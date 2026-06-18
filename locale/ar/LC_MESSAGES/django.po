@@ -3,12 +3,11 @@
 # This file is distributed under the same license as the PACKAGE package.
 # FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
 #
-#, fuzzy
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-18 13:59+0300\n"
+"POT-Creation-Date: 2026-06-18 14:06+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -125,10 +124,9 @@ msgstr "المدير العام"
 
 #: .\apps\applications\forms.py:19
 #: .\apps\applications\templates\applications\register.html:20
-#, fuzzy
 #| msgid "Full name (Arabic)"
 msgid "Full name (4 parts)"
-msgstr "الاسم الكامل (بالعربية)"
+msgstr "الاسم الرباعي"
 
 #: .\apps\applications\forms.py:21
 #: .\apps\applications\templates\applications\admin_detail.html:20
@@ -145,14 +143,12 @@ msgstr "النوع"
 #: .\apps\applications\forms.py:25
 #: .\apps\applications\templates\applications\admin_detail.html:23
 #: .\apps\applications\templates\applications\register.html:49
-#, fuzzy
 #| msgid "email address"
 msgid "Address"
-msgstr "عنوان البريد الإلكتروني"
+msgstr "العنوان"
 
 #: .\apps\applications\forms.py:26
 #: .\apps\applications\templates\applications\register.html:34
-#, fuzzy
 #| msgid "Phone number"
 msgid "Mobile number"
 msgstr "رقم الهاتف"
@@ -165,7 +161,6 @@ msgstr "المستوى التعليمي"
 #: .\apps\applications\forms.py:29
 #: .\apps\applications\templates\applications\admin_detail.html:25
 #: .\apps\applications\templates\applications\register.html:57
-#, fuzzy
 #| msgid "Applications"
 msgid "Specialization"
 msgstr "الطلبات"
@@ -179,7 +174,6 @@ msgstr "جهة العمل"
 #: .\apps\applications\forms.py:31
 #: .\apps\applications\templates\applications\admin_detail.html:27
 #: .\apps\applications\templates\applications\register.html:65
-#, fuzzy
 #| msgid "Current time:"
 msgid "Current job"
 msgstr "الوقت الحالي:"
@@ -204,7 +198,6 @@ msgstr "التواصل مع الأب الكاهن"
 #: .\apps\applications\forms.py:35
 #: .\apps\applications\templates\applications\admin_detail.html:19
 #: .\apps\applications\templates\applications\register.html:44
-#, fuzzy
 #| msgid "national ID"
 msgid "National ID"
 msgstr "الرقم القومي"
@@ -214,23 +207,42 @@ msgid "Date of birth must be in the past."
 msgstr "يجب أن يكون تاريخ الميلاد في الماضي."
 
 #: .\apps\applications\forms.py:50
-#, fuzzy
 #| msgid "Phone number"
-msgid "Phone number is required."
+msgid "Mobile number is required."
 msgstr "رقم الهاتف"
 
-#: .\apps\applications\forms.py:56
+#: .\apps\applications\forms.py:53
+#| msgid "Phone number"
+msgid "Enter a valid mobile number."
+msgstr "رقم الهاتف"
+
+#: .\apps\applications\forms.py:59
 msgid "National ID is required."
 msgstr "الرقم القومي مطلوب."
 
-#: .\apps\applications\forms.py:67
+#: .\apps\applications\forms.py:95
+msgid "An account with this email already exists."
+msgstr ""
+
+#: .\apps\applications\forms.py:96
+msgid "An account with this mobile number already exists."
+msgstr ""
+
+#: .\apps\applications\forms.py:97
+msgid "An account with this national ID already exists."
+msgstr ""
+
+#: .\apps\applications\forms.py:98
+msgid "An account with this full name already exists."
+msgstr ""
+
+#: .\apps\applications\forms.py:111
 #: .\apps\applications\templates\applications\admin_detail.html:39
-#, fuzzy
 #| msgid "Admin"
 msgid "Admin notes"
 msgstr "مدير"
 
-#: .\apps\applications\forms.py:68
+#: .\apps\applications\forms.py:112
 #: .\apps\applications\templates\applications\admin_detail.html:43
 msgid "Rejection reason"
 msgstr "سبب الرفض"
@@ -248,32 +260,27 @@ msgid "reviewed at"
 msgstr ""
 
 #: .\apps\applications\models.py:46
-#, fuzzy
 #| msgid "active"
 msgid "activated at"
 msgstr "نشط"
 
 #: .\apps\applications\models.py:49
-#, fuzzy
 #| msgid "Applications"
 msgid "application"
 msgstr "الطلبات"
 
 #: .\apps\applications\models.py:50
-#, fuzzy
 #| msgid "Applications"
 msgid "applications"
 msgstr "الطلبات"
 
 #: .\apps\applications\templates\applications\admin_detail.html:3
 #: .\apps\applications\templates\applications\admin_detail.html:8
-#, fuzzy
 #| msgid "Applications"
 msgid "Application"
 msgstr "الطلبات"
 
 #: .\apps\applications\templates\applications\admin_detail.html:6
-#, fuzzy
 #| msgid "Applications"
 msgid "Back to applications"
 msgstr "الطلبات"
@@ -283,7 +290,6 @@ msgid "Submitted"
 msgstr "تم التقديم"
 
 #: .\apps\applications\templates\applications\admin_detail.html:15
-#, fuzzy
 #| msgid "Personal info"
 msgid "Personal data"
 msgstr "المعلومات الشخصية"
@@ -309,7 +315,6 @@ msgid "Review actions"
 msgstr "إجراءات المراجعة"
 
 #: .\apps\applications\templates\applications\admin_detail.html:49
-#, fuzzy
 #| msgid "Under review"
 msgid "Mark under review"
 msgstr "قيد المراجعة"
@@ -323,13 +328,11 @@ msgid "Reject"
 msgstr "رفض"
 
 #: .\apps\applications\templates\applications\admin_detail.html:56
-#, fuzzy
 #| msgid "active"
 msgid "Activate"
 msgstr "نشط"
 
 #: .\apps\applications\templates\applications\admin_detail.html:61
-#, fuzzy
 #| msgid "Awaiting review"
 msgid "Last reviewer"
 msgstr "في انتظار المراجعة"
@@ -359,19 +362,16 @@ msgid "Created"
 msgstr "تاريخ الإنشاء"
 
 #: .\apps\applications\templates\applications\admin_list.html:30
-#, fuzzy
 #| msgid "Applications"
 msgid "Action"
 msgstr "الطلبات"
 
 #: .\apps\applications\templates\applications\admin_list.html:40
-#, fuzzy
 #| msgid "Review queue"
 msgid "Review"
 msgstr "قائمة المراجعة"
 
 #: .\apps\applications\templates\applications\admin_list.html:43
-#, fuzzy
 #| msgid "Applications"
 msgid "No applications yet."
 msgstr "الطلبات"
@@ -393,7 +393,6 @@ msgid "Submit registration"
 msgstr "إرسال التسجيل"
 
 #: .\apps\applications\templates\applications\registration_success.html:3
-#, fuzzy
 #| msgid "Registration queue"
 msgid "Registration received"
 msgstr "قائمة التسجيل"
@@ -421,37 +420,34 @@ msgstr "سنتواصل معك بالخطوات التالية."
 msgid "Back to home"
 msgstr "العودة للرئيسية"
 
-#: .\apps\applications\views.py:57
+#: .\apps\applications\views.py:59
 msgid "Registration received. We will contact you shortly."
 msgstr "تم استلام التسجيل. سنتواصل معك قريباً."
 
-#: .\apps\applications\views.py:104
+#: .\apps\applications\views.py:106
 msgid "Application marked as under review."
 msgstr "تم تحديد الطلب كقيد المراجعة."
 
-#: .\apps\applications\views.py:110
-#, fuzzy
+#: .\apps\applications\views.py:112
 #| msgid "Applications"
 msgid "Application approved."
 msgstr "الطلبات"
 
-#: .\apps\applications\views.py:115
+#: .\apps\applications\views.py:117
 msgid "Rejection reason is required."
 msgstr "سبب الرفض مطلوب."
 
-#: .\apps\applications\views.py:119
-#, fuzzy
+#: .\apps\applications\views.py:121
 #| msgid "Applications"
 msgid "Application rejected."
 msgstr "الطلبات"
 
-#: .\apps\applications\views.py:124
-#, fuzzy
+#: .\apps\applications\views.py:126
 #| msgid "Applications"
 msgid "Application activated."
 msgstr "الطلبات"
 
-#: .\apps\applications\views.py:126
+#: .\apps\applications\views.py:128
 msgid "Action not allowed for the current status."
 msgstr "الإجراء غير مسموح للحالة الحالية."
 
@@ -460,7 +456,6 @@ msgid "template slug"
 msgstr ""
 
 #: .\apps\communications\email_message.py:18
-#, fuzzy
 #| msgid "Email"
 msgid "to email"
 msgstr "البريد الإلكتروني"
@@ -486,13 +481,11 @@ msgid "sent at"
 msgstr ""
 
 #: .\apps\communications\email_message.py:40
-#, fuzzy
 #| msgid "email address"
 msgid "email message"
 msgstr "عنوان البريد الإلكتروني"
 
 #: .\apps\communications\email_message.py:41
-#, fuzzy
 #| msgid "email address"
 msgid "email messages"
 msgstr "عنوان البريد الإلكتروني"
@@ -502,7 +495,6 @@ msgid "slug"
 msgstr ""
 
 #: .\apps\communications\models.py:25
-#, fuzzy
 #| msgid "Full name"
 msgid "name"
 msgstr "الاسم الكامل"
@@ -512,7 +504,6 @@ msgid "email template"
 msgstr ""
 
 #: .\apps\communications\models.py:32
-#, fuzzy
 #| msgid "email address"
 msgid "email templates"
 msgstr "عنوان البريد الإلكتروني"
@@ -521,43 +512,40 @@ msgstr "عنوان البريد الإلكتروني"
 msgid "Unknown template slug."
 msgstr ""
 
-#: .\apps\students\constants.py:10
+#: .\apps\students\constants.py:11
 msgid "Male"
 msgstr "ذكر"
 
-#: .\apps\students\constants.py:11
+#: .\apps\students\constants.py:12
 msgid "Female"
 msgstr "أنثى"
 
-#: .\apps\students\constants.py:21
+#: .\apps\students\constants.py:22
 msgid "Secondary"
 msgstr "الثانوية"
 
-#: .\apps\students\constants.py:22
-#, fuzzy
+#: .\apps\students\constants.py:23
 #| msgid "Teacher"
 msgid "Bachelor"
 msgstr "معلم"
 
-#: .\apps\students\constants.py:23
+#: .\apps\students\constants.py:24
 msgid "Master"
 msgstr "الماجستير"
 
-#: .\apps\students\constants.py:24
-#, fuzzy
+#: .\apps\students\constants.py:25
 #| msgid "Storage"
 msgid "Doctorate"
 msgstr "التخزين"
 
-#: .\apps\students\constants.py:25
+#: .\apps\students\constants.py:26
 msgid "Other"
 msgstr "أخرى"
 
 #: .\apps\students\models.py:22
-#, fuzzy
 #| msgid "full name (Arabic)"
 msgid "full name (4 parts)"
-msgstr "الاسم الكامل (بالعربية)"
+msgstr "الاسم الرباعي"
 
 #: .\apps\students\models.py:23
 msgid "date of birth"
@@ -568,13 +556,11 @@ msgid "gender"
 msgstr ""
 
 #: .\apps\students\models.py:25
-#, fuzzy
 #| msgid "email address"
 msgid "address"
-msgstr "عنوان البريد الإلكتروني"
+msgstr "العنوان"
 
 #: .\apps\students\models.py:26
-#, fuzzy
 #| msgid "Phone number"
 msgid "mobile number"
 msgstr "رقم الهاتف"
@@ -584,7 +570,6 @@ msgid "education level"
 msgstr ""
 
 #: .\apps\students\models.py:33
-#, fuzzy
 #| msgid "Applications"
 msgid "specialization"
 msgstr "الطلبات"
@@ -610,13 +595,11 @@ msgid "priest contact"
 msgstr ""
 
 #: .\apps\students\models.py:41
-#, fuzzy
 #| msgid "Your profile"
 msgid "student profile"
 msgstr "ملفك الشخصي"
 
 #: .\apps\students\models.py:42
-#, fuzzy
 #| msgid "Your profile"
 msgid "student profiles"
 msgstr "ملفك الشخصي"

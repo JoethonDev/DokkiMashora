@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-18 13:59+0300\n"
+"POT-Creation-Date: 2026-06-18 14:06+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -201,19 +201,39 @@ msgid "Date of birth must be in the past."
 msgstr ""
 
 #: .\apps\applications\forms.py:50
-msgid "Phone number is required."
+msgid "Mobile number is required."
 msgstr ""
 
-#: .\apps\applications\forms.py:56
+#: .\apps\applications\forms.py:53
+msgid "Enter a valid mobile number."
+msgstr ""
+
+#: .\apps\applications\forms.py:59
 msgid "National ID is required."
 msgstr ""
 
-#: .\apps\applications\forms.py:67
+#: .\apps\applications\forms.py:95
+msgid "An account with this email already exists."
+msgstr ""
+
+#: .\apps\applications\forms.py:96
+msgid "An account with this mobile number already exists."
+msgstr ""
+
+#: .\apps\applications\forms.py:97
+msgid "An account with this national ID already exists."
+msgstr ""
+
+#: .\apps\applications\forms.py:98
+msgid "An account with this full name already exists."
+msgstr ""
+
+#: .\apps\applications\forms.py:111
 #: .\apps\applications\templates\applications\admin_detail.html:39
 msgid "Admin notes"
 msgstr ""
 
-#: .\apps\applications\forms.py:68
+#: .\apps\applications\forms.py:112
 #: .\apps\applications\templates\applications\admin_detail.html:43
 msgid "Rejection reason"
 msgstr ""
@@ -378,31 +398,31 @@ msgstr ""
 msgid "Back to home"
 msgstr ""
 
-#: .\apps\applications\views.py:57
+#: .\apps\applications\views.py:59
 msgid "Registration received. We will contact you shortly."
 msgstr ""
 
-#: .\apps\applications\views.py:104
+#: .\apps\applications\views.py:106
 msgid "Application marked as under review."
 msgstr ""
 
-#: .\apps\applications\views.py:110
+#: .\apps\applications\views.py:112
 msgid "Application approved."
 msgstr ""
 
-#: .\apps\applications\views.py:115
+#: .\apps\applications\views.py:117
 msgid "Rejection reason is required."
 msgstr ""
 
-#: .\apps\applications\views.py:119
+#: .\apps\applications\views.py:121
 msgid "Application rejected."
 msgstr ""
 
-#: .\apps\applications\views.py:124
+#: .\apps\applications\views.py:126
 msgid "Application activated."
 msgstr ""
 
-#: .\apps\applications\views.py:126
+#: .\apps\applications\views.py:128
 msgid "Action not allowed for the current status."
 msgstr ""
 
@@ -462,31 +482,31 @@ msgstr ""
 msgid "Unknown template slug."
 msgstr ""
 
-#: .\apps\students\constants.py:10
+#: .\apps\students\constants.py:11
 msgid "Male"
 msgstr ""
 
-#: .\apps\students\constants.py:11
+#: .\apps\students\constants.py:12
 msgid "Female"
 msgstr ""
 
-#: .\apps\students\constants.py:21
+#: .\apps\students\constants.py:22
 msgid "Secondary"
 msgstr ""
 
-#: .\apps\students\constants.py:22
+#: .\apps\students\constants.py:23
 msgid "Bachelor"
 msgstr ""
 
-#: .\apps\students\constants.py:23
+#: .\apps\students\constants.py:24
 msgid "Master"
 msgstr ""
 
-#: .\apps\students\constants.py:24
+#: .\apps\students\constants.py:25
 msgid "Doctorate"
 msgstr ""
 
-#: .\apps\students\constants.py:25
+#: .\apps\students\constants.py:26
 msgid "Other"
 msgstr ""
 
