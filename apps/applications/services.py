@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import date
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.db import transaction
 
 from apps.accounts.constants import GROUP_STUDENT
@@ -148,7 +149,5 @@ def submit_registration(data: RegistrationData) -> tuple[StudentProfile, Applica
 
 
 def _student_group():
-    from django.contrib.auth.models import Group
-
     group, _ = Group.objects.get_or_create(name=GROUP_STUDENT)
     return group

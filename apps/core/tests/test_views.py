@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 
+from django.conf import settings
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone, translation
@@ -33,14 +34,10 @@ class LandingPageTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_timezone_is_cairo(self) -> None:
-        from django.conf import settings
-
         self.assertEqual(settings.TIME_ZONE, "Africa/Cairo")
         self.assertTrue(settings.USE_TZ)
 
     def test_default_language_is_arabic(self) -> None:
-        from django.conf import settings
-
         self.assertEqual(settings.LANGUAGE_CODE, "ar")
         codes = {code for code, _name in settings.LANGUAGES}
         self.assertIn("ar", codes)

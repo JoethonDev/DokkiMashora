@@ -134,6 +134,10 @@ TIME_ZONE = "Africa/Cairo"
 USE_I18N = True
 USE_TZ = True
 
+DATE_FORMAT = "j M Y"
+DATETIME_FORMAT = "j M Y, H:i"
+SHORT_DATETIME_FORMAT = "j M Y, H:i"
+
 LANGUAGES = [
     ("ar", "العربية"),
     ("en", "English"),

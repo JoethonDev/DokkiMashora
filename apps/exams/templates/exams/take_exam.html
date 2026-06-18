@@ -6,7 +6,7 @@
 {% block content %}
 <div x-data="examTimer({{ remaining_seconds }}, {{ exam.id }})" class="max-w-4xl mx-auto">
   <div class="sticky top-0 bg-white dark:bg-slate-800 shadow z-10 p-4 rounded-b-lg mb-6 flex justify-between items-center">
-    <h1 class="text-xl font-bold text-slate-800 dark:text-white truncate ml-4">{{ exam.title }}</h1>
+    <h1 class="text-xl font-bold text-slate-800 dark:text-white truncate ms-4">{{ exam.title }}</h1>
     <div class="flex items-center gap-4">
       <div class="text-lg font-mono font-bold"
            :class="{'text-red-600 animate-pulse': timeLeft < 120, 'text-green-600': timeLeft >= 120}"
@@ -22,7 +22,7 @@
     </div>
   </div>
 
-  <form id="exam-form" method="post" action="{% url 'exams:submit_exam' exam.id %}">
+  <form id="exam-form" method="post" action="{% if token %}{% url 'exams:submit_exam_token' token %}{% else %}{% url 'exams:submit_exam' exam.id %}{% endif %}">
     {% csrf_token %}
     {% for question in questions %}
       <div class="mb-6 p-6 bg-white dark:bg-slate-800 rounded-lg shadow" id="q-{{ question.id }}">
@@ -43,7 +43,7 @@
                 <input type="radio"
                        name="question_{{ question.id }}"
                        value="{{ choice.id }}"
-                       class="ml-3 h-4 w-4 text-blue-600 border-slate-300"
+                       class="ms-3 h-4 w-4 text-blue-600 border-slate-300"
                        x-on:change="saved = false">
                 <span class="text-slate-700 dark:text-slate-200">{{ choice.text }}</span>
               </label>

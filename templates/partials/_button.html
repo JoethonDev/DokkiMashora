@@ -1,0 +1,19 @@
+{% load i18n %}
+<{% if href %}a href="{{ href }}"{% else %}button type="{{ type|default:"submit" }}"{% endif %}
+  class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition
+         {% if size == "sm" %}px-3 py-1.5 text-xs{% elif size == "lg" %}px-6 py-3 text-base{% else %}px-4 py-2 text-sm{% endif %}
+         disabled:opacity-50 disabled:cursor-not-allowed
+         {% if variant == "primary" %}bg-brand-600 text-white hover:bg-brand-700 shadow-sm
+         {% elif variant == "secondary" %}border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800
+         {% elif variant == "ghost" %}text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800
+         {% elif variant == "danger" %}bg-rose-600 text-white hover:bg-rose-700 shadow-sm
+         {% elif variant == "success" %}bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm{% endif %}
+         {{ class|default:"" }}"
+  {% if hx_post %}hx-post="{{ hx_post }}" hx-target="{{ hx_target|default:'this' }}" hx-swap="{{ hx_swap|default:'outerHTML' }}"{% endif %}
+  {% if hx_get %}hx-get="{{ hx_get }}" hx-target="{{ hx_target|default:'#content' }}" hx-swap="{{ hx_swap|default:'innerHTML' }}"{% endif %}
+  {% if hx_confirm %}hx-confirm="{{ hx_confirm }}"{% endif %}
+  {% if hx_indicator %}hx-indicator="{{ hx_indicator }}"{% endif %}
+  {% if loading_label %}data-loading-disable data-loading-label="{{ loading_label }}"{% endif %}
+  {{ attrs|default:"" }}>
+  {{ label }}
+</{% if href %}a{% else %}button{% endif %}>

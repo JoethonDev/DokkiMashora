@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-18 14:06+0300\n"
+"POT-Creation-Date: 2026-06-18 15:26+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -15,8 +15,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=6; plural=n==0 ? 0 : n==1 ? 1 : n==2 ? 2 : n%100>=3 "
-"&& n%100<=10 ? 3 : n%100>=11 && n%100<=99 ? 4 : 5;\n"
+"Plural-Forms: nplurals=6; plural=n==0 ? 0 : n==1 ? 1 : n==2 ? 2 : n%100>=3 && n%100<=10 ? 3 : n%100>=11 && n%100<=99 ? 4 : 5;\n"
 
 #: .\apps\accounts\admin.py:24
 msgid "Personal info"
@@ -25,6 +24,9 @@ msgstr "المعلومات الشخصية"
 #: .\apps\accounts\admin.py:25
 #: .\apps\applications\templates\applications\admin_list.html:12
 #: .\apps\applications\templates\applications\admin_list.html:28
+#: .\apps\exams\templates\exams\admin_detail.html:205
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:19
+#: .\apps\exams\templates\exams\exam_results.html:13
 msgid "Status"
 msgstr "الحالة"
 
@@ -90,7 +92,7 @@ msgid "Stored for matching across applications."
 msgstr "يُستخدم للمطابقة بين الطلبات."
 
 #: .\apps\accounts\models.py:42 .\apps\applications\models.py:30
-#: .\apps\communications\email_message.py:23
+#: .\apps\communications\email_message.py:23 .\apps\exams\models.py:134
 msgid "status"
 msgstr "الحالة"
 
@@ -99,6 +101,7 @@ msgid "staff status"
 msgstr "صلاحية الموظف"
 
 #: .\apps\accounts\models.py:50 .\apps\communications\models.py:28
+#: .\apps\exams\models.py:45
 msgid "active"
 msgstr "نشط"
 
@@ -118,13 +121,12 @@ msgstr "المستخدمون"
 msgid "Profile updated."
 msgstr "تم تحديث الملف الشخصي."
 
-#: .\apps\accounts\views.py:104
+#: .\apps\accounts\views.py:112
 msgid "Super Admin"
 msgstr "المدير العام"
 
 #: .\apps\applications\forms.py:19
 #: .\apps\applications\templates\applications\register.html:20
-#| msgid "Full name (Arabic)"
 msgid "Full name (4 parts)"
 msgstr "الاسم الرباعي"
 
@@ -143,13 +145,11 @@ msgstr "النوع"
 #: .\apps\applications\forms.py:25
 #: .\apps\applications\templates\applications\admin_detail.html:23
 #: .\apps\applications\templates\applications\register.html:49
-#| msgid "email address"
 msgid "Address"
 msgstr "العنوان"
 
 #: .\apps\applications\forms.py:26
 #: .\apps\applications\templates\applications\register.html:34
-#| msgid "Phone number"
 msgid "Mobile number"
 msgstr "رقم الهاتف"
 
@@ -161,7 +161,6 @@ msgstr "المستوى التعليمي"
 #: .\apps\applications\forms.py:29
 #: .\apps\applications\templates\applications\admin_detail.html:25
 #: .\apps\applications\templates\applications\register.html:57
-#| msgid "Applications"
 msgid "Specialization"
 msgstr "الطلبات"
 
@@ -174,7 +173,6 @@ msgstr "جهة العمل"
 #: .\apps\applications\forms.py:31
 #: .\apps\applications\templates\applications\admin_detail.html:27
 #: .\apps\applications\templates\applications\register.html:65
-#| msgid "Current time:"
 msgid "Current job"
 msgstr "الوقت الحالي:"
 
@@ -198,7 +196,6 @@ msgstr "التواصل مع الأب الكاهن"
 #: .\apps\applications\forms.py:35
 #: .\apps\applications\templates\applications\admin_detail.html:19
 #: .\apps\applications\templates\applications\register.html:44
-#| msgid "national ID"
 msgid "National ID"
 msgstr "الرقم القومي"
 
@@ -207,12 +204,10 @@ msgid "Date of birth must be in the past."
 msgstr "يجب أن يكون تاريخ الميلاد في الماضي."
 
 #: .\apps\applications\forms.py:50
-#| msgid "Phone number"
 msgid "Mobile number is required."
 msgstr "رقم الهاتف"
 
 #: .\apps\applications\forms.py:53
-#| msgid "Phone number"
 msgid "Enter a valid mobile number."
 msgstr "رقم الهاتف"
 
@@ -238,7 +233,6 @@ msgstr ""
 
 #: .\apps\applications\forms.py:111
 #: .\apps\applications\templates\applications\admin_detail.html:39
-#| msgid "Admin"
 msgid "Admin notes"
 msgstr "مدير"
 
@@ -260,37 +254,33 @@ msgid "reviewed at"
 msgstr ""
 
 #: .\apps\applications\models.py:46
-#| msgid "active"
 msgid "activated at"
 msgstr "نشط"
 
 #: .\apps\applications\models.py:49
-#| msgid "Applications"
 msgid "application"
 msgstr "الطلبات"
 
 #: .\apps\applications\models.py:50
-#| msgid "Applications"
 msgid "applications"
 msgstr "الطلبات"
 
 #: .\apps\applications\templates\applications\admin_detail.html:3
 #: .\apps\applications\templates\applications\admin_detail.html:8
-#| msgid "Applications"
 msgid "Application"
 msgstr "الطلبات"
 
 #: .\apps\applications\templates\applications\admin_detail.html:6
-#| msgid "Applications"
 msgid "Back to applications"
 msgstr "الطلبات"
 
 #: .\apps\applications\templates\applications\admin_detail.html:10
+#: .\apps\exams\templates\exams\admin_detail.html:207
+#: .\apps\exams\templates\exams\admin_grade_list.html:16
 msgid "Submitted"
 msgstr "تم التقديم"
 
 #: .\apps\applications\templates\applications\admin_detail.html:15
-#| msgid "Personal info"
 msgid "Personal data"
 msgstr "المعلومات الشخصية"
 
@@ -315,7 +305,6 @@ msgid "Review actions"
 msgstr "إجراءات المراجعة"
 
 #: .\apps\applications\templates\applications\admin_detail.html:49
-#| msgid "Under review"
 msgid "Mark under review"
 msgstr "قيد المراجعة"
 
@@ -328,12 +317,11 @@ msgid "Reject"
 msgstr "رفض"
 
 #: .\apps\applications\templates\applications\admin_detail.html:56
-#| msgid "active"
+#: .\apps\exams\templates\exams\admin_detail.html:29
 msgid "Activate"
 msgstr "نشط"
 
 #: .\apps\applications\templates\applications\admin_detail.html:61
-#| msgid "Awaiting review"
 msgid "Last reviewer"
 msgstr "في انتظار المراجعة"
 
@@ -362,25 +350,22 @@ msgid "Created"
 msgstr "تاريخ الإنشاء"
 
 #: .\apps\applications\templates\applications\admin_list.html:30
-#| msgid "Applications"
 msgid "Action"
 msgstr "الطلبات"
 
 #: .\apps\applications\templates\applications\admin_list.html:40
-#| msgid "Review queue"
 msgid "Review"
 msgstr "قائمة المراجعة"
 
 #: .\apps\applications\templates\applications\admin_list.html:43
-#| msgid "Applications"
 msgid "No applications yet."
 msgstr "الطلبات"
 
 #: .\apps\applications\templates\applications\register.html:3
 #: .\apps\applications\templates\applications\register.html:7
-#: .\templates\partials\_navbar.html:14 .\templates\partials\_navbar.html:33
+#: .\templates\partials\_navbar.html:14 .\templates\partials\_navbar.html:34
 msgid "Register"
-msgstr ""
+msgstr "التسجيل"
 
 #: .\apps\applications\templates\applications\register.html:8
 msgid ""
@@ -393,7 +378,6 @@ msgid "Submit registration"
 msgstr "إرسال التسجيل"
 
 #: .\apps\applications\templates\applications\registration_success.html:3
-#| msgid "Registration queue"
 msgid "Registration received"
 msgstr "قائمة التسجيل"
 
@@ -429,7 +413,6 @@ msgid "Application marked as under review."
 msgstr "تم تحديد الطلب كقيد المراجعة."
 
 #: .\apps\applications\views.py:112
-#| msgid "Applications"
 msgid "Application approved."
 msgstr "الطلبات"
 
@@ -438,12 +421,10 @@ msgid "Rejection reason is required."
 msgstr "سبب الرفض مطلوب."
 
 #: .\apps\applications\views.py:121
-#| msgid "Applications"
 msgid "Application rejected."
 msgstr "الطلبات"
 
 #: .\apps\applications\views.py:126
-#| msgid "Applications"
 msgid "Application activated."
 msgstr "الطلبات"
 
@@ -456,7 +437,6 @@ msgid "template slug"
 msgstr ""
 
 #: .\apps\communications\email_message.py:18
-#| msgid "Email"
 msgid "to email"
 msgstr "البريد الإلكتروني"
 
@@ -464,11 +444,13 @@ msgstr "البريد الإلكتروني"
 msgid "cc emails"
 msgstr ""
 
-#: .\apps\communications\email_message.py:20 .\apps\communications\models.py:26
+#: .\apps\communications\email_message.py:20
+#: .\apps\communications\models.py:26
 msgid "subject"
 msgstr ""
 
-#: .\apps\communications\email_message.py:21 .\apps\communications\models.py:27
+#: .\apps\communications\email_message.py:21
+#: .\apps\communications\models.py:27
 msgid "body"
 msgstr ""
 
@@ -481,12 +463,10 @@ msgid "sent at"
 msgstr ""
 
 #: .\apps\communications\email_message.py:40
-#| msgid "email address"
 msgid "email message"
 msgstr "عنوان البريد الإلكتروني"
 
 #: .\apps\communications\email_message.py:41
-#| msgid "email address"
 msgid "email messages"
 msgstr "عنوان البريد الإلكتروني"
 
@@ -495,7 +475,6 @@ msgid "slug"
 msgstr ""
 
 #: .\apps\communications\models.py:25
-#| msgid "Full name"
 msgid "name"
 msgstr "الاسم الكامل"
 
@@ -504,13 +483,711 @@ msgid "email template"
 msgstr ""
 
 #: .\apps\communications\models.py:32
-#| msgid "email address"
 msgid "email templates"
 msgstr "عنوان البريد الإلكتروني"
 
 #: .\apps\communications\models.py:41
 msgid "Unknown template slug."
 msgstr ""
+
+#: .\apps\exams\apps.py:8 .\templates\accounts\dashboards\admin.html:19
+#: .\templates\partials\_navbar.html:20
+msgid "Exams"
+msgstr "الامتحانات"
+
+#: .\apps\exams\constants.py:6
+msgid "Entrance exam"
+msgstr "امتحان القبول"
+
+#: .\apps\exams\constants.py:7
+msgid "Assessment"
+msgstr "تقييم"
+
+#: .\apps\exams\constants.py:13
+msgid "Multiple choice"
+msgstr "اختيار من متعدد"
+
+#: .\apps\exams\constants.py:14
+msgid "Essay"
+msgstr "مقالي"
+
+#: .\apps\exams\constants.py:22
+msgid "Assigned"
+msgstr "مُسند"
+
+#: .\apps\exams\constants.py:23
+#: .\apps\exams\templates\exams\student_list.html:21
+msgid "In progress"
+msgstr "قيد التنفيذ"
+
+#: .\apps\exams\constants.py:24
+#: .\apps\exams\templates\exams\student_list.html:23
+msgid "Completed"
+msgstr "مكتمل"
+
+#: .\apps\exams\constants.py:25
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:114
+#: .\apps\exams\templates\exams\exam_results.html:16
+#: .\apps\exams\templates\exams\student_list.html:25
+msgid "Graded"
+msgstr "مصحح"
+
+#: .\apps\exams\forms.py:31
+msgid "Date and time when the exam becomes available."
+msgstr "التاريخ والوقت الذي يصبح فيه الامتحان متاحاً."
+
+#: .\apps\exams\forms.py:32
+msgid "Date and time when the exam closes."
+msgstr "التاريخ والوقت الذي يُغلق فيه الامتحان."
+
+#: .\apps\exams\forms.py:52 .\apps\exams\validators.py:8
+msgid "Open time must be before close time."
+msgstr "يجب أن يكون وقت الفتح قبل وقت الإغلاق."
+
+#: .\apps\exams\models.py:20
+msgid "title"
+msgstr "العنوان"
+
+#: .\apps\exams\models.py:21
+msgid "description"
+msgstr "الوصف"
+
+#: .\apps\exams\models.py:23
+msgid "exam type"
+msgstr "نوع الامتحان"
+
+#: .\apps\exams\models.py:30
+msgid "access token"
+msgstr "رمز الوصول"
+
+#: .\apps\exams\models.py:32
+msgid "duration (minutes)"
+msgstr "المدة (دقائق)"
+
+#: .\apps\exams\models.py:34
+msgid "passing score"
+msgstr "درجة النجاح"
+
+#: .\apps\exams\models.py:40
+msgid "total points"
+msgstr "إجمالي النقاط"
+
+#: .\apps\exams\models.py:46
+msgid "open at"
+msgstr "يفتح في"
+
+#: .\apps\exams\models.py:47
+msgid "close at"
+msgstr "يغلق في"
+
+#: .\apps\exams\models.py:52
+msgid "created by"
+msgstr "تم الإنشاء بواسطة"
+
+#: .\apps\exams\models.py:56 .\apps\exams\models.py:73
+#: .\apps\exams\models.py:124
+msgid "exam"
+msgstr "الامتحان"
+
+#: .\apps\exams\models.py:57
+msgid "exams"
+msgstr "الامتحانات"
+
+#: .\apps\exams\models.py:75
+msgid "question text"
+msgstr "نص السؤال"
+
+#: .\apps\exams\models.py:77
+msgid "type"
+msgstr "النوع"
+
+#: .\apps\exams\models.py:83
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:41
+#: .\apps\exams\templates\exams\exam_results.html:48
+#: .\apps\exams\templates\exams\take_exam.html:34
+msgid "points"
+msgstr "نقاط"
+
+#: .\apps\exams\models.py:88 .\apps\exams\models.py:108
+msgid "order"
+msgstr "الترتيب"
+
+#: .\apps\exams\models.py:91 .\apps\exams\models.py:104
+#: .\apps\exams\models.py:186
+msgid "question"
+msgstr "السؤال"
+
+#: .\apps\exams\models.py:92
+msgid "questions"
+msgstr "الأسئلة"
+
+#: .\apps\exams\models.py:106
+msgid "text"
+msgstr "النص"
+
+#: .\apps\exams\models.py:107
+msgid "correct"
+msgstr "صحيح"
+
+#: .\apps\exams\models.py:111
+msgid "choice"
+msgstr "اختيار"
+
+#: .\apps\exams\models.py:112
+msgid "choices"
+msgstr "اختيارات"
+
+#: .\apps\exams\models.py:130
+msgid "student"
+msgstr "الطالب"
+
+#: .\apps\exams\models.py:132
+msgid "attempt number"
+msgstr "رقم المحاولة"
+
+#: .\apps\exams\models.py:141 .\apps\exams\models.py:198
+msgid "score"
+msgstr ""
+
+#: .\apps\exams\models.py:147
+msgid "assigned at"
+msgstr "أُسند في"
+
+#: .\apps\exams\models.py:148
+msgid "started at"
+msgstr "بدأ في"
+
+#: .\apps\exams\models.py:149
+msgid "submitted at"
+msgstr "سُلّم في"
+
+#: .\apps\exams\models.py:150 .\apps\exams\models.py:205
+msgid "graded at"
+msgstr "صُحح في"
+
+#: .\apps\exams\models.py:157 .\apps\exams\models.py:212
+msgid "graded by"
+msgstr "صُحح بواسطة"
+
+#: .\apps\exams\models.py:161
+msgid "exam assignment"
+msgstr "إسناد الامتحان"
+
+#: .\apps\exams\models.py:162
+msgid "exam assignments"
+msgstr "إسنادات الامتحان"
+
+#: .\apps\exams\models.py:180
+msgid "assignment"
+msgstr "إسناد"
+
+#: .\apps\exams\models.py:194
+msgid "selected choice"
+msgstr "الاختيار المحدد"
+
+#: .\apps\exams\models.py:196
+msgid "essay text"
+msgstr "نص المقال"
+
+#: .\apps\exams\models.py:204
+msgid "feedback"
+msgstr ""
+
+#: .\apps\exams\models.py:216
+msgid "answer"
+msgstr "إجابة"
+
+#: .\apps\exams\models.py:217
+msgid "answers"
+msgstr "الإجابات"
+
+#: .\apps\exams\templates\exams\admin_detail.html:4
+msgid "Exam Detail"
+msgstr "تفاصيل الامتحان"
+
+#: .\apps\exams\templates\exams\admin_detail.html:9
+#: .\apps\exams\templates\exams\admin_exam_form.html:4
+#: .\apps\exams\templates\exams\admin_exam_form.html:9
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:9
+#: .\apps\exams\templates\exams\admin_list.html:9
+msgid "Exam Management"
+msgstr "إدارة الامتحانات"
+
+#: .\apps\exams\templates\exams\admin_detail.html:23
+#: .\apps\exams\templates\exams\admin_detail.html:143
+#: .\apps\exams\templates\exams\admin_list.html:45
+msgid "Edit"
+msgstr "تعديل"
+
+#: .\apps\exams\templates\exams\admin_detail.html:29
+msgid "Deactivate"
+msgstr "تعطيل"
+
+#: .\apps\exams\templates\exams\admin_detail.html:36
+#: .\apps\exams\templates\exams\admin_list.html:21
+#: .\apps\exams\templates\exams\exam_instructions.html:14
+msgid "Duration"
+msgstr "المدة"
+
+#: .\apps\exams\templates\exams\admin_detail.html:37
+#: .\apps\exams\templates\exams\exam_instructions.html:14
+msgid "minutes"
+msgstr "دقيقة"
+
+#: .\apps\exams\templates\exams\admin_detail.html:40
+msgid "Total points"
+msgstr "إجمالي النقاط"
+
+#: .\apps\exams\templates\exams\admin_detail.html:44
+#: .\apps\exams\templates\exams\exam_instructions.html:15
+#: .\apps\exams\templates\exams\exam_results.html:35
+msgid "Passing score"
+msgstr "درجة النجاح"
+
+#: .\apps\exams\templates\exams\admin_detail.html:48
+#: .\apps\exams\templates\exams\admin_list.html:22
+#: .\apps\exams\templates\exams\admin_list.html:38
+msgid "Active"
+msgstr "نشط"
+
+#: .\apps\exams\templates\exams\admin_detail.html:51
+msgid "Yes"
+msgstr "نعم"
+
+#: .\apps\exams\templates\exams\admin_detail.html:53
+msgid "No"
+msgstr "لا"
+
+#: .\apps\exams\templates\exams\admin_detail.html:60
+msgid "Opens"
+msgstr "يفتح"
+
+#: .\apps\exams\templates\exams\admin_detail.html:64
+msgid "Closes"
+msgstr "يغلق"
+
+#: .\apps\exams\templates\exams\admin_detail.html:78
+#: .\apps\exams\templates\exams\admin_detail.html:95
+msgid "Questions"
+msgstr "الأسئلة"
+
+#: .\apps\exams\templates\exams\admin_detail.html:83
+msgid "Access"
+msgstr "الوصول"
+
+#: .\apps\exams\templates\exams\admin_detail.html:88
+#: .\apps\exams\templates\exams\admin_detail.html:199
+msgid "Assignments"
+msgstr "الإسنادات"
+
+#: .\apps\exams\templates\exams\admin_detail.html:101
+msgid "Add question"
+msgstr "إضافة سؤال"
+
+#: .\apps\exams\templates\exams\admin_detail.html:115
+msgid "Q"
+msgstr "س"
+
+#: .\apps\exams\templates\exams\admin_detail.html:121
+msgid "pts"
+msgstr "نقطة"
+
+#: .\apps\exams\templates\exams\admin_detail.html:132
+msgid "No choices added yet."
+msgstr "لم تُضف اختيارات بعد."
+
+#: .\apps\exams\templates\exams\admin_detail.html:147
+msgid "Delete this question?"
+msgstr "حذف هذا السؤال؟"
+
+#: .\apps\exams\templates\exams\admin_detail.html:149
+msgid "Delete"
+msgstr "حذف"
+
+#: .\apps\exams\templates\exams\admin_detail.html:158
+msgid "No questions yet. Add the first question."
+msgstr "لا توجد أسئلة بعد. أضف السؤال الأول."
+
+#: .\apps\exams\templates\exams\admin_detail.html:166
+msgid "Exam Access"
+msgstr "الوصول للامتحان"
+
+#: .\apps\exams\templates\exams\admin_detail.html:169
+msgid "Access URL"
+msgstr "رابط الوصول"
+
+#: .\apps\exams\templates\exams\admin_detail.html:174
+msgid ""
+"Students scan this QR code or open the URL. Unauthenticated users are "
+"redirected to login."
+msgstr ""
+"يمسح الطلاب رمز QR هذا أو يفتحون الرابط. يتم توجيه المستخدمين غير المسجلين "
+"إلى تسجيل الدخول."
+
+#: .\apps\exams\templates\exams\admin_detail.html:178
+msgid "QR Code"
+msgstr "رمز QR"
+
+#: .\apps\exams\templates\exams\admin_detail.html:183
+msgid "QR unavailable"
+msgstr "رمز QR غير متاح"
+
+#: .\apps\exams\templates\exams\admin_detail.html:192
+msgid "Activate this exam to generate the access URL and QR code."
+msgstr "فعّل هذا الامتحان لتوليد رابط الوصول ورمز QR."
+
+#: .\apps\exams\templates\exams\admin_detail.html:204
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:18
+#: .\apps\exams\templates\exams\admin_grade_list.html:14
+#: .\templates\accounts\dashboards\student.html:7
+msgid "Student"
+msgstr "طالب"
+
+#: .\apps\exams\templates\exams\admin_detail.html:206
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:88
+#: .\apps\exams\templates\exams\exam_results.html:25
+#: .\apps\exams\templates\exams\exam_results.html:84
+#: .\apps\exams\templates\exams\student_list.html:23
+#: .\apps\exams\templates\exams\student_list.html:25
+msgid "Score"
+msgstr "الدرجة"
+
+#: .\apps\exams\templates\exams\admin_detail.html:208
+#: .\apps\exams\templates\exams\admin_grade_list.html:17
+#: .\apps\exams\templates\exams\admin_list.html:23
+msgid "Actions"
+msgstr "الإجراءات"
+
+#: .\apps\exams\templates\exams\admin_detail.html:229
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:4
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:13
+#: .\apps\exams\templates\exams\admin_grade_list.html:28
+msgid "Grade"
+msgstr "تصحيح"
+
+#: .\apps\exams\templates\exams\admin_detail.html:231
+#: .\apps\exams\templates\exams\admin_list.html:44
+msgid "View"
+msgstr "عرض"
+
+#: .\apps\exams\templates\exams\admin_detail.html:239
+msgid "No assignments yet."
+msgstr "لا توجد إسنادات بعد."
+
+#: .\apps\exams\templates\exams\admin_exam_form.html:41
+#: .\templates\accounts\profile.html:24
+msgid "Save"
+msgstr "حفظ"
+
+#: .\apps\exams\templates\exams\admin_exam_form.html:44
+#: .\apps\exams\templates\exams\partials\question_form.html:111
+msgid "Cancel"
+msgstr "إلغاء"
+
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:28
+msgid "Current score"
+msgstr "الدرجة الحالية"
+
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:38
+#: .\apps\exams\templates\exams\exam_results.html:45
+#: .\apps\exams\templates\exams\take_exam.html:31
+msgid "Question"
+msgstr "سؤال"
+
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:49
+msgid "Student's choice"
+msgstr "اختيار الطالب"
+
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:54
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:79
+#: .\apps\exams\templates\exams\exam_results.html:60
+msgid "No answer"
+msgstr "بدون إجابة"
+
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:62
+#: .\apps\exams\templates\exams\exam_results.html:67
+#: .\apps\exams\templates\exams\partials\question_form.html:94
+msgid "Correct"
+msgstr "صحيح"
+
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:66
+#: .\apps\exams\templates\exams\exam_results.html:71
+msgid "Incorrect"
+msgstr "خطأ"
+
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:73
+msgid "Student's answer"
+msgstr "إجابة الطالب"
+
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:88
+msgid "max"
+msgstr "الحد الأقصى"
+
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:97
+#: .\apps\exams\templates\exams\exam_results.html:89
+msgid "Feedback"
+msgstr "التعليقات"
+
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:108
+msgid "Grade with Gemini"
+msgstr "تصحيح بواسطة Gemini"
+
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:125
+msgid "Save Grades"
+msgstr "حفظ الدرجات"
+
+#: .\apps\exams\templates\exams\admin_grade_list.html:4
+msgid "Grade Exams"
+msgstr "تصحيح الامتحانات"
+
+#: .\apps\exams\templates\exams\admin_grade_list.html:8
+msgid "Pending Grading"
+msgstr "في انتظار التصحيح"
+
+#: .\apps\exams\templates\exams\admin_grade_list.html:15
+msgid "Exam"
+msgstr "الامتحان"
+
+#: .\apps\exams\templates\exams\admin_grade_list.html:34
+msgid "No submissions pending grading."
+msgstr "لا توجد تسليمات في انتظار التصحيح."
+
+#: .\apps\exams\templates\exams\admin_list.html:4
+msgid "Manage Exams"
+msgstr "إدارة الامتحانات"
+
+#: .\apps\exams\templates\exams\admin_list.html:11
+msgid "Create Exam"
+msgstr "إنشاء امتحان"
+
+#: .\apps\exams\templates\exams\admin_list.html:19
+msgid "Title"
+msgstr "العنوان"
+
+#: .\apps\exams\templates\exams\admin_list.html:20
+msgid "Type"
+msgstr "النوع"
+
+#: .\apps\exams\templates\exams\admin_list.html:35
+msgid "min"
+msgstr "دقيقة"
+
+#: .\apps\exams\templates\exams\admin_list.html:40
+msgid "Inactive"
+msgstr "غير نشط"
+
+#: .\apps\exams\templates\exams\admin_list.html:50
+msgid "No exams yet."
+msgstr "لا توجد امتحانات بعد."
+
+#: .\apps\exams\templates\exams\exam_instructions.html:4
+msgid "Exam Instructions"
+msgstr "تعليمات الامتحان"
+
+#: .\apps\exams\templates\exams\exam_instructions.html:16
+msgid "Total questions"
+msgstr "إجمالي الأسئلة"
+
+#: .\apps\exams\templates\exams\exam_instructions.html:20
+msgid ""
+"Once you start, the timer begins and cannot be paused. Make sure you have a "
+"stable internet connection."
+msgstr "بمجرد البدء، يبدأ المؤقت ولا يمكن إيقافه. تأكد من اتصالك بالإنترنت."
+
+#: .\apps\exams\templates\exams\exam_instructions.html:26
+#: .\apps\exams\templates\exams\student_list.html:34
+#: .\apps\exams\templates\exams\student_list.html:42
+msgid "Continue"
+msgstr "متابعة"
+
+#: .\apps\exams\templates\exams\exam_instructions.html:26
+msgid "Start Exam"
+msgstr "بدء الامتحان"
+
+#: .\apps\exams\templates\exams\exam_results.html:4
+#: .\apps\exams\templates\exams\exam_results.html:8
+msgid "Results"
+msgstr "النتائج"
+
+#: .\apps\exams\templates\exams\exam_results.html:18
+msgid "Pending grade"
+msgstr "في انتظار التصحيح"
+
+#: .\apps\exams\templates\exams\exam_results.html:55
+#: .\apps\exams\templates\exams\exam_results.html:77
+msgid "Your answer"
+msgstr "إجابتك"
+
+#: .\apps\exams\templates\exams\exam_results.html:100
+#| msgid "Back to applications"
+msgid "Back to instructions"
+msgstr "العودة للتعليمات"
+
+#: .\apps\exams\templates\exams\exam_results.html:100
+msgid "Back to exams"
+msgstr "العودة للامتحانات"
+
+#: .\apps\exams\templates\exams\partials\question_form.html:75
+#, fuzzy
+#| msgid "choices"
+msgid "Choices"
+msgstr "اختيارات"
+
+#: .\apps\exams\templates\exams\partials\question_form.html:78
+#, fuzzy
+#| msgid "choice"
+msgid "Add choice"
+msgstr "اختيار"
+
+#: .\apps\exams\templates\exams\partials\question_form.html:82
+#, fuzzy
+#| msgid "No questions yet. Add the first question."
+msgid "No choices yet. Add at least one."
+msgstr "لا توجد أسئلة بعد. أضف السؤال الأول."
+
+#: .\apps\exams\templates\exams\partials\question_form.html:89
+msgid "Choice text"
+msgstr "نص الاختيار"
+
+#: .\apps\exams\templates\exams\partials\question_form.html:106
+msgid "Save question"
+msgstr "حفظ السؤال"
+
+#: .\apps\exams\templates\exams\student_list.html:4
+#: .\apps\exams\templates\exams\student_list.html:8
+msgid "My Exams"
+msgstr "امتحاناتي"
+
+#: .\apps\exams\templates\exams\student_list.html:11
+msgid "Assigned Exams"
+msgstr "الامتحانات المُسندة"
+
+#: .\apps\exams\templates\exams\student_list.html:19
+msgid "Not started"
+msgstr "لم يبدأ"
+
+#: .\apps\exams\templates\exams\student_list.html:32
+#: .\apps\exams\templates\exams\student_list.html:40
+msgid "Start"
+msgstr "بدء"
+
+#: .\apps\exams\templates\exams\student_list.html:36
+#: .\apps\exams\templates\exams\student_list.html:44
+msgid "View Results"
+msgstr "عرض النتائج"
+
+#: .\apps\exams\templates\exams\student_list.html:53
+msgid "You have no assigned exams yet."
+msgstr "لا توجد لديك امتحانات مُسندة بعد."
+
+#: .\apps\exams\templates\exams\take_exam.html:4
+msgid "Take Exam"
+msgstr "أداء الامتحان"
+
+#: .\apps\exams\templates\exams\take_exam.html:16
+msgid "Time's up!"
+msgstr "انتهى الوقت!"
+
+#: .\apps\exams\templates\exams\take_exam.html:20
+msgid "Submit"
+msgstr "تسليم"
+
+#: .\apps\exams\templates\exams\take_exam.html:56
+msgid "Write your answer here..."
+msgstr "اكتب إجابتك هنا..."
+
+#: .\apps\exams\templates\exams\take_exam.html:64
+msgid "Submit exam"
+msgstr "تسليم الامتحان"
+
+#: .\apps\exams\validators.py:14
+#, fuzzy
+#| msgid "Date of birth must be in the past."
+msgid "Close time must be in the future."
+msgstr "يجب أن يكون تاريخ الميلاد في الماضي."
+
+#: .\apps\exams\views.py:74
+msgid "Entrance exams must be accessed through the access link."
+msgstr "يجب الوصول إلى امتحانات القبول عبر رابط الوصول."
+
+#: .\apps\exams\views.py:294
+msgid "Exam submitted successfully."
+msgstr "تم تسليم الامتحان بنجاح."
+
+#: .\apps\exams\views.py:324
+#| msgid "You have been assigned to this exam."
+msgid "You have already completed this entrance exam."
+msgstr "لقد أكملت هذا الامتحان القبولي بالفعل."
+
+#: .\apps\exams\views.py:366
+msgid "Exam created."
+msgstr "تم إنشاء الامتحان."
+
+#: .\apps\exams\views.py:375
+msgid "Create exam"
+msgstr "إنشاء امتحان"
+
+#: .\apps\exams\views.py:388
+msgid "Exam updated."
+msgstr "تم تحديث الامتحان."
+
+#: .\apps\exams\views.py:397
+msgid "Edit exam"
+msgstr "تعديل الامتحان"
+
+#: .\apps\exams\views.py:411
+msgid "activated"
+msgstr "مفعل"
+
+#: .\apps\exams\views.py:411
+msgid "deactivated"
+msgstr "معطل"
+
+#: .\apps\exams\views.py:412
+#, python-format
+msgid "Exam %(status)s."
+msgstr ""
+
+#: .\apps\exams\views.py:447
+msgid "Grades saved."
+msgstr "تم حفظ الدرجات."
+
+#: .\apps\exams\views.py:468
+msgid "No essay text to grade."
+msgstr "لا يوجد نص مقالي للتصحيح."
+
+#: .\apps\exams\views.py:474
+msgid "Gemini API is not configured."
+msgstr "Gemini API غير مهيأ."
+
+#: .\apps\exams\views.py:484
+msgid "Grading failed."
+msgstr "فشل التصحيح."
+
+#: .\apps\exams\views.py:489
+#, python-format
+msgid "Gemini grade: %(score)s out of %(max)s"
+msgstr "درجة Gemini: %(score)s من %(max)s"
+
+#: .\apps\exams\views.py:551
+msgid "Question saved."
+msgstr "تم حفظ السؤال."
+
+#: .\apps\exams\views.py:578
+msgid "Question deleted."
+msgstr "تم حذف السؤال."
+
+#: .\apps\exams\views.py:615
+msgid "MCQ questions must have at least one choice."
+msgstr "يجب أن يحتوي سؤال الاختيار من متعدد على اختيار واحد على الأقل."
+
+#: .\apps\exams\views.py:618
+msgid "Please mark exactly one choice as correct."
+msgstr "يرجى تحديد اختيار واحد صحيح."
+
+#: .\apps\exams\views.py:620
+msgid "Only one choice can be marked as correct."
+msgstr "يمكن تحديد اختيار واحد فقط كإجابة صحيحة."
 
 #: .\apps\students\constants.py:11
 msgid "Male"
@@ -525,7 +1202,6 @@ msgid "Secondary"
 msgstr "الثانوية"
 
 #: .\apps\students\constants.py:23
-#| msgid "Teacher"
 msgid "Bachelor"
 msgstr "معلم"
 
@@ -534,7 +1210,6 @@ msgid "Master"
 msgstr "الماجستير"
 
 #: .\apps\students\constants.py:25
-#| msgid "Storage"
 msgid "Doctorate"
 msgstr "التخزين"
 
@@ -543,7 +1218,6 @@ msgid "Other"
 msgstr "أخرى"
 
 #: .\apps\students\models.py:22
-#| msgid "full name (Arabic)"
 msgid "full name (4 parts)"
 msgstr "الاسم الرباعي"
 
@@ -556,12 +1230,10 @@ msgid "gender"
 msgstr ""
 
 #: .\apps\students\models.py:25
-#| msgid "email address"
 msgid "address"
 msgstr "العنوان"
 
 #: .\apps\students\models.py:26
-#| msgid "Phone number"
 msgid "mobile number"
 msgstr "رقم الهاتف"
 
@@ -570,7 +1242,6 @@ msgid "education level"
 msgstr ""
 
 #: .\apps\students\models.py:33
-#| msgid "Applications"
 msgid "specialization"
 msgstr "الطلبات"
 
@@ -595,12 +1266,10 @@ msgid "priest contact"
 msgstr ""
 
 #: .\apps\students\models.py:41
-#| msgid "Your profile"
 msgid "student profile"
 msgstr "ملفك الشخصي"
 
 #: .\apps\students\models.py:42
-#| msgid "Your profile"
 msgid "student profiles"
 msgstr "ملفك الشخصي"
 
@@ -621,50 +1290,44 @@ msgstr "المهام المعلقة والإجراءات السريعة."
 msgid "Review queue"
 msgstr "قائمة المراجعة"
 
-#: .\templates\accounts\dashboards\admin.html:18
-msgid "Active entrance exams"
-msgstr "امتحانات القبول النشطة"
+#: .\templates\accounts\dashboards\admin.html:21
+msgid "Manage exams"
+msgstr "إدارة الامتحانات"
 
-#: .\templates\accounts\dashboards\admin.html:18
-msgid "Open windows"
-msgstr "النوافذ المفتوحة"
-
-#: .\templates\accounts\dashboards\admin.html:19
+#: .\templates\accounts\dashboards\admin.html:23
 #: .\templates\core\landing.html:33
 msgid "Cohorts"
 msgstr "الدفعات"
 
-#: .\templates\accounts\dashboards\admin.html:19
+#: .\templates\accounts\dashboards\admin.html:23
 msgid "Diplomas + courses"
 msgstr "الدبلومات والمقررات"
 
-#: .\templates\accounts\dashboards\admin.html:20
+#: .\templates\accounts\dashboards\admin.html:24
 msgid "Storage"
 msgstr "التخزين"
 
-#: .\templates\accounts\dashboards\admin.html:20
+#: .\templates\accounts\dashboards\admin.html:24
 msgid "R2 usage"
 msgstr "استخدام R2"
 
-#: .\templates\accounts\dashboards\admin.html:25
-msgid "Coming soon"
-msgstr "قريباً"
-
-#: .\templates\accounts\dashboards\admin.html:26
-msgid ""
-"Registration review, entrance exam creation, and grading queues will land in "
-"upcoming phases."
-msgstr ""
-
 #: .\templates\accounts\dashboards\admin.html:29
+msgid "Pending grading"
+msgstr "في انتظار التصحيح"
+
+#: .\templates\accounts\dashboards\admin.html:31
+msgid "Grade submissions"
+msgstr "تصحيح التسليمات"
+
+#: .\templates\accounts\dashboards\admin.html:34
 msgid "Server time"
 msgstr "وقت الخادم"
 
-#: .\templates\accounts\dashboards\admin.html:30
+#: .\templates\accounts\dashboards\admin.html:35
 msgid "All schedules run in"
 msgstr "جميع الجداول تعمل بتوقيت"
 
-#: .\templates\accounts\dashboards\admin.html:30
+#: .\templates\accounts\dashboards\admin.html:35
 msgid "Current time:"
 msgstr "الوقت الحالي:"
 
@@ -707,10 +1370,6 @@ msgstr "ستملأ المرحلة الثانية والثالثة هذه الل�
 #: .\templates\accounts\dashboards\student.html:3
 msgid "Student dashboard"
 msgstr "لوحة تحكم الطالب"
-
-#: .\templates\accounts\dashboards\student.html:7
-msgid "Student"
-msgstr "طالب"
 
 #: .\templates\accounts\dashboards\student.html:8
 msgid "Welcome"
@@ -788,7 +1447,7 @@ msgstr "ستتم إضافة محتوى المقررات وأدوات التصح�
 
 #: .\templates\accounts\login.html:3 .\templates\accounts\login.html:7
 #: .\templates\accounts\login.html:30 .\templates\core\landing.html:20
-#: .\templates\partials\_navbar.html:32
+#: .\templates\partials\_navbar.html:33
 msgid "Log in"
 msgstr "تسجيل الدخول"
 
@@ -807,10 +1466,6 @@ msgstr "ملفك الشخصي"
 #: .\templates\accounts\profile.html:7
 msgid "Update your name and phone number. Email cannot be changed here."
 msgstr "حدّث اسمك ورقم هاتفك. لا يمكن تغيير البريد الإلكتروني هنا."
-
-#: .\templates\accounts\profile.html:24
-msgid "Save"
-msgstr "حفظ"
 
 #: .\templates\core\errors\400.html:7
 msgid "Bad request"
@@ -920,9 +1575,6 @@ msgstr "اذهب"
 msgid "Dashboard"
 msgstr "لوحة التحكم"
 
-#: .\templates\partials\_navbar.html:29
+#: .\templates\partials\_navbar.html:30
 msgid "Log out"
 msgstr "تسجيل الخروج"
-
-#~ msgid "Learn more"
-#~ msgstr "اعرف المزيد"

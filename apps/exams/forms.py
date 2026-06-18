@@ -1,10 +1,11 @@
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
-from apps.exams.models import Exam
+from apps.accounts.forms import StyledMixin
+from apps.exams.models import Exam, Question
 
 
-class ExamForm(forms.ModelForm):
+class ExamForm(StyledMixin, forms.ModelForm):
     class Meta:
         model = Exam
         fields = [
@@ -34,15 +35,7 @@ class ExamForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        for field in self.fields.values():
-            field.widget.attrs.setdefault(
-                "class",
-                (
-                    "w-full border border-slate-300 dark:border-slate-600 "
-                    "rounded-lg p-2 bg-white dark:bg-slate-700 "
-                    "text-slate-700 dark:text-slate-200"
-                ),
-            )
+        self.apply_styling()
 
     def clean(self):
         cleaned = super().clean()
@@ -51,3 +44,20 @@ class ExamForm(forms.ModelForm):
         if open_at and close_at and open_at >= close_at:
             raise forms.ValidationError(_("Open time must be before close time."))
         return cleaned
+
+
+class QuestionForm(StyledMixin, forms.ModelForm):
+    class Meta:
+        model = Question
+        fields = [
+            "text",
+            "question_type",
+            "points",
+        ]
+        widgets = {
+            "text": forms.Textarea(attrs={"rows": 3}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.apply_styling()

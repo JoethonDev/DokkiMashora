@@ -20,6 +20,13 @@ body {
   transform: scaleX(-1);
 }
 
+/* Headings use tighter tracking for display feel. */
+h1, h2, h3, .font-display { letter-spacing: -0.01em; }
+h1 { letter-spacing: -0.02em; }
+
+/* Tabular figures stop the exam timer and score columns from jittering. */
+.tabular, table td.num, .timer, .stat-value { font-variant-numeric: tabular-nums; }
+
 .htmx-indicator {
   opacity: 0;
   transition: opacity 200ms ease-out;

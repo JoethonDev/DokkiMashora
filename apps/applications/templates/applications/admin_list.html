@@ -9,7 +9,7 @@
       <h1 class="mt-1 text-3xl font-bold tracking-tight">{% trans "Applications" %}</h1>
     </div>
     <form method="get" class="flex items-center gap-2">
-      <label for="status" class="text-sm text-slate-500">{% trans "Status" %}</label>
+      <label for="status" class="text-sm text-slate-500 dark:text-slate-400">{% trans "Status" %}</label>
       <select id="status" name="status" onchange="this.form.submit()" class="rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-sm">
         <option value="">{% trans "All" %}</option>
         {% for value, label in status_choices %}
@@ -21,7 +21,7 @@
 
   <div class="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
     <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-800 text-sm">
-      <thead class="bg-slate-50 dark:bg-slate-800/50 text-slate-500">
+      <thead class="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400">
         <tr>
           <th class="px-4 py-2 text-start font-medium">{% trans "Name" %}</th>
           <th class="px-4 py-2 text-start font-medium">{% trans "Email" %}</th>
@@ -34,13 +34,13 @@
         {% for application in applications %}
           <tr>
             <td class="px-4 py-2">{{ application.student.full_name }}</td>
-            <td class="px-4 py-2 text-slate-500">{{ application.student.user.email }}</td>
+            <td class="px-4 py-2 text-slate-500 dark:text-slate-400">{{ application.student.user.email }}</td>
             <td class="px-4 py-2">{{ application.get_status_display }}</td>
-            <td class="px-4 py-2 text-slate-500">{{ application.created_at|date:"Y-m-d H:i" }}</td>
+            <td class="px-4 py-2 text-slate-500 dark:text-slate-400">{{ application.created_at|date:"Y-m-d H:i" }}</td>
             <td class="px-4 py-2"><a href="{% url 'applications:admin_detail' application.id %}" class="text-brand-600 hover:underline">{% trans "Review" %}</a></td>
           </tr>
         {% empty %}
-          <tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">{% trans "No applications yet." %}</td></tr>
+          <tr><td colspan="5" class="px-4 py-6 text-center text-slate-500 dark:text-slate-400">{% trans "No applications yet." %}</td></tr>
         {% endfor %}
       </tbody>
     </table>

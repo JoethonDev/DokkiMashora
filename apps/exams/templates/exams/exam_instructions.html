@@ -20,10 +20,10 @@
         {% trans "Once you start, the timer begins and cannot be paused. Make sure you have a stable internet connection." %}
       </p>
     </div>
-    <form method="post" action="{% url 'exams:start_exam' exam.id %}">
+    <form method="post" action="{% if token %}{% url 'exams:start_exam_token' token %}{% else %}{% url 'exams:start_exam' exam.id %}{% endif %}">
       {% csrf_token %}
       <button type="submit" class="bg-blue-600 text-white px-8 py-3 rounded-lg text-lg font-semibold hover:bg-blue-700">
-        {% trans "Start Exam" %}
+        {% if assignment.status == 'in_progress' %}{% trans "Continue" %}{% else %}{% trans "Start Exam" %}{% endif %}
       </button>
     </form>
   </div>

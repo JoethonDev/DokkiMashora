@@ -7,27 +7,27 @@
   <header class="mt-4 mb-6">
     <p class="text-sm font-semibold text-brand-600 tracking-wide uppercase">{% trans "Application" %} #{{ application.id }}</p>
     <h1 class="mt-1 text-3xl font-bold tracking-tight">{{ application.student.full_name }}</h1>
-    <p class="mt-1 text-sm text-slate-500">{{ application.get_status_display }} &middot; {% trans "Submitted" %} {{ application.created_at|date:"Y-m-d H:i" }}</p>
+    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ application.get_status_display }} &middot; {% trans "Submitted" %} {{ application.created_at|date:"Y-m-d H:i" }}</p>
   </header>
 
   <div class="grid lg:grid-cols-2 gap-6">
     <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
       <h2 class="font-semibold mb-3">{% trans "Personal data" %}</h2>
       <dl class="text-sm grid grid-cols-2 gap-y-2">
-        <dt class="text-slate-500">{% trans "Email" %}</dt><dd>{{ application.student.user.email }}</dd>
-        <dt class="text-slate-500">{% trans "Phone" %}</dt><dd>{{ application.student.phone }}</dd>
-        <dt class="text-slate-500">{% trans "National ID" %}</dt><dd>{{ application.student.national_id }}</dd>
-        <dt class="text-slate-500">{% trans "Date of birth" %}</dt><dd>{{ application.student.date_of_birth }}</dd>
-        <dt class="text-slate-500">{% trans "Age" %}</dt><dd>{{ application.student.age }}</dd>
-        <dt class="text-slate-500">{% trans "Gender" %}</dt><dd>{{ application.student.get_gender_display }}</dd>
-        <dt class="text-slate-500">{% trans "Address" %}</dt><dd class="col-span-1">{{ application.student.address }}</dd>
-        <dt class="text-slate-500">{% trans "Education" %}</dt><dd>{{ application.student.get_education_display }}</dd>
-        <dt class="text-slate-500">{% trans "Specialization" %}</dt><dd>{{ application.student.specialization|default:"-" }}</dd>
-        <dt class="text-slate-500">{% trans "Employer" %}</dt><dd>{{ application.student.employer|default:"-" }}</dd>
-        <dt class="text-slate-500">{% trans "Current job" %}</dt><dd>{{ application.student.current_job|default:"-" }}</dd>
-        <dt class="text-slate-500">{% trans "Church" %}</dt><dd>{{ application.student.church|default:"-" }}</dd>
-        <dt class="text-slate-500">{% trans "Priest" %}</dt><dd>{{ application.student.priest_name|default:"-" }}</dd>
-        <dt class="text-slate-500">{% trans "Priest contact" %}</dt><dd>{{ application.student.priest_contact|default:"-" }}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Email" %}</dt><dd>{{ application.student.user.email }}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Phone" %}</dt><dd>{{ application.student.phone }}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "National ID" %}</dt><dd>{{ application.student.national_id }}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Date of birth" %}</dt><dd>{{ application.student.date_of_birth }}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Age" %}</dt><dd>{{ application.student.age }}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Gender" %}</dt><dd>{{ application.student.get_gender_display }}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Address" %}</dt><dd class="col-span-1">{{ application.student.address }}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Education" %}</dt><dd>{{ application.student.get_education_display }}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Specialization" %}</dt><dd>{{ application.student.specialization|default:"-" }}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Employer" %}</dt><dd>{{ application.student.employer|default:"-" }}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Current job" %}</dt><dd>{{ application.student.current_job|default:"-" }}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Church" %}</dt><dd>{{ application.student.church|default:"-" }}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Priest" %}</dt><dd>{{ application.student.priest_name|default:"-" }}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Priest contact" %}</dt><dd>{{ application.student.priest_contact|default:"-" }}</dd>
       </dl>
     </div>
 
@@ -58,7 +58,7 @@
         </div>
       </form>
       {% if application.reviewed_by %}
-        <p class="mt-3 text-xs text-slate-500">{% trans "Last reviewer" %}: {{ application.reviewed_by.email }} {% if application.reviewed_at %}({{ application.reviewed_at|date:"Y-m-d H:i" }}){% endif %}</p>
+        <p class="mt-3 text-xs text-slate-500 dark:text-slate-400">{% trans "Last reviewer" %}: {{ application.reviewed_by.email }} {% if application.reviewed_at %}({{ application.reviewed_at|date:"Y-m-d H:i" }}){% endif %}</p>
       {% endif %}
     </div>
   </div>

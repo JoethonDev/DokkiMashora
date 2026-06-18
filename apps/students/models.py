@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -51,8 +53,6 @@ class StudentProfile(TimeStampedModel):
 
     @property
     def age(self) -> int:
-        from datetime import date
-
         today = date.today()
         return (
             today.year

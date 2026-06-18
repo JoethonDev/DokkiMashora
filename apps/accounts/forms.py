@@ -13,10 +13,10 @@ class StyledMixin:
     """Adds shared CSS classes to all rendered form widgets."""
 
     base_class = (
-        "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm "
-        "shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 "
-        "focus:ring-emerald-200 dark:border-slate-700 dark:bg-slate-900 "
-        "dark:text-slate-100"
+        "w-full rounded-lg border border-slate-300 dark:border-slate-700 "
+        "bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm "
+        "focus:border-brand-500 focus:outline-none focus:ring-2 "
+        "focus:ring-brand-200 dark:focus:ring-brand-900 dark:text-slate-100"
     )
 
     def apply_styling(self) -> None:
@@ -25,7 +25,7 @@ class StyledMixin:
             css = widget.attrs.get("class", "")
             if isinstance(widget, (forms.CheckboxInput, forms.CheckboxSelectMultiple)):
                 widget.attrs["class"] = (
-                    css + " h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500"
+                    css + " h-4 w-4 rounded text-brand-600 focus:ring-brand-500"
                 ).strip()
             elif isinstance(widget, forms.Select):
                 widget.attrs["class"] = (css + " " + self.base_class).strip()

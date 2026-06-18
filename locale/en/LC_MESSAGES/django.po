@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-18 14:06+0300\n"
+"POT-Creation-Date: 2026-06-18 15:26+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -25,6 +25,9 @@ msgstr ""
 #: .\apps\accounts\admin.py:25
 #: .\apps\applications\templates\applications\admin_list.html:12
 #: .\apps\applications\templates\applications\admin_list.html:28
+#: .\apps\exams\templates\exams\admin_detail.html:205
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:19
+#: .\apps\exams\templates\exams\exam_results.html:13
 msgid "Status"
 msgstr ""
 
@@ -90,7 +93,7 @@ msgid "Stored for matching across applications."
 msgstr ""
 
 #: .\apps\accounts\models.py:42 .\apps\applications\models.py:30
-#: .\apps\communications\email_message.py:23
+#: .\apps\communications\email_message.py:23 .\apps\exams\models.py:134
 msgid "status"
 msgstr ""
 
@@ -99,6 +102,7 @@ msgid "staff status"
 msgstr ""
 
 #: .\apps\accounts\models.py:50 .\apps\communications\models.py:28
+#: .\apps\exams\models.py:45
 msgid "active"
 msgstr ""
 
@@ -118,7 +122,7 @@ msgstr ""
 msgid "Profile updated."
 msgstr ""
 
-#: .\apps\accounts\views.py:104
+#: .\apps\accounts\views.py:112
 msgid "Super Admin"
 msgstr ""
 
@@ -272,6 +276,8 @@ msgid "Back to applications"
 msgstr ""
 
 #: .\apps\applications\templates\applications\admin_detail.html:10
+#: .\apps\exams\templates\exams\admin_detail.html:207
+#: .\apps\exams\templates\exams\admin_grade_list.html:16
 msgid "Submitted"
 msgstr ""
 
@@ -312,6 +318,7 @@ msgid "Reject"
 msgstr ""
 
 #: .\apps\applications\templates\applications\admin_detail.html:56
+#: .\apps\exams\templates\exams\admin_detail.html:29
 msgid "Activate"
 msgstr ""
 
@@ -357,7 +364,7 @@ msgstr ""
 
 #: .\apps\applications\templates\applications\register.html:3
 #: .\apps\applications\templates\applications\register.html:7
-#: .\templates\partials\_navbar.html:14 .\templates\partials\_navbar.html:33
+#: .\templates\partials\_navbar.html:14 .\templates\partials\_navbar.html:34
 msgid "Register"
 msgstr ""
 
@@ -482,6 +489,693 @@ msgstr ""
 msgid "Unknown template slug."
 msgstr ""
 
+#: .\apps\exams\apps.py:8 .\templates\accounts\dashboards\admin.html:19
+#: .\templates\partials\_navbar.html:20
+msgid "Exams"
+msgstr ""
+
+#: .\apps\exams\constants.py:6
+msgid "Entrance exam"
+msgstr ""
+
+#: .\apps\exams\constants.py:7
+msgid "Assessment"
+msgstr ""
+
+#: .\apps\exams\constants.py:13
+msgid "Multiple choice"
+msgstr ""
+
+#: .\apps\exams\constants.py:14
+msgid "Essay"
+msgstr ""
+
+#: .\apps\exams\constants.py:22
+msgid "Assigned"
+msgstr ""
+
+#: .\apps\exams\constants.py:23
+#: .\apps\exams\templates\exams\student_list.html:21
+msgid "In progress"
+msgstr ""
+
+#: .\apps\exams\constants.py:24
+#: .\apps\exams\templates\exams\student_list.html:23
+msgid "Completed"
+msgstr ""
+
+#: .\apps\exams\constants.py:25
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:114
+#: .\apps\exams\templates\exams\exam_results.html:16
+#: .\apps\exams\templates\exams\student_list.html:25
+msgid "Graded"
+msgstr ""
+
+#: .\apps\exams\forms.py:31
+msgid "Date and time when the exam becomes available."
+msgstr ""
+
+#: .\apps\exams\forms.py:32
+msgid "Date and time when the exam closes."
+msgstr ""
+
+#: .\apps\exams\forms.py:52 .\apps\exams\validators.py:8
+msgid "Open time must be before close time."
+msgstr ""
+
+#: .\apps\exams\models.py:20
+msgid "title"
+msgstr ""
+
+#: .\apps\exams\models.py:21
+msgid "description"
+msgstr ""
+
+#: .\apps\exams\models.py:23
+msgid "exam type"
+msgstr ""
+
+#: .\apps\exams\models.py:30
+msgid "access token"
+msgstr ""
+
+#: .\apps\exams\models.py:32
+msgid "duration (minutes)"
+msgstr ""
+
+#: .\apps\exams\models.py:34
+msgid "passing score"
+msgstr ""
+
+#: .\apps\exams\models.py:40
+msgid "total points"
+msgstr ""
+
+#: .\apps\exams\models.py:46
+msgid "open at"
+msgstr ""
+
+#: .\apps\exams\models.py:47
+msgid "close at"
+msgstr ""
+
+#: .\apps\exams\models.py:52
+msgid "created by"
+msgstr ""
+
+#: .\apps\exams\models.py:56 .\apps\exams\models.py:73
+#: .\apps\exams\models.py:124
+msgid "exam"
+msgstr ""
+
+#: .\apps\exams\models.py:57
+msgid "exams"
+msgstr ""
+
+#: .\apps\exams\models.py:75
+msgid "question text"
+msgstr ""
+
+#: .\apps\exams\models.py:77
+msgid "type"
+msgstr ""
+
+#: .\apps\exams\models.py:83
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:41
+#: .\apps\exams\templates\exams\exam_results.html:48
+#: .\apps\exams\templates\exams\take_exam.html:34
+msgid "points"
+msgstr ""
+
+#: .\apps\exams\models.py:88 .\apps\exams\models.py:108
+msgid "order"
+msgstr ""
+
+#: .\apps\exams\models.py:91 .\apps\exams\models.py:104
+#: .\apps\exams\models.py:186
+msgid "question"
+msgstr ""
+
+#: .\apps\exams\models.py:92
+msgid "questions"
+msgstr ""
+
+#: .\apps\exams\models.py:106
+msgid "text"
+msgstr ""
+
+#: .\apps\exams\models.py:107
+msgid "correct"
+msgstr ""
+
+#: .\apps\exams\models.py:111
+msgid "choice"
+msgstr ""
+
+#: .\apps\exams\models.py:112
+msgid "choices"
+msgstr ""
+
+#: .\apps\exams\models.py:130
+msgid "student"
+msgstr ""
+
+#: .\apps\exams\models.py:132
+msgid "attempt number"
+msgstr ""
+
+#: .\apps\exams\models.py:141 .\apps\exams\models.py:198
+msgid "score"
+msgstr ""
+
+#: .\apps\exams\models.py:147
+msgid "assigned at"
+msgstr ""
+
+#: .\apps\exams\models.py:148
+msgid "started at"
+msgstr ""
+
+#: .\apps\exams\models.py:149
+msgid "submitted at"
+msgstr ""
+
+#: .\apps\exams\models.py:150 .\apps\exams\models.py:205
+msgid "graded at"
+msgstr ""
+
+#: .\apps\exams\models.py:157 .\apps\exams\models.py:212
+msgid "graded by"
+msgstr ""
+
+#: .\apps\exams\models.py:161
+msgid "exam assignment"
+msgstr ""
+
+#: .\apps\exams\models.py:162
+msgid "exam assignments"
+msgstr ""
+
+#: .\apps\exams\models.py:180
+msgid "assignment"
+msgstr ""
+
+#: .\apps\exams\models.py:194
+msgid "selected choice"
+msgstr ""
+
+#: .\apps\exams\models.py:196
+msgid "essay text"
+msgstr ""
+
+#: .\apps\exams\models.py:204
+msgid "feedback"
+msgstr ""
+
+#: .\apps\exams\models.py:216
+msgid "answer"
+msgstr ""
+
+#: .\apps\exams\models.py:217
+msgid "answers"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:4
+msgid "Exam Detail"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:9
+#: .\apps\exams\templates\exams\admin_exam_form.html:4
+#: .\apps\exams\templates\exams\admin_exam_form.html:9
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:9
+#: .\apps\exams\templates\exams\admin_list.html:9
+msgid "Exam Management"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:23
+#: .\apps\exams\templates\exams\admin_detail.html:143
+#: .\apps\exams\templates\exams\admin_list.html:45
+msgid "Edit"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:29
+msgid "Deactivate"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:36
+#: .\apps\exams\templates\exams\admin_list.html:21
+#: .\apps\exams\templates\exams\exam_instructions.html:14
+msgid "Duration"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:37
+#: .\apps\exams\templates\exams\exam_instructions.html:14
+msgid "minutes"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:40
+msgid "Total points"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:44
+#: .\apps\exams\templates\exams\exam_instructions.html:15
+#: .\apps\exams\templates\exams\exam_results.html:35
+msgid "Passing score"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:48
+#: .\apps\exams\templates\exams\admin_list.html:22
+#: .\apps\exams\templates\exams\admin_list.html:38
+msgid "Active"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:51
+msgid "Yes"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:53
+msgid "No"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:60
+msgid "Opens"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:64
+msgid "Closes"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:78
+#: .\apps\exams\templates\exams\admin_detail.html:95
+msgid "Questions"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:83
+msgid "Access"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:88
+#: .\apps\exams\templates\exams\admin_detail.html:199
+msgid "Assignments"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:101
+msgid "Add question"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:115
+msgid "Q"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:121
+msgid "pts"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:132
+msgid "No choices added yet."
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:147
+msgid "Delete this question?"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:149
+msgid "Delete"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:158
+msgid "No questions yet. Add the first question."
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:166
+msgid "Exam Access"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:169
+msgid "Access URL"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:174
+msgid ""
+"Students scan this QR code or open the URL. Unauthenticated users are "
+"redirected to login."
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:178
+msgid "QR Code"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:183
+msgid "QR unavailable"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:192
+msgid "Activate this exam to generate the access URL and QR code."
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:204
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:18
+#: .\apps\exams\templates\exams\admin_grade_list.html:14
+#: .\templates\accounts\dashboards\student.html:7
+msgid "Student"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:206
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:88
+#: .\apps\exams\templates\exams\exam_results.html:25
+#: .\apps\exams\templates\exams\exam_results.html:84
+#: .\apps\exams\templates\exams\student_list.html:23
+#: .\apps\exams\templates\exams\student_list.html:25
+msgid "Score"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:208
+#: .\apps\exams\templates\exams\admin_grade_list.html:17
+#: .\apps\exams\templates\exams\admin_list.html:23
+msgid "Actions"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:229
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:4
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:13
+#: .\apps\exams\templates\exams\admin_grade_list.html:28
+msgid "Grade"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:231
+#: .\apps\exams\templates\exams\admin_list.html:44
+msgid "View"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_detail.html:239
+msgid "No assignments yet."
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_exam_form.html:41
+#: .\templates\accounts\profile.html:24
+msgid "Save"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_exam_form.html:44
+#: .\apps\exams\templates\exams\partials\question_form.html:111
+msgid "Cancel"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:28
+msgid "Current score"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:38
+#: .\apps\exams\templates\exams\exam_results.html:45
+#: .\apps\exams\templates\exams\take_exam.html:31
+msgid "Question"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:49
+msgid "Student's choice"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:54
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:79
+#: .\apps\exams\templates\exams\exam_results.html:60
+msgid "No answer"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:62
+#: .\apps\exams\templates\exams\exam_results.html:67
+#: .\apps\exams\templates\exams\partials\question_form.html:94
+msgid "Correct"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:66
+#: .\apps\exams\templates\exams\exam_results.html:71
+msgid "Incorrect"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:73
+msgid "Student's answer"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:88
+msgid "max"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:97
+#: .\apps\exams\templates\exams\exam_results.html:89
+msgid "Feedback"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:108
+msgid "Grade with Gemini"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_grade_assignment.html:125
+msgid "Save Grades"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_grade_list.html:4
+msgid "Grade Exams"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_grade_list.html:8
+msgid "Pending Grading"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_grade_list.html:15
+msgid "Exam"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_grade_list.html:34
+msgid "No submissions pending grading."
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_list.html:4
+msgid "Manage Exams"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_list.html:11
+msgid "Create Exam"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_list.html:19
+msgid "Title"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_list.html:20
+msgid "Type"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_list.html:35
+msgid "min"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_list.html:40
+msgid "Inactive"
+msgstr ""
+
+#: .\apps\exams\templates\exams\admin_list.html:50
+msgid "No exams yet."
+msgstr ""
+
+#: .\apps\exams\templates\exams\exam_instructions.html:4
+msgid "Exam Instructions"
+msgstr ""
+
+#: .\apps\exams\templates\exams\exam_instructions.html:16
+msgid "Total questions"
+msgstr ""
+
+#: .\apps\exams\templates\exams\exam_instructions.html:20
+msgid ""
+"Once you start, the timer begins and cannot be paused. Make sure you have a "
+"stable internet connection."
+msgstr ""
+
+#: .\apps\exams\templates\exams\exam_instructions.html:26
+#: .\apps\exams\templates\exams\student_list.html:34
+#: .\apps\exams\templates\exams\student_list.html:42
+msgid "Continue"
+msgstr ""
+
+#: .\apps\exams\templates\exams\exam_instructions.html:26
+msgid "Start Exam"
+msgstr ""
+
+#: .\apps\exams\templates\exams\exam_results.html:4
+#: .\apps\exams\templates\exams\exam_results.html:8
+msgid "Results"
+msgstr ""
+
+#: .\apps\exams\templates\exams\exam_results.html:18
+msgid "Pending grade"
+msgstr ""
+
+#: .\apps\exams\templates\exams\exam_results.html:55
+#: .\apps\exams\templates\exams\exam_results.html:77
+msgid "Your answer"
+msgstr ""
+
+#: .\apps\exams\templates\exams\exam_results.html:100
+msgid "Back to instructions"
+msgstr ""
+
+#: .\apps\exams\templates\exams\exam_results.html:100
+msgid "Back to exams"
+msgstr ""
+
+#: .\apps\exams\templates\exams\partials\question_form.html:75
+msgid "Choices"
+msgstr ""
+
+#: .\apps\exams\templates\exams\partials\question_form.html:78
+msgid "Add choice"
+msgstr ""
+
+#: .\apps\exams\templates\exams\partials\question_form.html:82
+msgid "No choices yet. Add at least one."
+msgstr ""
+
+#: .\apps\exams\templates\exams\partials\question_form.html:89
+msgid "Choice text"
+msgstr ""
+
+#: .\apps\exams\templates\exams\partials\question_form.html:106
+msgid "Save question"
+msgstr ""
+
+#: .\apps\exams\templates\exams\student_list.html:4
+#: .\apps\exams\templates\exams\student_list.html:8
+msgid "My Exams"
+msgstr ""
+
+#: .\apps\exams\templates\exams\student_list.html:11
+msgid "Assigned Exams"
+msgstr ""
+
+#: .\apps\exams\templates\exams\student_list.html:19
+msgid "Not started"
+msgstr ""
+
+#: .\apps\exams\templates\exams\student_list.html:32
+#: .\apps\exams\templates\exams\student_list.html:40
+msgid "Start"
+msgstr ""
+
+#: .\apps\exams\templates\exams\student_list.html:36
+#: .\apps\exams\templates\exams\student_list.html:44
+msgid "View Results"
+msgstr ""
+
+#: .\apps\exams\templates\exams\student_list.html:53
+msgid "You have no assigned exams yet."
+msgstr ""
+
+#: .\apps\exams\templates\exams\take_exam.html:4
+msgid "Take Exam"
+msgstr ""
+
+#: .\apps\exams\templates\exams\take_exam.html:16
+msgid "Time's up!"
+msgstr ""
+
+#: .\apps\exams\templates\exams\take_exam.html:20
+msgid "Submit"
+msgstr ""
+
+#: .\apps\exams\templates\exams\take_exam.html:56
+msgid "Write your answer here..."
+msgstr ""
+
+#: .\apps\exams\templates\exams\take_exam.html:64
+msgid "Submit exam"
+msgstr ""
+
+#: .\apps\exams\validators.py:14
+msgid "Close time must be in the future."
+msgstr ""
+
+#: .\apps\exams\views.py:74
+msgid "Entrance exams must be accessed through the access link."
+msgstr ""
+
+#: .\apps\exams\views.py:294
+msgid "Exam submitted successfully."
+msgstr ""
+
+#: .\apps\exams\views.py:324
+msgid "You have already completed this entrance exam."
+msgstr ""
+
+#: .\apps\exams\views.py:366
+msgid "Exam created."
+msgstr ""
+
+#: .\apps\exams\views.py:375
+msgid "Create exam"
+msgstr ""
+
+#: .\apps\exams\views.py:388
+msgid "Exam updated."
+msgstr ""
+
+#: .\apps\exams\views.py:397
+msgid "Edit exam"
+msgstr ""
+
+#: .\apps\exams\views.py:411
+msgid "activated"
+msgstr ""
+
+#: .\apps\exams\views.py:411
+msgid "deactivated"
+msgstr ""
+
+#: .\apps\exams\views.py:412
+#, python-format
+msgid "Exam %(status)s."
+msgstr ""
+
+#: .\apps\exams\views.py:447
+msgid "Grades saved."
+msgstr ""
+
+#: .\apps\exams\views.py:468
+msgid "No essay text to grade."
+msgstr ""
+
+#: .\apps\exams\views.py:474
+msgid "Gemini API is not configured."
+msgstr ""
+
+#: .\apps\exams\views.py:484
+msgid "Grading failed."
+msgstr ""
+
+#: .\apps\exams\views.py:489
+#, python-format
+msgid "Gemini grade: %(score)s out of %(max)s"
+msgstr ""
+
+#: .\apps\exams\views.py:551
+msgid "Question saved."
+msgstr ""
+
+#: .\apps\exams\views.py:578
+msgid "Question deleted."
+msgstr ""
+
+#: .\apps\exams\views.py:615
+msgid "MCQ questions must have at least one choice."
+msgstr ""
+
+#: .\apps\exams\views.py:618
+msgid "Please mark exactly one choice as correct."
+msgstr ""
+
+#: .\apps\exams\views.py:620
+msgid "Only one choice can be marked as correct."
+msgstr ""
+
 #: .\apps\students\constants.py:11
 msgid "Male"
 msgstr ""
@@ -583,50 +1277,44 @@ msgstr ""
 msgid "Review queue"
 msgstr ""
 
-#: .\templates\accounts\dashboards\admin.html:18
-msgid "Active entrance exams"
+#: .\templates\accounts\dashboards\admin.html:21
+msgid "Manage exams"
 msgstr ""
 
-#: .\templates\accounts\dashboards\admin.html:18
-msgid "Open windows"
-msgstr ""
-
-#: .\templates\accounts\dashboards\admin.html:19
+#: .\templates\accounts\dashboards\admin.html:23
 #: .\templates\core\landing.html:33
 msgid "Cohorts"
 msgstr ""
 
-#: .\templates\accounts\dashboards\admin.html:19
+#: .\templates\accounts\dashboards\admin.html:23
 msgid "Diplomas + courses"
 msgstr ""
 
-#: .\templates\accounts\dashboards\admin.html:20
+#: .\templates\accounts\dashboards\admin.html:24
 msgid "Storage"
 msgstr ""
 
-#: .\templates\accounts\dashboards\admin.html:20
+#: .\templates\accounts\dashboards\admin.html:24
 msgid "R2 usage"
 msgstr ""
 
-#: .\templates\accounts\dashboards\admin.html:25
-msgid "Coming soon"
-msgstr ""
-
-#: .\templates\accounts\dashboards\admin.html:26
-msgid ""
-"Registration review, entrance exam creation, and grading queues will land in "
-"upcoming phases."
-msgstr ""
-
 #: .\templates\accounts\dashboards\admin.html:29
+msgid "Pending grading"
+msgstr ""
+
+#: .\templates\accounts\dashboards\admin.html:31
+msgid "Grade submissions"
+msgstr ""
+
+#: .\templates\accounts\dashboards\admin.html:34
 msgid "Server time"
 msgstr ""
 
-#: .\templates\accounts\dashboards\admin.html:30
+#: .\templates\accounts\dashboards\admin.html:35
 msgid "All schedules run in"
 msgstr ""
 
-#: .\templates\accounts\dashboards\admin.html:30
+#: .\templates\accounts\dashboards\admin.html:35
 msgid "Current time:"
 msgstr ""
 
@@ -668,10 +1356,6 @@ msgstr ""
 
 #: .\templates\accounts\dashboards\student.html:3
 msgid "Student dashboard"
-msgstr ""
-
-#: .\templates\accounts\dashboards\student.html:7
-msgid "Student"
 msgstr ""
 
 #: .\templates\accounts\dashboards\student.html:8
@@ -750,7 +1434,7 @@ msgstr ""
 
 #: .\templates\accounts\login.html:3 .\templates\accounts\login.html:7
 #: .\templates\accounts\login.html:30 .\templates\core\landing.html:20
-#: .\templates\partials\_navbar.html:32
+#: .\templates\partials\_navbar.html:33
 msgid "Log in"
 msgstr ""
 
@@ -768,10 +1452,6 @@ msgstr ""
 
 #: .\templates\accounts\profile.html:7
 msgid "Update your name and phone number. Email cannot be changed here."
-msgstr ""
-
-#: .\templates\accounts\profile.html:24
-msgid "Save"
 msgstr ""
 
 #: .\templates\core\errors\400.html:7
@@ -880,6 +1560,6 @@ msgstr ""
 msgid "Dashboard"
 msgstr ""
 
-#: .\templates\partials\_navbar.html:29
+#: .\templates\partials\_navbar.html:30
 msgid "Log out"
 msgstr ""

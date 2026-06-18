@@ -1,0 +1,16 @@
+{% load i18n %}
+<button x-data="themeToggle()" @click="toggle()"
+        :aria-label="dark ? '{% trans "Switch to light" %}' : '{% trans "Switch to dark" %}'"
+        class="rounded-md border border-slate-300 dark:border-slate-700 p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">
+  <svg x-show="dark" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A3 3 0 0118.621 15H3a9 9 0 010-6h.379a3 3 0 011.732-1.354A8 8 0 1020.354 15.354z"/><path stroke-linecap="round" stroke-linejoin="round" d="M22 12a10 10 0 11-20 0 10 10 0 0120 0z" opacity="0"/><circle cx="12" cy="12" r="4" fill="currentColor" stroke="none"/></svg>
+  <svg x-show="!dark" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/><path stroke-linecap="round" d="M12 1v3M12 20v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M1 12h3M20 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>
+</button>
+<script>
+function themeToggle(){return{
+  dark: document.documentElement.classList.contains('dark'),
+  toggle(){ this.dark=!this.dark;
+    document.documentElement.classList.toggle('dark',this.dark);
+    try{localStorage.setItem('dm-theme',this.dark?'dark':'light')}catch(e){}
+  }
+}}
+</script>

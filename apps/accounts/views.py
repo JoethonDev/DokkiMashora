@@ -11,6 +11,11 @@ from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods
 
+from apps.applications.constants import APP_STATUS_PENDING, APP_STATUS_UNDER_REVIEW
+from apps.applications.models import Application
+from apps.exams.constants import ASSIGNMENT_STATUS_COMPLETED
+from apps.exams.models import Assignment, Exam
+
 from .constants import (
     GROUP_ADMIN,
     GROUP_MODERATOR,
@@ -64,11 +69,6 @@ def dashboard_router(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def admin_dashboard(request: HttpRequest) -> HttpResponse:
-    from apps.applications.constants import APP_STATUS_PENDING, APP_STATUS_UNDER_REVIEW
-    from apps.applications.models import Application
-    from apps.exams.constants import ASSIGNMENT_STATUS_COMPLETED
-    from apps.exams.models import Assignment, Exam
-
     pending_count = Application.objects.filter(
         status__in=[APP_STATUS_PENDING, APP_STATUS_UNDER_REVIEW]
     ).count()
@@ -85,9 +85,6 @@ def admin_dashboard(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def moderator_dashboard(request: HttpRequest) -> HttpResponse:
-    from apps.applications.constants import APP_STATUS_PENDING, APP_STATUS_UNDER_REVIEW
-    from apps.applications.models import Application
-
     pending_count = Application.objects.filter(
         status__in=[APP_STATUS_PENDING, APP_STATUS_UNDER_REVIEW]
     ).count()

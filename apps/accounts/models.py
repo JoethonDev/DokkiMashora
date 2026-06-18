@@ -10,7 +10,7 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.core.models import TimeStampedModel
 
-from .constants import USER_STATUS_ACTIVE, USER_STATUS_CHOICES
+from .constants import GROUP_STUDENT, STAFF_ROLE_GROUPS, USER_STATUS_ACTIVE, USER_STATUS_CHOICES
 from .managers import UserManager
 
 
@@ -81,8 +81,6 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
     @property
     def primary_role(self) -> str:
         """Return the highest-priority group for the user, or empty string."""
-        from .constants import GROUP_STUDENT, STAFF_ROLE_GROUPS
-
         groups = set(self.groups.values_list("name", flat=True))
         for candidate in STAFF_ROLE_GROUPS + (GROUP_STUDENT,):
             if candidate in groups:

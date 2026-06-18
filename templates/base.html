@@ -6,6 +6,10 @@
   <meta name="color-scheme" content="light dark">
   <title>{% block title %}{{ SITE_NAME }}{% endblock title %}</title>
 
+  <script>
+    (function(){try{var s=localStorage.getItem("dm-theme");if(s==="dark"||(!s&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch(e){}})();
+  </script>
+
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
 
@@ -17,17 +21,23 @@
       theme: {
         extend: {
           fontFamily: {
-            sans: ['"Cairo"', '"Inter"', 'system-ui', 'sans-serif'],
-            display: ['"Cairo"', '"Inter"', 'system-ui', 'sans-serif'],
+            sans: ['"Inter"', '"Cairo"', 'system-ui', 'sans-serif'],
+            display: ['"Inter"', '"Cairo"', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
           },
           colors: {
             brand: {
               50:  '#f0fdf6',
               100: '#dcfce8',
+              200: '#bbf7d0',
+              300: '#86efad',
+              400: '#4ade80',
               500: '#10b981',
               600: '#059669',
               700: '#047857',
+              800: '#065f46',
               900: '#064e3b',
+              950: '#022c22',
             },
           },
         },
@@ -41,15 +51,19 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <style>[x-cloak] { display: none !important; }</style>
 
   {% block extra_head %}{% endblock extra_head %}
 </head>
-<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 font-sans antialiased min-h-screen flex flex-col" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 font-sans antialiased min-h-screen flex flex-col" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-boost="true" hx-push-url="true">
 
+  {% include "partials/_skip_link.html" %}
   {% include "partials/_navbar.html" %}
+  {% include "partials/_mobile_nav.html" %}
 
-  <main class="flex-1">
+  <main id="main" class="flex-1">
     {% include "partials/_messages.html" %}
     {% block content %}{% endblock content %}
   </main>

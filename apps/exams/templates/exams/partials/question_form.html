@@ -1,0 +1,114 @@
+{% load i18n %}
+<form
+  class="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg p-5 mb-4"
+  hx-post="{% if question %}{% url 'exams:admin_question_save' exam.id question.id %}{% else %}{% url 'exams:admin_question_save' exam.id %}{% endif %}"
+  hx-target="this"
+  hx-swap="outerHTML"
+  x-data="{
+    questionType: '{{ form.question_type.value|default:question_type_mcq }}',
+    choices: [
+      {% for choice in choices %}
+        { id: '{{ choice.id }}', text: '{{ choice.text|escapejs }}', is_correct: {% if choice.is_correct %}true{% else %}false{% endif %}, order: {{ choice.order }} }{% if not forloop.last %},{% endif %}
+      {% endfor %}
+    ],
+    nextId: 1,
+    addChoice() {
+      this.choices.push({ id: 'new_' + this.nextId, text: '', is_correct: false, order: this.choices.length + 1 });
+      this.nextId++;
+    },
+    removeChoice(index) {
+      this.choices.splice(index, 1);
+      this.choices.forEach((c, i) => c.order = i + 1);
+    }
+  }"
+>
+  {% csrf_token %}
+  {% if form.non_field_errors %}
+    <div class="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded text-red-800 dark:text-red-200 text-sm">
+      {{ form.non_field_errors|join:" " }}
+    </div>
+  {% endif %}
+
+  <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
+    <div class="md:col-span-4">
+      <label for="{{ form.text.id_for_label }}" class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
+        {{ form.text.label }}{% if form.text.field.required %} <span class="text-rose-600">*</span>{% endif %}
+      </label>
+      {{ form.text }}
+      {% if form.text.errors %}
+        <p class="mt-1 text-xs text-rose-600">{{ form.text.errors|join:" " }}</p>
+      {% endif %}
+    </div>
+
+    <div class="md:col-span-1">
+      <label for="{{ form.question_type.id_for_label }}" class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
+        {{ form.question_type.label }}{% if form.question_type.field.required %} <span class="text-rose-600">*</span>{% endif %}
+      </label>
+      <select
+        name="{{ form.question_type.html_name }}"
+        id="{{ form.question_type.id_for_label }}"
+        x-model="questionType"
+        class="w-full border border-slate-300 dark:border-slate-600 rounded-lg p-2 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200"
+      >
+        {% for value, label in form.question_type.field.choices %}
+          <option value="{{ value }}" {% if form.question_type.value == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      {% if form.question_type.errors %}
+        <p class="mt-1 text-xs text-rose-600">{{ form.question_type.errors|join:" " }}</p>
+      {% endif %}
+    </div>
+
+    <div class="md:col-span-1">
+      <label for="{{ form.points.id_for_label }}" class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
+        {{ form.points.label }}{% if form.points.field.required %} <span class="text-rose-600">*</span>{% endif %}
+      </label>
+      {{ form.points }}
+      {% if form.points.errors %}
+        <p class="mt-1 text-xs text-rose-600">{{ form.points.errors|join:" " }}</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div x-show="questionType === '{{ question_type_mcq }}'" x-cloak class="mt-5">
+    <div class="flex justify-between items-center mb-2">
+      <h4 class="text-sm font-semibold text-slate-700 dark:text-slate-200">{% trans "Choices" %}</h4>
+      <button type="button" @click="addChoice"
+              class="text-xs bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 px-2 py-1 rounded">
+        + {% trans "Add choice" %}
+      </button>
+    </div>
+
+    <p x-show="choices.length === 0" class="text-sm text-slate-500 mb-2">{% trans "No choices yet. Add at least one." %}</p>
+
+    <template x-for="(choice, index) in choices" :key="choice.id">
+      <div class="flex items-start gap-3 mb-2">
+        <input type="hidden" :name="'choice_order_' + choice.id" :value="index + 1">
+        <input type="text" :name="'choice_text_' + choice.id" x-model="choice.text"
+               class="flex-1 border border-slate-300 dark:border-slate-600 rounded-lg p-2 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-sm"
+               placeholder="{% trans 'Choice text' %}" required>
+        <label class="flex items-center gap-1 text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap">
+          <input type="checkbox" :name="'choice_correct_' + choice.id" value="1" :checked="choice.is_correct"
+                 @change="choice.is_correct = $event.target.checked"
+                 class="h-4 w-4 text-blue-600 border-slate-300 rounded">
+          {% trans "Correct" %}
+        </label>
+        <button type="button" @click="removeChoice(index)"
+                class="text-red-600 hover:text-red-800 text-sm px-2">
+          &times;
+        </button>
+      </div>
+    </template>
+  </div>
+
+  <div class="mt-5 flex gap-3">
+    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-semibold">
+      {% trans "Save question" %}
+    </button>
+    <button type="button"
+            onclick="document.getElementById('question-form-container').innerHTML=''"
+            class="bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 px-4 py-2 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 text-sm">
+      {% trans "Cancel" %}
+    </button>
+  </div>
+</form>

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from decimal import Decimal
+from uuid import UUID
 
 from django.db import transaction
 from django.utils import timezone
@@ -132,5 +133,19 @@ def get_exam_with_questions(exam_id: int) -> Exam | None:
             "questions__choices",
         )
         .filter(id=exam_id)
+        .first()
+    )
+
+
+def get_exam_with_questions_by_token(token) -> Exam | None:
+    try:
+        UUID(str(token))
+    except (TypeError, ValueError):
+        return None
+    return (
+        Exam.objects.prefetch_related(
+            "questions__choices",
+        )
+        .filter(access_token=token)
         .first()
     )

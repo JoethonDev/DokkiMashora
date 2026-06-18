@@ -6,6 +6,7 @@ from datetime import date
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import Group
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse
@@ -13,6 +14,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods
 
+from apps.accounts.constants import GROUP_STUDENT
 from apps.core.permissions import is_admin, is_moderator
 from apps.students.models import StudentProfile
 
@@ -122,7 +124,7 @@ def application_detail(request: HttpRequest, application_id: int) -> HttpRespons
             return redirect("applications:admin_detail", application_id=application.id)
         if action == "activate" and application.status == APP_STATUS_APPROVED:
             application.activate()
-            _attach_student_role(application.student)
+            _activate_student(application.student)
             messages.success(request, _("Application activated."))
             return redirect("applications:admin_detail", application_id=application.id)
         messages.error(request, _("Action not allowed for the current status."))
@@ -139,34 +141,8 @@ def _render_detail(
     )
 
 
-def _attach_student_role(profile: StudentProfile) -> None:
-    from django.contrib.auth.models import Group
-    from django.utils import timezone
-
-    from apps.accounts.constants import GROUP_STUDENT
-    from apps.communications.services import send_templated_email
-    from apps.exams.models import Exam
-    from apps.exams.services import assign_exam
-
+def _activate_student(profile: StudentProfile) -> None:
     group, _ = Group.objects.get_or_create(name=GROUP_STUDENT)
     profile.user.groups.add(group)
     profile.user.is_active = True
     profile.user.save(update_fields=["is_active", "updated_at"])
-
-    now = timezone.now()
-    entrance_exam = Exam.objects.filter(
-        exam_type="entrance", is_active=True,
-        open_at__lte=now, close_at__gte=now,
-    ).first()
-    if entrance_exam:
-        assign_exam(entrance_exam, profile.user)
-        send_templated_email(
-            profile.user.email,
-            "entrance_exam_invitation",
-            context={
-                "student_name": profile.full_name,
-                "exam_open_at": entrance_exam.open_at.isoformat(),
-                "exam_close_at": entrance_exam.close_at.isoformat(),
-                "exam_url": f"/exams/{entrance_exam.id}/",
-            },
-        )

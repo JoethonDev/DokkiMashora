@@ -1,3 +1,5 @@
+import uuid
+
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -23,6 +25,9 @@ class Exam(TimeStampedModel):
         choices=EXAM_TYPE_CHOICES,
         default=EXAM_TYPE_ENTRANCE,
         db_index=True,
+    )
+    access_token = models.UUIDField(
+        _("access token"), default=uuid.uuid4, unique=True, editable=False,
     )
     duration_minutes = models.PositiveIntegerField(_("duration (minutes)"))
     passing_score = models.DecimalField(
@@ -54,6 +59,10 @@ class Exam(TimeStampedModel):
 
     def __str__(self):
         return self.title
+
+    def regenerate_access_token(self):
+        self.access_token = uuid.uuid4()
+        self.save(update_fields=["access_token"])
 
 
 class Question(TimeStampedModel):

@@ -2,16 +2,23 @@
 
 from decimal import Decimal
 
+from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from apps.exams.models import Choice, Exam, Question
+
+User = get_user_model()
 
 
 class Command(BaseCommand):
     help = "Seed a sample entrance exam with questions"
 
     def handle(self, *args, **options):
+        admin = User.objects.filter(is_superuser=True).first()
+        if not admin:
+            self.stdout.write(self.style.ERROR("No superuser found. Create one first."))
+            return
         now = timezone.now()
         exam, created = Exam.objects.get_or_create(
             title="Entrance Exam - Sample",
@@ -22,6 +29,7 @@ class Command(BaseCommand):
                 "is_active": True,
                 "open_at": now,
                 "close_at": now + timezone.timedelta(days=365),
+                "created_by": admin,
             },
         )
         if not created:
@@ -80,6 +88,8 @@ class Command(BaseCommand):
         )
 
         exam.total_points = Decimal("70.00")
+        exam.regenerate_access_token()
         exam.save(update_fields=["total_points"])
 
         self.stdout.write(self.style.SUCCESS(f"Created sample exam '{exam.title}' with 5 questions."))
+        self.stdout.write(f"Access URL: /exams/access/{exam.access_token}/")

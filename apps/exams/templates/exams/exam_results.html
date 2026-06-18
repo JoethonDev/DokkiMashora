@@ -95,9 +95,9 @@
   {% endfor %}
 
   <div class="text-center mb-8">
-    <a href="{% url 'exams:student_list' %}"
+    <a href="{% if token %}{% url 'exams:exam_instructions_token' token %}{% else %}{% url 'exams:student_list' %}{% endif %}"
        class="bg-slate-600 text-white px-6 py-2 rounded-lg hover:bg-slate-700">
-      {% trans "Back to exams" %}
+      {% if token %}{% trans "Back to instructions" %}{% else %}{% trans "Back to exams" %}{% endif %}
     </a>
   </div>
 </div>

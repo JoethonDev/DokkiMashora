@@ -7,6 +7,7 @@ from datetime import date
 from django.test import TestCase
 from django.urls import reverse
 
+from apps.accounts.models import User
 from apps.applications.forms import RegistrationForm
 from apps.applications.models import Application
 
@@ -136,8 +137,6 @@ class RegistrationViewTests(TestCase):
         self.assertEqual(Application.objects.count(), 0)
 
     def test_authenticated_user_is_redirected_to_dashboard(self) -> None:
-        from apps.accounts.models import User
-
         user = User.objects.create_user(email="logged@example.com", password="x")
         self.client.force_login(user)
         response = self.client.get(self.url)
@@ -145,8 +144,6 @@ class RegistrationViewTests(TestCase):
         self.assertEqual(response.url, reverse("accounts:post_login"))
 
     def test_authenticated_user_cannot_post_registration(self) -> None:
-        from apps.accounts.models import User
-
         user = User.objects.create_user(email="logged@example.com", password="x")
         self.client.force_login(user)
         response = self._post()
