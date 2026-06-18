@@ -11,9 +11,13 @@
 
       <nav class="hidden md:flex items-center gap-6 text-sm font-medium text-slate-700 dark:text-slate-300">
         <a href="{% url 'core:landing' %}" class="hover:text-brand-600">{% trans "Home" %}</a>
+        <a href="{% url 'applications:register' %}" class="hover:text-brand-600">{% trans "Register" %}</a>
         {% if user.is_authenticated %}
           <a href="{% url 'accounts:dashboard' %}" class="hover:text-brand-600">{% trans "Dashboard" %}</a>
           <a href="{% url 'accounts:profile' %}" class="hover:text-brand-600">{% trans "Profile" %}</a>
+          {% if user.is_staff %}
+            <a href="{% url 'applications:admin_list' %}" class="hover:text-brand-600">{% trans "Applications" %}</a>
+          {% endif %}
         {% endif %}
       </nav>
 
@@ -25,7 +29,8 @@
             <button type="submit" class="rounded-md border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-sm hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Log out" %}</button>
           </form>
         {% else %}
-          <a href="{% url 'accounts:login' %}" class="rounded-md bg-brand-600 px-3 py-1.5 text-sm text-white hover:bg-brand-700">{% trans "Log in" %}</a>
+          <a href="{% url 'accounts:login' %}" class="hidden sm:inline-block rounded-md border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-sm hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Log in" %}</a>
+          <a href="{% url 'applications:register' %}" class="rounded-md bg-brand-600 px-3 py-1.5 text-sm text-white hover:bg-brand-700">{% trans "Register" %}</a>
         {% endif %}
       </div>
     </div>

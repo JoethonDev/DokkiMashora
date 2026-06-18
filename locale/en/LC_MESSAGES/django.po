@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-18 13:28+0300\n"
+"POT-Creation-Date: 2026-06-18 13:48+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,11 +17,14 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
 #: .\apps\accounts\admin.py:24
 msgid "Personal info"
 msgstr ""
 
 #: .\apps\accounts\admin.py:25
+#: .\apps\applications\templates\applications\admin_list.html:12
+#: .\apps\applications\templates\applications\admin_list.html:28
 msgid "Status"
 msgstr ""
 
@@ -34,6 +37,10 @@ msgid "Important dates"
 msgstr ""
 
 #: .\apps\accounts\forms.py:40 .\apps\accounts\forms.py:75
+#: .\apps\applications\forms.py:27
+#: .\apps\applications\templates\applications\admin_detail.html:17
+#: .\apps\applications\templates\applications\admin_list.html:27
+#: .\apps\applications\templates\applications\register.html:39
 #: .\templates\accounts\profile.html:12
 msgid "Email"
 msgstr ""
@@ -54,55 +61,56 @@ msgstr ""
 msgid "Phone number"
 msgstr ""
 
-#: .\apps\accounts\models.py:24
+#: .\apps\accounts\models.py:20
 msgid "email address"
 msgstr ""
 
-#: .\apps\accounts\models.py:25
+#: .\apps\accounts\models.py:21
 msgid "full name"
 msgstr ""
 
-#: .\apps\accounts\models.py:27
+#: .\apps\accounts\models.py:23
 msgid "full name (Arabic)"
 msgstr ""
 
-#: .\apps\accounts\models.py:30
+#: .\apps\accounts\models.py:26
 msgid "Used for the Arabic UI."
 msgstr ""
 
-#: .\apps\accounts\models.py:33
+#: .\apps\accounts\models.py:29
 msgid "phone number"
 msgstr ""
 
-#: .\apps\accounts\models.py:39
+#: .\apps\accounts\models.py:35 .\apps\students\models.py:27
 msgid "national ID"
 msgstr ""
 
-#: .\apps\accounts\models.py:43
+#: .\apps\accounts\models.py:39
 msgid "Stored for matching across applications."
 msgstr ""
 
-#: .\apps\accounts\models.py:46
+#: .\apps\accounts\models.py:42 .\apps\applications\models.py:30
+#: .\apps\communications\email_message.py:23
 msgid "status"
 msgstr ""
 
-#: .\apps\accounts\models.py:53
+#: .\apps\accounts\models.py:49
 msgid "staff status"
 msgstr ""
 
-#: .\apps\accounts\models.py:54
+#: .\apps\accounts\models.py:50 .\apps\communications\models.py:28
 msgid "active"
 msgstr ""
 
-#: .\apps\accounts\models.py:55
+#: .\apps\accounts\models.py:51
 msgid "date joined"
 msgstr ""
 
-#: .\apps\accounts\models.py:63
+#: .\apps\accounts\models.py:59
 msgid "user"
 msgstr ""
 
-#: .\apps\accounts\models.py:64
+#: .\apps\accounts\models.py:60
 msgid "users"
 msgstr ""
 
@@ -110,16 +118,408 @@ msgstr ""
 msgid "Profile updated."
 msgstr ""
 
-#: .\apps\accounts\views.py:88
+#: .\apps\accounts\views.py:104
 msgid "Super Admin"
+msgstr ""
+
+#: .\apps\applications\forms.py:19
+#: .\apps\applications\templates\applications\register.html:20
+msgid "Full name (4 parts)"
+msgstr ""
+
+#: .\apps\applications\forms.py:21
+#: .\apps\applications\templates\applications\admin_detail.html:20
+#: .\apps\applications\templates\applications\register.html:25
+msgid "Date of birth"
+msgstr ""
+
+#: .\apps\applications\forms.py:24
+#: .\apps\applications\templates\applications\admin_detail.html:22
+#: .\apps\applications\templates\applications\register.html:30
+msgid "Gender"
+msgstr ""
+
+#: .\apps\applications\forms.py:25
+#: .\apps\applications\templates\applications\admin_detail.html:23
+#: .\apps\applications\templates\applications\register.html:49
+msgid "Address"
+msgstr ""
+
+#: .\apps\applications\forms.py:26
+#: .\apps\applications\templates\applications\register.html:34
+msgid "Mobile number"
+msgstr ""
+
+#: .\apps\applications\forms.py:28
+#: .\apps\applications\templates\applications\register.html:53
+msgid "Education level"
+msgstr ""
+
+#: .\apps\applications\forms.py:29
+#: .\apps\applications\templates\applications\admin_detail.html:25
+#: .\apps\applications\templates\applications\register.html:57
+msgid "Specialization"
+msgstr ""
+
+#: .\apps\applications\forms.py:30
+#: .\apps\applications\templates\applications\admin_detail.html:26
+#: .\apps\applications\templates\applications\register.html:61
+msgid "Employer"
+msgstr ""
+
+#: .\apps\applications\forms.py:31
+#: .\apps\applications\templates\applications\admin_detail.html:27
+#: .\apps\applications\templates\applications\register.html:65
+msgid "Current job"
+msgstr ""
+
+#: .\apps\applications\forms.py:32
+#: .\apps\applications\templates\applications\admin_detail.html:28
+#: .\apps\applications\templates\applications\register.html:69
+msgid "Church"
+msgstr ""
+
+#: .\apps\applications\forms.py:33
+#: .\apps\applications\templates\applications\register.html:73
+msgid "Priest name"
+msgstr ""
+
+#: .\apps\applications\forms.py:34
+#: .\apps\applications\templates\applications\admin_detail.html:30
+#: .\apps\applications\templates\applications\register.html:77
+msgid "Priest contact"
+msgstr ""
+
+#: .\apps\applications\forms.py:35
+#: .\apps\applications\templates\applications\admin_detail.html:19
+#: .\apps\applications\templates\applications\register.html:44
+msgid "National ID"
+msgstr ""
+
+#: .\apps\applications\forms.py:44
+msgid "Date of birth must be in the past."
+msgstr ""
+
+#: .\apps\applications\forms.py:50
+msgid "Phone number is required."
+msgstr ""
+
+#: .\apps\applications\forms.py:56
+msgid "National ID is required."
+msgstr ""
+
+#: .\apps\applications\forms.py:67
+#: .\apps\applications\templates\applications\admin_detail.html:39
+msgid "Admin notes"
+msgstr ""
+
+#: .\apps\applications\forms.py:68
+#: .\apps\applications\templates\applications\admin_detail.html:43
+msgid "Rejection reason"
+msgstr ""
+
+#: .\apps\applications\models.py:36
+msgid "admin notes"
+msgstr ""
+
+#: .\apps\applications\models.py:37
+msgid "rejection reason"
+msgstr ""
+
+#: .\apps\applications\models.py:45
+msgid "reviewed at"
+msgstr ""
+
+#: .\apps\applications\models.py:46
+msgid "activated at"
+msgstr ""
+
+#: .\apps\applications\models.py:49
+msgid "application"
+msgstr ""
+
+#: .\apps\applications\models.py:50
+msgid "applications"
+msgstr ""
+
+#: .\apps\applications\templates\applications\admin_detail.html:3
+#: .\apps\applications\templates\applications\admin_detail.html:8
+msgid "Application"
+msgstr ""
+
+#: .\apps\applications\templates\applications\admin_detail.html:6
+msgid "Back to applications"
+msgstr ""
+
+#: .\apps\applications\templates\applications\admin_detail.html:10
+msgid "Submitted"
+msgstr ""
+
+#: .\apps\applications\templates\applications\admin_detail.html:15
+msgid "Personal data"
+msgstr ""
+
+#: .\apps\applications\templates\applications\admin_detail.html:18
+msgid "Phone"
+msgstr ""
+
+#: .\apps\applications\templates\applications\admin_detail.html:21
+msgid "Age"
+msgstr ""
+
+#: .\apps\applications\templates\applications\admin_detail.html:24
+msgid "Education"
+msgstr ""
+
+#: .\apps\applications\templates\applications\admin_detail.html:29
+msgid "Priest"
+msgstr ""
+
+#: .\apps\applications\templates\applications\admin_detail.html:35
+msgid "Review actions"
+msgstr ""
+
+#: .\apps\applications\templates\applications\admin_detail.html:49
+msgid "Mark under review"
+msgstr ""
+
+#: .\apps\applications\templates\applications\admin_detail.html:52
+msgid "Approve"
+msgstr ""
+
+#: .\apps\applications\templates\applications\admin_detail.html:53
+msgid "Reject"
+msgstr ""
+
+#: .\apps\applications\templates\applications\admin_detail.html:56
+msgid "Activate"
+msgstr ""
+
+#: .\apps\applications\templates\applications\admin_detail.html:61
+msgid "Last reviewer"
+msgstr ""
+
+#: .\apps\applications\templates\applications\admin_list.html:3
+#: .\apps\applications\templates\applications\admin_list.html:9
+#: .\templates\accounts\dashboards\admin.html:14
+#: .\templates\partials\_navbar.html:19
+msgid "Applications"
+msgstr ""
+
+#: .\apps\applications\templates\applications\admin_list.html:8
+#: .\templates\accounts\dashboards\admin.html:7
+msgid "Admin"
+msgstr ""
+
+#: .\apps\applications\templates\applications\admin_list.html:14
+msgid "All"
+msgstr ""
+
+#: .\apps\applications\templates\applications\admin_list.html:26
+msgid "Name"
+msgstr ""
+
+#: .\apps\applications\templates\applications\admin_list.html:29
+msgid "Created"
+msgstr ""
+
+#: .\apps\applications\templates\applications\admin_list.html:30
+msgid "Action"
+msgstr ""
+
+#: .\apps\applications\templates\applications\admin_list.html:40
+msgid "Review"
+msgstr ""
+
+#: .\apps\applications\templates\applications\admin_list.html:43
+msgid "No applications yet."
+msgstr ""
+
+#: .\apps\applications\templates\applications\register.html:3
+#: .\apps\applications\templates\applications\register.html:7
+#: .\templates\partials\_navbar.html:14 .\templates\partials\_navbar.html:33
+msgid "Register"
+msgstr ""
+
+#: .\apps\applications\templates\applications\register.html:8
+msgid ""
+"Please fill in the form below. Our team will review your application and "
+"contact you."
+msgstr ""
+
+#: .\apps\applications\templates\applications\register.html:81
+msgid "Submit registration"
+msgstr ""
+
+#: .\apps\applications\templates\applications\registration_success.html:3
+msgid "Registration received"
+msgstr ""
+
+#: .\apps\applications\templates\applications\registration_success.html:6
+msgid "Thank you"
+msgstr ""
+
+#: .\apps\applications\templates\applications\registration_success.html:7
+msgid "Your registration was received"
+msgstr ""
+
+#: .\apps\applications\templates\applications\registration_success.html:9
+#, python-format
+msgid "We will contact <strong>%(email)s</strong> with the next steps."
+msgstr ""
+
+#: .\apps\applications\templates\applications\registration_success.html:11
+msgid "We will contact you with the next steps."
+msgstr ""
+
+#: .\apps\applications\templates\applications\registration_success.html:13
+#: .\templates\core\errors\400.html:9 .\templates\core\errors\403.html:9
+#: .\templates\core\errors\404.html:9 .\templates\core\errors\500.html:9
+msgid "Back to home"
+msgstr ""
+
+#: .\apps\applications\views.py:57
+msgid "Registration received. We will contact you shortly."
+msgstr ""
+
+#: .\apps\applications\views.py:104
+msgid "Application marked as under review."
+msgstr ""
+
+#: .\apps\applications\views.py:110
+msgid "Application approved."
+msgstr ""
+
+#: .\apps\applications\views.py:115
+msgid "Rejection reason is required."
+msgstr ""
+
+#: .\apps\applications\views.py:119
+msgid "Application rejected."
+msgstr ""
+
+#: .\apps\applications\views.py:124
+msgid "Application activated."
+msgstr ""
+
+#: .\apps\applications\views.py:126
+msgid "Action not allowed for the current status."
+msgstr ""
+
+#: .\apps\communications\email_message.py:17
+msgid "template slug"
+msgstr ""
+
+#: .\apps\communications\email_message.py:18
+msgid "to email"
+msgstr ""
+
+#: .\apps\communications\email_message.py:19
+msgid "cc emails"
+msgstr ""
+
+#: .\apps\communications\email_message.py:20 .\apps\communications\models.py:26
+msgid "subject"
+msgstr ""
+
+#: .\apps\communications\email_message.py:21 .\apps\communications\models.py:27
+msgid "body"
+msgstr ""
+
+#: .\apps\communications\email_message.py:29
+msgid "error"
+msgstr ""
+
+#: .\apps\communications\email_message.py:37
+msgid "sent at"
+msgstr ""
+
+#: .\apps\communications\email_message.py:40
+msgid "email message"
+msgstr ""
+
+#: .\apps\communications\email_message.py:41
+msgid "email messages"
+msgstr ""
+
+#: .\apps\communications\models.py:20
+msgid "slug"
+msgstr ""
+
+#: .\apps\communications\models.py:25
+msgid "name"
+msgstr ""
+
+#: .\apps\communications\models.py:31
+msgid "email template"
+msgstr ""
+
+#: .\apps\communications\models.py:32
+msgid "email templates"
+msgstr ""
+
+#: .\apps\communications\models.py:41
+msgid "Unknown template slug."
+msgstr ""
+
+#: .\apps\students\models.py:22
+msgid "full name (4 parts)"
+msgstr ""
+
+#: .\apps\students\models.py:23
+msgid "date of birth"
+msgstr ""
+
+#: .\apps\students\models.py:24
+msgid "gender"
+msgstr ""
+
+#: .\apps\students\models.py:25
+msgid "address"
+msgstr ""
+
+#: .\apps\students\models.py:26
+msgid "mobile number"
+msgstr ""
+
+#: .\apps\students\models.py:29
+msgid "education level"
+msgstr ""
+
+#: .\apps\students\models.py:33
+msgid "specialization"
+msgstr ""
+
+#: .\apps\students\models.py:34
+msgid "employer"
+msgstr ""
+
+#: .\apps\students\models.py:35
+msgid "current job"
+msgstr ""
+
+#: .\apps\students\models.py:36
+msgid "church"
+msgstr ""
+
+#: .\apps\students\models.py:37
+msgid "priest name"
+msgstr ""
+
+#: .\apps\students\models.py:38
+msgid "priest contact"
+msgstr ""
+
+#: .\apps\students\models.py:41
+msgid "student profile"
+msgstr ""
+
+#: .\apps\students\models.py:42
+msgid "student profiles"
 msgstr ""
 
 #: .\templates\accounts\dashboards\admin.html:3
 msgid "Admin dashboard"
-msgstr ""
-
-#: .\templates\accounts\dashboards\admin.html:7
-msgid "Admin"
 msgstr ""
 
 #: .\templates\accounts\dashboards\admin.html:8
@@ -130,58 +530,55 @@ msgstr ""
 msgid "Pending items and quick actions."
 msgstr ""
 
-#: .\templates\accounts\dashboards\admin.html:13
-msgid "Applications"
+#: .\templates\accounts\dashboards\admin.html:16
+#: .\templates\accounts\dashboards\moderator.html:8
+msgid "Review queue"
 msgstr ""
 
-#: .\templates\accounts\dashboards\admin.html:13
-msgid "Awaiting review"
-msgstr ""
-
-#: .\templates\accounts\dashboards\admin.html:14
+#: .\templates\accounts\dashboards\admin.html:18
 msgid "Active entrance exams"
 msgstr ""
 
-#: .\templates\accounts\dashboards\admin.html:14
+#: .\templates\accounts\dashboards\admin.html:18
 msgid "Open windows"
 msgstr ""
 
-#: .\templates\accounts\dashboards\admin.html:15
+#: .\templates\accounts\dashboards\admin.html:19
 #: .\templates\core\landing.html:33
 msgid "Cohorts"
 msgstr ""
 
-#: .\templates\accounts\dashboards\admin.html:15
+#: .\templates\accounts\dashboards\admin.html:19
 msgid "Diplomas + courses"
 msgstr ""
 
-#: .\templates\accounts\dashboards\admin.html:16
+#: .\templates\accounts\dashboards\admin.html:20
 msgid "Storage"
 msgstr ""
 
-#: .\templates\accounts\dashboards\admin.html:16
+#: .\templates\accounts\dashboards\admin.html:20
 msgid "R2 usage"
 msgstr ""
 
-#: .\templates\accounts\dashboards\admin.html:21
+#: .\templates\accounts\dashboards\admin.html:25
 msgid "Coming soon"
 msgstr ""
 
-#: .\templates\accounts\dashboards\admin.html:22
+#: .\templates\accounts\dashboards\admin.html:26
 msgid ""
 "Registration review, entrance exam creation, and grading queues will land in "
 "upcoming phases."
 msgstr ""
 
-#: .\templates\accounts\dashboards\admin.html:25
+#: .\templates\accounts\dashboards\admin.html:29
 msgid "Server time"
 msgstr ""
 
-#: .\templates\accounts\dashboards\admin.html:26
+#: .\templates\accounts\dashboards\admin.html:30
 msgid "All schedules run in"
 msgstr ""
 
-#: .\templates\accounts\dashboards\admin.html:26
+#: .\templates\accounts\dashboards\admin.html:30
 msgid "Current time:"
 msgstr ""
 
@@ -193,35 +590,31 @@ msgstr ""
 msgid "Moderator"
 msgstr ""
 
-#: .\templates\accounts\dashboards\moderator.html:8
-msgid "Review queue"
-msgstr ""
-
-#: .\templates\accounts\dashboards\moderator.html:11
-msgid "Written answers"
-msgstr ""
-
-#: .\templates\accounts\dashboards\moderator.html:11
-msgid "Under review"
-msgstr ""
-
 #: .\templates\accounts\dashboards\moderator.html:12
 msgid "Registration queue"
 msgstr ""
 
-#: .\templates\accounts\dashboards\moderator.html:12
+#: .\templates\accounts\dashboards\moderator.html:14
 msgid "To verify"
 msgstr ""
 
-#: .\templates\accounts\dashboards\moderator.html:13
-msgid "Email previews"
-msgstr ""
-
-#: .\templates\accounts\dashboards\moderator.html:13
-msgid "Awaiting send"
+#: .\templates\accounts\dashboards\moderator.html:16
+msgid "Written answers"
 msgstr ""
 
 #: .\templates\accounts\dashboards\moderator.html:16
+msgid "Under review"
+msgstr ""
+
+#: .\templates\accounts\dashboards\moderator.html:17
+msgid "Email previews"
+msgstr ""
+
+#: .\templates\accounts\dashboards\moderator.html:17
+msgid "Awaiting send"
+msgstr ""
+
+#: .\templates\accounts\dashboards\moderator.html:20
 msgid "Phase 2 and Phase 3 will populate this dashboard with real data."
 msgstr ""
 
@@ -308,8 +701,8 @@ msgid "Course content and grading tools land in Phase 4 and Phase 5."
 msgstr ""
 
 #: .\templates\accounts\login.html:3 .\templates\accounts\login.html:7
-#: .\templates\accounts\login.html:30 .\templates\core\landing.html:17
-#: .\templates\partials\_navbar.html:28
+#: .\templates\accounts\login.html:30 .\templates\core\landing.html:20
+#: .\templates\partials\_navbar.html:32
 msgid "Log in"
 msgstr ""
 
@@ -317,7 +710,7 @@ msgstr ""
 msgid "Use the email address you registered with."
 msgstr ""
 
-#: .\templates\accounts\profile.html:3 .\templates\partials\_navbar.html:16
+#: .\templates\accounts\profile.html:3 .\templates\partials\_navbar.html:17
 msgid "Profile"
 msgstr ""
 
@@ -339,11 +732,6 @@ msgstr ""
 
 #: .\templates\core\errors\400.html:8
 msgid "The request could not be processed."
-msgstr ""
-
-#: .\templates\core\errors\400.html:9 .\templates\core\errors\403.html:9
-#: .\templates\core\errors\404.html:9 .\templates\core\errors\500.html:9
-msgid "Back to home"
 msgstr ""
 
 #: .\templates\core\errors\403.html:7
@@ -388,8 +776,8 @@ msgid ""
 "certificates — all in one place, designed for Cairo time."
 msgstr ""
 
-#: .\templates\core\landing.html:20
-msgid "Learn more"
+#: .\templates\core\landing.html:17
+msgid "Register now"
 msgstr ""
 
 #: .\templates\core\landing.html:29
@@ -440,10 +828,10 @@ msgstr ""
 msgid "Go"
 msgstr ""
 
-#: .\templates\partials\_navbar.html:15
+#: .\templates\partials\_navbar.html:16
 msgid "Dashboard"
 msgstr ""
 
-#: .\templates\partials\_navbar.html:25
+#: .\templates\partials\_navbar.html:29
 msgid "Log out"
 msgstr ""

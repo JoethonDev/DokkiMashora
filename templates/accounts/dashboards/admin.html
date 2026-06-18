@@ -10,7 +10,11 @@
   </header>
 
   <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-    {% include "accounts/dashboards/_tile.html" with title=_("Applications") value="0" sub=_("Awaiting review") %}
+    <a href="{% url 'applications:admin_list' %}" class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 hover:border-brand-500 transition">
+      <p class="text-sm text-slate-500">{% trans "Applications" %}</p>
+      <p class="mt-1 text-3xl font-semibold tracking-tight">{{ pending_applications_count|default:"0" }}</p>
+      <p class="mt-1 text-xs text-brand-600">{% trans "Review queue" %} &rarr;</p>
+    </a>
     {% include "accounts/dashboards/_tile.html" with title=_("Active entrance exams") value="0" sub=_("Open windows") %}
     {% include "accounts/dashboards/_tile.html" with title=_("Cohorts") value="0" sub=_("Diplomas + courses") %}
     {% include "accounts/dashboards/_tile.html" with title=_("Storage") value="0" sub=_("R2 usage") %}

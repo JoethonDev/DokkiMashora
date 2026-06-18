@@ -13,11 +13,11 @@
         {% trans "Registration, entrance exams, content, assessments, grading, and certificates — all in one place, designed for Cairo time." %}
       </p>
       <div class="mt-8 flex flex-wrap gap-3">
-        <a href="{% url 'accounts:login' %}" class="inline-flex items-center gap-2 rounded-md bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 text-sm font-semibold shadow-sm">
-          {% trans "Log in" %}
+        <a href="{% url 'applications:register' %}" class="inline-flex items-center gap-2 rounded-md bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 text-sm font-semibold shadow-sm">
+          {% trans "Register now" %}
         </a>
-        <a href="#features" class="inline-flex items-center gap-2 rounded-md border border-slate-300 dark:border-slate-700 px-5 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">
-          {% trans "Learn more" %}
+        <a href="{% url 'accounts:login' %}" class="inline-flex items-center gap-2 rounded-md border border-slate-300 dark:border-slate-700 px-5 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">
+          {% trans "Log in" %}
         </a>
       </div>
     </div>

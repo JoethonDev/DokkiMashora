@@ -64,12 +64,28 @@ def dashboard_router(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def admin_dashboard(request: HttpRequest) -> HttpResponse:
-    return render(request, "accounts/dashboards/admin.html", _dashboard_context(request.user))
+    from apps.applications.constants import APP_STATUS_PENDING, APP_STATUS_UNDER_REVIEW
+    from apps.applications.models import Application
+
+    pending_count = Application.objects.filter(
+        status__in=[APP_STATUS_PENDING, APP_STATUS_UNDER_REVIEW]
+    ).count()
+    context = _dashboard_context(request.user)
+    context["pending_applications_count"] = pending_count
+    return render(request, "accounts/dashboards/admin.html", context)
 
 
 @login_required
 def moderator_dashboard(request: HttpRequest) -> HttpResponse:
-    return render(request, "accounts/dashboards/moderator.html", _dashboard_context(request.user))
+    from apps.applications.constants import APP_STATUS_PENDING, APP_STATUS_UNDER_REVIEW
+    from apps.applications.models import Application
+
+    pending_count = Application.objects.filter(
+        status__in=[APP_STATUS_PENDING, APP_STATUS_UNDER_REVIEW]
+    ).count()
+    context = _dashboard_context(request.user)
+    context["pending_applications_count"] = pending_count
+    return render(request, "accounts/dashboards/moderator.html", context)
 
 
 @login_required
