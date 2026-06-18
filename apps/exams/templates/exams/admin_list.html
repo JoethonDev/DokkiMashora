@@ -1,57 +1,60 @@
 {% extends "base.html" %}
 {% load i18n %}
+{% load ui_tags %}
 
 {% block title %}{% trans "Manage Exams" %} - {{ block.super }}{% endblock %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto">
-  <div class="flex justify-between items-center mb-8">
-    <h1 class="text-3xl font-bold text-slate-800 dark:text-white">{% trans "Exam Management" %}</h1>
-    <a href="{% url 'exams:admin_create_exam' %}" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-      {% trans "Create Exam" %}
-    </a>
-  </div>
+<section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <header class="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Admin" %}</p>
+      <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{% trans "Exam Management" %}</h1>
+    </div>
+    {% url 'exams:admin_create_exam' as create_exam_url %}
+    {% include "partials/_button.html" with href=create_exam_url label=_("Create Exam") variant="primary" %}
+  </header>
 
-  <div class="bg-white dark:bg-slate-800 rounded-lg shadow overflow-hidden">
-    <table class="w-full">
-      <thead>
-        <tr class="bg-slate-50 dark:bg-slate-700 text-start">
-          <th class="px-6 py-3 text-sm font-semibold text-slate-600 dark:text-slate-200">{% trans "Title" %}</th>
-          <th class="px-6 py-3 text-sm font-semibold text-slate-600 dark:text-slate-200">{% trans "Type" %}</th>
-          <th class="px-6 py-3 text-sm font-semibold text-slate-600 dark:text-slate-200">{% trans "Duration" %}</th>
-          <th class="px-6 py-3 text-sm font-semibold text-slate-600 dark:text-slate-200">{% trans "Active" %}</th>
-          <th class="px-6 py-3 text-sm font-semibold text-slate-600 dark:text-slate-200">{% trans "Actions" %}</th>
+  <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+    <table class="min-w-[640px] w-full divide-y divide-slate-200 dark:divide-slate-800 text-sm">
+      <thead class="bg-slate-50 dark:bg-slate-800/50">
+        <tr class="text-slate-600 dark:text-slate-300">
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Title" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Type" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Duration" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Active" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Actions" %}</th>
         </tr>
       </thead>
-      <tbody class="divide-y divide-slate-200 dark:divide-slate-600">
+      <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
         {% for exam in exams %}
-          <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
-            <td class="px-6 py-4">
-              <a href="{% url 'exams:admin_detail' exam.id %}" class="text-blue-600 hover:underline font-medium">
-                {{ exam.title }}
-              </a>
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+            <td class="px-4 py-3">
+              <a href="{% url 'exams:admin_detail' exam.id %}" class="text-brand-600 hover:underline font-medium">{{ exam.title }}</a>
             </td>
-            <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{{ exam.get_exam_type_display }}</td>
-            <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{{ exam.duration_minutes }} {% trans "min" %}</td>
-            <td class="px-6 py-4">
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-300">{{ exam.get_exam_type_display }}</td>
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-300 tabular-nums">{{ exam.duration_minutes }} {% trans "min" %}</td>
+            <td class="px-4 py-3">
               {% if exam.is_active %}
-                <span class="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 px-2 py-1 rounded-full text-xs font-semibold">{% trans "Active" %}</span>
+                {% include "partials/_badge.html" with label=_("Active") tone="success" %}
               {% else %}
-                <span class="bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 px-2 py-1 rounded-full text-xs font-semibold">{% trans "Inactive" %}</span>
+                {% include "partials/_badge.html" with label=_("Inactive") tone="danger" %}
               {% endif %}
             </td>
-            <td class="px-6 py-4 flex gap-2">
-              <a href="{% url 'exams:admin_detail' exam.id %}" class="text-blue-600 hover:underline text-sm">{% trans "View" %}</a>
-              <a href="{% url 'exams:admin_edit_exam' exam.id %}" class="text-slate-600 hover:underline text-sm">{% trans "Edit" %}</a>
+            <td class="px-4 py-3">
+              <div class="flex gap-2">
+                <a href="{% url 'exams:admin_detail' exam.id %}" class="text-brand-600 hover:underline font-medium text-sm">{% trans "View" %}</a>
+                <a href="{% url 'exams:admin_edit_exam' exam.id %}" class="text-slate-600 dark:text-slate-300 hover:underline font-medium text-sm">{% trans "Edit" %}</a>
+              </div>
             </td>
           </tr>
         {% empty %}
           <tr>
-            <td colspan="5" class="px-6 py-8 text-center text-slate-500">{% trans "No exams yet." %}</td>
+            <td colspan="5" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400">{% trans "No exams yet." %}</td>
           </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
-</div>
+</section>
 {% endblock %}

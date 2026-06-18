@@ -86,6 +86,8 @@ def application_list(request: HttpRequest) -> HttpResponse:
         "status_filter": status_filter,
         "status_choices": Application._meta.get_field("status").choices,
     }
+    if request.headers.get("HX-Target") == "applications-list":
+        return render(request, "applications/partials/_list_table.html", context)
     return render(request, "applications/admin_list.html", context)
 
 

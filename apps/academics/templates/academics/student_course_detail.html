@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{{ version.course.title }} - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <header class="mb-6">
+    <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Course" %}</p>
+    <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ version.course.title }}</h1>
+    {% if version.cohort %}<p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{{ version.cohort.name }}</p>{% endif %}
+  </header>
+  {% if lectures %}
+    <div class="space-y-3">
+      {% for lecture in lectures %}
+        <a href="{% url 'academics:student_lecture_view' version.id lecture.id %}" class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 hover:border-brand-500 transition flex items-center gap-3">
+          <span class="text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded tabular-nums">{{ lecture.order }}</span>
+          <span class="font-medium">{{ lecture.title }}</span>
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    {% include "partials/_empty_state.html" with title=_("No lectures available") subtitle=_("Lectures will appear here when they are released") %}
+  {% endif %}
+</div>
+{% endblock %}

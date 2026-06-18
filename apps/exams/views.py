@@ -512,22 +512,40 @@ def _htmx_redirect(response, target):
     return response
 
 
+def _question_form_context(exam, question=None, form=None, choices=None):
+    if form is None:
+        form = QuestionForm(instance=question)
+    if choices is None:
+        choices = list(question.choices.all()) if question else []
+    return {
+        "exam": exam,
+        "question": question,
+        "form": form,
+        "choices": choices,
+        "question_type_mcq": QUESTION_TYPE_MCQ,
+        "full_page": False,
+        "question_save_url": reverse(
+            "exams:admin_question_save",
+            args=[exam.id] + ([question.id] if question else []),
+        ),
+    }
+
+
+def _render_question_form(request, exam, question=None, form=None, choices=None):
+    context = _question_form_context(exam, question=question, form=form, choices=choices)
+    context["full_page"] = not _is_htmx(request)
+    template = "exams/partials/question_form.html" if _is_htmx(request) else "exams/admin_question_form.html"
+    return render(request, template, context)
+
+
 @login_required
 @role_required(*ROLE_EXAM_STAFF)
 def admin_question_form(request, exam_id, question_id=None):
     """Return an inline question form (with choices) for HTMX."""
     exam = get_object_or_404(Exam, id=exam_id)
     question = get_object_or_404(Question, id=question_id, exam=exam) if question_id else None
-    choices = list(question.choices.all()) if question else []
-    form = QuestionForm(instance=question) if request.method == "GET" else QuestionForm(request.POST, instance=question)
-    context = {
-        "exam": exam,
-        "question": question,
-        "form": form,
-        "choices": choices,
-        "question_type_mcq": QUESTION_TYPE_MCQ,
-    }
-    return render(request, "exams/partials/question_form.html", context)
+    form = QuestionForm(instance=question)
+    return _render_question_form(request, exam, question=question, form=form)
 
 
 @login_required
@@ -558,17 +576,7 @@ def admin_question_save(request, exam_id, question_id=None):
             return redirect("exams:admin_detail", exam_id=exam.id)
 
     choices = _choices_for_template(parsed_choices, question)
-    return render(
-        request,
-        "exams/partials/question_form.html",
-        {
-            "exam": exam,
-            "question": question,
-            "form": form,
-            "choices": choices,
-            "question_type_mcq": QUESTION_TYPE_MCQ,
-        },
-    )
+    return _render_question_form(request, exam, question=question, form=form, choices=choices)
 
 
 @login_required

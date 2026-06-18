@@ -7,13 +7,12 @@ from datetime import date
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
-from apps.accounts.forms import StyledMixin
 from apps.applications.models import Application
 from apps.applications.services import RegistrationData, find_duplicate, normalize_phone
 from apps.students.constants import EDUCATION_CHOICES, GENDER_CHOICES
 
 
-class RegistrationForm(StyledMixin, forms.Form):
+class RegistrationForm(forms.Form):
     """Public registration form with all 15 required fields."""
 
     full_name = forms.CharField(label=_("Full name (4 parts)"), max_length=200)
@@ -36,7 +35,6 @@ class RegistrationForm(StyledMixin, forms.Form):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.apply_styling()
 
     def clean_date_of_birth(self) -> date:
         value: date = self.cleaned_data["date_of_birth"]
@@ -101,7 +99,7 @@ class RegistrationForm(StyledMixin, forms.Form):
         return cleaned
 
 
-class ApplicationDecisionForm(StyledMixin, forms.ModelForm):
+class ApplicationDecisionForm(forms.ModelForm):
     """Admin form to capture review notes and a rejection reason."""
 
     class Meta:
@@ -114,4 +112,3 @@ class ApplicationDecisionForm(StyledMixin, forms.ModelForm):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.apply_styling()

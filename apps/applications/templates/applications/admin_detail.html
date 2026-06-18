@@ -1,33 +1,35 @@
 {% extends "base.html" %}
 {% load i18n %}
+{% load ui_tags %}
+
 {% block title %}{% trans "Application" %} {{ application.id }} | {{ SITE_NAME_AR }}{% endblock title %}
 {% block content %}
-<section class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-  <a href="{% url 'applications:admin_list' %}" class="text-sm text-brand-600 hover:underline">&larr; {% trans "Back to applications" %}</a>
+<section class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <a href="{% url 'applications:admin_list' %}" class="text-sm text-brand-600 dark:text-brand-400 hover:underline">&larr; {% trans "Back to applications" %}</a>
   <header class="mt-4 mb-6">
-    <p class="text-sm font-semibold text-brand-600 tracking-wide uppercase">{% trans "Application" %} #{{ application.id }}</p>
-    <h1 class="mt-1 text-3xl font-bold tracking-tight">{{ application.student.full_name }}</h1>
-    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ application.get_status_display }} &middot; {% trans "Submitted" %} {{ application.created_at|date:"Y-m-d H:i" }}</p>
+    <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Application" %} #{{ application.id }}</p>
+    <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ application.student.full_name }}</h1>
+    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ application.get_status_display }} &middot; {% trans "Submitted" %} <span class="tabular-nums">{% dt application.created_at %}</span></p>
   </header>
 
   <div class="grid lg:grid-cols-2 gap-6">
     <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
       <h2 class="font-semibold mb-3">{% trans "Personal data" %}</h2>
-      <dl class="text-sm grid grid-cols-2 gap-y-2">
-        <dt class="text-slate-500 dark:text-slate-400">{% trans "Email" %}</dt><dd>{{ application.student.user.email }}</dd>
-        <dt class="text-slate-500 dark:text-slate-400">{% trans "Phone" %}</dt><dd>{{ application.student.phone }}</dd>
-        <dt class="text-slate-500 dark:text-slate-400">{% trans "National ID" %}</dt><dd>{{ application.student.national_id }}</dd>
-        <dt class="text-slate-500 dark:text-slate-400">{% trans "Date of birth" %}</dt><dd>{{ application.student.date_of_birth }}</dd>
-        <dt class="text-slate-500 dark:text-slate-400">{% trans "Age" %}</dt><dd>{{ application.student.age }}</dd>
-        <dt class="text-slate-500 dark:text-slate-400">{% trans "Gender" %}</dt><dd>{{ application.student.get_gender_display }}</dd>
-        <dt class="text-slate-500 dark:text-slate-400">{% trans "Address" %}</dt><dd class="col-span-1">{{ application.student.address }}</dd>
-        <dt class="text-slate-500 dark:text-slate-400">{% trans "Education" %}</dt><dd>{{ application.student.get_education_display }}</dd>
-        <dt class="text-slate-500 dark:text-slate-400">{% trans "Specialization" %}</dt><dd>{{ application.student.specialization|default:"-" }}</dd>
-        <dt class="text-slate-500 dark:text-slate-400">{% trans "Employer" %}</dt><dd>{{ application.student.employer|default:"-" }}</dd>
-        <dt class="text-slate-500 dark:text-slate-400">{% trans "Current job" %}</dt><dd>{{ application.student.current_job|default:"-" }}</dd>
-        <dt class="text-slate-500 dark:text-slate-400">{% trans "Church" %}</dt><dd>{{ application.student.church|default:"-" }}</dd>
-        <dt class="text-slate-500 dark:text-slate-400">{% trans "Priest" %}</dt><dd>{{ application.student.priest_name|default:"-" }}</dd>
-        <dt class="text-slate-500 dark:text-slate-400">{% trans "Priest contact" %}</dt><dd>{{ application.student.priest_contact|default:"-" }}</dd>
+      <dl class="grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-x-4 gap-y-2.5 text-sm">
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Email" %}</dt><dd class="text-slate-900 dark:text-slate-100 break-words">{{ application.student.user.email }}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Phone" %}</dt><dd class="text-slate-900 dark:text-slate-100 break-words">{{ application.student.phone }}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "National ID" %}</dt><dd class="text-slate-900 dark:text-slate-100 break-words">{{ application.student.national_id }}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Date of birth" %}</dt><dd class="text-slate-900 dark:text-slate-100 break-words">{{ application.student.date_of_birth }}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Age" %}</dt><dd class="text-slate-900 dark:text-slate-100 tabular-nums">{{ application.student.age }}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Gender" %}</dt><dd class="text-slate-900 dark:text-slate-100 break-words">{{ application.student.get_gender_display }}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Address" %}</dt><dd class="text-slate-900 dark:text-slate-100 break-words">{{ application.student.address }}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Education" %}</dt><dd class="text-slate-900 dark:text-slate-100 break-words">{{ application.student.get_education_display }}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Specialization" %}</dt><dd class="text-slate-900 dark:text-slate-100 break-words">{% include "partials/_blank.html" with value=application.student.specialization %}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Employer" %}</dt><dd class="text-slate-900 dark:text-slate-100 break-words">{% include "partials/_blank.html" with value=application.student.employer %}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Current job" %}</dt><dd class="text-slate-900 dark:text-slate-100 break-words">{% include "partials/_blank.html" with value=application.student.current_job %}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Church" %}</dt><dd class="text-slate-900 dark:text-slate-100 break-words">{% include "partials/_blank.html" with value=application.student.church %}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Priest" %}</dt><dd class="text-slate-900 dark:text-slate-100 break-words">{% include "partials/_blank.html" with value=application.student.priest_name %}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Priest contact" %}</dt><dd class="text-slate-900 dark:text-slate-100 break-words">{% include "partials/_blank.html" with value=application.student.priest_contact %}</dd>
       </dl>
     </div>
 
@@ -35,30 +37,23 @@
       <h2 class="font-semibold mb-3">{% trans "Review actions" %}</h2>
       <form method="post" class="space-y-3">
         {% csrf_token %}
-        <div>
-          <label for="{{ form.admin_notes.id_for_label }}" class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Admin notes" %}</label>
-          <div class="mt-1">{{ form.admin_notes }}</div>
-        </div>
-        <div>
-          <label for="{{ form.rejection_reason.id_for_label }}" class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Rejection reason" %}</label>
-          <div class="mt-1">{{ form.rejection_reason }}</div>
-          {% if form.rejection_reason.errors %}<p class="mt-1 text-xs text-rose-600">{{ form.rejection_reason.errors|join:" " }}</p>{% endif %}
-        </div>
+        {% include "partials/_field.html" with field=form.admin_notes %}
+        {% include "partials/_field.html" with field=form.rejection_reason %}
         <div class="flex flex-wrap gap-2">
           {% if application.status == "pending" %}
-            <button name="action" value="mark_review" type="submit" class="rounded-md border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-sm">{% trans "Mark under review" %}</button>
+            {% include "partials/_button.html" with label=_("Mark under review") size="sm" variant="secondary" attrs='name="action" value="mark_review"' %}
           {% endif %}
           {% if application.status == "pending" or application.status == "under_review" %}
-            <button name="action" value="approve" type="submit" class="rounded-md bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 text-sm">{% trans "Approve" %}</button>
-            <button name="action" value="reject" type="submit" class="rounded-md bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 text-sm">{% trans "Reject" %}</button>
+            {% include "partials/_button.html" with label=_("Approve") size="sm" variant="success" attrs='name="action" value="approve"' %}
+            {% include "partials/_button.html" with label=_("Reject") size="sm" variant="danger" attrs='name="action" value="reject"' %}
           {% endif %}
           {% if application.status == "approved" %}
-            <button name="action" value="activate" type="submit" class="rounded-md bg-brand-600 hover:bg-brand-700 text-white px-3 py-1.5 text-sm">{% trans "Activate" %}</button>
+            {% include "partials/_button.html" with label=_("Activate") size="sm" variant="primary" attrs='name="action" value="activate"' %}
           {% endif %}
         </div>
       </form>
       {% if application.reviewed_by %}
-        <p class="mt-3 text-xs text-slate-500 dark:text-slate-400">{% trans "Last reviewer" %}: {{ application.reviewed_by.email }} {% if application.reviewed_at %}({{ application.reviewed_at|date:"Y-m-d H:i" }}){% endif %}</p>
+        <p class="mt-3 text-xs text-slate-500 dark:text-slate-400 tabular-nums">{% trans "Last reviewer" %}: {{ application.reviewed_by.email }} {% if application.reviewed_at %}({% dt application.reviewed_at %}){% endif %}</p>
       {% endif %}
     </div>
   </div>

@@ -1,84 +1,30 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n form_tags %}
+
 {% block title %}{% trans "Register" %} | {{ SITE_NAME_AR }}{% endblock title %}
 {% block content %}
-<section class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+<div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12">
   <header class="mb-6">
-    <h1 class="text-3xl font-bold tracking-tight">{% trans "Register" %}</h1>
+    <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Register" %}</p>
+    <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{% trans "Register" %}</h1>
     <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{% trans "Please fill in the form below. Our team will review your application and contact you." %}</p>
   </header>
 
-  <form method="post" class="space-y-4" novalidate>
+  <form method="post" class="space-y-5" novalidate>
     {% csrf_token %}
     {% if form.non_field_errors %}
-      <div class="rounded-md bg-rose-50 border border-rose-200 text-rose-800 text-sm px-3 py-2">
+      <div class="rounded-md bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-200 text-sm px-3 py-2">
         {{ form.non_field_errors|join:" " }}
       </div>
     {% endif %}
     <div class="grid sm:grid-cols-2 gap-4">
-      <div>
-        <label for="{{ form.full_name.id_for_label }}" class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Full name (4 parts)" %} <span class="text-rose-600">*</span></label>
-        <div class="mt-1">{{ form.full_name }}</div>
-        {% if form.full_name.errors %}<p class="mt-1 text-xs text-rose-600">{{ form.full_name.errors|join:" " }}</p>{% endif %}
-      </div>
-      <div>
-        <label for="{{ form.date_of_birth.id_for_label }}" class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Date of birth" %} <span class="text-rose-600">*</span></label>
-        <div class="mt-1">{{ form.date_of_birth }}</div>
-        {% if form.date_of_birth.errors %}<p class="mt-1 text-xs text-rose-600">{{ form.date_of_birth.errors|join:" " }}</p>{% endif %}
-      </div>
-      <div>
-        <label for="{{ form.gender.id_for_label }}" class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Gender" %} <span class="text-rose-600">*</span></label>
-        <div class="mt-1">{{ form.gender }}</div>
-      </div>
-      <div>
-        <label for="{{ form.phone.id_for_label }}" class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Mobile number" %} <span class="text-rose-600">*</span></label>
-        <div class="mt-1">{{ form.phone }}</div>
-        {% if form.phone.errors %}<p class="mt-1 text-xs text-rose-600">{{ form.phone.errors|join:" " }}</p>{% endif %}
-      </div>
-      <div>
-        <label for="{{ form.email.id_for_label }}" class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Email" %} <span class="text-rose-600">*</span></label>
-        <div class="mt-1">{{ form.email }}</div>
-        {% if form.email.errors %}<p class="mt-1 text-xs text-rose-600">{{ form.email.errors|join:" " }}</p>{% endif %}
-      </div>
-      <div>
-        <label for="{{ form.national_id.id_for_label }}" class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "National ID" %} <span class="text-rose-600">*</span></label>
-        <div class="mt-1">{{ form.national_id }}</div>
-        {% if form.national_id.errors %}<p class="mt-1 text-xs text-rose-600">{{ form.national_id.errors|join:" " }}</p>{% endif %}
-      </div>
-      <div class="sm:col-span-2">
-        <label for="{{ form.address.id_for_label }}" class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Address" %} <span class="text-rose-600">*</span></label>
-        <div class="mt-1">{{ form.address }}</div>
-      </div>
-      <div>
-        <label for="{{ form.education.id_for_label }}" class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Education level" %} <span class="text-rose-600">*</span></label>
-        <div class="mt-1">{{ form.education }}</div>
-      </div>
-      <div>
-        <label for="{{ form.specialization.id_for_label }}" class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Specialization" %}</label>
-        <div class="mt-1">{{ form.specialization }}</div>
-      </div>
-      <div>
-        <label for="{{ form.employer.id_for_label }}" class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Employer" %}</label>
-        <div class="mt-1">{{ form.employer }}</div>
-      </div>
-      <div>
-        <label for="{{ form.current_job.id_for_label }}" class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Current job" %}</label>
-        <div class="mt-1">{{ form.current_job }}</div>
-      </div>
-      <div>
-        <label for="{{ form.church.id_for_label }}" class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Church" %}</label>
-        <div class="mt-1">{{ form.church }}</div>
-      </div>
-      <div>
-        <label for="{{ form.priest_name.id_for_label }}" class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Priest name" %}</label>
-        <div class="mt-1">{{ form.priest_name }}</div>
-      </div>
-      <div class="sm:col-span-2">
-        <label for="{{ form.priest_contact.id_for_label }}" class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Priest contact" %}</label>
-        <div class="mt-1">{{ form.priest_contact }}</div>
-      </div>
+      {% for field in form %}
+        <div class="{% if field.name == 'address' or field.name == 'priest_contact' %}sm:col-span-2{% endif %}">
+          {% include "partials/_field.html" %}
+        </div>
+      {% endfor %}
     </div>
-    <button type="submit" class="w-full inline-flex justify-center rounded-md bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 text-sm font-semibold">{% trans "Submit registration" %}</button>
+    {% include "partials/_button.html" with label=_("Submit registration") variant="primary" class="w-full justify-center" %}
   </form>
-</section>
+</div>
 {% endblock content %}

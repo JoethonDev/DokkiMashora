@@ -1,68 +1,60 @@
 {% extends "base.html" %}
 {% load i18n %}
+{% load ui_tags %}
 
 {% block title %}{{ exam.title }} - {% trans "Take Exam" %}{% endblock %}
 
 {% block content %}
-<div x-data="examTimer({{ remaining_seconds }}, {{ exam.id }})" class="max-w-4xl mx-auto">
-  <div class="sticky top-0 bg-white dark:bg-slate-800 shadow z-10 p-4 rounded-b-lg mb-6 flex justify-between items-center">
-    <h1 class="text-xl font-bold text-slate-800 dark:text-white truncate ms-4">{{ exam.title }}</h1>
-    <div class="flex items-center gap-4">
-      <div class="text-lg font-mono font-bold"
-           :class="{'text-red-600 animate-pulse': timeLeft < 120, 'text-green-600': timeLeft >= 120}"
+<div x-data="examTimer({{ remaining_seconds }}, {{ exam.id }})" class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+  <div class="sticky top-16 z-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 mb-8 flex items-center justify-between gap-4">
+    <h1 class="truncate text-base font-semibold text-slate-900 dark:text-slate-100">{{ exam.title }}</h1>
+    <div class="flex items-center gap-4 shrink-0">
+      <div class="text-lg font-mono font-bold tabular-nums"
+           :class="{'text-rose-600 animate-pulse': timeLeft < 120, 'text-brand-600': timeLeft >= 120}"
            x-show="timeLeft > 0"
            x-text="formatTime(timeLeft)"></div>
-      <div class="text-lg font-bold text-red-600" x-show="timeLeft <= 0">
+      <div class="text-lg font-bold text-rose-600" x-show="timeLeft <= 0">
         {% trans "Time's up!" %}
       </div>
-      <button type="submit" form="exam-form"
-              class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-semibold">
-        {% trans "Submit" %}
-      </button>
+      {% include "partials/_button.html" with label=_("Submit") variant="primary" size="sm" attrs='form="exam-form"' type="submit" %}
     </div>
   </div>
 
   <form id="exam-form" method="post" action="{% if token %}{% url 'exams:submit_exam_token' token %}{% else %}{% url 'exams:submit_exam' exam.id %}{% endif %}">
     {% csrf_token %}
     {% for question in questions %}
-      <div class="mb-6 p-6 bg-white dark:bg-slate-800 rounded-lg shadow" id="q-{{ question.id }}">
-        <div class="flex justify-between items-start mb-4">
-          <h3 class="text-lg font-semibold text-slate-800 dark:text-white">
-            {% trans "Question" %} {{ forloop.counter }}
-          </h3>
-          <span class="text-sm text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">
-            {{ question.points }} {% trans "points" %}
-          </span>
-        </div>
-        <p class="text-slate-700 dark:text-slate-200 mb-4 leading-relaxed">{{ question.text }}</p>
+      <fieldset class="mb-8 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5" id="q-{{ question.id }}">
+        <legend class="flex items-center gap-3 mb-4 text-sm font-semibold text-slate-900 dark:text-slate-100">
+          <span class="inline-flex items-center justify-center h-8 w-8 rounded-full bg-brand-600 text-white text-xs font-bold tabular-nums">{{ forloop.counter }}</span>
+          <span>{% trans "Question" %}</span>
+          {% include "partials/_badge.html" with label=question.points|stringformat:"s"|add:" pts" tone="neutral" %}
+        </legend>
+        <p class="text-base text-slate-800 dark:text-slate-200 leading-relaxed max-w-prose mb-5">{{ question.text }}</p>
 
         {% if question.question_type == "mcq" %}
-          <div class="space-y-2">
+          <div class="space-y-2" role="radiogroup" aria-label="{% trans 'Answer choices' %}">
             {% for choice in question.choices.all %}
-              <label class="flex items-center p-3 border border-slate-200 dark:border-slate-600 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+              <label class="flex items-center gap-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 cursor-pointer transition-all hover:bg-brand-50 dark:hover:bg-brand-950/20 has-[:checked]:bg-brand-50 dark:has-[:checked]:bg-brand-950/20 has-[:checked]:ring-2 has-[:checked]:ring-brand-500/50">
                 <input type="radio"
                        name="question_{{ question.id }}"
                        value="{{ choice.id }}"
-                       class="ms-3 h-4 w-4 text-blue-600 border-slate-300"
+                       class="h-4 w-4 shrink-0 text-brand-600 border-slate-300 dark:border-slate-600 focus:ring-brand-500"
                        x-on:change="saved = false">
-                <span class="text-slate-700 dark:text-slate-200">{{ choice.text }}</span>
+                <span class="text-slate-700 dark:text-slate-200 text-sm leading-relaxed">{{ choice.text }}</span>
               </label>
             {% endfor %}
           </div>
         {% else %}
           <textarea name="question_{{ question.id }}"
                     rows="6"
-                    class="w-full border border-slate-300 dark:border-slate-600 rounded-lg p-4 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-base text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 transition-all resize-y"
                     placeholder="{% trans 'Write your answer here...' %}"></textarea>
         {% endif %}
-      </div>
+      </fieldset>
     {% endfor %}
 
-    <div class="text-center mb-8">
-      <button type="submit"
-              class="bg-blue-600 text-white px-10 py-3 rounded-lg text-lg font-semibold hover:bg-blue-700 transition-colors">
-        {% trans "Submit exam" %}
-      </button>
+    <div class="text-center py-8">
+      {% include "partials/_button.html" with label=_("Submit exam") variant="primary" size="lg" type="submit" loading_label=_("Submitting...") %}
     </div>
   </form>
 </div>

@@ -66,6 +66,13 @@ class TestAdminQuestionForm:
         assert response.status_code == 200
         assert "choice_text_" in response.content.decode()
 
+    def test_question_form_create_renders_full_page_without_htmx(self, admin_client, exam):
+        response = admin_client.get(reverse("exams:admin_question_form", args=[exam.id]))
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert "Add Question" in content
+        assert "Back to exam" in content
+
     def test_question_form_edit_renders(self, admin_client, exam):
         question = Question.objects.create(
             exam=exam,
@@ -80,6 +87,20 @@ class TestAdminQuestionForm:
         )
         assert response.status_code == 200
         assert "MCQ" in response.content.decode()
+
+    def test_question_form_edit_renders_full_page_without_htmx(self, admin_client, exam):
+        question = Question.objects.create(
+            exam=exam,
+            question_type=QUESTION_TYPE_MCQ,
+            text="MCQ",
+            points=Decimal("5.00"),
+            order=1,
+        )
+        response = admin_client.get(reverse("exams:admin_question_form", args=[exam.id, question.id]))
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert "Edit Question" in content
+        assert "Back to exam" in content
 
 
 @pytest.mark.django_db
@@ -175,6 +196,23 @@ class TestAdminQuestionSave:
         assert "at least one choice" in content
         assert Question.objects.filter(exam=exam).count() == 0
 
+    def test_mcq_requires_choices_on_plain_post(self, admin_client, exam):
+        with translation_override("en"):
+            url = reverse("exams:admin_question_save", args=[exam.id])
+            response = admin_client.post(
+                url,
+                {
+                    "text": "No choices",
+                    "question_type": QUESTION_TYPE_MCQ,
+                    "points": "5.00",
+                },
+            )
+        assert response.status_code == 200
+        assert "HX-Redirect" not in response
+        content = response.content.decode()
+        assert "Add Question" in content
+        assert "at least one choice" in content
+
     def test_mcq_requires_exactly_one_correct_choice(self, admin_client, exam):
         with translation_override("en"):
             url = reverse("exams:admin_question_save", args=[exam.id])
@@ -235,5 +273,4 @@ class TestAdminQuestionDelete:
         assert response.status_code == 200
         assert response["HX-Redirect"]
         assert not Question.objects.filter(id=question.id).exists()
-
 

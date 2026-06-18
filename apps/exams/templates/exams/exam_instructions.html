@@ -1,30 +1,29 @@
 {% extends "base.html" %}
 {% load i18n %}
+{% load ui_tags %}
 
 {% block title %}{{ exam.title }} - {% trans "Exam Instructions" %}{% endblock %}
 
 {% block content %}
-<div class="max-w-3xl mx-auto">
-  <h1 class="text-3xl font-bold text-slate-800 dark:text-white mb-6">{{ exam.title }}</h1>
-  <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-8">
+<div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+  <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
+    <h1 class="text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ exam.title }}</h1>
     {% if exam.description %}
-      <p class="text-slate-600 dark:text-slate-300 mb-6">{{ exam.description }}</p>
+      <p class="mt-2 text-base text-slate-700 dark:text-slate-200 leading-relaxed max-w-prose">{{ exam.description }}</p>
     {% endif %}
-    <ul class="space-y-3 text-slate-600 dark:text-slate-300 mb-8">
+    <ul class="mt-6 space-y-2 text-sm text-slate-600 dark:text-slate-300">
       <li><strong>{% trans "Duration" %}:</strong> {{ exam.duration_minutes }} {% trans "minutes" %}</li>
       <li><strong>{% trans "Passing score" %}:</strong> {{ exam.passing_score }}%</li>
       <li><strong>{% trans "Total questions" %}:</strong> {{ exam.questions.count }}</li>
     </ul>
-    <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded p-4 mb-8">
+    <div class="mt-6 rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 p-4">
       <p class="text-amber-800 dark:text-amber-200 text-sm">
         {% trans "Once you start, the timer begins and cannot be paused. Make sure you have a stable internet connection." %}
       </p>
     </div>
-    <form method="post" action="{% if token %}{% url 'exams:start_exam_token' token %}{% else %}{% url 'exams:start_exam' exam.id %}{% endif %}">
+    <form method="post" action="{% if token %}{% url 'exams:start_exam_token' token %}{% else %}{% url 'exams:start_exam' exam.id %}{% endif %}" class="mt-6">
       {% csrf_token %}
-      <button type="submit" class="bg-blue-600 text-white px-8 py-3 rounded-lg text-lg font-semibold hover:bg-blue-700">
-        {% if assignment.status == 'in_progress' %}{% trans "Continue" %}{% else %}{% trans "Start Exam" %}{% endif %}
-      </button>
+      {% include "partials/_button.html" with label=_("Start Exam") variant="primary" size="lg" %}
     </form>
   </div>
 </div>

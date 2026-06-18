@@ -19,8 +19,11 @@
         {% if user.is_authenticated %}
           <a href="{% url 'accounts:dashboard' %}" class="hover:text-brand-600">{% trans "Dashboard" %}</a>
           <a href="{% url 'accounts:profile' %}" class="hover:text-brand-600">{% trans "Profile" %}</a>
+          <a href="{% url 'academics:student_course_list' %}" class="hover:text-brand-600">{% trans "My Courses" %}</a>
           {% if user.is_staff %}
             <a href="{% url 'applications:admin_list' %}" class="hover:text-brand-600">{% trans "Applications" %}</a>
+            <a href="{% url 'academics:admin_diploma_list' %}" class="hover:text-brand-600">{% trans "Academics" %}</a>
+            <a href="{% url 'academics:admin_course_list' %}" class="hover:text-brand-600">{% trans "Courses" %}</a>
             <a href="{% url 'exams:admin_list' %}" class="hover:text-brand-600">{% trans "Exams" %}</a>
           {% endif %}
         {% endif %}

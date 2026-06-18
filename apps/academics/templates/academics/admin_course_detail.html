@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{{ course.title }} - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <header class="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Course" %}</p>
+      <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ course.title }}</h1>
+      {% if course.description %}<p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{{ course.description }}</p>{% endif %}
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a href="{% url 'academics:admin_course_edit' course.id %}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Edit" %}</a>
+      <a href="{% url 'academics:admin_version_create' course.id %}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm bg-brand-600 text-white hover:bg-brand-700 shadow-sm">+ {% trans "Add version" %}</a>
+    </div>
+  </header>
+  <h2 class="text-lg sm:text-xl font-semibold mb-4">{% trans "Course versions" %}</h2>
+  {% if versions %}
+    <div class="space-y-3">
+      {% for version in versions %}
+        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 flex justify-between items-center">
+          <div>
+            <span class="font-medium">{{ version.label }}</span>
+            {% if version.cohort %}<span class="ms-2 text-sm text-slate-500 dark:text-slate-400">{{ version.cohort.name }}</span>{% endif %}
+            {% if version.access_duration_days %}<span class="ms-2 text-xs text-slate-500 dark:text-slate-400">{{ version.access_duration_days }} {% trans "days" %}</span>{% endif %}
+          </div>
+          <a href="{% url 'academics:admin_version_detail' course.id version.id %}" class="text-brand-600 dark:text-brand-400 hover:underline text-sm font-semibold">{% trans "View lectures" %}</a>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    {% include "partials/_empty_state.html" with title=_("No versions yet") subtitle=_("Create a version for a cohort") %}
+  {% endif %}
+</div>
+{% endblock %}

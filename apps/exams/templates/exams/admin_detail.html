@@ -1,105 +1,97 @@
 {% extends "base.html" %}
 {% load i18n %}
+{% load ui_tags %}
 
 {% block title %}{{ exam.title }} - {% trans "Exam Detail" %}{% endblock %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto" x-data="{ activeTab: 'questions' }">
-  <nav class="mb-6 text-sm text-slate-500">
-    <a href="{% url 'exams:admin_list' %}" class="hover:underline">{% trans "Exam Management" %}</a>
-    <span class="mx-2">/</span>
-    <span>{{ exam.title }}</span>
-  </nav>
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10" x-data="{ activeTab: 'questions' }">
+  {% include "partials/_breadcrumb.html" with items=breadcrumb_items %}
 
-  <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-6 mb-6">
-    <div class="flex flex-col md:flex-row md:justify-between md:items-start gap-4 mb-4">
+  <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+    <div class="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
       <div>
-        <h1 class="text-2xl font-bold text-slate-800 dark:text-white">{{ exam.title }}</h1>
-        <p class="text-sm text-slate-500 mt-1">{{ exam.get_exam_type_display }}</p>
+        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ exam.title }}</h1>
+        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ exam.get_exam_type_display }}</p>
       </div>
       <div class="flex flex-wrap gap-2">
-        <a href="{% url 'exams:admin_edit_exam' exam.id %}"
-           class="bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 px-4 py-2 rounded hover:bg-slate-300 dark:hover:bg-slate-500 text-sm font-semibold">
-          {% trans "Edit" %}
-        </a>
+        {% url 'exams:admin_edit_exam' exam.id as edit_exam_url %}
+        {% include "partials/_button.html" with href=edit_exam_url label=_("Edit") variant="secondary" size="sm" %}
         <form method="post" action="{% url 'exams:admin_toggle_active' exam.id %}" class="inline">
           {% csrf_token %}
-          <button type="submit"
-            class="{% if exam.is_active %}bg-red-600 hover:bg-red-700{% else %}bg-green-600 hover:bg-green-700{% endif %} text-white px-4 py-2 rounded text-sm font-semibold">
-            {% if exam.is_active %}{% trans "Deactivate" %}{% else %}{% trans "Activate" %}{% endif %}
-          </button>
+          {% if exam.is_active %}
+            {% include "partials/_button.html" with label=_("Deactivate") variant="danger" size="sm" %}
+          {% else %}
+            {% include "partials/_button.html" with label=_("Activate") variant="success" size="sm" %}
+          {% endif %}
         </form>
       </div>
     </div>
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+    <dl class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
       <div>
-        <p class="text-slate-500">{% trans "Duration" %}</p>
-        <p class="font-semibold">{{ exam.duration_minutes }} {% trans "minutes" %}</p>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Duration" %}</dt>
+        <dd class="font-semibold text-slate-900 dark:text-slate-100 tabular-nums">{{ exam.duration_minutes }} {% trans "minutes" %}</dd>
       </div>
       <div>
-        <p class="text-slate-500">{% trans "Total points" %}</p>
-        <p class="font-semibold">{{ exam.total_points }}</p>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Total points" %}</dt>
+        <dd class="font-semibold text-slate-900 dark:text-slate-100 tabular-nums">{{ exam.total_points }}</dd>
       </div>
       <div>
-        <p class="text-slate-500">{% trans "Passing score" %}</p>
-        <p class="font-semibold">{{ exam.passing_score }}%</p>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Passing score" %}</dt>
+        <dd class="font-semibold text-slate-900 dark:text-slate-100 tabular-nums">{{ exam.passing_score }}%</dd>
       </div>
       <div>
-        <p class="text-slate-500">{% trans "Active" %}</p>
-        <p class="font-semibold">
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Active" %}</dt>
+        <dd class="font-semibold">
           {% if exam.is_active %}
-            <span class="text-green-600">{% trans "Yes" %}</span>
+            {% include "partials/_badge.html" with label=_("Yes") tone="success" %}
           {% else %}
-            <span class="text-red-600">{% trans "No" %}</span>
+            {% include "partials/_badge.html" with label=_("No") tone="danger" %}
           {% endif %}
-        </p>
-      </div>
-    </div>
-    <div class="grid grid-cols-2 gap-4 text-sm mt-2">
-      <div>
-        <p class="text-slate-500">{% trans "Opens" %}</p>
-        <p class="font-semibold">{{ exam.open_at }}</p>
+        </dd>
       </div>
       <div>
-        <p class="text-slate-500">{% trans "Closes" %}</p>
-        <p class="font-semibold">{{ exam.close_at }}</p>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Opens" %}</dt>
+        <dd class="font-semibold text-slate-900 dark:text-slate-100 text-xs tabular-nums">{% dt exam.open_at %}</dd>
       </div>
-    </div>
+      <div>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Closes" %}</dt>
+        <dd class="font-semibold text-slate-900 dark:text-slate-100 text-xs tabular-nums">{% dt exam.close_at %}</dd>
+      </div>
+    </dl>
     {% if exam.description %}
-      <p class="mt-4 text-slate-600 dark:text-slate-300">{{ exam.description }}</p>
+      <p class="mt-4 text-slate-600 dark:text-slate-300 text-sm leading-relaxed max-w-prose">{{ exam.description }}</p>
     {% endif %}
   </div>
 
-  <div class="mb-6 border-b border-slate-200 dark:border-slate-700">
-    <nav class="flex gap-6 text-sm font-medium">
-      <button type="button" @click="activeTab = 'questions'"
-              :class="activeTab === 'questions' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-500 hover:text-slate-700'"
-              class="pb-2">
+  <div class="mt-8 mb-6 border-b border-slate-200 dark:border-slate-700">
+    <nav class="flex gap-6 text-sm font-medium" role="tablist">
+      <button id="questions-tab" type="button" role="tab" aria-controls="questions-panel" :aria-selected="activeTab === 'questions'"
+              @click="activeTab = 'questions'"
+              :class="activeTab === 'questions' ? 'border-b-2 border-brand-600 text-brand-600' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
+              class="pb-2 -mb-px transition">
         {% trans "Questions" %} ({{ exam.questions.count }})
       </button>
-      <button type="button" @click="activeTab = 'access'"
-              :class="activeTab === 'access' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-500 hover:text-slate-700'"
-              class="pb-2">
+      <button id="access-tab" type="button" role="tab" aria-controls="access-panel" :aria-selected="activeTab === 'access'"
+              @click="activeTab = 'access'"
+              :class="activeTab === 'access' ? 'border-b-2 border-brand-600 text-brand-600' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
+              class="pb-2 -mb-px transition">
         {% trans "Access" %}
       </button>
-      <button type="button" @click="activeTab = 'assignments'"
-              :class="activeTab === 'assignments' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-500 hover:text-slate-700'"
-              class="pb-2">
+      <button id="assignments-tab" type="button" role="tab" aria-controls="assignments-panel" :aria-selected="activeTab === 'assignments'"
+              @click="activeTab = 'assignments'"
+              :class="activeTab === 'assignments' ? 'border-b-2 border-brand-600 text-brand-600' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
+              class="pb-2 -mb-px transition">
         {% trans "Assignments" %} ({{ exam.assignments.count }})
       </button>
     </nav>
   </div>
 
-  <div x-show="activeTab === 'questions'" x-cloak>
+  <div x-show="activeTab === 'questions'" x-cloak id="questions-panel" role="tabpanel" aria-labelledby="questions-tab" tabindex="0">
     <div class="flex justify-between items-center mb-4">
-      <h2 class="text-xl font-bold text-slate-800 dark:text-white">{% trans "Questions" %}</h2>
-      <button type="button"
-              hx-get="{% url 'exams:admin_question_form' exam.id %}"
-              hx-target="#question-form-container"
-              hx-swap="innerHTML"
-              class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 text-sm font-semibold">
-        + {% trans "Add question" %}
-      </button>
+      <h2 class="text-lg sm:text-xl font-semibold text-slate-900 dark:text-slate-100">{% trans "Questions" %}</h2>
+      {% url 'exams:admin_question_form' exam.id as question_form_url %}
+      {% include "partials/_button.html" with type="button" label=_("Add question") variant="primary" hx_get=question_form_url hx_target="#question-form-container" hx_swap="innerHTML" %}
     </div>
 
     <div id="question-form-container" class="mb-6"></div>
@@ -107,26 +99,23 @@
     {% if exam.questions.all %}
       <div class="space-y-4" id="questions-list">
         {% for question in exam.questions.all %}
-          <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-5" id="question-{{ question.id }}">
+          <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5" id="question-{{ question.id }}">
             <div class="flex justify-between items-start">
-              <div class="flex-1">
+              <div class="flex-1 min-w-0">
                 <div class="flex flex-wrap items-center gap-2 mb-2">
-                  <span class="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold px-2 py-0.5 rounded">
-                    {% trans "Q" %}{{ question.order }}
-                  </span>
-                  <span class="bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 text-xs font-semibold px-2 py-0.5 rounded">
-                    {{ question.get_question_type_display }}
-                  </span>
-                  <span class="bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200 text-xs font-semibold px-2 py-0.5 rounded">
-                    {{ question.points }} {% trans "pts" %}
-                  </span>
+                  {% include "partials/_badge.html" with label=question.order|stringformat:"s" tone="neutral" %}
+                  {% include "partials/_badge.html" with label=question.get_question_type_display tone="info" %}
+                  {% include "partials/_badge.html" with label=question.points|stringformat:"s"|add:" pts" tone="neutral" %}
                 </div>
-                <p class="text-slate-700 dark:text-slate-200 font-medium">{{ question.text }}</p>
+                <p class="text-base leading-relaxed text-slate-800 dark:text-slate-200 max-w-prose">{{ question.text }}</p>
                 {% if question.question_type == "mcq" %}
                   <ul class="mt-3 space-y-1">
                     {% for choice in question.choices.all %}
-                      <li class="text-sm {% if choice.is_correct %}text-green-600 font-semibold{% else %}text-slate-500{% endif %}">
-                        {% if choice.is_correct %}✓{% endif %} {{ choice.text }}
+                      <li class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                        {% if choice.is_correct %}
+                          {% include "partials/_badge.html" with label=_("Correct") tone="success" %}
+                        {% endif %}
+                        <span>{{ choice.text }}</span>
                       </li>
                     {% empty %}
                       <li class="text-sm text-amber-600">{% trans "No choices added yet." %}</li>
@@ -135,48 +124,39 @@
                 {% endif %}
               </div>
               <div class="flex gap-2 ms-4 shrink-0">
-                <button type="button"
-                        hx-get="{% url 'exams:admin_question_form' exam.id question.id %}"
-                        hx-target="#question-form-container"
-                        hx-swap="innerHTML"
-                        class="text-slate-600 hover:text-blue-600 text-sm font-semibold">
-                  {% trans "Edit" %}
-                </button>
-                <button type="button"
-                        hx-post="{% url 'exams:admin_question_delete' exam.id question.id %}"
-                        hx-confirm="{% trans 'Delete this question?' %}"
-                        class="text-red-600 hover:text-red-800 text-sm font-semibold">
-                  {% trans "Delete" %}
-                </button>
+                {% url 'exams:admin_question_form' exam.id question.id as edit_question_url %}
+                {% url 'exams:admin_question_delete' exam.id question.id as delete_question_url %}
+                {% include "partials/_button.html" with type="button" label=_("Edit") variant="ghost" size="sm" hx_get=edit_question_url hx_target="#question-form-container" hx_swap="innerHTML" %}
+                {% include "partials/_button.html" with type="button" label=_("Delete") variant="ghost" size="sm" class="text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:text-rose-400 dark:hover:bg-rose-950/40" hx_post=delete_question_url hx_confirm=_("Delete this question?") %}
               </div>
             </div>
           </div>
         {% endfor %}
       </div>
     {% else %}
-      <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-8 text-center" id="questions-empty">
+      <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-center" id="questions-empty">
         <p class="text-slate-500 dark:text-slate-400">{% trans "No questions yet. Add the first question." %}</p>
       </div>
     {% endif %}
   </div>
 
-  <div x-show="activeTab === 'access'" x-cloak>
+  <div x-show="activeTab === 'access'" x-cloak id="access-panel" role="tabpanel" aria-labelledby="access-tab" tabindex="0">
     {% if exam.is_active and access_url %}
-      <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-6">
-        <h2 class="text-xl font-bold text-slate-800 dark:text-white mb-4">{% trans "Exam Access" %}</h2>
+      <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+        <h2 class="text-lg sm:text-xl font-semibold mb-4">{% trans "Exam Access" %}</h2>
         <div class="grid md:grid-cols-2 gap-6">
           <div>
-            <p class="text-sm text-slate-500 mb-2">{% trans "Access URL" %}</p>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-2">{% trans "Access URL" %}</p>
             <input type="text" readonly value="{{ access_url }}"
-                   class="w-full border border-slate-300 dark:border-slate-600 rounded-lg p-2 bg-slate-50 dark:bg-slate-700 text-sm font-mono"
+                   class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-sm font-mono shadow-sm"
                    onclick="this.select(); navigator.clipboard?.writeText(this.value)">
-            <p class="text-xs text-slate-400 mt-1">
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
               {% trans "Students scan this QR code or open the URL. Unauthenticated users are redirected to login." %}
             </p>
           </div>
           <div class="text-center">
-            <p class="text-sm text-slate-500 mb-2">{% trans "QR Code" %}</p>
-            <div class="inline-block bg-white p-3 rounded-lg border border-slate-200 dark:border-slate-600">
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-2">{% trans "QR Code" %}</p>
+            <div class="inline-block bg-white p-3 rounded-lg border border-slate-200 dark:border-slate-700">
               {% if qr_svg %}
                 <div class="w-48 h-48">{{ qr_svg|safe }}</div>
               {% else %}
@@ -187,7 +167,7 @@
         </div>
       </div>
     {% else %}
-      <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-8 text-center">
+      <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-center">
         <p class="text-slate-500 dark:text-slate-400">
           {% trans "Activate this exam to generate the access URL and QR code." %}
         </p>
@@ -195,40 +175,37 @@
     {% endif %}
   </div>
 
-  <div x-show="activeTab === 'assignments'" x-cloak>
-    <h2 class="text-xl font-bold text-slate-800 dark:text-white mb-4">{% trans "Assignments" %}</h2>
-    <div class="bg-white dark:bg-slate-800 rounded-lg shadow overflow-hidden">
-      <table class="w-full">
-        <thead>
-          <tr class="bg-slate-50 dark:bg-slate-700 text-start">
-            <th class="px-6 py-3 text-sm font-semibold text-slate-600 dark:text-slate-200">{% trans "Student" %}</th>
-            <th class="px-6 py-3 text-sm font-semibold text-slate-600 dark:text-slate-200">{% trans "Status" %}</th>
-            <th class="px-6 py-3 text-sm font-semibold text-slate-600 dark:text-slate-200">{% trans "Score" %}</th>
-            <th class="px-6 py-3 text-sm font-semibold text-slate-600 dark:text-slate-200">{% trans "Submitted" %}</th>
-            <th class="px-6 py-3 text-sm font-semibold text-slate-600 dark:text-slate-200">{% trans "Actions" %}</th>
+  <div x-show="activeTab === 'assignments'" x-cloak id="assignments-panel" role="tabpanel" aria-labelledby="assignments-tab" tabindex="0">
+    <h2 class="text-lg sm:text-xl font-semibold mb-4">{% trans "Assignments" %}</h2>
+    <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+      <table class="min-w-[640px] w-full divide-y divide-slate-200 dark:divide-slate-800 text-sm">
+        <thead class="bg-slate-50 dark:bg-slate-800/50">
+          <tr class="text-slate-600 dark:text-slate-300">
+            <th class="px-4 py-2.5 text-start font-medium">{% trans "Student" %}</th>
+            <th class="px-4 py-2.5 text-start font-medium">{% trans "Status" %}</th>
+            <th class="px-4 py-2.5 text-start font-medium">{% trans "Score" %}</th>
+            <th class="px-4 py-2.5 text-start font-medium">{% trans "Submitted" %}</th>
+            <th class="px-4 py-2.5 text-start font-medium">{% trans "Actions" %}</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-slate-200 dark:divide-slate-600">
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
           {% for a in exam.assignments.all %}
-            <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
-              <td class="px-6 py-4 text-sm">{{ a.student.email }}</td>
-              <td class="px-6 py-4">
-                <span class="px-2 py-1 rounded-full text-xs font-semibold
-                  {% if a.status == 'assigned' %}bg-yellow-100 text-yellow-800
-                  {% elif a.status == 'in_progress' %}bg-blue-100 text-blue-800
-                  {% elif a.status == 'completed' %}bg-purple-100 text-purple-800
-                  {% elif a.status == 'graded' %}bg-green-100 text-green-800
-                  {% endif %}">
-                  {{ a.get_status_display }}
-                </span>
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+              <td class="px-4 py-3 text-slate-900 dark:text-slate-100">{{ a.student.email }}</td>
+              <td class="px-4 py-3">
+                {% if a.status == "assigned" %}{% include "partials/_badge.html" with label=a.get_status_display tone="warning" %}
+                {% elif a.status == "in_progress" %}{% include "partials/_badge.html" with label=a.get_status_display tone="info" %}
+                {% elif a.status == "completed" %}{% include "partials/_badge.html" with label=a.get_status_display tone="info" %}
+                {% elif a.status == "graded" %}{% include "partials/_badge.html" with label=a.get_status_display tone="success" %}
+                {% endif %}
               </td>
-              <td class="px-6 py-4 text-sm">{{ a.score|default:"—" }}</td>
-              <td class="px-6 py-4 text-sm">{{ a.submitted_at|default:"—" }}</td>
-              <td class="px-6 py-4">
+              <td class="px-4 py-3 text-slate-900 dark:text-slate-100 tabular-nums">{% include "partials/_blank.html" with value=a.score %}</td>
+              <td class="px-4 py-3 text-slate-500 dark:text-slate-400 text-xs tabular-nums">{% include "partials/_blank.html" with value=a.submitted_at|date:"DATETIME_FORMAT" %}</td>
+              <td class="px-4 py-3">
                 {% if a.status == "completed" %}
-                  <a href="{% url 'exams:admin_grade_assignment' a.id %}" class="text-blue-600 hover:underline text-sm">{% trans "Grade" %}</a>
+                  <a href="{% url 'exams:admin_grade_assignment' a.id %}" class="text-brand-600 hover:underline font-medium text-sm">{% trans "Grade" %}</a>
                 {% elif a.status == "graded" %}
-                  <a href="{% url 'exams:admin_grade_assignment' a.id %}" class="text-blue-600 hover:underline text-sm">{% trans "View" %}</a>
+                  <a href="{% url 'exams:admin_grade_assignment' a.id %}" class="text-brand-600 hover:underline font-medium text-sm">{% trans "View" %}</a>
                 {% else %}
                   <span class="text-slate-400 text-sm">—</span>
                 {% endif %}
@@ -236,7 +213,7 @@
             </tr>
           {% empty %}
             <tr>
-              <td colspan="5" class="px-6 py-8 text-center text-slate-500">{% trans "No assignments yet." %}</td>
+              <td colspan="5" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400">{% trans "No assignments yet." %}</td>
             </tr>
           {% endfor %}
         </tbody>

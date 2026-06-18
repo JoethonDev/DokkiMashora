@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Diplomas" %} - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <header class="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Admin" %}</p>
+      <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{% trans "Diplomas" %}</h1>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{% trans "Manage academic programs" %}</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a href="{% url 'academics:admin_diploma_create' %}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm bg-brand-600 text-white hover:bg-brand-700 shadow-sm">{% trans "Create diploma" %}</a>
+    </div>
+  </header>
+
+  <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+    <table class="min-w-[640px] w-full divide-y divide-slate-200 dark:divide-slate-800 text-sm">
+      <thead class="bg-slate-50 dark:bg-slate-800/50">
+        <tr class="text-slate-600 dark:text-slate-300">
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Title" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Semesters" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Cohorts" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Active" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Actions" %}</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+        {% for diploma in diplomas %}
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+            <td class="px-4 py-3">
+              <a href="{% url 'academics:admin_diploma_detail' diploma.id %}" class="text-brand-600 dark:text-brand-400 hover:underline font-medium">{{ diploma.title }}</a>
+            </td>
+            <td class="px-4 py-3 tabular-nums">{{ diploma.total_semesters }}</td>
+            <td class="px-4 py-3 tabular-nums">{{ diploma.cohorts.count }}</td>
+            <td class="px-4 py-3">
+              {% if diploma.is_active %}
+                {% include "partials/_badge.html" with label=_("Active") tone="success" %}
+              {% else %}
+                {% include "partials/_badge.html" with label=_("Inactive") tone="danger" %}
+              {% endif %}
+            </td>
+            <td class="px-4 py-3">
+              <a href="{% url 'academics:admin_diploma_edit' diploma.id %}" class="text-slate-600 dark:text-slate-300 hover:text-brand-600 text-sm font-semibold">{% trans "Edit" %}</a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5" class="px-4 py-10 text-center">
+            {% url 'academics:admin_diploma_create' as create_url %}
+            {% include "partials/_empty_state.html" with title=_("No diplomas yet") subtitle=_("Create the first diploma to get started") cta_href=create_url cta_label=_("Create diploma") %}
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

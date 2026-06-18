@@ -1,53 +1,43 @@
 {% extends "base.html" %}
 {% load i18n %}
+{% load ui_tags %}
 
 {% block title %}{{ assignment.exam.title }} - {% trans "Grade" %}{% endblock %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto">
-  <nav class="mb-6 text-sm text-slate-500">
-    <a href="{% url 'exams:admin_list' %}" class="hover:underline">{% trans "Exam Management" %}</a>
-    <span class="mx-2">/</span>
-    <a href="{% url 'exams:admin_detail' assignment.exam.id %}" class="hover:underline">{{ assignment.exam.title }}</a>
-    <span class="mx-2">/</span>
-    <span>{% trans "Grade" %}: {{ assignment.student.email }}</span>
-  </nav>
+<section class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  {% include "partials/_breadcrumb.html" with items=breadcrumb_items %}
 
-  <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-6 mb-8">
-    <h1 class="text-2xl font-bold text-slate-800 dark:text-white mb-2">{{ assignment.exam.title }}</h1>
-    <p class="text-slate-500">{% trans "Student" %}: <strong>{{ assignment.student.email }}</strong></p>
-    <p class="text-slate-500">{% trans "Status" %}:
-      <span class="font-semibold
-        {% if assignment.status == 'completed' %}text-purple-600
-        {% elif assignment.status == 'graded' %}text-green-600
-        {% endif %}">
-        {{ assignment.get_status_display }}
-      </span>
-    </p>
-    {% if assignment.score is not None %}
-      <p class="text-slate-500">{% trans "Current score" %}: <strong>{{ assignment.score }}</strong></p>
-    {% endif %}
+  <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
+    <h1 class="text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ assignment.exam.title }}</h1>
+    <dl class="mt-4 grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-x-4 gap-y-2.5 text-sm">
+      <dt class="text-slate-500 dark:text-slate-400">{% trans "Student" %}</dt>
+      <dd class="text-slate-900 dark:text-slate-100 break-words">{{ assignment.student.email }}</dd>
+      <dt class="text-slate-500 dark:text-slate-400">{% trans "Status" %}</dt>
+      <dd class="text-slate-900 dark:text-slate-100 break-words">{{ assignment.get_status_display }}</dd>
+      {% if assignment.score is not None %}
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Current score" %}</dt>
+        <dd class="text-slate-900 dark:text-slate-100 break-words tabular-nums">{{ assignment.score }}</dd>
+      {% endif %}
+    </dl>
   </div>
 
-  <form method="post">
+  <form method="post" class="mt-8">
     {% csrf_token %}
     {% for question, answer in question_answer_pairs %}
-        <div class="mb-6 p-6 bg-white dark:bg-slate-800 rounded-lg shadow">
+        <div class="mb-6 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
           <div class="flex justify-between items-start mb-4">
-            <h3 class="text-lg font-semibold text-slate-800 dark:text-white">
+            <h3 class="text-base font-semibold text-slate-900 dark:text-slate-100">
               {% trans "Question" %} {{ forloop.counter }}
             </h3>
-            <span class="text-sm text-slate-500 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">
-              {{ question.points }} {% trans "points" %}
-              {% if question.question_type == "mcq" %}- MCQ{% endif %}
-            </span>
+            {% include "partials/_badge.html" with label=question.points|stringformat:"s"|add:" pts" tone="neutral" %}
           </div>
-          <p class="text-slate-700 dark:text-slate-200 mb-4">{{ question.text }}</p>
+          <p class="text-base leading-relaxed text-slate-800 dark:text-slate-200 max-w-prose">{{ question.text }}</p>
 
           {% if question.question_type == "mcq" %}
-            <div class="mb-4">
-              <p class="text-sm text-slate-500 mb-2">{% trans "Student's choice" %}:</p>
-              <p class="text-slate-700 dark:text-slate-200">
+            <div class="mt-4">
+              <p class="text-xs font-medium text-slate-500 dark:text-slate-400">{% trans "Student's choice" %}:</p>
+              <p class="mt-1 text-slate-700 dark:text-slate-200">
                 {% if answer and answer.selected_choice %}
                   {{ answer.selected_choice.text }}
                 {% else %}
@@ -56,23 +46,19 @@
               </p>
             </div>
             {% if answer and answer.score is not None %}
-              <div>
+              <div class="mt-2">
                 {% if answer.score > 0 %}
-                  <span class="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 px-3 py-1 rounded-full text-sm font-semibold">
-                    {% trans "Correct" %} (+{{ answer.score }})
-                  </span>
+                  {% include "partials/_badge.html" with label=_("Correct")|add:" (+"|add:answer.score|add:")" tone="success" %}
                 {% else %}
-                  <span class="bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 px-3 py-1 rounded-full text-sm font-semibold">
-                    {% trans "Incorrect" %}
-                  </span>
+                  {% include "partials/_badge.html" with label=_("Incorrect") tone="danger" %}
                 {% endif %}
               </div>
             {% endif %}
           {% else %}
-            <div class="mb-4">
-              <p class="text-sm text-slate-500 mb-2">{% trans "Student's answer" %}:</p>
-              <div class="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg mb-4">
-                <p class="text-slate-700 dark:text-slate-200 whitespace-pre-wrap">
+            <div class="mt-4">
+              <p class="text-xs font-medium text-slate-500 dark:text-slate-400">{% trans "Student's answer" %}:</p>
+              <div class="mt-1 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg mb-4">
+                <p class="text-slate-700 dark:text-slate-200 whitespace-pre-wrap leading-relaxed max-w-prose">
                   {% if answer and answer.essay_text %}
                     {{ answer.essay_text }}
                   {% else %}
@@ -84,34 +70,32 @@
             {% if answer %}
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
+                  <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">
                     {% trans "Score" %} ({% trans "max" %}: {{ question.points }})
                   </label>
                   <input type="number" name="score_{{ question.id }}"
                          value="{{ answer.score|default:'' }}"
                          step="0.01" min="0" max="{{ question.points }}"
-                         class="w-full border border-slate-300 dark:border-slate-600 rounded-lg p-2 bg-white dark:bg-slate-700">
+                         class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900 dark:text-slate-100">
                 </div>
                 <div>
-                  <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
+                  <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">
                     {% trans "Feedback" %}
                   </label>
                   <input type="text" name="feedback_{{ question.id }}"
                          value="{{ answer.feedback|default:'' }}"
-                         class="w-full border border-slate-300 dark:border-slate-600 rounded-lg p-2 bg-white dark:bg-slate-700">
+                         class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900 dark:text-slate-100">
                 </div>
               </div>
               {% if not answer.graded_at %}
                 <div class="mt-3">
-                  <a href="{% url 'exams:admin_grade_with_gemini' answer.id %}"
-                     class="text-sm text-blue-600 hover:underline">
-                    ✨ {% trans "Grade with Gemini" %}
-                  </a>
+              {% url 'exams:admin_grade_with_gemini' answer.id as gemini_url %}
+              {% include "partials/_button.html" with href=gemini_url label=_("Grade with Gemini") variant="secondary" size="sm" class="text-brand-600 dark:text-brand-400" %}
                 </div>
               {% endif %}
               {% if answer.graded_at %}
-                <p class="mt-2 text-xs text-slate-400">
-                  {% trans "Graded" %} {{ answer.graded_at }}
+                <p class="mt-2 text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+                  {% trans "Graded" %} {% dt answer.graded_at %}
                   {% if answer.graded_by %} by {{ answer.graded_by.email }}{% endif %}
                 </p>
               {% endif %}
@@ -121,10 +105,8 @@
     {% endfor %}
 
     <div class="text-center mb-8">
-      <button type="submit" class="bg-blue-600 text-white px-8 py-3 rounded-lg text-lg font-semibold hover:bg-blue-700">
-        {% trans "Save Grades" %}
-      </button>
+      {% include "partials/_button.html" with label=_("Save Grades") variant="primary" size="lg" loading_label=_("Saving grades...") %}
     </div>
   </form>
-</div>
+</section>
 {% endblock %}

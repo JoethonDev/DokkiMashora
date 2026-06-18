@@ -73,6 +73,15 @@ class AdminListAccessTests(TestCase):
         response = self.client.get(self.url, {"status": APP_STATUS_PENDING})
         self.assertEqual(response.status_code, 200)
 
+    def test_status_filter_hx_returns_table_partial(self) -> None:
+        admin = User.objects.create_user(email="a@example.com", password="x", is_staff=True)
+        admin.groups.add(Group.objects.get(name=GROUP_ADMIN))
+        self.client.force_login(admin)
+        make_application()
+        response = self.client.get(self.url, {"status": APP_STATUS_PENDING}, HTTP_HX_REQUEST="true")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Applicant")
+
 
 class AdminActionTests(TestCase):
     def setUp(self) -> None:

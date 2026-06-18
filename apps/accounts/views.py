@@ -11,6 +11,8 @@ from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods
 
+from apps.academics.models import Diploma
+from apps.academics.services import get_student_course_versions
 from apps.applications.constants import APP_STATUS_PENDING, APP_STATUS_UNDER_REVIEW
 from apps.applications.models import Application
 from apps.exams.constants import ASSIGNMENT_STATUS_COMPLETED
@@ -105,10 +107,15 @@ def student_dashboard(request: HttpRequest) -> HttpResponse:
 
 # --- Helpers ----------------------------------------------------------------
 def _dashboard_context(user: User) -> dict:
-    return {
+    ctx = {
         "user_role": user.primary_role or _("Super Admin"),
         "show_role_label": True,
     }
+    if user.is_staff or user.is_superuser:
+        ctx["diploma_count"] = Diploma.objects.filter(is_active=True).count()
+    elif hasattr(user, "student_profile"):
+        ctx["course_count"] = get_student_course_versions(user.student_profile).count()
+    return ctx
 
 
 def _dashboard_url_name(user: User) -> str:

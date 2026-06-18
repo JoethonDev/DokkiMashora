@@ -4,44 +4,52 @@
 {% block title %}{% trans "My Exams" %} - {{ block.super }}{% endblock %}
 
 {% block content %}
-<div class="max-w-5xl mx-auto">
-  <h1 class="text-3xl font-bold text-slate-800 dark:text-white mb-8">{% trans "My Exams" %}</h1>
+<section class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <h1 class="text-2xl sm:text-3xl font-bold tracking-tight font-display">{% trans "My Exams" %}</h1>
 
   {% if assignments %}
-    <h2 class="text-xl font-semibold text-slate-700 dark:text-slate-200 mb-4">{% trans "Assigned Exams" %}</h2>
-    <div class="space-y-4 mb-12">
+    <h2 class="mt-8 text-lg sm:text-xl font-semibold text-slate-700 dark:text-slate-200">{% trans "Assigned Exams" %}</h2>
+    <div class="mt-4 space-y-4">
       {% for a in assignments %}
-        <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-6 flex justify-between items-center">
-          <div>
-            <h3 class="text-lg font-semibold text-slate-800 dark:text-white">{{ a.exam.title }}</h3>
-            <p class="text-sm text-slate-500">
+        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 flex justify-between items-center gap-4">
+          <div class="min-w-0">
+            <h3 class="font-semibold text-slate-900 dark:text-slate-100 truncate">{{ a.exam.title }}</h3>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
               {% if a.status == "assigned" %}
-                <span class="text-yellow-600">{% trans "Not started" %}</span>
+                {% include "partials/_badge.html" with label=_("Not started") tone="neutral" %}
               {% elif a.status == "in_progress" %}
-                <span class="text-blue-600">{% trans "In progress" %}</span>
+                {% include "partials/_badge.html" with label=_("In progress") tone="info" %}
               {% elif a.status == "completed" %}
-                <span class="text-green-600">{% trans "Completed" %} — {% if a.score is not None %}{% trans "Score" %}: {{ a.score }}{% endif %}</span>
+                {% include "partials/_badge.html" with label=_("Completed") tone="info" %}
+                {% if a.score is not None %} &middot; {% trans "Score" %}: <span class="tabular-nums">{{ a.score }}</span>{% endif %}
               {% elif a.status == "graded" %}
-                <span class="text-green-600">{% trans "Graded" %} — {% trans "Score" %}: {{ a.score }}</span>
+                {% include "partials/_badge.html" with label=_("Graded") tone="success" %}
+                &middot; {% trans "Score" %}: <span class="tabular-nums">{{ a.score }}</span>
               {% endif %}
             </p>
           </div>
-          <div>
+          <div class="shrink-0">
             {% if a.exam.exam_type == "entrance" %}
               {% if a.status == "assigned" %}
-                <a href="{% url 'exams:exam_instructions_token' a.exam.access_token %}" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">{% trans "Start" %}</a>
+                {% url 'exams:exam_instructions_token' a.exam.access_token as action_url %}
+                {% include "partials/_button.html" with href=action_url label=_("Start") variant="primary" %}
               {% elif a.status == "in_progress" %}
-                <a href="{% url 'exams:take_exam_token' a.exam.access_token %}" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">{% trans "Continue" %}</a>
+                {% url 'exams:take_exam_token' a.exam.access_token as action_url %}
+                {% include "partials/_button.html" with href=action_url label=_("Continue") variant="primary" %}
               {% elif a.status == "completed" or a.status == "graded" %}
-                <a href="{% url 'exams:exam_results_token' a.exam.access_token %}" class="bg-slate-600 text-white px-4 py-2 rounded hover:bg-slate-700">{% trans "View Results" %}</a>
+                {% url 'exams:exam_results_token' a.exam.access_token as action_url %}
+                {% include "partials/_button.html" with href=action_url label=_("View Results") variant="secondary" %}
               {% endif %}
             {% else %}
               {% if a.status == "assigned" %}
-                <a href="{% url 'exams:exam_instructions' a.exam.id %}" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">{% trans "Start" %}</a>
+                {% url 'exams:exam_instructions' a.exam.id as action_url %}
+                {% include "partials/_button.html" with href=action_url label=_("Start") variant="primary" %}
               {% elif a.status == "in_progress" %}
-                <a href="{% url 'exams:take_exam' a.exam.id %}" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">{% trans "Continue" %}</a>
+                {% url 'exams:take_exam' a.exam.id as action_url %}
+                {% include "partials/_button.html" with href=action_url label=_("Continue") variant="primary" %}
               {% elif a.status == "completed" or a.status == "graded" %}
-                <a href="{% url 'exams:results' a.exam.id %}" class="bg-slate-600 text-white px-4 py-2 rounded hover:bg-slate-700">{% trans "View Results" %}</a>
+                {% url 'exams:results' a.exam.id as action_url %}
+                {% include "partials/_button.html" with href=action_url label=_("View Results") variant="secondary" %}
               {% endif %}
             {% endif %}
           </div>
@@ -49,9 +57,10 @@
       {% endfor %}
     </div>
   {% else %}
-    <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-8 text-center mb-12">
-      <p class="text-slate-500 dark:text-slate-400 text-lg">{% trans "You have no assigned exams yet." %}</p>
+    <div class="mt-8 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-8 text-center">
+      <p class="text-base font-semibold text-slate-700 dark:text-slate-200">{% trans "No exams yet" %}</p>
+      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{% trans "You have no assigned exams yet." %}</p>
     </div>
   {% endif %}
-</div>
+</section>
 {% endblock %}

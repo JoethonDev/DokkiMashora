@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{{ diploma.title }} - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  {% include "partials/_breadcrumb.html" with items=breadcrumb_items %}
+  <header class="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Diploma" %}</p>
+      <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ diploma.title }}</h1>
+      {% if diploma.description %}<p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{{ diploma.description }}</p>{% endif %}
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a href="{% url 'academics:admin_diploma_edit' diploma.id %}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Edit" %}</a>
+    </div>
+  </header>
+
+  <div class="grid sm:grid-cols-2 gap-4 mb-8">
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+      <p class="text-sm text-slate-500 dark:text-slate-400">{% trans "Semesters" %}</p>
+      <p class="mt-1 text-3xl font-bold tabular-nums tracking-tight font-display text-slate-900 dark:text-slate-100">{{ semesters.count }}</p>
+    </div>
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+      <p class="text-sm text-slate-500 dark:text-slate-400">{% trans "Cohorts" %}</p>
+      <p class="mt-1 text-3xl font-bold tabular-nums tracking-tight font-display text-slate-900 dark:text-slate-100">{{ cohorts.count }}</p>
+    </div>
+  </div>
+
+  <div class="mb-8">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-lg sm:text-xl font-semibold">{% trans "Semesters" %}</h2>
+      <a href="{% url 'academics:admin_semester_create' diploma.id %}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm bg-brand-600 text-white hover:bg-brand-700 shadow-sm">+ {% trans "Add semester" %}</a>
+    </div>
+    {% if semesters %}
+      <div class="space-y-3">
+        {% for semester in semesters %}
+          <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 flex justify-between items-center">
+            <div>
+              <span class="text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded">{{ semester.order }}</span>
+              <span class="ms-2 font-medium">{{ semester.title }}</span>
+            </div>
+            <a href="{% url 'academics:admin_semester_edit' diploma.id semester.id %}" class="text-slate-600 dark:text-slate-300 hover:text-brand-600 text-sm font-semibold">{% trans "Edit" %}</a>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      {% include "partials/_empty_state.html" with title=_("No semesters yet") subtitle=_("Add the first semester") %}
+    {% endif %}
+  </div>
+
+  <div>
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-lg sm:text-xl font-semibold">{% trans "Cohorts" %}</h2>
+      <a href="{% url 'academics:admin_cohort_create' diploma.id %}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm bg-brand-600 text-white hover:bg-brand-700 shadow-sm">+ {% trans "Add cohort" %}</a>
+    </div>
+    {% if cohorts %}
+      <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+        <table class="min-w-[640px] w-full divide-y divide-slate-200 dark:divide-slate-800 text-sm">
+          <thead class="bg-slate-50 dark:bg-slate-800/50">
+            <tr class="text-slate-600 dark:text-slate-300">
+              <th class="px-4 py-2.5 text-start font-medium">{% trans "Name" %}</th>
+              <th class="px-4 py-2.5 text-start font-medium">{% trans "Start" %}</th>
+              <th class="px-4 py-2.5 text-start font-medium">{% trans "End" %}</th>
+              <th class="px-4 py-2.5 text-start font-medium">{% trans "Active" %}</th>
+              <th class="px-4 py-2.5 text-start font-medium">{% trans "Actions" %}</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+            {% for cohort in cohorts %}
+              <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                <td class="px-4 py-3 font-medium">{{ cohort.name }}</td>
+                <td class="px-4 py-3 tabular-nums">{{ cohort.start_date|date:"DATE_FORMAT" }}</td>
+                <td class="px-4 py-3 tabular-nums">{% include "partials/_blank.html" with value=cohort.end_date|date:"DATE_FORMAT" %}</td>
+                <td class="px-4 py-3">
+                  {% if cohort.is_active %}{% include "partials/_badge.html" with label=_("Active") tone="success" %}{% else %}{% include "partials/_badge.html" with label=_("Inactive") tone="danger" %}{% endif %}
+                </td>
+                <td class="px-4 py-3"><a href="{% url 'academics:admin_cohort_edit' diploma.id cohort.id %}" class="text-slate-600 dark:text-slate-300 hover:text-brand-600 text-sm font-semibold">{% trans "Edit" %}</a></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      {% include "partials/_empty_state.html" with title=_("No cohorts yet") subtitle=_("Create the first cohort") %}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

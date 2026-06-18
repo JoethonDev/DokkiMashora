@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "My Courses" %} - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <header class="mb-6">
+    <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Student" %}</p>
+    <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{% trans "My Courses" %}</h1>
+  </header>
+  {% if course_versions %}
+    <div class="grid sm:grid-cols-2 gap-4">
+      {% for version in course_versions %}
+        <a href="{% url 'academics:student_course_detail' version.id %}" class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 hover:border-brand-500 transition">
+          <p class="font-semibold text-slate-900 dark:text-slate-100">{{ version.course.title }}</p>
+          {% if version.cohort %}<p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ version.cohort.name }}</p>{% endif %}
+          <p class="mt-2 text-xs text-brand-600 dark:text-brand-400">{% trans "View lectures" %} &rarr;</p>
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    {% include "partials/_empty_state.html" with title=_("No courses yet") subtitle=_("You have not been enrolled in any course") %}
+  {% endif %}
+</div>
+{% endblock %}

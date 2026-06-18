@@ -9,8 +9,10 @@
     {% if user.is_authenticated %}
       <a href="{% url 'accounts:dashboard' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Dashboard" %}</a>
       <a href="{% url 'accounts:profile' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Profile" %}</a>
+      <a href="{% url 'academics:student_course_list' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "My Courses" %}</a>
       {% if user.is_staff %}
         <a href="{% url 'applications:admin_list' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Applications" %}</a>
+        <a href="{% url 'academics:admin_diploma_list' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Academics" %}</a>
         <a href="{% url 'exams:admin_list' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Exams" %}</a>
       {% endif %}
       <form method="post" action="{% url 'accounts:logout' %}" class="mt-auto">

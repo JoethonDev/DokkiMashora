@@ -1,11 +1,10 @@
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
-from apps.accounts.forms import StyledMixin
 from apps.exams.models import Exam, Question
 
 
-class ExamForm(StyledMixin, forms.ModelForm):
+class ExamForm(forms.ModelForm):
     class Meta:
         model = Exam
         fields = [
@@ -33,10 +32,6 @@ class ExamForm(StyledMixin, forms.ModelForm):
             "close_at": _("Date and time when the exam closes."),
         }
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.apply_styling()
-
     def clean(self):
         cleaned = super().clean()
         open_at = cleaned.get("open_at")
@@ -46,7 +41,7 @@ class ExamForm(StyledMixin, forms.ModelForm):
         return cleaned
 
 
-class QuestionForm(StyledMixin, forms.ModelForm):
+class QuestionForm(forms.ModelForm):
     class Meta:
         model = Question
         fields = [
@@ -55,9 +50,5 @@ class QuestionForm(StyledMixin, forms.ModelForm):
             "points",
         ]
         widgets = {
-            "text": forms.Textarea(attrs={"rows": 3}),
+            "text": forms.Textarea(attrs={"rows": 5}),
         }
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.apply_styling()
