@@ -12,12 +12,26 @@
   </nav>
 
   <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-6 mb-8">
-    <h1 class="text-2xl font-bold text-slate-800 dark:text-white mb-4">{{ exam.title }}</h1>
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+    <div class="flex justify-between items-start mb-4">
       <div>
-        <p class="text-slate-500">{% trans "Type" %}</p>
-        <p class="font-semibold">{{ exam.get_exam_type_display }}</p>
+        <h1 class="text-2xl font-bold text-slate-800 dark:text-white">{{ exam.title }}</h1>
+        <p class="text-sm text-slate-500 mt-1">{{ exam.get_exam_type_display }}</p>
       </div>
+      <div class="flex gap-2">
+        <a href="{% url 'exams:admin_edit_exam' exam.id %}"
+           class="bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 px-4 py-2 rounded hover:bg-slate-300 dark:hover:bg-slate-500 text-sm font-semibold">
+          {% trans "Edit" %}
+        </a>
+        <form method="post" action="{% url 'exams:admin_toggle_active' exam.id %}" class="inline">
+          {% csrf_token %}
+          <button type="submit"
+            class="{% if exam.is_active %}bg-red-600 hover:bg-red-700{% else %}bg-green-600 hover:bg-green-700{% endif %} text-white px-4 py-2 rounded text-sm font-semibold">
+            {% if exam.is_active %}{% trans "Deactivate" %}{% else %}{% trans "Activate" %}{% endif %}
+          </button>
+        </form>
+      </div>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
       <div>
         <p class="text-slate-500">{% trans "Duration" %}</p>
         <p class="font-semibold">{{ exam.duration_minutes }} {% trans "minutes" %}</p>
@@ -30,11 +44,54 @@
         <p class="text-slate-500">{% trans "Passing score" %}</p>
         <p class="font-semibold">{{ exam.passing_score }}%</p>
       </div>
+      <div>
+        <p class="text-slate-500">{% trans "Active" %}</p>
+        <p class="font-semibold">
+          {% if exam.is_active %}
+            <span class="text-green-600">{% trans "Yes" %}</span>
+          {% else %}
+            <span class="text-red-600">{% trans "No" %}</span>
+          {% endif %}
+        </p>
+      </div>
+    </div>
+    <div class="grid grid-cols-2 gap-4 text-sm mt-2">
+      <div>
+        <p class="text-slate-500">{% trans "Opens" %}</p>
+        <p class="font-semibold">{{ exam.open_at }}</p>
+      </div>
+      <div>
+        <p class="text-slate-500">{% trans "Closes" %}</p>
+        <p class="font-semibold">{{ exam.close_at }}</p>
+      </div>
     </div>
     {% if exam.description %}
       <p class="mt-4 text-slate-600 dark:text-slate-300">{{ exam.description }}</p>
     {% endif %}
   </div>
+
+  {% if exam.is_active and access_url %}
+    <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-6 mb-8">
+      <h2 class="text-xl font-bold text-slate-800 dark:text-white mb-4">{% trans "Exam Access" %}</h2>
+      <div class="grid md:grid-cols-2 gap-6">
+        <div>
+          <p class="text-sm text-slate-500 mb-2">{% trans "Access URL" %}</p>
+          <input type="text" readonly value="{{ access_url }}"
+                 class="w-full border border-slate-300 dark:border-slate-600 rounded-lg p-2 bg-slate-50 dark:bg-slate-700 text-sm font-mono"
+                 onclick="this.select(); navigator.clipboard?.writeText(this.value)">
+          <p class="text-xs text-slate-400 mt-1">
+            {% trans "Students scan this QR code or open the URL. Unauthenticated users are redirected to login." %}
+          </p>
+        </div>
+        <div class="text-center">
+          <p class="text-sm text-slate-500 mb-2">{% trans "QR Code" %}</p>
+          <div class="inline-block bg-white p-3 rounded-lg border border-slate-200 dark:border-slate-600">
+            {{ qr_svg|safe }}
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
 
   <h2 class="text-xl font-bold text-slate-800 dark:text-white mb-4">{% trans "Assignments" %}</h2>
   <div class="bg-white dark:bg-slate-800 rounded-lg shadow overflow-hidden">

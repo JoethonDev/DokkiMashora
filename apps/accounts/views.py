@@ -66,12 +66,20 @@ def dashboard_router(request: HttpRequest) -> HttpResponse:
 def admin_dashboard(request: HttpRequest) -> HttpResponse:
     from apps.applications.constants import APP_STATUS_PENDING, APP_STATUS_UNDER_REVIEW
     from apps.applications.models import Application
+    from apps.exams.constants import ASSIGNMENT_STATUS_COMPLETED
+    from apps.exams.models import Assignment, Exam
 
     pending_count = Application.objects.filter(
         status__in=[APP_STATUS_PENDING, APP_STATUS_UNDER_REVIEW]
     ).count()
+    active_exams = Exam.objects.filter(is_active=True).count()
+    pending_grading = Assignment.objects.filter(
+        status=ASSIGNMENT_STATUS_COMPLETED,
+    ).count()
     context = _dashboard_context(request.user)
     context["pending_applications_count"] = pending_count
+    context["active_exams_count"] = active_exams
+    context["pending_grading_count"] = pending_grading
     return render(request, "accounts/dashboards/admin.html", context)
 
 

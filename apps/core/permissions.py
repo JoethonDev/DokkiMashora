@@ -25,6 +25,10 @@ def _user_in_any_group(user, group_names: tuple[str, ...]) -> bool:
     return user.groups.filter(name__in=group_names).exists()
 
 
+ROLE_EXAM_STAFF = (GROUP_SUPER_ADMIN, GROUP_ADMIN, GROUP_MODERATOR, GROUP_TEACHER)
+ROLE_SENIOR_STAFF = (GROUP_SUPER_ADMIN, GROUP_ADMIN)
+
+
 def is_super_admin(user) -> bool:
     return bool(
         user

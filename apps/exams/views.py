@@ -1,13 +1,17 @@
+import io
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.permissions import role_required
+from apps.core.permissions import ROLE_EXAM_STAFF, role_required
 from apps.exams.constants import ASSIGNMENT_STATUS_COMPLETED
+from apps.exams.forms import ExamForm
 from apps.exams.gemini import GeminiClient
 from apps.exams.models import Answer, Assignment, Exam
 from apps.exams.services import (
@@ -149,38 +153,118 @@ def exam_results(request, exam_id):
     )
 
 
+def exam_access(request, exam_id):
+    """Public access URL for QR code scanning.
+    Redirects unauthenticated users to login, then back here.
+    """
+    exam = get_object_or_404(Exam, id=exam_id, is_active=True)
+    if not request.user.is_authenticated:
+        from django.contrib.auth.views import redirect_to_login
+
+        return redirect_to_login(request.get_full_path())
+    assignment = Assignment.objects.filter(
+        exam=exam,
+        student=request.user,
+    ).first()
+    if not assignment:
+        messages.error(request, _("You are not assigned to this exam."))
+        return redirect("exams:student_list")
+    return redirect("exams:exam_instructions", exam_id=exam_id)
+
+
 @login_required
-@role_required("Admin", "Super Admin", "Moderator", "Teacher")
+@role_required(*ROLE_EXAM_STAFF)
 def admin_list(request):
     exams = Exam.objects.all().select_related("created_by")
     return render(request, "exams/admin_list.html", {"exams": exams})
 
 
 @login_required
-@role_required("Admin", "Super Admin", "Moderator", "Teacher")
+@role_required(*ROLE_EXAM_STAFF)
 def admin_detail(request, exam_id):
     exam = get_object_or_404(
         Exam.objects.prefetch_related("questions__choices", "assignments__student"),
         id=exam_id,
     )
+    access_url = request.build_absolute_uri(reverse("exams:exam_access", args=[exam_id]))
+    qr_svg = _generate_qr_svg(access_url)
     return render(
         request,
         "exams/admin_detail.html",
         {
+            "exam": exam,
+            "access_url": access_url,
+            "qr_svg": qr_svg,
+        },
+    )
+
+
+@login_required
+@role_required(*ROLE_EXAM_STAFF)
+def admin_create_exam(request):
+    if request.method == "POST":
+        form = ExamForm(request.POST)
+        if form.is_valid():
+            exam = form.save(commit=False)
+            exam.created_by = request.user
+            exam.save()
+            messages.success(request, _("Exam created."))
+            return redirect("exams:admin_detail", exam_id=exam.id)
+    else:
+        form = ExamForm()
+    return render(
+        request,
+        "exams/admin_exam_form.html",
+        {
+            "form": form,
+            "title": _("Create exam"),
+        },
+    )
+
+
+@login_required
+@role_required(*ROLE_EXAM_STAFF)
+def admin_edit_exam(request, exam_id):
+    exam = get_object_or_404(Exam, id=exam_id)
+    if request.method == "POST":
+        form = ExamForm(request.POST, instance=exam)
+        if form.is_valid():
+            form.save()
+            messages.success(request, _("Exam updated."))
+            return redirect("exams:admin_detail", exam_id=exam.id)
+    else:
+        form = ExamForm(instance=exam)
+    return render(
+        request,
+        "exams/admin_exam_form.html",
+        {
+            "form": form,
+            "title": _("Edit exam"),
             "exam": exam,
         },
     )
 
 
 @login_required
-@role_required("Admin", "Super Admin", "Moderator", "Teacher")
+@role_required(*ROLE_EXAM_STAFF)
+def admin_toggle_active(request, exam_id):
+    exam = get_object_or_404(Exam, id=exam_id)
+    exam.is_active = not exam.is_active
+    exam.save(update_fields=["is_active", "updated_at"])
+    status = _("activated") if exam.is_active else _("deactivated")
+    messages.success(request, _("Exam %(status)s.") % {"status": status})
+    return redirect("exams:admin_detail", exam_id=exam.id)
+
+
+@login_required
+@role_required(*ROLE_EXAM_STAFF)
 def admin_grade_list(request):
     pending = get_pending_grading()
     return render(request, "exams/admin_grade_list.html", {"assignments": pending})
 
 
 @login_required
-@role_required("Admin", "Super Admin", "Moderator", "Teacher")
+@role_required(*ROLE_EXAM_STAFF)
 def admin_grade_assignment(request, assignment_id):
     assignment = get_object_or_404(
         Assignment.objects.select_related("exam", "student"),
@@ -218,7 +302,7 @@ def admin_grade_assignment(request, assignment_id):
 
 
 @login_required
-@role_required("Admin", "Super Admin", "Moderator", "Teacher")
+@role_required(*ROLE_EXAM_STAFF)
 def admin_grade_with_gemini(request, answer_id):
     answer = get_object_or_404(
         Answer.objects.select_related("question", "assignment__exam"),
@@ -249,3 +333,14 @@ def admin_grade_with_gemini(request, answer_id):
             },
         )
     return redirect("exams:admin_grade_assignment", assignment_id=answer.assignment_id)
+
+
+def _generate_qr_svg(url: str) -> str:
+    import qrcode
+    import qrcode.image.svg
+
+    factory = qrcode.image.svg.SvgImage
+    img = qrcode.make(url, image_factory=factory, box_size=10)
+    buf = io.BytesIO()
+    img.save(buf)
+    return buf.getvalue().decode("utf-8")

@@ -15,16 +15,21 @@
       <p class="mt-1 text-3xl font-semibold tracking-tight">{{ pending_applications_count|default:"0" }}</p>
       <p class="mt-1 text-xs text-brand-600">{% trans "Review queue" %} &rarr;</p>
     </a>
-    {% include "accounts/dashboards/_tile.html" with title=_("Active entrance exams") value="0" sub=_("Open windows") %}
+    <a href="{% url 'exams:admin_list' %}" class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 hover:border-brand-500 transition">
+      <p class="text-sm text-slate-500">{% trans "Exams" %}</p>
+      <p class="mt-1 text-3xl font-semibold tracking-tight">{{ active_exams_count|default:"0" }}</p>
+      <p class="mt-1 text-xs text-brand-600">{% trans "Manage exams" %} &rarr;</p>
+    </a>
     {% include "accounts/dashboards/_tile.html" with title=_("Cohorts") value="0" sub=_("Diplomas + courses") %}
     {% include "accounts/dashboards/_tile.html" with title=_("Storage") value="0" sub=_("R2 usage") %}
   </div>
 
   <div class="mt-8 grid lg:grid-cols-2 gap-4">
-    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
-      <h2 class="font-semibold">{% trans "Coming soon" %}</h2>
-      <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{% trans "Registration review, entrance exam creation, and grading queues will land in upcoming phases." %}</p>
-    </div>
+    <a href="{% url 'exams:admin_grade_list' %}" class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 hover:border-brand-500 transition">
+      <h2 class="font-semibold">{% trans "Pending grading" %}</h2>
+      <p class="mt-1 text-3xl font-semibold tracking-tight">{{ pending_grading_count|default:"0" }}</p>
+      <p class="mt-1 text-xs text-brand-600">{% trans "Grade submissions" %} &rarr;</p>
+    </a>
     <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
       <h2 class="font-semibold">{% trans "Server time" %}</h2>
       <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{% trans "All schedules run in" %} {% now "e" %}. {% trans "Current time:" %} {% now "H:i" %}.</p>
