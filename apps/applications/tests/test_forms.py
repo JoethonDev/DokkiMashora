@@ -52,6 +52,47 @@ class RegistrationFormTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn("national_id", form.errors)
 
+    def test_form_rejects_short_phone(self) -> None:
+        form = RegistrationForm(data=self._data(phone="12345"))
+        self.assertFalse(form.is_valid())
+        self.assertIn("phone", form.errors)
+
+    def test_form_rejects_duplicate_email(self) -> None:
+        self.client.post(self._post_url(), self._data())
+        form = RegistrationForm(
+            data=self._data(phone="01111111111", national_id="999", full_name="Different")
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("email", form.errors)
+
+    def test_form_rejects_duplicate_phone(self) -> None:
+        self.client.post(self._post_url(), self._data())
+        form = RegistrationForm(
+            data=self._data(email="other@example.com", national_id="999", full_name="Different")
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("phone", form.errors)
+
+    def test_form_rejects_duplicate_national_id(self) -> None:
+        self.client.post(self._post_url(), self._data())
+        form = RegistrationForm(
+            data=self._data(email="other@example.com", phone="01111111111", full_name="Different")
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("national_id", form.errors)
+
+    def test_form_rejects_duplicate_full_name(self) -> None:
+        self.client.post(self._post_url(), self._data())
+        form = RegistrationForm(
+            data=self._data(email="other@example.com", phone="01111111111", national_id="999")
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("full_name", form.errors)
+
+    @staticmethod
+    def _post_url() -> str:
+        return reverse("applications:register")
+
 
 class RegistrationViewTests(TestCase):
     def setUp(self) -> None:
@@ -92,4 +133,22 @@ class RegistrationViewTests(TestCase):
         response = self._post(email="")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'name="email"')
+        self.assertEqual(Application.objects.count(), 0)
+
+    def test_authenticated_user_is_redirected_to_dashboard(self) -> None:
+        from apps.accounts.models import User
+
+        user = User.objects.create_user(email="logged@example.com", password="x")
+        self.client.force_login(user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("accounts:post_login"))
+
+    def test_authenticated_user_cannot_post_registration(self) -> None:
+        from apps.accounts.models import User
+
+        user = User.objects.create_user(email="logged@example.com", password="x")
+        self.client.force_login(user)
+        response = self._post()
+        self.assertEqual(response.status_code, 302)
         self.assertEqual(Application.objects.count(), 0)

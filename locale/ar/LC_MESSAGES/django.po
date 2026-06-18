@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-18 13:48+0300\n"
+"POT-Creation-Date: 2026-06-18 13:59+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -134,13 +134,13 @@ msgstr "الاسم الكامل (بالعربية)"
 #: .\apps\applications\templates\applications\admin_detail.html:20
 #: .\apps\applications\templates\applications\register.html:25
 msgid "Date of birth"
-msgstr ""
+msgstr "تاريخ الميلاد"
 
 #: .\apps\applications\forms.py:24
 #: .\apps\applications\templates\applications\admin_detail.html:22
 #: .\apps\applications\templates\applications\register.html:30
 msgid "Gender"
-msgstr ""
+msgstr "النوع"
 
 #: .\apps\applications\forms.py:25
 #: .\apps\applications\templates\applications\admin_detail.html:23
@@ -160,7 +160,7 @@ msgstr "رقم الهاتف"
 #: .\apps\applications\forms.py:28
 #: .\apps\applications\templates\applications\register.html:53
 msgid "Education level"
-msgstr ""
+msgstr "المستوى التعليمي"
 
 #: .\apps\applications\forms.py:29
 #: .\apps\applications\templates\applications\admin_detail.html:25
@@ -174,7 +174,7 @@ msgstr "الطلبات"
 #: .\apps\applications\templates\applications\admin_detail.html:26
 #: .\apps\applications\templates\applications\register.html:61
 msgid "Employer"
-msgstr ""
+msgstr "جهة العمل"
 
 #: .\apps\applications\forms.py:31
 #: .\apps\applications\templates\applications\admin_detail.html:27
@@ -188,18 +188,18 @@ msgstr "الوقت الحالي:"
 #: .\apps\applications\templates\applications\admin_detail.html:28
 #: .\apps\applications\templates\applications\register.html:69
 msgid "Church"
-msgstr ""
+msgstr "الكنيسة"
 
 #: .\apps\applications\forms.py:33
 #: .\apps\applications\templates\applications\register.html:73
 msgid "Priest name"
-msgstr ""
+msgstr "اسم الأب الكاهن"
 
 #: .\apps\applications\forms.py:34
 #: .\apps\applications\templates\applications\admin_detail.html:30
 #: .\apps\applications\templates\applications\register.html:77
 msgid "Priest contact"
-msgstr ""
+msgstr "التواصل مع الأب الكاهن"
 
 #: .\apps\applications\forms.py:35
 #: .\apps\applications\templates\applications\admin_detail.html:19
@@ -211,7 +211,7 @@ msgstr "الرقم القومي"
 
 #: .\apps\applications\forms.py:44
 msgid "Date of birth must be in the past."
-msgstr ""
+msgstr "يجب أن يكون تاريخ الميلاد في الماضي."
 
 #: .\apps\applications\forms.py:50
 #, fuzzy
@@ -221,7 +221,7 @@ msgstr "رقم الهاتف"
 
 #: .\apps\applications\forms.py:56
 msgid "National ID is required."
-msgstr ""
+msgstr "الرقم القومي مطلوب."
 
 #: .\apps\applications\forms.py:67
 #: .\apps\applications\templates\applications\admin_detail.html:39
@@ -233,7 +233,7 @@ msgstr "مدير"
 #: .\apps\applications\forms.py:68
 #: .\apps\applications\templates\applications\admin_detail.html:43
 msgid "Rejection reason"
-msgstr ""
+msgstr "سبب الرفض"
 
 #: .\apps\applications\models.py:36
 msgid "admin notes"
@@ -280,7 +280,7 @@ msgstr "الطلبات"
 
 #: .\apps\applications\templates\applications\admin_detail.html:10
 msgid "Submitted"
-msgstr ""
+msgstr "تم التقديم"
 
 #: .\apps\applications\templates\applications\admin_detail.html:15
 #, fuzzy
@@ -290,15 +290,15 @@ msgstr "المعلومات الشخصية"
 
 #: .\apps\applications\templates\applications\admin_detail.html:18
 msgid "Phone"
-msgstr ""
+msgstr "الهاتف"
 
 #: .\apps\applications\templates\applications\admin_detail.html:21
 msgid "Age"
-msgstr ""
+msgstr "العمر"
 
 #: .\apps\applications\templates\applications\admin_detail.html:24
 msgid "Education"
-msgstr ""
+msgstr "التعليم"
 
 #: .\apps\applications\templates\applications\admin_detail.html:29
 msgid "Priest"
@@ -306,7 +306,7 @@ msgstr ""
 
 #: .\apps\applications\templates\applications\admin_detail.html:35
 msgid "Review actions"
-msgstr ""
+msgstr "إجراءات المراجعة"
 
 #: .\apps\applications\templates\applications\admin_detail.html:49
 #, fuzzy
@@ -316,11 +316,11 @@ msgstr "قيد المراجعة"
 
 #: .\apps\applications\templates\applications\admin_detail.html:52
 msgid "Approve"
-msgstr ""
+msgstr "موافقة"
 
 #: .\apps\applications\templates\applications\admin_detail.html:53
 msgid "Reject"
-msgstr ""
+msgstr "رفض"
 
 #: .\apps\applications\templates\applications\admin_detail.html:56
 #, fuzzy
@@ -348,15 +348,15 @@ msgstr "مدير"
 
 #: .\apps\applications\templates\applications\admin_list.html:14
 msgid "All"
-msgstr ""
+msgstr "الكل"
 
 #: .\apps\applications\templates\applications\admin_list.html:26
 msgid "Name"
-msgstr ""
+msgstr "الاسم"
 
 #: .\apps\applications\templates\applications\admin_list.html:29
 msgid "Created"
-msgstr ""
+msgstr "تاريخ الإنشاء"
 
 #: .\apps\applications\templates\applications\admin_list.html:30
 #, fuzzy
@@ -390,7 +390,7 @@ msgstr ""
 
 #: .\apps\applications\templates\applications\register.html:81
 msgid "Submit registration"
-msgstr ""
+msgstr "إرسال التسجيل"
 
 #: .\apps\applications\templates\applications\registration_success.html:3
 #, fuzzy
@@ -400,20 +400,20 @@ msgstr "قائمة التسجيل"
 
 #: .\apps\applications\templates\applications\registration_success.html:6
 msgid "Thank you"
-msgstr ""
+msgstr "شكراً لك"
 
 #: .\apps\applications\templates\applications\registration_success.html:7
 msgid "Your registration was received"
-msgstr ""
+msgstr "تم استلام طلب تسجيلك"
 
 #: .\apps\applications\templates\applications\registration_success.html:9
 #, python-format
 msgid "We will contact <strong>%(email)s</strong> with the next steps."
-msgstr ""
+msgstr "سنتواصل معك على <strong>%(email)s</strong> بالخطوات التالية."
 
 #: .\apps\applications\templates\applications\registration_success.html:11
 msgid "We will contact you with the next steps."
-msgstr ""
+msgstr "سنتواصل معك بالخطوات التالية."
 
 #: .\apps\applications\templates\applications\registration_success.html:13
 #: .\templates\core\errors\400.html:9 .\templates\core\errors\403.html:9
@@ -423,11 +423,11 @@ msgstr "العودة للرئيسية"
 
 #: .\apps\applications\views.py:57
 msgid "Registration received. We will contact you shortly."
-msgstr ""
+msgstr "تم استلام التسجيل. سنتواصل معك قريباً."
 
 #: .\apps\applications\views.py:104
 msgid "Application marked as under review."
-msgstr ""
+msgstr "تم تحديد الطلب كقيد المراجعة."
 
 #: .\apps\applications\views.py:110
 #, fuzzy
@@ -437,7 +437,7 @@ msgstr "الطلبات"
 
 #: .\apps\applications\views.py:115
 msgid "Rejection reason is required."
-msgstr ""
+msgstr "سبب الرفض مطلوب."
 
 #: .\apps\applications\views.py:119
 #, fuzzy
@@ -453,7 +453,7 @@ msgstr "الطلبات"
 
 #: .\apps\applications\views.py:126
 msgid "Action not allowed for the current status."
-msgstr ""
+msgstr "الإجراء غير مسموح للحالة الحالية."
 
 #: .\apps\communications\email_message.py:17
 msgid "template slug"
@@ -520,6 +520,38 @@ msgstr "عنوان البريد الإلكتروني"
 #: .\apps\communications\models.py:41
 msgid "Unknown template slug."
 msgstr ""
+
+#: .\apps\students\constants.py:10
+msgid "Male"
+msgstr "ذكر"
+
+#: .\apps\students\constants.py:11
+msgid "Female"
+msgstr "أنثى"
+
+#: .\apps\students\constants.py:21
+msgid "Secondary"
+msgstr "الثانوية"
+
+#: .\apps\students\constants.py:22
+#, fuzzy
+#| msgid "Teacher"
+msgid "Bachelor"
+msgstr "معلم"
+
+#: .\apps\students\constants.py:23
+msgid "Master"
+msgstr "الماجستير"
+
+#: .\apps\students\constants.py:24
+#, fuzzy
+#| msgid "Storage"
+msgid "Doctorate"
+msgstr "التخزين"
+
+#: .\apps\students\constants.py:25
+msgid "Other"
+msgstr "أخرى"
 
 #: .\apps\students\models.py:22
 #, fuzzy
@@ -901,11 +933,11 @@ msgstr "توقيت القاهرة:"
 msgid "Go"
 msgstr "اذهب"
 
-#: .\templates\partials\_navbar.html:15
+#: .\templates\partials\_navbar.html:16
 msgid "Dashboard"
 msgstr "لوحة التحكم"
 
-#: .\templates\partials\_navbar.html:25
+#: .\templates\partials\_navbar.html:29
 msgid "Log out"
 msgstr "تسجيل الخروج"
 

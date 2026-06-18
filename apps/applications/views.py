@@ -30,7 +30,9 @@ PUBLIC_REGISTRATION_SESSION_KEY = "registration_email"
 
 @require_http_methods(["GET", "POST"])
 def register(request: HttpRequest) -> HttpResponse:
-    """Public registration form."""
+    """Public registration form. Authenticated users go to their dashboard."""
+    if request.user.is_authenticated:
+        return redirect("accounts:post_login")
     if request.method == "POST":
         form = RegistrationForm(request.POST)
         if form.is_valid():
@@ -52,7 +54,7 @@ def register(request: HttpRequest) -> HttpResponse:
                     priest_contact=form.cleaned_data.get("priest_contact", ""),
                     age=(date.today() - form.cleaned_data["date_of_birth"]).days // 365,
                 )
-                _profile, _application, _created = submit_registration(data)
+                _profile, _application = submit_registration(data)
             request.session[PUBLIC_REGISTRATION_SESSION_KEY] = form.cleaned_data["email"]
             messages.success(request, _("Registration received. We will contact you shortly."))
             return redirect("applications:registration_success")

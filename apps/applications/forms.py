@@ -8,9 +8,9 @@ from django import forms
 from django.utils.translation import gettext_lazy as _
 
 from apps.accounts.forms import StyledMixin
+from apps.applications.models import Application
+from apps.applications.services import RegistrationData, find_duplicate, normalize_phone
 from apps.students.constants import EDUCATION_CHOICES, GENDER_CHOICES
-
-from .models import Application
 
 
 class RegistrationForm(StyledMixin, forms.Form):
@@ -47,7 +47,10 @@ class RegistrationForm(StyledMixin, forms.Form):
     def clean_phone(self) -> str:
         value = self.cleaned_data["phone"].strip()
         if not value:
-            raise forms.ValidationError(_("Phone number is required."))
+            raise forms.ValidationError(_("Mobile number is required."))
+        normalized = normalize_phone(value)
+        if len(normalized) < 7:
+            raise forms.ValidationError(_("Enter a valid mobile number."))
         return value
 
     def clean_national_id(self) -> str:
@@ -55,6 +58,47 @@ class RegistrationForm(StyledMixin, forms.Form):
         if not value:
             raise forms.ValidationError(_("National ID is required."))
         return value
+
+    def clean(self):
+        cleaned = super().clean()
+        required = (
+            "email",
+            "phone",
+            "national_id",
+            "full_name",
+            "date_of_birth",
+            "gender",
+            "address",
+            "education",
+        )
+        if all(cleaned.get(field) for field in required):
+            data = RegistrationData(
+                email=cleaned["email"],
+                full_name=cleaned["full_name"],
+                date_of_birth=cleaned["date_of_birth"],
+                gender=cleaned["gender"],
+                address=cleaned["address"],
+                phone=cleaned["phone"],
+                national_id=cleaned["national_id"],
+                education=cleaned["education"],
+                specialization=cleaned.get("specialization", ""),
+                employer=cleaned.get("employer", ""),
+                current_job=cleaned.get("current_job", ""),
+                church=cleaned.get("church", ""),
+                priest_name=cleaned.get("priest_name", ""),
+                priest_contact=cleaned.get("priest_contact", ""),
+                age=0,
+            )
+            duplicate_on = find_duplicate(data)
+            if duplicate_on:
+                messages = {
+                    "email": _("An account with this email already exists."),
+                    "phone": _("An account with this mobile number already exists."),
+                    "national_id": _("An account with this national ID already exists."),
+                    "full_name": _("An account with this full name already exists."),
+                }
+                self.add_error(duplicate_on, messages[duplicate_on])
+        return cleaned
 
 
 class ApplicationDecisionForm(StyledMixin, forms.ModelForm):

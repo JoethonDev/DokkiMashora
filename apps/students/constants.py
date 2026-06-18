@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from django.utils.translation import gettext_lazy as _
+
 GENDER_MALE = "male"
 GENDER_FEMALE = "female"
 
 GENDER_CHOICES = (
-    (GENDER_MALE, "Male"),
-    (GENDER_FEMALE, "Female"),
+    (GENDER_MALE, _("Male")),
+    (GENDER_FEMALE, _("Female")),
 )
 
 EDUCATION_SECONDARY = "secondary"
@@ -17,9 +19,9 @@ EDUCATION_DOCTORATE = "doctorate"
 EDUCATION_OTHER = "other"
 
 EDUCATION_CHOICES = (
-    (EDUCATION_SECONDARY, "Secondary"),
-    (EDUCATION_BACHELOR, "Bachelor"),
-    (EDUCATION_MASTER, "Master"),
-    (EDUCATION_DOCTORATE, "Doctorate"),
-    (EDUCATION_OTHER, "Other"),
+    (EDUCATION_SECONDARY, _("Secondary")),
+    (EDUCATION_BACHELOR, _("Bachelor")),
+    (EDUCATION_MASTER, _("Master")),
+    (EDUCATION_DOCTORATE, _("Doctorate")),
+    (EDUCATION_OTHER, _("Other")),
 )

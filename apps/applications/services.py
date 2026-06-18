@@ -1,10 +1,9 @@
-"""Application business logic: duplicate matching, submission, status transitions."""
+"""Application business logic: duplicate checking, phone normalization, submission."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from typing import Any
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
@@ -12,13 +11,32 @@ from django.db import transaction
 from apps.accounts.constants import GROUP_STUDENT
 from apps.students.models import StudentProfile
 
-from .constants import (
-    APP_STATUS_PENDING,
-    APP_STATUS_REJECTED,
-)
+from .constants import APP_STATUS_PENDING
 from .models import Application
 
 User = get_user_model()
+
+# Country code prefixes that get stripped from a phone number
+# (in addition to any leading +, 00, or 0).
+COUNTRY_CODES = {
+    "20": "EG",
+    "966": "SA",
+    "971": "AE",
+    "965": "KW",
+    "974": "QA",
+    "973": "BH",
+    "968": "OM",
+    "962": "JO",
+    "961": "LB",
+    "963": "SY",
+    "964": "IQ",
+    "970": "PS",
+    "212": "MA",
+    "213": "DZ",
+    "216": "TN",
+    "218": "LY",
+    "249": "SD",
+}
 
 
 @dataclass
@@ -42,85 +60,91 @@ class RegistrationData:
     age: int
 
 
-def find_existing_user(*, email: str, national_id: str, phone: str) -> tuple[Any | None, str | None]:
-    """Return (user, match_field) for the first identifier that hits."""
-    if email:
-        user = User.objects.filter(email__iexact=email).first()
-        if user is not None:
-            return user, "email"
-    if national_id:
-        profile = StudentProfile.objects.filter(national_id=national_id).select_related("user").first()
-        if profile is not None:
-            return profile.user, "national_id"
-    if phone:
-        profile = StudentProfile.objects.filter(phone=phone).select_related("user").first()
-        if profile is not None:
-            return profile.user, "phone"
-    return None, None
+def normalize_phone(raw: str) -> str:
+    """Strip the country code, +, 00, and leading 0 from a phone number.
+
+    Examples:
+        +201234567890 -> 1234567890
+        00201234567890 -> 1234567890
+        0100 123 4567  -> 1001234567
+        +1 555-123-4567 -> 5551234567
+    """
+    digits = "".join(c for c in raw if c.isdigit())
+    if not digits:
+        return ""
+    if digits.startswith("00"):
+        digits = digits[2:]
+    for code in sorted(COUNTRY_CODES.keys(), key=len, reverse=True):
+        if digits.startswith(code) and len(digits) > len(code) + 6:
+            digits = digits[len(code) :]
+            break
+    if digits.startswith("0"):
+        digits = digits[1:]
+    return digits
+
+
+def find_duplicate(data: RegistrationData) -> str | None:
+    """Return the field name that conflicts, or None when the data is fresh."""
+    if User.objects.filter(email__iexact=data.email).exists():
+        return "email"
+    if User.objects.filter(phone__iexact=data.phone).exists():
+        return "phone"
+    if StudentProfile.objects.filter(national_id=data.national_id).exists():
+        return "national_id"
+    if StudentProfile.objects.filter(full_name__iexact=data.full_name).exists():
+        return "full_name"
+    return None
 
 
 def open_application_for(student: StudentProfile) -> Application:
     """Return the active application, reopening a rejected one if needed."""
-    application = student.applications.exclude(status=APP_STATUS_REJECTED).order_by("-created_at").first()
+    application = student.applications.exclude(status="rejected").order_by("-created_at").first()
     if application is not None:
         return application
     return Application.objects.create(student=student, status=APP_STATUS_PENDING)
 
 
 @transaction.atomic
-def submit_registration(data: RegistrationData) -> tuple[StudentProfile, Application, bool]:
-    """Create or reuse a user + student profile, then create a pending application.
+def submit_registration(data: RegistrationData) -> tuple[StudentProfile, Application]:
+    """Create a user, profile, and pending application.
 
-    Returns (student_profile, application, created_user).
+    Raises ValueError with a duplicate field name if the data conflicts
+    with an existing record.
     """
-    user, match_field = find_existing_user(email=data.email, national_id=data.national_id, phone=data.phone)
-    if user is None:
-        user = User.objects.create_user(
-            email=data.email,
-            password=None,
-            full_name=data.full_name,
-            phone=data.phone,
-            national_id=data.national_id,
-        )
-        user.set_unusable_password()
-        user.save(update_fields=["password"])
-        user.groups.add(_student_group())
-        created_user = True
-    else:
-        # Person matched on national_id or phone: refresh contact info
-        # and email from the new submission.
-        update_fields = ["full_name", "phone", "national_id", "updated_at"]
-        user.full_name = data.full_name
-        user.phone = data.phone
-        user.national_id = data.national_id
-        if match_field in {"national_id", "phone"} and user.email != data.email:
-            user.email = data.email
-            update_fields.append("email")
-        user.save(update_fields=update_fields)
-        created_user = False
+    duplicate_on = find_duplicate(data)
+    if duplicate_on:
+        raise ValueError(duplicate_on)
 
-    profile, _ = StudentProfile.objects.update_or_create(
-        user=user,
-        defaults={
-            "full_name": data.full_name,
-            "date_of_birth": data.date_of_birth,
-            "gender": data.gender,
-            "address": data.address,
-            "phone": data.phone,
-            "national_id": data.national_id,
-            "education": data.education,
-            "specialization": data.specialization,
-            "employer": data.employer,
-            "current_job": data.current_job,
-            "church": data.church,
-            "priest_name": data.priest_name,
-            "priest_contact": data.priest_contact,
-        },
+    normalized_phone = normalize_phone(data.phone)
+    user = User.objects.create_user(
+        email=data.email,
+        password=normalized_phone,
+        full_name=data.full_name,
+        phone=data.phone,
+        national_id=data.national_id,
     )
-    application = open_application_for(profile)
-    if match_field and created_user is False:
-        return profile, application, False
-    return profile, application, created_user
+    user.is_active = False
+    user.save(update_fields=["is_active", "updated_at"])
+    user.groups.add(_student_group())
+
+    profile = StudentProfile.objects.create(
+        user=user,
+        full_name=data.full_name,
+        date_of_birth=data.date_of_birth,
+        gender=data.gender,
+        address=data.address,
+        phone=data.phone,
+        national_id=data.national_id,
+        education=data.education,
+        specialization=data.specialization,
+        employer=data.employer,
+        current_job=data.current_job,
+        church=data.church,
+        priest_name=data.priest_name,
+        priest_contact=data.priest_contact,
+    )
+    application = Application.objects.create(student=profile, status=APP_STATUS_PENDING)
+    return profile, application
 
 
 def _student_group():
