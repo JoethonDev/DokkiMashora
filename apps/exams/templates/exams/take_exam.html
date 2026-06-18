@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{{ exam.title }} - {% trans "Take Exam" %}{% endblock %}
+
+{% block content %}
+<div x-data="examTimer({{ remaining_seconds }}, {{ exam.id }})" class="max-w-4xl mx-auto">
+  <div class="sticky top-0 bg-white dark:bg-slate-800 shadow z-10 p-4 rounded-b-lg mb-6 flex justify-between items-center">
+    <h1 class="text-xl font-bold text-slate-800 dark:text-white truncate ml-4">{{ exam.title }}</h1>
+    <div class="flex items-center gap-4">
+      <div class="text-lg font-mono font-bold"
+           :class="{'text-red-600 animate-pulse': timeLeft < 120, 'text-green-600': timeLeft >= 120}"
+           x-show="timeLeft > 0"
+           x-text="formatTime(timeLeft)"></div>
+      <div class="text-lg font-bold text-red-600" x-show="timeLeft <= 0">
+        {% trans "Time's up!" %}
+      </div>
+      <button type="submit" form="exam-form"
+              class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-semibold">
+        {% trans "Submit" %}
+      </button>
+    </div>
+  </div>
+
+  <form id="exam-form" method="post" action="{% url 'exams:submit_exam' exam.id %}">
+    {% csrf_token %}
+    {% for question in questions %}
+      <div class="mb-6 p-6 bg-white dark:bg-slate-800 rounded-lg shadow" id="q-{{ question.id }}">
+        <div class="flex justify-between items-start mb-4">
+          <h3 class="text-lg font-semibold text-slate-800 dark:text-white">
+            {% trans "Question" %} {{ forloop.counter }}
+          </h3>
+          <span class="text-sm text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">
+            {{ question.points }} {% trans "points" %}
+          </span>
+        </div>
+        <p class="text-slate-700 dark:text-slate-200 mb-4 leading-relaxed">{{ question.text }}</p>
+
+        {% if question.question_type == "mcq" %}
+          <div class="space-y-2">
+            {% for choice in question.choices.all %}
+              <label class="flex items-center p-3 border border-slate-200 dark:border-slate-600 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                <input type="radio"
+                       name="question_{{ question.id }}"
+                       value="{{ choice.id }}"
+                       class="ml-3 h-4 w-4 text-blue-600 border-slate-300"
+                       x-on:change="saved = false">
+                <span class="text-slate-700 dark:text-slate-200">{{ choice.text }}</span>
+              </label>
+            {% endfor %}
+          </div>
+        {% else %}
+          <textarea name="question_{{ question.id }}"
+                    rows="6"
+                    class="w-full border border-slate-300 dark:border-slate-600 rounded-lg p-4 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="{% trans 'Write your answer here...' %}"></textarea>
+        {% endif %}
+      </div>
+    {% endfor %}
+
+    <div class="text-center mb-8">
+      <button type="submit"
+              class="bg-blue-600 text-white px-10 py-3 rounded-lg text-lg font-semibold hover:bg-blue-700 transition-colors">
+        {% trans "Submit exam" %}
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function examTimer(remainingSeconds, examId) {
+  return {
+    timeLeft: remainingSeconds,
+    saved: true,
+    init() {
+      if (this.timeLeft <= 0) return;
+      this.startTimer();
+    },
+    startTimer() {
+      setInterval(() => {
+        if (this.timeLeft > 0) {
+          this.timeLeft--;
+          if (this.timeLeft <= 0) {
+            document.getElementById('exam-form').submit();
+          }
+        }
+      }, 1000);
+    },
+    formatTime(seconds) {
+      const m = Math.floor(seconds / 60);
+      const s = seconds % 60;
+      return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+  };
+}
+</script>
+{% endblock %}

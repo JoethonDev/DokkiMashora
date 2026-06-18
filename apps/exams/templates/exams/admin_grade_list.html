@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Grade Exams" %} - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto">
+  <h1 class="text-3xl font-bold text-slate-800 dark:text-white mb-8">{% trans "Pending Grading" %}</h1>
+
+  <div class="bg-white dark:bg-slate-800 rounded-lg shadow overflow-hidden">
+    <table class="w-full">
+      <thead>
+        <tr class="bg-slate-50 dark:bg-slate-700 text-left">
+          <th class="px-6 py-3 text-sm font-semibold text-slate-600 dark:text-slate-200">{% trans "Student" %}</th>
+          <th class="px-6 py-3 text-sm font-semibold text-slate-600 dark:text-slate-200">{% trans "Exam" %}</th>
+          <th class="px-6 py-3 text-sm font-semibold text-slate-600 dark:text-slate-200">{% trans "Submitted" %}</th>
+          <th class="px-6 py-3 text-sm font-semibold text-slate-600 dark:text-slate-200">{% trans "Actions" %}</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-200 dark:divide-slate-600">
+        {% for a in assignments %}
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+            <td class="px-6 py-4 text-sm">{{ a.student.email }}</td>
+            <td class="px-6 py-4 text-sm">{{ a.exam.title }}</td>
+            <td class="px-6 py-4 text-sm">{{ a.submitted_at }}</td>
+            <td class="px-6 py-4">
+              <a href="{% url 'exams:admin_grade_assignment' a.id %}" class="bg-blue-600 text-white px-4 py-1.5 rounded text-sm hover:bg-blue-700">
+                {% trans "Grade" %}
+              </a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="4" class="px-6 py-8 text-center text-slate-500">{% trans "No submissions pending grading." %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{{ exam.title }} - {% trans "Results" %}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+  <h1 class="text-3xl font-bold text-slate-800 dark:text-white mb-6">{{ exam.title }} - {% trans "Results" %}</h1>
+
+  <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-6 mb-8">
+    <div class="grid grid-cols-3 gap-4 text-center">
+      <div>
+        <p class="text-sm text-slate-500">{% trans "Status" %}</p>
+        <p class="text-xl font-bold">
+          {% if assignment.status == "graded" %}
+            <span class="text-green-600">{% trans "Graded" %}</span>
+          {% elif assignment.status == "completed" %}
+            <span class="text-yellow-600">{% trans "Pending grade" %}</span>
+          {% else %}
+            <span class="text-slate-600">{{ assignment.get_status_display }}</span>
+          {% endif %}
+        </p>
+      </div>
+      <div>
+        <p class="text-sm text-slate-500">{% trans "Score" %}</p>
+        <p class="text-xl font-bold">
+          {% if assignment.score is not None %}
+            {{ assignment.score }}
+          {% else %}
+            —
+          {% endif %}
+        </p>
+      </div>
+      <div>
+        <p class="text-sm text-slate-500">{% trans "Passing score" %}</p>
+        <p class="text-xl font-bold">{{ exam.passing_score }}</p>
+      </div>
+    </div>
+  </div>
+
+  {% for answer in answers %}
+    <div class="mb-6 p-6 bg-white dark:bg-slate-800 rounded-lg shadow">
+      <div class="flex justify-between items-start mb-4">
+        <h3 class="text-lg font-semibold text-slate-800 dark:text-white">
+          {% trans "Question" %} {{ forloop.counter }}
+        </h3>
+        <span class="text-sm text-slate-500 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">
+          {{ answer.question.points }} {% trans "points" %}
+        </span>
+      </div>
+      <p class="text-slate-700 dark:text-slate-200 mb-4">{{ answer.question.text }}</p>
+
+      {% if answer.question.question_type == "mcq" %}
+        <div class="mb-4">
+          <p class="text-sm text-slate-500 mb-2">{% trans "Your answer" %}:</p>
+          <p class="text-slate-700 dark:text-slate-200">
+            {% if answer.selected_choice %}
+              {{ answer.selected_choice.text }}
+            {% else %}
+              <span class="text-slate-400 italic">{% trans "No answer" %}</span>
+            {% endif %}
+          </p>
+        </div>
+        <div>
+          {% if answer.score is not None and answer.score > 0 %}
+            <span class="inline-block bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 px-3 py-1 rounded-full text-sm font-semibold">
+              {% trans "Correct" %} (+{{ answer.score }})
+            </span>
+          {% elif answer.score is not None %}
+            <span class="inline-block bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 px-3 py-1 rounded-full text-sm font-semibold">
+              {% trans "Incorrect" %}
+            </span>
+          {% endif %}
+        </div>
+      {% else %}
+        <div class="mb-4">
+          <p class="text-sm text-slate-500 mb-2">{% trans "Your answer" %}:</p>
+          <div class="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+            <p class="text-slate-700 dark:text-slate-200 whitespace-pre-wrap">{{ answer.essay_text }}</p>
+          </div>
+        </div>
+        {% if answer.score is not None %}
+          <div class="flex items-center gap-4">
+            <span class="text-sm font-semibold">{% trans "Score" %}: {{ answer.score }}</span>
+          </div>
+        {% endif %}
+        {% if answer.feedback %}
+          <div class="mt-2">
+            <p class="text-sm text-slate-500 mb-1">{% trans "Feedback" %}:</p>
+            <p class="text-slate-600 dark:text-slate-300 text-sm">{{ answer.feedback }}</p>
+          </div>
+        {% endif %}
+      {% endif %}
+    </div>
+  {% endfor %}
+
+  <div class="text-center mb-8">
+    <a href="{% url 'exams:student_list' %}"
+       class="bg-slate-600 text-white px-6 py-2 rounded-lg hover:bg-slate-700">
+      {% trans "Back to exams" %}
+    </a>
+  </div>
+</div>
+{% endblock %}

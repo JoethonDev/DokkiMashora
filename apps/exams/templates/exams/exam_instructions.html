@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{{ exam.title }} - {% trans "Exam Instructions" %}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+  <h1 class="text-3xl font-bold text-slate-800 dark:text-white mb-6">{{ exam.title }}</h1>
+  <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-8">
+    {% if exam.description %}
+      <p class="text-slate-600 dark:text-slate-300 mb-6">{{ exam.description }}</p>
+    {% endif %}
+    <ul class="space-y-3 text-slate-600 dark:text-slate-300 mb-8">
+      <li><strong>{% trans "Duration" %}:</strong> {{ exam.duration_minutes }} {% trans "minutes" %}</li>
+      <li><strong>{% trans "Passing score" %}:</strong> {{ exam.passing_score }}%</li>
+      <li><strong>{% trans "Total questions" %}:</strong> {{ exam.questions.count }}</li>
+    </ul>
+    <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded p-4 mb-8">
+      <p class="text-amber-800 dark:text-amber-200 text-sm">
+        {% trans "Once you start, the timer begins and cannot be paused. Make sure you have a stable internet connection." %}
+      </p>
+    </div>
+    <form method="post" action="{% url 'exams:start_exam' exam.id %}">
+      {% csrf_token %}
+      <button type="submit" class="bg-blue-600 text-white px-8 py-3 rounded-lg text-lg font-semibold hover:bg-blue-700">
+        {% trans "Start Exam" %}
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}

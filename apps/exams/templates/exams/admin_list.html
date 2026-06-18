@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Manage Exams" %} - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+  <div class="flex justify-between items-center mb-8">
+    <h1 class="text-3xl font-bold text-slate-800 dark:text-white">{% trans "Exam Management" %}</h1>
+    <a href="{% url 'admin:apps_exams_exam_add' %}" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+      {% trans "Create Exam" %}
+    </a>
+  </div>
+
+  <div class="bg-white dark:bg-slate-800 rounded-lg shadow overflow-hidden">
+    <table class="w-full">
+      <thead>
+        <tr class="bg-slate-50 dark:bg-slate-700 text-left">
+          <th class="px-6 py-3 text-sm font-semibold text-slate-600 dark:text-slate-200">{% trans "Title" %}</th>
+          <th class="px-6 py-3 text-sm font-semibold text-slate-600 dark:text-slate-200">{% trans "Type" %}</th>
+          <th class="px-6 py-3 text-sm font-semibold text-slate-600 dark:text-slate-200">{% trans "Duration" %}</th>
+          <th class="px-6 py-3 text-sm font-semibold text-slate-600 dark:text-slate-200">{% trans "Active" %}</th>
+          <th class="px-6 py-3 text-sm font-semibold text-slate-600 dark:text-slate-200">{% trans "Actions" %}</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-200 dark:divide-slate-600">
+        {% for exam in exams %}
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+            <td class="px-6 py-4">
+              <a href="{% url 'exams:admin_detail' exam.id %}" class="text-blue-600 hover:underline font-medium">
+                {{ exam.title }}
+              </a>
+            </td>
+            <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{{ exam.get_exam_type_display }}</td>
+            <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{{ exam.duration_minutes }} {% trans "min" %}</td>
+            <td class="px-6 py-4">
+              {% if exam.is_active %}
+                <span class="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 px-2 py-1 rounded-full text-xs font-semibold">{% trans "Yes" %}</span>
+              {% else %}
+                <span class="bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 px-2 py-1 rounded-full text-xs font-semibold">{% trans "No" %}</span>
+              {% endif %}
+            </td>
+            <td class="px-6 py-4">
+              <a href="{% url 'exams:admin_detail' exam.id %}" class="text-blue-600 hover:underline text-sm">{% trans "View" %}</a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="5" class="px-6 py-8 text-center text-slate-500">{% trans "No exams yet." %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

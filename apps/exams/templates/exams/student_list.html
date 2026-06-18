@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "My Exams" %} - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto">
+  <h1 class="text-3xl font-bold text-slate-800 dark:text-white mb-8">{% trans "My Exams" %}</h1>
+
+  {% if assignments %}
+    <h2 class="text-xl font-semibold text-slate-700 dark:text-slate-200 mb-4">{% trans "Assigned Exams" %}</h2>
+    <div class="space-y-4 mb-12">
+      {% for a in assignments %}
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-6 flex justify-between items-center">
+          <div>
+            <h3 class="text-lg font-semibold text-slate-800 dark:text-white">{{ a.exam.title }}</h3>
+            <p class="text-sm text-slate-500">
+              {% if a.status == "assigned" %}
+                <span class="text-yellow-600">{% trans "Not started" %}</span>
+              {% elif a.status == "in_progress" %}
+                <span class="text-blue-600">{% trans "In progress" %}</span>
+              {% elif a.status == "completed" %}
+                <span class="text-green-600">{% trans "Completed" %} — {% if a.score is not None %}{% trans "Score" %}: {{ a.score }}{% endif %}</span>
+              {% elif a.status == "graded" %}
+                <span class="text-green-600">{% trans "Graded" %} — {% trans "Score" %}: {{ a.score }}</span>
+              {% endif %}
+            </p>
+          </div>
+          <div>
+            {% if a.status == "assigned" %}
+              <a href="{% url 'exams:exam_instructions' a.exam.id %}" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">{% trans "Start" %}</a>
+            {% elif a.status == "in_progress" %}
+              <a href="{% url 'exams:take_exam' a.exam.id %}" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">{% trans "Continue" %}</a>
+            {% elif a.status == "completed" or a.status == "graded" %}
+              <a href="{% url 'exams:results' a.exam.id %}" class="bg-slate-600 text-white px-4 py-2 rounded hover:bg-slate-700">{% trans "View Results" %}</a>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-8 text-center mb-12">
+      <p class="text-slate-500 dark:text-slate-400 text-lg">{% trans "You have no assigned exams yet." %}</p>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

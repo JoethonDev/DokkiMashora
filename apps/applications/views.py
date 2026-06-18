@@ -141,10 +141,32 @@ def _render_detail(
 
 def _attach_student_role(profile: StudentProfile) -> None:
     from django.contrib.auth.models import Group
+    from django.utils import timezone
 
     from apps.accounts.constants import GROUP_STUDENT
+    from apps.communications.services import send_templated_email
+    from apps.exams.models import Exam
+    from apps.exams.services import assign_exam
 
     group, _ = Group.objects.get_or_create(name=GROUP_STUDENT)
     profile.user.groups.add(group)
     profile.user.is_active = True
     profile.user.save(update_fields=["is_active", "updated_at"])
+
+    now = timezone.now()
+    entrance_exam = Exam.objects.filter(
+        exam_type="entrance", is_active=True,
+        open_at__lte=now, close_at__gte=now,
+    ).first()
+    if entrance_exam:
+        assign_exam(entrance_exam, profile.user)
+        send_templated_email(
+            profile.user.email,
+            "entrance_exam_invitation",
+            context={
+                "student_name": profile.full_name,
+                "exam_open_at": entrance_exam.open_at.isoformat(),
+                "exam_close_at": entrance_exam.close_at.isoformat(),
+                "exam_url": f"/exams/{entrance_exam.id}/",
+            },
+        )
