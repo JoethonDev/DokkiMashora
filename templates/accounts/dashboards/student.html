@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% trans "Student dashboard" %} | {{ SITE_NAME_AR }}{% endblock title %}
+{% block content %}
+<section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+  <header class="mb-6">
+    <p class="text-sm font-semibold text-brand-600 tracking-wide uppercase">{% trans "Student" %}</p>
+    <h1 class="mt-1 text-3xl font-bold tracking-tight">{% trans "Welcome" %}, {{ request.user.get_short_name }}</h1>
+  </header>
+  <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    {% include "accounts/dashboards/_tile.html" with title=_("Active courses") value="0" sub=_("Enrolled") %}
+    {% include "accounts/dashboards/_tile.html" with title=_("Upcoming exams") value="0" sub=_("Entrance + normal") %}
+    {% include "accounts/dashboards/_tile.html" with title=_("Certificates") value="0" sub=_("Earned") %}
+  </div>
+  <div class="mt-8 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-6 text-sm text-slate-500">
+    {% trans "Your full profile, application history, and entrance exam access unlock in Phase 2 and Phase 3." %}
+  </div>
+</section>
+{% endblock content %}

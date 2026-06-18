@@ -1,0 +1,31 @@
+line-length = 110
+target-version = "py311"
+extend-exclude = ["**/migrations/*.py"]
+
+[lint]
+select = [
+    "E",  # pycodestyle errors
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "UP", # pyupgrade
+    "N",  # pep8-naming
+    "DJ", # flake8-django
+    "C4", # flake8-comprehensions
+]
+ignore = [
+    "E501", # line length is enforced by formatter
+    "B008", # function calls in defaults (used by Django)
+    "N818", # exceptions should end in Error
+]
+
+[lint.per-file-ignores]
+"**/migrations/*.py" = ["E", "F", "I", "B", "UP", "N"]
+"**/tests/*.py" = ["B011"]
+
+[format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+docstring-code-format = true

@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% trans "Home" %} | {{ SITE_NAME_AR }}{% endblock title %}
+{% block content %}
+<section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+  <div class="grid lg:grid-cols-2 gap-10 items-center">
+    <div>
+      <p class="text-sm font-semibold text-brand-600 tracking-wide uppercase">{% trans "DokkiMashora LMS" %}</p>
+      <h1 class="mt-3 text-4xl sm:text-5xl font-bold tracking-tight text-slate-900 dark:text-white">
+        {% trans "A modern Arabic-first learning platform." %}
+      </h1>
+      <p class="mt-5 text-lg text-slate-600 dark:text-slate-300 max-w-prose">
+        {% trans "Registration, entrance exams, content, assessments, grading, and certificates — all in one place, designed for Cairo time." %}
+      </p>
+      <div class="mt-8 flex flex-wrap gap-3">
+        <a href="{% url 'accounts:login' %}" class="inline-flex items-center gap-2 rounded-md bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 text-sm font-semibold shadow-sm">
+          {% trans "Log in" %}
+        </a>
+        <a href="#features" class="inline-flex items-center gap-2 rounded-md border border-slate-300 dark:border-slate-700 px-5 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">
+          {% trans "Learn more" %}
+        </a>
+      </div>
+    </div>
+    <div class="relative">
+      <div class="absolute inset-0 -z-10 bg-gradient-to-tr from-brand-500/20 to-sky-500/20 rounded-3xl blur-2xl"></div>
+      <div class="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl p-6">
+        <div class="grid grid-cols-2 gap-4 text-sm">
+          <div class="rounded-xl bg-slate-50 dark:bg-slate-800 p-4">
+            <p class="text-slate-500">{% trans "Active students" %}</p>
+            <p class="mt-1 text-2xl font-semibold">—</p>
+          </div>
+          <div class="rounded-xl bg-slate-50 dark:bg-slate-800 p-4">
+            <p class="text-slate-500">{% trans "Cohorts" %}</p>
+            <p class="mt-1 text-2xl font-semibold">—</p>
+          </div>
+          <div class="rounded-xl bg-slate-50 dark:bg-slate-800 p-4">
+            <p class="text-slate-500">{% trans "Diplomas" %}</p>
+            <p class="mt-1 text-2xl font-semibold">—</p>
+          </div>
+          <div class="rounded-xl bg-slate-50 dark:bg-slate-800 p-4">
+            <p class="text-slate-500">{% trans "Live exams" %}</p>
+            <p class="mt-1 text-2xl font-semibold">—</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="features" class="mt-20 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 p-5 bg-white dark:bg-slate-900">
+      <h3 class="font-semibold">{% trans "Arabic-first" %}</h3>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{% trans "Default Arabic UI with full English support and RTL/LTR switching." %}</p>
+    </div>
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 p-5 bg-white dark:bg-slate-900">
+      <h3 class="font-semibold">{% trans "Cairo time" %}</h3>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{% trans "All schedules, timers, and deadlines run in Africa/Cairo." %}</p>
+    </div>
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 p-5 bg-white dark:bg-slate-900">
+      <h3 class="font-semibold">{% trans "Separated flows" %}</h3>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{% trans "Entrance exams stay separate from learning assessments." %}</p>
+    </div>
+  </div>
+</section>
+{% endblock content %}

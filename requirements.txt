@@ -1,0 +1,26 @@
+# Django
+Django==5.1.4
+django-environ==0.13.0
+dj-database-url==2.3.0
+python-dotenv==1.0.1
+
+# Database
+psycopg[binary]==3.3.4
+
+# Static & server
+whitenoise==6.12.0
+gunicorn==23.0.0
+
+# Storage (Cloudflare R2 is S3-compatible)
+django-storages[boto3]==1.14.6
+boto3==1.35.54
+
+# AI
+google-genai==2.0.1
+
+# Tooling
+ruff==0.15.12
+pytest==8.3.4
+pytest-django==4.12.0
+coverage==7.6.1
+playwright==1.49.1

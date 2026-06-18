@@ -1,0 +1,33 @@
+{% load i18n %}
+<header class="bg-white/80 dark:bg-slate-900/80 backdrop-blur border-b border-slate-200 dark:border-slate-800 sticky top-0 z-30">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex h-16 items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <a href="{% url 'core:landing' %}" class="flex items-center gap-2 text-slate-900 dark:text-slate-100">
+          <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-white font-bold">د</span>
+          <span class="hidden sm:inline text-lg font-semibold tracking-tight">{{ SITE_NAME_AR }}</span>
+        </a>
+      </div>
+
+      <nav class="hidden md:flex items-center gap-6 text-sm font-medium text-slate-700 dark:text-slate-300">
+        <a href="{% url 'core:landing' %}" class="hover:text-brand-600">{% trans "Home" %}</a>
+        {% if user.is_authenticated %}
+          <a href="{% url 'accounts:dashboard' %}" class="hover:text-brand-600">{% trans "Dashboard" %}</a>
+          <a href="{% url 'accounts:profile' %}" class="hover:text-brand-600">{% trans "Profile" %}</a>
+        {% endif %}
+      </nav>
+
+      <div class="flex items-center gap-2" x-data="{ open: false }">
+        {% include "partials/_language_switcher.html" %}
+        {% if user.is_authenticated %}
+          <form method="post" action="{% url 'accounts:logout' %}" class="hidden sm:block">
+            {% csrf_token %}
+            <button type="submit" class="rounded-md border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-sm hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Log out" %}</button>
+          </form>
+        {% else %}
+          <a href="{% url 'accounts:login' %}" class="rounded-md bg-brand-600 px-3 py-1.5 text-sm text-white hover:bg-brand-700">{% trans "Log in" %}</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</header>

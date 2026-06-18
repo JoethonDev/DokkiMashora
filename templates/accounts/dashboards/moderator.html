@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% trans "Moderator dashboard" %} | {{ SITE_NAME_AR }}{% endblock title %}
+{% block content %}
+<section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+  <header class="mb-6">
+    <p class="text-sm font-semibold text-brand-600 tracking-wide uppercase">{% trans "Moderator" %}</p>
+    <h1 class="mt-1 text-3xl font-bold tracking-tight">{% trans "Review queue" %}</h1>
+  </header>
+  <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    {% include "accounts/dashboards/_tile.html" with title=_("Written answers") value="0" sub=_("Under review") %}
+    {% include "accounts/dashboards/_tile.html" with title=_("Registration queue") value="0" sub=_("To verify") %}
+    {% include "accounts/dashboards/_tile.html" with title=_("Email previews") value="0" sub=_("Awaiting send") %}
+  </div>
+  <div class="mt-8 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-6 text-sm text-slate-500">
+    {% trans "Phase 2 and Phase 3 will populate this dashboard with real data." %}
+  </div>
+</section>
+{% endblock content %}

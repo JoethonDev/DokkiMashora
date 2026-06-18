@@ -1,0 +1,6 @@
+{% load i18n %}
+<div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+  <p class="text-sm text-slate-500">{{ title }}</p>
+  <p class="mt-1 text-3xl font-semibold tracking-tight">{{ value }}</p>
+  {% if sub %}<p class="mt-1 text-xs text-slate-500">{{ sub }}</p>{% endif %}
+</div>

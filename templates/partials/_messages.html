@@ -1,0 +1,16 @@
+{% load i18n %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
+  {% if messages %}
+    <div class="space-y-2" id="messages">
+      {% for message in messages %}
+        <div class="rounded-md px-4 py-2 text-sm border
+                    {% if message.tags == 'success' %}bg-emerald-50 border-emerald-200 text-emerald-800
+                    {% elif message.tags == 'error' or message.tags == 'danger' %}bg-rose-50 border-rose-200 text-rose-800
+                    {% elif message.tags == 'warning' %}bg-amber-50 border-amber-200 text-amber-800
+                    {% else %}bg-sky-50 border-sky-200 text-sky-800{% endif %}">
+          {{ message }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>

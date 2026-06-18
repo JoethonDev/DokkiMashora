@@ -1,0 +1,452 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-06-18 13:28+0300\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=6; plural=n==0 ? 0 : n==1 ? 1 : n==2 ? 2 : n%100>=3 "
+"&& n%100<=10 ? 3 : n%100>=11 && n%100<=99 ? 4 : 5;\n"
+#: .\apps\accounts\admin.py:24
+msgid "Personal info"
+msgstr "المعلومات الشخصية"
+
+#: .\apps\accounts\admin.py:25
+msgid "Status"
+msgstr "الحالة"
+
+#: .\apps\accounts\admin.py:27
+msgid "Permissions"
+msgstr "الصلاحيات"
+
+#: .\apps\accounts\admin.py:30
+msgid "Important dates"
+msgstr "التواريخ المهمة"
+
+#: .\apps\accounts\forms.py:40 .\apps\accounts\forms.py:75
+#: .\templates\accounts\profile.html:12
+msgid "Email"
+msgstr "البريد الإلكتروني"
+
+#: .\apps\accounts\forms.py:44
+msgid "Password"
+msgstr "كلمة المرور"
+
+#: .\apps\accounts\forms.py:61
+msgid "Full name"
+msgstr "الاسم الكامل"
+
+#: .\apps\accounts\forms.py:62
+msgid "Full name (Arabic)"
+msgstr "الاسم الكامل (بالعربية)"
+
+#: .\apps\accounts\forms.py:63
+msgid "Phone number"
+msgstr "رقم الهاتف"
+
+#: .\apps\accounts\models.py:24
+msgid "email address"
+msgstr "عنوان البريد الإلكتروني"
+
+#: .\apps\accounts\models.py:25
+msgid "full name"
+msgstr "الاسم الكامل"
+
+#: .\apps\accounts\models.py:27
+msgid "full name (Arabic)"
+msgstr "الاسم الكامل (بالعربية)"
+
+#: .\apps\accounts\models.py:30
+msgid "Used for the Arabic UI."
+msgstr "يُستخدم للواجهة العربية."
+
+#: .\apps\accounts\models.py:33
+msgid "phone number"
+msgstr "رقم الهاتف"
+
+#: .\apps\accounts\models.py:39
+msgid "national ID"
+msgstr "الرقم القومي"
+
+#: .\apps\accounts\models.py:43
+msgid "Stored for matching across applications."
+msgstr "يُستخدم للمطابقة بين الطلبات."
+
+#: .\apps\accounts\models.py:46
+msgid "status"
+msgstr "الحالة"
+
+#: .\apps\accounts\models.py:53
+msgid "staff status"
+msgstr "صلاحية الموظف"
+
+#: .\apps\accounts\models.py:54
+msgid "active"
+msgstr "نشط"
+
+#: .\apps\accounts\models.py:55
+msgid "date joined"
+msgstr "تاريخ الانضمام"
+
+#: .\apps\accounts\models.py:63
+msgid "user"
+msgstr "مستخدم"
+
+#: .\apps\accounts\models.py:64
+msgid "users"
+msgstr "المستخدمون"
+
+#: .\apps\accounts\views.py:52
+msgid "Profile updated."
+msgstr "تم تحديث الملف الشخصي."
+
+#: .\apps\accounts\views.py:88
+msgid "Super Admin"
+msgstr "المدير العام"
+
+#: .\templates\accounts\dashboards\admin.html:3
+msgid "Admin dashboard"
+msgstr "لوحة تحكم المدير"
+
+#: .\templates\accounts\dashboards\admin.html:7
+msgid "Admin"
+msgstr "مدير"
+
+#: .\templates\accounts\dashboards\admin.html:8
+msgid "Operations dashboard"
+msgstr "لوحة تحكم العمليات"
+
+#: .\templates\accounts\dashboards\admin.html:9
+msgid "Pending items and quick actions."
+msgstr "المهام المعلقة والإجراءات السريعة."
+
+#: .\templates\accounts\dashboards\admin.html:13
+msgid "Applications"
+msgstr "الطلبات"
+
+#: .\templates\accounts\dashboards\admin.html:13
+msgid "Awaiting review"
+msgstr "في انتظار المراجعة"
+
+#: .\templates\accounts\dashboards\admin.html:14
+msgid "Active entrance exams"
+msgstr "امتحانات القبول النشطة"
+
+#: .\templates\accounts\dashboards\admin.html:14
+msgid "Open windows"
+msgstr "النوافذ المفتوحة"
+
+#: .\templates\accounts\dashboards\admin.html:15
+#: .\templates\core\landing.html:33
+msgid "Cohorts"
+msgstr "الدفعات"
+
+#: .\templates\accounts\dashboards\admin.html:15
+msgid "Diplomas + courses"
+msgstr "الدبلومات والمقررات"
+
+#: .\templates\accounts\dashboards\admin.html:16
+msgid "Storage"
+msgstr "التخزين"
+
+#: .\templates\accounts\dashboards\admin.html:16
+msgid "R2 usage"
+msgstr "استخدام R2"
+
+#: .\templates\accounts\dashboards\admin.html:21
+msgid "Coming soon"
+msgstr "قريباً"
+
+#: .\templates\accounts\dashboards\admin.html:22
+msgid ""
+"Registration review, entrance exam creation, and grading queues will land in "
+"upcoming phases."
+msgstr ""
+
+#: .\templates\accounts\dashboards\admin.html:25
+msgid "Server time"
+msgstr "وقت الخادم"
+
+#: .\templates\accounts\dashboards\admin.html:26
+msgid "All schedules run in"
+msgstr "جميع الجداول تعمل بتوقيت"
+
+#: .\templates\accounts\dashboards\admin.html:26
+msgid "Current time:"
+msgstr "الوقت الحالي:"
+
+#: .\templates\accounts\dashboards\moderator.html:3
+msgid "Moderator dashboard"
+msgstr "لوحة تحكم المشرف"
+
+#: .\templates\accounts\dashboards\moderator.html:7
+msgid "Moderator"
+msgstr "مشرف"
+
+#: .\templates\accounts\dashboards\moderator.html:8
+msgid "Review queue"
+msgstr "قائمة المراجعة"
+
+#: .\templates\accounts\dashboards\moderator.html:11
+msgid "Written answers"
+msgstr "الإجابات الكتابية"
+
+#: .\templates\accounts\dashboards\moderator.html:11
+msgid "Under review"
+msgstr "قيد المراجعة"
+
+#: .\templates\accounts\dashboards\moderator.html:12
+msgid "Registration queue"
+msgstr "قائمة التسجيل"
+
+#: .\templates\accounts\dashboards\moderator.html:12
+msgid "To verify"
+msgstr "للتحقق"
+
+#: .\templates\accounts\dashboards\moderator.html:13
+msgid "Email previews"
+msgstr "معاينات البريد الإلكتروني"
+
+#: .\templates\accounts\dashboards\moderator.html:13
+msgid "Awaiting send"
+msgstr "في انتظار الإرسال"
+
+#: .\templates\accounts\dashboards\moderator.html:16
+msgid "Phase 2 and Phase 3 will populate this dashboard with real data."
+msgstr "ستملأ المرحلة الثانية والثالثة هذه اللوحة ببيانات حقيقية."
+
+#: .\templates\accounts\dashboards\student.html:3
+msgid "Student dashboard"
+msgstr "لوحة تحكم الطالب"
+
+#: .\templates\accounts\dashboards\student.html:7
+msgid "Student"
+msgstr "طالب"
+
+#: .\templates\accounts\dashboards\student.html:8
+msgid "Welcome"
+msgstr "مرحباً"
+
+#: .\templates\accounts\dashboards\student.html:11
+msgid "Active courses"
+msgstr "المقررات النشطة"
+
+#: .\templates\accounts\dashboards\student.html:11
+msgid "Enrolled"
+msgstr "مسجل"
+
+#: .\templates\accounts\dashboards\student.html:12
+msgid "Upcoming exams"
+msgstr "الامتحانات القادمة"
+
+#: .\templates\accounts\dashboards\student.html:12
+msgid "Entrance + normal"
+msgstr "القبول والعادية"
+
+#: .\templates\accounts\dashboards\student.html:13
+msgid "Certificates"
+msgstr "الشهادات"
+
+#: .\templates\accounts\dashboards\student.html:13
+msgid "Earned"
+msgstr "مكتسبة"
+
+#: .\templates\accounts\dashboards\student.html:16
+msgid ""
+"Your full profile, application history, and entrance exam access unlock in "
+"Phase 2 and Phase 3."
+msgstr ""
+
+#: .\templates\accounts\dashboards\teacher.html:3
+msgid "Teacher dashboard"
+msgstr "لوحة تحكم المعلم"
+
+#: .\templates\accounts\dashboards\teacher.html:7
+msgid "Teacher"
+msgstr "معلم"
+
+#: .\templates\accounts\dashboards\teacher.html:8
+msgid "Your classes"
+msgstr "فصولك"
+
+#: .\templates\accounts\dashboards\teacher.html:11
+msgid "Active cohorts"
+msgstr "الدفعات النشطة"
+
+#: .\templates\accounts\dashboards\teacher.html:11
+msgid "Assigned to you"
+msgstr "المخصصة لك"
+
+#: .\templates\accounts\dashboards\teacher.html:12
+msgid "Homework to grade"
+msgstr "واجبات للتصحيح"
+
+#: .\templates\accounts\dashboards\teacher.html:12
+msgid "This week"
+msgstr "هذا الأسبوع"
+
+#: .\templates\accounts\dashboards\teacher.html:13
+msgid "Quizzes"
+msgstr "اختبارات قصيرة"
+
+#: .\templates\accounts\dashboards\teacher.html:13
+msgid "Draft + published"
+msgstr "مسودة ومنشور"
+
+#: .\templates\accounts\dashboards\teacher.html:16
+msgid "Course content and grading tools land in Phase 4 and Phase 5."
+msgstr "ستتم إضافة محتوى المقررات وأدوات التصحيح في المرحلة الرابعة والخامسة."
+
+#: .\templates\accounts\login.html:3 .\templates\accounts\login.html:7
+#: .\templates\accounts\login.html:30 .\templates\core\landing.html:17
+#: .\templates\partials\_navbar.html:28
+msgid "Log in"
+msgstr "تسجيل الدخول"
+
+#: .\templates\accounts\login.html:8
+msgid "Use the email address you registered with."
+msgstr "استخدم عنوان البريد الإلكتروني الذي سجلت به."
+
+#: .\templates\accounts\profile.html:3 .\templates\partials\_navbar.html:16
+msgid "Profile"
+msgstr "الملف الشخصي"
+
+#: .\templates\accounts\profile.html:6
+msgid "Your profile"
+msgstr "ملفك الشخصي"
+
+#: .\templates\accounts\profile.html:7
+msgid "Update your name and phone number. Email cannot be changed here."
+msgstr "حدّث اسمك ورقم هاتفك. لا يمكن تغيير البريد الإلكتروني هنا."
+
+#: .\templates\accounts\profile.html:24
+msgid "Save"
+msgstr "حفظ"
+
+#: .\templates\core\errors\400.html:7
+msgid "Bad request"
+msgstr "طلب غير صالح"
+
+#: .\templates\core\errors\400.html:8
+msgid "The request could not be processed."
+msgstr "تعذر معالجة الطلب."
+
+#: .\templates\core\errors\400.html:9 .\templates\core\errors\403.html:9
+#: .\templates\core\errors\404.html:9 .\templates\core\errors\500.html:9
+msgid "Back to home"
+msgstr "العودة للرئيسية"
+
+#: .\templates\core\errors\403.html:7
+msgid "Permission denied"
+msgstr "تم رفض الإذن"
+
+#: .\templates\core\errors\403.html:8
+msgid "You do not have access to this page."
+msgstr "ليس لديك صلاحية الوصول لهذه الصفحة."
+
+#: .\templates\core\errors\404.html:7
+msgid "Page not found"
+msgstr "الصفحة غير موجودة"
+
+#: .\templates\core\errors\404.html:8
+msgid "The page you are looking for does not exist."
+msgstr "الصفحة التي تبحث عنها غير موجودة."
+
+#: .\templates\core\errors\500.html:7
+msgid "Server error"
+msgstr "خطأ في الخادم"
+
+#: .\templates\core\errors\500.html:8
+msgid "Something went wrong on our side. Please try again."
+msgstr "حدث خطأ من جانبنا. يرجى المحاولة مرة أخرى."
+
+#: .\templates\core\landing.html:3 .\templates\partials\_navbar.html:13
+msgid "Home"
+msgstr "الرئيسية"
+
+#: .\templates\core\landing.html:8
+msgid "DokkiMashora LMS"
+msgstr "دكى مشورة"
+
+#: .\templates\core\landing.html:10
+msgid "A modern Arabic-first learning platform."
+msgstr "منصة تعليمية حديثة بالعربية أولاً."
+
+#: .\templates\core\landing.html:13
+msgid ""
+"Registration, entrance exams, content, assessments, grading, and "
+"certificates — all in one place, designed for Cairo time."
+msgstr ""
+"التسجيل وامتحانات القبول والمحتوى والتقييمات والتصحيح والشهادات، كل "
+"ذلك في مكان واحد، مصمم لتوقيت القاهرة."
+
+#: .\templates\core\landing.html:20
+msgid "Learn more"
+msgstr "اعرف المزيد"
+
+#: .\templates\core\landing.html:29
+msgid "Active students"
+msgstr "الطلاب النشطون"
+
+#: .\templates\core\landing.html:37
+msgid "Diplomas"
+msgstr "الدبلومات"
+
+#: .\templates\core\landing.html:41
+msgid "Live exams"
+msgstr "الامتحانات المباشرة"
+
+#: .\templates\core\landing.html:51
+msgid "Arabic-first"
+msgstr "العربية أولاً"
+
+#: .\templates\core\landing.html:52
+msgid "Default Arabic UI with full English support and RTL/LTR switching."
+msgstr "واجهة عربية افتراضية مع دعم كامل للإنجليزية وتبديل RTL/LTR."
+
+#: .\templates\core\landing.html:55
+msgid "Cairo time"
+msgstr "توقيت القاهرة"
+
+#: .\templates\core\landing.html:56
+msgid "All schedules, timers, and deadlines run in Africa/Cairo."
+msgstr "جميع الجداول والمؤقتات والمواعيد النهائية تعمل بتوقيت القاهرة."
+
+#: .\templates\core\landing.html:59
+msgid "Separated flows"
+msgstr "مسارات منفصلة"
+
+#: .\templates\core\landing.html:60
+msgid "Entrance exams stay separate from learning assessments."
+msgstr "امتحانات القبول منفصلة عن تقييمات التعلم."
+
+#: .\templates\partials\_footer.html:4
+msgid "All rights reserved."
+msgstr "جميع الحقوق محفوظة."
+
+#: .\templates\partials\_footer.html:5
+msgid "Cairo time:"
+msgstr "توقيت القاهرة:"
+
+#: .\templates\partials\_language_switcher.html:13
+msgid "Go"
+msgstr "اذهب"
+
+#: .\templates\partials\_navbar.html:15
+msgid "Dashboard"
+msgstr "لوحة التحكم"
+
+#: .\templates\partials\_navbar.html:25
+msgid "Log out"
+msgstr "تسجيل الخروج"

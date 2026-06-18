@@ -1,0 +1,61 @@
+{% load i18n static %}<!doctype html>
+<html lang="{{ LANGUAGE_CODE }}" dir="{% if LANGUAGE_BIDI %}rtl{% else %}ltr{% endif %}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>{% block title %}{{ SITE_NAME }}{% endblock title %}</title>
+
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+
+  {# Tailwind via Play CDN for development; production builds will compile. #}
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Cairo"', '"Inter"', 'system-ui', 'sans-serif'],
+            display: ['"Cairo"', '"Inter"', 'system-ui', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50:  '#f0fdf6',
+              100: '#dcfce8',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857',
+              900: '#064e3b',
+            },
+          },
+        },
+      },
+    };
+  </script>
+
+  <script defer src="https://cdn.jsdelivr.net/npm/htmx.org@1.9.12/dist/htmx.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/htmx.org@1.9.12/dist/ext/loading-states.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  {% block extra_head %}{% endblock extra_head %}
+</head>
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 font-sans antialiased min-h-screen flex flex-col" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+
+  {% include "partials/_navbar.html" %}
+
+  <main class="flex-1">
+    {% include "partials/_messages.html" %}
+    {% block content %}{% endblock content %}
+  </main>
+
+  {% include "partials/_footer.html" %}
+
+  {% block extra_js %}{% endblock extra_js %}
+</body>
+</html>

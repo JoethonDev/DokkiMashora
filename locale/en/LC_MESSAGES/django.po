@@ -1,0 +1,449 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-06-18 13:28+0300\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+#: .\apps\accounts\admin.py:24
+msgid "Personal info"
+msgstr ""
+
+#: .\apps\accounts\admin.py:25
+msgid "Status"
+msgstr ""
+
+#: .\apps\accounts\admin.py:27
+msgid "Permissions"
+msgstr ""
+
+#: .\apps\accounts\admin.py:30
+msgid "Important dates"
+msgstr ""
+
+#: .\apps\accounts\forms.py:40 .\apps\accounts\forms.py:75
+#: .\templates\accounts\profile.html:12
+msgid "Email"
+msgstr ""
+
+#: .\apps\accounts\forms.py:44
+msgid "Password"
+msgstr ""
+
+#: .\apps\accounts\forms.py:61
+msgid "Full name"
+msgstr ""
+
+#: .\apps\accounts\forms.py:62
+msgid "Full name (Arabic)"
+msgstr ""
+
+#: .\apps\accounts\forms.py:63
+msgid "Phone number"
+msgstr ""
+
+#: .\apps\accounts\models.py:24
+msgid "email address"
+msgstr ""
+
+#: .\apps\accounts\models.py:25
+msgid "full name"
+msgstr ""
+
+#: .\apps\accounts\models.py:27
+msgid "full name (Arabic)"
+msgstr ""
+
+#: .\apps\accounts\models.py:30
+msgid "Used for the Arabic UI."
+msgstr ""
+
+#: .\apps\accounts\models.py:33
+msgid "phone number"
+msgstr ""
+
+#: .\apps\accounts\models.py:39
+msgid "national ID"
+msgstr ""
+
+#: .\apps\accounts\models.py:43
+msgid "Stored for matching across applications."
+msgstr ""
+
+#: .\apps\accounts\models.py:46
+msgid "status"
+msgstr ""
+
+#: .\apps\accounts\models.py:53
+msgid "staff status"
+msgstr ""
+
+#: .\apps\accounts\models.py:54
+msgid "active"
+msgstr ""
+
+#: .\apps\accounts\models.py:55
+msgid "date joined"
+msgstr ""
+
+#: .\apps\accounts\models.py:63
+msgid "user"
+msgstr ""
+
+#: .\apps\accounts\models.py:64
+msgid "users"
+msgstr ""
+
+#: .\apps\accounts\views.py:52
+msgid "Profile updated."
+msgstr ""
+
+#: .\apps\accounts\views.py:88
+msgid "Super Admin"
+msgstr ""
+
+#: .\templates\accounts\dashboards\admin.html:3
+msgid "Admin dashboard"
+msgstr ""
+
+#: .\templates\accounts\dashboards\admin.html:7
+msgid "Admin"
+msgstr ""
+
+#: .\templates\accounts\dashboards\admin.html:8
+msgid "Operations dashboard"
+msgstr ""
+
+#: .\templates\accounts\dashboards\admin.html:9
+msgid "Pending items and quick actions."
+msgstr ""
+
+#: .\templates\accounts\dashboards\admin.html:13
+msgid "Applications"
+msgstr ""
+
+#: .\templates\accounts\dashboards\admin.html:13
+msgid "Awaiting review"
+msgstr ""
+
+#: .\templates\accounts\dashboards\admin.html:14
+msgid "Active entrance exams"
+msgstr ""
+
+#: .\templates\accounts\dashboards\admin.html:14
+msgid "Open windows"
+msgstr ""
+
+#: .\templates\accounts\dashboards\admin.html:15
+#: .\templates\core\landing.html:33
+msgid "Cohorts"
+msgstr ""
+
+#: .\templates\accounts\dashboards\admin.html:15
+msgid "Diplomas + courses"
+msgstr ""
+
+#: .\templates\accounts\dashboards\admin.html:16
+msgid "Storage"
+msgstr ""
+
+#: .\templates\accounts\dashboards\admin.html:16
+msgid "R2 usage"
+msgstr ""
+
+#: .\templates\accounts\dashboards\admin.html:21
+msgid "Coming soon"
+msgstr ""
+
+#: .\templates\accounts\dashboards\admin.html:22
+msgid ""
+"Registration review, entrance exam creation, and grading queues will land in "
+"upcoming phases."
+msgstr ""
+
+#: .\templates\accounts\dashboards\admin.html:25
+msgid "Server time"
+msgstr ""
+
+#: .\templates\accounts\dashboards\admin.html:26
+msgid "All schedules run in"
+msgstr ""
+
+#: .\templates\accounts\dashboards\admin.html:26
+msgid "Current time:"
+msgstr ""
+
+#: .\templates\accounts\dashboards\moderator.html:3
+msgid "Moderator dashboard"
+msgstr ""
+
+#: .\templates\accounts\dashboards\moderator.html:7
+msgid "Moderator"
+msgstr ""
+
+#: .\templates\accounts\dashboards\moderator.html:8
+msgid "Review queue"
+msgstr ""
+
+#: .\templates\accounts\dashboards\moderator.html:11
+msgid "Written answers"
+msgstr ""
+
+#: .\templates\accounts\dashboards\moderator.html:11
+msgid "Under review"
+msgstr ""
+
+#: .\templates\accounts\dashboards\moderator.html:12
+msgid "Registration queue"
+msgstr ""
+
+#: .\templates\accounts\dashboards\moderator.html:12
+msgid "To verify"
+msgstr ""
+
+#: .\templates\accounts\dashboards\moderator.html:13
+msgid "Email previews"
+msgstr ""
+
+#: .\templates\accounts\dashboards\moderator.html:13
+msgid "Awaiting send"
+msgstr ""
+
+#: .\templates\accounts\dashboards\moderator.html:16
+msgid "Phase 2 and Phase 3 will populate this dashboard with real data."
+msgstr ""
+
+#: .\templates\accounts\dashboards\student.html:3
+msgid "Student dashboard"
+msgstr ""
+
+#: .\templates\accounts\dashboards\student.html:7
+msgid "Student"
+msgstr ""
+
+#: .\templates\accounts\dashboards\student.html:8
+msgid "Welcome"
+msgstr ""
+
+#: .\templates\accounts\dashboards\student.html:11
+msgid "Active courses"
+msgstr ""
+
+#: .\templates\accounts\dashboards\student.html:11
+msgid "Enrolled"
+msgstr ""
+
+#: .\templates\accounts\dashboards\student.html:12
+msgid "Upcoming exams"
+msgstr ""
+
+#: .\templates\accounts\dashboards\student.html:12
+msgid "Entrance + normal"
+msgstr ""
+
+#: .\templates\accounts\dashboards\student.html:13
+msgid "Certificates"
+msgstr ""
+
+#: .\templates\accounts\dashboards\student.html:13
+msgid "Earned"
+msgstr ""
+
+#: .\templates\accounts\dashboards\student.html:16
+msgid ""
+"Your full profile, application history, and entrance exam access unlock in "
+"Phase 2 and Phase 3."
+msgstr ""
+
+#: .\templates\accounts\dashboards\teacher.html:3
+msgid "Teacher dashboard"
+msgstr ""
+
+#: .\templates\accounts\dashboards\teacher.html:7
+msgid "Teacher"
+msgstr ""
+
+#: .\templates\accounts\dashboards\teacher.html:8
+msgid "Your classes"
+msgstr ""
+
+#: .\templates\accounts\dashboards\teacher.html:11
+msgid "Active cohorts"
+msgstr ""
+
+#: .\templates\accounts\dashboards\teacher.html:11
+msgid "Assigned to you"
+msgstr ""
+
+#: .\templates\accounts\dashboards\teacher.html:12
+msgid "Homework to grade"
+msgstr ""
+
+#: .\templates\accounts\dashboards\teacher.html:12
+msgid "This week"
+msgstr ""
+
+#: .\templates\accounts\dashboards\teacher.html:13
+msgid "Quizzes"
+msgstr ""
+
+#: .\templates\accounts\dashboards\teacher.html:13
+msgid "Draft + published"
+msgstr ""
+
+#: .\templates\accounts\dashboards\teacher.html:16
+msgid "Course content and grading tools land in Phase 4 and Phase 5."
+msgstr ""
+
+#: .\templates\accounts\login.html:3 .\templates\accounts\login.html:7
+#: .\templates\accounts\login.html:30 .\templates\core\landing.html:17
+#: .\templates\partials\_navbar.html:28
+msgid "Log in"
+msgstr ""
+
+#: .\templates\accounts\login.html:8
+msgid "Use the email address you registered with."
+msgstr ""
+
+#: .\templates\accounts\profile.html:3 .\templates\partials\_navbar.html:16
+msgid "Profile"
+msgstr ""
+
+#: .\templates\accounts\profile.html:6
+msgid "Your profile"
+msgstr ""
+
+#: .\templates\accounts\profile.html:7
+msgid "Update your name and phone number. Email cannot be changed here."
+msgstr ""
+
+#: .\templates\accounts\profile.html:24
+msgid "Save"
+msgstr ""
+
+#: .\templates\core\errors\400.html:7
+msgid "Bad request"
+msgstr ""
+
+#: .\templates\core\errors\400.html:8
+msgid "The request could not be processed."
+msgstr ""
+
+#: .\templates\core\errors\400.html:9 .\templates\core\errors\403.html:9
+#: .\templates\core\errors\404.html:9 .\templates\core\errors\500.html:9
+msgid "Back to home"
+msgstr ""
+
+#: .\templates\core\errors\403.html:7
+msgid "Permission denied"
+msgstr ""
+
+#: .\templates\core\errors\403.html:8
+msgid "You do not have access to this page."
+msgstr ""
+
+#: .\templates\core\errors\404.html:7
+msgid "Page not found"
+msgstr ""
+
+#: .\templates\core\errors\404.html:8
+msgid "The page you are looking for does not exist."
+msgstr ""
+
+#: .\templates\core\errors\500.html:7
+msgid "Server error"
+msgstr ""
+
+#: .\templates\core\errors\500.html:8
+msgid "Something went wrong on our side. Please try again."
+msgstr ""
+
+#: .\templates\core\landing.html:3 .\templates\partials\_navbar.html:13
+msgid "Home"
+msgstr ""
+
+#: .\templates\core\landing.html:8
+msgid "DokkiMashora LMS"
+msgstr ""
+
+#: .\templates\core\landing.html:10
+msgid "A modern Arabic-first learning platform."
+msgstr ""
+
+#: .\templates\core\landing.html:13
+msgid ""
+"Registration, entrance exams, content, assessments, grading, and "
+"certificates — all in one place, designed for Cairo time."
+msgstr ""
+
+#: .\templates\core\landing.html:20
+msgid "Learn more"
+msgstr ""
+
+#: .\templates\core\landing.html:29
+msgid "Active students"
+msgstr ""
+
+#: .\templates\core\landing.html:37
+msgid "Diplomas"
+msgstr ""
+
+#: .\templates\core\landing.html:41
+msgid "Live exams"
+msgstr ""
+
+#: .\templates\core\landing.html:51
+msgid "Arabic-first"
+msgstr ""
+
+#: .\templates\core\landing.html:52
+msgid "Default Arabic UI with full English support and RTL/LTR switching."
+msgstr ""
+
+#: .\templates\core\landing.html:55
+msgid "Cairo time"
+msgstr ""
+
+#: .\templates\core\landing.html:56
+msgid "All schedules, timers, and deadlines run in Africa/Cairo."
+msgstr ""
+
+#: .\templates\core\landing.html:59
+msgid "Separated flows"
+msgstr ""
+
+#: .\templates\core\landing.html:60
+msgid "Entrance exams stay separate from learning assessments."
+msgstr ""
+
+#: .\templates\partials\_footer.html:4
+msgid "All rights reserved."
+msgstr ""
+
+#: .\templates\partials\_footer.html:5
+msgid "Cairo time:"
+msgstr ""
+
+#: .\templates\partials\_language_switcher.html:13
+msgid "Go"
+msgstr ""
+
+#: .\templates\partials\_navbar.html:15
+msgid "Dashboard"
+msgstr ""
+
+#: .\templates\partials\_navbar.html:25
+msgid "Log out"
+msgstr ""
