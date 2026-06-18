@@ -29,6 +29,7 @@ if settings.DEBUG:
 urlpatterns += i18n_patterns(
     path("", include("apps.core.urls")),
     path("accounts/", include("apps.accounts.urls")),
+    path("applications/", include("apps.applications.urls")),
     prefix_default_language=False,
 )
 

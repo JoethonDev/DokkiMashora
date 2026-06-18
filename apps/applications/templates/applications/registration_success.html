@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% trans "Registration received" %} | {{ SITE_NAME_AR }}{% endblock title %}
+{% block content %}
+<section class="max-w-xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center">
+  <p class="text-sm font-semibold text-brand-600 tracking-wide uppercase">{% trans "Thank you" %}</p>
+  <h1 class="mt-2 text-3xl font-bold">{% trans "Your registration was received" %}</h1>
+  {% if email %}
+    <p class="mt-3 text-slate-600 dark:text-slate-300">{% blocktrans %}We will contact <strong>{{ email }}</strong> with the next steps.{% endblocktrans %}</p>
+  {% else %}
+    <p class="mt-3 text-slate-600 dark:text-slate-300">{% trans "We will contact you with the next steps." %}</p>
+  {% endif %}
+  <a href="{% url 'core:landing' %}" class="mt-6 inline-block rounded-md bg-brand-600 text-white px-4 py-2 text-sm">{% trans "Back to home" %}</a>
+</section>
+{% endblock content %}

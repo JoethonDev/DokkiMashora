@@ -1,0 +1,91 @@
+"""Seed the default transactional email templates."""
+
+from __future__ import annotations
+
+from django.core.management.base import BaseCommand
+
+from apps.communications.constants import (
+    TEMPLATE_ACCEPTANCE,
+    TEMPLATE_ACTIVATION,
+    TEMPLATE_ENTRANCE_EXAM_INVITATION,
+    TEMPLATE_RECEIVED,
+    TEMPLATE_REJECTION,
+)
+from apps.communications.models import EmailTemplate
+
+DEFAULT_TEMPLATES = {
+    TEMPLATE_RECEIVED: {
+        "name": "Registration received",
+        "subject": "We received your registration",
+        "body": (
+            "Hello {{ full_name }},\n\n"
+            "We received your registration for DokkiMashora. "
+            "Our team will review it and get back to you shortly.\n\n"
+            "National ID: {{ national_id }}\n"
+            "Email: {{ email }}\n\n"
+            "Thank you,\nDokkiMashora admissions"
+        ),
+    },
+    TEMPLATE_ENTRANCE_EXAM_INVITATION: {
+        "name": "Entrance exam invitation",
+        "subject": "Your entrance exam is ready",
+        "body": (
+            "Hello {{ full_name }},\n\n"
+            "Your entrance exam is now available. "
+            "You can take it from {{ exam_open_at }} until {{ exam_close_at }}.\n\n"
+            "Please log in to start: {{ exam_url }}\n\n"
+            "Good luck!\nDokkiMashora admissions"
+        ),
+    },
+    TEMPLATE_ACCEPTANCE: {
+        "name": "Acceptance",
+        "subject": "Welcome to DokkiMashora",
+        "body": (
+            "Hello {{ full_name }},\n\n"
+            "Congratulations! Your application has been accepted. "
+            "We will activate your account shortly and send you the activation link.\n\n"
+            "Thank you,\nDokkiMashora admissions"
+        ),
+    },
+    TEMPLATE_REJECTION: {
+        "name": "Rejection",
+        "subject": "Update on your application",
+        "body": (
+            "Hello {{ full_name }},\n\n"
+            "Thank you for your interest in DokkiMashora. "
+            "After review we are unable to accept your application at this time.\n\n"
+            "Reason: {{ rejection_reason }}\n\n"
+            "You are welcome to apply again in a future cycle.\n\n"
+            "DokkiMashora admissions"
+        ),
+    },
+    TEMPLATE_ACTIVATION: {
+        "name": "Account activation",
+        "subject": "Activate your account",
+        "body": (
+            "Hello {{ full_name }},\n\n"
+            "Your account is approved. Please activate it using the link below:\n\n"
+            "{{ activation_url }}\n\n"
+            "Welcome aboard!\nDokkiMashora admissions"
+        ),
+    },
+}
+
+
+class Command(BaseCommand):
+    help = "Create or update the default email templates."
+
+    def handle(self, *args, **options) -> None:
+        for slug, payload in DEFAULT_TEMPLATES.items():
+            template, created = EmailTemplate.objects.update_or_create(
+                slug=slug,
+                defaults={
+                    "name": payload["name"],
+                    "subject": payload["subject"],
+                    "body": payload["body"],
+                    "is_active": True,
+                },
+            )
+            self.stdout.write(
+                self.style.SUCCESS(f"Template ensured: {slug}") if created else f"Template updated: {slug}"
+            )
