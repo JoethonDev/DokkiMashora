@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html dir="rtl">
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: A4 landscape; margin: 1.5cm; }
+  body { font-family: 'Arial', sans-serif; text-align: center; padding: 40px; }
+  .border { border: 3px double #8B4513; padding: 30px; min-height: 400px; }
+  h1 { font-size: 28px; color: #8B4513; margin-bottom: 10px; }
+  h2 { font-size: 22px; color: #333; margin-bottom: 20px; }
+  h3 { font-size: 24px; color: #000; margin: 15px 0; }
+  .number { font-size: 12px; color: #999; margin-bottom: 30px; }
+  .footer { margin-top: 40px; font-size: 12px; color: #666; }
+</style>
+</head>
+<body>
+<div class="border">
+  <div class="number">{{ certificate_number }}</div>
+  <h1>{{ diploma_title }}</h1>
+  <p>يشهد المركز بأن</p>
+  <h3>{{ student_name }}</h3>
+  <p>قد أتم بنجاح متطلبات</p>
+  <h2>{{ cohort_name }}</h2>
+  <p>تاريخ الإتمام: {{ completion_date }}</p>
+  <p>تاريخ الإصدار: {{ issue_date }}</p>
+  <div class="footer">Placeholder Certificate / شهادة مؤقتة</div>
+</div>
+</body>
+</html>

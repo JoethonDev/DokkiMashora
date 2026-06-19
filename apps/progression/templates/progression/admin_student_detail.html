@@ -1,0 +1,248 @@
+{% extends "base.html" %}{% load i18n %}{% load ui_tags %}
+{% block title %}{{ student }} - {% trans "Progress" %} - {{ block.super }}{% endblock %}
+{% block content %}
+<section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <header class="mb-6">
+    <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Admin" %}</p>
+    <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ student }}</h1>
+  </header>
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="lg:col-span-2 space-y-6">
+      {% for prog in progress_semesters %}
+        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="font-semibold">{{ prog.semester.title }}</h3>
+              <p class="text-sm text-slate-500">{% trans "Score" %}: {{ prog.calculated_score|default:"--" }}</p>
+            </div>
+            <div class="flex items-center gap-2">
+              {% include "partials/_badge.html" with label=prog.get_status_display tone=prog.status %}
+            </div>
+          </div>
+          {% if prog.status == "locked" %}
+            <p class="text-xs text-red-600 mt-2">{{ prog.lock_reason }}</p>
+          {% endif %}
+          {% with req=requirement_summaries|dict_key:prog.semester.id %}
+          {% if req %}
+            <div class="mt-2 text-xs space-y-0.5">
+              {% if req.missing_required %}
+                <p class="text-amber-600">{% trans "Missing" %}: {{ req.missing_required|length }} {% trans "assessment(s)" %}</p>
+              {% endif %}
+              {% if req.under_review_assessments %}
+                <p class="text-sky-600">{% trans "Under review" %}: {{ req.under_review_assessments|length }} {% trans "assessment(s)" %}</p>
+              {% endif %}
+              {% if req.failed_assessments %}
+                <p class="text-red-600">{% trans "Failed" %}: {{ req.failed_assessments|length }} {% trans "assessment(s)" %}</p>
+              {% endif %}
+            </div>
+          {% endif %}
+          {% endwith %}
+        </div>
+      {% empty %}
+        <p class="text-slate-500">{% trans "No progress records." %}</p>
+      {% endfor %}
+    </div>
+    <div class="space-y-4">
+      {% for enrollment in enrollments %}
+      <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+        <h3 class="font-semibold mb-3">{% trans "Semester Actions" %} — {{ enrollment.cohort.diploma.title }}</h3>
+
+        <form method="post" action="{% url 'progression:admin_evaluate_semester' student.id %}" class="mb-3">
+          {% csrf_token %}
+          <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}">
+          <select name="semester_id" class="w-full text-sm border rounded p-1 mb-1">
+            {% for sem in semesters %}<option value="{{ sem.id }}">{{ sem.title }}</option>{% endfor %}
+          </select>
+          <button type="submit" class="w-full text-xs bg-brand-600 text-white rounded py-1">{% trans "Evaluate" %}</button>
+        </form>
+
+        <div class="space-y-2">
+          <details class="text-sm">
+            <summary class="cursor-pointer font-medium text-brand-600">{% trans "Promote" %}</summary>
+            <form method="post" action="{% url 'progression:admin_promote' student.id %}" class="mt-2 space-y-1">
+              {% csrf_token %}
+              <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}">
+              <select name="semester_id" class="w-full text-sm border rounded p-1">
+                {% for sem in semesters %}<option value="{{ sem.id }}">{{ sem.title }}</option>{% endfor %}
+              </select>
+              <div class="flex items-center gap-2 text-xs">
+                <input type="checkbox" name="override_failed" id="override_failed_{{ enrollment.id }}" value="1">
+                <label for="override_failed_{{ enrollment.id }}">{% trans "Override failed" %}</label>
+              </div>
+              <input type="text" name="reason" placeholder="{% trans 'Reason (required for override)' %}" class="w-full text-xs border rounded p-1">
+              <button type="submit" class="w-full text-xs bg-emerald-600 text-white rounded py-1">{% trans "Promote" %}</button>
+            </form>
+          </details>
+
+          <details class="text-sm">
+            <summary class="cursor-pointer font-medium text-brand-600">{% trans "Demote" %}</summary>
+            <form method="post" action="{% url 'progression:admin_demote' student.id %}" class="mt-2 space-y-1">
+              {% csrf_token %}
+              <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}">
+              <select name="semester_id" class="w-full text-sm border rounded p-1">
+                {% for sem in semesters %}<option value="{{ sem.id }}">{{ sem.title }}</option>{% endfor %}
+              </select>
+              <input type="text" name="reason" placeholder="{% trans 'Reason (required)' %}" required class="w-full text-xs border rounded p-1">
+              <button type="submit" class="w-full text-xs bg-amber-600 text-white rounded py-1">{% trans "Demote" %}</button>
+            </form>
+          </details>
+
+          <details class="text-sm">
+            <summary class="cursor-pointer font-medium text-brand-600">{% trans "Override Status" %}</summary>
+            <form method="post" action="{% url 'progression:admin_override' student.id %}" class="mt-2 space-y-1">
+              {% csrf_token %}
+              <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}">
+              <select name="semester_id" class="w-full text-sm border rounded p-1">
+                {% for sem in semesters %}<option value="{{ sem.id }}">{{ sem.title }}</option>{% endfor %}
+              </select>
+              <select name="new_status" class="w-full text-sm border rounded p-1">
+                <option value="passed">{% trans "Passed" %}</option>
+                <option value="failed">{% trans "Failed" %}</option>
+                <option value="in_progress">{% trans "In progress" %}</option>
+                <option value="not_started">{% trans "Not started" %}</option>
+              </select>
+              <input type="text" name="reason" placeholder="{% trans 'Reason (required)' %}" required class="w-full text-xs border rounded p-1">
+              <button type="submit" class="w-full text-xs bg-sky-600 text-white rounded py-1">{% trans "Override" %}</button>
+            </form>
+          </details>
+
+          <details class="text-sm">
+            <summary class="cursor-pointer font-medium text-red-600">{% trans "Lock" %}</summary>
+            <form method="post" action="{% url 'progression:admin_lock' student.id %}" class="mt-2 space-y-1">
+              {% csrf_token %}
+              <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}">
+              <input type="text" name="reason" placeholder="{% trans 'Reason (required)' %}" required class="w-full text-xs border rounded p-1">
+              <button type="submit" class="w-full text-xs bg-red-600 text-white rounded py-1">{% trans "Lock" %}</button>
+            </form>
+          </details>
+
+          <details class="text-sm">
+            <summary class="cursor-pointer font-medium text-emerald-600">{% trans "Unlock" %}</summary>
+            <form method="post" action="{% url 'progression:admin_unlock' student.id %}" class="mt-2 space-y-1">
+              {% csrf_token %}
+              <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}">
+              <input type="text" name="reason" placeholder="{% trans 'Reason (required)' %}" required class="w-full text-xs border rounded p-1">
+              <button type="submit" class="w-full text-xs bg-emerald-600 text-white rounded py-1">{% trans "Unlock" %}</button>
+            </form>
+          </details>
+
+          <details class="text-sm">
+            <summary class="cursor-pointer font-medium text-brand-600">{% trans "Assign Retake" %}</summary>
+            <form method="post" action="{% url 'progression:admin_assign_retake' student.id %}" class="mt-2 space-y-1">
+              {% csrf_token %}
+              <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}">
+              <select name="semester_id" class="w-full text-sm border rounded p-1">
+                {% for sem in semesters %}<option value="{{ sem.id }}">{{ sem.title }}</option>{% endfor %}
+              </select>
+              <input type="text" name="reason" placeholder="{% trans 'Reason (required)' %}" required class="w-full text-xs border rounded p-1">
+              <button type="submit" class="w-full text-xs bg-amber-600 text-white rounded py-1">{% trans "Assign Retake" %}</button>
+            </form>
+          </details>
+
+          <details class="text-sm">
+            <summary class="cursor-pointer font-medium text-brand-600">{% trans "Clear Retake" %}</summary>
+            <form method="post" action="{% url 'progression:admin_clear_retake' student.id %}" class="mt-2 space-y-1">
+              {% csrf_token %}
+              <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}">
+              <select name="semester_id" class="w-full text-sm border rounded p-1">
+                {% for sem in semesters %}<option value="{{ sem.id }}">{{ sem.title }}</option>{% endfor %}
+              </select>
+              <input type="text" name="reason" placeholder="{% trans 'Reason (required)' %}" required class="w-full text-xs border rounded p-1">
+              <button type="submit" class="w-full text-xs bg-teal-600 text-white rounded py-1">{% trans "Clear Retake" %}</button>
+            </form>
+          </details>
+
+          <details class="text-sm">
+            <summary class="cursor-pointer font-medium text-brand-600">{% trans "Mark Complete" %}</summary>
+            <form method="post" action="{% url 'progression:admin_mark_complete' student.id %}" class="mt-2 space-y-1">
+              {% csrf_token %}
+              <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}">
+              <input type="text" name="notes" placeholder="{% trans 'Notes (optional)' %}" class="w-full text-xs border rounded p-1">
+              <button type="submit" class="w-full text-xs bg-indigo-600 text-white rounded py-1">{% trans "Mark Complete" %}</button>
+            </form>
+          </details>
+
+          <details class="text-sm">
+            <summary class="cursor-pointer font-medium text-brand-600">{% trans "Mark Graduate" %}</summary>
+            <form method="post" action="{% url 'progression:admin_mark_graduate' student.id %}" class="mt-2 space-y-1">
+              {% csrf_token %}
+              <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}">
+              <input type="text" name="notes" placeholder="{% trans 'Notes (optional)' %}" class="w-full text-xs border rounded p-1">
+              <button type="submit" class="w-full text-xs bg-purple-600 text-white rounded py-1">{% trans "Mark Graduate" %}</button>
+            </form>
+          </details>
+        </div>
+      </div>
+
+      {% if completion %}
+      <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+        <h3 class="font-semibold mb-2">{% trans "Diploma Completion" %}</h3>
+        <div class="flex items-center gap-2 mb-1">
+          {% include "partials/_badge.html" with label=completion.get_status_display tone=completion.status %}
+        </div>
+        {% if completion.completed_at %}
+          <p class="text-xs text-slate-500">{% trans "Completed" %}: {{ completion.completed_at|date }}</p>
+        {% endif %}
+        {% if completion.graduated_at %}
+          <p class="text-xs text-slate-500">{% trans "Graduated" %}: {{ completion.graduated_at|date }}</p>
+        {% endif %}
+        {% if completion.graduation_notes %}
+          <p class="text-xs text-slate-400 mt-1">{{ completion.graduation_notes }}</p>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+        <h3 class="font-semibold mb-3">{% trans "Certificate" %}</h3>
+        {% for cert in certificates %}
+          <div class="flex items-center justify-between text-sm mb-2">
+            <div>
+              <span class="font-mono text-xs">{{ cert.certificate_number }}</span>
+              {% include "partials/_badge.html" with label=cert.get_status_display tone=cert.status %}
+            </div>
+            {% if cert.status == "available" %}
+              <a href="{% url 'certificates:admin_download_certificate' cert.id %}" class="text-xs text-brand-600">{% trans "Download" %}</a>
+            {% endif %}
+          </div>
+        {% empty %}
+          <p class="text-xs text-slate-400 mb-2">{% trans "No certificates generated." %}</p>
+        {% endfor %}
+        <form method="post" action="{% url 'certificates:admin_generate_certificate' student.id %}" class="mb-2">
+          {% csrf_token %}
+          <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}">
+          <button type="submit" class="w-full text-xs bg-brand-600 text-white rounded py-1">{% trans "Generate Certificate" %}</button>
+        </form>
+      </div>
+      {% endfor %}
+
+      {% if eligibility %}
+        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+          <h3 class="font-semibold mb-2">{% trans "Final Exam" %}</h3>
+          {% if eligibility.eligible %}
+            {% include "partials/_badge.html" with label=_("Eligible") tone="success" %}
+          {% else %}
+            <p class="text-xs text-red-600">{{ eligibility.blocked_reason }}</p>
+          {% endif %}
+        </div>
+      {% endif %}
+
+      {% if decisions %}
+      <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+        <h3 class="font-semibold mb-2">{% trans "Decision History" %}</h3>
+        <ul class="text-xs space-y-1 max-h-48 overflow-y-auto">
+          {% for d in decisions %}
+          <li class="border-b border-slate-100 dark:border-slate-800 pb-1">
+            <span class="font-medium">{{ d.get_decision_type_display }}</span>
+            {% if d.reason %}&mdash; {{ d.reason }}{% endif %}
+            <span class="text-slate-400">({{ d.created_at|date:"Y-m-d H:i" }})</span>
+          </li>
+          {% empty %}
+          <li class="text-slate-400">{% trans "No decisions recorded." %}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endblock %}

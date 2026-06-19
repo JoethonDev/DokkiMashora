@@ -115,6 +115,12 @@ class LocalStorageBackend:
     def exists(self, key: str) -> bool:
         return (self.base_path / key).exists()
 
+    def download(self, key: str) -> bytes:
+        full_path = self.base_path / key
+        if not full_path.exists():
+            raise StorageError(f"File not found: {key}")
+        return full_path.read_bytes()
+
 
 class R2StorageBackend:
     """Cloudflare R2 (S3-compatible) storage backend."""
@@ -176,6 +182,15 @@ class R2StorageBackend:
         except Exception:
             return False
 
+    def download(self, key: str) -> bytes:
+        client = self._get_client()
+        try:
+            response = client.get_object(Bucket=settings.R2_BUCKET_NAME, Key=key)
+            return response["Body"].read()
+        except Exception as exc:
+            logger.error("R2 download failed for key=%s: %s", key, exc)
+            raise StorageError("File download failed.") from exc
+
 
 class StorageService:
     """Unified storage service with validation and backend abstraction."""
@@ -222,6 +237,9 @@ class StorageService:
 
     def exists(self, key: str) -> bool:
         return self.backend.exists(key)
+
+    def download_file(self, key: str) -> bytes:
+        return self.backend.download(key)
 
 
 storage_service = StorageService()

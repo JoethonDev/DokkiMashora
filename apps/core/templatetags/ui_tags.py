@@ -29,3 +29,9 @@ def youtube_embed(url):
     if match:
         return f"https://www.youtube.com/embed/{match.group(1)}"
     return url
+
+
+@register.filter
+def dict_key(d, key):
+    """Look up a dictionary key (supports integer keys)."""
+    return d.get(key)
