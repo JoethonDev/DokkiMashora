@@ -82,14 +82,6 @@ class RegistrationFormTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn("national_id", form.errors)
 
-    def test_form_rejects_duplicate_full_name(self) -> None:
-        self.client.post(self._post_url(), self._data())
-        form = RegistrationForm(
-            data=self._data(email="other@example.com", phone="01111111111", national_id="999")
-        )
-        self.assertFalse(form.is_valid())
-        self.assertIn("full_name", form.errors)
-
     @staticmethod
     def _post_url() -> str:
         return reverse("applications:register")

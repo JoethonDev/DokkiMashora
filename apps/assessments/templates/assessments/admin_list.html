@@ -1,0 +1,62 @@
+{% extends "base.html" %}{% load i18n %}{% load ui_tags %}
+{% block title %}{% trans "Manage Assessments" %} - {{ block.super }}{% endblock %}
+{% block content %}
+<section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <header class="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Admin" %}</p>
+      <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{% trans "Assessment Management" %}</h1>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      {% url 'assessments:admin_create' as create_url %}
+      {% include "partials/_button.html" with href=create_url label=_("Create Assessment") variant="primary" %}
+      {% url 'assessments:admin_grade_list' as grade_url %}
+      {% include "partials/_button.html" with href=grade_url label=_("Grading Queue") variant="secondary" %}
+    </div>
+  </header>
+
+  <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+    <table class="min-w-[640px] w-full divide-y divide-slate-200 dark:divide-slate-800 text-sm">
+      <thead class="bg-slate-50 dark:bg-slate-800/50">
+        <tr class="text-slate-600 dark:text-slate-300">
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Title" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Type" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Duration" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Active" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Actions" %}</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+        {% for assessment in assessments %}
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+            <td class="px-4 py-3">
+              <a href="{% url 'assessments:admin_detail' assessment.id %}" class="text-brand-600 hover:underline font-medium">{{ assessment.title }}</a>
+            </td>
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-300">{{ assessment.get_assessment_type_display }}</td>
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-300 tabular-nums">
+              {% if assessment.duration_minutes %}{{ assessment.duration_minutes }} {% trans "min" %}{% else %}&mdash;{% endif %}
+            </td>
+            <td class="px-4 py-3">
+              {% if assessment.is_active %}
+                {% include "partials/_badge.html" with label=_("Active") tone="success" %}
+              {% else %}
+                {% include "partials/_badge.html" with label=_("Inactive") tone="danger" %}
+              {% endif %}
+            </td>
+            <td class="px-4 py-3">
+              <div class="flex gap-2">
+                <a href="{% url 'assessments:admin_detail' assessment.id %}" class="text-brand-600 hover:underline font-medium text-sm">{% trans "View" %}</a>
+                <a href="{% url 'assessments:admin_edit' assessment.id %}" class="text-slate-600 dark:text-slate-300 hover:underline font-medium text-sm">{% trans "Edit" %}</a>
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="5" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400">{% trans "No assessments yet." %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

@@ -111,6 +111,34 @@ class TestQuestionModel:
         assert questions[0].order == 1
         assert questions[1].order == 2
 
+    def test_unique_question_order_per_exam(self, exam, mcq_question):
+        from django.db import IntegrityError
+        with pytest.raises(IntegrityError):
+            Question.objects.create(
+                exam=exam, question_type=QUESTION_TYPE_MCQ,
+                text="Duplicate order", points=Decimal("5.00"), order=1,
+            )
+
+    def test_unique_choice_order_per_question(self, exam, mcq_question):
+        from django.db import IntegrityError
+        with pytest.raises(IntegrityError):
+            Choice.objects.create(
+                question=mcq_question, text="Dup", is_correct=False, order=1,
+            )
+
+    def test_essay_clean_deletes_choices_on_save(self, exam):
+        q = Question.objects.create(
+            exam=exam, question_type=QUESTION_TYPE_MCQ,
+            text="Will become essay", points=Decimal("5.00"), order=10,
+        )
+        Choice.objects.create(question=q, text="A", is_correct=True, order=1)
+        Choice.objects.create(question=q, text="B", is_correct=False, order=2)
+        assert q.choices.count() == 2
+        q.question_type = QUESTION_TYPE_ESSAY
+        q.clean()
+        q.save()
+        assert q.choices.count() == 0
+
 
 @pytest.mark.django_db
 class TestAssignmentModel:
@@ -204,6 +232,22 @@ class TestServices:
         pending = list(get_pending_grading())
         assert len(pending) == 1
         assert pending[0] == assignment
+
+    def test_submit_exam_essay_rejects_selected_choice(self, assignment, essay_question):
+        start_exam(assignment)
+        with pytest.raises(ValueError, match="must not carry a selected choice"):
+            submit_exam(assignment, [
+                ExamAnswerData(question_id=essay_question.id, essay_text="Essay",
+                               selected_choice_id=999),
+            ])
+
+    def test_submit_exam_mcq_rejects_essay_text(self, assignment, mcq_question):
+        start_exam(assignment)
+        with pytest.raises(ValueError, match="must not carry essay text"):
+            submit_exam(assignment, [
+                ExamAnswerData(question_id=mcq_question.id, selected_choice_id=1,
+                               essay_text="Should not be here"),
+            ])
 
     def test_submit_exam_wrong_status(self, assignment):
         with pytest.raises(ValueError, match="in_progress status"):

@@ -7,6 +7,7 @@ from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
+from django.views.decorators.http import require_POST
 
 from apps.academics.forms import (
     CohortForm,
@@ -388,13 +389,13 @@ def admin_lecture_edit(request, course_id, version_id, lecture_id):
 
 @login_required
 @role_required(*ROLE_EXAM_STAFF)
+@require_POST
 def admin_lecture_delete(request, course_id, version_id, lecture_id):
     course = get_object_or_404(Course, id=course_id)
     version = get_object_or_404(CourseVersion, id=version_id, course=course)
     lecture = get_object_or_404(Lecture, id=lecture_id, course_version=version)
-    if request.method == "POST":
-        lecture.delete()
-        messages.success(request, _("Lecture deleted."))
+    lecture.delete()
+    messages.success(request, _("Lecture deleted."))
     return redirect("academics:admin_version_detail", course_id=course.id, version_id=version.id)
 
 

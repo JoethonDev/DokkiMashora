@@ -1,0 +1,33 @@
+{% load i18n form_tags %}
+{% if not full_page %}<div id="question-form-container">{% endif %}
+<form method="post" action="{{ question_save_url }}" class="space-y-5"
+      {% if not full_page %}hx-post="{{ question_save_url }}" hx-target="#question-form-container" hx-swap="outerHTML"{% endif %}>
+  {% csrf_token %}
+  {% for field in form %}{% include "partials/_field.html" %}{% endfor %}
+
+  {% if form.question_type.value == "mcq" or not form.instance.pk %}
+  <div x-data="{ choices: {% if choices %}{{ choices|length }}{% else %}0{% endif %} }" id="choices-section" class="space-y-3">
+    <p class="text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Answer Choices" %}</p>
+    <div id="choices-list" class="space-y-2">
+      {% for choice in choices %}
+        <div class="flex items-center gap-2">
+          <input type="hidden" name="choice_order_{{ choice.id }}" value="{{ choice.order|default:forloop.counter }}">
+          <input type="radio" name="correct_choice" value="{{ choice.id }}" {% if choice.is_correct %}checked{% endif %} class="h-4 w-4 shrink-0 text-brand-600 border-slate-300 focus:ring-brand-500">
+          <input type="text" name="choice_text_{{ choice.id }}" value="{{ choice.text }}" placeholder="{% trans 'Choice text' %}" class="flex-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900">
+        </div>
+      {% endfor %}
+    </div>
+    <template x-if="form.question_type.value === 'mcq'">
+      <button type="button" @click="choices++; $el.previousElementSibling.insertAdjacentHTML('beforeend', '<div class=\"flex items-center gap-2 mt-2\"><input type=\"hidden\" name=\"choice_order_new_'+choices+'\" value=\"'+choices+'\"><input type=\"radio\" name=\"correct_choice\" value=\"new_'+choices+'\" class=\"h-4 w-4 shrink-0 text-brand-600 border-slate-300 focus:ring-brand-500\"><input type=\"text\" name=\"choice_text_new_'+choices+'\" placeholder=\"{% trans 'Choice text' %}\" class=\"flex-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900\"></div>')" class="text-sm text-brand-600 hover:text-brand-700 font-medium">
+        + {% trans "Add choice" %}
+      </button>
+    </template>
+  </div>
+  {% endif %}
+
+  <div class="flex gap-2 pt-4">
+    {% include "partials/_button.html" with label=_("Save Question") variant="primary" loading_label=_("Saving...") %}
+    <a href="{% url 'assessments:admin_detail' assessment.id %}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Cancel" %}</a>
+  </div>
+</form>
+{% if not full_page %}</div>{% endif %}

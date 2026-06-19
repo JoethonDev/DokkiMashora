@@ -10,6 +10,8 @@ from apps.exams.constants import (
     ASSIGNMENT_STATUS_COMPLETED,
     ASSIGNMENT_STATUS_GRADED,
     ASSIGNMENT_STATUS_IN_PROGRESS,
+    EXAM_TYPE_ENTRANCE,
+    QUESTION_TYPE_ESSAY,
     QUESTION_TYPE_MCQ,
 )
 from apps.exams.models import Answer, Assignment, Choice, Exam
@@ -33,8 +35,16 @@ def assign_exam(exam: Exam, student, attempt: int = 1) -> Assignment:
 def start_exam(assignment: Assignment) -> Assignment:
     if assignment.status != ASSIGNMENT_STATUS_ASSIGNED:
         raise ValueError("Exam can only be started from assigned status.")
+    exam = assignment.exam
+    now = timezone.now()
+    if not exam.is_active:
+        raise ValueError("Exam is not active.")
+    if exam.open_at and now < exam.open_at:
+        raise ValueError("Exam has not opened yet.")
+    if exam.close_at and now > exam.close_at:
+        raise ValueError("Exam has already closed.")
     assignment.status = ASSIGNMENT_STATUS_IN_PROGRESS
-    assignment.started_at = timezone.now()
+    assignment.started_at = now
     assignment.save(update_fields=["status", "started_at"])
     return assignment
 
@@ -42,11 +52,25 @@ def start_exam(assignment: Assignment) -> Assignment:
 def submit_exam(assignment: Assignment, answers: list[ExamAnswerData]) -> Assignment:
     if assignment.status != ASSIGNMENT_STATUS_IN_PROGRESS:
         raise ValueError("Exam can only be submitted from in_progress status.")
-    questions = list(assignment.exam.questions.select_related("exam").prefetch_related("choices"))
+    exam = assignment.exam
+    now = timezone.now()
+    if not exam.is_active:
+        raise ValueError("Exam is not active.")
+    if exam.close_at and now > exam.close_at:
+        raise ValueError("Exam has already closed.")
+    if assignment.started_at and exam.duration_minutes:
+        deadline = assignment.started_at + timezone.timedelta(minutes=exam.duration_minutes)
+        if now > deadline:
+            raise ValueError("Exam duration has expired.")
+    questions = list(exam.questions.select_related("exam").prefetch_related("choices"))
     question_map = {q.id: q for q in questions}
     with transaction.atomic():
         for answer_data in answers:
             question = question_map[answer_data.question_id]
+            if question.question_type == QUESTION_TYPE_MCQ and answer_data.essay_text:
+                raise ValueError("MCQ answer must not carry essay text.")
+            if question.question_type == QUESTION_TYPE_ESSAY and answer_data.selected_choice_id is not None:
+                raise ValueError("Essay answer must not carry a selected choice.")
             kwargs = {"assignment": assignment, "question": question}
             if question.question_type == QUESTION_TYPE_MCQ:
                 choice = (
@@ -125,6 +149,17 @@ def get_active_exams():
         open_at__lte=now,
         close_at__gte=now,
     )
+
+
+def has_existing_attempt(exam: Exam, student) -> bool:
+    """Check if the student already has a completed/graded attempt for entrance exams."""
+    if exam.exam_type != EXAM_TYPE_ENTRANCE:
+        return False
+    return Assignment.objects.filter(
+        exam=exam,
+        student=student,
+        status__in=[ASSIGNMENT_STATUS_COMPLETED, ASSIGNMENT_STATUS_GRADED],
+    ).exists()
 
 
 def get_exam_with_questions(exam_id: int) -> Exam | None:

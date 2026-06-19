@@ -85,15 +85,19 @@ def normalize_phone(raw: str) -> str:
 
 
 def find_duplicate(data: RegistrationData) -> str | None:
-    """Return the field name that conflicts, or None when the data is fresh."""
-    if User.objects.filter(email__iexact=data.email).exists():
-        return "email"
-    if User.objects.filter(phone__iexact=data.phone).exists():
-        return "phone"
+    """Return the field name that conflicts, or None when the data is fresh.
+
+    Check order per guardrails: national ID → email → phone.
+    """
     if StudentProfile.objects.filter(national_id=data.national_id).exists():
         return "national_id"
-    if StudentProfile.objects.filter(full_name__iexact=data.full_name).exists():
-        return "full_name"
+    if User.objects.filter(email__iexact=data.email).exists():
+        return "email"
+    normalized_input = normalize_phone(data.phone)
+    if normalized_input:
+        for user in User.objects.exclude(phone=""):
+            if normalize_phone(user.phone) == normalized_input:
+                return "phone"
     return None
 
 
@@ -116,10 +120,10 @@ def submit_registration(data: RegistrationData) -> tuple[StudentProfile, Applica
     if duplicate_on:
         raise ValueError(duplicate_on)
 
-    normalized_phone = normalize_phone(data.phone)
+    user_password = normalize_phone(data.phone)
     user = User.objects.create_user(
         email=data.email,
-        password=normalized_phone,
+        password=user_password,
         full_name=data.full_name,
         phone=data.phone,
         national_id=data.national_id,

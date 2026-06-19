@@ -197,9 +197,8 @@ class AdminViewTests(TestCase):
                 args=[self.course.id, self.version.id, self.lecture.id],
             ),
         )
-        # GET redirects without deleting
-        self.assertEqual(r.status_code, 302)
-        self.assertTrue(Lecture.objects.filter(id=self.lecture.id).exists())
+        # GET returns 405 (POST required)
+        self.assertEqual(r.status_code, 405)
 
 
 class AdminAuthTests(TestCase):

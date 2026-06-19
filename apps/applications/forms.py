@@ -93,7 +93,6 @@ class RegistrationForm(forms.Form):
                     "email": _("An account with this email already exists."),
                     "phone": _("An account with this mobile number already exists."),
                     "national_id": _("An account with this national ID already exists."),
-                    "full_name": _("An account with this full name already exists."),
                 }
                 self.add_error(duplicate_on, messages[duplicate_on])
         return cleaned

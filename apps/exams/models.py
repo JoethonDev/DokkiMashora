@@ -12,6 +12,7 @@ from apps.exams.constants import (
     EXAM_TYPE_CHOICES,
     EXAM_TYPE_ENTRANCE,
     QUESTION_TYPE_CHOICES,
+    QUESTION_TYPE_ESSAY,
     QUESTION_TYPE_MCQ,
 )
 
@@ -91,9 +92,19 @@ class Question(TimeStampedModel):
         verbose_name = _("question")
         verbose_name_plural = _("questions")
         ordering = ("order",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("exam", "order"),
+                name="unique_question_order_per_exam",
+            ),
+        ]
 
     def __str__(self):
         return self.text[:50]
+
+    def clean(self):
+        if self.question_type == QUESTION_TYPE_ESSAY and self.pk:
+            self.choices.all().delete()
 
 
 class Choice(TimeStampedModel):
@@ -111,6 +122,12 @@ class Choice(TimeStampedModel):
         verbose_name = _("choice")
         verbose_name_plural = _("choices")
         ordering = ("order",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("question", "order"),
+                name="unique_choice_order_per_question",
+            ),
+        ]
 
     def __str__(self):
         return self.text[:50]

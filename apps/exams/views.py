@@ -15,6 +15,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from django.views.decorators.http import require_POST
 
 from apps.core.permissions import ROLE_EXAM_STAFF, role_required
 from apps.exams.constants import (
@@ -24,6 +25,7 @@ from apps.exams.constants import (
     ASSIGNMENT_STATUS_IN_PROGRESS,
     EXAM_TYPE_ASSESSMENT,
     EXAM_TYPE_ENTRANCE,
+    QUESTION_TYPE_ESSAY,
     QUESTION_TYPE_MCQ,
 )
 from apps.exams.forms import ExamForm, QuestionForm
@@ -62,6 +64,14 @@ def student_list(request):
 
 def _get_or_create_assignment(exam, student):
     """Return the student's assignment for an exam, creating it if needed."""
+    if exam.exam_type == EXAM_TYPE_ENTRANCE:
+        existing = Assignment.objects.filter(
+            exam=exam,
+            student=student,
+            status__in=[ASSIGNMENT_STATUS_COMPLETED, ASSIGNMENT_STATUS_GRADED],
+        ).first()
+        if existing:
+            return existing
     assignment = Assignment.objects.filter(exam=exam, student=student).first()
     if not assignment:
         assignment = Assignment.objects.create(
@@ -114,6 +124,7 @@ def exam_instructions(request, exam_id):
 
 
 @login_required
+@require_POST
 def start_exam_view(request, exam_id):
     exam = get_object_or_404(Exam, id=exam_id, is_active=True)
     _forbid_entrance_exam_by_id(exam)
@@ -209,6 +220,7 @@ def exam_instructions_token(request, token):
 
 
 @login_required
+@require_POST
 def start_exam_token(request, token):
     exam = get_object_or_404(Exam, access_token=token, is_active=True)
     assignment = get_object_or_404(
@@ -285,18 +297,34 @@ def exam_results_token(request, token):
 def _submit_assignment(request, assignment):
     """Parse POST answers and submit the assignment."""
     answers = []
+    questions = {q.id: q for q in assignment.exam.questions.prefetch_related("choices").all()}
     for key, value in request.POST.items():
-        if key.startswith("question_"):
-            qid = int(key.removeprefix("question_"))
+        if not key.startswith("question_"):
+            continue
+        qid = int(key.removeprefix("question_"))
+        question = questions.get(qid)
+        if not question:
+            messages.error(request, _("Unknown question."))
+            return
+        if question.question_type == QUESTION_TYPE_MCQ:
+            choice_id = int(value) if value.isdigit() else None
+            if choice_id:
+                valid_choice = question.choices.filter(id=choice_id).exists()
+                if not valid_choice:
+                    messages.error(request, _("Invalid choice for question %(id)s.") % {"id": qid})
+                    return
             answers.append(
-                ExamAnswerData(
-                    question_id=qid,
-                    selected_choice_id=int(value) if value.isdigit() else None,
-                    essay_text=value if not value.isdigit() else "",
-                )
+                ExamAnswerData(question_id=qid, selected_choice_id=choice_id)
             )
-    submit_exam(assignment, answers)
-    messages.success(request, _("Exam submitted successfully."))
+        elif question.question_type == QUESTION_TYPE_ESSAY:
+            answers.append(
+                ExamAnswerData(question_id=qid, essay_text=value)
+            )
+    try:
+        submit_exam(assignment, answers)
+        messages.success(request, _("Exam submitted successfully."))
+    except ValueError as exc:
+        messages.error(request, str(exc))
 
 
 def _render_results(request, exam, assignment, token=None):
@@ -405,6 +433,7 @@ def admin_edit_exam(request, exam_id):
 
 @login_required
 @role_required(*ROLE_EXAM_STAFF)
+@require_POST
 def admin_toggle_active(request, exam_id):
     exam = get_object_or_404(Exam, id=exam_id)
     if not exam.is_active and exam.exam_type == EXAM_TYPE_ENTRANCE:
@@ -462,6 +491,7 @@ def admin_grade_assignment(request, assignment_id):
 
 @login_required
 @role_required(*ROLE_EXAM_STAFF)
+@require_POST
 def admin_grade_with_gemini(request, answer_id):
     answer = get_object_or_404(
         Answer.objects.select_related("question", "assignment__exam"),
@@ -569,6 +599,8 @@ def admin_question_save(request, exam_id, question_id=None):
             question.save()
             if question.question_type == QUESTION_TYPE_MCQ:
                 _save_choices_from_parsed(question, parsed_choices)
+            elif question.question_type == QUESTION_TYPE_ESSAY:
+                Choice.objects.filter(question=question).delete()
             messages.success(request, _("Question saved."))
             if _is_htmx(request):
                 response = HttpResponse()
@@ -581,12 +613,12 @@ def admin_question_save(request, exam_id, question_id=None):
 
 @login_required
 @role_required(*ROLE_EXAM_STAFF)
+@require_POST
 def admin_question_delete(request, exam_id, question_id):
     """Delete a question."""
     question = get_object_or_404(Question, id=question_id, exam_id=exam_id)
-    if request.method == "POST":
-        question.delete()
-        messages.success(request, _("Question deleted."))
+    question.delete()
+    messages.success(request, _("Question deleted."))
     if _is_htmx(request):
         response = HttpResponse()
         return _htmx_redirect(response, reverse("exams:admin_detail", args=[exam_id]))
@@ -622,8 +654,8 @@ def _parse_inline_choices(request):
 
 def _validate_mcq_choices(choices):
     """Return a translated error string if MCQ choices are invalid."""
-    if not choices:
-        return _("MCQ questions must have at least one choice.")
+    if len(choices) < 2:
+        return _("MCQ questions must have at least two choices.")
     correct_count = sum(1 for choice in choices if choice["is_correct"])
     if correct_count == 0:
         return _("Please mark exactly one choice as correct.")
@@ -635,6 +667,20 @@ def _validate_mcq_choices(choices):
 def _save_choices_from_parsed(question, parsed_choices):
     """Persist parsed choices and remove any stale ones."""
     seen_ids = set()
+    non_new_ids = []
+    for _idx, choice_data in enumerate(parsed_choices, start=1):
+        suffix = choice_data["suffix"]
+        if not suffix.startswith("new_"):
+            try:
+                non_new_ids.append(int(suffix))
+            except (TypeError, ValueError):
+                pass
+    if non_new_ids:
+        current_ids = set(Choice.objects.filter(question=question).values_list("id", flat=True))
+        stale_ids = current_ids - set(non_new_ids)
+        Choice.objects.filter(question=question, id__in=stale_ids).delete()
+    else:
+        Choice.objects.filter(question=question).delete()
     for index, choice_data in enumerate(parsed_choices, start=1):
         suffix = choice_data["suffix"]
         text = choice_data["text"]
@@ -659,7 +705,6 @@ def _save_choices_from_parsed(question, parsed_choices):
                 order=order,
             )
             seen_ids.add(choice_id)
-    Choice.objects.filter(question=question).exclude(id__in=seen_ids).delete()
 
 
 def _choices_for_template(parsed_choices, question):

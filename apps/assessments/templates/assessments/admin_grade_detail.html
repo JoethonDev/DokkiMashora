@@ -1,0 +1,104 @@
+{% extends "base.html" %}{% load i18n %}{% load ui_tags %}
+{% block title %}{{ attempt.assessment.title }} - {% trans "Grade" %}{% endblock %}
+{% block content %}
+<div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <nav class="mb-6 text-sm text-slate-500 dark:text-slate-400" aria-label="breadcrumb">
+    <ol class="flex flex-wrap items-center gap-1">
+      <li class="flex items-center gap-1"><a href="{% url 'assessments:admin_grade_list' %}" class="hover:text-brand-600 dark:hover:text-brand-400">{% trans "Grading Queue" %}</a><span class="text-slate-300 dark:text-slate-600">/</span></li>
+      <li class="flex items-center gap-1"><span class="text-slate-700 dark:text-slate-200 font-medium">{{ attempt.student.email }}</span></li>
+    </ol>
+  </nav>
+
+  <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+      <div>
+        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ attempt.assessment.title }}</h1>
+        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          {% trans "Student" %}: {{ attempt.student.email }} &middot;
+          {% trans "Attempt" %} <span class="tabular-nums">{{ attempt.attempt_number }}</span> &middot;
+          {% trans "Status" %}:
+          {% if attempt.status == "under_review" %}{% include "partials/_badge.html" with label=_("Under review") tone="warning" %}
+          {% elif attempt.status == "graded" %}{% include "partials/_badge.html" with label=_("Graded") tone="success" %}
+          {% elif attempt.status == "released" %}{% include "partials/_badge.html" with label=_("Released") tone="success" %}
+          {% endif %}
+        </p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        {% if attempt.status == "graded" %}
+          <form method="post" action="{% url 'assessments:admin_release_grades' attempt.id %}">{% csrf_token %}
+            {% include "partials/_button.html" with label=_("Release to student") variant="success" size="sm" %}
+          </form>
+          <form method="post" action="{% url 'assessments:admin_hide_grades' attempt.id %}">{% csrf_token %}
+            {% include "partials/_button.html" with label=_("Hide from student") variant="secondary" size="sm" %}
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <form method="post" class="mt-6 space-y-6">
+    {% csrf_token %}
+    {% for question, answer in question_answer_pairs %}
+      <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+        <div class="flex items-center gap-2 mb-4 text-sm">
+          <span class="font-semibold text-slate-900 dark:text-slate-100">{% trans "Question" %} {{ forloop.counter }}</span>
+          {% include "partials/_badge.html" with label=question.get_question_type_display tone="neutral" %}
+          {% include "partials/_badge.html" with label=question.points|stringformat:"s"|add:" pts" tone="brand" %}
+          {% if answer and answer.score is not None %}
+            {% include "partials/_badge.html" with label=_("Graded") tone="success" %}
+          {% elif answer %}
+            {% include "partials/_badge.html" with label=_("Ungraded") tone="warning" %}
+          {% endif %}
+        </div>
+        <p class="text-base text-slate-800 dark:text-slate-200 leading-relaxed max-w-prose">{{ question.text }}</p>
+
+        {% if question.question_type == "mcq" and answer %}
+          <div class="mt-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+            <p class="text-xs font-medium text-slate-500 dark:text-slate-400">{% trans "Student answer" %}:</p>
+            <p class="mt-1 text-slate-700 dark:text-slate-200">
+              {% if answer.selected_choice %}
+                {{ answer.selected_choice.text }}
+                {% if answer.selected_choice.is_correct %}
+                  {% include "partials/_badge.html" with label=_("Correct") tone="success" %}
+                {% else %}
+                  {% include "partials/_badge.html" with label=_("Incorrect") tone="danger" %}
+                {% endif %}
+              {% else %}
+                <span class="text-slate-400 italic">{% trans "No answer" %}</span>
+              {% endif %}
+            </p>
+          </div>
+        {% elif question.question_type == "written" and answer %}
+          <div class="mt-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+            <p class="text-xs font-medium text-slate-500 dark:text-slate-400">{% trans "Student answer" %}:</p>
+            <p class="mt-1 text-slate-700 dark:text-slate-200 whitespace-pre-wrap leading-relaxed max-w-prose">{% if answer.written_text %}{{ answer.written_text }}{% else %}{% include "partials/_blank.html" %}{% endif %}</p>
+          </div>
+
+          <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Score" %}</label>
+              <input type="number" name="score_{{ question.id }}" value="{% if answer and answer.score is not None %}{{ answer.score }}{% endif %}" step="0.01" min="0" max="{{ question.points }}" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900 dark:text-slate-100 tabular-nums">
+              <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{% trans "Max" %}: {{ question.points }}</p>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Feedback" %}</label>
+              <textarea name="feedback_{{ question.id }}" rows="3" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900 dark:text-slate-100">{% if answer and answer.feedback %}{{ answer.feedback }}{% endif %}</textarea>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Override reason" %}</label>
+              <input type="text" name="override_reason_{{ question.id }}" value="{% if answer and answer.score_override_reason %}{{ answer.score_override_reason }}{% endif %}" placeholder="{% trans 'Required when changing score' %}" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900 dark:text-slate-100">
+              <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{% trans "Required if re-grading a previously scored answer." %}</p>
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    {% endfor %}
+
+    <div class="flex flex-wrap gap-2 pt-4">
+      {% include "partials/_button.html" with label=_("Save grades") variant="primary" size="lg" loading_label=_("Saving...") %}
+      {% url 'assessments:admin_grade_list' as back_url %}
+      {% include "partials/_button.html" with href=back_url label=_("Back to queue") variant="secondary" %}
+    </div>
+  </form>
+</div>
+{% endblock %}

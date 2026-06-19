@@ -66,7 +66,8 @@ class NormalizePhoneTests(TestCase):
 class FindDuplicateTests(TestCase):
     def setUp(self) -> None:
         user = User.objects.create_user(
-            email="existing@example.com", password="x", phone="01000000001", national_id="1234567890"
+            email="existing@example.com", password="x", phone="01000000001",
+            national_id="1234567890",
         )
         StudentProfile.objects.create(
             user=user,
@@ -87,9 +88,6 @@ class FindDuplicateTests(TestCase):
 
     def test_detects_duplicate_phone(self) -> None:
         self.assertEqual(find_duplicate(make_data(phone="01000000001")), "phone")
-
-    def test_detects_duplicate_full_name(self) -> None:
-        self.assertEqual(find_duplicate(make_data(full_name="Existing Person")), "full_name")
 
     def test_no_duplicate_returns_none(self) -> None:
         self.assertIsNone(find_duplicate(make_data()))
@@ -143,16 +141,6 @@ class SubmitRegistrationTests(TestCase):
                 )
             )
         self.assertEqual(str(ctx.exception), "phone")
-
-    def test_duplicate_full_name_raises_value_error(self) -> None:
-        submit_registration(make_data())
-        with self.assertRaises(ValueError) as ctx:
-            submit_registration(
-                make_data(
-                    email="other@example.com", national_id="999", phone="999", full_name="New Applicant"
-                )
-            )
-        self.assertEqual(str(ctx.exception), "full_name")
 
     def test_duplicate_does_not_create_new_records(self) -> None:
         submit_registration(make_data())

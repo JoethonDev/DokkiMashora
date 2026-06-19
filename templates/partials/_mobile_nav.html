@@ -15,6 +15,9 @@
         <a href="{% url 'academics:admin_diploma_list' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Academics" %}</a>
         <a href="{% url 'exams:admin_list' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Exams" %}</a>
       {% endif %}
+      {% if CAN_VIEW_DESIGN_SHOWCASE %}
+        <a href="{% url 'core:design_showcase' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Design Showcase" %}</a>
+      {% endif %}
       <form method="post" action="{% url 'accounts:logout' %}" class="mt-auto">
         {% csrf_token %}
         <button type="submit" class="w-full rounded-md bg-brand-600 text-white px-3 py-2 text-sm font-semibold">{% trans "Log out" %}</button>

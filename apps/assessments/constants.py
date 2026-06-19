@@ -1,0 +1,73 @@
+from django.utils.translation import gettext_lazy as _
+
+ASSESSMENT_TYPE_QUIZ = "quiz"
+ASSESSMENT_TYPE_SEMESTER_EXAM = "semester_exam"
+ASSESSMENT_TYPE_FINAL_EXAM = "final_exam"
+ASSESSMENT_TYPE_HOMEWORK = "homework"
+ASSESSMENT_TYPE_ADDITIONAL = "additional_assessment"
+
+ASSESSMENT_TYPE_CHOICES = [
+    (ASSESSMENT_TYPE_QUIZ, _("Quiz")),
+    (ASSESSMENT_TYPE_SEMESTER_EXAM, _("Semester exam")),
+    (ASSESSMENT_TYPE_FINAL_EXAM, _("Final exam")),
+    (ASSESSMENT_TYPE_HOMEWORK, _("Homework")),
+    (ASSESSMENT_TYPE_ADDITIONAL, _("Additional assessment")),
+]
+
+QUESTION_TYPE_MCQ = "mcq"
+QUESTION_TYPE_WRITTEN = "written"
+
+QUESTION_TYPE_CHOICES = [
+    (QUESTION_TYPE_MCQ, _("Multiple choice")),
+    (QUESTION_TYPE_WRITTEN, _("Written")),
+]
+
+GRADE_VISIBILITY_HIDDEN = "hidden"
+GRADE_VISIBILITY_UNDER_REVIEW = "under_review"
+GRADE_VISIBILITY_RELEASED = "released"
+
+GRADE_VISIBILITY_CHOICES = [
+    (GRADE_VISIBILITY_HIDDEN, _("Hidden")),
+    (GRADE_VISIBILITY_UNDER_REVIEW, _("Under review")),
+    (GRADE_VISIBILITY_RELEASED, _("Released")),
+]
+
+ATTEMPT_STATUS_ASSIGNED = "assigned"
+ATTEMPT_STATUS_IN_PROGRESS = "in_progress"
+ATTEMPT_STATUS_SUBMITTED = "submitted"
+ATTEMPT_STATUS_UNDER_REVIEW = "under_review"
+ATTEMPT_STATUS_GRADED = "graded"
+ATTEMPT_STATUS_RELEASED = "released"
+ATTEMPT_STATUS_EXPIRED = "expired"
+ATTEMPT_STATUS_CANCELLED = "cancelled"
+
+ATTEMPT_STATUS_CHOICES = [
+    (ATTEMPT_STATUS_ASSIGNED, _("Assigned")),
+    (ATTEMPT_STATUS_IN_PROGRESS, _("In progress")),
+    (ATTEMPT_STATUS_SUBMITTED, _("Submitted")),
+    (ATTEMPT_STATUS_UNDER_REVIEW, _("Under review")),
+    (ATTEMPT_STATUS_GRADED, _("Graded")),
+    (ATTEMPT_STATUS_RELEASED, _("Released")),
+    (ATTEMPT_STATUS_EXPIRED, _("Expired")),
+    (ATTEMPT_STATUS_CANCELLED, _("Cancelled")),
+]
+
+HOMEWORK_STATUS_UPLOADED = "uploaded"
+HOMEWORK_STATUS_SUBMITTED = "submitted"
+HOMEWORK_STATUS_UNDER_REVIEW = "under_review"
+HOMEWORK_STATUS_ACCEPTED = "accepted"
+HOMEWORK_STATUS_NEEDS_REVISION = "needs_revision"
+HOMEWORK_STATUS_REJECTED = "rejected"
+HOMEWORK_STATUS_GRADED = "graded"
+HOMEWORK_STATUS_RELEASED = "released"
+
+HOMEWORK_STATUS_CHOICES = [
+    (HOMEWORK_STATUS_UPLOADED, _("Uploaded")),
+    (HOMEWORK_STATUS_SUBMITTED, _("Submitted")),
+    (HOMEWORK_STATUS_UNDER_REVIEW, _("Under review")),
+    (HOMEWORK_STATUS_ACCEPTED, _("Accepted")),
+    (HOMEWORK_STATUS_NEEDS_REVISION, _("Needs revision")),
+    (HOMEWORK_STATUS_REJECTED, _("Rejected")),
+    (HOMEWORK_STATUS_GRADED, _("Graded")),
+    (HOMEWORK_STATUS_RELEASED, _("Released")),
+]

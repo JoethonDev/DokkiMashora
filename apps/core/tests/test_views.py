@@ -5,9 +5,13 @@ from __future__ import annotations
 import re
 
 from django.conf import settings
+from django.contrib.auth.models import Group
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone, translation
+
+from apps.accounts.constants import GROUP_STUDENT
+from apps.accounts.models import User
 
 
 class LandingPageTests(TestCase):
@@ -60,3 +64,29 @@ class ErrorHandlerTests(TestCase):
         response = self.client.get("/this-page-does-not-exist/")
         self.assertEqual(response.status_code, 404)
         self.assertContains(response, "404", status_code=404)
+
+
+class DesignShowcaseTests(TestCase):
+    def setUp(self) -> None:
+        self.client = Client()
+        self.url = reverse("core:design_showcase")
+
+    def test_design_showcase_requires_login(self) -> None:
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/accounts/login/", response["Location"])
+
+    def test_design_showcase_rejects_student(self) -> None:
+        student = User.objects.create_user(email="student-showcase@example.com", password="pass")
+        group, _created = Group.objects.get_or_create(name=GROUP_STUDENT)
+        student.groups.add(group)
+        self.client.force_login(student)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 403)
+
+    def test_design_showcase_allows_superuser(self) -> None:
+        admin = User.objects.create_superuser(email="admin-showcase@example.com", password="pass")
+        self.client.force_login(admin)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Operations Classic")

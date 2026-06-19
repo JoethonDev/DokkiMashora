@@ -57,10 +57,10 @@ def expire_stale_enrollments():
 
 
 def get_student_course_versions(student_profile):
-    """Return course versions the student is enrolled in (active or pending)."""
+    """Return course versions the student is enrolled in (active only)."""
     return CourseVersion.objects.filter(
         enrollments__student=student_profile,
-        enrollments__status__in=[ENROLLMENT_STATUS_ACTIVE, ENROLLMENT_STATUS_PENDING],
+        enrollments__status=ENROLLMENT_STATUS_ACTIVE,
         is_active=True,
     ).select_related("course", "cohort", "semester")
 
@@ -83,7 +83,7 @@ def can_access_course(student_profile, course_version) -> bool:
     enrollment = _get_course_enrollment(student_profile, course_version)
     if enrollment is None:
         return False
-    if enrollment.status not in (ENROLLMENT_STATUS_ACTIVE, ENROLLMENT_STATUS_PENDING):
+    if enrollment.status != ENROLLMENT_STATUS_ACTIVE:
         return False
     if enrollment.is_access_expired:
         return False

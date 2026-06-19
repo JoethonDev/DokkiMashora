@@ -10,4 +10,5 @@ app_name = "core"
 
 urlpatterns = [
     path("", views.landing, name="landing"),
+    path("design-showcase/", views.design_showcase, name="design_showcase"),
 ]

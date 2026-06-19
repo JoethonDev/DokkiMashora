@@ -26,6 +26,9 @@
             <a href="{% url 'academics:admin_course_list' %}" class="hover:text-brand-600">{% trans "Courses" %}</a>
             <a href="{% url 'exams:admin_list' %}" class="hover:text-brand-600">{% trans "Exams" %}</a>
           {% endif %}
+          {% if CAN_VIEW_DESIGN_SHOWCASE %}
+            <a href="{% url 'core:design_showcase' %}" class="hover:text-brand-600">{% trans "Designs" %}</a>
+          {% endif %}
         {% endif %}
       </nav>
 

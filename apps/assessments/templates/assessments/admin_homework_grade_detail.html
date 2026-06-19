@@ -1,0 +1,69 @@
+{% extends "base.html" %}{% load i18n %}{% load ui_tags %}
+{% block title %}{{ submission.assessment.title }} - {% trans "Grade Homework" %}{% endblock %}
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <nav class="mb-6 text-sm text-slate-500 dark:text-slate-400" aria-label="breadcrumb">
+    <ol class="flex flex-wrap items-center gap-1">
+      <li class="flex items-center gap-1"><a href="{% url 'assessments:admin_homework_list' %}" class="hover:text-brand-600 dark:hover:text-brand-400">{% trans "Homework" %}</a><span class="text-slate-300 dark:text-slate-600">/</span></li>
+      <li class="flex items-center gap-1"><span class="text-slate-700 dark:text-slate-200 font-medium">{{ submission.student.email }}</span></li>
+    </ol>
+  </nav>
+
+  <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+      <div>
+        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ submission.assessment.title }}</h1>
+        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          {% trans "Student" %}: {{ submission.student.email }} &middot;
+          {% trans "File" %}: {{ submission.original_filename }} &middot;
+          {% trans "Status" %}:
+          {% if submission.status == "graded" %}
+            {% include "partials/_badge.html" with label=_("Graded") tone="success" %}
+          {% elif submission.status == "under_review" %}
+            {% include "partials/_badge.html" with label=_("Under review") tone="warning" %}
+          {% else %}
+            {% include "partials/_badge.html" with label=_("Submitted") tone="info" %}
+          {% endif %}
+        </p>
+      </div>
+    </div>
+    <dl class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+      <div>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Submitted at" %}</dt>
+        <dd class="font-semibold text-slate-900 dark:text-slate-100 text-xs tabular-nums">{% dt submission.submitted_at %}</dd>
+      </div>
+      <div>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "File size" %}</dt>
+        <dd class="font-semibold text-slate-900 dark:text-slate-100 tabular-nums">{{ submission.file_size|filesizeformat }}</dd>
+      </div>
+    </dl>
+    {% if download_url %}
+      <div class="mt-4">
+        {% include "partials/_button.html" with href=download_url label=_("Download uploaded file") variant="secondary" size="sm" %}
+      </div>
+    {% endif %}
+  </div>
+
+  <form method="post" class="mt-6">
+    {% csrf_token %}
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+      <h2 class="text-base font-semibold text-slate-900 dark:text-slate-100 mb-4">{% trans "Grading" %}</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Score" %}</label>
+          <input type="number" name="score" value="{% if submission.score is not None %}{{ submission.score }}{% endif %}" step="0.01" min="0" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900 dark:text-slate-100 tabular-nums">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Feedback" %}</label>
+          <textarea name="feedback" rows="4" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900 dark:text-slate-100">{% if submission.feedback %}{{ submission.feedback }}{% endif %}</textarea>
+        </div>
+      </div>
+    </div>
+    <div class="flex flex-wrap gap-2 pt-4">
+      {% include "partials/_button.html" with label=_("Save Grade") variant="primary" size="lg" loading_label=_("Saving...") %}
+      {% url 'assessments:admin_homework_list' as back_url %}
+      {% include "partials/_button.html" with href=back_url label=_("Back to submissions") variant="secondary" %}
+    </div>
+  </form>
+</div>
+{% endblock %}

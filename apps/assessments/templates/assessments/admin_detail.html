@@ -1,0 +1,177 @@
+{% extends "base.html" %}{% load i18n %}{% load ui_tags %}
+{% block title %}{{ assessment.title }} - {% trans "Assessment Detail" %}{% endblock %}
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10" x-data="{ activeTab: 'questions' }">
+  <nav class="mb-6 text-sm text-slate-500 dark:text-slate-400" aria-label="breadcrumb">
+    <ol class="flex flex-wrap items-center gap-1">
+      <li class="flex items-center gap-1"><a href="{% url 'assessments:admin_list' %}" class="hover:text-brand-600 dark:hover:text-brand-400">{% trans "Assessments" %}</a><span class="text-slate-300 dark:text-slate-600">/</span></li>
+      <li class="flex items-center gap-1"><span class="text-slate-700 dark:text-slate-200 font-medium">{{ assessment.title }}</span></li>
+    </ol>
+  </nav>
+
+  <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+    <div class="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
+      <div>
+        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ assessment.title }}</h1>
+        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ assessment.get_assessment_type_display }}</p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        {% url 'assessments:admin_edit' assessment.id as edit_url %}
+        {% include "partials/_button.html" with href=edit_url label=_("Edit") variant="secondary" size="sm" %}
+        <form method="post" action="{% url 'assessments:admin_toggle' assessment.id %}" class="inline">
+          {% csrf_token %}
+          {% if assessment.is_active %}
+            {% include "partials/_button.html" with label=_("Deactivate") variant="danger" size="sm" %}
+          {% else %}
+            {% include "partials/_button.html" with label=_("Activate") variant="success" size="sm" %}
+          {% endif %}
+        </form>
+      </div>
+    </div>
+    <dl class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+      <div>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Duration" %}</dt>
+        <dd class="font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
+          {% if assessment.duration_minutes %}{{ assessment.duration_minutes }} {% trans "min" %}{% else %}{% trans "Untimed" %}{% endif %}
+        </dd>
+      </div>
+      <div>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Total points" %}</dt>
+        <dd class="font-semibold text-slate-900 dark:text-slate-100 tabular-nums">{{ assessment.total_points }}</dd>
+      </div>
+      <div>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Passing score" %}</dt>
+        <dd class="font-semibold text-slate-900 dark:text-slate-100 tabular-nums">{{ assessment.passing_score }}%</dd>
+      </div>
+      <div>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Active" %}</dt>
+        <dd class="font-semibold">
+          {% if assessment.is_active %}{% include "partials/_badge.html" with label=_("Yes") tone="success" %}{% else %}{% include "partials/_badge.html" with label=_("No") tone="danger" %}{% endif %}
+        </dd>
+      </div>
+      <div>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Opens" %}</dt>
+        <dd class="font-semibold text-slate-900 dark:text-slate-100 text-xs tabular-nums">{% dt assessment.open_at %}</dd>
+      </div>
+      <div>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Closes" %}</dt>
+        <dd class="font-semibold text-slate-900 dark:text-slate-100 text-xs tabular-nums">{% dt assessment.close_at %}</dd>
+      </div>
+      <div>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Max attempts" %}</dt>
+        <dd class="font-semibold text-slate-900 dark:text-slate-100 tabular-nums">{{ assessment.max_attempts }}</dd>
+      </div>
+      <div>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Grade visibility" %}</dt>
+        <dd class="font-semibold">{{ assessment.get_grade_visibility_display }}</dd>
+      </div>
+    </dl>
+  </div>
+
+  <div class="mt-8 border-b border-slate-200 dark:border-slate-800">
+    <nav class="flex gap-4 text-sm" role="tablist">
+      <button role="tab" :aria-selected="activeTab==='questions'" @click="activeTab='questions'" :class="activeTab==='questions' ? 'border-brand-600 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'" class="pb-3 border-b-2 font-medium transition">{% trans "Questions" %}<span class="ms-1.5 text-xs tabular-nums">({{ assessment.questions.count }})</span></button>
+      <button role="tab" :aria-selected="activeTab==='attempts'" @click="activeTab='attempts'" :class="activeTab==='attempts' ? 'border-brand-600 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'" class="pb-3 border-b-2 font-medium transition">{% trans "Attempts" %}<span class="ms-1.5 text-xs tabular-nums">({{ assessment.attempts.count }})</span></button>
+    </nav>
+  </div>
+
+  <div x-show="activeTab==='questions'" class="mt-6">
+    <div class="flex justify-end mb-4">
+      {% url 'assessments:admin_question_form' assessment.id as add_question_url %}
+      {% include "partials/_button.html" with hx_get=add_question_url hx_target="#question-form-container" label=_("Add Question") variant="primary" size="sm" %}
+    </div>
+    <div id="question-form-container"></div>
+    <div class="space-y-4">
+      {% for question in assessment.questions.all %}
+        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5" id="question-{{ question.id }}">
+          <div class="flex justify-between items-start gap-4">
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2 text-sm">
+                <span class="font-semibold text-slate-900 dark:text-slate-100">{% trans "Question" %} {{ question.order }}</span>
+                {% include "partials/_badge.html" with label=question.get_question_type_display tone="neutral" %}
+                {% include "partials/_badge.html" with label=question.points|stringformat:"s"|add:" pts" tone="brand" %}
+                {% if not question.required %}{% include "partials/_badge.html" with label=_("Optional") tone="info" %}{% endif %}
+              </div>
+              <p class="mt-2 text-base text-slate-800 dark:text-slate-200 leading-relaxed max-w-prose">{{ question.text|linebreaksbr }}</p>
+              {% if question.question_type == "mcq" %}
+                <ul class="mt-3 space-y-1">
+                  {% for choice in question.choices.all %}
+                    <li class="flex items-center gap-2 text-sm {% if choice.is_correct %}text-emerald-700 dark:text-emerald-300 font-semibold{% else %}text-slate-600 dark:text-slate-300{% endif %}">
+                      <span class="h-2 w-2 rounded-full {% if choice.is_correct %}bg-emerald-500{% else %}bg-slate-300 dark:bg-slate-600{% endif %}"></span>
+                      {{ choice.text }}
+                    </li>
+                  {% endfor %}
+                </ul>
+              {% endif %}
+              {% if question.rubric %}
+                <details class="mt-3">
+                  <summary class="text-xs text-slate-500 dark:text-slate-400 cursor-pointer hover:text-slate-700">{% trans "Rubric" %}</summary>
+                  <p class="mt-1 text-sm text-slate-600 dark:text-slate-300 leading-relaxed max-w-prose">{{ question.rubric }}</p>
+                </details>
+              {% endif %}
+            </div>
+            <div class="flex gap-2 shrink-0">
+              {% url 'assessments:admin_question_form' assessment.id question.id as edit_question_url %}
+              {% include "partials/_button.html" with hx_get=edit_question_url hx_target="#question-form-container" label=_("Edit") variant="ghost" size="sm" %}
+              <form method="post" action="{% url 'assessments:admin_question_delete' assessment.id question.id %}" class="inline" hx-confirm="{% trans 'Delete this question?' %}">
+                {% csrf_token %}
+                {% include "partials/_button.html" with label=_("Delete") variant="danger" size="sm" %}
+              </form>
+            </div>
+          </div>
+        </div>
+      {% empty %}
+        <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-8">
+          {% include "partials/_empty_state.html" with title=_("No questions yet") subtitle=_("Add questions to this assessment.") %}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div x-show="activeTab==='attempts'" x-cloak class="mt-6">
+    <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+      <table class="min-w-[640px] w-full divide-y divide-slate-200 dark:divide-slate-800 text-sm">
+        <thead class="bg-slate-50 dark:bg-slate-800/50">
+          <tr class="text-slate-600 dark:text-slate-300">
+            <th class="px-4 py-2.5 text-start font-medium">{% trans "Student" %}</th>
+            <th class="px-4 py-2.5 text-start font-medium">{% trans "Attempt" %}</th>
+            <th class="px-4 py-2.5 text-start font-medium">{% trans "Status" %}</th>
+            <th class="px-4 py-2.5 text-end font-medium">{% trans "Score" %}</th>
+            <th class="px-4 py-2.5 text-start font-medium">{% trans "Actions" %}</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+          {% for attempt in assessment.attempts.all %}
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+              <td class="px-4 py-3 text-slate-900 dark:text-slate-100">{{ attempt.student.email }}</td>
+              <td class="px-4 py-3 tabular-nums">{{ attempt.attempt_number }}</td>
+              <td class="px-4 py-3">
+                {% if attempt.status == "assigned" %}{% include "partials/_badge.html" with label=_("Assigned") tone="warning" %}
+                {% elif attempt.status == "in_progress" %}{% include "partials/_badge.html" with label=_("In progress") tone="info" %}
+                {% elif attempt.status == "submitted" %}{% include "partials/_badge.html" with label=_("Submitted") tone="info" %}
+                {% elif attempt.status == "under_review" %}{% include "partials/_badge.html" with label=_("Under review") tone="warning" %}
+                {% elif attempt.status == "graded" %}{% include "partials/_badge.html" with label=_("Graded") tone="success" %}
+                {% elif attempt.status == "released" %}{% include "partials/_badge.html" with label=_("Released") tone="success" %}
+                {% elif attempt.status == "expired" %}{% include "partials/_badge.html" with label=_("Expired") tone="danger" %}
+                {% elif attempt.status == "cancelled" %}{% include "partials/_badge.html" with label=_("Cancelled") tone="neutral" %}
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-end tabular-nums text-slate-900 dark:text-slate-100">
+                {% if attempt.score_points is not None %}{{ attempt.score_points }}{% else %}&mdash;{% endif %}
+              </td>
+              <td class="px-4 py-3">
+                {% url 'assessments:admin_grade_detail' attempt.id as grade_url %}
+                {% include "partials/_button.html" with href=grade_url label=_("Grade") variant="ghost" size="sm" %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400">{% trans "No attempts yet." %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

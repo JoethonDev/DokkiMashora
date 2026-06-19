@@ -32,6 +32,7 @@ urlpatterns += i18n_patterns(
     path("applications/", include("apps.applications.urls")),
     path("exams/", include("apps.exams.urls")),
     path("academics/", include("apps.academics.urls")),
+    path("assessments/", include("apps.assessments.urls")),
     prefix_default_language=False,
 )
 

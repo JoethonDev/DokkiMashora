@@ -1,0 +1,61 @@
+{% extends "base.html" %}{% load i18n %}{% load ui_tags %}
+{% block title %}{% trans "My Assessments" %} - {{ block.super }}{% endblock %}
+{% block content %}
+{% include "partials/_page.html" with title=_("My Assessments") subtitle=_("Available assessments and homework") max="5xl" %}
+<div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-10">
+  {% if assessment_cards %}
+    <div class="mt-4 space-y-4">
+      {% for card in assessment_cards %}
+        {% with assessment=card.assessment latest_attempt=card.latest_attempt %}
+          <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+            <div class="min-w-0">
+              <h3 class="font-semibold text-slate-900 dark:text-slate-100 truncate">{{ assessment.title }}</h3>
+              <p class="mt-1 text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+                {% if assessment.duration_minutes %}{{ assessment.duration_minutes }} {% trans "min" %} &middot; {% endif %}
+                {% trans "Pass:" %} {{ assessment.passing_score }}%
+              </p>
+              <div class="mt-1.5 flex flex-wrap gap-1.5">
+                {% include "partials/_badge.html" with label=assessment.get_assessment_type_display tone="neutral" %}
+                {% if latest_attempt %}
+                  {% if latest_attempt.status == "in_progress" %}{% include "partials/_badge.html" with label=_("In progress") tone="info" %}
+                  {% elif latest_attempt.status == "submitted" %}{% include "partials/_badge.html" with label=_("Submitted") tone="info" %}
+                  {% elif latest_attempt.status == "under_review" %}{% include "partials/_badge.html" with label=_("Under review") tone="warning" %}
+                  {% elif latest_attempt.status == "graded" and latest_attempt.visible_to_student %}{% include "partials/_badge.html" with label=_("Graded") tone="success" %}
+                  {% elif latest_attempt.status == "released" %}{% include "partials/_badge.html" with label=_("Completed") tone="success" %}
+                  {% endif %}
+                {% endif %}
+              </div>
+            </div>
+            <div class="shrink-0">
+              {% if assessment.assessment_type == "homework" %}
+                {% if latest_attempt and latest_attempt.status != "assigned" and latest_attempt.status != "expired" and latest_attempt.status != "cancelled" %}
+                  {% url 'assessments:results' assessment.id as action_url %}
+                  {% include "partials/_button.html" with href=action_url label=_("View submission") variant="secondary" %}
+                {% else %}
+                  {% url 'assessments:take' assessment.id as upload_url %}
+                  {% include "partials/_button.html" with href=upload_url label=_("Upload") variant="primary" %}
+                {% endif %}
+              {% elif not latest_attempt or latest_attempt.status == "assigned" or latest_attempt.status == "expired" or latest_attempt.status == "cancelled" %}
+                <form method="post" action="{% url 'assessments:start' assessment.id %}">{% csrf_token %}
+                  {% include "partials/_button.html" with label=_("Start") variant="primary" %}
+                </form>
+              {% elif latest_attempt.status == "in_progress" %}
+                {% url 'assessments:take' assessment.id as action_url %}
+                {% include "partials/_button.html" with href=action_url label=_("Continue") variant="primary" %}
+              {% elif latest_attempt.status == "released" or latest_attempt.status == "graded" and latest_attempt.visible_to_student %}
+                {% url 'assessments:results' assessment.id as action_url %}
+                {% include "partials/_button.html" with href=action_url label=_("View Results") variant="secondary" %}
+              {% elif latest_attempt.status == "submitted" or latest_attempt.status == "under_review" %}
+                {% url 'assessments:results' assessment.id as action_url %}
+                {% include "partials/_button.html" with href=action_url label=_("View") variant="secondary" %}
+              {% endif %}
+            </div>
+          </div>
+        {% endwith %}
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="mt-8">{% include "partials/_empty_state.html" with title=_("No assessments yet") subtitle=_("You have no active assessments right now.") %}</div>
+  {% endif %}
+</div>
+{% endblock %}

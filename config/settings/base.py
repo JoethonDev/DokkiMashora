@@ -80,6 +80,8 @@ LOCAL_APPS = [
     "apps.communications",
     "apps.exams",
     "apps.academics",
+    "apps.assessments",
+    "apps.storage",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -184,6 +186,11 @@ R2_SECRET_ACCESS_KEY = env("R2_SECRET_ACCESS_KEY")
 R2_BUCKET_NAME = env("R2_BUCKET_NAME")
 R2_ENDPOINT_URL = env("R2_ENDPOINT_URL")
 R2_PUBLIC_BASE_URL = env("R2_PUBLIC_BASE_URL")
+
+# --- File upload limits ----------------------------------------------------
+HOMEWORK_MAX_UPLOAD_MB = 25
+AUDIO_MAX_UPLOAD_MB = 50
+STORAGE_BACKEND = "r2" if USE_R2_STORAGE else "local"
 
 if USE_R2_STORAGE and R2_BUCKET_NAME and R2_ENDPOINT_URL:
     STORAGES = {

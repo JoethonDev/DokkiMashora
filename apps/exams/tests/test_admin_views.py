@@ -122,7 +122,7 @@ class TestAdminQuestionSave:
             HTTP_HX_REQUEST="true",
         )
         assert response.status_code == 200
-        assert response["HX-Redirect"]
+        assert "HX-Redirect" in response
         question = Question.objects.get(exam=exam)
         assert question.text == "What is 2+2?"
         assert question.choices.count() == 2
@@ -140,7 +140,7 @@ class TestAdminQuestionSave:
             HTTP_HX_REQUEST="true",
         )
         assert response.status_code == 200
-        assert response["HX-Redirect"]
+        assert "HX-Redirect" in response
         question = Question.objects.get(exam=exam)
         assert question.question_type == QUESTION_TYPE_ESSAY
         assert question.choices.count() == 0
@@ -166,19 +166,23 @@ class TestAdminQuestionSave:
                 "text": "Updated",
                 "question_type": QUESTION_TYPE_MCQ,
                 "points": "5.00",
-                "choice_text_new_1": "New choice",
+                "choice_text_new_1": "New choice A",
                 "choice_correct_new_1": "1",
                 "choice_order_new_1": "1",
+                "choice_text_new_2": "New choice B",
+                "choice_order_new_2": "2",
             },
             HTTP_HX_REQUEST="true",
         )
         assert response.status_code == 200
+        assert "HX-Redirect" in response
         question.refresh_from_db()
         assert question.text == "Updated"
         assert not question.choices.filter(id=old_choice.id).exists()
-        assert question.choices.filter(text="New choice").exists()
+        assert question.choices.filter(text="New choice A").exists()
+        assert question.choices.filter(text="New choice B").exists()
 
-    def test_mcq_requires_at_least_one_choice(self, admin_client, exam):
+    def test_mcq_requires_at_least_two_choices(self, admin_client, exam):
         with translation_override("en"):
             url = reverse("exams:admin_question_save", args=[exam.id])
             response = admin_client.post(
@@ -193,7 +197,7 @@ class TestAdminQuestionSave:
         assert response.status_code == 200
         assert "HX-Redirect" not in response
         content = response.content.decode()
-        assert "at least one choice" in content
+        assert "at least two choices" in content
         assert Question.objects.filter(exam=exam).count() == 0
 
     def test_mcq_requires_choices_on_plain_post(self, admin_client, exam):
@@ -211,7 +215,7 @@ class TestAdminQuestionSave:
         assert "HX-Redirect" not in response
         content = response.content.decode()
         assert "Add Question" in content
-        assert "at least one choice" in content
+        assert "at least two choices" in content
 
     def test_mcq_requires_exactly_one_correct_choice(self, admin_client, exam):
         with translation_override("en"):
@@ -248,6 +252,8 @@ class TestAdminQuestionSave:
                     "points": "5.00",
                     "choice_text_new_1": "A",
                     "choice_order_new_1": "1",
+                    "choice_text_new_2": "B",
+                    "choice_order_new_2": "2",
                 },
                 HTTP_HX_REQUEST="true",
             )
