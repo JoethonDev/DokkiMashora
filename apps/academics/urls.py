@@ -74,4 +74,9 @@ urlpatterns = [
         views.student_lecture_view,
         name="student_lecture_view",
     ),
+    path(
+        "my-courses/<int:version_id>/lectures/<int:lecture_id>/audio/<path:file_path>",
+        views.student_lecture_audio,
+        name="student_lecture_audio",
+    ),
 ]

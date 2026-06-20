@@ -1,14 +1,17 @@
 """Views for academic structure management and student content access."""
 
+import logging
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_POST
 
+from apps.academics.audio import transcode_to_hls, validate_audio_file
 from apps.academics.forms import (
     CohortForm,
     CourseForm,
@@ -32,7 +35,10 @@ from apps.academics.services import (
     get_visible_lectures,
 )
 from apps.core.permissions import ROLE_EXAM_STAFF, is_student, role_required
+from apps.storage.services import storage_service
 from apps.students.models import StudentProfile
+
+logger = logging.getLogger(__name__)
 
 
 def _diploma_breadcrumbs(diploma=None):
@@ -350,11 +356,12 @@ def admin_lecture_create(request, course_id, version_id):
     course = get_object_or_404(Course, id=course_id)
     version = get_object_or_404(CourseVersion, id=version_id, course=course)
     if request.method == "POST":
-        form = LectureForm(request.POST)
+        form = LectureForm(request.POST, request.FILES)
         if form.is_valid():
             lecture = form.save(commit=False)
             lecture.course_version = version
             lecture.save()
+            _process_lecture_audio(request, lecture, request.FILES)
             messages.success(request, _("Lecture created."))
             return redirect("academics:admin_version_detail", course_id=course.id, version_id=version.id)
     else:
@@ -373,9 +380,10 @@ def admin_lecture_edit(request, course_id, version_id, lecture_id):
     version = get_object_or_404(CourseVersion, id=version_id, course=course)
     lecture = get_object_or_404(Lecture, id=lecture_id, course_version=version)
     if request.method == "POST":
-        form = LectureForm(request.POST, instance=lecture)
+        form = LectureForm(request.POST, request.FILES, instance=lecture)
         if form.is_valid():
             form.save()
+            _process_lecture_audio(request, lecture, request.FILES)
             messages.success(request, _("Lecture updated."))
             return redirect("academics:admin_version_detail", course_id=course.id, version_id=version.id)
     else:
@@ -397,6 +405,37 @@ def admin_lecture_delete(request, course_id, version_id, lecture_id):
     lecture.delete()
     messages.success(request, _("Lecture deleted."))
     return redirect("academics:admin_version_detail", course_id=course.id, version_id=version.id)
+
+
+def _process_lecture_audio(request, lecture, files):
+    audio_file = files.get("audio_file")
+    if not audio_file:
+        return
+    try:
+        data = audio_file.read()
+        filename = str(audio_file)
+        content_type = audio_file.content_type or "audio/mpeg"
+        validate_audio_file(filename, content_type)
+        result = storage_service.upload_file(
+            data,
+            key_prefix=f"lectures/{lecture.id}/audio",
+            content_type=content_type,
+            max_size=200 * 1024 * 1024,
+            allowed_types=[".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac"],
+            original_filename=filename,
+        )
+        lecture.audio_storage_key = result.key
+        lecture.audio_original_filename = filename
+        lecture.audio_content_type = result.content_type
+        lecture.audio_byte_size = result.byte_size
+        lecture.save(update_fields=[
+            "audio_storage_key", "audio_original_filename",
+            "audio_content_type", "audio_byte_size",
+        ])
+        transcode_to_hls(lecture, data, filename, content_type)
+    except Exception as exc:
+        logger.exception("Audio upload/processing failed for lecture %s", lecture.id)
+        messages.error(request, _("Audio processing failed: %(error)s") % {"error": str(exc)})
 
 
 # ---------------------------------------------------------------------------
@@ -459,3 +498,30 @@ def student_lecture_view(request, version_id, lecture_id):
         "academics/student_lecture_view.html",
         {"version": version, "lecture": lecture},
     )
+
+
+@login_required
+def student_lecture_audio(request, version_id, lecture_id, file_path=""):
+    """Serve lecture audio file (HLS playlist/segment) with permission check."""
+    if not is_student(request.user) and not request.user.is_superuser:
+        raise PermissionDenied
+    try:
+        profile = request.user.student_profile
+    except StudentProfile.DoesNotExist:
+        raise Http404 from None
+    version = get_object_or_404(CourseVersion, id=version_id, is_active=True)
+    lecture = get_object_or_404(Lecture, id=lecture_id, course_version=version)
+    if not can_access_lecture(profile, lecture):
+        raise PermissionDenied(_("This lecture is not available yet."))
+    storage_key = f"lectures/{lecture.id}/audio/{file_path}"
+    try:
+        file_data = storage_service.download_file(storage_key)
+    except Exception:
+        raise Http404 from None
+    content_type = (
+        "application/vnd.apple.mpegurl"
+        if file_path.endswith(".m3u8")
+        else "video/MP2T" if file_path.endswith(".ts")
+        else "audio/mpeg"
+    )
+    return HttpResponse(file_data, content_type=content_type)

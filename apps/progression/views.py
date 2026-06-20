@@ -18,7 +18,13 @@ from apps.audit.constants import (
 )
 from apps.audit.services import record_audit_event
 from apps.certificates.models import GeneratedCertificate
-from apps.core.permissions import ROLE_EXAM_STAFF, ROLE_SENIOR_STAFF, can_view_student_progress, role_required, safe_int
+from apps.core.permissions import (
+    ROLE_EXAM_STAFF,
+    ROLE_SENIOR_STAFF,
+    can_view_student_progress,
+    role_required,
+    safe_int,
+)
 from apps.students.models import StudentProfile
 
 from .constants import CERTIFICATE_STATUS_AVAILABLE

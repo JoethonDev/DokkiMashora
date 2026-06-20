@@ -26,7 +26,14 @@
     </div>
   {% endif %}
 
-  {% if lecture.audio_url %}
+  {% if lecture.audio_hls_playlist_key %}
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 mb-6">
+      <h2 class="text-lg font-semibold mb-3">{% trans "Audio (HLS)" %}</h2>
+      <audio controls class="w-full" preload="none">
+        <source src="{% url 'academics:student_lecture_audio' version.id lecture.id lecture.audio_hls_playlist_key %}" type="application/vnd.apple.mpegurl">
+      </audio>
+    </div>
+  {% elif lecture.audio_url %}
     <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 mb-6">
       <h2 class="text-lg font-semibold mb-3">{% trans "Audio" %}</h2>
       <audio controls class="w-full"><source src="{{ lecture.audio_url }}"></audio>

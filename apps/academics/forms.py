@@ -1,6 +1,7 @@
 """Forms for academic structure management."""
 
 from django import forms
+from django.utils.translation import gettext_lazy as _
 
 from apps.academics.models import (
     Cohort,
@@ -58,6 +59,8 @@ class CourseVersionForm(forms.ModelForm):
         ]
 
 class LectureForm(forms.ModelForm):
+    audio_file = forms.FileField(required=False, label=_("Audio file (upload)"))
+
     class Meta:
         model = Lecture
         fields = [

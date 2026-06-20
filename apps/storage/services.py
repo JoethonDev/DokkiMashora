@@ -235,6 +235,24 @@ class StorageService:
     def get_download_url(self, key: str, *, expires_in: int | None = None) -> str:
         return self.backend.get_download_url(key, expires_in=expires_in)
 
+    def get_protected_download_url(
+        self,
+        key: str,
+        *,
+        user,
+        permission_fn,
+        expires_in: int | None = None,
+    ) -> str:
+        """Generate a download URL only after permission check passes.
+
+        ``permission_fn(user)`` must return True for access to be granted.
+        """
+        if not permission_fn(user):
+            raise StorageError("Access denied.")
+        if not settings.DEBUG and not settings.USE_R2_STORAGE:
+            logger.warning("Protected file storage should use R2 in production.")
+        return self.get_download_url(key, expires_in=expires_in)
+
     def exists(self, key: str) -> bool:
         return self.backend.exists(key)
 

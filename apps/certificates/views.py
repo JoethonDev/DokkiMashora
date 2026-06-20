@@ -2,7 +2,6 @@
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
@@ -15,7 +14,7 @@ from apps.audit.constants import (
     ACTION_CERTIFICATE_REVOKED,
 )
 from apps.audit.services import record_audit_event
-from apps.core.permissions import ROLE_SENIOR_STAFF, role_required
+from apps.core.permissions import ROLE_SENIOR_STAFF, is_admin, is_moderator, role_required
 from apps.progression.constants import CERTIFICATE_STATUS_AVAILABLE
 from apps.students.models import StudentProfile
 
@@ -244,10 +243,15 @@ def _serve_certificate_pdf(request, cert):
 
     from apps.storage.services import storage_service
     try:
-        file_data = storage_service.download_file(cert.pdf_storage_key)
-        response = HttpResponse(file_data, content_type="application/pdf")
-        response["Content-Disposition"] = f'inline; filename="certificate_{cert.certificate_number}.pdf"'
-        return response
+        url = storage_service.get_protected_download_url(
+            cert.pdf_storage_key,
+            user=request.user,
+            permission_fn=lambda u: (
+                getattr(u, "student_profile", None) == cert.student
+                or is_admin(u) or is_moderator(u)
+            ),
+        )
+        return redirect(url)
     except Exception:
         messages.error(request, _("Failed to load certificate PDF."))
         return redirect("certificates:student_certificate_list")

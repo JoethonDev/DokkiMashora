@@ -60,8 +60,8 @@ class CourseVersionAdmin(admin.ModelAdmin):
 
 @admin.register(Lecture)
 class LectureAdmin(admin.ModelAdmin):
-    list_display = ("course_version", "order", "title", "is_published", "release_at")
-    list_filter = ("is_published", "course_version__course")
+    list_display = ("course_version", "order", "title", "is_published", "release_at", "audio_processing_status")
+    list_filter = ("is_published", "course_version__course", "audio_processing_status")
     search_fields = ("title", "description")
 
 

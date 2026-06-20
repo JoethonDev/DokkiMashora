@@ -9,6 +9,8 @@ from apps.core.models import TimeStampedModel
 from apps.students.models import StudentProfile
 
 from .constants import (
+    AUDIO_PROCESSING_PENDING,
+    AUDIO_PROCESSING_STATUS_CHOICES,
     ENROLLMENT_STATUS_CHOICES,
     ENROLLMENT_STATUS_PENDING,
 )
@@ -205,6 +207,19 @@ class Lecture(TimeStampedModel):
     description = models.TextField(_("description"), blank=True)
     youtube_url = models.URLField(_("YouTube URL"), blank=True)
     audio_url = models.URLField(_("audio URL"), blank=True)
+    audio_storage_key = models.CharField(_("audio storage key"), max_length=500, blank=True)
+    audio_original_filename = models.CharField(_("original filename"), max_length=500, blank=True)
+    audio_content_type = models.CharField(_("content type"), max_length=100, blank=True)
+    audio_byte_size = models.PositiveIntegerField(_("file size (bytes)"), null=True, blank=True)
+    audio_hls_playlist_key = models.CharField(_("HLS playlist key"), max_length=500, blank=True)
+    audio_hls_segment_prefix = models.CharField(_("HLS segment prefix"), max_length=500, blank=True)
+    audio_processing_status = models.CharField(
+        _("processing status"),
+        max_length=20,
+        choices=AUDIO_PROCESSING_STATUS_CHOICES,
+        default=AUDIO_PROCESSING_PENDING,
+    )
+    audio_processing_error = models.TextField(_("processing error"), blank=True)
     release_at = models.DateTimeField(
         _("release at"),
         null=True,

@@ -57,7 +57,7 @@ from apps.audit.constants import (
     ACTION_QUESTION_UPDATED,
 )
 from apps.audit.services import record_audit_event
-from apps.core.permissions import ROLE_EXAM_STAFF, can_grade_attempt, role_required
+from apps.core.permissions import ROLE_EXAM_STAFF, can_grade_attempt, is_admin, is_moderator, role_required
 from apps.storage.services import FileValidationError, StorageError, storage_service
 
 # ---------------------------------------------------------------------------
@@ -157,7 +157,14 @@ def take_assessment(request, assessment_id):
         ).select_related("attempt").order_by("-created_at").first()
         existing_download_url = None
         if existing:
-            existing_download_url = storage_service.get_download_url(existing.storage_key)
+            existing_download_url = storage_service.get_protected_download_url(
+                existing.storage_key,
+                user=request.user,
+                permission_fn=lambda u: (
+                    u == existing.student
+                    or is_admin(u) or is_moderator(u)
+                ),
+            )
         return render(
             request,
             "assessments/take_assessment.html",
@@ -250,7 +257,14 @@ def assessment_results(request, assessment_id):
         submission = HomeworkSubmission.objects.filter(
             assessment=assessment, student=request.user,
         ).order_by("-created_at").first()
-        download_url = storage_service.get_download_url(submission.storage_key) if submission else None
+        download_url = storage_service.get_protected_download_url(
+            submission.storage_key,
+            user=request.user,
+            permission_fn=lambda u: (
+                u == submission.student
+                or is_admin(u) or is_moderator(u)
+            ),
+        ) if submission else None
         return render(
             request,
             "assessments/assessment_results.html",
@@ -606,7 +620,11 @@ def admin_homework_grade_detail(request, submission_id):
     )
     if not can_grade_attempt(request.user, submission):
         raise PermissionDenied
-    download_url = storage_service.get_download_url(submission.storage_key)
+    download_url = storage_service.get_protected_download_url(
+        submission.storage_key,
+        user=request.user,
+        permission_fn=lambda u: can_grade_attempt(u, submission),
+    )
     if request.method == "POST":
         score = Decimal(str(request.POST.get("score", 0)))
         feedback = request.POST.get("feedback", "")
