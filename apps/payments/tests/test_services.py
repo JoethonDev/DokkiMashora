@@ -29,6 +29,7 @@ from ..constants import (
 from ..models import PaymentRecord, PaymentUpload, PaymentUploadRow
 from ..services import (
     confirm_upload,
+    create_upload,
     match_student,
     parse_row_data,
     preview_upload,
@@ -535,6 +536,37 @@ class CsvValidationTests(TestCase):
         content = b"national_id,amount,payment_date\n12345678901234,1000,2026-01-15\n"
         rows = validate_csv_content(content)
         self.assertEqual(len(rows), 1)
+
+
+class CreateUploadAtomicTests(TestCase):
+    """create_upload must not leave orphan rows when CSV is invalid."""
+
+    def setUp(self) -> None:
+        from apps.accounts.constants import GROUP_ADMIN
+        admin_group, _ = Group.objects.get_or_create(name=GROUP_ADMIN)
+        self.admin = User.objects.create_user(
+            email="upload-admin@test.com", password="pass", is_staff=True
+        )
+        self.admin.groups.add(admin_group)
+
+    def test_missing_headers_raises_before_upload_created(self) -> None:
+        content = b"name,amount\nJohn,100\n"
+        with self.assertRaises(ValueError):
+            create_upload("bad.csv", content, uploaded_by=self.admin)
+        self.assertEqual(PaymentUpload.objects.count(), 0)
+
+    def test_empty_file_raises_before_upload_created(self) -> None:
+        content = b""
+        with self.assertRaises(ValueError):
+            create_upload("empty.csv", content, uploaded_by=self.admin)
+        self.assertEqual(PaymentUpload.objects.count(), 0)
+
+    def test_valid_csv_creates_upload_and_rows(self) -> None:
+        content = b"national_id,amount,payment_date\n12345678901234,1000,2026-01-15\n"
+        upload = create_upload("good.csv", content, uploaded_by=self.admin)
+        self.assertEqual(PaymentUpload.objects.count(), 1)
+        self.assertEqual(upload.rows.count(), 1)
+        self.assertEqual(upload.total_rows, 1)
 
 
 class SafeDateStrTests(TestCase):

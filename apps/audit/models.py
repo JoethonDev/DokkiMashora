@@ -49,3 +49,11 @@ class AuditEvent(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.get_action_display()} by {self.actor} at {self.created_at}"
+
+    def delete(self, *args, **kwargs) -> tuple[int, dict[str, int]]:
+        raise PermissionError("Audit events are append-only and cannot be deleted.")
+
+    def save(self, *args, **kwargs) -> None:
+        if self.pk is not None:
+            raise PermissionError("Audit events are append-only and cannot be modified.")
+        super().save(*args, **kwargs)

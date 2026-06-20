@@ -294,7 +294,9 @@ def parse_row_data(row: dict[str, str], row_number: int) -> dict[str, Any]:
     }
 
 
+@transaction.atomic
 def create_upload(original_filename: str, content: bytes, uploaded_by) -> PaymentUpload:
+    rows = validate_csv_content(content)
     fhash = hashlib.sha256(content).hexdigest()
     upload = PaymentUpload.objects.create(
         uploaded_by=uploaded_by,
@@ -302,10 +304,8 @@ def create_upload(original_filename: str, content: bytes, uploaded_by) -> Paymen
         file_hash=fhash,
         status=UPLOAD_STATUS_PENDING,
         started_at=timezone.now(),
+        total_rows=len(rows),
     )
-    rows = validate_csv_content(content)
-    upload.total_rows = len(rows)
-    upload.save(update_fields=["total_rows"])
     for i, row in enumerate(rows, start=1):
         parsed = parse_row_data(row, i)
         PaymentUploadRow.objects.create(

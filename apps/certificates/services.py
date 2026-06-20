@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 from io import BytesIO
 
@@ -24,6 +25,8 @@ from apps.progression.models import StudentDiplomaCompletion
 from apps.students.models import StudentProfile
 
 from .models import CertificateCounter, CertificateTemplate, GeneratedCertificate
+
+logger = logging.getLogger(__name__)
 
 
 def get_next_certificate_number(diploma_id: int, student_id: int) -> str:
@@ -137,10 +140,13 @@ def generate_certificate_pdf(
             cert.status = CERTIFICATE_STATUS_AVAILABLE
             cert.save(update_fields=["pdf_storage_key", "pdf_file_size", "status"])
 
-        except Exception as exc:
+        except (OSError, ValueError) as exc:
+            logger.exception("PDF generation failed for cert %s", certificate_number)
             cert.status = CERTIFICATE_STATUS_FAILED
             cert.metadata_snapshot["error"] = str(exc)
             cert.save(update_fields=["status", "metadata_snapshot"])
+
+    # ponytail: broad Exception replaced with OSError/ValueError; any other error propagates to caller
 
     return cert
 
@@ -160,16 +166,16 @@ def _html_to_pdf(html: str) -> bytes:
 
 def _create_placeholder_template(enrollment: DiplomaEnrollment, actor) -> CertificateTemplate:
     body_html = """
-    <div style="text-align: center; font-family: sans-serif; padding: 40px;">
+    <div style="text-align: center; font-family: 'Traditional Arabic', 'Amiri', 'Noto Naskh Arabic', 'Scheherazade New', serif; padding: 40px; direction: rtl;">
         <h1>{{ certificate_number }}</h1>
         <h2>{{ diploma_title }}</h2>
-        <p>This is to certify that</p>
+        <p>يشهد هذا المستند بأن</p>
         <h3>{{ student_name }}</h3>
-        <p>has successfully completed the requirements of</p>
+        <p>قد أتم بنجاح متطلبات</p>
         <h3>{{ cohort_name }}</h3>
-        <p>Date: {{ completion_date }}</p>
-        <p>Issued: {{ issue_date }}</p>
-        <p style="margin-top: 30px; font-size: 12px; color: #999;">This is a placeholder certificate.</p>
+        <p>التاريخ: {{ completion_date }}</p>
+        <p>تاريخ الإصدار: {{ issue_date }}</p>
+        <p style="margin-top: 30px; font-size: 12px; color: #999;">هذه شهادة مؤقتة لحين إعداد النموذج الرسمي.</p>
     </div>
     """
     template, _ = CertificateTemplate.objects.update_or_create(

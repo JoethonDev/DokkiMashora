@@ -1,5 +1,7 @@
 """Views for certificate management (admin and student)."""
 
+import logging
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
@@ -22,6 +24,7 @@ from .forms import CertificateTemplateForm
 from .models import CertificateTemplate, GeneratedCertificate
 from .services import generate_certificate_pdf, revoke_certificate
 
+logger = logging.getLogger(__name__)
 
 def _is_htmx(request):
     return request.headers.get("HX-Request") == "true"
@@ -253,6 +256,7 @@ def _serve_certificate_pdf(request, cert):
         )
         return redirect(url)
     except Exception:
+        logger.exception("Failed to serve certificate PDF %s", cert.id)
         messages.error(request, _("Failed to load certificate PDF."))
         return redirect("certificates:student_certificate_list")
 

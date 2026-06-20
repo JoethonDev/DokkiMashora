@@ -73,6 +73,40 @@ class AuditEventTests(TestCase):
         self.assertEqual(get_audit_events(actor_id=self.admin.id).count(), 1)
 
 
+class AuditAppendOnlyTests(TestCase):
+    """Audit events must be append-only: no edits, no hard-deletes."""
+
+    def setUp(self) -> None:
+        self.admin = User.objects.create_user(
+            email="audit-append@example.com", password="pass", is_staff=True
+        )
+
+    def test_delete_raises_permission_error(self) -> None:
+        event = record_audit_event(
+            actor=self.admin, action="test.delete_guard",
+            target_type="T", target_id="1",
+        )
+        with self.assertRaises(PermissionError):
+            event.delete()
+
+    def test_save_update_raises_permission_error(self) -> None:
+        event = record_audit_event(
+            actor=self.admin, action="test.save_guard",
+            target_type="T", target_id="1",
+        )
+        event.metadata = {"tampered": True}
+        with self.assertRaises(PermissionError):
+            event.save()
+
+    def test_created_event_is_queryable(self) -> None:
+        event = record_audit_event(
+            actor=self.admin, action="test.created",
+            target_type="T", target_id="42",
+        )
+        self.assertIsNotNone(event)
+        self.assertEqual(event.action, "test.created")
+
+
 class AuditViewTests(TestCase):
     def setUp(self) -> None:
         self.super_group, _ = Group.objects.get_or_create(name=GROUP_SUPER_ADMIN)
