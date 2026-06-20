@@ -29,8 +29,7 @@ from apps.assessments.constants import ASSESSMENT_TYPE_QUIZ
 from apps.assessments.models import Assessment, AssessmentAttempt
 from apps.certificates.models import GeneratedCertificate
 from apps.communications.email_message import EmailMessage
-from apps.exams.constants import EXAM_TYPE_ASSESSMENT, EXAM_TYPE_ENTRANCE
-from apps.exams.models import Assignment, Exam
+from apps.entrance_exams.models import EntranceAttempt, EntranceExam
 from apps.progression.constants import (
     CERTIFICATE_STATUS_AVAILABLE,
     CERTIFICATE_STATUS_REVOKED,
@@ -220,15 +219,25 @@ class GetDashboardDataExamAssignmentsTests(TestCase):
     def setUp(self) -> None:
         self.admin = User.objects.create_superuser(email="admin@test.com", password="x")
         self.user, self.profile = _create_student()
-        self.exam = Exam.objects.create(
-            title="Entrance Exam", created_by=self.admin,
+        self.root = Application.objects.create(student=self.profile)
+        _, self.cohort = _create_diploma_cohort(self.admin)
+        self.prog_app = ProgramApplication.objects.create(
+            student=self.profile, root_application=self.root,
+            cohort=self.cohort, program_type="diploma",
+        )
+        self.entrance_exam = EntranceExam.objects.create(
+            title="Entrance Exam",
+            diploma=self.cohort.diploma, cohort=self.cohort,
             duration_minutes=60, passing_score=50,
+            is_active=True,
             open_at=timezone.now(), close_at=timezone.now() + timedelta(hours=2),
+            created_by=self.admin,
         )
 
     def test_returns_assignments(self) -> None:
-        Assignment.objects.create(
-            exam=self.exam, student=self.user,
+        EntranceAttempt.objects.create(
+            exam=self.entrance_exam, student=self.profile,
+            program_application=self.prog_app,
         )
         data = get_dashboard_data(self.profile)
         self.assertEqual(len(data["exam_assignments"]), 1)
@@ -351,32 +360,49 @@ class GetDashboardDataExamScopingTests(TestCase):
     def setUp(self) -> None:
         self.admin = User.objects.create_superuser(email="admin@test.com", password="x")
         self.user, self.profile = _create_student()
-        self.entrance_exam = Exam.objects.create(
-            title="Entrance Exam", exam_type=EXAM_TYPE_ENTRANCE,
-            created_by=self.admin, duration_minutes=60, passing_score=50,
-            open_at=timezone.now(), close_at=timezone.now() + timedelta(hours=2),
+        self.root = Application.objects.create(student=self.profile)
+        _, self.cohort = _create_diploma_cohort(self.admin)
+        self.prog_app = ProgramApplication.objects.create(
+            student=self.profile, root_application=self.root,
+            cohort=self.cohort, program_type="diploma",
         )
-        self.assessment_exam = Exam.objects.create(
-            title="Assessment Exam", exam_type=EXAM_TYPE_ASSESSMENT,
-            created_by=self.admin, duration_minutes=60, passing_score=50,
-            open_at=timezone.now(), close_at=timezone.now() + timedelta(hours=2),
+        self.entrance_exam = EntranceExam.objects.create(
+            title="Entrance Exam",
+            diploma=self.cohort.diploma,
+            cohort=self.cohort,
+            duration_minutes=60,
+            passing_score=50,
+            is_active=True,
+            open_at=timezone.now(),
+            close_at=timezone.now() + timedelta(hours=2),
+            created_by=self.admin,
         )
 
-    def test_excludes_non_entrance_assignments(self) -> None:
-        Assignment.objects.create(exam=self.entrance_exam, student=self.user)
-        Assignment.objects.create(exam=self.assessment_exam, student=self.user)
+    def test_returns_entrance_attempts(self) -> None:
+        EntranceAttempt.objects.create(
+            exam=self.entrance_exam, student=self.profile,
+            program_application=self.prog_app,
+        )
         data = get_dashboard_data(self.profile)
         self.assertEqual(len(data["exam_assignments"]), 1)
 
-    def test_returns_only_entrance_exam_assignments(self) -> None:
-        Assignment.objects.create(exam=self.entrance_exam, student=self.user)
-        data = get_dashboard_data(self.profile)
-        self.assertEqual(len(data["exam_assignments"]), 1)
-        self.assertEqual(data["exam_assignments"][0].exam.exam_type, EXAM_TYPE_ENTRANCE)
-
-    def test_excludes_other_student_assignments(self) -> None:
+    def test_excludes_other_student_attempts(self) -> None:
         other_user = User.objects.create_user(email="other@test.com", password="x")
-        Assignment.objects.create(exam=self.entrance_exam, student=other_user)
+        other_profile = StudentProfile.objects.create(
+            user=other_user, full_name="Other",
+            date_of_birth=date(2000, 1, 1), gender=GENDER_MALE,
+            address="Giza", phone="01111111111", national_id="29001010100022",
+            education=EDUCATION_BACHELOR,
+        )
+        other_root = Application.objects.create(student=other_profile)
+        other_prog_app = ProgramApplication.objects.create(
+            student=other_profile, root_application=other_root,
+            cohort=self.cohort, program_type="diploma",
+        )
+        EntranceAttempt.objects.create(
+            exam=self.entrance_exam, student=other_profile,
+            program_application=other_prog_app,
+        )
         data = get_dashboard_data(self.profile)
         self.assertEqual(data["exam_assignments"], [])
 

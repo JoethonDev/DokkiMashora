@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from decimal import Decimal
-from uuid import UUID
 
 from django.db import transaction
 from django.utils import timezone
@@ -10,7 +9,6 @@ from apps.exams.constants import (
     ASSIGNMENT_STATUS_COMPLETED,
     ASSIGNMENT_STATUS_GRADED,
     ASSIGNMENT_STATUS_IN_PROGRESS,
-    EXAM_TYPE_ENTRANCE,
     QUESTION_TYPE_ESSAY,
     QUESTION_TYPE_MCQ,
 )
@@ -151,17 +149,6 @@ def get_active_exams():
     )
 
 
-def has_existing_attempt(exam: Exam, student) -> bool:
-    """Check if the student already has a completed/graded attempt for entrance exams."""
-    if exam.exam_type != EXAM_TYPE_ENTRANCE:
-        return False
-    return Assignment.objects.filter(
-        exam=exam,
-        student=student,
-        status__in=[ASSIGNMENT_STATUS_COMPLETED, ASSIGNMENT_STATUS_GRADED],
-    ).exists()
-
-
 def get_exam_with_questions(exam_id: int) -> Exam | None:
     return (
         Exam.objects.prefetch_related(
@@ -172,15 +159,4 @@ def get_exam_with_questions(exam_id: int) -> Exam | None:
     )
 
 
-def get_exam_with_questions_by_token(token) -> Exam | None:
-    try:
-        UUID(str(token))
-    except (TypeError, ValueError):
-        return None
-    return (
-        Exam.objects.prefetch_related(
-            "questions__choices",
-        )
-        .filter(access_token=token)
-        .first()
-    )
+

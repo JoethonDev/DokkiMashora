@@ -72,12 +72,6 @@
               class="pb-2 -mb-px transition">
         {% trans "Questions" %} ({{ exam.questions.count }})
       </button>
-      <button id="access-tab" type="button" role="tab" aria-controls="access-panel" :aria-selected="activeTab === 'access'"
-              @click="activeTab = 'access'"
-              :class="activeTab === 'access' ? 'border-b-2 border-brand-600 text-brand-600' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
-              class="pb-2 -mb-px transition">
-        {% trans "Access" %}
-      </button>
       <button id="assignments-tab" type="button" role="tab" aria-controls="assignments-panel" :aria-selected="activeTab === 'assignments'"
               @click="activeTab = 'assignments'"
               :class="activeTab === 'assignments' ? 'border-b-2 border-brand-600 text-brand-600' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
@@ -136,41 +130,6 @@
     {% else %}
       <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-center" id="questions-empty">
         <p class="text-slate-500 dark:text-slate-400">{% trans "No questions yet. Add the first question." %}</p>
-      </div>
-    {% endif %}
-  </div>
-
-  <div x-show="activeTab === 'access'" x-cloak id="access-panel" role="tabpanel" aria-labelledby="access-tab" tabindex="0">
-    {% if exam.is_active and access_url %}
-      <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
-        <h2 class="text-lg sm:text-xl font-semibold mb-4">{% trans "Exam Access" %}</h2>
-        <div class="grid md:grid-cols-2 gap-6">
-          <div>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mb-2">{% trans "Access URL" %}</p>
-            <input type="text" readonly value="{{ access_url }}"
-                   class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-sm font-mono shadow-sm"
-                   onclick="this.select(); navigator.clipboard?.writeText(this.value)">
-            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              {% trans "Students scan this QR code or open the URL. Unauthenticated users are redirected to login." %}
-            </p>
-          </div>
-          <div class="text-center">
-            <p class="text-sm text-slate-500 dark:text-slate-400 mb-2">{% trans "QR Code" %}</p>
-            <div class="inline-block bg-white p-3 rounded-lg border border-slate-200 dark:border-slate-700">
-              {% if qr_svg %}
-                <div class="w-48 h-48">{{ qr_svg|safe }}</div>
-              {% else %}
-                <p class="text-slate-400 text-sm">{% trans "QR unavailable" %}</p>
-              {% endif %}
-            </div>
-          </div>
-        </div>
-      </div>
-    {% else %}
-      <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-center">
-        <p class="text-slate-500 dark:text-slate-400">
-          {% trans "Activate this exam to generate the access URL and QR code." %}
-        </p>
       </div>
     {% endif %}
   </div>

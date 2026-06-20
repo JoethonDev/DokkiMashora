@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% load ui_tags %}
+
+{% block title %}{{ exam.title }} - {% trans "Results" %}{% endblock %}
+
+{% block content %}
+<section class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <h1 class="text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ exam.title }} - {% trans "Results" %}</h1>
+
+  <div class="mt-6 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
+    <div class="grid grid-cols-3 gap-4 text-center">
+      <div>
+        <p class="text-sm text-slate-500 dark:text-slate-400">{% trans "Status" %}</p>
+        <div class="mt-2 flex justify-center">
+          {% if attempt.status == "graded" %}
+            {% include "partials/_badge.html" with label=_("Graded") tone="success" %}
+          {% elif attempt.status == "completed" %}
+            {% include "partials/_badge.html" with label=_("Pending grade") tone="warning" %}
+          {% else %}
+            {{ attempt.get_status_display }}
+          {% endif %}
+        </div>
+      </div>
+      <div>
+        <p class="text-sm text-slate-500 dark:text-slate-400">{% trans "Score" %}</p>
+        <p class="mt-1 text-3xl font-bold tabular-nums tracking-tight font-display text-slate-900 dark:text-slate-100">
+          {% if attempt.score is not None %}
+            {{ attempt.score }}
+          {% else %}
+            {% include "partials/_blank.html" %}
+          {% endif %}
+        </p>
+      </div>
+      <div>
+        <p class="text-sm text-slate-500 dark:text-slate-400">{% trans "Passing score" %}</p>
+        <p class="mt-1 text-3xl font-bold tabular-nums tracking-tight font-display text-slate-900 dark:text-slate-100">{{ exam.passing_score }}</p>
+      </div>
+    </div>
+    {% if attempt.result %}
+      <div class="mt-4 text-center">
+        {% if attempt.result == "pass" %}
+          {% include "partials/_badge.html" with label=_("Passed") tone="success" %}
+        {% else %}
+          {% include "partials/_badge.html" with label=_("Failed") tone="danger" %}
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+
+  {% for answer in answers %}
+    <div class="mt-6 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+      <div class="flex justify-between items-start mb-4">
+        <h3 class="text-base font-semibold text-slate-900 dark:text-slate-100">
+          {% trans "Question" %} {{ forloop.counter }}
+        </h3>
+        {% include "partials/_badge.html" with label=answer.question.points|stringformat:"s"|add:" pts" tone="neutral" %}
+      </div>
+      <p class="text-base leading-relaxed text-slate-800 dark:text-slate-200 max-w-prose">{{ answer.question.text }}</p>
+
+      {% if answer.question.question_type == "mcq" %}
+        <div class="mt-4">
+          <p class="text-xs font-medium text-slate-500 dark:text-slate-400">{% trans "Your answer" %}:</p>
+          <p class="mt-1 text-slate-700 dark:text-slate-200 text-base leading-relaxed">
+            {% if answer.selected_choice %}
+              {{ answer.selected_choice.text }}
+            {% else %}
+              <span class="text-slate-400 italic">{% trans "No answer" %}</span>
+            {% endif %}
+          </p>
+        </div>
+      {% else %}
+        <div class="mt-4">
+          <p class="text-xs font-medium text-slate-500 dark:text-slate-400">{% trans "Your answer" %}:</p>
+          <div class="mt-1 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+            <p class="text-slate-700 dark:text-slate-200 whitespace-pre-wrap leading-relaxed max-w-prose">{{ answer.written_text }}</p>
+          </div>
+        </div>
+        {% if answer.score is not None %}
+          <div class="mt-3 flex items-center gap-4">
+            <span class="text-sm font-semibold text-slate-900 dark:text-slate-100">{% trans "Score" %}: {{ answer.score }}</span>
+          </div>
+        {% endif %}
+        {% if answer.feedback %}
+          <div class="mt-2">
+            <p class="text-xs font-medium text-slate-500 dark:text-slate-400">{% trans "Feedback" %}:</p>
+            <p class="mt-1 text-slate-600 dark:text-slate-300 text-sm leading-relaxed max-w-prose">{{ answer.feedback }}</p>
+          </div>
+        {% endif %}
+      {% endif %}
+    </div>
+  {% endfor %}
+
+  <div class="text-center mt-8 mb-8">
+    {% url 'entrance_exams:student_list' as back_url %}
+    {% include "partials/_button.html" with href=back_url label=_("Back to entrance exams") variant="secondary" %}
+  </div>
+</section>
+{% endblock %}

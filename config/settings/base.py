@@ -78,6 +78,7 @@ LOCAL_APPS = [
     "apps.students",
     "apps.applications",
     "apps.communications",
+    "apps.entrance_exams",
     "apps.exams",
     "apps.academics",
     "apps.assessments",

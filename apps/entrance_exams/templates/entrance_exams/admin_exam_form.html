@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{{ title }} - {% trans "Entrance Exam Management" %}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
+    <h1 class="text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ title }}</h1>
+    <form method="post" novalidate class="mt-6 space-y-5">
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <div class="rounded-md bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-200 text-sm px-3 py-2">
+          {{ form.non_field_errors|join:" " }}
+        </div>
+      {% endif %}
+      {% for field in form %}
+        {% include "partials/_field.html" %}
+      {% endfor %}
+      <div class="flex gap-3 pt-2">
+        {% include "partials/_button.html" with label=_("Save") variant="primary" loading_label=_("Saving...") %}
+        {% url 'entrance_exams:admin_list' as list_url %}
+        {% include "partials/_button.html" with href=list_url label=_("Cancel") variant="secondary" %}
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

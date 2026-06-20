@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% load ui_tags %}
+
+{% block title %}{{ exam.title }} - {% trans "Entrance Exam Detail" %}{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+    <div class="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
+      <div>
+        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ exam.title }}</h1>
+        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ exam.diploma.title }} — {{ exam.cohort }}</p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        {% url 'entrance_exams:admin_edit_exam' exam.id as edit_url %}
+        {% include "partials/_button.html" with href=edit_url label=_("Edit") variant="secondary" size="sm" %}
+        <form method="post" action="{% url 'entrance_exams:admin_toggle_active' exam.id %}" class="inline">
+          {% csrf_token %}
+          {% if exam.is_active %}
+            {% include "partials/_button.html" with label=_("Deactivate") variant="danger" size="sm" %}
+          {% else %}
+            {% include "partials/_button.html" with label=_("Activate") variant="success" size="sm" %}
+          {% endif %}
+        </form>
+      </div>
+    </div>
+    <dl class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+      <div>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Duration" %}</dt>
+        <dd class="font-semibold text-slate-900 dark:text-slate-100 tabular-nums">{{ exam.duration_minutes }} {% trans "minutes" %}</dd>
+      </div>
+      <div>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Total points" %}</dt>
+        <dd class="font-semibold text-slate-900 dark:text-slate-100 tabular-nums">{{ exam.total_points }}</dd>
+      </div>
+      <div>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Passing score" %}</dt>
+        <dd class="font-semibold text-slate-900 dark:text-slate-100 tabular-nums">{{ exam.passing_score }}%</dd>
+      </div>
+      <div>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Active" %}</dt>
+        <dd class="font-semibold">
+          {% if exam.is_active %}
+            {% include "partials/_badge.html" with label=_("Yes") tone="success" %}
+          {% else %}
+            {% include "partials/_badge.html" with label=_("No") tone="danger" %}
+          {% endif %}
+        </dd>
+      </div>
+      <div>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Opens" %}</dt>
+        <dd class="font-semibold text-slate-900 dark:text-slate-100 text-xs tabular-nums">{% dt exam.open_at %}</dd>
+      </div>
+      <div>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Closes" %}</dt>
+        <dd class="font-semibold text-slate-900 dark:text-slate-100 text-xs tabular-nums">{% dt exam.close_at %}</dd>
+      </div>
+    </dl>
+    {% if exam.description %}
+      <p class="mt-4 text-slate-600 dark:text-slate-300 text-sm leading-relaxed max-w-prose">{{ exam.description }}</p>
+    {% endif %}
+  </div>
+
+  <div class="mt-8 mb-6 border-b border-slate-200 dark:border-slate-700">
+    <nav class="flex gap-6 text-sm font-medium" role="tablist">
+      <button id="questions-tab" type="button" role="tab" aria-controls="questions-panel" :aria-selected="activeTab === 'questions'"
+              @click="activeTab = 'questions'"
+              :class="activeTab === 'questions' ? 'border-b-2 border-brand-600 text-brand-600' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
+              class="pb-2 -mb-px transition">
+        {% trans "Questions" %} ({{ exam.questions.count }})
+      </button>
+      <button id="attempts-tab" type="button" role="tab" aria-controls="attempts-panel" :aria-selected="activeTab === 'attempts'"
+              @click="activeTab = 'attempts'"
+              :class="activeTab === 'attempts' ? 'border-b-2 border-brand-600 text-brand-600' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
+              class="pb-2 -mb-px transition">
+        {% trans "Attempts" %} ({{ exam.attempts.count }})
+      </button>
+    </nav>
+  </div>
+
+  <div x-data="{ activeTab: 'questions' }">
+    <div x-show="activeTab === 'questions'" x-cloak id="questions-panel" role="tabpanel" aria-labelledby="questions-tab" tabindex="0">
+      <h2 class="text-lg sm:text-xl font-semibold mb-4">{% trans "Questions" %}</h2>
+      {% if exam.questions.all %}
+        <div class="space-y-4">
+          {% for question in exam.questions.all %}
+            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+              <div class="flex items-center gap-2 mb-2">
+                {% include "partials/_badge.html" with label=question.order|stringformat:"s" tone="neutral" %}
+                {% include "partials/_badge.html" with label=question.get_question_type_display tone="info" %}
+                {% include "partials/_badge.html" with label=question.points|stringformat:"s"|add:" pts" tone="neutral" %}
+              </div>
+              <p class="text-base leading-relaxed text-slate-800 dark:text-slate-200 max-w-prose">{{ question.text }}</p>
+              {% if question.question_type == "mcq" %}
+                <ul class="mt-3 space-y-1">
+                  {% for choice in question.choices.all %}
+                    <li class="text-sm text-slate-700 dark:text-slate-200">{{ choice.text }}</li>
+                  {% endfor %}
+                </ul>
+              {% endif %}
+              {% if question.rubric %}
+                <div class="mt-3 text-xs text-slate-500 dark:text-slate-400 italic">{{ question.rubric }}</div>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-center">
+          <p class="text-slate-500 dark:text-slate-400">{% trans "No questions yet." %}</p>
+        </div>
+      {% endif %}
+    </div>
+
+    <div x-show="activeTab === 'attempts'" x-cloak id="attempts-panel" role="tabpanel" aria-labelledby="attempts-tab" tabindex="0">
+      <h2 class="text-lg sm:text-xl font-semibold mb-4">{% trans "Attempts" %}</h2>
+      <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+        <table class="min-w-[640px] w-full divide-y divide-slate-200 dark:divide-slate-800 text-sm">
+          <thead class="bg-slate-50 dark:bg-slate-800/50">
+            <tr class="text-slate-600 dark:text-slate-300">
+              <th class="px-4 py-2.5 text-start font-medium">{% trans "Student" %}</th>
+              <th class="px-4 py-2.5 text-start font-medium">{% trans "Status" %}</th>
+              <th class="px-4 py-2.5 text-start font-medium">{% trans "Score" %}</th>
+              <th class="px-4 py-2.5 text-start font-medium">{% trans "Result" %}</th>
+              <th class="px-4 py-2.5 text-start font-medium">{% trans "Submitted" %}</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+            {% for a in exam.attempts.all %}
+              <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                <td class="px-4 py-3 text-slate-900 dark:text-slate-100">{{ a.student.user.email }}</td>
+                <td class="px-4 py-3">
+                  {% if a.status == "assigned" %}{% include "partials/_badge.html" with label=a.get_status_display tone="warning" %}
+                  {% elif a.status == "in_progress" %}{% include "partials/_badge.html" with label=a.get_status_display tone="info" %}
+                  {% elif a.status == "completed" %}{% include "partials/_badge.html" with label=a.get_status_display tone="info" %}
+                  {% elif a.status == "graded" %}{% include "partials/_badge.html" with label=a.get_status_display tone="success" %}
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-slate-900 dark:text-slate-100 tabular-nums">{{ a.score|default:"—" }}</td>
+                <td class="px-4 py-3">
+                  {% if a.result == "pass" %}
+                    {% include "partials/_badge.html" with label=_("Pass") tone="success" %}
+                  {% elif a.result == "fail" %}
+                    {% include "partials/_badge.html" with label=_("Fail") tone="danger" %}
+                  {% else %}
+                    <span class="text-slate-400">—</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-slate-500 dark:text-slate-400 text-xs tabular-nums">{% include "partials/_blank.html" with value=a.submitted_at|date:"DATETIME_FORMAT" %}</td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="5" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400">{% trans "No attempts yet." %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

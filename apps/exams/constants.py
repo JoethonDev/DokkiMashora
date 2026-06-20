@@ -1,12 +1,5 @@
 from django.utils.translation import gettext_lazy as _
 
-EXAM_TYPE_ENTRANCE = "entrance"
-EXAM_TYPE_ASSESSMENT = "assessment"
-EXAM_TYPE_CHOICES = [
-    (EXAM_TYPE_ENTRANCE, _("Entrance exam")),
-    (EXAM_TYPE_ASSESSMENT, _("Assessment")),
-]
-
 QUESTION_TYPE_MCQ = "mcq"
 QUESTION_TYPE_ESSAY = "essay"
 QUESTION_TYPE_CHOICES = [

@@ -9,8 +9,6 @@ from apps.core.models import TimeStampedModel
 from apps.exams.constants import (
     ASSIGNMENT_STATUS_ASSIGNED,
     ASSIGNMENT_STATUS_CHOICES,
-    EXAM_TYPE_CHOICES,
-    EXAM_TYPE_ENTRANCE,
     QUESTION_TYPE_CHOICES,
     QUESTION_TYPE_ESSAY,
     QUESTION_TYPE_MCQ,
@@ -23,8 +21,7 @@ class Exam(TimeStampedModel):
     exam_type = models.CharField(
         _("exam type"),
         max_length=20,
-        choices=EXAM_TYPE_CHOICES,
-        default=EXAM_TYPE_ENTRANCE,
+        default="assessment",
         db_index=True,
     )
     access_token = models.UUIDField(

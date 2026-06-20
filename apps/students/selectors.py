@@ -22,8 +22,7 @@ from apps.assessments.models import AssessmentAttempt, HomeworkSubmission
 from apps.assessments.services import get_student_attempts
 from apps.certificates.models import GeneratedCertificate
 from apps.communications.email_message import EmailMessage
-from apps.exams.constants import EXAM_TYPE_ENTRANCE
-from apps.exams.models import Assignment
+from apps.entrance_exams.models import EntranceAttempt
 from apps.progression.constants import CERTIFICATE_STATUS_AVAILABLE
 from apps.progression.models import (
     FinalExamEligibility,
@@ -53,7 +52,7 @@ _SECTION_LOADERS: dict[str, tuple] = {
     "course_enrollments": ("course_enrollments", lambda p, u: _get_course_enrollments(p)),
     "active_courses": ("active_courses", lambda p, u: _get_active_courses(p)),
     "expired_courses": ("expired_courses", lambda p, u: _get_expired_courses(p)),
-    "exam_assignments": ("exam_assignments", lambda p, u: _get_exam_assignments(u)),
+    "exam_assignments": ("exam_assignments", lambda p, u: _get_exam_assignments(p)),
     "assessment_attempts": ("assessment_attempts", lambda p, u: _get_assessment_attempts(u)),
     "homework_submissions": ("homework_submissions", lambda p, u: _get_homework_submissions(u)),
     "semester_progress": ("semester_progress", lambda p, u: _get_semester_progress(p)),
@@ -232,9 +231,9 @@ def _get_expired_courses(student_profile: StudentProfile) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-def _get_exam_assignments(user: User) -> list[Assignment]:
+def _get_exam_assignments(profile) -> list[EntranceAttempt]:
     return list(
-        Assignment.objects.filter(student=user, exam__exam_type=EXAM_TYPE_ENTRANCE)
+        EntranceAttempt.objects.filter(student=profile)
         .select_related("exam", "graded_by")
         .order_by("-assigned_at")
     )

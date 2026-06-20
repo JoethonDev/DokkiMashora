@@ -14,7 +14,7 @@ from apps.assessments.constants import (
     GRADE_VISIBILITY_RELEASED,
     GRADE_VISIBILITY_UNDER_REVIEW,
 )
-from apps.exams.constants import ASSIGNMENT_STATUS_GRADED
+from apps.entrance_exams.constants import ATTEMPT_STATUS_GRADED
 
 from .forms import StudentProfileUpdateForm
 from .policies import EDITABLE_FIELDS, RESTRICTED_FIELDS, get_field_label
@@ -134,7 +134,7 @@ def exam_results(request: HttpRequest) -> HttpResponse:
     """Show entrance exam assignments and results."""
     profile = _get_profile_or_404(request.user)
     data = get_dashboard_data(profile, sections=["exam_assignments"])
-    data["assignment_status_graded"] = ASSIGNMENT_STATUS_GRADED
+    data["attempt_status_graded"] = ATTEMPT_STATUS_GRADED
     return render(request, "students/profile/exams.html", data)
 
 

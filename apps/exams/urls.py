@@ -6,24 +6,6 @@ app_name = "exams"
 
 urlpatterns = [
     path("", views.student_list, name="student_list"),
-    path("access/<uuid:token>/", views.exam_access, name="exam_access"),
-    path(
-        "access/<uuid:token>/instructions/",
-        views.exam_instructions_token,
-        name="exam_instructions_token",
-    ),
-    path("access/<uuid:token>/start/", views.start_exam_token, name="start_exam_token"),
-    path("access/<uuid:token>/take/", views.take_exam_token, name="take_exam_token"),
-    path(
-        "access/<uuid:token>/submit/",
-        views.submit_exam_token,
-        name="submit_exam_token",
-    ),
-    path(
-        "access/<uuid:token>/results/",
-        views.exam_results_token,
-        name="exam_results_token",
-    ),
     path("<int:exam_id>/", views.exam_instructions, name="exam_instructions"),
     path("<int:exam_id>/start/", views.start_exam_view, name="start_exam"),
     path("<int:exam_id>/take/", views.take_exam, name="take_exam"),
@@ -68,10 +50,5 @@ urlpatterns = [
         "manage/grading/<int:assignment_id>/",
         views.admin_grade_assignment,
         name="admin_grade_assignment",
-    ),
-    path(
-        "manage/grading/answer/<int:answer_id>/gemini/",
-        views.admin_grade_with_gemini,
-        name="admin_grade_with_gemini",
     ),
 ]

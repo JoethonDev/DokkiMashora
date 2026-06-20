@@ -1,4 +1,4 @@
-"""Seed a sample entrance exam with MCQ and essay questions."""
+"""Seed a sample assessment exam with MCQ and essay questions."""
 
 from decimal import Decimal
 
@@ -12,7 +12,7 @@ User = get_user_model()
 
 
 class Command(BaseCommand):
-    help = "Seed a sample entrance exam with questions"
+    help = "Seed a sample assessment exam with questions"
 
     def handle(self, *args, **options):
         admin = User.objects.filter(is_superuser=True).first()
@@ -21,9 +21,9 @@ class Command(BaseCommand):
             return
         now = timezone.now()
         exam, created = Exam.objects.get_or_create(
-            title="Entrance Exam - Sample",
+            title="Sample Assessment",
             defaults={
-                "description": "A sample entrance exam covering Bible knowledge and theology.",
+                "description": "A sample assessment exam.",
                 "duration_minutes": 60,
                 "passing_score": Decimal("50.00"),
                 "is_active": True,
@@ -88,8 +88,6 @@ class Command(BaseCommand):
         )
 
         exam.total_points = Decimal("70.00")
-        exam.regenerate_access_token()
         exam.save(update_fields=["total_points"])
 
         self.stdout.write(self.style.SUCCESS(f"Created sample exam '{exam.title}' with 5 questions."))
-        self.stdout.write(f"Access URL: /exams/access/{exam.access_token}/")
