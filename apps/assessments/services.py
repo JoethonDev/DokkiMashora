@@ -13,7 +13,7 @@ from django.utils import timezone
 
 from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE
 from apps.academics.models import CourseEnrollment, DiplomaEnrollment
-from apps.accounts.constants import GROUP_ADMIN, GROUP_MODERATOR, GROUP_SUPER_ADMIN, GROUP_TEACHER
+from apps.core.permissions import assessment_staff_scope_filter, is_admin
 from apps.storage.services import storage_service
 
 from .constants import (
@@ -423,26 +423,28 @@ def get_student_attempts(student):
     ).order_by("-created_at")
 
 
-def get_pending_grading():
-    return AssessmentAttempt.objects.filter(
+def get_pending_grading(user=None):
+    qs = AssessmentAttempt.objects.filter(
         status=ATTEMPT_STATUS_UNDER_REVIEW,
-    ).select_related("assessment", "student")
+    ).select_related("assessment", "assessment__cohort", "assessment__course_version__cohort", "student")
+    if user is not None:
+        qs = qs.filter(assessment_staff_scope_filter(user)).distinct()
+    return qs
 
 
-def get_homework_pending_grading():
-    return HomeworkSubmission.objects.filter(
+def get_homework_pending_grading(user=None):
+    qs = HomeworkSubmission.objects.filter(
         status__in=[HOMEWORK_STATUS_UPLOADED, HOMEWORK_STATUS_UNDER_REVIEW],
-    ).select_related("assessment", "student", "attempt")
+    ).select_related("assessment", "assessment__cohort", "assessment__course_version__cohort", "student", "attempt")
+    if user is not None:
+        qs = qs.filter(assessment_staff_scope_filter(user)).distinct()
+    return qs
 
 
 def get_grading_queue(user):
     """Return attempts pending review, scoped to user's permissions."""
-    if user.is_superuser or user.groups.filter(name=GROUP_SUPER_ADMIN).exists():
+    if is_admin(user):
         return get_pending_grading()
-    if user.groups.filter(name=GROUP_ADMIN).exists():
-        return get_pending_grading()
-    if user.groups.filter(name=GROUP_MODERATOR).exists():
-        return get_pending_grading()
-    if user.groups.filter(name=GROUP_TEACHER).exists():
-        return get_pending_grading()
+    if user.is_authenticated:
+        return get_pending_grading(user)
     return AssessmentAttempt.objects.none()

@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -25,7 +26,7 @@ from apps.audit.constants import (
     ACTION_QUESTION_UPDATED,
 )
 from apps.audit.services import record_audit_event
-from apps.core.permissions import ROLE_EXAM_STAFF, role_required
+from apps.core.permissions import ROLE_EXAM_STAFF, can_grade_attempt, role_required
 from apps.exams.constants import (
     ASSIGNMENT_STATUS_COMPLETED,
     ASSIGNMENT_STATUS_GRADED,
@@ -315,6 +316,8 @@ def admin_grade_assignment(request, assignment_id):
         Assignment.objects.select_related("exam", "student"),
         id=assignment_id,
     )
+    if not can_grade_attempt(request.user, assignment):
+        raise PermissionDenied
     questions = assignment.exam.questions.prefetch_related("choices").all()
     answers = {
         a.question_id: a

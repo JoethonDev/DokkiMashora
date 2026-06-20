@@ -307,3 +307,115 @@ class CourseEnrollment(TimeStampedModel):
         if self.expires_at is None:
             return False
         return timezone.now() >= self.expires_at
+
+
+class TeacherCohortAssignment(TimeStampedModel):
+    """Explicit teacher scope for one cohort."""
+
+    teacher = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="teacher_cohort_assignments",
+        verbose_name=_("teacher"),
+    )
+    cohort = models.ForeignKey(
+        Cohort,
+        on_delete=models.PROTECT,
+        related_name="teacher_assignments",
+        verbose_name=_("cohort"),
+    )
+    active = models.BooleanField(_("active"), default=True, db_index=True)
+    assigned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="teacher_assignments_created",
+        verbose_name=_("assigned by"),
+    )
+    revoked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="teacher_assignments_revoked",
+        verbose_name=_("revoked by"),
+        null=True,
+        blank=True,
+    )
+    revoked_at = models.DateTimeField(_("revoked at"), null=True, blank=True)
+    revoke_reason = models.TextField(_("revoke reason"), blank=True)
+
+    class Meta:
+        verbose_name = _("teacher cohort assignment")
+        verbose_name_plural = _("teacher cohort assignments")
+        ordering = ("-created_at",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("teacher", "cohort"),
+                condition=models.Q(active=True),
+                name="unique_active_teacher_cohort_assignment",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("teacher", "active")),
+            models.Index(fields=("cohort", "active")),
+        ]
+
+    def __str__(self):
+        return f"{self.teacher} - {self.cohort}"
+
+
+class ModeratorStudentAssignment(TimeStampedModel):
+    """Explicit moderator scope for one student inside one cohort."""
+
+    moderator = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="moderator_student_assignments",
+        verbose_name=_("moderator"),
+    )
+    student = models.ForeignKey(
+        StudentProfile,
+        on_delete=models.PROTECT,
+        related_name="moderator_assignments",
+        verbose_name=_("student"),
+    )
+    cohort = models.ForeignKey(
+        Cohort,
+        on_delete=models.PROTECT,
+        related_name="moderator_assignments",
+        verbose_name=_("cohort"),
+    )
+    active = models.BooleanField(_("active"), default=True, db_index=True)
+    assigned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="moderator_assignments_created",
+        verbose_name=_("assigned by"),
+    )
+    revoked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="moderator_assignments_revoked",
+        verbose_name=_("revoked by"),
+        null=True,
+        blank=True,
+    )
+    revoked_at = models.DateTimeField(_("revoked at"), null=True, blank=True)
+    revoke_reason = models.TextField(_("revoke reason"), blank=True)
+
+    class Meta:
+        verbose_name = _("moderator student assignment")
+        verbose_name_plural = _("moderator student assignments")
+        ordering = ("-created_at",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("moderator", "student", "cohort"),
+                condition=models.Q(active=True),
+                name="unique_active_moderator_student_cohort_assignment",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("moderator", "active")),
+            models.Index(fields=("student", "cohort", "active")),
+        ]
+
+    def __str__(self):
+        return f"{self.moderator} - {self.student} - {self.cohort}"

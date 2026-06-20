@@ -3,18 +3,21 @@
 from datetime import date
 from decimal import Decimal
 
+from django.contrib.auth.models import Group
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
 from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE
-from apps.academics.models import Course, CourseEnrollment, CourseVersion
+from apps.academics.models import Cohort, Course, CourseEnrollment, CourseVersion, Diploma
+from apps.accounts.constants import GROUP_TEACHER
 from apps.accounts.models import User
 from apps.assessments.constants import (
     ASSESSMENT_TYPE_HOMEWORK,
     ASSESSMENT_TYPE_QUIZ,
     ATTEMPT_STATUS_IN_PROGRESS,
     ATTEMPT_STATUS_SUBMITTED,
+    ATTEMPT_STATUS_UNDER_REVIEW,
     HOMEWORK_STATUS_UNDER_REVIEW,
 )
 from apps.assessments.models import Assessment, AssessmentAttempt, HomeworkSubmission
@@ -204,3 +207,51 @@ class HomeworkSubmittedViewTests(TestCase):
         response = self.client.get(reverse("assessments:results", args=[self.assessment.id]))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Download uploaded file")
+
+
+class AdminGradePermissionTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.admin = User.objects.create_superuser(email="admin-grade@test.com", password="x")
+        self.teacher = User.objects.create_user(email="unassigned-teacher@test.com", password="x")
+        group, _ = Group.objects.get_or_create(name=GROUP_TEACHER)
+        self.teacher.groups.add(group)
+        self.student = User.objects.create_user(email="grade-student@test.com", password="x")
+        _create_profile(self.student, national_id="10000000000106", phone="01000000106")
+        diploma = Diploma.objects.create(title="Grade Diploma", total_semesters=2, created_by=self.admin)
+        cohort = Cohort.objects.create(
+            diploma=diploma,
+            name="Grade Cohort",
+            start_date=timezone.now().date(),
+            created_by=self.admin,
+        )
+        course = Course.objects.create(title="Grade Course", created_by=self.admin)
+        course_version = CourseVersion.objects.create(
+            course=course,
+            cohort=cohort,
+            label="v1",
+            created_by=self.admin,
+        )
+        self.assessment = Assessment.objects.create(
+            title="Scoped Grade Quiz",
+            assessment_type=ASSESSMENT_TYPE_QUIZ,
+            course_version=course_version,
+            open_at=timezone.now() - timezone.timedelta(days=1),
+            close_at=timezone.now() + timezone.timedelta(days=7),
+            passing_score=Decimal("50.00"),
+            is_active=True,
+            created_by=self.admin,
+        )
+        self.attempt = AssessmentAttempt.objects.create(
+            assessment=self.assessment,
+            student=self.student,
+            attempt_number=1,
+            status=ATTEMPT_STATUS_UNDER_REVIEW,
+        )
+
+    def test_unassigned_teacher_direct_grade_url_is_forbidden(self):
+        self.client.force_login(self.teacher)
+
+        response = self.client.get(reverse("assessments:admin_grade_detail", args=[self.attempt.id]))
+
+        self.assertEqual(response.status_code, 403)

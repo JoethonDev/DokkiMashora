@@ -11,6 +11,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.applications.constants import PROGRAM_APP_STATUS_ACCEPTED, PROGRAM_APP_STATUS_REJECTED
+from apps.core.permissions import entrance_staff_scope_filter
 
 from .constants import (
     ATTEMPT_STATUS_ASSIGNED,
@@ -225,14 +226,17 @@ def get_student_attempts(student: StudentProfile) -> list[EntranceAttempt]:
     )
 
 
-def get_pending_grading() -> list[EntranceAttempt]:
+def get_pending_grading(user=None) -> list[EntranceAttempt]:
     from .models import EntranceAttempt
 
-    return list(
+    qs = (
         EntranceAttempt.objects.filter(status=ATTEMPT_STATUS_COMPLETED)
         .select_related("exam", "student__user")
         .order_by("submitted_at")
     )
+    if user is not None:
+        qs = qs.filter(entrance_staff_scope_filter(user)).distinct()
+    return list(qs)
 
 
 def get_active_exams_for_cohort(cohort_id: int) -> list[EntranceExam]:

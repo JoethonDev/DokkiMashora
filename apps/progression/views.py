@@ -2,6 +2,7 @@
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
@@ -17,7 +18,7 @@ from apps.audit.constants import (
 )
 from apps.audit.services import record_audit_event
 from apps.certificates.models import GeneratedCertificate
-from apps.core.permissions import ROLE_SENIOR_STAFF, role_required, safe_int
+from apps.core.permissions import ROLE_EXAM_STAFF, ROLE_SENIOR_STAFF, can_view_student_progress, role_required, safe_int
 from apps.students.models import StudentProfile
 
 from .constants import CERTIFICATE_STATUS_AVAILABLE
@@ -90,9 +91,11 @@ def admin_dashboard(request):
 
 
 @login_required
-@role_required(*ROLE_SENIOR_STAFF)
+@role_required(*ROLE_EXAM_STAFF)
 def admin_student_detail(request, student_id):
     student = _get_student_or_404(student_id)
+    if not can_view_student_progress(request.user, student):
+        raise PermissionDenied
     enrollments = DiplomaEnrollment.objects.filter(student=student).select_related(
         "cohort__diploma",
     )

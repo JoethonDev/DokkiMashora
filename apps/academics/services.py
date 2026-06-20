@@ -15,6 +15,8 @@ from apps.academics.models import (
     CourseVersion,
     DiplomaEnrollment,
     Lecture,
+    ModeratorStudentAssignment,
+    TeacherCohortAssignment,
 )
 
 
@@ -122,3 +124,68 @@ def enroll_student_in_diploma(student_profile, cohort) -> DiplomaEnrollment:
         defaults={"status": ENROLLMENT_STATUS_PENDING},
     )
     return enrollment
+
+
+def assign_teacher_to_cohort(teacher, cohort, actor) -> TeacherCohortAssignment:
+    """Create or reactivate a teacher assignment for a cohort."""
+    assignment, created = TeacherCohortAssignment.objects.get_or_create(
+        teacher=teacher,
+        cohort=cohort,
+        active=True,
+        defaults={"assigned_by": actor},
+    )
+    if not created and assignment.assigned_by_id != actor.id:
+        assignment.assigned_by = actor
+        assignment.save(update_fields=["assigned_by", "updated_at"])
+    return assignment
+
+
+def revoke_teacher_cohort_assignment(
+    assignment: TeacherCohortAssignment,
+    actor,
+    reason: str = "",
+) -> TeacherCohortAssignment:
+    """Revoke a teacher assignment without deleting history."""
+    assignment.active = False
+    assignment.revoked_by = actor
+    assignment.revoked_at = timezone.now()
+    assignment.revoke_reason = reason
+    assignment.save(update_fields=["active", "revoked_by", "revoked_at", "revoke_reason", "updated_at"])
+    return assignment
+
+
+def assign_moderator_to_students(
+    moderator,
+    students,
+    cohort,
+    actor,
+) -> list[ModeratorStudentAssignment]:
+    """Merge-add moderator assignments for the given students in a cohort."""
+    assignments = []
+    for student in students:
+        assignment, created = ModeratorStudentAssignment.objects.get_or_create(
+            moderator=moderator,
+            student=student,
+            cohort=cohort,
+            active=True,
+            defaults={"assigned_by": actor},
+        )
+        if not created and assignment.assigned_by_id != actor.id:
+            assignment.assigned_by = actor
+            assignment.save(update_fields=["assigned_by", "updated_at"])
+        assignments.append(assignment)
+    return assignments
+
+
+def revoke_moderator_student_assignment(
+    assignment: ModeratorStudentAssignment,
+    actor,
+    reason: str = "",
+) -> ModeratorStudentAssignment:
+    """Revoke a moderator assignment without deleting history."""
+    assignment.active = False
+    assignment.revoked_by = actor
+    assignment.revoked_at = timezone.now()
+    assignment.revoke_reason = reason
+    assignment.save(update_fields=["active", "revoked_by", "revoked_at", "revoke_reason", "updated_at"])
+    return assignment

@@ -6,6 +6,7 @@ from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -56,7 +57,7 @@ from apps.audit.constants import (
     ACTION_QUESTION_UPDATED,
 )
 from apps.audit.services import record_audit_event
-from apps.core.permissions import ROLE_EXAM_STAFF, role_required
+from apps.core.permissions import ROLE_EXAM_STAFF, can_grade_attempt, role_required
 from apps.storage.services import FileValidationError, StorageError, storage_service
 
 # ---------------------------------------------------------------------------
@@ -577,7 +578,7 @@ def _save_choices_from_parsed(question, parsed_choices):
 @role_required(*ROLE_EXAM_STAFF)
 def admin_grade_list(request):
     queue = get_grading_queue(request.user)
-    homework_queue = get_homework_pending_grading()
+    homework_queue = get_homework_pending_grading(request.user)
     return render(
         request,
         "assessments/admin_grade_list.html",
@@ -588,9 +589,7 @@ def admin_grade_list(request):
 @login_required
 @role_required(*ROLE_EXAM_STAFF)
 def admin_homework_grade_list(request):
-    submissions = HomeworkSubmission.objects.all().select_related(
-        "assessment", "student", "attempt",
-    ).order_by("-created_at")
+    submissions = get_homework_pending_grading(request.user).order_by("-created_at")
     return render(
         request,
         "assessments/admin_homework_list.html",
@@ -605,6 +604,8 @@ def admin_homework_grade_detail(request, submission_id):
         HomeworkSubmission.objects.select_related("assessment", "student", "attempt"),
         id=submission_id,
     )
+    if not can_grade_attempt(request.user, submission):
+        raise PermissionDenied
     download_url = storage_service.get_download_url(submission.storage_key)
     if request.method == "POST":
         score = Decimal(str(request.POST.get("score", 0)))
@@ -636,6 +637,8 @@ def admin_grade_detail(request, attempt_id):
         AssessmentAttempt.objects.select_related("assessment", "student"),
         id=attempt_id,
     )
+    if not can_grade_attempt(request.user, attempt):
+        raise PermissionDenied
     questions = attempt.assessment.questions.prefetch_related("choices").all()
     answers = {a.question_id: a for a in attempt.answers.select_related("question", "selected_choice").all()}
     if request.method == "POST":
@@ -680,6 +683,8 @@ def admin_grade_detail(request, attempt_id):
 @require_POST
 def admin_release_grades(request, attempt_id):
     attempt = get_object_or_404(AssessmentAttempt, id=attempt_id)
+    if not can_grade_attempt(request.user, attempt):
+        raise PermissionDenied
     release_grades(attempt)
     record_audit_event(
         actor=request.user,
@@ -697,6 +702,8 @@ def admin_release_grades(request, attempt_id):
 @require_POST
 def admin_hide_grades(request, attempt_id):
     attempt = get_object_or_404(AssessmentAttempt, id=attempt_id)
+    if not can_grade_attempt(request.user, attempt):
+        raise PermissionDenied
     hide_grades(attempt)
     record_audit_event(
         actor=request.user,
@@ -713,7 +720,12 @@ def admin_hide_grades(request, attempt_id):
 @role_required(*ROLE_EXAM_STAFF)
 @require_POST
 def admin_grade_answer(request, answer_id):
-    answer = get_object_or_404(AssessmentAnswer, id=answer_id)
+    answer = get_object_or_404(
+        AssessmentAnswer.objects.select_related("attempt__assessment", "attempt__student"),
+        id=answer_id,
+    )
+    if not can_grade_attempt(request.user, answer.attempt):
+        raise PermissionDenied
     score = Decimal(str(request.POST.get("score", 0)))
     feedback = request.POST.get("feedback", "")
     override_reason = request.POST.get("override_reason", "")
@@ -744,7 +756,12 @@ def admin_grade_answer(request, answer_id):
 @role_required(*ROLE_EXAM_STAFF)
 @require_POST
 def admin_grade_homework_submission(request, submission_id):
-    submission = get_object_or_404(HomeworkSubmission, id=submission_id)
+    submission = get_object_or_404(
+        HomeworkSubmission.objects.select_related("assessment", "student", "attempt"),
+        id=submission_id,
+    )
+    if not can_grade_attempt(request.user, submission):
+        raise PermissionDenied
     score = Decimal(str(request.POST.get("score", 0)))
     feedback = request.POST.get("feedback", "")
     try:

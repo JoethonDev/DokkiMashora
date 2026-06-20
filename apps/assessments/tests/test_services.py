@@ -10,7 +10,8 @@ from django.utils import timezone
 
 from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE
 from apps.academics.models import Cohort, Course, CourseEnrollment, CourseVersion, Diploma
-from apps.accounts.constants import GROUP_ADMIN, GROUP_TEACHER
+from apps.academics.services import assign_moderator_to_students, assign_teacher_to_cohort
+from apps.accounts.constants import GROUP_ADMIN, GROUP_MODERATOR, GROUP_TEACHER
 from apps.accounts.models import User
 from apps.assessments.constants import (
     ASSESSMENT_TYPE_HOMEWORK,
@@ -445,10 +446,55 @@ class QueryTests(TestCase):
     def setUp(self):
         self.admin = User.objects.create_superuser(email="admin@test.com", password="x")
         self.student = User.objects.create_user(email="student@test.com", password="x")
+        self.other_student = User.objects.create_user(email="other-student@test.com", password="x")
+        self.student_profile = StudentProfile.objects.create(
+            user=self.student,
+            full_name="Queue Student",
+            date_of_birth=date(2000, 1, 1),
+            gender="m",
+            address="Address",
+            phone="01000000901",
+            national_id="10000000000901",
+            education="university",
+        )
+        self.other_profile = StudentProfile.objects.create(
+            user=self.other_student,
+            full_name="Other Queue Student",
+            date_of_birth=date(2000, 1, 1),
+            gender="m",
+            address="Address",
+            phone="01000000902",
+            national_id="10000000000902",
+            education="university",
+        )
         self.now = timezone.now()
+        self.diploma = Diploma.objects.create(title="Queue Diploma", total_semesters=2, created_by=self.admin)
+        self.cohort = Cohort.objects.create(
+            diploma=self.diploma,
+            name="Queue 2026",
+            start_date=date(2026, 1, 1),
+            created_by=self.admin,
+        )
+        self.course = Course.objects.create(title="Queue Course", created_by=self.admin)
+        self.course_version = CourseVersion.objects.create(
+            course=self.course,
+            cohort=self.cohort,
+            label="v1",
+            created_by=self.admin,
+        )
         self.active_assessment = Assessment.objects.create(
             title="Active Quiz",
             assessment_type=ASSESSMENT_TYPE_QUIZ,
+            open_at=self.now - timezone.timedelta(days=1),
+            close_at=self.now + timezone.timedelta(days=7),
+            passing_score=Decimal("50.00"),
+            is_active=True,
+            created_by=self.admin,
+        )
+        self.scoped_assessment = Assessment.objects.create(
+            title="Scoped Quiz",
+            assessment_type=ASSESSMENT_TYPE_QUIZ,
+            course_version=self.course_version,
             open_at=self.now - timezone.timedelta(days=1),
             close_at=self.now + timezone.timedelta(days=7),
             passing_score=Decimal("50.00"),
@@ -504,6 +550,50 @@ class QueryTests(TestCase):
         self.student.groups.add(group)
         results = get_grading_queue(self.student)
         self.assertEqual(len(results), 0)
+
+    def test_teacher_grading_queue_is_limited_to_assigned_cohort(self):
+        teacher = User.objects.create_user(email="teacher@test.com", password="x")
+        group, _ = Group.objects.get_or_create(name=GROUP_TEACHER)
+        teacher.groups.add(group)
+        assign_teacher_to_cohort(teacher, self.cohort, self.admin)
+        visible = AssessmentAttempt.objects.create(
+            assessment=self.scoped_assessment,
+            student=self.student,
+            attempt_number=1,
+            status=ATTEMPT_STATUS_UNDER_REVIEW,
+        )
+        AssessmentAttempt.objects.create(
+            assessment=self.active_assessment,
+            student=self.other_student,
+            attempt_number=1,
+            status=ATTEMPT_STATUS_UNDER_REVIEW,
+        )
+
+        results = list(get_grading_queue(teacher))
+
+        self.assertEqual(results, [visible])
+
+    def test_moderator_grading_queue_is_limited_to_assigned_student_and_cohort(self):
+        moderator = User.objects.create_user(email="moderator@test.com", password="x")
+        group, _ = Group.objects.get_or_create(name=GROUP_MODERATOR)
+        moderator.groups.add(group)
+        assign_moderator_to_students(moderator, [self.student_profile], self.cohort, self.admin)
+        visible = AssessmentAttempt.objects.create(
+            assessment=self.scoped_assessment,
+            student=self.student,
+            attempt_number=1,
+            status=ATTEMPT_STATUS_UNDER_REVIEW,
+        )
+        AssessmentAttempt.objects.create(
+            assessment=self.scoped_assessment,
+            student=self.other_student,
+            attempt_number=1,
+            status=ATTEMPT_STATUS_UNDER_REVIEW,
+        )
+
+        results = list(get_grading_queue(moderator))
+
+        self.assertEqual(results, [visible])
 
     def test_grading_queue_for_superuser(self):
         AssessmentAttempt.objects.create(

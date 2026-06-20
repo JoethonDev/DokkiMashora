@@ -4,10 +4,13 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.utils import timezone
 
 from apps.academics.models import Cohort, Diploma
+from apps.academics.services import assign_moderator_to_students
+from apps.accounts.constants import GROUP_MODERATOR
 from apps.applications.models import Application, ProgramApplication
 from apps.entrance_exams.constants import QUESTION_TYPE_MCQ, QUESTION_TYPE_WRITTEN
 from apps.entrance_exams.models import EntranceAttempt, EntranceChoice, EntranceExam, EntranceQuestion
@@ -375,6 +378,44 @@ class TestAdminGradeList:
         response = admin_client.get(reverse("entrance_exams:admin_grade_list"))
         assert response.status_code == 200
         assert exam.title in response.content.decode()
+
+    def test_moderator_sees_only_assigned_students(
+        self,
+        client,
+        django_user_model,
+        admin_user,
+        exam,
+        student_profile,
+    ):
+        moderator = django_user_model.objects.create_user(email="moderator@test.com", password="pass")
+        group, _ = Group.objects.get_or_create(name=GROUP_MODERATOR)
+        moderator.groups.add(group)
+        other_user = django_user_model.objects.create_user(email="other-student@test.com", password="pass")
+        other_profile = StudentProfile.objects.create(
+            user=other_user,
+            full_name="Other Student",
+            date_of_birth=date(2000, 1, 1),
+            gender=GENDER_MALE,
+            address="Cairo",
+            phone="01000000022",
+            national_id="29001010100022",
+            education=EDUCATION_BACHELOR,
+        )
+        visible = _create_attempt(exam, student_profile)
+        hidden = _create_attempt(exam, other_profile)
+        visible.status = "completed"
+        hidden.status = "completed"
+        visible.save(update_fields=["status"])
+        hidden.save(update_fields=["status"])
+        assign_moderator_to_students(moderator, [student_profile], exam.cohort, admin_user)
+        client.force_login(moderator)
+
+        response = client.get(reverse("entrance_exams:admin_grade_list"))
+
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert student_profile.user.email in content
+        assert other_profile.user.email not in content
 
 
 @pytest.mark.django_db

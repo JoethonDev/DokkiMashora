@@ -10,8 +10,10 @@ from apps.academics.models import (
     Diploma,
     DiplomaEnrollment,
     Lecture,
+    ModeratorStudentAssignment,
     Semester,
     SemesterCourse,
+    TeacherCohortAssignment,
 )
 
 
@@ -75,3 +77,17 @@ class CourseEnrollmentAdmin(admin.ModelAdmin):
     list_display = ("student", "course_version", "status", "activated_at", "expires_at")
     list_filter = ("status", "course_version__course")
     search_fields = ("student__full_name", "student__user__email")
+
+
+@admin.register(TeacherCohortAssignment)
+class TeacherCohortAssignmentAdmin(admin.ModelAdmin):
+    list_display = ("teacher", "cohort", "active", "assigned_by", "revoked_at")
+    list_filter = ("active", "cohort")
+    search_fields = ("teacher__email", "cohort__name", "cohort__diploma__title")
+
+
+@admin.register(ModeratorStudentAssignment)
+class ModeratorStudentAssignmentAdmin(admin.ModelAdmin):
+    list_display = ("moderator", "student", "cohort", "active", "assigned_by", "revoked_at")
+    list_filter = ("active", "cohort")
+    search_fields = ("moderator__email", "student__full_name", "student__user__email", "cohort__name")

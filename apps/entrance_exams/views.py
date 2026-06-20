@@ -15,7 +15,7 @@ from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods, require_POST
 
 from apps.applications.models import ProgramApplication
-from apps.core.permissions import is_admin, is_moderator
+from apps.core.permissions import can_grade_attempt, is_admin, is_moderator
 
 from .constants import (
     ATTEMPT_STATUS_ASSIGNED,
@@ -258,7 +258,7 @@ def admin_grade_list(request):
     """List completed entrance attempts ready for grading."""
     if not (is_admin(request.user) or is_moderator(request.user)):
         raise PermissionDenied
-    pending = get_pending_grading()
+    pending = get_pending_grading(request.user)
     return render(request, "entrance_exams/admin_grade_list.html", {
         "attempts": pending,
     })
@@ -273,6 +273,8 @@ def admin_grade_attempt(request, attempt_id):
         EntranceAttempt.objects.select_related("exam", "student__user"),
         id=attempt_id,
     )
+    if not can_grade_attempt(request.user, attempt):
+        raise PermissionDenied
     questions = attempt.exam.questions.prefetch_related("choices").all()
     answers = {a.question_id: a for a in attempt.answers.all()}
     if request.method == "POST":

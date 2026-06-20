@@ -2,6 +2,7 @@
 
 from datetime import date, timedelta
 
+from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.utils import timezone
 
@@ -17,8 +18,15 @@ from apps.academics.models import (
     Diploma,
     DiplomaEnrollment,
     Lecture,
+    ModeratorStudentAssignment,
     Semester,
     SemesterCourse,
+    TeacherCohortAssignment,
+)
+from apps.academics.services import (
+    assign_moderator_to_students,
+    assign_teacher_to_cohort,
+    revoke_moderator_student_assignment,
 )
 from apps.accounts.models import User
 from apps.students.constants import EDUCATION_BACHELOR, GENDER_MALE
@@ -229,3 +237,62 @@ class EnrollmentTests(TestCase):
             expires_at=timezone.now() + timedelta(days=1),
         )
         self.assertFalse(ce.is_access_expired)
+
+
+class StaffAssignmentTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(email="admin2@test.com", password="x")
+        self.teacher = User.objects.create_user(email="teacher@test.com", password="x")
+        self.moderator = User.objects.create_user(email="moderator@test.com", password="x")
+        self.student_user = User.objects.create_user(email="assigned-student@test.com", password="x")
+        self.profile = StudentProfile.objects.create(
+            user=self.student_user,
+            full_name="Assigned Student",
+            date_of_birth=date(2000, 1, 1),
+            gender=GENDER_MALE,
+            address="Cairo",
+            phone="01000000100",
+            national_id="29001010100100",
+            education=EDUCATION_BACHELOR,
+        )
+        diploma = Diploma.objects.create(title="Assignment Diploma", total_semesters=2, created_by=self.admin)
+        self.cohort = Cohort.objects.create(
+            diploma=diploma,
+            name="Assignments 2026",
+            start_date=date(2026, 1, 1),
+            created_by=self.admin,
+        )
+
+    def test_teacher_active_assignment_is_unique(self):
+        assign_teacher_to_cohort(self.teacher, self.cohort, self.admin)
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                TeacherCohortAssignment.objects.create(
+                    teacher=self.teacher,
+                    cohort=self.cohort,
+                    assigned_by=self.admin,
+                )
+
+    def test_moderator_assignment_merge_does_not_delete_existing_row(self):
+        first = assign_moderator_to_students(self.moderator, [self.profile], self.cohort, self.admin)[0]
+        second = assign_moderator_to_students(self.moderator, [self.profile], self.cohort, self.admin)[0]
+
+        self.assertEqual(first.id, second.id)
+        self.assertEqual(
+            ModeratorStudentAssignment.objects.filter(
+                moderator=self.moderator,
+                student=self.profile,
+                cohort=self.cohort,
+                active=True,
+            ).count(),
+            1,
+        )
+
+    def test_moderator_assignment_revoke_preserves_history(self):
+        assignment = assign_moderator_to_students(self.moderator, [self.profile], self.cohort, self.admin)[0]
+        revoke_moderator_student_assignment(assignment, self.admin, "rotated")
+        assignment.refresh_from_db()
+
+        self.assertFalse(assignment.active)
+        self.assertEqual(assignment.revoke_reason, "rotated")
+        self.assertIsNotNone(assignment.revoked_at)
