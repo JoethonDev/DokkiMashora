@@ -1,9 +1,7 @@
 """Tests for payment services: matching, parsing, upload confirm rollback."""
-
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
-
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from django.contrib.auth.models import Group
@@ -336,7 +334,7 @@ class PaymentFilterSelectorTests(TestCase):
         PaymentRecord.objects.create(
             student=self.student, upload_row=None,
             external_reference="REF-F1", amount=Decimal("500"),
-            status=PAYMENT_STATUS_PAID, paid_at=datetime(2026, 1, 15, tzinfo=timezone.utc),
+            status=PAYMENT_STATUS_PAID, paid_at=datetime(2026, 1, 15, tzinfo=UTC),
         )
 
     def test_get_upload_queryset_filters_by_status(self) -> None:
@@ -394,7 +392,14 @@ class EnrollmentLinkingTests(TestCase):
     """Tests that preview_upload and confirm_upload populate enrollment FKs."""
 
     def setUp(self) -> None:
-        from apps.academics.models import Cohort, Course, CourseEnrollment, CourseVersion, Diploma, DiplomaEnrollment, Semester
+        from apps.academics.models import (
+            Cohort,
+            Course,
+            CourseEnrollment,
+            CourseVersion,
+            Diploma,
+            DiplomaEnrollment,
+        )
         from apps.accounts.constants import GROUP_ADMIN, GROUP_STUDENT
         from apps.accounts.models import User as UserModel
         from apps.applications.models import Application

@@ -1,17 +1,17 @@
 from __future__ import annotations
 
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, render
-
-from django.contrib.auth import get_user_model
 
 from apps.accounts.constants import GROUP_ADMIN, GROUP_SUPER_ADMIN
 from apps.core.permissions import role_required, safe_date_str, safe_int
 
-User = get_user_model()
-
+from .constants import AUDIT_ACTION_CHOICES
 from .models import AuditEvent
 from .selectors import get_audit_events
+
+User = get_user_model()
 
 ROLE_AUDIT_STAFF = (GROUP_SUPER_ADMIN, GROUP_ADMIN)
 
@@ -34,7 +34,6 @@ def audit_list(request):
         date_to=date_to,
         days=None,
     )
-    from .constants import AUDIT_ACTION_CHOICES
     actor_choices = User.objects.filter(is_staff=True, is_active=True).order_by("full_name")
     return render(
         request,
