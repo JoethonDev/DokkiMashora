@@ -1,0 +1,25 @@
+{% extends "students/profile/base_profile.html" %}{% load i18n %}
+{% block profile_title %}{% trans "Certificates" %}{% endblock %}
+{% block profile_content %}
+{% if certificates %}
+<div class="space-y-3">
+  {% for cert in certificates %}
+  <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+    <div class="flex items-center justify-between">
+      <div>
+        <p class="text-sm font-medium">{{ cert.diploma_enrollment.cohort.diploma.title }}</p>
+        <p class="text-xs text-slate-500 mt-1">{% trans "Certificate No." %}: {{ cert.certificate_number }}</p>
+      </div>
+      {% include "partials/_badge.html" with label=cert.get_status_display tone="success" %}
+    </div>
+    <p class="text-xs text-slate-500 mt-1">{% trans "Issued" %}: {{ cert.generated_at|date:"j M Y" }}</p>
+    <a href="{% url 'certificates:student_certificate_download' cert.id %}" class="text-sm text-brand-600 hover:underline mt-2 inline-block">{% trans "Download Certificate" %}</a>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 text-sm text-slate-500 dark:text-slate-400">
+  <p>{% trans "No certificates issued yet." %}</p>
+</div>
+{% endif %}
+{% endblock %}

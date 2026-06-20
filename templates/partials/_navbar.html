@@ -13,22 +13,25 @@
         </a>
       </div>
 
-      <nav class="hidden md:flex items-center gap-6 text-sm font-medium text-slate-700 dark:text-slate-300">
+      <nav class="hidden md:flex items-center gap-5 text-sm font-medium text-slate-700 dark:text-slate-300">
         <a href="{% url 'core:landing' %}" class="hover:text-brand-600">{% trans "Home" %}</a>
-        <a href="{% url 'applications:register' %}" class="hover:text-brand-600">{% trans "Register" %}</a>
         {% if user.is_authenticated %}
           <a href="{% url 'accounts:dashboard' %}" class="hover:text-brand-600">{% trans "Dashboard" %}</a>
-          <a href="{% url 'accounts:profile' %}" class="hover:text-brand-600">{% trans "Profile" %}</a>
-          <a href="{% url 'academics:student_course_list' %}" class="hover:text-brand-600">{% trans "My Courses" %}</a>
-          {% if user.is_staff %}
+          {% if CAN_VIEW_STUDENT_NAV %}
+            <a href="{% url 'students:dashboard' %}" class="hover:text-brand-600">{% trans "My Profile" %}</a>
+            <a href="{% url 'academics:student_course_list' %}" class="hover:text-brand-600">{% trans "My Courses" %}</a>
+          {% endif %}
+          {% if CAN_VIEW_STAFF_NAV %}
             <a href="{% url 'applications:admin_list' %}" class="hover:text-brand-600">{% trans "Applications" %}</a>
             <a href="{% url 'academics:admin_diploma_list' %}" class="hover:text-brand-600">{% trans "Academics" %}</a>
-            <a href="{% url 'academics:admin_course_list' %}" class="hover:text-brand-600">{% trans "Courses" %}</a>
             <a href="{% url 'exams:admin_list' %}" class="hover:text-brand-600">{% trans "Exams" %}</a>
+            <a href="{% url 'assessments:admin_list' %}" class="hover:text-brand-600">{% trans "Assessments" %}</a>
           {% endif %}
           {% if CAN_VIEW_DESIGN_SHOWCASE %}
             <a href="{% url 'core:design_showcase' %}" class="hover:text-brand-600">{% trans "Designs" %}</a>
           {% endif %}
+        {% else %}
+          <a href="{% url 'applications:register' %}" class="hover:text-brand-600">{% trans "Register" %}</a>
         {% endif %}
       </nav>
 

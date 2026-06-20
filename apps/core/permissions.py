@@ -17,6 +17,28 @@ from apps.accounts.constants import (
 )
 
 
+def safe_int(value: str | None, default: int | None = None) -> int | None:
+    """Parse an integer from a string, returning *default* on failure."""
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return default
+
+
+def safe_date_str(value: str | None) -> str | None:
+    """Validate a YYYY-MM-DD date string, returning None if invalid."""
+    if not value:
+        return None
+    from datetime import datetime
+    try:
+        datetime.strptime(value.strip(), "%Y-%m-%d")
+        return value.strip()
+    except (ValueError, TypeError):
+        return None
+
+
 def _user_in_any_group(user, group_names: tuple[str, ...]) -> bool:
     if not user.is_authenticated:
         return False

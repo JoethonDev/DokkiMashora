@@ -35,6 +35,13 @@ class EmailMessage(TimeStampedModel):
         related_name="sent_emails",
     )
     sent_at = models.DateTimeField(_("sent at"), null=True, blank=True)
+    bulk_send = models.ForeignKey(
+        "BulkEmailSend",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="messages",
+    )
 
     class Meta:
         verbose_name = _("email message")

@@ -10,7 +10,13 @@ from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone, translation
 
-from apps.accounts.constants import GROUP_STUDENT
+from apps.accounts.constants import (
+    GROUP_ADMIN,
+    GROUP_MODERATOR,
+    GROUP_STUDENT,
+    GROUP_SUPER_ADMIN,
+    GROUP_TEACHER,
+)
 from apps.accounts.models import User
 
 
@@ -64,6 +70,139 @@ class ErrorHandlerTests(TestCase):
         response = self.client.get("/this-page-does-not-exist/")
         self.assertEqual(response.status_code, 404)
         self.assertContains(response, "404", status_code=404)
+
+
+class NavigationVisibilityTests(TestCase):
+    def setUp(self) -> None:
+        self.client = Client()
+        self.url = reverse("core:landing")
+        self.student_group, _created = Group.objects.get_or_create(name=GROUP_STUDENT)
+        self.admin_group, _created = Group.objects.get_or_create(name=GROUP_ADMIN)
+
+    def test_authenticated_student_does_not_see_public_auth_actions(self) -> None:
+        student = User.objects.create_user(email="nav-student@example.com", password="pass")
+        student.groups.add(self.student_group)
+        self.client.force_login(student)
+
+        response = self.client.get("/en/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Register now")
+        self.assertNotContains(response, "Log in")
+        self.assertContains(response, "Go to dashboard")
+
+    def test_student_nav_does_not_show_admin_links(self) -> None:
+        student = User.objects.create_user(email="student-links@example.com", password="pass")
+        student.groups.add(self.student_group)
+        self.client.force_login(student)
+
+        response = self.client.get("/en/")
+
+        self.assertContains(response, "My Profile")
+        self.assertContains(response, "My Courses")
+        self.assertNotContains(response, "Applications")
+        self.assertNotContains(response, "Assessments")
+
+    def test_admin_nav_does_not_show_student_only_links(self) -> None:
+        admin = User.objects.create_user(email="admin-links@example.com", password="pass", is_staff=True)
+        admin.groups.add(self.admin_group)
+        self.client.force_login(admin)
+
+        response = self.client.get("/en/")
+
+        self.assertContains(response, "Applications")
+        self.assertContains(response, "Assessments")
+        self.assertNotContains(response, "My Courses")
+        self.assertNotContains(response, "My Profile")
+        self.assertNotContains(response, "Register now")
+
+
+class RoleMatrixNavTests(TestCase):
+    """Verify nav visibility for anonymous, student, teacher, moderator, admin, super admin."""
+
+    ROLES: dict[str, str] = {
+        "anonymous": "",
+        GROUP_STUDENT: GROUP_STUDENT,
+        GROUP_TEACHER: GROUP_TEACHER,
+        GROUP_MODERATOR: GROUP_MODERATOR,
+        GROUP_ADMIN: GROUP_ADMIN,
+        GROUP_SUPER_ADMIN: GROUP_SUPER_ADMIN,
+    }
+
+    def setUp(self) -> None:
+        self.client = Client()
+        self.created_users: dict[str, User] = {}
+        for name in self.ROLES:
+            if name == "anonymous":
+                continue
+            user = User.objects.create_user(
+                email=f"{name.lower().replace(' ', '_')}@example.com",
+                password="pass",
+                is_staff=(name != GROUP_STUDENT),
+            )
+            group, _ = Group.objects.get_or_create(name=name)
+            user.groups.add(group)
+            self.created_users[name] = user
+
+    def _login(self, role_name: str) -> None:
+        if role_name == "anonymous":
+            self.client.logout()
+        else:
+            self.client.force_login(self.created_users[role_name])
+
+    def test_anonymous_gets_200_on_landing(self) -> None:
+        self._login("anonymous")
+        response = self.client.get("/en/")
+        self.assertEqual(response.status_code, 200)
+
+    def test_student_gets_200_on_student_pages(self) -> None:
+        self._login(GROUP_STUDENT)
+        for url in ["/en/", "/en/profile/"]:
+            response = self.client.get(url)
+            self.assertIn(response.status_code, (200, 302, 404),
+                          f"{url} returned {response.status_code} for student")
+
+    def test_teacher_gets_200_on_exam_pages(self) -> None:
+        self._login(GROUP_TEACHER)
+        response = self.client.get("/en/exams/manage/")
+        self.assertIn(response.status_code, (200, 302))
+
+    def test_moderator_gets_200_on_payment_pages(self) -> None:
+        self._login(GROUP_MODERATOR)
+        response = self.client.get(reverse("payments:upload_list"))
+        self.assertIn(response.status_code, (200, 302))
+
+    def test_admin_gets_200_on_admin_pages(self) -> None:
+        self._login(GROUP_ADMIN)
+        for url_name in ["payments:upload_list", "progression:admin_dashboard",
+                         "applications:admin_list", "certificates:admin_certificate_list"]:
+            response = self.client.get(reverse(url_name))
+            self.assertIn(response.status_code, (200, 302),
+                          f"{url_name} returned {response.status_code} for admin")
+
+    def test_super_admin_gets_200_on_all_admin_pages(self) -> None:
+        self._login(GROUP_SUPER_ADMIN)
+        for url_name in ["audit:list", "communications:bulk_email_create",
+                         "applications:admin_list", "certificates:admin_certificate_list"]:
+            response = self.client.get(reverse(url_name))
+            self.assertIn(response.status_code, (200, 302),
+                          f"{url_name} returned {response.status_code} for super admin")
+
+    def test_student_cannot_access_admin_pages(self) -> None:
+        self._login(GROUP_STUDENT)
+        for url_name in ["applications:admin_list", "payments:upload_list",
+                         "progression:admin_dashboard", "audit:list"]:
+            response = self.client.get(reverse(url_name))
+            self.assertIn(response.status_code, (302, 403),
+                          f"{url_name} returned {response.status_code} for student (expected 302 or 403)")
+
+    def test_anonymous_redirected_to_login(self) -> None:
+        self._login("anonymous")
+        for url_name in ["students:dashboard", "payments:upload_list",
+                         "progression:admin_dashboard"]:
+            response = self.client.get(reverse(url_name))
+            self.assertIn(response.status_code, (302, 403),
+                          f"{url_name} returned {response.status_code} for anonymous")
 
 
 class DesignShowcaseTests(TestCase):

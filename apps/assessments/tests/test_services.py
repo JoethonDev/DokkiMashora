@@ -884,3 +884,48 @@ class FullFlowIntegrationTests(TestCase):
         self.assertEqual(attempt.status, ATTEMPT_STATUS_UNDER_REVIEW)
         self.assertEqual(attempt.score_points, Decimal("10.00"))
         self.assertIsNotNone(attempt.score_percent)
+
+
+class GradingQueueQueryCountTests(TestCase):
+    """Verify grading queue selectors produce bounded queries."""
+
+    def setUp(self) -> None:
+        self.admin = User.objects.create_superuser(email="admin@test.com", password="x")
+        self.student = User.objects.create_user(email="student@test.com", password="x")
+        self.assessment = Assessment.objects.create(
+            title="Quiz", assessment_type=ASSESSMENT_TYPE_QUIZ,
+            created_by=self.admin,
+            open_at=timezone.now() - timezone.timedelta(hours=1),
+            close_at=timezone.now() + timezone.timedelta(hours=2),
+            passing_score=Decimal("50.00"),
+        )
+        for i in range(5):
+            u = User.objects.create_user(email=f"s{i}@test.com", password="x")
+            AssessmentAttempt.objects.create(
+                assessment=self.assessment, student=u,
+                attempt_number=1, status=ATTEMPT_STATUS_UNDER_REVIEW,
+            )
+
+    def test_get_pending_grading_query_count_bounded(self) -> None:
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        with CaptureQueriesContext(connection) as captured:
+            list(get_pending_grading())
+        self.assertLess(len(captured.captured_queries), 5,
+                        f"get_pending_grading used {len(captured.captured_queries)} queries; expected < 5")
+
+    def test_get_homework_pending_grading_query_count_bounded(self) -> None:
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        with CaptureQueriesContext(connection) as captured:
+            list(get_homework_pending_grading())
+        self.assertLess(len(captured.captured_queries), 5,
+                        f"get_homework_pending_grading used {len(captured.captured_queries)} queries; expected < 5")
+
+    def test_get_grading_queue_query_count_bounded(self) -> None:
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        with CaptureQueriesContext(connection) as captured:
+            list(get_grading_queue(self.admin))
+        self.assertLess(len(captured.captured_queries), 10,
+                        f"get_grading_queue used {len(captured.captured_queries)} queries; expected < 10")

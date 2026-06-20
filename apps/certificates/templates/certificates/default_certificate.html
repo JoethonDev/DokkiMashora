@@ -1,5 +1,6 @@
+{% load i18n %}<|xml|>
 <!DOCTYPE html>
-<html dir="rtl">
+<html dir="{{ LANGUAGE_BIDI|yesno:'rtl,ltr' }}">
 <head>
 <meta charset="utf-8">
 <style>
@@ -17,13 +18,13 @@
 <div class="border">
   <div class="number">{{ certificate_number }}</div>
   <h1>{{ diploma_title }}</h1>
-  <p>يشهد المركز بأن</p>
+  <p>{% trans "The center certifies that" %}</p>
   <h3>{{ student_name }}</h3>
-  <p>قد أتم بنجاح متطلبات</p>
+  <p>{% trans "has successfully completed the requirements of" %}</p>
   <h2>{{ cohort_name }}</h2>
-  <p>تاريخ الإتمام: {{ completion_date }}</p>
-  <p>تاريخ الإصدار: {{ issue_date }}</p>
-  <div class="footer">Placeholder Certificate / شهادة مؤقتة</div>
+  <p>{% trans "Completion date:" %} {{ completion_date }}</p>
+  <p>{% trans "Issue date:" %} {{ issue_date }}</p>
+  <div class="footer">{% trans "Placeholder Certificate" %}</div>
 </div>
 </body>
 </html>

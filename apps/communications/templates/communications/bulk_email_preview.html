@@ -1,0 +1,39 @@
+{% extends "base.html" %}{% load i18n %}
+{% block title %}{% trans "Preview Bulk Email" %} — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+{% include "partials/_page.html" with title=_("Preview Bulk Email") subtitle=_("Review before sending") %}
+<section class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pb-10">
+<div class="space-y-5">
+  <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+    <h2 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">{% trans "Subject" %}</h2>
+    <p class="text-lg font-medium">{{ draft.subject }}</p>
+  </div>
+  <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+    <h2 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">{% trans "Body" %}</h2>
+    <div class="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">{{ draft.body }}</div>
+  </div>
+  <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+    <h2 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">{% trans "Recipients" %}</h2>
+    <p class="mb-3">{% blocktrans count count=recipient_count %}{{ count }} recipient{% plural %}{{ count }} recipients{% endblocktrans %}</p>
+    {% if recipients %}
+    <ul class="text-sm text-slate-600 dark:text-slate-300 max-h-48 overflow-y-auto space-y-1">
+      {% for email in recipients %}
+      <li class="font-mono text-xs">{{ email }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+  <div class="flex gap-3">
+    <form method="post">
+      {% csrf_token %}
+      {% include "partials/_button.html" with label=_("Confirm & Send") variant="success" type="submit" %}
+    </form>
+    <form method="post" action="{% url 'communications:bulk_email_discard' %}">
+      {% csrf_token %}
+      {% include "partials/_button.html" with label=_("Discard") variant="danger" type="submit" %}
+    </form>
+    <a href="{% url 'communications:bulk_email_create' %}" class="inline-flex items-center px-4 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Edit" %}</a>
+  </div>
+</div>
+</section>
+{% endblock %}

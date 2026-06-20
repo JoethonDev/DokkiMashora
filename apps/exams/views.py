@@ -17,6 +17,16 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_POST
 
+from apps.audit.constants import (
+    ACTION_EXAM_CREATED,
+    ACTION_EXAM_TOGGLED,
+    ACTION_EXAM_UPDATED,
+    ACTION_GRADE_CHANGED,
+    ACTION_QUESTION_CREATED,
+    ACTION_QUESTION_DELETED,
+    ACTION_QUESTION_UPDATED,
+)
+from apps.audit.services import record_audit_event
 from apps.core.permissions import ROLE_EXAM_STAFF, role_required
 from apps.exams.constants import (
     ASSIGNMENT_STATUS_ASSIGNED,
@@ -394,6 +404,13 @@ def admin_create_exam(request):
             exam = form.save(commit=False)
             exam.created_by = request.user
             exam.save()
+            record_audit_event(
+                actor=request.user,
+                action=ACTION_EXAM_CREATED,
+                target_type="exam",
+                target_id=str(exam.id),
+                metadata={"title": exam.title, "exam_type": exam.exam_type},
+            )
             messages.success(request, _("Exam created."))
             return redirect("exams:admin_detail", exam_id=exam.id)
     else:
@@ -416,6 +433,13 @@ def admin_edit_exam(request, exam_id):
         form = ExamForm(request.POST, instance=exam)
         if form.is_valid():
             form.save()
+            record_audit_event(
+                actor=request.user,
+                action=ACTION_EXAM_UPDATED,
+                target_type="exam",
+                target_id=str(exam.id),
+                metadata={"title": exam.title},
+            )
             messages.success(request, _("Exam updated."))
             return redirect("exams:admin_detail", exam_id=exam.id)
     else:
@@ -440,6 +464,13 @@ def admin_toggle_active(request, exam_id):
         exam.regenerate_access_token()
     exam.is_active = not exam.is_active
     exam.save(update_fields=["is_active", "updated_at"])
+    record_audit_event(
+        actor=request.user,
+        action=ACTION_EXAM_TOGGLED,
+        target_type="exam",
+        target_id=str(exam.id),
+        metadata={"is_active": exam.is_active, "title": exam.title},
+    )
     status = _("activated") if exam.is_active else _("deactivated")
     messages.success(request, _("Exam %(status)s.") % {"status": status})
     return redirect("exams:admin_detail", exam_id=exam.id)
@@ -476,6 +507,13 @@ def admin_grade_assignment(request, assignment_id):
                     score = Decimal(str(request.POST[score_key]))
                     feedback = request.POST.get(feedback_key, "")
                     grade_essay_answer(answer, score, feedback, request.user)
+        record_audit_event(
+            actor=request.user,
+            action=ACTION_GRADE_CHANGED,
+            target_type="assignment",
+            target_id=str(assignment_id),
+            metadata={"exam_id": assignment.exam_id, "student_id": assignment.student_id},
+        )
         messages.success(request, _("Grades saved."))
         return redirect("exams:admin_grade_assignment", assignment_id=assignment_id)
     question_answer_pairs = [(q, answers.get(q.id)) for q in questions]
@@ -517,6 +555,13 @@ def admin_grade_with_gemini(request, answer_id):
         messages.error(request, result.get("feedback", _("Grading failed.")))
     else:
         grade_essay_answer(answer, result["score"], result["feedback"], request.user)
+        record_audit_event(
+            actor=request.user,
+            action=ACTION_GRADE_CHANGED,
+            target_type="answer",
+            target_id=str(answer_id),
+            metadata={"exam_id": answer.assignment.exam_id, "grader": "gemini", "score": str(result["score"])},
+        )
         messages.success(
             request,
             _("Gemini grade: %(score)s out of %(max)s")
@@ -601,6 +646,13 @@ def admin_question_save(request, exam_id, question_id=None):
                 _save_choices_from_parsed(question, parsed_choices)
             elif question.question_type == QUESTION_TYPE_ESSAY:
                 Choice.objects.filter(question=question).delete()
+            record_audit_event(
+                actor=request.user,
+                action=ACTION_QUESTION_CREATED if not question_id else ACTION_QUESTION_UPDATED,
+                target_type="question",
+                target_id=str(question.id),
+                metadata={"exam_id": exam_id, "question_type": question.question_type},
+            )
             messages.success(request, _("Question saved."))
             if _is_htmx(request):
                 response = HttpResponse()
@@ -617,6 +669,13 @@ def admin_question_save(request, exam_id, question_id=None):
 def admin_question_delete(request, exam_id, question_id):
     """Delete a question."""
     question = get_object_or_404(Question, id=question_id, exam_id=exam_id)
+    record_audit_event(
+        actor=request.user,
+        action=ACTION_QUESTION_DELETED,
+        target_type="question",
+        target_id=str(question_id),
+        metadata={"exam_id": exam_id, "question_type": getattr(question, "question_type", "")},
+    )
     question.delete()
     messages.success(request, _("Question deleted."))
     if _is_htmx(request):

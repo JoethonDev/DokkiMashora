@@ -13,7 +13,9 @@ try:  # pragma: no cover - optional dependency
 
     INSTALLED_APPS = list(INSTALLED_APPS) + ["debug_toolbar"]
     MIDDLEWARE = list(MIDDLEWARE) + ["debug_toolbar.middleware.DebugToolbarMiddleware"]
-    DEBUG_TOOLBAR_CONFIG = {"SHOW_TOOLBAR_CALLBACK": lambda request: DEBUG}
+    DEBUG_TOOLBAR_CONFIG = {
+        "SHOW_TOOLBAR_CALLBACK": lambda request: DEBUG,
+    }
 except ImportError:  # pragma: no cover - optional dependency
     pass
 

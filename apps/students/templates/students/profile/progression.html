@@ -1,0 +1,84 @@
+{% extends "students/profile/base_profile.html" %}{% load i18n student_extras %}
+{% block profile_title %}{% trans "Academic Progress" %}{% endblock %}
+{% block profile_content %}
+{% if semester_progress %}
+<h2 class="text-base font-semibold mb-3">{% trans "Semester Progress" %}</h2>
+<div class="space-y-3 mb-6">
+  {% for sp in semester_progress %}
+  <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+    <div class="flex items-center justify-between">
+      <div>
+        <p class="text-sm font-medium">{{ sp.semester.title }}</p>
+        {% if sp.diploma_enrollment %}
+        <p class="text-xs text-slate-500">{{ sp.diploma_enrollment.cohort.diploma.title }}</p>
+        {% endif %}
+      </div>
+      {% include "partials/_badge.html" with label=sp.get_status_display tone=sp.status|status_tone:"semester_progress" %}
+    </div>
+    {% if sp.calculated_score is not None %}
+    <p class="text-xs text-slate-500 mt-1">{% trans "Score" %}: <span class="tabular-nums font-semibold">{{ sp.calculated_score }}%</span></p>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if completions %}
+<h2 class="text-base font-semibold mb-3">{% trans "Diploma Completions" %}</h2>
+<div class="space-y-3 mb-6">
+  {% for c in completions %}
+  <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+    <div class="flex items-center justify-between">
+      <p class="text-sm font-medium">{{ c.diploma_enrollment.cohort.diploma.title }}</p>
+      {% include "partials/_badge.html" with label=c.get_status_display tone=c.status|status_tone:"diploma_completion" %}
+    </div>
+    {% if c.completed_at %}
+    <p class="text-xs text-slate-500 mt-1">{% trans "Completed" %}: {{ c.completed_at|date:"j M Y" }}</p>
+    {% endif %}
+    {% if c.graduated_at %}
+    <p class="text-xs text-slate-500">{% trans "Graduated" %}: {{ c.graduated_at|date:"j M Y" }}</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if eligibilities %}
+<h2 class="text-base font-semibold mb-3">{% trans "Final Exam Eligibility" %}</h2>
+<div class="space-y-3 mb-6">
+  {% for e in eligibilities %}
+  <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+    <div class="flex items-center justify-between">
+      <p class="text-sm font-medium">{{ e.diploma_enrollment.cohort.diploma.title }}</p>
+      {% if e.eligible %}{% include "partials/_badge.html" with label=_("Eligible") tone="success" %}
+      {% else %}{% include "partials/_badge.html" with label=_("Not eligible") tone="warning" %}{% endif %}
+    </div>
+    {% if e.blocked_reason %}
+    <p class="text-xs text-rose-600 mt-1">{{ e.blocked_reason }}</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if promotion_decisions %}
+<h2 class="text-base font-semibold mb-3">{% trans "Decision History" %}</h2>
+<div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 max-h-64 overflow-y-auto">
+  <div class="space-y-2 text-xs">
+    {% for d in promotion_decisions %}
+    <div class="border-b border-slate-100 dark:border-slate-800 pb-2 last:border-0">
+      <span class="font-medium">{{ d.get_decision_type_display }}</span>
+      &mdash; {{ d|student_safe_reason }}
+      <span class="text-slate-400">({{ d.decided_at|date:"j M Y, H:i" }})</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% if not semester_progress and not completions and not eligibilities and not promotion_decisions %}
+<div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 text-sm text-slate-500 dark:text-slate-400">
+  <p>{% trans "No academic progress records yet." %}</p>
+</div>
+{% endif %}
+{% endblock %}

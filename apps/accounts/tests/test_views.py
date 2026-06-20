@@ -111,3 +111,49 @@ class ProfileTests(TestCase):
         self.user.refresh_from_db()
         self.assertEqual(self.user.full_name, "New Name")
         self.assertEqual(self.user.phone, "0100")
+
+
+class AdminDashboardQueryCountTests(TestCase):
+    """Verify admin dashboard produces a bounded number of queries."""
+
+    def setUp(self) -> None:
+        self.client = Client()
+        self.admin = User.objects.create_superuser(
+            email="admin@test.com", password="x",
+            is_staff=True, is_superuser=True,
+        )
+        self.client.force_login(self.admin)
+        from datetime import date
+
+        from apps.academics.models import Diploma
+        from apps.applications.constants import APP_STATUS_PENDING
+        from apps.applications.models import Application
+        from apps.exams.constants import ASSIGNMENT_STATUS_COMPLETED
+        from apps.exams.models import Assignment, Exam
+        from apps.students.models import StudentProfile
+        student_user = User.objects.create_user(email="stu@test.com", password="x")
+        profile = StudentProfile.objects.create(
+            user=student_user, full_name="S", date_of_birth=date(2000, 1, 1),
+            gender="male", address="Addr", phone="01000000000",
+            national_id="29001010100011", education="bachelor",
+        )
+        Diploma.objects.create(title="Diploma A", is_active=True, created_by=self.admin)
+        Diploma.objects.create(title="Diploma B", is_active=True, created_by=self.admin)
+        from django.utils import timezone as tz
+        exam = Exam.objects.create(
+            title="Exam", is_active=True, created_by=self.admin,
+            duration_minutes=60, passing_score=50,
+            open_at=tz.now(), close_at=tz.now() + tz.timedelta(hours=2),
+        )
+        self.admin2 = User.objects.create_user(email="stu2@test.com", password="x")
+        Assignment.objects.create(exam=exam, student=self.admin2, status=ASSIGNMENT_STATUS_COMPLETED)
+        Application.objects.create(student=profile, status=APP_STATUS_PENDING)
+
+    def test_admin_dashboard_query_count_bounded(self) -> None:
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        url = reverse("accounts:dashboard_admin")
+        with CaptureQueriesContext(connection) as captured:
+            self.client.get(url)
+        self.assertLess(len(captured.captured_queries), 15,
+                        f"Admin dashboard used {len(captured.captured_queries)} queries; expected < 15")

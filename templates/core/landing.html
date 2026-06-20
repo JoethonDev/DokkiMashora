@@ -1,59 +1,281 @@
 {% extends "base.html" %}
-{% load i18n %}
-{% block title %}{% trans "Home" %} | {{ SITE_NAME_AR }}{% endblock title %}
+{% load i18n static %}
+
+{% block title %}
+  {% if LANGUAGE_CODE == "en" %}Logos Coptic Family Institute{% else %}معهد اللوغوس الكنسي للإرشاد والنمو الأسري{% endif %} | {{ SITE_NAME_AR }}
+{% endblock title %}
+
 {% block content %}
-<section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
-  <div class="grid lg:grid-cols-2 gap-10 items-center">
-    <div>
-      <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "DokkiMashora LMS" %}</p>
-      <h1 class="mt-3 text-4xl sm:text-5xl font-extrabold tracking-tight font-display text-slate-900 dark:text-white">
-        {% trans "A modern Arabic-first learning platform." %}
+<section class="bg-[#2d0505] px-4 py-2.5 text-center text-xs font-semibold text-amber-100 sm:text-sm">
+  <span class="inline-flex items-center gap-2">
+    <span class="h-2 w-2 rounded-full bg-amber-300"></span>
+    {% if LANGUAGE_CODE == "en" %}
+      New cohort registration is open through the official application flow.
+    {% else %}
+      التسجيل مفتوح الآن للدفعة الجديدة من خلال نموذج الالتحاق الرسمي.
+    {% endif %}
+  </span>
+</section>
+
+<section class="relative min-h-[calc(100svh-7rem)] overflow-hidden bg-[#2d0505]">
+  <img
+    src="https://images.unsplash.com/photo-1542038784456-1ea8e935640e?auto=format&fit=crop&q=80&w=1800"
+    alt="{% trans 'Family learning and counseling session' %}"
+    class="absolute inset-0 h-full w-full object-cover opacity-42"
+  >
+  <div class="absolute inset-0 bg-gradient-to-b from-[#2d0505]/70 via-[#5c0f0f]/76 to-[#faf9f6]"></div>
+
+  <div class="relative mx-auto flex min-h-[calc(100svh-7rem)] max-w-7xl flex-col justify-center px-4 pb-20 pt-14 sm:px-6 lg:px-8">
+    <div class="max-w-4xl {% if LANGUAGE_CODE != 'en' %}text-right{% endif %}">
+      <div class="inline-flex items-center gap-2 rounded-full border border-amber-300/40 bg-white/10 px-3.5 py-1.5 text-xs font-bold text-amber-100 backdrop-blur">
+        <span class="text-amber-300">✝</span>
+        <span>
+          {% if LANGUAGE_CODE == "en" %}
+            Contemporary psychology with a rooted Orthodox pastoral spirit
+          {% else %}
+            علم نفس معاصر بروح آبائية كنسية
+          {% endif %}
+        </span>
+      </div>
+
+      <h1 class="mt-6 max-w-4xl text-4xl font-black leading-tight tracking-tight text-white sm:text-5xl lg:text-6xl">
+        {% if LANGUAGE_CODE == "en" %}
+          Logos Coptic Family Institute, powered by DokkiMashora.
+        {% else %}
+          احم بيتك، افهم أولادك، وابدأ حياة زوجية مبنية على أسس روحية ونفسية متينة.
+        {% endif %}
       </h1>
-      <p class="mt-5 text-lg text-slate-600 dark:text-slate-300 max-w-prose">
-        {% trans "Registration, entrance exams, content, assessments, grading, and certificates — all in one place, designed for Cairo time." %}
+
+      <p class="mt-5 max-w-3xl text-base leading-8 text-amber-50/90 sm:text-lg">
+        {% if LANGUAGE_CODE == "en" %}
+          A church-focused family learning and guidance experience for couples, parents, servants, and families. Programs, cohorts, lectures, and applications below are connected to the live LMS database.
+        {% else %}
+          مناهج ودراسات كنسية متخصصة تجمع بين أحدث الأبحاث في الصحة النفسية والسلوك، والتعاليم الآبائية الأصيلة، مع مسار تسجيل وإدارة أكاديمية متصل ببيانات النظام الفعلية.
+        {% endif %}
       </p>
-      <div class="mt-8 flex flex-wrap gap-3">
-        {% include "partials/_button.html" with href=url_applications_register label=_("Register now") variant="primary" size="lg" %}
-        {% include "partials/_button.html" with href=url_accounts_login label=_("Log in") variant="secondary" size="lg" %}
+
+      <div class="mt-8 flex flex-col gap-3 sm:flex-row {% if LANGUAGE_CODE != 'en' %}sm:justify-end{% endif %}">
+        {% if user.is_authenticated %}
+          <a href="{{ url_accounts_dashboard }}" class="inline-flex items-center justify-center rounded-lg bg-amber-300 px-6 py-3 text-sm font-black text-[#2d0505] shadow-sm transition hover:bg-amber-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#2d0505]">
+            {% trans "Go to dashboard" %}
+          </a>
+        {% else %}
+          <a href="{{ url_applications_register }}" class="inline-flex items-center justify-center rounded-lg bg-amber-300 px-6 py-3 text-sm font-black text-[#2d0505] shadow-sm transition hover:bg-amber-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#2d0505]">
+            {% if LANGUAGE_CODE == "en" %}Apply for the new cohort{% else %}سجل في الدفعة الجديدة{% endif %}
+          </a>
+          <a href="{{ url_accounts_login }}" class="inline-flex items-center justify-center rounded-lg border border-white/45 bg-white/10 px-6 py-3 text-sm font-bold text-white backdrop-blur transition hover:bg-white/18 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#2d0505]">
+            {% trans "Log in" %}
+          </a>
+        {% endif %}
+        <a href="#programs" class="inline-flex items-center justify-center rounded-lg border border-white/35 px-6 py-3 text-sm font-bold text-white transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#2d0505]">
+          {% if LANGUAGE_CODE == "en" %}Explore programs{% else %}استكشف البرامج{% endif %}
+        </a>
       </div>
     </div>
-    <div class="relative">
-      <div class="absolute inset-0 -z-10 bg-gradient-to-tr from-brand-500/20 to-sky-500/20 rounded-3xl blur-2xl"></div>
-      <div class="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm p-6">
-        <div class="grid grid-cols-2 gap-4 text-sm">
-          <div class="rounded-xl bg-slate-50 dark:bg-slate-800 p-4">
-            <p class="text-slate-500 dark:text-slate-400">{% trans "Active students" %}</p>
-            <p class="mt-1 text-2xl font-semibold text-slate-900 dark:text-slate-100 tabular-nums">—</p>
-          </div>
-          <div class="rounded-xl bg-slate-50 dark:bg-slate-800 p-4">
-            <p class="text-slate-500 dark:text-slate-400">{% trans "Cohorts" %}</p>
-            <p class="mt-1 text-2xl font-semibold text-slate-900 dark:text-slate-100 tabular-nums">—</p>
-          </div>
-          <div class="rounded-xl bg-slate-50 dark:bg-slate-800 p-4">
-            <p class="text-slate-500 dark:text-slate-400">{% trans "Diplomas" %}</p>
-            <p class="mt-1 text-2xl font-semibold text-slate-900 dark:text-slate-100 tabular-nums">—</p>
-          </div>
-          <div class="rounded-xl bg-slate-50 dark:bg-slate-800 p-4">
-            <p class="text-slate-500 dark:text-slate-400">{% trans "Live exams" %}</p>
-            <p class="mt-1 text-2xl font-semibold text-slate-900 dark:text-slate-100 tabular-nums">—</p>
-          </div>
-        </div>
+
+    <div class="mt-12 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div class="rounded-lg border border-white/20 bg-white/12 p-4 text-white backdrop-blur">
+        <p class="stat-value text-3xl font-black">{{ landing_stats.active_diplomas }}</p>
+        <p class="mt-1 text-xs font-semibold text-amber-100">{% if LANGUAGE_CODE == "en" %}Active diplomas{% else %}دبلومات نشطة{% endif %}</p>
+      </div>
+      <div class="rounded-lg border border-white/20 bg-white/12 p-4 text-white backdrop-blur">
+        <p class="stat-value text-3xl font-black">{{ landing_stats.active_cohorts }}</p>
+        <p class="mt-1 text-xs font-semibold text-amber-100">{% if LANGUAGE_CODE == "en" %}Open cohorts{% else %}دفعات متاحة{% endif %}</p>
+      </div>
+      <div class="rounded-lg border border-white/20 bg-white/12 p-4 text-white backdrop-blur">
+        <p class="stat-value text-3xl font-black">{{ landing_stats.active_courses }}</p>
+        <p class="mt-1 text-xs font-semibold text-amber-100">{% if LANGUAGE_CODE == "en" %}Courses in LMS{% else %}مقررات على المنصة{% endif %}</p>
+      </div>
+      <div class="rounded-lg border border-white/20 bg-white/12 p-4 text-white backdrop-blur">
+        <p class="stat-value text-3xl font-black">{{ landing_stats.published_lectures }}</p>
+        <p class="mt-1 text-xs font-semibold text-amber-100">{% if LANGUAGE_CODE == "en" %}Published lectures{% else %}محاضرات منشورة{% endif %}</p>
       </div>
     </div>
   </div>
+</section>
 
-  <div id="features" class="mt-20 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
-      <h3 class="font-semibold text-slate-900 dark:text-slate-100">{% trans "Arabic-first" %}</h3>
-      <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{% trans "Default Arabic UI with full English support and RTL/LTR switching." %}</p>
+<section id="mission" class="border-b border-stone-200 bg-[#faf9f6] dark:border-slate-800 dark:bg-slate-950">
+  <div class="mx-auto grid max-w-7xl gap-8 px-4 py-14 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
+    <div class="{% if LANGUAGE_CODE != 'en' %}text-right{% endif %}">
+      <p class="text-xs font-black uppercase tracking-[0.24em] text-[#8c1d1d] dark:text-amber-200">
+        {% if LANGUAGE_CODE == "en" %}Institute vision{% else %}رؤية المعهد{% endif %}
+      </p>
+      <h2 class="mt-3 text-3xl font-black tracking-tight text-[#2d0505] dark:text-white">
+        {% if LANGUAGE_CODE == "en" %}
+          Protecting the family through learning, counsel, and pastoral coordination.
+        {% else %}
+          حماية كيان الأسرة وتخفيف الضغوط اليومية من خلال تعليم وإرشاد منظم.
+        {% endif %}
+      </h2>
+      <p class="mt-4 text-sm leading-7 text-stone-700 dark:text-slate-300">
+        {% if LANGUAGE_CODE == "en" %}
+          The supplied design is now represented as a live website experience: visitors see real academic availability, then continue into the same application and account flows used by the LMS.
+        {% else %}
+          هذه الصفحة تستخدم نفس روح التصميم المرفق، لكنها مرتبطة فعلياً ببيانات الدبلومات والدفعات والمحاضرات ونموذج التقديم داخل النظام.
+        {% endif %}
+      </p>
     </div>
-    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
-      <h3 class="font-semibold text-slate-900 dark:text-slate-100">{% trans "Cairo time" %}</h3>
-      <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{% trans "All schedules, timers, and deadlines run in Africa/Cairo." %}</p>
+
+    <div class="grid gap-4 md:grid-cols-3">
+      <article class="rounded-lg border border-stone-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <p class="text-2xl text-[#d4af37]">✝</p>
+        <h3 class="mt-4 text-base font-black text-stone-950 dark:text-white">{% if LANGUAGE_CODE == "en" %}Engagement and marriage{% else %}الخطوبة والاستعداد للزواج{% endif %}</h3>
+        <p class="mt-2 text-sm leading-6 text-stone-600 dark:text-slate-300">{% if LANGUAGE_CODE == "en" %}Guided preparation for commitment, expectations, communication, and healthy spiritual routines.{% else %}إعداد هادئ لفهم التوقعات، التواصل، المسؤولية، وبناء البيت المسيحي.{% endif %}</p>
+      </article>
+      <article class="rounded-lg border border-stone-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <p class="text-2xl text-[#d4af37]">♡</p>
+        <h3 class="mt-4 text-base font-black text-stone-950 dark:text-white">{% if LANGUAGE_CODE == "en" %}Parenting and behavior{% else %}التربية وتعديل السلوك{% endif %}</h3>
+        <p class="mt-2 text-sm leading-6 text-stone-600 dark:text-slate-300">{% if LANGUAGE_CODE == "en" %}Practical tools for children, teens, emotion regulation, and home discipline without panic.{% else %}أدوات عملية لفهم الأطفال والمراهقين، وتنظيم الانفعال، وبناء الانضباط داخل البيت.{% endif %}</p>
+      </article>
+      <article class="rounded-lg border border-stone-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <p class="text-2xl text-[#d4af37]">◎</p>
+        <h3 class="mt-4 text-base font-black text-stone-950 dark:text-white">{% if LANGUAGE_CODE == "en" %}Private guidance{% else %}جلسات إرشادية خاصة{% endif %}</h3>
+        <p class="mt-2 text-sm leading-6 text-stone-600 dark:text-slate-300">{% if LANGUAGE_CODE == "en" %}Confidential support that can connect learning, family need, and church context.{% else %}دعم خاص بسرية ووضوح، يربط بين الاحتياج الأسري والسياق الكنسي والتعلم المستمر.{% endif %}</p>
+      </article>
     </div>
-    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
-      <h3 class="font-semibold text-slate-900 dark:text-slate-100">{% trans "Separated flows" %}</h3>
-      <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{% trans "Entrance exams stay separate from learning assessments." %}</p>
+  </div>
+</section>
+
+<section id="programs" class="bg-white dark:bg-slate-950">
+  <div class="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
+    <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <div class="max-w-3xl {% if LANGUAGE_CODE != 'en' %}text-right{% endif %}">
+        <p class="text-xs font-black uppercase tracking-[0.24em] text-[#8c1d1d] dark:text-amber-200">
+          {% if LANGUAGE_CODE == "en" %}Live academic data{% else %}بيانات أكاديمية فعلية{% endif %}
+        </p>
+        <h2 class="mt-3 text-3xl font-black tracking-tight text-stone-950 dark:text-white">
+          {% if LANGUAGE_CODE == "en" %}Programs and cohorts currently configured in the LMS.{% else %}الدبلومات والدفعات المتاحة حالياً داخل النظام.{% endif %}
+        </h2>
+      </div>
+      {% if not user.is_authenticated %}
+        <a href="{{ url_applications_register }}" class="inline-flex items-center justify-center rounded-lg bg-[#8c1d1d] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#5c0f0f]">
+          {% if LANGUAGE_CODE == "en" %}Start application{% else %}ابدأ طلب الالتحاق{% endif %}
+        </a>
+      {% endif %}
+    </div>
+
+    <div class="mt-8 grid gap-4 lg:grid-cols-3">
+      {% for cohort in featured_cohorts %}
+        <article class="rounded-lg border border-stone-200 bg-[#faf9f6] p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <p class="text-xs font-black uppercase tracking-wide text-[#8c1d1d] dark:text-amber-200">{{ cohort.name }}</p>
+          <h3 class="mt-2 text-xl font-black text-stone-950 dark:text-white">{{ cohort.diploma.title }}</h3>
+          <p class="mt-3 text-sm leading-6 text-stone-600 dark:text-slate-300">
+            {% if cohort.diploma.description %}
+              {{ cohort.diploma.description|truncatewords:28 }}
+            {% else %}
+              {% trans "This cohort is configured in the LMS and available for application review." %}
+            {% endif %}
+          </p>
+          <dl class="mt-5 grid grid-cols-3 gap-2 text-center">
+            <div class="rounded-lg border border-stone-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950">
+              <dt class="text-[11px] font-bold text-stone-500 dark:text-slate-400">{% trans "Start" %}</dt>
+              <dd class="mt-1 text-xs font-black text-stone-950 dark:text-white">{{ cohort.start_date|date:"M Y" }}</dd>
+            </div>
+            <div class="rounded-lg border border-stone-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950">
+              <dt class="text-[11px] font-bold text-stone-500 dark:text-slate-400">{% trans "Courses" %}</dt>
+              <dd class="stat-value mt-1 text-lg font-black text-stone-950 dark:text-white">{{ cohort.course_count }}</dd>
+            </div>
+            <div class="rounded-lg border border-stone-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950">
+              <dt class="text-[11px] font-bold text-stone-500 dark:text-slate-400">{% trans "Lectures" %}</dt>
+              <dd class="stat-value mt-1 text-lg font-black text-stone-950 dark:text-white">{{ cohort.lecture_count }}</dd>
+            </div>
+          </dl>
+        </article>
+      {% empty %}
+        <article class="rounded-lg border border-stone-200 bg-[#faf9f6] p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <p class="text-xs font-black uppercase tracking-wide text-[#8c1d1d] dark:text-amber-200">{% if LANGUAGE_CODE == "en" %}Sample track{% else %}مسار مقترح{% endif %}</p>
+          <h3 class="mt-2 text-xl font-black text-stone-950 dark:text-white">{% if LANGUAGE_CODE == "en" %}Marriage preparation and family guidance{% else %}دبلوم تأهيل المقبلين على الزواج والإرشاد الأسري{% endif %}</h3>
+          <p class="mt-3 text-sm leading-6 text-stone-600 dark:text-slate-300">{% if LANGUAGE_CODE == "en" %}Create diplomas and cohorts in Academics, and they will appear here automatically.{% else %}أنشئ الدبلومات والدفعات من إدارة الأكاديميات، وستظهر هنا تلقائياً.{% endif %}</p>
+        </article>
+      {% endfor %}
+    </div>
+
+    <div class="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {% for diploma in active_diplomas %}
+        <article class="rounded-lg border border-stone-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <h3 class="text-base font-black text-stone-950 dark:text-white">{{ diploma.title }}</h3>
+          <p class="mt-2 text-sm leading-6 text-stone-600 dark:text-slate-300">
+            {% if diploma.description %}
+              {{ diploma.description|truncatewords:24 }}
+            {% else %}
+              {% trans "Active academic program" %}
+            {% endif %}
+          </p>
+          <div class="mt-4 flex flex-wrap gap-2 text-xs font-bold">
+            <span class="rounded-md bg-amber-100 px-2.5 py-1 text-[#5c0f0f] dark:bg-amber-300/20 dark:text-amber-100">{{ diploma.active_cohort_count }} {% trans "cohorts" %}</span>
+            <span class="rounded-md bg-stone-100 px-2.5 py-1 text-stone-700 dark:bg-slate-800 dark:text-slate-200">{{ diploma.course_count }} {% trans "courses" %}</span>
+            <span class="rounded-md bg-stone-100 px-2.5 py-1 text-stone-700 dark:bg-slate-800 dark:text-slate-200">{{ diploma.published_lecture_count }} {% trans "lectures" %}</span>
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<section id="assessment" class="border-y border-stone-200 bg-[#f6efe7] dark:border-slate-800 dark:bg-slate-900">
+  <div class="mx-auto grid max-w-7xl gap-8 px-4 py-14 sm:px-6 lg:grid-cols-[1fr_1.1fr] lg:px-8">
+    <div class="{% if LANGUAGE_CODE != 'en' %}text-right{% endif %}">
+      <p class="text-xs font-black uppercase tracking-[0.24em] text-[#8c1d1d] dark:text-amber-200">
+        {% if LANGUAGE_CODE == "en" %}Find your priority{% else %}اختبر أولوياتك{% endif %}
+      </p>
+      <h2 class="mt-3 text-3xl font-black tracking-tight text-stone-950 dark:text-white">
+        {% if LANGUAGE_CODE == "en" %}A simple guidance panel inspired by the original landing concept.{% else %}لوحة إرشاد بسيطة مستوحاة من التصميم الأصلي.{% endif %}
+      </h2>
+      <p class="mt-4 text-sm leading-7 text-stone-700 dark:text-slate-300">
+        {% if LANGUAGE_CODE == "en" %}This preview keeps the original “choose your need” idea, then sends visitors into the real application flow.{% else %}تحتفظ هذه النسخة بفكرة تحديد الاحتياج، ثم توجه الزائر إلى نموذج التقديم الفعلي.{% endif %}
+      </p>
+    </div>
+
+    <div x-data="{ choice: 'couple' }" class="rounded-lg border border-stone-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-950">
+      <div class="grid gap-2 sm:grid-cols-3">
+        <button type="button" @click="choice = 'couple'" class="rounded-lg border px-3 py-2 text-sm font-bold" :class="choice === 'couple' ? 'border-[#8c1d1d] bg-[#8c1d1d] text-white' : 'border-stone-200 text-stone-700 dark:border-slate-700 dark:text-slate-200'">{% if LANGUAGE_CODE == "en" %}Couples{% else %}مقبلين على الزواج{% endif %}</button>
+        <button type="button" @click="choice = 'parent'" class="rounded-lg border px-3 py-2 text-sm font-bold" :class="choice === 'parent' ? 'border-[#8c1d1d] bg-[#8c1d1d] text-white' : 'border-stone-200 text-stone-700 dark:border-slate-700 dark:text-slate-200'">{% if LANGUAGE_CODE == "en" %}Parents{% else %}آباء وأمهات{% endif %}</button>
+        <button type="button" @click="choice = 'servant'" class="rounded-lg border px-3 py-2 text-sm font-bold" :class="choice === 'servant' ? 'border-[#8c1d1d] bg-[#8c1d1d] text-white' : 'border-stone-200 text-stone-700 dark:border-slate-700 dark:text-slate-200'">{% if LANGUAGE_CODE == "en" %}Servants{% else %}خدام{% endif %}</button>
+      </div>
+      <div class="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-5 text-stone-800 dark:border-amber-300/30 dark:bg-amber-300/10 dark:text-slate-100">
+        <template x-if="choice === 'couple'">
+          <div>
+            <h3 class="font-black">{% if LANGUAGE_CODE == "en" %}Recommended: marriage preparation track{% else %}الترشيح: مسار إعداد الزواج والخطوبة{% endif %}</h3>
+            <p class="mt-2 text-sm leading-6">{% if LANGUAGE_CODE == "en" %}Start with expectations, communication, finance, conflict, and spiritual home routines.{% else %}ابدأ بفهم التوقعات، الحوار، الميزانية، الخلافات، وبناء البيت روحياً ونفسياً.{% endif %}</p>
+          </div>
+        </template>
+        <template x-if="choice === 'parent'">
+          <div>
+            <h3 class="font-black">{% if LANGUAGE_CODE == "en" %}Recommended: behavior and parenting track{% else %}الترشيح: التربية وتعديل السلوك{% endif %}</h3>
+            <p class="mt-2 text-sm leading-6">{% if LANGUAGE_CODE == "en" %}Focus on emotion regulation, discipline, social media pressure, and better daily conversations.{% else %}ركز على تنظيم الانفعال، الانضباط، ضغط السوشيال ميديا، والحوار اليومي الهادئ.{% endif %}</p>
+          </div>
+        </template>
+        <template x-if="choice === 'servant'">
+          <div>
+            <h3 class="font-black">{% if LANGUAGE_CODE == "en" %}Recommended: pastoral family support{% else %}الترشيح: دعم أسري للخدام والرعاة{% endif %}</h3>
+            <p class="mt-2 text-sm leading-6">{% if LANGUAGE_CODE == "en" %}Build a shared language for referral, listening, boundaries, and coordinated church care.{% else %}ابن لغة مشتركة للإحالة، الإصغاء، الحدود، والتنسيق الرعوي داخل الخدمة.{% endif %}</p>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="bg-[#2d0505] text-white">
+  <div class="mx-auto grid max-w-7xl gap-6 px-4 py-12 sm:px-6 lg:grid-cols-[1fr_auto] lg:items-center lg:px-8">
+    <div class="{% if LANGUAGE_CODE != 'en' %}text-right{% endif %}">
+      <p class="text-xs font-black uppercase tracking-[0.24em] text-amber-200">{% if LANGUAGE_CODE == "en" %}Ready to begin{% else %}جاهز للبدء{% endif %}</p>
+      <h2 class="mt-3 text-3xl font-black tracking-tight">{% if LANGUAGE_CODE == "en" %}One clear path from interest to reviewed application.{% else %}مسار واضح من الاهتمام إلى طلب التحاق قابل للمراجعة.{% endif %}</h2>
+      <p class="mt-3 max-w-2xl text-sm leading-7 text-amber-50/85">
+        {% if LANGUAGE_CODE == "en" %}
+          {{ landing_stats.applications }} applications have been recorded in the LMS so far.
+        {% else %}
+          تم تسجيل {{ landing_stats.applications }} طلب التحاق داخل النظام حتى الآن.
+        {% endif %}
+      </p>
+    </div>
+    <div class="flex flex-wrap gap-3">
+      {% if user.is_authenticated %}
+        <a href="{{ url_accounts_dashboard }}" class="inline-flex items-center justify-center rounded-lg bg-amber-300 px-6 py-3 text-sm font-black text-[#2d0505] hover:bg-amber-200">{% trans "Go to dashboard" %}</a>
+      {% else %}
+        <a href="{{ url_applications_register }}" class="inline-flex items-center justify-center rounded-lg bg-amber-300 px-6 py-3 text-sm font-black text-[#2d0505] hover:bg-amber-200">{% if LANGUAGE_CODE == "en" %}Apply now{% else %}قدم الآن{% endif %}</a>
+      {% endif %}
+      <a href="#programs" class="inline-flex items-center justify-center rounded-lg border border-white/35 px-6 py-3 text-sm font-bold text-white hover:bg-white/10">{% if LANGUAGE_CODE == "en" %}Review programs{% else %}راجع البرامج{% endif %}</a>
     </div>
   </div>
 </section>

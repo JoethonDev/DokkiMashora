@@ -1,0 +1,16 @@
+{% extends "students/profile/base_profile.html" %}{% load i18n %}
+{% block profile_title %}{% trans "Edit Profile" %}{% endblock %}
+{% block profile_content %}
+<div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 max-w-lg">
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% for field in form %}
+      {% include "partials/_field.html" %}
+    {% endfor %}
+    <div class="mt-5 flex gap-2">
+      {% include "partials/_button.html" with label=_("Save") variant="primary" %}
+      <a href="{% url 'students:details' %}" class="rounded-md border border-slate-300 dark:border-slate-700 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Cancel" %}</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,44 @@
+{% extends "students/profile/base_profile.html" %}{% load i18n %}
+{% block profile_title %}{% blocktrans with name=user.full_name|default:user.email %}Welcome, {{ name }}{% endblocktrans %}{% endblock %}
+{% block profile_subtitle %}<p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{% trans "Your academic overview at a glance." %}</p>{% endblock %}
+{% block profile_content %}
+<div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6">
+  {% include "partials/_stat.html" with label=_("Active Courses") value=active_courses|length %}
+  {% include "partials/_stat.html" with label=_("Applications") value=applications|length %}
+  {% include "partials/_stat.html" with label=_("Certificates") value=certificates|length %}
+  {% include "partials/_stat.html" with label=_("Completed Semesters") value=semester_progress|length %}
+  {% include "partials/_stat.html" with label=_("Upcoming Exams") value=exam_assignments|length %}
+  {% include "partials/_stat.html" with label=_("Assessments") value=assessment_attempts|length %}
+</div>
+
+{% if active_courses %}
+<div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 mb-4">
+  <h2 class="text-base font-semibold mb-3">{% trans "Continue Learning" %}</h2>
+  <div class="space-y-2">
+    {% for item in active_courses %}
+    <a href="{% url 'academics:student_course_detail' item.course_version.id %}" class="block rounded-lg border border-slate-100 dark:border-slate-800 p-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
+      <div class="flex items-center justify-between">
+        <span class="font-medium text-sm">{{ item.course.title }}</span>
+        {% if item.semester %}<span class="text-xs text-slate-500">{{ item.semester.title }}</span>{% endif %}
+      </div>
+      <p class="text-xs text-slate-500 mt-1">{{ item.lecture_count }} {% trans "lectures" %}</p>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% if reapply and reapply.allowed %}
+<div class="rounded-xl border border-brand-200 dark:border-brand-800 bg-brand-50 dark:bg-brand-900/20 p-4 mb-4">
+  <p class="text-sm font-medium text-brand-700 dark:text-brand-200">{% trans "Ready to apply for a program?" %}</p>
+  <p class="text-xs text-slate-600 dark:text-slate-300 mt-1">{% trans "Submit a new application to join a cohort." %}</p>
+  <a href="{% url 'students:reapply' %}" class="inline-block mt-2 text-sm font-medium text-brand-600 hover:underline">{% trans "Reapply now" %} &rarr;</a>
+</div>
+{% endif %}
+
+{% if not active_courses and not applications and not certificates %}
+<div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 text-sm text-slate-500 dark:text-slate-400">
+  <p>{% trans "No academic records yet. Complete registration and enrollment to get started." %}</p>
+</div>
+{% endif %}
+{% endblock %}

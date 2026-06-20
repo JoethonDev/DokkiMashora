@@ -1,0 +1,33 @@
+{% extends "base.html" %}{% load i18n %}
+{% block title %}{% trans "My Profile" %} | {{ block.super }}{% endblock %}
+{% block content %}
+<section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <header class="mb-6">
+    <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Profile" %}</p>
+    <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{% block profile_title %}{% trans "My Profile" %}{% endblock %}</h1>
+    {% block profile_subtitle %}{% endblock %}
+  </header>
+
+  <div class="grid grid-cols-1 lg:grid-cols-[14rem_1fr] gap-6">
+    <nav class="space-y-1 text-sm" aria-label="{% trans 'Profile sections' %}">
+      <a href="{% url 'students:dashboard' %}" class="block rounded-md px-3 py-2 {% if request.resolver_match.url_name == 'dashboard' %}bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-200 font-semibold{% else %}text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800{% endif %}">{% trans "Dashboard" %}</a>
+      <a href="{% url 'students:details' %}" class="block rounded-md px-3 py-2 {% if request.resolver_match.url_name == 'details' or request.resolver_match.url_name == 'edit_profile' %}bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-200 font-semibold{% else %}text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800{% endif %}">{% trans "Profile Details" %}</a>
+      <a href="{% url 'students:application_history' %}" class="block rounded-md px-3 py-2 {% if request.resolver_match.url_name == 'application_history' %}bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-200 font-semibold{% else %}text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800{% endif %}">{% trans "Applications" %}</a>
+      <a href="{% url 'students:reapply' %}" class="block rounded-md px-3 py-2 {% if request.resolver_match.url_name == 'reapply' %}bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-200 font-semibold{% else %}text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800{% endif %}">{% trans "Reapply" %}</a>
+      <a href="{% url 'students:enrollment_history' %}" class="block rounded-md px-3 py-2 {% if request.resolver_match.url_name == 'enrollment_history' %}bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-200 font-semibold{% else %}text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800{% endif %}">{% trans "Enrollments" %}</a>
+      <a href="{% url 'students:access_list' %}" class="block rounded-md px-3 py-2 {% if request.resolver_match.url_name == 'access_list' %}bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-200 font-semibold{% else %}text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800{% endif %}">{% trans "Course Access" %}</a>
+      <a href="{% url 'students:exam_results' %}" class="block rounded-md px-3 py-2 {% if request.resolver_match.url_name == 'exam_results' %}bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-200 font-semibold{% else %}text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800{% endif %}">{% trans "Entrance Exams" %}</a>
+      <a href="{% url 'students:assessment_history' %}" class="block rounded-md px-3 py-2 {% if request.resolver_match.url_name == 'assessment_history' %}bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-200 font-semibold{% else %}text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800{% endif %}">{% trans "Assessments" %}</a>
+      <a href="{% url 'students:homework_list' %}" class="block rounded-md px-3 py-2 {% if request.resolver_match.url_name == 'homework_list' %}bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-200 font-semibold{% else %}text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800{% endif %}">{% trans "Homework" %}</a>
+      <a href="{% url 'students:progression_history' %}" class="block rounded-md px-3 py-2 {% if request.resolver_match.url_name == 'progression_history' %}bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-200 font-semibold{% else %}text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800{% endif %}">{% trans "Academic Progress" %}</a>
+      <a href="{% url 'students:certificate_list' %}" class="block rounded-md px-3 py-2 {% if request.resolver_match.url_name == 'certificate_list' %}bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-200 font-semibold{% else %}text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800{% endif %}">{% trans "Certificates" %}</a>
+      <a href="{% url 'students:payment_status' %}" class="block rounded-md px-3 py-2 {% if request.resolver_match.url_name == 'payment_status' %}bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-200 font-semibold{% else %}text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800{% endif %}">{% trans "Payments" %}</a>
+      <a href="{% url 'students:notification_history' %}" class="block rounded-md px-3 py-2 {% if request.resolver_match.url_name == 'notification_history' %}bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-200 font-semibold{% else %}text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800{% endif %}">{% trans "Notifications" %}</a>
+    </nav>
+
+    <div>
+      {% block profile_content %}{% endblock %}
+    </div>
+  </div>
+</section>
+{% endblock %}

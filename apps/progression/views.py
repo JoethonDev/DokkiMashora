@@ -8,8 +8,16 @@ from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_POST
 
 from apps.academics.models import Diploma, DiplomaEnrollment, Semester
+from apps.audit.constants import (
+    ACTION_DEMOTION,
+    ACTION_LOCK,
+    ACTION_PROMOTION,
+    ACTION_RETAKE,
+    ACTION_UNLOCK,
+)
+from apps.audit.services import record_audit_event
 from apps.certificates.models import GeneratedCertificate
-from apps.core.permissions import ROLE_SENIOR_STAFF, role_required
+from apps.core.permissions import ROLE_SENIOR_STAFF, role_required, safe_int
 from apps.students.models import StudentProfile
 
 from .constants import CERTIFICATE_STATUS_AVAILABLE
@@ -52,8 +60,8 @@ def admin_dashboard(request):
     cohort_id = request.GET.get("cohort_id")
 
     progress_qs = get_progression_dashboard_data(
-        diploma_id=int(diploma_id) if diploma_id else None,
-        cohort_id=int(cohort_id) if cohort_id else None,
+        diploma_id=safe_int(diploma_id),
+        cohort_id=safe_int(cohort_id),
     )
 
     students_data = {}
@@ -161,6 +169,18 @@ def admin_promote(request, student_id):
     try:
         override_failed = request.POST.get("override_failed") == "1"
         manual_promote(student, enrollment, semester, actor=request.user, reason=reason, override_failed=override_failed)
+        record_audit_event(
+            actor=request.user,
+            action=ACTION_PROMOTION,
+            target_type="student",
+            target_id=str(student.id),
+            metadata={
+                "enrollment_id": enrollment_id,
+                "semester_id": semester_id,
+                "reason": reason,
+                "override_failed": override_failed,
+            },
+        )
         messages.success(request, _("Student promoted."))
     except ValueError as exc:
         messages.error(request, str(exc))
@@ -182,6 +202,17 @@ def admin_demote(request, student_id):
 
     try:
         demote_student(student, enrollment, semester, actor=request.user, reason=reason)
+        record_audit_event(
+            actor=request.user,
+            action=ACTION_DEMOTION,
+            target_type="student",
+            target_id=str(student.id),
+            metadata={
+                "enrollment_id": enrollment_id,
+                "semester_id": semester_id,
+                "reason": reason,
+            },
+        )
         messages.success(request, _("Student demoted."))
     except ValueError as exc:
         messages.error(request, str(exc))
@@ -204,6 +235,19 @@ def admin_override(request, student_id):
 
     try:
         override_student_progress(student, enrollment, semester, new_status, actor=request.user, reason=reason)
+        record_audit_event(
+            actor=request.user,
+            action=ACTION_PROMOTION,
+            target_type="student",
+            target_id=str(student.id),
+            metadata={
+                "enrollment_id": enrollment_id,
+                "semester_id": semester_id,
+                "new_status": new_status,
+                "reason": reason,
+                "type": "override",
+            },
+        )
         messages.success(request, _("Progress overridden."))
     except ValueError as exc:
         messages.error(request, str(exc))
@@ -223,6 +267,16 @@ def admin_lock(request, student_id):
 
     try:
         lock_student(student, enrollment, actor=request.user, reason=reason)
+        record_audit_event(
+            actor=request.user,
+            action=ACTION_LOCK,
+            target_type="student",
+            target_id=str(student.id),
+            metadata={
+                "enrollment_id": enrollment_id,
+                "reason": reason,
+            },
+        )
         messages.success(request, _("Student locked."))
     except ValueError as exc:
         messages.error(request, str(exc))
@@ -242,6 +296,16 @@ def admin_unlock(request, student_id):
 
     try:
         unlock_student(student, enrollment, actor=request.user, reason=reason)
+        record_audit_event(
+            actor=request.user,
+            action=ACTION_UNLOCK,
+            target_type="student",
+            target_id=str(student.id),
+            metadata={
+                "enrollment_id": enrollment_id,
+                "reason": reason,
+            },
+        )
         messages.success(request, _("Student unlocked."))
     except ValueError as exc:
         messages.error(request, str(exc))
@@ -263,6 +327,18 @@ def admin_assign_retake(request, student_id):
 
     try:
         assign_retake(student, enrollment, semester, actor=request.user, reason=reason)
+        record_audit_event(
+            actor=request.user,
+            action=ACTION_RETAKE,
+            target_type="student",
+            target_id=str(student.id),
+            metadata={
+                "enrollment_id": enrollment_id,
+                "semester_id": semester_id,
+                "reason": reason,
+                "type": "assign",
+            },
+        )
         messages.success(request, _("Retake assigned."))
     except ValueError as exc:
         messages.error(request, str(exc))
@@ -284,6 +360,18 @@ def admin_clear_retake(request, student_id):
 
     try:
         clear_retake(student, enrollment, semester, actor=request.user, reason=reason)
+        record_audit_event(
+            actor=request.user,
+            action=ACTION_RETAKE,
+            target_type="student",
+            target_id=str(student.id),
+            metadata={
+                "enrollment_id": enrollment_id,
+                "semester_id": semester_id,
+                "reason": reason,
+                "type": "clear",
+            },
+        )
         messages.success(request, _("Retake cleared."))
     except ValueError as exc:
         messages.error(request, str(exc))
@@ -303,6 +391,17 @@ def admin_mark_complete(request, student_id):
 
     try:
         mark_completed(student, enrollment, actor=request.user, notes=notes)
+        record_audit_event(
+            actor=request.user,
+            action=ACTION_PROMOTION,
+            target_type="student",
+            target_id=str(student.id),
+            metadata={
+                "enrollment_id": enrollment_id,
+                "notes": notes,
+                "type": "completed",
+            },
+        )
         messages.success(request, _("Student marked as completed."))
     except ValueError as exc:
         messages.error(request, str(exc))
@@ -322,6 +421,17 @@ def admin_mark_graduate(request, student_id):
 
     try:
         mark_graduated(student, enrollment, actor=request.user, notes=notes)
+        record_audit_event(
+            actor=request.user,
+            action=ACTION_PROMOTION,
+            target_type="student",
+            target_id=str(student.id),
+            metadata={
+                "enrollment_id": enrollment_id,
+                "notes": notes,
+                "type": "graduated",
+            },
+        )
         messages.success(request, _("Student marked as graduated."))
     except ValueError as exc:
         messages.error(request, str(exc))

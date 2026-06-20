@@ -1,0 +1,39 @@
+{% extends "students/profile/base_profile.html" %}{% load i18n student_extras %}
+{% block profile_title %}{% trans "Assessments" %}{% endblock %}
+{% block profile_content %}
+{% if assessment_attempts %}
+<div class="space-y-3">
+  {% for a in assessment_attempts %}
+  <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+    <div class="flex items-center justify-between">
+      <div>
+        <p class="text-sm font-medium">{{ a.assessment.title }}</p>
+        {% if a.assessment.course_version %}
+        <p class="text-xs text-slate-500">{{ a.assessment.course_version.course.title }}</p>
+        {% endif %}
+      </div>
+      {% include "partials/_badge.html" with label=a.get_status_display tone=a.status|status_tone:"assessment_attempt" %}
+    </div>
+    <div class="mt-2 text-xs text-slate-500 space-y-1">
+      <p>{% trans "Attempt" %} #{{ a.attempt_number }}</p>
+      {% if a.submitted_at %}<p>{% trans "Submitted" %}: {{ a.submitted_at|date:"j M Y, H:i" }}</p>{% endif %}
+      {% if a.visible_to_student and a.score_percent is not None %}
+      <p>{% trans "Score" %}: <span class="tabular-nums font-semibold">{{ a.score_percent }}%</span></p>
+      {% if a.is_pass is not None %}
+        {% if a.is_pass %}<p class="text-emerald-600">{% trans "Passed" %}</p>{% else %}<p class="text-rose-600">{% trans "Failed" %}</p>{% endif %}
+      {% endif %}
+      {% elif a.status == "submitted" or a.status == "under_review" %}
+      <p class="text-amber-600">{% trans "Under review" %}</p>
+      {% elif a.status == "graded" and not a.visible_to_student %}
+      <p class="text-slate-400">{% trans "Grade not yet released" %}</p>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 text-sm text-slate-500 dark:text-slate-400">
+  <p>{% trans "No assessment attempts yet." %}</p>
+</div>
+{% endif %}
+{% endblock %}

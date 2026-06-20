@@ -9,6 +9,12 @@ from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_POST
 
 from apps.academics.models import DiplomaEnrollment
+from apps.audit.constants import (
+    ACTION_CERTIFICATE_GENERATED,
+    ACTION_CERTIFICATE_REGENERATED,
+    ACTION_CERTIFICATE_REVOKED,
+)
+from apps.audit.services import record_audit_event
 from apps.core.permissions import ROLE_SENIOR_STAFF, role_required
 from apps.progression.constants import CERTIFICATE_STATUS_AVAILABLE
 from apps.students.models import StudentProfile
@@ -116,6 +122,17 @@ def admin_generate_certificate(request, student_id):
 
     try:
         cert = generate_certificate_pdf(student, enrollment, actor=request.user)
+        record_audit_event(
+            actor=request.user,
+            action=ACTION_CERTIFICATE_GENERATED,
+            target_type="certificate",
+            target_id=str(cert.id),
+            metadata={
+                "student_id": student.id,
+                "enrollment_id": enrollment_id,
+                "status": cert.status,
+            },
+        )
         if cert.status == CERTIFICATE_STATUS_AVAILABLE:
             messages.success(request, _("Certificate generated."))
         else:
@@ -135,6 +152,17 @@ def admin_revoke_certificate(request, cert_id):
 
     try:
         revoke_certificate(cert, actor=request.user, reason=reason)
+        record_audit_event(
+            actor=request.user,
+            action=ACTION_CERTIFICATE_REVOKED,
+            target_type="certificate",
+            target_id=str(cert_id),
+            metadata={
+                "student_id": cert.student_id,
+                "certificate_number": cert.certificate_number,
+                "reason": reason,
+            },
+        )
         messages.success(request, _("Certificate revoked."))
     except ValueError as exc:
         messages.error(request, str(exc))
@@ -152,6 +180,18 @@ def admin_regenerate_certificate(request, cert_id):
 
     try:
         new_cert = regenerate_certificate(cert, actor=request.user, reason=reason)
+        record_audit_event(
+            actor=request.user,
+            action=ACTION_CERTIFICATE_REGENERATED,
+            target_type="certificate",
+            target_id=str(new_cert.id),
+            metadata={
+                "previous_cert_id": cert_id,
+                "student_id": new_cert.student_id,
+                "reason": reason,
+                "status": new_cert.status,
+            },
+        )
         if new_cert.status == CERTIFICATE_STATUS_AVAILABLE:
             messages.success(request, _("Certificate regenerated."))
         else:

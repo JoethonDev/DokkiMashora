@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.db.models import Count, Q
 from django.http import (
     HttpRequest,
     HttpResponse,
@@ -11,16 +12,60 @@ from django.http import (
     HttpResponseRedirect,
 )
 from django.shortcuts import render
+from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods
 
+from apps.academics.models import Cohort, Course, Diploma, Lecture
+from apps.applications.models import Application
 from apps.core.permissions import ROLE_SENIOR_STAFF, role_required
 
 
 def landing(request: HttpRequest) -> HttpResponse:
     """Public landing page."""
-    return render(request, "core/landing.html")
+    featured_cohorts = (
+        Cohort.objects.filter(is_active=True, diploma__is_active=True)
+        .select_related("diploma")
+        .annotate(
+            course_count=Count("course_versions__course", filter=Q(course_versions__is_active=True), distinct=True),
+            lecture_count=Count(
+                "course_versions__lectures",
+                filter=Q(course_versions__lectures__is_published=True),
+                distinct=True,
+            ),
+            application_count=Count("applications", distinct=True),
+        )
+        .order_by("start_date", "name")[:3]
+    )
+    active_diplomas = (
+        Diploma.objects.filter(is_active=True)
+        .annotate(
+            active_cohort_count=Count("cohorts", filter=Q(cohorts__is_active=True), distinct=True),
+            course_count=Count("semesters__semester_courses__course", distinct=True),
+            published_lecture_count=Count(
+                "cohorts__course_versions__lectures",
+                filter=Q(cohorts__course_versions__lectures__is_published=True),
+                distinct=True,
+            ),
+        )
+        .order_by("title")[:6]
+    )
+    context = {
+        "url_accounts_dashboard": reverse("accounts:dashboard"),
+        "url_accounts_login": reverse("accounts:login"),
+        "url_applications_register": reverse("applications:register"),
+        "featured_cohorts": featured_cohorts,
+        "active_diplomas": active_diplomas,
+        "landing_stats": {
+            "active_diplomas": Diploma.objects.filter(is_active=True).count(),
+            "active_cohorts": Cohort.objects.filter(is_active=True, diploma__is_active=True).count(),
+            "active_courses": Course.objects.filter(is_active=True).count(),
+            "published_lectures": Lecture.objects.filter(is_published=True).count(),
+            "applications": Application.objects.count(),
+        },
+    }
+    return render(request, "core/landing.html", context)
 
 
 @login_required
@@ -69,19 +114,32 @@ def design_showcase(request: HttpRequest) -> HttpResponse:
                 "accent": "#0f766e",
                 "accent_soft": "#ccfbf1",
             },
-        {
-            "id": "quiet-dark",
-            "name": {"en": "Quiet Dark", "ar": "داكن هادئ"},
-            "note": {"en": "Readable dark preview", "ar": "معاينة داكنة مقروءة"},
-            "bg": "#0f172a",
+            {
+                "id": "quiet-dark",
+                "name": {"en": "Quiet Dark", "ar": "داكن هادئ"},
+                "note": {"en": "Readable dark preview", "ar": "معاينة داكنة مقروءة"},
+                "bg": "#0f172a",
                 "surface": "#111827",
                 "panel": "#1e293b",
                 "border": "#334155",
                 "text": "#e2e8f0",
                 "muted": "#94a3b8",
-            "accent": "#34d399",
-            "accent_soft": "#064e3b",
-        },
+                "accent": "#34d399",
+                "accent_soft": "#064e3b",
+            },
+            {
+                "id": "coptic-family",
+                "name": {"en": "Coptic Crimson + Gold", "ar": "قبطي قرمزي + ذهبي"},
+                "note": {"en": "Public institute landing page", "ar": "صفحة المعهد العامة"},
+                "bg": "#faf9f6",
+                "surface": "#ffffff",
+                "panel": "#f6efe7",
+                "border": "#e7d9c7",
+                "text": "#2d0505",
+                "muted": "#665f59",
+                "accent": "#8c1d1d",
+                "accent_soft": "#fbeee6",
+            },
         ],
         "designs": [
             {
@@ -162,6 +220,26 @@ def design_showcase(request: HttpRequest) -> HttpResponse:
                     {"en": "Wide reading column", "ar": "عمود قراءة واسع"},
                     {"en": "Minimal chrome", "ar": "إطار بسيط"},
                     {"en": "Eye comfort", "ar": "راحة العين"},
+                ],
+            },
+            {
+                "id": "coptic-institute-landing",
+                "name": {"en": "Coptic Family Institute", "ar": "معهد الأسرة القبطي"},
+                "note": {"en": "Crimson/gold public recruitment page", "ar": "صفحة عامة قرمزية وذهبية للتقديم"},
+                "role": {"en": "Public visitors", "ar": "زوار الموقع"},
+                "shell": "reading",
+                "density": "Medium",
+                "default_page": "courses",
+                "nav": [
+                    {"en": "Vision", "ar": "الرؤية"},
+                    {"en": "Programs", "ar": "البرامج"},
+                    {"en": "Priority finder", "ar": "اختبر أولوياتك"},
+                    {"en": "Apply", "ar": "التقديم"},
+                ],
+                "focus": [
+                    {"en": "Pastoral trust", "ar": "ثقة رعوية"},
+                    {"en": "Live cohorts", "ar": "دفعات فعلية"},
+                    {"en": "Clear application path", "ar": "مسار تقديم واضح"},
                 ],
             },
         ],

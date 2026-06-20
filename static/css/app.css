@@ -20,6 +20,16 @@ body {
   transform: scaleX(-1);
 }
 
+.landing-hero {
+  min-height: calc(100svh - 8rem);
+}
+
+@media (min-width: 1024px) {
+  .landing-hero {
+    min-height: 620px;
+  }
+}
+
 /* Headings use tighter tracking for display feel. */
 h1, h2, h3, .font-display { letter-spacing: -0.01em; }
 h1 { letter-spacing: -0.02em; }

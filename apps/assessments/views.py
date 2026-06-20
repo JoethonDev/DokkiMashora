@@ -43,6 +43,19 @@ from apps.assessments.services import (
     submit_assessment,
     submit_homework,
 )
+from apps.audit.constants import (
+    ACTION_EXAM_CREATED,
+    ACTION_EXAM_TOGGLED,
+    ACTION_EXAM_UPDATED,
+    ACTION_GRADE_CHANGED,
+    ACTION_GRADE_HIDDEN,
+    ACTION_GRADE_OVERRIDE,
+    ACTION_GRADE_RELEASED,
+    ACTION_QUESTION_CREATED,
+    ACTION_QUESTION_DELETED,
+    ACTION_QUESTION_UPDATED,
+)
+from apps.audit.services import record_audit_event
 from apps.core.permissions import ROLE_EXAM_STAFF, role_required
 from apps.storage.services import FileValidationError, StorageError, storage_service
 
@@ -321,6 +334,13 @@ def admin_create(request):
             assessment = form.save(commit=False)
             assessment.created_by = request.user
             assessment.save()
+            record_audit_event(
+                actor=request.user,
+                action=ACTION_EXAM_CREATED,
+                target_type="assessment",
+                target_id=str(assessment.id),
+                metadata={"title": assessment.title, "assessment_type": assessment.assessment_type},
+            )
             messages.success(request, _("Assessment created."))
             return redirect("assessments:admin_detail", assessment_id=assessment.id)
     else:
@@ -340,6 +360,13 @@ def admin_edit(request, assessment_id):
         form = AssessmentForm(request.POST, instance=assessment)
         if form.is_valid():
             form.save()
+            record_audit_event(
+                actor=request.user,
+                action=ACTION_EXAM_UPDATED,
+                target_type="assessment",
+                target_id=str(assessment.id),
+                metadata={"title": assessment.title},
+            )
             messages.success(request, _("Assessment updated."))
             return redirect("assessments:admin_detail", assessment_id=assessment.id)
     else:
@@ -358,6 +385,13 @@ def admin_toggle_active(request, assessment_id):
     assessment = get_object_or_404(Assessment, id=assessment_id)
     assessment.is_active = not assessment.is_active
     assessment.save(update_fields=["is_active", "updated_at"])
+    record_audit_event(
+        actor=request.user,
+        action=ACTION_EXAM_TOGGLED,
+        target_type="assessment",
+        target_id=str(assessment.id),
+        metadata={"is_active": assessment.is_active, "title": assessment.title},
+    )
     status = _("activated") if assessment.is_active else _("deactivated")
     messages.success(request, _("Assessment %(status)s.") % {"status": status})
     return redirect("assessments:admin_detail", assessment_id=assessment.id)
@@ -425,6 +459,13 @@ def admin_question_save(request, assessment_id, question_id=None):
                 _save_choices_from_parsed(question, parsed_choices)
             elif question.question_type == "written":
                 AssessmentChoice.objects.filter(question=question).delete()
+            record_audit_event(
+                actor=request.user,
+                action=ACTION_QUESTION_CREATED if not question_id else ACTION_QUESTION_UPDATED,
+                target_type="assessment_question",
+                target_id=str(question.id),
+                metadata={"assessment_id": assessment_id, "question_type": question.question_type},
+            )
             messages.success(request, _("Question saved."))
             if _is_htmx(request):
                 response = HttpResponse()
@@ -440,6 +481,13 @@ def admin_question_save(request, assessment_id, question_id=None):
 @require_POST
 def admin_question_delete(request, assessment_id, question_id):
     question = get_object_or_404(AssessmentQuestion, id=question_id, assessment_id=assessment_id)
+    record_audit_event(
+        actor=request.user,
+        action=ACTION_QUESTION_DELETED,
+        target_type="assessment_question",
+        target_id=str(question_id),
+        metadata={"assessment_id": assessment_id},
+    )
     question.delete()
     messages.success(request, _("Question deleted."))
     if _is_htmx(request):
@@ -563,6 +611,13 @@ def admin_homework_grade_detail(request, submission_id):
         feedback = request.POST.get("feedback", "")
         try:
             grade_homework(submission.id, score, feedback, request.user)
+            record_audit_event(
+                actor=request.user,
+                action=ACTION_GRADE_CHANGED,
+                target_type="homework_submission",
+                target_id=str(submission_id),
+                metadata={"assessment_id": submission.assessment_id, "student_id": submission.student_id},
+            )
             messages.success(request, _("Homework graded."))
         except ValueError as exc:
             messages.error(request, str(exc))
@@ -603,6 +658,13 @@ def admin_grade_detail(request, attempt_id):
                         )
                     except ValueError as exc:
                         messages.error(request, str(exc))
+        record_audit_event(
+            actor=request.user,
+            action=ACTION_GRADE_CHANGED,
+            target_type="assessment_attempt",
+            target_id=str(attempt_id),
+            metadata={"assessment_id": attempt.assessment_id, "student_id": attempt.student_id},
+        )
         messages.success(request, _("Grades saved."))
         return redirect("assessments:admin_grade_detail", attempt_id=attempt_id)
     question_answer_pairs = [(q, answers.get(q.id)) for q in questions]
@@ -619,6 +681,13 @@ def admin_grade_detail(request, attempt_id):
 def admin_release_grades(request, attempt_id):
     attempt = get_object_or_404(AssessmentAttempt, id=attempt_id)
     release_grades(attempt)
+    record_audit_event(
+        actor=request.user,
+        action=ACTION_GRADE_RELEASED,
+        target_type="assessment_attempt",
+        target_id=str(attempt_id),
+        metadata={"assessment_id": attempt.assessment_id, "student_id": attempt.student_id},
+    )
     messages.success(request, _("Grades released to student."))
     return redirect("assessments:admin_grade_detail", attempt_id=attempt_id)
 
@@ -629,6 +698,13 @@ def admin_release_grades(request, attempt_id):
 def admin_hide_grades(request, attempt_id):
     attempt = get_object_or_404(AssessmentAttempt, id=attempt_id)
     hide_grades(attempt)
+    record_audit_event(
+        actor=request.user,
+        action=ACTION_GRADE_HIDDEN,
+        target_type="assessment_attempt",
+        target_id=str(attempt_id),
+        metadata={"assessment_id": attempt.assessment_id, "student_id": attempt.student_id},
+    )
     messages.success(request, _("Grades hidden from student."))
     return redirect("assessments:admin_grade_detail", attempt_id=attempt_id)
 
@@ -646,6 +722,18 @@ def admin_grade_answer(request, answer_id):
             answer.id, score, feedback, request.user,
             override_reason=override_reason,
         )
+        record_audit_event(
+            actor=request.user,
+            action=ACTION_GRADE_OVERRIDE if override_reason else ACTION_GRADE_CHANGED,
+            target_type="assessment_answer",
+            target_id=str(answer_id),
+            metadata={
+                "attempt_id": answer.attempt_id,
+                "question_id": answer.question_id,
+                "score": str(score),
+                "override_reason": override_reason or "",
+            },
+        )
         messages.success(request, _("Answer graded."))
     except ValueError as exc:
         messages.error(request, str(exc))
@@ -661,6 +749,17 @@ def admin_grade_homework_submission(request, submission_id):
     feedback = request.POST.get("feedback", "")
     try:
         grade_homework(submission.id, score, feedback, request.user)
+        record_audit_event(
+            actor=request.user,
+            action=ACTION_GRADE_CHANGED,
+            target_type="homework_submission",
+            target_id=str(submission_id),
+            metadata={
+                "attempt_id": submission.attempt_id,
+                "assessment_id": submission.assessment_id,
+                "score": str(score),
+            },
+        )
         messages.success(request, _("Homework graded."))
     except ValueError as exc:
         messages.error(request, str(exc))

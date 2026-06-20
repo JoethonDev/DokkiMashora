@@ -15,6 +15,13 @@ from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods
 
 from apps.accounts.constants import GROUP_STUDENT
+from apps.audit.constants import (
+    ACTION_APPLICATION_ACTIVATED,
+    ACTION_APPLICATION_APPROVED,
+    ACTION_APPLICATION_REJECTED,
+    ACTION_APPLICATION_STATUS_CHANGE,
+)
+from apps.audit.services import record_audit_event
 from apps.core.permissions import is_admin, is_moderator
 from apps.students.models import StudentProfile
 
@@ -107,12 +114,26 @@ def application_detail(request: HttpRequest, application_id: int) -> HttpRespons
         decision_form = ApplicationDecisionForm(request.POST, instance=application)
         if action == "mark_review" and application.status == APP_STATUS_PENDING:
             application.mark_under_review(request.user)
+            record_audit_event(
+                actor=request.user,
+                action=ACTION_APPLICATION_STATUS_CHANGE,
+                target_type="application",
+                target_id=str(application.id),
+                metadata={"status": APP_STATUS_UNDER_REVIEW},
+            )
             messages.info(request, _("Application marked as under review."))
             return redirect("applications:admin_detail", application_id=application.id)
         if action == "approve" and application.status in {APP_STATUS_PENDING, APP_STATUS_UNDER_REVIEW}:
             if not decision_form.is_valid():
                 return _render_detail(request, application, decision_form)
             application.approve(request.user, notes=decision_form.cleaned_data.get("admin_notes", ""))
+            record_audit_event(
+                actor=request.user,
+                action=ACTION_APPLICATION_APPROVED,
+                target_type="application",
+                target_id=str(application.id),
+                metadata={"student_id": application.student_id},
+            )
             messages.success(request, _("Application approved."))
             return redirect("applications:admin_detail", application_id=application.id)
         if action == "reject" and application.status in {APP_STATUS_PENDING, APP_STATUS_UNDER_REVIEW}:
@@ -122,11 +143,25 @@ def application_detail(request: HttpRequest, application_id: int) -> HttpRespons
                 return _render_detail(request, application, decision_form)
             admin_notes = (request.POST.get("admin_notes") or "").strip()
             application.reject(request.user, reason=reason, notes=admin_notes)
+            record_audit_event(
+                actor=request.user,
+                action=ACTION_APPLICATION_REJECTED,
+                target_type="application",
+                target_id=str(application.id),
+                metadata={"reason": reason, "student_id": application.student_id},
+            )
             messages.warning(request, _("Application rejected."))
             return redirect("applications:admin_detail", application_id=application.id)
         if action == "activate" and application.status == APP_STATUS_APPROVED:
             application.activate()
             _activate_student(application.student)
+            record_audit_event(
+                actor=request.user,
+                action=ACTION_APPLICATION_ACTIVATED,
+                target_type="application",
+                target_id=str(application.id),
+                metadata={"student_id": application.student_id, "user_id": application.student.user_id},
+            )
             messages.success(request, _("Application activated."))
             return redirect("applications:admin_detail", application_id=application.id)
         messages.error(request, _("Action not allowed for the current status."))

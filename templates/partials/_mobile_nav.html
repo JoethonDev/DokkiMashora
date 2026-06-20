@@ -5,15 +5,17 @@
   <nav class="absolute start-0 top-0 h-full w-72 max-w-[80%] bg-white dark:bg-slate-900 p-5 shadow-xl flex flex-col gap-1"
        x-show="open" x-transition @keydown.escape="open=false">
     <a href="{% url 'core:landing' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Home" %}</a>
-    <a href="{% url 'applications:register' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Register" %}</a>
     {% if user.is_authenticated %}
       <a href="{% url 'accounts:dashboard' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Dashboard" %}</a>
-      <a href="{% url 'accounts:profile' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Profile" %}</a>
-      <a href="{% url 'academics:student_course_list' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "My Courses" %}</a>
-      {% if user.is_staff %}
+      {% if CAN_VIEW_STUDENT_NAV %}
+        <a href="{% url 'students:dashboard' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "My Profile" %}</a>
+        <a href="{% url 'academics:student_course_list' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "My Courses" %}</a>
+      {% endif %}
+      {% if CAN_VIEW_STAFF_NAV %}
         <a href="{% url 'applications:admin_list' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Applications" %}</a>
         <a href="{% url 'academics:admin_diploma_list' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Academics" %}</a>
         <a href="{% url 'exams:admin_list' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Exams" %}</a>
+        <a href="{% url 'assessments:admin_list' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Assessments" %}</a>
       {% endif %}
       {% if CAN_VIEW_DESIGN_SHOWCASE %}
         <a href="{% url 'core:design_showcase' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Design Showcase" %}</a>

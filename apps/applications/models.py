@@ -19,12 +19,20 @@ from .constants import (
 
 
 class Application(TimeStampedModel):
-    """A registration request. One application per student; resubmissions update this row."""
+    """A registration request. A student may have multiple applications for different cohorts."""
 
     student = models.ForeignKey(
         StudentProfile,
         on_delete=models.CASCADE,
         related_name="applications",
+    )
+    cohort = models.ForeignKey(
+        "academics.Cohort",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="applications",
+        verbose_name=_("cohort"),
     )
     status = models.CharField(
         _("status"),
@@ -96,3 +104,15 @@ class Application(TimeStampedModel):
         self.status = "activated"
         self.activated_at = timezone.now()
         self.save(update_fields=["status", "activated_at", "updated_at"])
+
+    @property
+    def next_action(self) -> dict | None:
+        """Return a row-level next action for the student, or None."""
+        action_map = {
+            "pending": {"text": _("Waiting for review"), "url": None},
+            "under_review": {"text": _("Under review — no action needed"), "url": None},
+            "approved": {"text": _("Awaiting activation"), "url": None},
+            "activated": {"text": _("Enrolled — view courses"), "url": "students:dashboard"},
+            "rejected": {"text": _("Apply to a different cohort"), "url": "students:reapply"},
+        }
+        return action_map.get(self.status)

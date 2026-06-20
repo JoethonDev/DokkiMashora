@@ -1,0 +1,57 @@
+{% extends "base.html" %}{% load i18n %}
+{% block title %}{% trans "Payment Records" %} — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+{% include "partials/_page.html" with title=_("Payment Records") %}
+<form method="get" class="flex flex-wrap gap-3 mb-4 items-end">
+  <div>
+    <label class="block text-xs font-medium text-slate-700 dark:text-slate-200 mb-1">{% trans "Status" %}</label>
+    <select name="status" class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm">
+      <option value="">{% trans "All statuses" %}</option>
+      {% for key, label in payment_status_choices %}
+      <option value="{{ key }}" {% if current_status == key %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label class="block text-xs font-medium text-slate-700 dark:text-slate-200 mb-1">{% trans "Student" %}</label>
+    <input type="text" name="student_q" value="{{ current_student_q }}" placeholder="{% trans 'Name, email, phone, or national ID' %}" class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm">
+  </div>
+  <div>
+    <label class="block text-xs font-medium text-slate-700 dark:text-slate-200 mb-1">{% trans "Date from" %}</label>
+    <input type="date" name="date_from" value="{{ current_date_from }}" class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm">
+  </div>
+  <div>
+    <label class="block text-xs font-medium text-slate-700 dark:text-slate-200 mb-1">{% trans "Date to" %}</label>
+    <input type="date" name="date_to" value="{{ current_date_to }}" class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm">
+  </div>
+  <div>{% include "partials/_button.html" with label=_("Filter") variant="primary" type="submit" %}</div>
+</form>
+{% if records %}
+<div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+  <table class="min-w-[640px] w-full text-sm">
+    <thead class="bg-slate-50 dark:bg-slate-800/50">
+      <tr class="text-slate-600 dark:text-slate-300">
+        <th class="px-4 py-2.5 text-start font-medium">{% trans "Student" %}</th>
+        <th class="px-4 py-2.5 text-end font-medium">{% trans "Amount" %}</th>
+        <th class="px-4 py-2.5 text-start font-medium">{% trans "Status" %}</th>
+        <th class="px-4 py-2.5 text-start font-medium">{% trans "Reference" %}</th>
+        <th class="px-4 py-2.5 text-start font-medium">{% trans "Paid at" %}</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+      {% for r in records %}
+      <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+        <td class="px-4 py-3"><a href="{% url 'payments:record_detail' record_id=r.id %}" class="text-brand-600 hover:underline">{{ r.student.full_name }}</a></td>
+        <td class="px-4 py-3 text-end tabular-nums">{{ r.amount }} {{ r.currency }}</td>
+        <td class="px-4 py-3">{% include "partials/_badge.html" with label=r.get_status_display %}</td>
+        <td class="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">{{ r.external_reference|default:"—" }}</td>
+        <td class="px-4 py-3 text-xs text-slate-500 dark:text-slate-400 tabular-nums">{{ r.paid_at|date:"DATETIME_FORMAT"|default:"—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+{% include "partials/_empty_state.html" with title=_("No payment records") subtitle=_("Import payments via CSV upload.") %}
+{% endif %}
+{% endblock %}
