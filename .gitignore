@@ -52,3 +52,6 @@ htmlcov/
 *.swp
 .DS_Store
 Thumbs.db
+
+# --- Root-level screenshots -------------------------------------------------
+localhost_*.png
