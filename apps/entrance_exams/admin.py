@@ -31,5 +31,6 @@ class EntranceExamAdmin(admin.ModelAdmin):
 class EntranceAttemptAdmin(admin.ModelAdmin):
     list_display = ("student", "exam", "status", "score", "result", "submitted_at", "graded_at")
     list_filter = ("status", "result", "exam__diploma", "exam__cohort")
-    search_fields = ("student__full_name",)
+    search_fields = ("student__full_name", "student__user__email", "exam__title")
+    list_select_related = ("student__user", "exam")
     inlines = [EntranceAnswerInline]

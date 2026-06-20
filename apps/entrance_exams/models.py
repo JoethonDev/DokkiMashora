@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -64,6 +66,15 @@ class EntranceExam(TimeStampedModel):
             ),
         ]
 
+    def recompute_total_points(self) -> None:
+        total = (
+            self.questions.aggregate(total=models.Sum("points"))["total"]
+            or Decimal("0.00")
+        )
+        if self.total_points != total:
+            self.total_points = total
+            self.save(update_fields=["total_points", "updated_at"])
+
     def __str__(self):
         return f"{self.title} — {self.cohort}"
 
@@ -105,6 +116,15 @@ class EntranceQuestion(TimeStampedModel):
                 name="unique_entrance_question_order",
             ),
         ]
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        self.exam.recompute_total_points()
+
+    def delete(self, *args, **kwargs):
+        exam = self.exam
+        super().delete(*args, **kwargs)
+        exam.recompute_total_points()
 
     def __str__(self):
         return self.text[:50]
