@@ -1,5 +1,5 @@
 {% load i18n static %}<!doctype html>
-<html lang="{{ LANGUAGE_CODE }}" dir="{% if LANGUAGE_BIDI %}rtl{% else %}ltr{% endif %}">
+<html lang="{{ LANGUAGE_CODE }}" dir="{% if LANGUAGE_BIDI %}rtl{% else %}ltr{% endif %}" data-ui-theme="operational">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,7 +7,7 @@
   <title>{% block title %}{{ SITE_NAME }}{% endblock title %}</title>
 
   <script>
-    (function(){try{var s=localStorage.getItem("dm-theme");if(s==="dark"||(!s&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch(e){}})();
+    (function(){try{var s=localStorage.getItem("dm-ui-theme");if(s==="landing-heritage"||s==="operational")document.documentElement.setAttribute("data-ui-theme",s);var t=localStorage.getItem("dm-theme");if(t==="dark"||(!t&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch(e){}})();
   </script>
 
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>

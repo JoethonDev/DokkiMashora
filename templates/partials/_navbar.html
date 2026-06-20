@@ -38,6 +38,7 @@
 
       <div class="flex items-center gap-2" x-data="{ open: false }">
         {% include "partials/_language_switcher.html" %}
+        {% include "partials/_design_switcher.html" %}
         {% include "partials/_theme_toggle.html" %}
         {% if user.is_authenticated %}
           <form method="post" action="{% url 'accounts:logout' %}" class="hidden sm:block">
