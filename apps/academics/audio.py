@@ -7,7 +7,6 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from django.conf import settings
 from django.utils.translation import gettext_lazy as _
 
 from apps.academics.constants import (
@@ -54,8 +53,8 @@ def transcode_to_hls(
     """Transcode uploaded audio to HLS, upload segments to storage."""
     lect_id = lecture.id
     prefix = f"lectures/{lect_id}/audio"
-    playlist_key = f"{prefix}/index.m3u8"
-    segment_prefix = f"{prefix}/seg_"
+    playlist_key = "index.m3u8"
+    segment_prefix = "seg_"
 
     lecture.audio_processing_status = AUDIO_PROCESSING_PROCESSING
     lecture.audio_processing_error = ""
@@ -100,21 +99,12 @@ def transcode_to_hls(
                     continue
                 rel_key = f"{prefix}/{f.name}"
                 data = f.read_bytes()
-                if settings.USE_R2_STORAGE:
-                    storage_service.upload_file(
-                        data,
-                        key_prefix=prefix,
-                        content_type=(
-                            "application/vnd.apple.mpegurl"
-                            if f.suffix == ".m3u8"
-                            else "video/MP2T"
-                        ),
-                        original_filename=f.name,
-                        max_size=200 * 1024 * 1024,
-                        allowed_types=[".m3u8", ".ts"],
-                    )
-                else:
-                    storage_service.backend.upload(rel_key, data, "application/octet-stream")
+                ctype = (
+                    "application/vnd.apple.mpegurl"
+                    if f.suffix == ".m3u8"
+                    else "video/MP2T"
+                )
+                storage_service.backend.upload(rel_key, data, ctype)
 
         lecture.audio_processing_status = AUDIO_PROCESSING_COMPLETED
         lecture.save(update_fields=["audio_processing_status"])
