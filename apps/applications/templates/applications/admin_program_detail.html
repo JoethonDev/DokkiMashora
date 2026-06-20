@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% load ui_tags %}
+
+{% block title %}{% trans "Program Application" %} {{ application.id }} | {{ SITE_NAME_AR }}{% endblock title %}
+{% block content %}
+<section class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <a href="{% url 'applications:program_list' %}" class="text-sm text-brand-600 dark:text-brand-400 hover:underline">&larr; {% trans "Back to program applications" %}</a>
+  <header class="mt-4 mb-6">
+    <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Program Application" %} #{{ application.id }}</p>
+    <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ application.student.full_name }}</h1>
+    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ application.get_status_display }} &middot; {% trans "Submitted" %} <span class="tabular-nums">{% dt application.created_at %}</span></p>
+  </header>
+
+  <div class="grid lg:grid-cols-2 gap-6">
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+      <h2 class="font-semibold mb-3">{% trans "Applicant data" %}</h2>
+      <dl class="grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-x-4 gap-y-2.5 text-sm">
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Email" %}</dt><dd class="text-slate-900 dark:text-slate-100 break-words">{{ application.student.user.email }}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Phone" %}</dt><dd class="text-slate-900 dark:text-slate-100 break-words">{{ application.student.phone }}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "National ID" %}</dt><dd class="text-slate-900 dark:text-slate-100 break-words">{{ application.student.national_id }}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Program type" %}</dt><dd class="text-slate-900 dark:text-slate-100 break-words">{{ application.get_program_type_display }}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Program" %}</dt>
+        <dd class="text-slate-900 dark:text-slate-100 break-words">
+          {% if application.cohort %}{{ application.cohort }}{% elif application.course %}{{ application.course.title }}{% else %}<span class="text-slate-400">—</span>{% endif %}
+        </dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Status" %}</dt><dd class="text-slate-900 dark:text-slate-100 break-words">{{ application.get_status_display }}</dd>
+      </dl>
+    </div>
+
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+      <h2 class="font-semibold mb-3">{% trans "Review actions" %}</h2>
+      <form method="post" class="space-y-3">
+        {% csrf_token %}
+        {% if application.admin_notes %}
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Admin notes" %}</label>
+            <textarea name="admin_notes" rows="3" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900 dark:text-slate-100">{{ application.admin_notes }}</textarea>
+          </div>
+        {% endif %}
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Rejection reason" %}</label>
+          <textarea name="rejection_reason" rows="2" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900 dark:text-slate-100">{{ application.rejection_reason }}</textarea>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          {% if application.status == "submitted" %}
+            {% include "partials/_button.html" with label=_("Mark under review") size="sm" variant="secondary" attrs='name="action" value="mark_review"' %}
+          {% endif %}
+          {% if application.status == "submitted" or application.status == "under_review" %}
+            {% include "partials/_button.html" with label=_("Invite to entrance") size="sm" variant="primary" attrs='name="action" value="invite"' %}
+            {% include "partials/_button.html" with label=_("Accept") size="sm" variant="success" attrs='name="action" value="accept"' %}
+            {% include "partials/_button.html" with label=_("Reject") size="sm" variant="danger" attrs='name="action" value="reject"' %}
+          {% endif %}
+          {% if application.status == "accepted" %}
+            {% include "partials/_button.html" with label=_("Activate") size="sm" variant="primary" attrs='name="action" value="activate"' %}
+          {% endif %}
+        </div>
+      </form>
+      {% if application.reviewed_by %}
+        <p class="mt-3 text-xs text-slate-500 dark:text-slate-400 tabular-nums">{% trans "Last reviewer" %}: {{ application.reviewed_by.email }} {% if application.reviewed_at %}({% dt application.reviewed_at %}){% endif %}</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {% with attempts=application.entrance_attempts.all %}
+    {% if attempts %}
+      <div class="mt-8">
+        <h2 class="text-lg font-semibold mb-3">{% trans "Entrance Exam Attempts" %}</h2>
+        <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+          <table class="min-w-[600px] w-full divide-y divide-slate-200 dark:divide-slate-800 text-sm">
+            <thead class="bg-slate-50 dark:bg-slate-800/50">
+              <tr class="text-slate-600 dark:text-slate-300">
+                <th class="px-4 py-2.5 text-start font-medium">{% trans "Exam" %}</th>
+                <th class="px-4 py-2.5 text-start font-medium">{% trans "Status" %}</th>
+                <th class="px-4 py-2.5 text-start font-medium">{% trans "Score" %}</th>
+                <th class="px-4 py-2.5 text-start font-medium">{% trans "Result" %}</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+              {% for a in attempts %}
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                  <td class="px-4 py-3 text-slate-900 dark:text-slate-100">{{ a.exam.title }}</td>
+                  <td class="px-4 py-3">{% include "partials/_badge.html" with label=a.get_status_display %}</td>
+                  <td class="px-4 py-3 text-slate-900 dark:text-slate-100 tabular-nums">{{ a.score|default:"—" }}</td>
+                  <td class="px-4 py-3">
+                    {% if a.result == "pass" %}
+                      {% include "partials/_badge.html" with label=_("Pass") tone="success" %}
+                    {% elif a.result == "fail" %}
+                      {% include "partials/_badge.html" with label=_("Fail") tone="danger" %}
+                    {% else %}
+                      <span class="text-slate-400">—</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    {% endif %}
+  {% endwith %}
+</section>
+{% endblock content %}

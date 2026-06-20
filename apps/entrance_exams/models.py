@@ -118,6 +118,7 @@ class EntranceChoice(TimeStampedModel):
         verbose_name=_("question"),
     )
     text = models.CharField(_("text"), max_length=500)
+    is_correct = models.BooleanField(_("correct"), default=False)
     order = models.PositiveIntegerField(_("order"), db_index=True)
 
     class Meta:

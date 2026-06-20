@@ -23,6 +23,7 @@ from apps.audit.constants import (
 )
 from apps.audit.services import record_audit_event
 from apps.core.permissions import is_admin, is_moderator
+from apps.entrance_exams.services import assign_exam_for_application
 from apps.students.models import StudentProfile
 
 from .constants import (
@@ -257,7 +258,13 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
                 target_id=str(application.id),
                 metadata={"status": PROGRAM_APP_STATUS_INVITED},
             )
-            messages.success(request, _("Applicant invited to entrance assessment."))
+            if assign_exam_for_application(application):
+                messages.success(request, _("Applicant invited to entrance assessment."))
+            else:
+                messages.success(
+                    request,
+                    _("Applicant invited. No active entrance exam exists for this cohort — please create one."),
+                )
             return redirect("applications:program_detail", application_id=application.id)
         if action == "accept" and application.status in {PROGRAM_APP_STATUS_SUBMITTED, PROGRAM_UNDER_REVIEW}:
             notes = (request.POST.get("admin_notes") or "").strip()

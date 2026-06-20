@@ -95,7 +95,9 @@
               {% if question.question_type == "mcq" %}
                 <ul class="mt-3 space-y-1">
                   {% for choice in question.choices.all %}
-                    <li class="text-sm text-slate-700 dark:text-slate-200">{{ choice.text }}</li>
+                    <li class="text-sm {% if choice.is_correct %}text-emerald-600 dark:text-emerald-400 font-medium{% else %}text-slate-700 dark:text-slate-200{% endif %}">
+                      {{ choice.text }}{% if choice.is_correct %} ✓{% endif %}
+                    </li>
                   {% endfor %}
                 </ul>
               {% endif %}

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% load ui_tags %}
+{% block title %}{% trans "Program Applications" %} | {{ SITE_NAME_AR }}{% endblock title %}
+{% block content %}
+<section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <header class="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Admin" %}</p>
+      <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{% trans "Program Applications" %}</h1>
+    </div>
+    <div class="flex flex-wrap gap-3">
+      <form method="get" class="flex items-center gap-2">
+        <label for="status" class="text-sm text-slate-500 dark:text-slate-400">{% trans "Status" %}</label>
+        <select id="status" name="status" class="rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-sm">
+          <option value="">{% trans "All" %}</option>
+          {% for value, label in status_choices %}
+            <option value="{{ value }}" {% if value == status_filter %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </form>
+      <form method="get" class="flex items-center gap-2">
+        <label for="program_type" class="text-sm text-slate-500 dark:text-slate-400">{% trans "Type" %}</label>
+        <select id="program_type" name="program_type" class="rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-sm">
+          <option value="">{% trans "All" %}</option>
+          {% for value, label in program_type_choices %}
+            <option value="{{ value }}" {% if value == program_type_filter %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </form>
+    </div>
+  </header>
+
+  <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+    <table class="min-w-[800px] w-full divide-y divide-slate-200 dark:divide-slate-800 text-sm">
+      <thead class="bg-slate-50 dark:bg-slate-800/50">
+        <tr class="text-slate-600 dark:text-slate-300">
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Student" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Type" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Program" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Status" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Submitted" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Actions" %}</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+        {% for app in applications %}
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+            <td class="px-4 py-3">
+              <a href="{% url 'applications:program_detail' app.id %}" class="text-brand-600 hover:underline font-medium">{{ app.student.full_name }}</a>
+              <p class="text-xs text-slate-400">{{ app.student.user.email }}</p>
+            </td>
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-300">{{ app.get_program_type_display }}</td>
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-300">
+              {% if app.cohort %}{{ app.cohort }}{% elif app.course %}{{ app.course.title }}{% else %}<span class="text-slate-400">—</span>{% endif %}
+            </td>
+            <td class="px-4 py-3">{% include "partials/_badge.html" with label=app.get_status_display %}</td>
+            <td class="px-4 py-3 text-slate-500 dark:text-slate-400 text-xs tabular-nums">{% dt app.created_at %}</td>
+            <td class="px-4 py-3">
+              {% url 'applications:program_detail' app.id as detail_url %}
+              {% include "partials/_button.html" with href=detail_url label=_("Review") variant="secondary" size="sm" %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="6" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400">{% trans "No program applications yet." %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock content %}

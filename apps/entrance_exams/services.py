@@ -101,10 +101,12 @@ def submit_attempt(
                 choice = EntranceChoice.objects.filter(
                     id=answer_data.selected_choice_id, question=question,
                 ).first()
+                score = question.points if (choice and choice.is_correct) else Decimal("0.00")
                 EntranceAnswer.objects.create(
                     attempt=attempt,
                     question=question,
                     selected_choice=choice,
+                    score=score,
                 )
             else:
                 if answer_data.selected_choice_id is not None:
@@ -117,6 +119,7 @@ def submit_attempt(
         attempt.status = ATTEMPT_STATUS_COMPLETED
         attempt.submitted_at = timezone.now()
         attempt.save(update_fields=["status", "submitted_at"])
+        _recompute_attempt_grade(attempt)
     return attempt
 
 
@@ -183,6 +186,33 @@ def _update_program_application_from_result(
 # ---------------------------------------------------------------------------
 # Query helpers
 # ---------------------------------------------------------------------------
+
+
+def assign_exam_for_application(program_application: ProgramApplication) -> EntranceAttempt | None:
+    """Auto-assign the matching entrance exam when a ProgramApplication is invited.
+
+    Looks up the active EntranceExam for the application's cohort and creates
+    an EntranceAttempt.  Returns ``None`` when no exam exists (the admin can
+    still create one later and assign manually).
+    """
+    from apps.applications.constants import PROGRAM_TYPE_DIPLOMA
+
+    from .models import EntranceAttempt, EntranceExam
+
+    if program_application.program_type != PROGRAM_TYPE_DIPLOMA:
+        return None
+    cohort = program_application.cohort
+    if not cohort:
+        return None
+    exam = EntranceExam.objects.filter(cohort=cohort, is_active=True).first()
+    if not exam:
+        return None
+    attempt, _ = EntranceAttempt.objects.get_or_create(
+        exam=exam,
+        program_application=program_application,
+        student=program_application.student,
+    )
+    return attempt
 
 
 def get_student_attempts(student: StudentProfile) -> list[EntranceAttempt]:
