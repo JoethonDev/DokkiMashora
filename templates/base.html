@@ -57,7 +57,7 @@
 
   {% block extra_head %}{% endblock extra_head %}
 </head>
-<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 font-sans antialiased min-h-screen flex flex-col" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+<body class="dm-shell font-sans antialiased min-h-screen flex flex-col" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
 
   {% include "partials/_skip_link.html" %}
   {% include "partials/_navbar.html" %}

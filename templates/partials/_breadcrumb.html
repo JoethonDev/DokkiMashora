@@ -1,13 +1,13 @@
 {% load i18n %}
-<nav class="mb-6 text-sm text-slate-500 dark:text-slate-400" aria-label="breadcrumb">
+<nav class="mb-6 text-sm dm-muted" aria-label="breadcrumb">
   <ol class="flex flex-wrap items-center gap-1">
     {% for item in items %}
       <li class="flex items-center gap-1">
         {% if forloop.last %}
-          <span class="text-slate-700 dark:text-slate-200 font-medium">{{ item.label }}</span>
+          <span class="font-medium dm-text">{{ item.label }}</span>
         {% else %}
-          {% if item.href %}<a href="{{ item.href }}" class="hover:text-brand-600 dark:hover:text-brand-400">{{ item.label }}</a>{% else %}<span>{{ item.label }}</span>{% endif %}
-          <span class="text-slate-300 dark:text-slate-600">/</span>
+          {% if item.href %}<a href="{{ item.href }}" class="hover:underline dm-brand-text">{{ item.label }}</a>{% else %}<span>{{ item.label }}</span>{% endif %}
+          <span class="dm-muted">/</span>
         {% endif %}
       </li>
     {% endfor %}

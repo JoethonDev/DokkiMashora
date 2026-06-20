@@ -2,7 +2,7 @@
 <form action="{% url 'set_language' %}" method="post" class="flex items-center gap-1 text-xs">
   {% csrf_token %}
   <input name="next" type="hidden" value="{{ request.get_full_path }}">
-  <select name="language" class="rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-xs" onchange="this.form.submit()">
+  <select name="language" class="rounded-md dm-input px-2 py-1 text-xs" onchange="this.form.submit()">
     {% get_available_languages as languages %}
     {% get_current_language as current_lang %}
     {% for lang_code, lang_name in languages %}
@@ -10,6 +10,6 @@
     {% endfor %}
   </select>
   <noscript>
-    <button type="submit" class="rounded-md bg-slate-800 text-white px-2 py-1">{% trans "Go" %}</button>
+    <button type="submit" class="rounded-md dm-button dm-button-primary px-2 py-1">{% trans "Go" %}</button>
   </noscript>
 </form>

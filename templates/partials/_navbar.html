@@ -1,38 +1,38 @@
 {% load i18n %}
-<header class="bg-white/80 dark:bg-slate-900/80 backdrop-blur border-b border-slate-200 dark:border-slate-800 sticky top-0 z-30">
+<header class="dm-surface backdrop-blur border-b dm-border sticky top-0 z-30 shadow-sm">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="flex h-16 items-center justify-between gap-4">
       <div class="flex items-center gap-3">
-        <button class="md:hidden rounded-md border border-slate-300 dark:border-slate-700 p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+        <button class="md:hidden dm-button dm-button-secondary p-1.5"
                 @click="$dispatch('open-nav')" aria-label="{% trans 'Menu' %}" aria-expanded="false">
           <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
         </button>
-        <a href="{% url 'core:landing' %}" class="flex items-center gap-2 text-slate-900 dark:text-slate-100">
-          <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-white font-bold">د</span>
+        <a href="{% url 'core:landing' %}" class="flex items-center gap-2 dm-text">
+          <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg dm-brand font-bold">د</span>
           <span class="hidden sm:inline text-lg font-semibold tracking-tight">{{ SITE_NAME_AR }}</span>
         </a>
       </div>
 
-      <nav class="hidden md:flex items-center gap-5 text-sm font-medium text-slate-700 dark:text-slate-300">
-        <a href="{% url 'core:landing' %}" class="hover:text-brand-600">{% trans "Home" %}</a>
+      <nav class="hidden md:flex items-center gap-5 text-sm font-medium dm-muted">
+        <a href="{% url 'core:landing' %}" class="hover:underline dm-brand-text">{% trans "Home" %}</a>
         {% if user.is_authenticated %}
-          <a href="{% url 'accounts:dashboard' %}" class="hover:text-brand-600">{% trans "Dashboard" %}</a>
+          <a href="{% url 'accounts:dashboard' %}" class="hover:underline dm-brand-text">{% trans "Dashboard" %}</a>
           {% if CAN_VIEW_STUDENT_NAV %}
-            <a href="{% url 'students:dashboard' %}" class="hover:text-brand-600">{% trans "My Profile" %}</a>
-            <a href="{% url 'academics:student_course_list' %}" class="hover:text-brand-600">{% trans "My Courses" %}</a>
+            <a href="{% url 'students:dashboard' %}" class="hover:underline dm-brand-text">{% trans "My Profile" %}</a>
+            <a href="{% url 'academics:student_course_list' %}" class="hover:underline dm-brand-text">{% trans "My Courses" %}</a>
           {% endif %}
           {% if CAN_VIEW_STAFF_NAV %}
-            <a href="{% url 'applications:admin_list' %}" class="hover:text-brand-600">{% trans "Applications" %}</a>
-            <a href="{% url 'academics:admin_diploma_list' %}" class="hover:text-brand-600">{% trans "Academics" %}</a>
-            <a href="{% url 'exams:admin_list' %}" class="hover:text-brand-600">{% trans "Exams" %}</a>
-            <a href="{% url 'entrance_exams:admin_list' %}" class="hover:text-brand-600">{% trans "Entrance" %}</a>
-            <a href="{% url 'assessments:admin_list' %}" class="hover:text-brand-600">{% trans "Assessments" %}</a>
+            <a href="{% url 'applications:admin_list' %}" class="hover:underline dm-brand-text">{% trans "Applications" %}</a>
+            <a href="{% url 'academics:admin_diploma_list' %}" class="hover:underline dm-brand-text">{% trans "Academics" %}</a>
+            <a href="{% url 'exams:admin_list' %}" class="hover:underline dm-brand-text">{% trans "Exams" %}</a>
+            <a href="{% url 'entrance_exams:admin_list' %}" class="hover:underline dm-brand-text">{% trans "Entrance" %}</a>
+            <a href="{% url 'assessments:admin_list' %}" class="hover:underline dm-brand-text">{% trans "Assessments" %}</a>
           {% endif %}
           {% if CAN_VIEW_DESIGN_SHOWCASE %}
-            <a href="{% url 'core:design_showcase' %}" class="hover:text-brand-600">{% trans "Designs" %}</a>
+            <a href="{% url 'core:design_showcase' %}" class="hover:underline dm-brand-text">{% trans "Designs" %}</a>
           {% endif %}
         {% else %}
-          <a href="{% url 'applications:register' %}" class="hover:text-brand-600">{% trans "Register" %}</a>
+          <a href="{% url 'applications:register' %}" class="hover:underline dm-brand-text">{% trans "Register" %}</a>
         {% endif %}
       </nav>
 
@@ -43,11 +43,11 @@
         {% if user.is_authenticated %}
           <form method="post" action="{% url 'accounts:logout' %}" class="hidden sm:block">
             {% csrf_token %}
-            <button type="submit" class="rounded-md border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-sm hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Log out" %}</button>
+            <button type="submit" class="dm-button dm-button-secondary px-3 py-1.5 text-sm">{% trans "Log out" %}</button>
           </form>
         {% else %}
-          <a href="{% url 'accounts:login' %}" class="hidden sm:inline-block rounded-md border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-sm hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Log in" %}</a>
-          <a href="{% url 'applications:register' %}" class="rounded-md bg-brand-600 px-3 py-1.5 text-sm text-white hover:bg-brand-700">{% trans "Register" %}</a>
+          <a href="{% url 'accounts:login' %}" class="hidden sm:inline-block dm-button dm-button-secondary px-3 py-1.5 text-sm">{% trans "Log in" %}</a>
+          <a href="{% url 'applications:register' %}" class="dm-button dm-button-primary px-3 py-1.5 text-sm">{% trans "Register" %}</a>
         {% endif %}
       </div>
     </div>

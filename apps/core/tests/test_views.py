@@ -43,6 +43,13 @@ class LandingPageTests(TestCase):
         response = self.client.get(reverse("core:landing"))
         self.assertEqual(response.status_code, 200)
 
+    def test_landing_page_exposes_ui_theme_switcher(self) -> None:
+        response = self.client.get(reverse("core:landing"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-ui-theme="operational"')
+        self.assertContains(response, 'class="dm-shell')
+        self.assertContains(response, "Switch to Heritage")
+
     def test_timezone_is_cairo(self) -> None:
         self.assertEqual(settings.TIME_ZONE, "Africa/Cairo")
         self.assertTrue(settings.USE_TZ)
