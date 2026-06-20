@@ -11,6 +11,9 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.applications.constants import PROGRAM_APP_STATUS_ACCEPTED, PROGRAM_APP_STATUS_REJECTED
+from apps.audit.constants import ACTION_APPLICATION_APPROVED, ACTION_APPLICATION_REJECTED
+from apps.audit.services import record_audit_event
+from apps.communications.email_message import EmailMessage
 from apps.core.permissions import entrance_staff_scope_filter
 
 from .constants import (
@@ -140,11 +143,11 @@ def grade_answer(
     answer.graded_at = timezone.now()
     answer.graded_by = grader
     answer.save(update_fields=["score", "feedback", "graded_at", "graded_by"])
-    _recompute_attempt_grade(answer.attempt)
+    _recompute_attempt_grade(answer.attempt, actor=grader)
     return answer
 
 
-def _recompute_attempt_grade(attempt: EntranceAttempt) -> None:
+def _recompute_attempt_grade(attempt: EntranceAttempt, actor: User | None = None) -> None:
     total = Decimal("0.00")
     all_graded = True
     for answer in attempt.answers.select_related("question").all():
@@ -159,7 +162,7 @@ def _recompute_attempt_grade(attempt: EntranceAttempt) -> None:
         attempt.status = ATTEMPT_STATUS_GRADED
         attempt.graded_at = timezone.now()
         attempt.save(update_fields=["score", "status", "graded_at", "result"])
-        _update_program_application_from_result(attempt, attempt.result)
+        _update_program_application_from_result(attempt, attempt.result, actor=actor)
     else:
         attempt.save(update_fields=["score"])
 
@@ -173,15 +176,52 @@ def _compute_result(score: Decimal, passing_score: Decimal) -> str:
 def _update_program_application_from_result(
     attempt: EntranceAttempt,
     result: str,
+    actor: User | None = None,
 ) -> None:
     from .constants import RESULT_PASS
 
     prog_app = attempt.program_application
     if result == RESULT_PASS:
         prog_app.status = PROGRAM_APP_STATUS_ACCEPTED
+        audit_action = ACTION_APPLICATION_APPROVED
     else:
         prog_app.status = PROGRAM_APP_STATUS_REJECTED
+        audit_action = ACTION_APPLICATION_REJECTED
     prog_app.save(update_fields=["status", "updated_at"])
+
+    record_audit_event(
+        actor=actor,
+        action=audit_action,
+        target_type="entrance_attempt",
+        target_id=str(attempt.id),
+        metadata={
+            "student_id": attempt.student_id,
+            "exam_id": attempt.exam_id,
+            "score": str(attempt.score),
+            "result": result,
+        },
+    )
+
+    email_to = attempt.student.user.email
+    exam_title = attempt.exam.title
+    if result == RESULT_PASS:
+        subject = _("Entrance exam passed — %(title)s") % {"title": exam_title}
+        body = _(
+            "Congratulations! You have passed the entrance exam '%(title)s'. "
+            "Your application has been accepted."
+        ) % {"title": exam_title}
+    else:
+        subject = _("Entrance exam result — %(title)s") % {"title": exam_title}
+        body = _(
+            "You did not pass the entrance exam '%(title)s'. "
+            "Your application has been rejected."
+        ) % {"title": exam_title}
+    EmailMessage.objects.create(
+        template_slug="entrance_exam_result",
+        to_email=email_to,
+        subject=subject,
+        body=body,
+    )
 
 
 # ---------------------------------------------------------------------------

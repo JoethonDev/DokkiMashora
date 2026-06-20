@@ -54,8 +54,30 @@ def student_list(request):
     """Show the student's entrance exam attempts and available exams."""
     profile = _get_profile(request.user)
     attempts = get_student_attempts(profile)
+    active_exam_ids = {a.exam_id for a in attempts}
+    prog_apps = ProgramApplication.objects.filter(
+        student=profile, cohort__isnull=False,
+    ).select_related("cohort")
+    cohort_ids = set()
+    for pa in prog_apps:
+        if pa.cohort_id:
+            cohort_ids.add(pa.cohort_id)
+    available = []
+    if cohort_ids:
+        now = timezone.now()
+        available = list(
+            EntranceExam.objects.filter(
+                cohort_id__in=cohort_ids,
+                is_active=True,
+                open_at__lte=now,
+                close_at__gte=now,
+            ).exclude(
+                id__in=active_exam_ids,
+            ).select_related("cohort")
+        )
     return render(request, "entrance_exams/student_list.html", {
         "attempts": attempts,
+        "available_exams": available,
     })
 
 

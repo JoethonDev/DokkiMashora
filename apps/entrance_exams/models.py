@@ -193,7 +193,7 @@ class EntranceAttempt(TimeStampedModel):
     result = models.CharField(
         _("result"),
         max_length=10,
-        choices=(("pass", _("Pass")), ("fail", _("Fail"))),
+        choices=RESULT_CHOICES,
         blank=True,
         default="",
     )

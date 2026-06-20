@@ -7,8 +7,26 @@
 <section class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
   <h1 class="text-2xl sm:text-3xl font-bold tracking-tight font-display">{% trans "Entrance Exams" %}</h1>
 
+  {% if available_exams %}
+    <h2 class="mt-8 text-lg font-semibold text-slate-900 dark:text-slate-100">{% trans "Available Exams" %}</h2>
+    <div class="mt-4 space-y-4">
+      {% for exam in available_exams %}
+        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 flex justify-between items-center gap-4">
+          <div class="min-w-0">
+            <h3 class="font-semibold text-slate-900 dark:text-slate-100 truncate">{{ exam.title }}</h3>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ exam.cohort }}</p>
+          </div>
+          <div class="shrink-0">
+            <a href="{% url 'entrance_exams:exam_instructions' exam.id %}" class="inline-flex items-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 transition">{% trans "Start" %}</a>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
   {% if attempts %}
-    <div class="mt-8 space-y-4">
+    <h2 class="{% if available_exams %}mt-10{% else %}mt-8{% endif %} text-lg font-semibold text-slate-900 dark:text-slate-100">{% trans "My Attempts" %}</h2>
+    <div class="mt-4 space-y-4">
       {% for a in attempts %}
         <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 flex justify-between items-center gap-4">
           <div class="min-w-0">
@@ -21,7 +39,9 @@
         </div>
       {% endfor %}
     </div>
-  {% else %}
+  {% endif %}
+
+  {% if not attempts and not available_exams %}
     <div class="mt-8 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-8 text-center">
       <p class="text-base font-semibold text-slate-700 dark:text-slate-200">{% trans "No entrance exams" %}</p>
       <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{% trans "You have no entrance exams assigned." %}</p>
