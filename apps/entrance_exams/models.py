@@ -14,6 +14,7 @@ from .constants import (
     GEMINI_DECISION_CHOICES,
     QUESTION_TYPE_CHOICES,
     QUESTION_TYPE_MCQ,
+    RESULT_CHOICES,
 )
 
 
