@@ -211,6 +211,7 @@ class Lecture(TimeStampedModel):
     audio_original_filename = models.CharField(_("original filename"), max_length=500, blank=True)
     audio_content_type = models.CharField(_("content type"), max_length=100, blank=True)
     audio_byte_size = models.PositiveIntegerField(_("file size (bytes)"), null=True, blank=True)
+    audio_checksum = models.CharField(_("checksum"), max_length=64, blank=True)
     audio_hls_playlist_key = models.CharField(_("HLS playlist key"), max_length=500, blank=True)
     audio_hls_segment_prefix = models.CharField(_("HLS segment prefix"), max_length=500, blank=True)
     audio_processing_status = models.CharField(

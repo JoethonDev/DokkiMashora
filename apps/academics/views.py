@@ -428,11 +428,14 @@ def _process_lecture_audio(request, lecture, files):
         lecture.audio_original_filename = filename
         lecture.audio_content_type = result.content_type
         lecture.audio_byte_size = result.byte_size
+        lecture.audio_checksum = result.checksum
         lecture.save(update_fields=[
             "audio_storage_key", "audio_original_filename",
-            "audio_content_type", "audio_byte_size",
+            "audio_content_type", "audio_byte_size", "audio_checksum",
         ])
-        transcode_to_hls(lecture, data, filename, content_type)
+        # ponytail: sync FFmpeg blocks the request. Switch to Celery/Task queue if uploads >50MB.
+        import threading
+        threading.Thread(target=transcode_to_hls, args=(lecture, data, filename, content_type), daemon=True).start()
     except Exception as exc:
         logger.exception("Audio upload/processing failed for lecture %s", lecture.id)
         messages.error(request, _("Audio processing failed: %(error)s") % {"error": str(exc)})
@@ -525,3 +528,26 @@ def student_lecture_audio(request, version_id, lecture_id, file_path=""):
         else "audio/mpeg"
     )
     return HttpResponse(file_data, content_type=content_type)
+
+
+@login_required
+def student_lecture_audio_download(request, version_id, lecture_id):
+    """Serve original uploaded audio file with permission check."""
+    if not is_student(request.user) and not request.user.is_superuser:
+        raise PermissionDenied
+    try:
+        profile = request.user.student_profile
+    except StudentProfile.DoesNotExist:
+        raise Http404 from None
+    version = get_object_or_404(CourseVersion, id=version_id, is_active=True)
+    lecture = get_object_or_404(Lecture, id=lecture_id, course_version=version)
+    if not can_access_lecture(profile, lecture):
+        raise PermissionDenied(_("This lecture is not available yet."))
+    if not lecture.audio_storage_key:
+        raise Http404
+    url = storage_service.get_protected_download_url(
+        lecture.audio_storage_key,
+        user=request.user,
+        permission_fn=lambda u: can_access_lecture(profile, lecture),
+    )
+    return redirect(url)

@@ -5,11 +5,12 @@ import tempfile
 from pathlib import Path
 
 from django.conf import settings
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from apps.storage.services import (
     FileValidationError,
     LocalStorageBackend,
+    StorageError,
     StorageService,
     UploadResult,
     _compute_checksum,
@@ -186,3 +187,36 @@ class TestStorageServiceUpload(TestCase):
         )
         self.assertTrue(self.service.exists(result.key))
         self.assertFalse(self.service.exists("nonexistent/key"))
+
+
+class TestProtectedDownloadUrl(TestCase):
+    def test_denies_when_permission_fails(self):
+        service = StorageService()
+        service._backend = LocalStorageBackend()
+        with self.assertRaises(StorageError, msg="Access denied."):
+            service.get_protected_download_url(
+                "some/key",
+                user=None,
+                permission_fn=lambda u: False,
+            )
+
+    def test_returns_url_when_permission_passes(self):
+        service = StorageService()
+        service._backend = LocalStorageBackend()
+        url = service.get_protected_download_url(
+            "some/key",
+            user=None,
+            permission_fn=lambda u: True,
+        )
+        self.assertIsInstance(url, str)
+        self.assertTrue(url)
+
+    @override_settings(PRODUCTION_DEPLOYMENT=True, USE_R2_STORAGE=False)
+    def test_fails_closed_in_production_without_r2(self):
+        service = StorageService()
+        with self.assertRaises(StorageError):
+            service.get_protected_download_url(
+                "some/key",
+                user=None,
+                permission_fn=lambda u: True,
+            )

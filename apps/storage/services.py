@@ -249,8 +249,8 @@ class StorageService:
         """
         if not permission_fn(user):
             raise StorageError("Access denied.")
-        if not settings.DEBUG and not settings.USE_R2_STORAGE:
-            logger.warning("Protected file storage should use R2 in production.")
+        if getattr(settings, "PRODUCTION_DEPLOYMENT", False) and not settings.USE_R2_STORAGE:
+            raise StorageError("Protected file storage requires R2 in production.")
         return self.get_download_url(key, expires_in=expires_in)
 
     def exists(self, key: str) -> bool:

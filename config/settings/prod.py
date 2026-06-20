@@ -4,6 +4,7 @@ from .base import *  # noqa: F401,F403
 from .base import env  # noqa: F401
 
 DEBUG = False
+PRODUCTION_DEPLOYMENT = True
 
 # Enforce secure cookies in production.
 SESSION_COOKIE_SECURE = True
