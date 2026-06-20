@@ -24,7 +24,7 @@ from apps.academics.models import (
     Semester,
 )
 from apps.accounts.models import User
-from apps.applications.models import Application
+from apps.applications.models import Application, ProgramApplication
 from apps.assessments.constants import ASSESSMENT_TYPE_QUIZ
 from apps.assessments.models import Assessment, AssessmentAttempt
 from apps.certificates.models import GeneratedCertificate
@@ -114,13 +114,18 @@ class GetDashboardDataApplicationsTests(TestCase):
         self.user, self.profile = _create_student()
 
     def test_returns_applications_ordered_by_created_at_desc(self) -> None:
-        app1 = Application.objects.create(student=self.profile)
-        Application.objects.filter(pk=app1.pk).update(created_at=timezone.now() - timedelta(hours=1))
-        app2 = Application.objects.create(student=self.profile)
+        root = Application.objects.create(student=self.profile)
+        pa1 = ProgramApplication.objects.create(
+            student=self.profile, root_application=root, program_type="diploma",
+        )
+        ProgramApplication.objects.filter(pk=pa1.pk).update(created_at=timezone.now() - timedelta(hours=1))
+        pa2 = ProgramApplication.objects.create(
+            student=self.profile, root_application=root, program_type="diploma",
+        )
         data = get_dashboard_data(self.profile)
         self.assertEqual(len(data["applications"]), 2)
-        self.assertEqual(data["applications"][0], app2)
-        self.assertEqual(data["applications"][1], app1)
+        self.assertEqual(data["applications"][0], pa2)
+        self.assertEqual(data["applications"][1], pa1)
 
 
 class GetDashboardDataCourseEnrollmentsTests(TestCase):

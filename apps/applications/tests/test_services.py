@@ -95,7 +95,7 @@ class FindDuplicateTests(TestCase):
 
 class SubmitRegistrationTests(TestCase):
     def test_first_submission_creates_inactive_user_with_phone_password(self) -> None:
-        profile, application = submit_registration(make_data(phone="01000000000"))
+        profile, application, _ = submit_registration(make_data(phone="01000000000"))
         user = profile.user
         self.assertFalse(user.is_active)
         self.assertTrue(user.groups.filter(name="Student").exists())
@@ -104,11 +104,11 @@ class SubmitRegistrationTests(TestCase):
         self.assertEqual(Application.objects.count(), 1)
 
     def test_normalizes_phone_before_setting_password(self) -> None:
-        profile, _ = submit_registration(make_data(phone="+201000000000"))
+        profile, _, _ = submit_registration(make_data(phone="+201000000000"))
         self.assertTrue(check_password("1000000000", profile.user.password))
 
     def test_stores_original_phone_on_profile(self) -> None:
-        profile, _ = submit_registration(make_data(phone="+201000000000"))
+        profile, _, _ = submit_registration(make_data(phone="+201000000000"))
         self.assertEqual(profile.phone, "+201000000000")
 
     def test_duplicate_email_raises_value_error(self) -> None:

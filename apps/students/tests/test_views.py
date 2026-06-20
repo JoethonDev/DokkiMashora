@@ -11,11 +11,12 @@ from django.utils.translation import override as translation_override
 from apps.academics.models import Cohort, Diploma, DiplomaEnrollment
 from apps.accounts.models import User
 from apps.applications.constants import (
-    APP_STATUS_ACTIVATED,
     APP_STATUS_PENDING,
-    APP_STATUS_REJECTED,
+    PROGRAM_APP_STATUS_ACTIVATED,
+    PROGRAM_APP_STATUS_REJECTED,
+    PROGRAM_APP_STATUS_SUBMITTED,
 )
-from apps.applications.models import Application
+from apps.applications.models import Application, ProgramApplication
 from apps.students.constants import EDUCATION_BACHELOR, GENDER_MALE
 from apps.students.models import StudentProfile
 
@@ -187,10 +188,14 @@ class ApplicationHistoryViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_shows_application_when_exists(self) -> None:
-        Application.objects.create(student=self.profile, status=APP_STATUS_PENDING)
+        root = Application.objects.create(student=self.profile, status=APP_STATUS_PENDING)
+        ProgramApplication.objects.create(
+            student=self.profile, root_application=root,
+            status=PROGRAM_APP_STATUS_SUBMITTED, program_type="diploma",
+        )
         with translation_override("en"):
             response = self.client.get(reverse("students:application_history"))
-        self.assertContains(response, "Pending")
+        self.assertContains(response, "Submitted")
 
 
 class EnrollmentHistoryViewTests(TestCase):
@@ -230,38 +235,66 @@ class ReapplyViewTests(TestCase):
 
     def test_post_when_no_existing_application_creates_new(self) -> None:
         with translation_override("en"):
-            response = self.client.post(reverse("students:reapply"), {"cohort": self.cohort.pk})
+            response = self.client.post(
+                reverse("students:reapply"),
+                {"program_type": "diploma", "target_id": self.cohort.pk},
+            )
             self.assertRedirects(response, reverse("students:application_history"))
-        apps = list(Application.objects.filter(student=self.profile))
+        apps = list(ProgramApplication.objects.filter(student=self.profile))
         self.assertEqual(len(apps), 1)
-        self.assertEqual(apps[0].status, APP_STATUS_PENDING)
+        self.assertEqual(apps[0].status, PROGRAM_APP_STATUS_SUBMITTED)
         self.assertEqual(apps[0].cohort, self.cohort)
 
     def test_post_when_rejected_creates_fresh_record(self) -> None:
-        Application.objects.create(student=self.profile, status=APP_STATUS_REJECTED)
+        root = Application.objects.create(student=self.profile, status=APP_STATUS_PENDING)
+        ProgramApplication.objects.create(
+            student=self.profile, root_application=root,
+            status=PROGRAM_APP_STATUS_REJECTED, program_type="diploma",
+        )
         with translation_override("en"):
-            response = self.client.post(reverse("students:reapply"), {"cohort": self.cohort.pk})
+            response = self.client.post(
+                reverse("students:reapply"),
+                {"program_type": "diploma", "target_id": self.cohort.pk},
+            )
             self.assertRedirects(response, reverse("students:application_history"))
-        apps = list(Application.objects.filter(student=self.profile))
+        apps = list(ProgramApplication.objects.filter(student=self.profile))
         self.assertEqual(len(apps), 2)
-        pending_apps = [a for a in apps if a.status == APP_STATUS_PENDING]
-        self.assertEqual(len(pending_apps), 1)
+        submitted_apps = [a for a in apps if a.status == PROGRAM_APP_STATUS_SUBMITTED]
+        self.assertEqual(len(submitted_apps), 1)
 
     def test_post_when_pending_blocks_and_shows_error(self) -> None:
-        Application.objects.create(student=self.profile, status=APP_STATUS_PENDING)
+        root = Application.objects.create(student=self.profile, status=APP_STATUS_PENDING)
+        ProgramApplication.objects.create(
+            student=self.profile, root_application=root,
+            status=PROGRAM_APP_STATUS_SUBMITTED, program_type="diploma",
+            cohort=self.cohort,
+        )
         with translation_override("en"):
-            response = self.client.post(reverse("students:reapply"), {"cohort": self.cohort.pk})
+            response = self.client.post(
+                reverse("students:reapply"),
+                {"program_type": "diploma", "target_id": self.cohort.pk},
+            )
             self.assertRedirects(response, reverse("students:reapply"))
 
     def test_post_does_not_overwrite_existing_activated(self) -> None:
-        existing = Application.objects.create(
-            student=self.profile, status=APP_STATUS_ACTIVATED,
+        other_cohort = Cohort.objects.create(
+            diploma=self.diploma, name="C2026",
+            start_date=date(2026, 9, 1), created_by=self.admin,
+        )
+        root = Application.objects.create(student=self.profile, status=APP_STATUS_PENDING)
+        existing = ProgramApplication.objects.create(
+            student=self.profile, root_application=root,
+            status=PROGRAM_APP_STATUS_ACTIVATED, program_type="diploma",
+            cohort=self.cohort,
         )
         with translation_override("en"):
-            response = self.client.post(reverse("students:reapply"), {"cohort": self.cohort.pk})
+            response = self.client.post(
+                reverse("students:reapply"),
+                {"program_type": "diploma", "target_id": other_cohort.pk},
+            )
             self.assertRedirects(response, reverse("students:application_history"))
         existing.refresh_from_db()
-        self.assertEqual(existing.status, APP_STATUS_ACTIVATED)
+        self.assertEqual(existing.status, PROGRAM_APP_STATUS_ACTIVATED)
 
     def test_profile_without_student_profile_returns_404(self) -> None:
         """A user without a StudentProfile should get 404 on profile views."""

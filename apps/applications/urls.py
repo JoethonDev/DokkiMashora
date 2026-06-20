@@ -13,4 +13,7 @@ urlpatterns = [
     path("register/success/", views.registration_success, name="registration_success"),
     path("admin/", views.application_list, name="admin_list"),
     path("admin/<int:application_id>/", views.application_detail, name="admin_detail"),
+    path("programs/", views.program_application_list, name="program_list"),
+    path("programs/<int:application_id>/", views.program_application_detail, name="program_detail"),
+    path("apply/", views.dashboard_apply, name="dashboard_apply"),
 ]

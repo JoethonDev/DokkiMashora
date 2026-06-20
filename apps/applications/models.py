@@ -15,6 +15,14 @@ from .constants import (
     APP_STATUS_CHOICES,
     APP_STATUS_PENDING,
     APP_STATUS_REJECTED,
+    PROGRAM_APP_STATUS_ACCEPTED,
+    PROGRAM_APP_STATUS_ACTIVATED,
+    PROGRAM_APP_STATUS_CHOICES,
+    PROGRAM_APP_STATUS_INVITED,
+    PROGRAM_APP_STATUS_REJECTED,
+    PROGRAM_APP_STATUS_SUBMITTED,
+    PROGRAM_APP_STATUS_UNDER_REVIEW,
+    PROGRAM_TYPE_CHOICES,
 )
 
 
@@ -116,3 +124,124 @@ class Application(TimeStampedModel):
             "rejected": {"text": _("Apply to a different cohort"), "url": "students:reapply"},
         }
         return action_map.get(self.status)
+
+
+class ProgramApplication(TimeStampedModel):
+    """A child program request linked to a root Application/person identity.
+
+    One person may have multiple ProgramApplication records (for different
+    courses or diploma cohorts over time), but only one root Application.
+    """
+
+    root_application = models.ForeignKey(
+        Application,
+        on_delete=models.PROTECT,
+        related_name="program_applications",
+        verbose_name=_("root application"),
+    )
+    student = models.ForeignKey(
+        StudentProfile,
+        on_delete=models.PROTECT,
+        related_name="program_applications",
+    )
+    program_type = models.CharField(
+        _("program type"),
+        max_length=10,
+        choices=PROGRAM_TYPE_CHOICES,
+    )
+    cohort = models.ForeignKey(
+        "academics.Cohort",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="program_applications",
+        verbose_name=_("cohort"),
+    )
+    course = models.ForeignKey(
+        "academics.Course",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="program_applications",
+        verbose_name=_("course"),
+    )
+    status = models.CharField(
+        _("status"),
+        max_length=24,
+        choices=PROGRAM_APP_STATUS_CHOICES,
+        default=PROGRAM_APP_STATUS_SUBMITTED,
+        db_index=True,
+    )
+    admin_notes = models.TextField(_("admin notes"), blank=True)
+    rejection_reason = models.TextField(_("rejection reason"), blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_program_applications",
+    )
+    reviewed_at = models.DateTimeField(_("reviewed at"), null=True, blank=True)
+    activated_at = models.DateTimeField(_("activated at"), null=True, blank=True)
+
+    class Meta:
+        verbose_name = _("program application")
+        verbose_name_plural = _("program applications")
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=("status",)),
+            models.Index(fields=("student", "status")),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.student.full_name} - {self.get_program_type_display()} - {self.get_status_display()}"
+
+    @property
+    def is_open(self) -> bool:
+        return self.status not in {
+            PROGRAM_APP_STATUS_REJECTED,
+            PROGRAM_APP_STATUS_ACTIVATED,
+        }
+
+    def mark_under_review(self, reviewer) -> None:
+        self.status = PROGRAM_APP_STATUS_UNDER_REVIEW
+        self.reviewed_by = reviewer
+        self.save(update_fields=["status", "reviewed_by", "updated_at"])
+
+    def mark_invited(self, reviewer) -> None:
+        self.status = PROGRAM_APP_STATUS_INVITED
+        self.reviewed_by = reviewer
+        self.save(update_fields=["status", "reviewed_by", "updated_at"])
+
+    def accept(self, reviewer, notes: str = "") -> None:
+        self.status = PROGRAM_APP_STATUS_ACCEPTED
+        self.reviewed_by = reviewer
+        self.reviewed_at = timezone.now()
+        if notes:
+            self.admin_notes = notes
+        self.save(
+            update_fields=["status", "reviewed_by", "reviewed_at", "admin_notes", "updated_at"]
+        )
+
+    def reject(self, reviewer, reason: str, notes: str = "") -> None:
+        self.status = PROGRAM_APP_STATUS_REJECTED
+        self.reviewed_by = reviewer
+        self.reviewed_at = timezone.now()
+        self.rejection_reason = reason
+        if notes:
+            self.admin_notes = notes
+        self.save(
+            update_fields=[
+                "status",
+                "reviewed_by",
+                "reviewed_at",
+                "rejection_reason",
+                "admin_notes",
+                "updated_at",
+            ]
+        )
+
+    def activate(self) -> None:
+        self.status = PROGRAM_APP_STATUS_ACTIVATED
+        self.activated_at = timezone.now()
+        self.save(update_fields=["status", "activated_at", "updated_at"])

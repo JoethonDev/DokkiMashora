@@ -17,7 +17,7 @@ from apps.academics.constants import (
     ENROLLMENT_STATUS_RESTRICTED,
 )
 from apps.academics.models import CourseEnrollment, CourseVersion, DiplomaEnrollment
-from apps.applications.models import Application
+from apps.applications.models import ProgramApplication
 from apps.assessments.models import AssessmentAttempt, HomeworkSubmission
 from apps.assessments.services import get_student_attempts
 from apps.certificates.models import GeneratedCertificate
@@ -125,10 +125,10 @@ def _identity_summary(profile: StudentProfile, user: User) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _get_applications(student_profile: StudentProfile) -> list[Application]:
+def _get_applications(student_profile: StudentProfile) -> list[ProgramApplication]:
     return list(
-        Application.objects.filter(student=student_profile)
-        .select_related("reviewed_by", "cohort__diploma")
+        ProgramApplication.objects.filter(student=student_profile)
+        .select_related("reviewed_by", "cohort__diploma", "course", "root_application")
         .order_by("-created_at")
     )
 

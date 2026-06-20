@@ -10,13 +10,33 @@
     {% endif %}
     <form method="post">
       {% csrf_token %}
+      <div class="mb-3">
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">{% trans "Program Type" %}</label>
+        <div class="flex gap-4">
+          <label class="inline-flex items-center text-sm">
+            <input type="radio" name="program_type" value="diploma" checked class="rounded border-slate-300 dark:border-slate-700 me-1">
+            {% trans "Diploma (Cohort)" %}
+          </label>
+          <label class="inline-flex items-center text-sm">
+            <input type="radio" name="program_type" value="course" class="rounded border-slate-300 dark:border-slate-700 me-1">
+            {% trans "Course" %}
+          </label>
+        </div>
+      </div>
       <div class="mb-4">
-        <label for="id_cohort" class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">{% trans "Program / Cohort" %}</label>
-        <select name="cohort" id="id_cohort" required class="block w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm">
+        <label for="id_target" class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">{% trans "Program / Cohort" %}</label>
+        <select name="target_id" id="id_target" required class="block w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm">
           <option value="">{% trans "— Select —" %}</option>
+          <optgroup label="{% trans 'Diplomas' %}">
           {% for c in cohorts %}
-          <option value="{{ c.pk }}">{{ c.diploma.title }} — {{ c.name }}</option>
+          <option value="{{ c.pk }}" data-type="diploma">{{ c.diploma.title }} — {{ c.name }}</option>
           {% endfor %}
+          </optgroup>
+          <optgroup label="{% trans 'Courses' %}">
+          {% for course in courses %}
+          <option value="{{ course.pk }}" data-type="course">{{ course.title }}</option>
+          {% endfor %}
+          </optgroup>
         </select>
       </div>
       <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">{% trans "By submitting, you agree to the program terms and conditions." %}</p>
