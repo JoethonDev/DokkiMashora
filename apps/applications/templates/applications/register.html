@@ -17,7 +17,7 @@
         {{ form.non_field_errors|join:" " }}
       </div>
     {% endif %}
-    <div class="grid sm:grid-cols-2 gap-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
       {% for field in form %}
         <div class="{% if field.name == 'address' or field.name == 'priest_contact' %}sm:col-span-2{% endif %}">
           {% include "partials/_field.html" %}

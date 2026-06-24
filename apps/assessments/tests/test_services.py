@@ -38,6 +38,7 @@ from apps.assessments.models import (
 )
 from apps.assessments.services import (
     AssessmentAnswerData,
+    autosave_attempt,
     check_assessment_access,
     get_grading_queue,
     get_homework_pending_grading,
@@ -752,7 +753,7 @@ class SubmitHomeworkTests(TestCase):
             file_size=100,
             status=HOMEWORK_STATUS_UNDER_REVIEW,
         )
-        with self.assertRaises(ValueError, msg="already been submitted"):
+        with self.assertRaises(ValueError, msg="Maximum number of files"):
             submit_homework(
                 student=self.student,
                 assessment=self.assessment,
@@ -760,6 +761,22 @@ class SubmitHomeworkTests(TestCase):
                 original_filename=self.filename,
                 content_type=self.content_type,
             )
+
+    @patch("apps.assessments.services.storage_service")
+    def test_submit_homework_respects_max_upload_files(self, mock_storage):
+        mock_storage.upload_file.return_value = UploadResult(
+            key="homework/1/abc.pdf",
+            content_type="application/pdf",
+            byte_size=len(self.file_data),
+            checksum="abc",
+            backend="local",
+        )
+        self.assessment.max_upload_files = 2
+        self.assessment.save()
+        submit_homework(self.student, self.assessment, self.file_data, "a.pdf", "application/pdf")
+        submit_homework(self.student, self.assessment, self.file_data, "b.pdf", "application/pdf")
+        with self.assertRaises(ValueError, msg="Maximum number of files"):
+            submit_homework(self.student, self.assessment, self.file_data, "c.pdf", "application/pdf")
 
     def test_submit_homework_max_attempts(self):
         for i in range(3):
@@ -782,6 +799,16 @@ class SubmitHomeworkTests(TestCase):
                 file_data=self.file_data,
                 original_filename="essay.pdf",
                 content_type="text/plain",
+            )
+
+    def test_submit_homework_rejects_blocked_extension(self):
+        with self.assertRaises(FileValidationError, msg="not allowed"):
+            submit_homework(
+                student=self.student,
+                assessment=self.assessment,
+                file_data=self.file_data,
+                original_filename="malware.exe",
+                content_type="application/x-msdownload",
             )
 
 
@@ -1019,3 +1046,89 @@ class GradingQueueQueryCountTests(TestCase):
             list(get_grading_queue(self.admin))
         self.assertLess(len(captured.captured_queries), 10,
                         f"get_grading_queue used {len(captured.captured_queries)} queries; expected < 10")
+
+
+class AutosaveAttemptTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(email="admin@test.com", password="x")
+        self.student = User.objects.create_user(email="student@test.com", password="x")
+        self.now = timezone.now()
+        self.assessment = Assessment.objects.create(
+            title="Quiz",
+            assessment_type=ASSESSMENT_TYPE_QUIZ,
+            open_at=self.now - timezone.timedelta(days=1),
+            close_at=self.now + timezone.timedelta(days=7),
+            passing_score=Decimal("50.00"),
+            total_points=Decimal("30.00"),
+            is_active=True,
+            created_by=self.admin,
+        )
+        self.mcq_q = AssessmentQuestion.objects.create(
+            assessment=self.assessment, text="MCQ Q",
+            question_type=QUESTION_TYPE_MCQ, points=Decimal("10.00"), order=1,
+        )
+        self.choice = AssessmentChoice.objects.create(
+            question=self.mcq_q, text="A", is_correct=True, order=1,
+        )
+        self.written_q = AssessmentQuestion.objects.create(
+            assessment=self.assessment, text="Essay",
+            question_type=QUESTION_TYPE_WRITTEN, points=Decimal("20.00"), order=2,
+        )
+        self.attempt = AssessmentAttempt.objects.create(
+            assessment=self.assessment, student=self.student,
+            attempt_number=1, status=ATTEMPT_STATUS_IN_PROGRESS,
+            started_at=self.now,
+        )
+
+    def test_autosave_creates_mcq_answer(self):
+        autosave_attempt(self.attempt, [
+            AssessmentAnswerData(question_id=self.mcq_q.id, selected_choice_id=self.choice.id),
+        ])
+        answer = AssessmentAnswer.objects.get(attempt=self.attempt, question=self.mcq_q)
+        self.assertEqual(answer.selected_choice_id, self.choice.id)
+        self.assertEqual(answer.written_text, "")
+
+    def test_autosave_creates_written_answer(self):
+        autosave_attempt(self.attempt, [
+            AssessmentAnswerData(question_id=self.written_q.id, written_text="Draft"),
+        ])
+        answer = AssessmentAnswer.objects.get(attempt=self.attempt, question=self.written_q)
+        self.assertEqual(answer.written_text, "Draft")
+
+    def test_autosave_does_not_score(self):
+        autosave_attempt(self.attempt, [
+            AssessmentAnswerData(question_id=self.mcq_q.id, selected_choice_id=self.choice.id),
+        ])
+        answer = AssessmentAnswer.objects.get(attempt=self.attempt, question=self.mcq_q)
+        self.assertIsNone(answer.score)
+
+    def test_autosave_does_not_change_status(self):
+        autosave_attempt(self.attempt, [
+            AssessmentAnswerData(question_id=self.mcq_q.id, selected_choice_id=self.choice.id),
+        ])
+        self.attempt.refresh_from_db()
+        self.assertEqual(self.attempt.status, ATTEMPT_STATUS_IN_PROGRESS)
+
+    def test_autosave_noop_on_submitted_attempt(self):
+        self.attempt.status = ATTEMPT_STATUS_SUBMITTED
+        self.attempt.save(update_fields=["status"])
+        autosave_attempt(self.attempt, [
+            AssessmentAnswerData(question_id=self.mcq_q.id, selected_choice_id=self.choice.id),
+        ])
+        self.assertFalse(AssessmentAnswer.objects.filter(attempt=self.attempt).exists())
+
+    def test_autosave_updates_existing_answer(self):
+        AssessmentAnswer.objects.create(
+            attempt=self.attempt, question=self.mcq_q,
+            selected_choice=self.choice, written_text="",
+            score=Decimal("10.00"),
+        )
+        other_choice = AssessmentChoice.objects.create(
+            question=self.mcq_q, text="B", is_correct=False, order=2,
+        )
+        autosave_attempt(self.attempt, [
+            AssessmentAnswerData(question_id=self.mcq_q.id, selected_choice_id=other_choice.id),
+        ])
+        answer = AssessmentAnswer.objects.get(attempt=self.attempt, question=self.mcq_q)
+        self.assertEqual(answer.selected_choice_id, other_choice.id)
+        self.assertEqual(answer.score, Decimal("10.00"))

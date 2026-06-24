@@ -1,9 +1,10 @@
 from django import forms
+from django.forms import inlineformset_factory
 from django.utils.translation import gettext_lazy as _
 
 from apps.academics.models import Cohort, Diploma
 
-from .models import EntranceExam
+from .models import EntranceChoice, EntranceExam, EntranceQuestion
 
 
 class EntranceExamForm(forms.ModelForm):
@@ -42,6 +43,44 @@ class EntranceExamForm(forms.ModelForm):
         if open_at and close_at and open_at >= close_at:
             raise forms.ValidationError(_("Open time must be before close time."))
         return cleaned_data
+
+
+class EntranceQuestionForm(forms.ModelForm):
+    class Meta:
+        model = EntranceQuestion
+        fields = ("text", "question_type", "points", "rubric", "order")
+        widgets = {
+            "text": forms.Textarea(attrs={"rows": 4}),
+            "rubric": forms.Textarea(attrs={"rows": 3}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["text"].label = _("Question text")
+        self.fields["order"].help_text = _("Display order (lower = first)")
+
+
+class EntranceChoiceForm(forms.ModelForm):
+    class Meta:
+        model = EntranceChoice
+        fields = ("text", "score", "order")
+        widgets = {
+            "text": forms.TextInput(attrs={"placeholder": _("Choice text")}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["score"].label = _("Score")
+        self.fields["order"].label = _("Order")
+
+
+EntranceChoiceFormSet = inlineformset_factory(
+    EntranceQuestion,
+    EntranceChoice,
+    form=EntranceChoiceForm,
+    extra=2,
+    can_delete=True,
+)
 
 
 class EntranceGradeForm(forms.Form):

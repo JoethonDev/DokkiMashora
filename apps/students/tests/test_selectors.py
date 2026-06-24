@@ -105,7 +105,7 @@ class GetDashboardDataStructureTests(TestCase):
                          "semester_progress", "promotion_decisions", "completions",
                          "certificates", "eligibilities", "notifications"):
             self.assertEqual(data[section], [])
-        self.assertEqual(data["payments"], {"total_paid": 0, "record_count": 0, "records": []})
+        self.assertEqual(data["payments"], {"total_paid": 0, "record_count": 0, "records": [], "diploma_enrollments": [], "course_enrollments": []})
 
 
 class GetDashboardDataApplicationsTests(TestCase):

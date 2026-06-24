@@ -5,7 +5,7 @@
 {% block title %}{{ exam.title }} - {% trans "Entrance Exam Detail" %}{% endblock %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10" x-data="{ activeTab: 'questions' }">
   <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
     <div class="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
       <div>
@@ -13,8 +13,12 @@
         <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ exam.diploma.title }} — {{ exam.cohort }}</p>
       </div>
       <div class="flex flex-wrap gap-2">
+        {% url 'entrance_exams:admin_preview' exam.id as preview_url %}
+        {% include "partials/_button.html" with href=preview_url label=_("Preview") variant="ghost" size="sm" %}
         {% url 'entrance_exams:admin_edit_exam' exam.id as edit_url %}
         {% include "partials/_button.html" with href=edit_url label=_("Edit") variant="secondary" size="sm" %}
+        {% url 'entrance_exams:admin_cohort_email' exam.id as email_url %}
+        {% include "partials/_button.html" with href=email_url label=_("Emails") variant="secondary" size="sm" %}
         <form method="post" action="{% url 'entrance_exams:admin_toggle_active' exam.id %}" class="inline">
           {% csrf_token %}
           {% if exam.is_active %}
@@ -25,7 +29,7 @@
         </form>
       </div>
     </div>
-    <dl class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+    <dl class="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-sm">
       <div>
         <dt class="text-slate-500 dark:text-slate-400">{% trans "Duration" %}</dt>
         <dd class="font-semibold text-slate-900 dark:text-slate-100 tabular-nums">{{ exam.duration_minutes }} {% trans "minutes" %}</dd>
@@ -79,39 +83,214 @@
     </nav>
   </div>
 
-  <div x-data="{ activeTab: 'questions' }">
+  <script id="questions-data" type="application/json">{
+    {% for q in exam.questions.all %}
+    "{{ q.id }}": {
+      "text": "{{ q.text|escapejs }}",
+      "question_type": "{{ q.question_type }}",
+      "points": "{{ q.points|default_if_none:'0' }}",
+      "rubric": "{{ q.rubric|escapejs }}",
+      "choices": [
+        {% for c in q.choices.all %}
+        {"id": {{ c.id }}, "text": "{{ c.text|escapejs }}", "score": "{{ c.score|default_if_none:'0' }}", "order": {{ c.order }}}{% if not forloop.last %},{% endif %}
+        {% endfor %}
+      ]
+    }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+  }</script>
+
+  <div x-data="{
+    deletingId: null,
+    deleteAction: '',
+    showForm: false,
+    editingId: null,
+    form: { text: '', question_type: 'mcq', points: 1, rubric: '', choices: [] },
+
+    openEdit(id) {
+      this.editingId = id;
+      const q = JSON.parse(document.getElementById('questions-data').textContent)[id];
+      const emptyChoices = [{text: '', score: '0', order: 1}, {text: '', score: '0', order: 2}];
+      this.form = {
+        text: q.text,
+        question_type: q.question_type,
+        points: parseFloat(q.points) || 0,
+        rubric: q.rubric,
+        choices: q.choices.length ? q.choices.map(c => ({...c, score: parseFloat(c.score) || 0})) : emptyChoices.map((c, i) => ({...c, order: i + 1}))
+      };
+      this.showForm = true;
+    },
+
+    openAdd() {
+      this.editingId = null;
+      this.form = {
+        text: '',
+        question_type: 'mcq',
+        points: 1,
+        rubric: '',
+        choices: [{text: '', score: '0', order: 1}, {text: '', score: '0', order: 2}]
+      };
+      this.showForm = true;
+    },
+
+    addChoice() {
+      this.form.choices.push({text: '', score: '0', order: this.form.choices.length + 1});
+    },
+
+    removeChoice(index) {
+      if (this.form.choices.length > 1) this.form.choices.splice(index, 1);
+    },
+
+    save() {
+      const url = this.editingId
+        ? '{% url "entrance_exams:admin_edit_question" exam.id 0 %}'.replace('/0/', '/' + this.editingId + '/')
+        : '{% url "entrance_exams:admin_add_question" exam.id %}';
+      fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '',
+          'HX-Request': 'true',
+        },
+        body: JSON.stringify(this.form),
+      }).then(r => {
+        if (r.ok) {
+          r.json().then(data => {
+            const blob = JSON.parse(document.getElementById('questions-data').textContent);
+            blob[data.id] = data;
+            document.getElementById('questions-data').textContent = JSON.stringify(blob);
+          });
+          document.body.dispatchEvent(new CustomEvent('question-saved'));
+        }
+      });
+      this.showForm = false;
+      this.editingId = null;
+    }
+  }">
     <div x-show="activeTab === 'questions'" x-cloak id="questions-panel" role="tabpanel" aria-labelledby="questions-tab" tabindex="0">
-      <h2 class="text-lg sm:text-xl font-semibold mb-4">{% trans "Questions" %}</h2>
-      {% if exam.questions.all %}
-        <div class="space-y-4">
-          {% for question in exam.questions.all %}
-            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
-              <div class="flex items-center gap-2 mb-2">
-                {% include "partials/_badge.html" with label=question.order|stringformat:"s" tone="neutral" %}
-                {% include "partials/_badge.html" with label=question.get_question_type_display tone="info" %}
-                {% include "partials/_badge.html" with label=question.points|stringformat:"s"|add:" pts" tone="neutral" %}
+      <div id="question-form-container"
+           x-show="showForm"
+           x-transition:enter="transition ease-out duration-500"
+           x-transition:enter-start="opacity-0 -translate-y-6"
+           x-transition:enter-end="opacity-100 translate-y-0"
+           x-transition:leave="transition ease-in duration-350"
+           x-transition:leave-start="opacity-100 translate-y-0"
+           x-transition:leave-end="opacity-0 -translate-y-6"
+           @question-saved.window="showForm = false; editingId = null"
+           class="mb-6">
+        <form class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-6">
+          <fieldset>
+            <legend class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">{% trans "Question" %}</legend>
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+              <div class="lg:col-span-7">
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{% trans "Question text" %}</label>
+                <textarea x-model="form.text" rows="4" class="dm-input w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900 resize-y"></textarea>
               </div>
-              <p class="text-base leading-relaxed text-slate-800 dark:text-slate-200 max-w-prose">{{ question.text }}</p>
-              {% if question.question_type == "mcq" %}
-                <ul class="mt-3 space-y-1">
-                  {% for choice in question.choices.all %}
-                    <li class="text-sm {% if choice.is_correct %}text-emerald-600 dark:text-emerald-400 font-medium{% else %}text-slate-700 dark:text-slate-200{% endif %}">
-                      {{ choice.text }}{% if choice.is_correct %} ✓{% endif %}
-                    </li>
-                  {% endfor %}
-                </ul>
-              {% endif %}
-              {% if question.rubric %}
-                <div class="mt-3 text-xs text-slate-500 dark:text-slate-400 italic">{{ question.rubric }}</div>
-              {% endif %}
+              <div class="lg:col-span-3">
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{% trans "Type" %}</label>
+                <select x-model="form.question_type" class="dm-input w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900">
+                  <option value="mcq">{% trans "Multiple choice" %}</option>
+                  <option value="written">{% trans "Written" %}</option>
+                </select>
+              </div>
+              <div class="lg:col-span-2">
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{% trans "Points" %}</label>
+                <input type="number" step="0.01" min="0" x-model="form.points" class="dm-input w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900">
+              </div>
             </div>
-          {% endfor %}
-        </div>
-      {% else %}
-        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-center">
-          <p class="text-slate-500 dark:text-slate-400">{% trans "No questions yet." %}</p>
-        </div>
-      {% endif %}
+          </fieldset>
+
+          <div x-show="form.question_type === 'written'" x-cloak x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{% trans "Rubric / model answer" %}</label>
+            <textarea x-model="form.rubric" rows="3" class="dm-input w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900 resize-y"></textarea>
+          </div>
+
+          <div class="border-t border-slate-200 dark:border-slate-700 pt-6">
+            <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">{% trans "Answer Choices" %}</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">{% trans "Add choices and assign a score to each. Only MCQ questions use scores." %}</p>
+            <div class="space-y-3">
+              <template x-for="(choice, index) in form.choices" :key="index">
+                <div class="flex items-start gap-3 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/30">
+                  <div class="flex-1">
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{% trans "Text" %}</label>
+                    <input type="text" x-model="choice.text" class="dm-input w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900">
+                  </div>
+                  <div class="w-24">
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{% trans "Score" %}</label>
+                    <input type="number" step="0.01" min="0" x-model="choice.score" class="dm-input w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900">
+                  </div>
+                  <div class="w-20">
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{% trans "Order" %}</label>
+                    <input type="number" min="1" x-model="choice.order" class="dm-input w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900">
+                  </div>
+                  <button type="button" @click="removeChoice(index)" x-show="form.choices.length > 1" class="mt-5 text-xs text-rose-600 hover:text-rose-700 shrink-0">{% trans "Remove" %}</button>
+                </div>
+              </template>
+            </div>
+            <button type="button" @click="addChoice()" class="mt-3 text-sm text-brand-600 hover:text-brand-700 font-medium">+ {% trans "Add choice" %}</button>
+          </div>
+
+          <div class="flex flex-wrap gap-3 pt-2">
+            <button type="button" @click="save()" data-loading-disable class="inline-flex items-center px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 transition disabled:opacity-50 disabled:cursor-not-allowed">
+              <span data-loading-show class="hidden">{% trans "Saving..." %}</span>
+              <span data-loading-hide>{% trans "Save question" %}</span>
+            </button>
+            <button type="button" @click="showForm = false; editingId = null" class="inline-flex items-center px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition">{% trans "Cancel" %}</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg sm:text-xl font-semibold">{% trans "Questions" %}</h2>
+        <button @click="openAdd()" type="button" class="inline-flex items-center px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 transition">
+          {% trans "Add question" %}
+        </button>
+      </div>
+
+      <div id="questions-list" hx-get="{% url 'entrance_exams:admin_detail' exam.id %}" hx-select="#questions-list" hx-trigger="question-saved from:body" hx-swap="outerHTML">
+        {% if exam.questions.all %}
+          <div class="space-y-4">
+            {% for question in exam.questions.all %}
+              <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+                <div class="flex items-center justify-between mb-2">
+                  <div class="flex items-center gap-2">
+                    {% include "partials/_badge.html" with label=question.order|stringformat:"s" tone="neutral" %}
+                    {% include "partials/_badge.html" with label=question.get_question_type_display tone="info" %}
+                    {% include "partials/_badge.html" with label=question.points|stringformat:"s"|add:" pts" tone="neutral" %}
+                  </div>
+                  <div class="flex items-center gap-1">
+                    <button @click="openEdit('{{ question.id }}')" type="button" class="inline-flex items-center px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition">
+                      {% trans "Edit" %}
+                    </button>
+                    <button type="button"
+                            @click="deletingId = {{ question.id }}; deleteAction = '{% url 'entrance_exams:admin_delete_question' exam.id question.id %}'"
+                            class="inline-flex items-center px-3 py-1.5 rounded-lg border border-rose-300 dark:border-rose-800 text-sm font-medium text-rose-700 dark:text-rose-300 bg-white dark:bg-slate-900 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition">
+                      {% trans "Delete" %}
+                    </button>
+                  </div>
+                </div>
+                <p class="text-base leading-relaxed text-slate-800 dark:text-slate-200 max-w-prose">{{ question.text }}</p>
+                {% if question.question_type == "mcq" %}
+                  <ul class="mt-3 space-y-1">
+                    {% for choice in question.choices.all %}
+                      <li class="text-sm text-slate-700 dark:text-slate-200">
+                        {{ choice.text }}
+                        <span class="text-xs text-slate-400 ml-1">({{ choice.score }} pts)</span>
+                      </li>
+                    {% endfor %}
+                  </ul>
+                {% endif %}
+                {% if question.rubric %}
+                  <div class="mt-3 text-xs text-slate-500 dark:text-slate-400 italic">{{ question.rubric }}</div>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-center">
+            <p class="text-slate-500 dark:text-slate-400">{% trans "No questions yet." %}</p>
+          </div>
+        {% endif %}
+      </div>
     </div>
 
     <div x-show="activeTab === 'attempts'" x-cloak id="attempts-panel" role="tabpanel" aria-labelledby="attempts-tab" tabindex="0">
@@ -157,6 +336,40 @@
             {% endfor %}
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <div x-show="deletingId !== null" x-cloak
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+         @click.self="deletingId = null">
+      <div x-show="deletingId !== null" x-cloak
+           x-transition:enter="transition ease-out duration-300"
+           x-transition:enter-start="opacity-0 scale-95"
+           x-transition:enter-end="opacity-100 scale-100"
+           x-transition:leave="transition ease-in duration-200"
+           x-transition:leave-start="opacity-100 scale-100"
+           x-transition:leave-end="opacity-0 scale-95"
+           class="bg-white dark:bg-slate-900 rounded-xl shadow-xl p-6 max-w-sm mx-4" @click.stop>
+        <p class="text-slate-800 dark:text-slate-200 font-medium">{% trans "Delete this question?" %}</p>
+        <p class="text-sm text-slate-500 mt-1">{% trans "This action cannot be undone." %}</p>
+        <div class="flex justify-end gap-3 mt-6">
+          <button type="button" @click="deletingId = null"
+                  class="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-sm text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition">
+            {% trans "Cancel" %}
+          </button>
+          <button type="button" @click="
+              htmx.ajax('POST', deleteAction, {target: '#questions-list', swap: 'outerHTML'});
+              deletingId = null;
+            " class="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition">
+            {% trans "Delete" %}
+          </button>
+        </div>
       </div>
     </div>
   </div>

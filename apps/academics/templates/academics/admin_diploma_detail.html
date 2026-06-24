@@ -13,11 +13,11 @@
       {% if diploma.description %}<p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{{ diploma.description }}</p>{% endif %}
     </div>
     <div class="flex flex-wrap gap-2">
-      <a href="{% url 'academics:admin_diploma_edit' diploma.id %}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Edit" %}</a>
+      <a href="{% url 'academics:admin_diploma_edit' diploma.id %}?next={{ request.path|urlencode }}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Edit" %}</a>
     </div>
   </header>
 
-  <div class="grid sm:grid-cols-2 gap-4 mb-8">
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
     <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
       <p class="text-sm text-slate-500 dark:text-slate-400">{% trans "Semesters" %}</p>
       <p class="mt-1 text-3xl font-bold tabular-nums tracking-tight font-display text-slate-900 dark:text-slate-100">{{ semesters.count }}</p>
@@ -30,30 +30,79 @@
 
   <div class="mb-8">
     <div class="flex justify-between items-center mb-4">
-      <h2 class="text-lg sm:text-xl font-semibold">{% trans "Semesters" %}</h2>
-      <a href="{% url 'academics:admin_semester_create' diploma.id %}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm bg-brand-600 text-white hover:bg-brand-700 shadow-sm">+ {% trans "Add semester" %}</a>
-    </div>
-    {% if semesters %}
-      <div class="space-y-3">
-        {% for semester in semesters %}
-          <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 flex justify-between items-center">
-            <div>
-              <span class="text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded">{{ semester.order }}</span>
-              <span class="ms-2 font-medium">{{ semester.title }}</span>
-            </div>
-            <a href="{% url 'academics:admin_semester_edit' diploma.id semester.id %}" class="text-slate-600 dark:text-slate-300 hover:text-brand-600 text-sm font-semibold">{% trans "Edit" %}</a>
-          </div>
-        {% endfor %}
+      <h2 class="text-lg sm:text-xl font-semibold">{% trans "Semesters & Content" %}</h2>
+      <div class="flex gap-2">
+        <a href="{% url 'academics:admin_semester_create' diploma.id %}?next={{ request.path|urlencode }}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm bg-brand-600 text-white hover:bg-brand-700 shadow-sm">+ {% trans "Semester" %}</a>
+        <a href="{% url 'academics:admin_course_create' %}?diploma_id={{ diploma.id }}&next={{ request.path|urlencode }}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">+ {% trans "Course" %}</a>
       </div>
+    </div>
+    {% if semester_data %}
+      {% for sd in semester_data %}
+        <details class="group mb-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+          <summary class="flex items-center gap-3 px-5 py-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40 text-sm font-medium [&::-webkit-details-marker]:hidden">
+            <span class="text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded">{{ sd.semester.order }}</span>
+            <span class="font-medium">{{ sd.semester.title }}</span>
+            <span class="text-xs text-slate-400">({{ sd.courses|length }} {% trans "courses" %})</span>
+            <svg class="ms-auto h-4 w-4 shrink-0 text-slate-400 transition group-open:rotate-180" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+            <a href="{% url 'academics:admin_semester_edit' diploma.id sd.semester.id %}?next={{ request.path|urlencode }}" class="text-xs text-slate-500 hover:text-brand-600 shrink-0">{% trans "Edit" %}</a>
+            <div x-data="{ confirmId: null }" @modal-confirm.window="if($event.detail.id===confirmId) document.getElementById($event.detail.id+'-form').requestSubmit()" class="inline shrink-0">
+              <form id="del-sem-{{ sd.semester.id }}-form" method="post" action="{% url 'academics:admin_semester_delete' diploma.id sd.semester.id %}" hx-post="{% url 'academics:admin_semester_delete' diploma.id sd.semester.id %}" hx-target="body" class="inline">{% csrf_token %}<button type="submit" hidden></button><input type="hidden" name="next" value="{{ request.path }}"><button type="button" @click="confirmId='del-sem-{{ sd.semester.id }}'; $dispatch('open-modal', {id:'del-sem-{{ sd.semester.id }}'})" class="text-xs text-slate-500 hover:text-red-600 bg-transparent border-0 p-0 cursor-pointer">{% trans "Delete" %}</button></form>
+              {% include "partials/_modal.html" with modal_id="del-sem-"|add:sd.semester.id|stringformat:"s" title=_("Confirm Delete") body=_("Delete this semester?") confirm_label=_("Delete") %}
+            </div>
+          </summary>
+          <div class="px-5 pb-4 pt-2">
+            {% if sd.courses %}
+              <div class="space-y-3">
+                {% for cd in sd.courses %}
+                  <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-4">
+                    <div class="flex items-center justify-between gap-3">
+                      <a href="{% url 'academics:admin_course_detail' cd.course.id %}" class="font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300">{{ cd.course.title }}</a>
+                      <div x-data="{ confirmId: null }" @modal-confirm.window="if($event.detail.id===confirmId) document.getElementById($event.detail.id+'-form').requestSubmit()" class="inline">
+                        <form id="rem-course-{{ cd.sc_id }}-form" method="post" action="{% url 'academics:admin_semester_course_delete' cd.sc_id %}" hx-post="{% url 'academics:admin_semester_course_delete' cd.sc_id %}" hx-target="body" class="inline">
+                          {% csrf_token %}
+                          <button type="submit" hidden></button>
+                          <input type="hidden" name="next" value="{{ request.path }}">
+                          <button type="button" @click="confirmId='rem-course-{{ cd.sc_id }}'; $dispatch('open-modal', {id:'rem-course-{{ cd.sc_id }}'})" class="text-xs font-semibold text-rose-600 hover:text-rose-800 bg-transparent border-0 cursor-pointer">{% trans "Remove" %}</button>
+                        </form>
+                        {% include "partials/_modal.html" with modal_id="rem-course-"|add:cd.sc_id|stringformat:"s" title=_("Confirm") body=_("Remove this course from the semester?") confirm_label=_("Remove") %}
+                      </div>
+                    </div>
+                    {% if cd.versions %}
+                      <div class="mt-3 space-y-2">
+                        {% for v in cd.versions %}
+                          <div class="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
+                            <span class="text-xs font-medium text-slate-400">{{ v.label }}</span>
+                            {% if v.cohort %}<span class="text-xs text-slate-400">({{ v.cohort.name }})</span>{% endif %}
+                            <span class="text-xs text-slate-400">{{ v.lecture_count }} {% trans "lectures" %}</span>
+                            {% if v.is_active %}{% include "partials/_badge.html" with label=_("Active") tone="success" %}{% else %}{% include "partials/_badge.html" with label=_("Inactive") tone="danger" %}{% endif %}
+                            <div class="ms-auto flex gap-2">
+                              <a href="{% url 'academics:admin_version_detail' v.course.id v.id %}" class="text-xs text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 font-semibold">{% trans "Manage" %}</a>
+                              <a href="{% url 'academics:admin_lecture_create' v.course.id v.id %}?next={{ request.path|urlencode }}" class="text-xs text-slate-500 hover:text-brand-600">{% trans "Lecture" %}</a>
+                            </div>
+                          </div>
+                        {% endfor %}
+                      </div>
+                    {% else %}
+                      <p class="mt-2 text-xs text-slate-400">{% trans "No versions yet" %}</p>
+                    {% endif %}
+                  </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <p class="text-sm text-slate-400 text-center py-4">{% trans "No courses in this semester." %}</p>
+            {% endif %}
+          </div>
+        </details>
+      {% endfor %}
     {% else %}
       {% include "partials/_empty_state.html" with title=_("No semesters yet") subtitle=_("Add the first semester") %}
     {% endif %}
   </div>
 
-  <div>
+  <div class="mb-8">
     <div class="flex justify-between items-center mb-4">
       <h2 class="text-lg sm:text-xl font-semibold">{% trans "Cohorts" %}</h2>
-      <a href="{% url 'academics:admin_cohort_create' diploma.id %}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm bg-brand-600 text-white hover:bg-brand-700 shadow-sm">+ {% trans "Add cohort" %}</a>
+      <a href="{% url 'academics:admin_cohort_create' diploma.id %}?next={{ request.path|urlencode }}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm bg-brand-600 text-white hover:bg-brand-700 shadow-sm">+ {% trans "Add cohort" %}</a>
     </div>
     {% if cohorts %}
       <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
@@ -76,7 +125,7 @@
                 <td class="px-4 py-3">
                   {% if cohort.is_active %}{% include "partials/_badge.html" with label=_("Active") tone="success" %}{% else %}{% include "partials/_badge.html" with label=_("Inactive") tone="danger" %}{% endif %}
                 </td>
-                <td class="px-4 py-3"><a href="{% url 'academics:admin_cohort_edit' diploma.id cohort.id %}" class="text-slate-600 dark:text-slate-300 hover:text-brand-600 text-sm font-semibold">{% trans "Edit" %}</a></td>
+                <td class="px-4 py-3"><a href="{% url 'academics:admin_cohort_edit' diploma.id cohort.id %}?next={{ request.path|urlencode }}" class="text-slate-600 dark:text-slate-300 hover:text-brand-600 text-sm font-semibold">{% trans "Edit" %}</a></td>
               </tr>
             {% endfor %}
           </tbody>

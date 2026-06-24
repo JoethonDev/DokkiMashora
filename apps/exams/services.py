@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from django.db import transaction
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 from apps.exams.constants import (
     ASSIGNMENT_STATUS_ASSIGNED,
@@ -32,15 +33,15 @@ def assign_exam(exam: Exam, student, attempt: int = 1) -> Assignment:
 
 def start_exam(assignment: Assignment) -> Assignment:
     if assignment.status != ASSIGNMENT_STATUS_ASSIGNED:
-        raise ValueError("Exam can only be started from assigned status.")
+        raise ValueError(_("Exam can only be started from assigned status."))
     exam = assignment.exam
     now = timezone.now()
     if not exam.is_active:
-        raise ValueError("Exam is not active.")
+        raise ValueError(_("Exam is not active."))
     if exam.open_at and now < exam.open_at:
-        raise ValueError("Exam has not opened yet.")
+        raise ValueError(_("Exam has not opened yet."))
     if exam.close_at and now > exam.close_at:
-        raise ValueError("Exam has already closed.")
+        raise ValueError(_("Exam has already closed."))
     assignment.status = ASSIGNMENT_STATUS_IN_PROGRESS
     assignment.started_at = now
     assignment.save(update_fields=["status", "started_at"])
@@ -49,26 +50,26 @@ def start_exam(assignment: Assignment) -> Assignment:
 
 def submit_exam(assignment: Assignment, answers: list[ExamAnswerData]) -> Assignment:
     if assignment.status != ASSIGNMENT_STATUS_IN_PROGRESS:
-        raise ValueError("Exam can only be submitted from in_progress status.")
+        raise ValueError(_("Exam can only be submitted from in_progress status."))
     exam = assignment.exam
     now = timezone.now()
     if not exam.is_active:
-        raise ValueError("Exam is not active.")
+        raise ValueError(_("Exam is not active."))
     if exam.close_at and now > exam.close_at:
-        raise ValueError("Exam has already closed.")
+        raise ValueError(_("Exam has already closed."))
     if assignment.started_at and exam.duration_minutes:
         deadline = assignment.started_at + timezone.timedelta(minutes=exam.duration_minutes)
         if now > deadline:
-            raise ValueError("Exam duration has expired.")
+            raise ValueError(_("Exam duration has expired."))
     questions = list(exam.questions.select_related("exam").prefetch_related("choices"))
     question_map = {q.id: q for q in questions}
     with transaction.atomic():
         for answer_data in answers:
             question = question_map[answer_data.question_id]
             if question.question_type == QUESTION_TYPE_MCQ and answer_data.essay_text:
-                raise ValueError("MCQ answer must not carry essay text.")
+                raise ValueError(_("MCQ answer must not carry essay text."))
             if question.question_type == QUESTION_TYPE_ESSAY and answer_data.selected_choice_id is not None:
-                raise ValueError("Essay answer must not carry a selected choice.")
+                raise ValueError(_("Essay answer must not carry a selected choice."))
             kwargs = {"assignment": assignment, "question": question}
             if question.question_type == QUESTION_TYPE_MCQ:
                 choice = (

@@ -6,6 +6,8 @@
   <meta name="color-scheme" content="light dark">
   <title>{% block title %}{{ SITE_NAME }}{% endblock title %}</title>
 
+  <link rel="icon" type="image/x-icon" href="{% static 'favicon.ico' %}">
+
   <script>
     (function(){try{var s=localStorage.getItem("dm-ui-theme");if(s==="landing-heritage"||s==="operational")document.documentElement.setAttribute("data-ui-theme",s);var t=localStorage.getItem("dm-theme");if(t==="dark"||(!t&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch(e){}})();
   </script>
@@ -48,6 +50,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/htmx.org@1.9.12/dist/htmx.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/htmx.org@1.9.12/dist/ext/loading-states.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+  <script>document.addEventListener('click',(e)=>{const t=e.target.closest('input[type="date"],input[type="datetime-local"],input[type="time"]');if(t)t.showPicker()})</script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -57,7 +60,7 @@
 
   {% block extra_head %}{% endblock extra_head %}
 </head>
-<body class="dm-shell font-sans antialiased min-h-screen flex flex-col" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+<body class="dm-shell font-sans antialiased min-h-screen flex flex-col" hx-ext="loading-states" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
 
   {% include "partials/_skip_link.html" %}
   {% include "partials/_navbar.html" %}

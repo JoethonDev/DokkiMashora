@@ -1,0 +1,1278 @@
+"""Deterministic E2E demo seed - idempotent, safe to re-run.
+
+Run twice in a row and the second run must not create duplicates or print
+misleading "+ created" lines. Each *_ensure_* helper is responsible for
+keeping the row's current values in sync via update_or_create where the
+seed owns the row, and via per-key existence checks for append-only
+tables such as AuditEvent.
+
+Demo fixture state is written directly via ORM. This is intentional:
+the seed builds a known state for the E2E suite, not a real business
+workflow. Business workflow proof lives in the E2E test files.
+"""
+from __future__ import annotations
+
+from datetime import date, timedelta
+from typing import Any
+
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
+from django.core.management.base import BaseCommand
+from django.db import transaction
+from django.utils import timezone
+
+from apps.academics.constants import (
+    ENROLLMENT_STATUS_ACTIVE,
+    ENROLLMENT_STATUS_EXPIRED,
+    ENROLLMENT_STATUS_PENDING,
+    ENROLLMENT_STATUS_RESTRICTED,
+)
+from apps.academics.models import (
+    Cohort,
+    Course,
+    CourseVersion,
+    Diploma,
+    Lecture,
+    Semester,
+    SemesterCourse,
+)
+from apps.applications.constants import (
+    APP_STATUS_ACTIVATED,
+    APP_STATUS_PENDING,
+    APP_STATUS_REJECTED,
+    PROGRAM_APP_STATUS_ACTIVATED,
+    PROGRAM_APP_STATUS_REJECTED,
+    PROGRAM_APP_STATUS_SUBMITTED,
+    PROGRAM_TYPE_COURSE,
+    PROGRAM_TYPE_DIPLOMA,
+)
+from apps.applications.models import Application, ProgramApplication
+from apps.assessments.constants import (
+    ASSESSMENT_TYPE_FINAL_EXAM,
+    ASSESSMENT_TYPE_HOMEWORK,
+    ASSESSMENT_TYPE_QUIZ,
+    ATTEMPT_STATUS_GRADED,
+    ATTEMPT_STATUS_UNDER_REVIEW,
+    GRADE_VISIBILITY_RELEASED,
+    HOMEWORK_STATUS_UNDER_REVIEW,
+    QUESTION_TYPE_MCQ,
+    QUESTION_TYPE_WRITTEN,
+)
+from apps.assessments.models import (
+    Assessment,
+    AssessmentAttempt,
+    AssessmentChoice,
+    AssessmentQuestion,
+    HomeworkSubmission,
+)
+from apps.audit.constants import (
+    ACTION_APPLICATION_ACTIVATED,
+    ACTION_CERTIFICATE_GENERATED,
+    ACTION_GRADE_RELEASED,
+    ACTION_PAYMENT_UPLOAD_CONFIRMED,
+)
+from apps.audit.models import AuditEvent
+from apps.certificates.models import CertificateTemplate, GeneratedCertificate
+from apps.communications.constants import (
+    TEMPLATE_ACCEPTANCE,
+    TEMPLATE_ACTIVATION,
+    TEMPLATE_ENTRANCE_EXAM_INVITATION,
+    TEMPLATE_RECEIVED,
+    TEMPLATE_REJECTION,
+)
+from apps.communications.models import EmailTemplate
+from apps.entrance_exams.constants import ATTEMPT_STATUS_ASSIGNED
+from apps.entrance_exams.models import (
+    EntranceAttempt,
+    EntranceChoice,
+    EntranceExam,
+    EntranceQuestion,
+)
+from apps.payments.constants import (
+    PAYMENT_STATUS_PAID,
+    PAYMENT_STATUS_UNPAID,
+)
+from apps.payments.models import PaymentRecord
+from apps.progression.constants import (
+    CERTIFICATE_STATUS_AVAILABLE,
+    DIPLOMA_COMPLETION_COMPLETED,
+)
+from apps.progression.models import StudentDiplomaCompletion
+from apps.students.constants import GENDER_FEMALE, GENDER_MALE
+from apps.students.models import StudentProfile
+
+User = get_user_model()
+
+PASSWORD = "TestPass123!"
+
+# Role names must match the GROUP_* constants in apps/accounts/constants.py.
+ROLE_SUPER_ADMIN = "Super Admin"
+ROLE_ADMIN = "Admin"
+ROLE_MODERATOR = "Moderator"
+ROLE_TEACHER = "Teacher"
+ROLE_STUDENT = "Student"
+
+# Student definitions.
+STUDENTS: list[dict[str, Any]] = [
+    {
+        "email": "student.active@dokkimashora.test",
+        "full_name": "Active Student",
+        "phone": "+201100000001",
+        "national_id": "29901011234567",
+        "gender": GENDER_MALE,
+        "dob": date(1998, 3, 15),
+        "address": "Cairo, Egypt",
+        "education": "bachelor",
+        "specialization": "Theology",
+        "employer": "Church of St. Mark",
+        "current_job": "Deacon",
+        "church": "St. Mark Coptic Orthodox",
+        "priest_name": "Fr. Matta El Meskin",
+        "priest_contact": "+201100000099",
+    },
+    {
+        "email": "student.expired@dokkimashora.test",
+        "full_name": "Expired Student",
+        "phone": "+201100000002",
+        "national_id": "29901021234567",
+        "gender": GENDER_MALE,
+        "dob": date(1995, 7, 22),
+        "address": "Alexandria, Egypt",
+        "education": "master",
+        "specialization": "Biblical Studies",
+        "employer": "Diocese of Alexandria",
+        "current_job": "Teacher",
+        "church": "St. George Coptic Orthodox",
+        "priest_name": "Fr. Youhanna El Souriani",
+        "priest_contact": "+201100000098",
+    },
+    {
+        "email": "student.restricted@dokkimashora.test",
+        "full_name": "Restricted Student",
+        "phone": "+201100000003",
+        "national_id": "29901031234567",
+        "gender": GENDER_FEMALE,
+        "dob": date(2000, 1, 10),
+        "address": "Giza, Egypt",
+        "education": "bachelor",
+        "specialization": "Coptic Studies",
+        "employer": "",
+        "current_job": "Student",
+        "church": "The Holy Virgin Coptic Orthodox",
+        "priest_name": "Fr. Boulos Halim",
+        "priest_contact": "+201100000097",
+    },
+    {
+        "email": "student.pending@dokkimashora.test",
+        "full_name": "Pending Student",
+        "phone": "+201100000004",
+        "national_id": "29901041234567",
+        "gender": GENDER_MALE,
+        "dob": date(1999, 11, 5),
+        "address": "Luxor, Egypt",
+        "education": "secondary",
+        "specialization": "",
+        "employer": "",
+        "current_job": "Unemployed",
+        "church": "St. Abanoub Coptic Orthodox",
+        "priest_name": "Fr. Shenouda Mansour",
+        "priest_contact": "+201100000096",
+    },
+    {
+        "email": "student.noaccess@dokkimashora.test",
+        "full_name": "No Access Student",
+        "phone": "+201100000005",
+        "national_id": "29901051234567",
+        "gender": GENDER_FEMALE,
+        "dob": date(1997, 5, 30),
+        "address": "Asyut, Egypt",
+        "education": "doctorate",
+        "specialization": "Patristics",
+        "employer": "Monastery of St. Macarius",
+        "current_job": "Researcher",
+        "church": "St. Macarius Coptic Orthodox",
+        "priest_name": "Fr. Athanasius Iskandar",
+        "priest_contact": "+201100000095",
+    },
+]
+
+
+class Command(BaseCommand):
+    help = "Seed deterministic E2E demo data. Idempotent - safe to re-run."
+
+    def handle(self, *args, **options):
+        self.warnings: list[str] = []
+        self.stdout.write("Seeding E2E demo data...")
+
+        # Group cache lives on self so it is built lazily on first use and
+        # never touches the DB at module import time.
+        self.groups: dict[str, Group] = {}
+
+        with transaction.atomic():
+            super_admin = self._ensure_super_admin()
+            self._ensure_admin()
+            teacher = self._ensure_user("teacher@dokkimashora.test", ROLE_TEACHER, is_staff=True)
+            moderator = self._ensure_user("moderator@dokkimashora.test", ROLE_MODERATOR, is_staff=True)
+
+            student_users: dict[str, tuple[User, dict]] = {}
+            for s in STUDENTS:
+                is_active = s["email"] != "student.pending@dokkimashora.test"
+                user = self._ensure_user(s["email"], ROLE_STUDENT, is_active=is_active)
+                student_users[s["email"]] = (user, s)
+
+            diploma, sem1, sem2, course, cohort_a, cohort_b = self._ensure_academics(super_admin)
+            ver_a, ver_b, ver_standalone = self._ensure_course_versions(super_admin, course, cohort_a, cohort_b, sem1)
+            self._ensure_lectures(ver_a, ver_b)
+
+            profiles: dict[str, StudentProfile] = {}
+            for email, (user, data) in student_users.items():
+                profiles[email] = self._ensure_profile(user, data)
+
+            apps_map = self._ensure_applications(profiles, super_admin, cohort_a, cohort_b, course)
+            self._ensure_enrollments(profiles, cohort_a, ver_a, ver_b)
+            assessments = self._ensure_assessments(teacher, ver_a, cohort_a, sem1)
+            attempt_for_audit = self._ensure_attempts(assessments, student_users, profiles)
+            self._ensure_entrance_exam(diploma, cohort_a, profiles, super_admin)
+            self._ensure_teacher_moderator(super_admin, teacher, moderator, cohort_a, profiles)
+            payment_for_audit = self._ensure_payments(profiles, apps_map)
+            self._ensure_communications()
+            cert_for_audit = self._ensure_certificates(super_admin, profiles, cohort_a, diploma)
+            self._ensure_audit(super_admin, profiles, attempt_for_audit, payment_for_audit, cert_for_audit)
+
+        self._print_summary(profiles, diploma, cohort_a, cohort_b, course, ver_a, ver_b, assessments)
+        if self.warnings:
+            self.stdout.write(self.style.WARNING("\nWarnings / Skipped:"))
+            for w in self.warnings:
+                self.stdout.write(self.style.WARNING(f"  - {w}"))
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _report(self, label: str, created: bool) -> None:
+        # Always pass the actual created flag. Do not print "+ created" for
+        # rows that already existed.
+        if created:
+            self.stdout.write(self.style.SUCCESS(f"  + {label}"))
+        else:
+            self.stdout.write(f"  . {label} (already exists)")
+
+    def _group(self, name: str) -> Group:
+        # Lazy, idempotent group cache. Avoids touching the DB at import time.
+        if name not in self.groups:
+            group, created = Group.objects.get_or_create(name=name)
+            self.groups[name] = group
+        return self.groups[name]
+
+    def _ensure_super_admin(self) -> User:
+        """Ensure the Super Admin user exists, with a known password.
+
+        The Super Admin is also added to the Admin, Moderator, Teacher,
+        and Student groups so it can reach every page in the E2E suite.
+        """
+        user, created = User.objects.get_or_create(
+            email="superadmin@dokkimashora.test",
+            defaults={"is_staff": True, "is_superuser": True, "is_active": True},
+        )
+        user.is_staff = True
+        user.is_superuser = True
+        user.is_active = True
+        user.set_password(PASSWORD)
+        user.save(update_fields=["is_staff", "is_superuser", "is_active", "password"])
+        user.groups.clear()
+        for role in (ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_MODERATOR, ROLE_TEACHER, ROLE_STUDENT):
+            user.groups.add(self._group(role))
+        self._report("User: superadmin@dokkimashora.test (Super Admin)", created)
+        return user
+
+    def _ensure_admin(self) -> User:
+        """Ensure a non-superuser Admin exists. The first seed run is what
+        guarantees this row exists; subsequent runs only refresh password
+        and group membership.
+        """
+        user, created = User.objects.get_or_create(
+            email="admin@dokkimashora.test",
+            defaults={"is_staff": True, "is_active": True},
+        )
+        user.is_staff = True
+        user.is_superuser = False
+        user.is_active = True
+        user.set_password(PASSWORD)
+        user.save(update_fields=["is_staff", "is_superuser", "is_active", "password"])
+        user.groups.clear()
+        user.groups.add(self._group(ROLE_ADMIN))
+        self._report("User: admin@dokkimashora.test (Admin)", created)
+        return user
+
+    def _ensure_user(
+        self, email: str, role: str, *, is_staff: bool = False,
+        is_active: bool = True, is_superuser: bool = False,
+    ) -> User:
+        user, created = User.objects.get_or_create(
+            email=email,
+            defaults={
+                "is_staff": is_staff,
+                "is_active": is_active,
+                "is_superuser": is_superuser,
+            },
+        )
+        user.set_password(PASSWORD)
+        update_fields = ["password"]
+        if user.is_staff != is_staff:
+            user.is_staff = is_staff
+            update_fields.append("is_staff")
+        if user.is_superuser != is_superuser:
+            user.is_superuser = is_superuser
+            update_fields.append("is_superuser")
+        if user.is_active != is_active:
+            user.is_active = is_active
+            update_fields.append("is_active")
+        user.save(update_fields=update_fields)
+        user.groups.clear()
+        user.groups.add(self._group(role))
+        self._report(f"User: {email} ({role})", created)
+        return user
+
+    def _ensure_profile(self, user: User, data: dict) -> StudentProfile:
+        # update_or_create keeps the row's current values in sync so that
+        # changes to the seed (e.g. a corrected phone) propagate to the DB.
+        profile, created = StudentProfile.objects.update_or_create(
+            user=user,
+            defaults={
+                "full_name": data["full_name"],
+                "date_of_birth": data["dob"],
+                "gender": data["gender"],
+                "address": data["address"],
+                "phone": data["phone"],
+                "national_id": data["national_id"],
+                "education": data["education"],
+                "specialization": data["specialization"],
+                "employer": data["employer"],
+                "current_job": data["current_job"],
+                "church": data["church"],
+                "priest_name": data["priest_name"],
+                "priest_contact": data["priest_contact"],
+            },
+        )
+        self._report(f"Profile: {data['full_name']}", created)
+        return profile
+
+    def _ensure_academics(self, admin: User):
+        diploma, created = Diploma.objects.update_or_create(
+            title="E2E Counseling Diploma",
+            defaults={"total_semesters": 2, "is_active": True, "created_by": admin},
+        )
+        self._report("Diploma: E2E Counseling Diploma", created)
+
+        sem1, created = Semester.objects.update_or_create(
+            diploma=diploma, order=1,
+            defaults={"title": "Semester 1", "is_active": True},
+        )
+        self._report("Semester 1", created)
+
+        sem2, created = Semester.objects.update_or_create(
+            diploma=diploma, order=2,
+            defaults={"title": "Semester 2", "is_active": True},
+        )
+        self._report("Semester 2", created)
+
+        course, created = Course.objects.update_or_create(
+            title="E2E Foundations Course",
+            defaults={"is_standalone": True, "is_active": True, "created_by": admin},
+        )
+        self._report("Course: E2E Foundations Course", created)
+
+        _obj, created = SemesterCourse.objects.update_or_create(
+            semester=sem1, course=course,
+            defaults={"order": 1},
+        )
+
+        cohort_a, created = Cohort.objects.update_or_create(
+            diploma=diploma, name="E2E Cohort A 2026",
+            defaults={
+                "start_date": date(2026, 1, 15),
+                "end_date": date(2026, 12, 15),
+                "is_active": True,
+                "created_by": admin,
+            },
+        )
+        self._report("Cohort A 2026", created)
+
+        cohort_b, created = Cohort.objects.update_or_create(
+            diploma=diploma, name="E2E Cohort B 2026",
+            defaults={
+                "start_date": date(2026, 6, 1),
+                "end_date": date(2027, 5, 31),
+                "is_active": True,
+                "created_by": admin,
+            },
+        )
+        self._report("Cohort B 2026", created)
+
+        return diploma, sem1, sem2, course, cohort_a, cohort_b
+
+    def _ensure_course_versions(self, admin, course, cohort_a, cohort_b, sem1):
+        # Cohort A and B are bound to the diploma. The standalone version
+        # has no cohort and is queried via cohort__isnull=True (the
+        # unique_together allows multiple NULL cohorts in some DBs).
+        ver_a, created = CourseVersion.objects.update_or_create(
+            course=course, cohort=cohort_a, label="v1",
+            defaults={
+                "semester": sem1,
+                "access_duration_days": 180,
+                "is_active": True,
+                "created_by": admin,
+            },
+        )
+        self._report("CourseVersion A (Cohort A, v1)", created)
+
+        ver_b, created = CourseVersion.objects.update_or_create(
+            course=course, cohort=cohort_b, label="v1",
+            defaults={
+                "semester": sem1,
+                "access_duration_days": 180,
+                "is_active": True,
+                "created_by": admin,
+            },
+        )
+        self._report("CourseVersion B (Cohort B, v1)", created)
+
+        # Look up the standalone version explicitly to avoid relying on
+        # the unique_together with NULL cohort (which some databases
+        # allow multiple of).
+        ver_standalone = (
+            CourseVersion.objects
+            .filter(course=course, cohort__isnull=True, label="standalone")
+            .first()
+        )
+        if ver_standalone is None:
+            ver_standalone = CourseVersion.objects.create(
+                course=course,
+                cohort=None,
+                label="standalone",
+                semester=sem1,
+                access_duration_days=90,
+                is_active=True,
+                created_by=admin,
+            )
+            self._report("CourseVersion standalone", created)
+        else:
+            ver_standalone.semester = sem1
+            ver_standalone.access_duration_days = 90
+            ver_standalone.is_active = True
+            ver_standalone.created_by = admin
+            ver_standalone.save()
+            self._report("CourseVersion standalone", False)
+
+        return ver_a, ver_b, ver_standalone
+
+    def _ensure_lectures(self, ver_a, ver_b):
+        now = timezone.now()
+
+        _obj, created = Lecture.objects.update_or_create(
+            course_version=ver_a, order=1,
+            defaults={
+                "title": "E2E Lecture 1 - Published Released",
+                "description": "First published and released lecture for E2E testing.",
+                "youtube_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                "release_at": now - timedelta(days=30),
+                "is_published": True,
+            },
+        )
+        self._report("Lecture: Published Released (Ver A)", created)
+
+        _obj, created = Lecture.objects.update_or_create(
+            course_version=ver_a, order=2,
+            defaults={
+                "title": "E2E Lecture 2 - Future Release",
+                "description": "Lecture scheduled for future release.",
+                "youtube_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                "release_at": now + timedelta(days=30),
+                "is_published": True,
+            },
+        )
+        self._report("Lecture: Future Release (Ver A)", created)
+
+        _obj, created = Lecture.objects.update_or_create(
+            course_version=ver_a, order=3,
+            defaults={
+                "title": "E2E Lecture 3 - Unpublished",
+                "description": "Unpublished lecture for draft testing.",
+                "is_published": False,
+            },
+        )
+        self._report("Lecture: Unpublished (Ver A)", created)
+
+        _obj, created = Lecture.objects.update_or_create(
+            course_version=ver_b, order=1,
+            defaults={
+                "title": "E2E Lecture B1 - Published Released",
+                "description": "Published released lecture for Cohort B.",
+                "youtube_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                "release_at": now - timedelta(days=10),
+                "is_published": True,
+            },
+        )
+        self._report("Lecture: Published Released (Ver B)", created)
+
+    def _ensure_applications(self, profiles, admin, cohort_a, cohort_b, course):
+        """Create one root Application plus a child ProgramApplication per
+        student. Each (student, program_type, cohort/course) combination
+        is unique.
+        """
+        apps_map: dict[str, Application] = {}
+        now = timezone.now()
+
+        # student.active: activated diploma + activated course.
+        p = profiles["student.active@dokkimashora.test"]
+        root, created = Application.objects.update_or_create(
+            student=p,
+            defaults={
+                "status": APP_STATUS_ACTIVATED,
+                "reviewed_by": admin,
+                "activated_at": now,
+            },
+        )
+        self._report("Application: active student (activated)", created)
+        apps_map["student.active"] = root
+
+        _obj, created = ProgramApplication.objects.update_or_create(
+            root_application=root, student=p,
+            program_type=PROGRAM_TYPE_DIPLOMA, cohort=cohort_a,
+            defaults={
+                "status": PROGRAM_APP_STATUS_ACTIVATED,
+                "reviewed_by": admin,
+                "activated_at": now,
+            },
+        )
+        self._report("ProgramApplication: active -> diploma Cohort A", created)
+
+        _obj, created = ProgramApplication.objects.update_or_create(
+            root_application=root, student=p,
+            program_type=PROGRAM_TYPE_COURSE, course=course,
+            defaults={
+                "status": PROGRAM_APP_STATUS_ACTIVATED,
+                "reviewed_by": admin,
+                "activated_at": now,
+            },
+        )
+        self._report("ProgramApplication: active -> course standalone", created)
+
+        # student.expired: activated diploma (long ago) and activated course.
+        p = profiles["student.expired@dokkimashora.test"]
+        expired_at = now - timedelta(days=200)
+        root, created = Application.objects.update_or_create(
+            student=p,
+            defaults={
+                "status": APP_STATUS_ACTIVATED,
+                "reviewed_by": admin,
+                "activated_at": expired_at,
+            },
+        )
+        self._report("Application: expired student (activated)", created)
+        apps_map["student.expired"] = root
+
+        _obj, created = ProgramApplication.objects.update_or_create(
+            root_application=root, student=p,
+            program_type=PROGRAM_TYPE_DIPLOMA, cohort=cohort_a,
+            defaults={
+                "status": PROGRAM_APP_STATUS_ACTIVATED,
+                "reviewed_by": admin,
+                "activated_at": expired_at,
+            },
+        )
+        self._report("ProgramApplication: expired -> diploma Cohort A", created)
+
+        # The expired student also has a course program application
+        # matching the expired CourseEnrollment below. This keeps
+        # application history consistent with the enrollment state.
+        _obj, created = ProgramApplication.objects.update_or_create(
+            root_application=root, student=p,
+            program_type=PROGRAM_TYPE_COURSE, course=course,
+            defaults={
+                "status": PROGRAM_APP_STATUS_ACTIVATED,
+                "reviewed_by": admin,
+                "activated_at": expired_at,
+            },
+        )
+        self._report("ProgramApplication: expired -> course standalone", created)
+
+        # student.restricted: activated.
+        p = profiles["student.restricted@dokkimashora.test"]
+        root, created = Application.objects.update_or_create(
+            student=p,
+            defaults={
+                "status": APP_STATUS_ACTIVATED,
+                "reviewed_by": admin,
+                "activated_at": now,
+            },
+        )
+        self._report("Application: restricted student (activated)", created)
+        apps_map["student.restricted"] = root
+
+        _obj, created = ProgramApplication.objects.update_or_create(
+            root_application=root, student=p,
+            program_type=PROGRAM_TYPE_DIPLOMA, cohort=cohort_a,
+            defaults={
+                "status": PROGRAM_APP_STATUS_ACTIVATED,
+                "reviewed_by": admin,
+                "activated_at": now,
+            },
+        )
+        self._report("ProgramApplication: restricted -> diploma Cohort A", created)
+
+        # student.pending: pending application.
+        p = profiles["student.pending@dokkimashora.test"]
+        root, created = Application.objects.update_or_create(
+            student=p,
+            defaults={"status": APP_STATUS_PENDING},
+        )
+        self._report("Application: pending student (pending)", created)
+        apps_map["student.pending"] = root
+
+        _obj, created = ProgramApplication.objects.update_or_create(
+            root_application=root, student=p,
+            program_type=PROGRAM_TYPE_DIPLOMA, cohort=cohort_a,
+            defaults={"status": PROGRAM_APP_STATUS_SUBMITTED},
+        )
+        self._report("ProgramApplication: pending -> diploma Cohort A", created)
+
+        # student.noaccess: rejected.
+        p = profiles["student.noaccess@dokkimashora.test"]
+        root, created = Application.objects.update_or_create(
+            student=p,
+            defaults={
+                "status": APP_STATUS_REJECTED,
+                "reviewed_by": admin,
+                "rejection_reason": "E2E test: rejected application",
+            },
+        )
+        self._report("Application: noaccess student (rejected)", created)
+        apps_map["student.noaccess"] = root
+
+        _obj, created = ProgramApplication.objects.update_or_create(
+            root_application=root, student=p,
+            program_type=PROGRAM_TYPE_DIPLOMA, cohort=cohort_a,
+            defaults={
+                "status": PROGRAM_APP_STATUS_REJECTED,
+                "reviewed_by": admin,
+                "rejection_reason": "E2E test: rejected program application",
+            },
+        )
+        self._report("ProgramApplication: noaccess -> diploma Cohort A (rejected)", created)
+
+        return apps_map
+
+    def _ensure_enrollments(self, profiles, cohort_a, ver_a, ver_b):
+        from apps.academics.models import CourseEnrollment, DiplomaEnrollment
+
+        now = timezone.now()
+
+        # active student: active diploma + active course.
+        p = profiles["student.active@dokkimashora.test"]
+        _obj, created = DiplomaEnrollment.objects.update_or_create(
+            student=p, cohort=cohort_a,
+            defaults={
+                "status": ENROLLMENT_STATUS_ACTIVE,
+                "activated_at": now,
+                "expires_at": now + timedelta(days=365),
+            },
+        )
+        self._report("DiplomaEnrollment: active student", created)
+
+        _obj, created = CourseEnrollment.objects.update_or_create(
+            student=p, course_version=ver_a,
+            defaults={
+                "status": ENROLLMENT_STATUS_ACTIVE,
+                "activated_at": now,
+                "expires_at": now + timedelta(days=180),
+            },
+        )
+        self._report("CourseEnrollment: active student (Ver A)", created)
+
+        # expired student: diploma still active (admin lifetime),
+        # CourseEnrollment is expired.
+        p = profiles["student.expired@dokkimashora.test"]
+        _obj, created = DiplomaEnrollment.objects.update_or_create(
+            student=p, cohort=cohort_a,
+            defaults={
+                "status": ENROLLMENT_STATUS_ACTIVE,
+                "activated_at": now - timedelta(days=400),
+                "expires_at": now - timedelta(days=35),
+            },
+        )
+        self._report("DiplomaEnrollment: expired student", created)
+
+        _obj, created = CourseEnrollment.objects.update_or_create(
+            student=p, course_version=ver_a,
+            defaults={
+                "status": ENROLLMENT_STATUS_EXPIRED,
+                "activated_at": now - timedelta(days=200),
+                "expires_at": now - timedelta(days=20),
+            },
+        )
+        self._report("CourseEnrollment: expired student (Ver A)", created)
+
+        # restricted student: restricted diploma enrollment.
+        p = profiles["student.restricted@dokkimashora.test"]
+        _obj, created = DiplomaEnrollment.objects.update_or_create(
+            student=p, cohort=cohort_a,
+            defaults={
+                "status": ENROLLMENT_STATUS_RESTRICTED,
+                "activated_at": now,
+                "expires_at": now + timedelta(days=365),
+            },
+        )
+        self._report("DiplomaEnrollment: restricted student", created)
+
+        # pending student: pending diploma enrollment.
+        p = profiles["student.pending@dokkimashora.test"]
+        _obj, created = DiplomaEnrollment.objects.update_or_create(
+            student=p, cohort=cohort_a,
+            defaults={
+                "status": ENROLLMENT_STATUS_PENDING,
+            },
+        )
+        self._report("DiplomaEnrollment: pending student", created)
+
+        # noaccess: no enrollment.
+
+    def _ensure_assessments(self, teacher, ver_a, cohort_a, sem1):
+        now = timezone.now()
+        assessments: dict[str, Assessment] = {}
+
+        # Quiz MCQ (timed, released visibility).
+        quiz, created = Assessment.objects.update_or_create(
+            title="E2E Quiz MCQ",
+            defaults={
+                "assessment_type": ASSESSMENT_TYPE_QUIZ,
+                "course_version": ver_a,
+                "semester": sem1,
+                "cohort": cohort_a,
+                "created_by": teacher,
+                "open_at": now - timedelta(days=1),
+                "close_at": now + timedelta(days=1),
+                "duration_minutes": 30,
+                "total_points": 10,
+                "passing_score": 50,
+                "is_active": True,
+                "max_attempts": 2,
+                "show_correct_answers": True,
+                "grade_visibility": GRADE_VISIBILITY_RELEASED,
+            },
+        )
+        self._report("Assessment: E2E Quiz MCQ", created)
+        assessments["quiz_mcq"] = quiz
+
+        q1, created = AssessmentQuestion.objects.update_or_create(
+            assessment=quiz, order=1,
+            defaults={"text": "What is the capital of France?", "question_type": QUESTION_TYPE_MCQ, "points": 5},
+        )
+        _obj, created = AssessmentChoice.objects.update_or_create(
+            question=q1, text="London", defaults={"is_correct": False, "order": 1},
+        )
+        _obj, created = AssessmentChoice.objects.update_or_create(
+            question=q1, text="Paris", defaults={"is_correct": True, "order": 2},
+        )
+        _obj, created = AssessmentChoice.objects.update_or_create(
+            question=q1, text="Berlin", defaults={"is_correct": False, "order": 3},
+        )
+
+        q2, created = AssessmentQuestion.objects.update_or_create(
+            assessment=quiz, order=2,
+            defaults={"text": "How many days are in a week?", "question_type": QUESTION_TYPE_MCQ, "points": 5},
+        )
+        _obj, created = AssessmentChoice.objects.update_or_create(
+            question=q2, text="5", defaults={"is_correct": False, "order": 1},
+        )
+        _obj, created = AssessmentChoice.objects.update_or_create(
+            question=q2, text="6", defaults={"is_correct": False, "order": 2},
+        )
+        _obj, created = AssessmentChoice.objects.update_or_create(
+            question=q2, text="7", defaults={"is_correct": True, "order": 3},
+        )
+
+        # Mixed assessment (MCQ + written).
+        mixed, created = Assessment.objects.update_or_create(
+            title="E2E Mixed Assessment",
+            defaults={
+                "assessment_type": ASSESSMENT_TYPE_QUIZ,
+                "course_version": ver_a,
+                "semester": sem1,
+                "cohort": cohort_a,
+                "created_by": teacher,
+                "open_at": now - timedelta(days=1),
+                "close_at": now + timedelta(days=1),
+                "duration_minutes": 45,
+                "total_points": 20,
+                "passing_score": 50,
+                "is_active": True,
+                "max_attempts": 1,
+                "grade_visibility": GRADE_VISIBILITY_RELEASED,
+            },
+        )
+        self._report("Assessment: E2E Mixed Assessment", created)
+        assessments["mixed"] = mixed
+
+        mq1, created = AssessmentQuestion.objects.update_or_create(
+            assessment=mixed, order=1,
+            defaults={"text": "MCQ: Which is a fruit?", "question_type": QUESTION_TYPE_MCQ, "points": 5},
+        )
+        _obj, created = AssessmentChoice.objects.update_or_create(
+            question=mq1, text="Carrot", defaults={"is_correct": False, "order": 1},
+        )
+        _obj, created = AssessmentChoice.objects.update_or_create(
+            question=mq1, text="Apple", defaults={"is_correct": True, "order": 2},
+        )
+
+        mq2, created = AssessmentQuestion.objects.update_or_create(
+            assessment=mixed, order=2,
+            defaults={"text": "MCQ: Which is a color?", "question_type": QUESTION_TYPE_MCQ, "points": 5},
+        )
+        _obj, created = AssessmentChoice.objects.update_or_create(
+            question=mq2, text="Table", defaults={"is_correct": False, "order": 1},
+        )
+        _obj, created = AssessmentChoice.objects.update_or_create(
+            question=mq2, text="Blue", defaults={"is_correct": True, "order": 2},
+        )
+
+        _obj, created = AssessmentQuestion.objects.update_or_create(
+            assessment=mixed, order=3,
+            defaults={"text": "Written: Describe your understanding of counseling.", "question_type": QUESTION_TYPE_WRITTEN, "points": 5},
+        )
+        _obj, created = AssessmentQuestion.objects.update_or_create(
+            assessment=mixed, order=4,
+            defaults={"text": "Written: How would you handle a difficult client?", "question_type": QUESTION_TYPE_WRITTEN, "points": 5},
+        )
+
+        # Homework: untimed (duration_minutes=None is the correct value
+        # for homework per Assessment.clean()).
+        hw, created = Assessment.objects.update_or_create(
+            title="E2E Homework Upload",
+            defaults={
+                "assessment_type": ASSESSMENT_TYPE_HOMEWORK,
+                "course_version": ver_a,
+                "semester": sem1,
+                "cohort": cohort_a,
+                "created_by": teacher,
+                "open_at": now - timedelta(days=1),
+                "close_at": now + timedelta(days=7),
+                "duration_minutes": None,
+                "total_points": 50,
+                "passing_score": 50,
+                "is_active": True,
+                "max_attempts": 1,
+            },
+        )
+        self._report("Assessment: E2E Homework Upload", created)
+        assessments["homework"] = hw
+
+        # Final Exam (timed).
+        final, created = Assessment.objects.update_or_create(
+            title="E2E Final Exam",
+            defaults={
+                "assessment_type": ASSESSMENT_TYPE_FINAL_EXAM,
+                "course_version": ver_a,
+                "semester": sem1,
+                "cohort": cohort_a,
+                "created_by": teacher,
+                "open_at": now - timedelta(days=1),
+                "close_at": now + timedelta(days=7),
+                "duration_minutes": 120,
+                "total_points": 100,
+                "passing_score": 60,
+                "is_active": True,
+                "max_attempts": 1,
+                "grade_visibility": GRADE_VISIBILITY_RELEASED,
+            },
+        )
+        self._report("Assessment: E2E Final Exam", created)
+        assessments["final"] = final
+
+        return assessments
+
+    def _ensure_attempts(self, assessments, student_users, profiles):
+        """Create one graded attempt, one under_review attempt, and one
+        homework submission. Returns the graded attempt for the audit
+        seed to reference.
+        """
+        now = timezone.now()
+        active_user = student_users["student.active@dokkimashora.test"][0]
+
+        # Graded attempt for Quiz MCQ.
+        quiz = assessments["quiz_mcq"]
+        attempt, created = AssessmentAttempt.objects.update_or_create(
+            assessment=quiz, student=active_user, attempt_number=1,
+            defaults={
+                "status": ATTEMPT_STATUS_GRADED,
+                "started_at": now - timedelta(hours=2),
+                "submitted_at": now - timedelta(hours=1),
+                "graded_at": now - timedelta(minutes=30),
+                "score_points": 8,
+                "score_percent": 80,
+                "is_pass": True,
+                "visible_to_student": True,
+            },
+        )
+        self._report("AssessmentAttempt: quiz MCQ (graded)", created)
+
+        # Under-review attempt for Mixed Assessment.
+        mixed = assessments["mixed"]
+        _obj, created = AssessmentAttempt.objects.update_or_create(
+            assessment=mixed, student=active_user, attempt_number=1,
+            defaults={
+                "status": ATTEMPT_STATUS_UNDER_REVIEW,
+                "started_at": now - timedelta(hours=1),
+                "submitted_at": now - timedelta(minutes=30),
+            },
+        )
+        self._report("AssessmentAttempt: mixed (under review)", created)
+
+        # Homework submission.
+        hw = assessments["homework"]
+        hw_attempt, created = AssessmentAttempt.objects.update_or_create(
+            assessment=hw, student=active_user, attempt_number=1,
+            defaults={
+                "status": ATTEMPT_STATUS_UNDER_REVIEW,
+                "started_at": now - timedelta(days=2),
+                "submitted_at": now - timedelta(days=1),
+            },
+        )
+        _obj, created = HomeworkSubmission.objects.update_or_create(
+            assessment=hw, student=active_user,
+            defaults={
+                "status": HOMEWORK_STATUS_UNDER_REVIEW,
+                "attempt": hw_attempt,
+                "original_filename": "e2e_homework.pdf",
+                "storage_key": "demo/e2e_homework.pdf",
+                "content_type": "application/pdf",
+                "file_size": 102400,
+                "submitted_at": now - timedelta(days=1),
+            },
+        )
+        self._report("HomeworkSubmission: e2e homework", created)
+
+        return attempt
+
+    def _ensure_entrance_exam(self, diploma, cohort_a, profiles, admin):
+        now = timezone.now()
+        exam, created = EntranceExam.objects.update_or_create(
+            diploma=diploma, cohort=cohort_a,
+            defaults={
+                "title": "E2E Entrance Exam Cohort A",
+                "duration_minutes": 30,
+                "passing_score": 60,
+                "total_points": 30,
+                "is_active": True,
+                "open_at": now - timedelta(days=1),
+                "close_at": now + timedelta(days=1),
+                "created_by": admin,
+            },
+        )
+        self._report("EntranceExam: E2E Cohort A", created)
+
+        eq1, created = EntranceQuestion.objects.update_or_create(
+            exam=exam, order=1,
+            defaults={"text": "MCQ: What is theology?", "question_type": "mcq", "points": 10},
+        )
+        _obj, created = EntranceChoice.objects.update_or_create(
+            question=eq1, text="Study of God", defaults={"weight": 1.0, "order": 1},
+        )
+        _obj, created = EntranceChoice.objects.update_or_create(
+            question=eq1, text="Study of animals", defaults={"weight": 0.0, "order": 2},
+        )
+        _obj, created = EntranceChoice.objects.update_or_create(
+            question=eq1, text="Study of rocks", defaults={"weight": 0.0, "order": 3},
+        )
+
+        eq2, created = EntranceQuestion.objects.update_or_create(
+            exam=exam, order=2,
+            defaults={"text": "MCQ: Who wrote the Gospel of John?", "question_type": "mcq", "points": 10},
+        )
+        _obj, created = EntranceChoice.objects.update_or_create(
+            question=eq2, text="Matthew", defaults={"weight": 0.0, "order": 1},
+        )
+        _obj, created = EntranceChoice.objects.update_or_create(
+            question=eq2, text="John", defaults={"weight": 1.0, "order": 2},
+        )
+        _obj, created = EntranceChoice.objects.update_or_create(
+            question=eq2, text="Paul", defaults={"weight": 0.0, "order": 3},
+        )
+
+        _obj, created = EntranceQuestion.objects.update_or_create(
+            exam=exam, order=3,
+            defaults={"text": "Written: Why do you want to study counseling?", "question_type": "written", "points": 10},
+        )
+
+        # Entrance attempt for pending student.
+        p = profiles["student.pending@dokkimashora.test"]
+        pa = ProgramApplication.objects.filter(
+            student=p, program_type=PROGRAM_TYPE_DIPLOMA, cohort=cohort_a,
+        ).first()
+        if pa:
+            _obj, created = EntranceAttempt.objects.update_or_create(
+                program_application=pa, exam=exam,
+                defaults={
+                    "student": p,
+                    "status": ATTEMPT_STATUS_ASSIGNED,
+                },
+            )
+            self._report("EntranceAttempt: pending student (assigned)", created)
+
+    def _ensure_teacher_moderator(self, admin, teacher, moderator, cohort_a, profiles):
+        from apps.academics.constants import SCOPE_DIPLOMA_COHORT
+        from apps.academics.models import ModeratorStudentAssignment, TeacherAssignment
+
+        _obj, created = TeacherAssignment.objects.update_or_create(
+            teacher=teacher, scope_type=SCOPE_DIPLOMA_COHORT, cohort=cohort_a,
+            defaults={"active": True, "assigned_by": admin},
+        )
+        self._report("TeacherAssignment: teacher -> Cohort A", created)
+
+        p = profiles["student.active@dokkimashora.test"]
+        _obj, created = ModeratorStudentAssignment.objects.update_or_create(
+            moderator=moderator, student=p, cohort=cohort_a,
+            defaults={"active": True, "assigned_by": admin},
+        )
+        self._report("ModeratorStudentAssignment: moderator -> active student", created)
+
+    def _ensure_payments(self, profiles, apps_map):
+        # Paid payment for active student.
+        p = profiles["student.active@dokkimashora.test"]
+        root_app = apps_map.get("student.active")
+        payment, created = PaymentRecord.objects.update_or_create(
+            student=p, external_reference="E2E-TXN-001",
+            defaults={
+                "amount": 1500,
+                "currency": "EGP",
+                "status": PAYMENT_STATUS_PAID,
+                "paid_at": timezone.now() - timedelta(days=30),
+                "application": root_app,
+            },
+        )
+        self._report("PaymentRecord: active student (paid)", created)
+
+        # Unpaid payment for pending student.
+        p = profiles["student.pending@dokkimashora.test"]
+        root_app = apps_map.get("student.pending")
+        _obj, created = PaymentRecord.objects.update_or_create(
+            student=p, external_reference="E2E-TXN-002",
+            defaults={
+                "amount": 1500,
+                "currency": "EGP",
+                "status": PAYMENT_STATUS_UNPAID,
+                "due_at": timezone.now() + timedelta(days=14),
+                "application": root_app,
+            },
+        )
+        self._report("PaymentRecord: pending student (unpaid)", created)
+        return payment
+
+    def _ensure_communications(self):
+        templates = [
+            (TEMPLATE_RECEIVED, "Registration Received", "Your registration has been received."),
+            (TEMPLATE_ACCEPTANCE, "Acceptance", "Congratulations! You have been accepted."),
+            (TEMPLATE_REJECTION, "Rejection", "We regret to inform you..."),
+            (TEMPLATE_ACTIVATION, "Activation", "Your account has been activated."),
+            (TEMPLATE_ENTRANCE_EXAM_INVITATION, "Entrance Exam Invitation", "You have been invited to the entrance exam."),
+        ]
+        for slug, name, body in templates:
+            _obj, created = EmailTemplate.objects.update_or_create(
+                slug=slug,
+                defaults={"name": name, "subject": name, "body": body, "is_active": True},
+            )
+            self._report(f"EmailTemplate: {slug}", created)
+
+    def _ensure_certificates(self, admin, profiles, cohort_a, diploma):
+        from apps.academics.models import DiplomaEnrollment
+
+        cert_template, created = CertificateTemplate.objects.update_or_create(
+            diploma=diploma, language="ar", template_type="completion",
+            defaults={
+                "name": "E2E Counseling Diploma Certificate",
+                "active": True,
+                "is_placeholder": False,
+                "created_by": admin,
+            },
+        )
+        self._report("CertificateTemplate: E2E Counseling Diploma", created)
+
+        p = profiles["student.active@dokkimashora.test"]
+        diploma_enr = DiplomaEnrollment.objects.filter(
+            student=p, cohort=cohort_a,
+        ).first()
+
+        if not diploma_enr:
+            self.warnings.append("GeneratedCertificate skipped: no DiplomaEnrollment for active student")
+            return None
+
+        # Demo fixture state: completion + certificate are written
+        # directly to match what the progression service would produce
+        # after a real graduation flow. This is a known state, not a
+        # business workflow proof.
+        _obj, created = StudentDiplomaCompletion.objects.update_or_create(
+            student=p, diploma_enrollment=diploma_enr,
+            defaults={
+                "status": DIPLOMA_COMPLETION_COMPLETED,
+                "completed_at": timezone.now(),
+                "final_score": 88,
+                "completed_by": admin,
+            },
+        )
+        self._report("StudentDiplomaCompletion: active student", created)
+
+        cert, created = GeneratedCertificate.objects.update_or_create(
+            student=p, diploma_enrollment=diploma_enr,
+            defaults={
+                "certificate_template": cert_template,
+                "certificate_number": "E2E-2026-0001",
+                "status": CERTIFICATE_STATUS_AVAILABLE,
+                "generated_by": admin,
+            },
+        )
+        self._report("GeneratedCertificate: active student", created)
+        return cert
+
+    def _ensure_audit(self, admin, profiles, attempt, payment, certificate):
+        """Seed a deterministic set of demo audit events.
+
+        AuditEvent is append-only (save() and delete() raise PermissionError
+        in the model), so the natural key here is the unique
+        (actor, action, target_type, target_id, metadata.scope) tuple. We
+        check existence for each event before creating, so re-runs do
+        not duplicate.
+        """
+        p = profiles["student.active@dokkimashora.test"]
+        scope = "e2e_demo"
+
+        # 1. Application activated (uses the real Application pk).
+        application_pk = (
+            Application.objects.filter(student=p).values_list("pk", flat=True).first()
+        )
+        if application_pk is not None and not AuditEvent.objects.filter(
+            actor=admin, action=ACTION_APPLICATION_ACTIVATED,
+            target_type="application", target_id=str(application_pk),
+            metadata__scope=scope,
+        ).exists():
+            AuditEvent.objects.create(
+                actor=admin, action=ACTION_APPLICATION_ACTIVATED,
+                target_type="application", target_id=str(application_pk),
+                metadata={"email": p.user.email, "scope": scope},
+                ip_address="127.0.0.1",
+            )
+            self._report("Audit: application.activated", True)
+        else:
+            self._report("Audit: application.activated (already exists)", False)
+
+        # 2. Grade released (uses the real AssessmentAttempt pk).
+        if attempt is not None and not AuditEvent.objects.filter(
+            actor=admin, action=ACTION_GRADE_RELEASED,
+            target_type="assessment_attempt", target_id=str(attempt.pk),
+            metadata__scope=scope,
+        ).exists():
+            AuditEvent.objects.create(
+                actor=admin, action=ACTION_GRADE_RELEASED,
+                target_type="assessment_attempt", target_id=str(attempt.pk),
+                metadata={"assessment_id": attempt.assessment_id, "scope": scope},
+                ip_address="127.0.0.1",
+            )
+            self._report("Audit: grade.released", True)
+        else:
+            self._report("Audit: grade.released (already exists)", False)
+
+        # 3. Payment upload confirmed (uses the real PaymentRecord pk).
+        if payment is not None and not AuditEvent.objects.filter(
+            actor=admin, action=ACTION_PAYMENT_UPLOAD_CONFIRMED,
+            target_type="payment_record", target_id=str(payment.pk),
+            metadata__scope=scope,
+        ).exists():
+            AuditEvent.objects.create(
+                actor=admin, action=ACTION_PAYMENT_UPLOAD_CONFIRMED,
+                target_type="payment_record", target_id=str(payment.pk),
+                metadata={"external_reference": payment.external_reference, "scope": scope},
+                ip_address="127.0.0.1",
+            )
+            self._report("Audit: payment.upload_confirmed", True)
+        else:
+            self._report("Audit: payment.upload_confirmed (already exists)", False)
+
+        # 4. Certificate generated (uses the real GeneratedCertificate pk).
+        if certificate is not None and not AuditEvent.objects.filter(
+            actor=admin, action=ACTION_CERTIFICATE_GENERATED,
+            target_type="generated_certificate", target_id=str(certificate.pk),
+            metadata__scope=scope,
+        ).exists():
+            AuditEvent.objects.create(
+                actor=admin, action=ACTION_CERTIFICATE_GENERATED,
+                target_type="generated_certificate", target_id=str(certificate.pk),
+                metadata={"certificate_number": certificate.certificate_number, "scope": scope},
+                ip_address="127.0.0.1",
+            )
+            self._report("Audit: certificate.generated", True)
+        else:
+            self._report("Audit: certificate.generated (already exists)", False)
+
+    def _print_summary(self, profiles, diploma, cohort_a, cohort_b, course, ver_a, ver_b, assessments):
+        creds = [
+            ("Super Admin", "superadmin@dokkimashora.test"),
+            ("Admin", "admin@dokkimashora.test"),
+            ("Moderator", "moderator@dokkimashora.test"),
+            ("Teacher", "teacher@dokkimashora.test"),
+            ("Student (active)", "student.active@dokkimashora.test"),
+            ("Student (expired)", "student.expired@dokkimashora.test"),
+            ("Student (restricted)", "student.restricted@dokkimashora.test"),
+            ("Student (pending)", "student.pending@dokkimashora.test"),
+            ("Student (noaccess)", "student.noaccess@dokkimashora.test"),
+        ]
+
+        out: list[str] = []
+        out.append("")
+        out.append("# E2E Demo Seed Complete")
+        out.append("")
+        out.append("## Credentials")
+        out.append("")
+        out.append("| Role | Email | Password | Notes |")
+        out.append("|---|---|---|---|")
+        for role, email in creds:
+            note = ""
+            if "pending" in email:
+                note = "is_active=False"
+            elif "noaccess" in email:
+                note = "application rejected"
+            out.append(f"| {role} | `{email}` | `{PASSWORD}` | {note} |")
+
+        out.append("")
+        out.append("## Important URLs")
+        out.append("")
+        out.append("- Login: `/accounts/login/`")
+        out.append("- Student portal: `/profile/`")
+        out.append("- Admin applications: `/applications/admin/`")
+        out.append("- Program applications: `/applications/programs/`")
+        out.append("- Academics: `/academics/my-courses/`")
+        out.append("- Assessments: `/assessments/`")
+        out.append("- Entrance exams: `/entrance-exams/`")
+        out.append("- Payments: `/payments/`")
+        out.append("- Certificates: `/certificates/`")
+
+        out.append("")
+        out.append("## Seeded Object IDs")
+        out.append("")
+        out.append(f"- Diploma: `{diploma.pk}`")
+        out.append(f"- Cohort A: `{cohort_a.pk}`")
+        out.append(f"- Cohort B: `{cohort_b.pk}`")
+        out.append(f"- Course: `{course.pk}`")
+        out.append(f"- Version A: `{ver_a.pk}`")
+        out.append(f"- Version B: `{ver_b.pk}`")
+        for name, a in assessments.items():
+            out.append(f"- Assessment ({name}): `{a.pk}`")
+
+        out.append("")
+        out.append("## Scenario Mapping")
+        out.append("")
+        out.append("- **active student**: content access, assessment, homework, certificates")
+        out.append("- **expired student**: expired access behavior")
+        out.append("- **restricted student**: restricted access behavior")
+        out.append("- **pending student**: entrance exam and admin approval")
+        out.append("- **noaccess student**: permission denial")
+
+        self.stdout.write("\n".join(out))

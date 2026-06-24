@@ -26,7 +26,7 @@
   </div>
   <div>{% include "partials/_button.html" with label=_("Filter") variant="primary" type="submit" %}</div>
 </form>
-{% if records %}
+{% if page_obj %}
 <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
   <table class="min-w-[640px] w-full text-sm">
     <thead class="bg-slate-50 dark:bg-slate-800/50">
@@ -39,15 +39,16 @@
       </tr>
     </thead>
     <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
-      {% for r in records %}
+      {% for r in page_obj %}
       <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-        <td class="px-4 py-3"><a href="{% url 'payments:record_detail' record_id=r.id %}" class="text-brand-600 hover:underline">{{ r.student.full_name }}</a></td>
+        <td class="px-4 py-3"><a href="{% url 'payments:record_detail' record_id=r.id %}" class="text-brand-600 hover:text-brand-700 dark:hover:text-brand-300">{{ r.student.full_name }}</a></td>
         <td class="px-4 py-3 text-end tabular-nums">{{ r.amount }} {{ r.currency }}</td>
         <td class="px-4 py-3">{% include "partials/_badge.html" with label=r.get_status_display %}</td>
         <td class="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">{{ r.external_reference|default:"—" }}</td>
         <td class="px-4 py-3 text-xs text-slate-500 dark:text-slate-400 tabular-nums">{{ r.paid_at|date:"DATETIME_FORMAT"|default:"—" }}</td>
       </tr>
       {% endfor %}
+    {% include "partials/_pagination.html" %}
     </tbody>
   </table>
 </div>

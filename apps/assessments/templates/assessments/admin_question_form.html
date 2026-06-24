@@ -2,7 +2,7 @@
 {% block title %}{% trans "Question" %} - {{ block.super }}{% endblock %}
 {% block content %}
 <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
-  <nav class="mb-6 text-sm text-slate-500 dark:text-slate-400" aria-label="breadcrumb">
+  <nav class="mb-6 text-sm text-slate-500 dark:text-slate-400" aria-label="{% trans "breadcrumb" %}">
     <ol class="flex flex-wrap items-center gap-1">
       <li class="flex items-center gap-1"><a href="{% url 'assessments:admin_list' %}" class="hover:text-brand-600 dark:hover:text-brand-400">{% trans "Assessments" %}</a><span class="text-slate-300 dark:text-slate-600">/</span></li>
       <li class="flex items-center gap-1"><a href="{% url 'assessments:admin_detail' assessment.id %}" class="hover:text-brand-600 dark:hover:text-brand-400">{{ assessment.title }}</a><span class="text-slate-300 dark:text-slate-600">/</span></li>
@@ -10,8 +10,6 @@
     </ol>
   </nav>
 
-  <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
-    {% include "assessments/partials/question_form.html" %}
-  </div>
+  {% include "assessments/partials/question_form.html" %}
 </div>
 {% endblock %}

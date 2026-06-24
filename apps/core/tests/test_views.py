@@ -18,6 +18,7 @@ from apps.accounts.constants import (
     GROUP_TEACHER,
 )
 from apps.accounts.models import User
+from apps.core.models import LandingAnnouncement
 
 
 class LandingPageTests(TestCase):
@@ -43,8 +44,45 @@ class LandingPageTests(TestCase):
         response = self.client.get(reverse("core:landing"))
         self.assertEqual(response.status_code, 200)
 
-    def test_landing_page_exposes_ui_theme_switcher(self) -> None:
+    def test_landing_page_uses_active_admin_announcement(self) -> None:
+        LandingAnnouncement.objects.all().delete()
+        LandingAnnouncement.objects.create(
+            title="Entrance week",
+            message="Applications close Friday.",
+            cta_label="Apply",
+            cta_url="/applications/register/",
+        )
+
         response = self.client.get(reverse("core:landing"))
+
+        self.assertContains(response, "Entrance week")
+        self.assertContains(response, "Applications close Friday.")
+        self.assertContains(response, "/applications/register/")
+
+    def test_landing_page_hides_inactive_announcement(self) -> None:
+        LandingAnnouncement.objects.all().delete()
+        LandingAnnouncement.objects.create(
+            title="Hidden banner",
+            message="Disabled by admin.",
+            is_active=False,
+        )
+
+        response = self.client.get(reverse("core:landing"))
+
+        self.assertNotContains(response, "Hidden banner")
+
+    def test_landing_page_renders_extended_translated_sections(self) -> None:
+        with translation.override("ar"):
+            response = self.client.get(reverse("core:landing"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "كيف تسير الرحلة")
+        self.assertContains(response, "مكتبة التعلم")
+        self.assertContains(response, "مصمم للثقة")
+
+    def test_landing_page_exposes_ui_theme_switcher(self) -> None:
+        with translation.override("en"):
+            response = self.client.get(reverse("core:landing"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'data-ui-theme="operational"')
         self.assertContains(response, 'class="dm-shell')

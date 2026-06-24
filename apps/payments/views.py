@@ -9,6 +9,7 @@ from django.views.decorators.http import require_POST
 from apps.accounts.constants import GROUP_ADMIN, GROUP_MODERATOR, GROUP_SUPER_ADMIN
 from apps.audit.constants import ACTION_PAYMENT_UPLOAD_CONFIRMED, ACTION_PAYMENT_UPLOAD_PREVIEWED
 from apps.audit.services import record_audit_event
+from apps.core.pagination import paginate
 from apps.core.permissions import role_required, safe_date_str
 
 from .constants import PAYMENT_STATUS_CHOICES, UPLOAD_STATUS_CHOICES, UPLOAD_STATUS_PREVIEWED
@@ -19,7 +20,7 @@ from .selectors import (
     get_upload_detail,
     get_upload_queryset,
 )
-from .services import confirm_upload, create_upload, preview_upload
+from .services import confirm_upload, create_upload, mark_enrollment_paid, mark_enrollment_unpaid, preview_upload
 
 ROLE_PAYMENT_STAFF = (GROUP_SUPER_ADMIN, GROUP_ADMIN, GROUP_MODERATOR)
 
@@ -37,11 +38,13 @@ def upload_list(request):
         date_from=date_from,
         date_to=date_to,
     )
+    page_obj, pagination_qs = paginate(request, uploads)
     return render(
         request,
         "payments/admin_upload_list.html",
         {
-            "uploads": uploads,
+            "page_obj": page_obj,
+            "pagination_qs": pagination_qs,
             "upload_status_choices": UPLOAD_STATUS_CHOICES,
             "current_status": status,
             "current_date_from": raw_date_from,
@@ -161,11 +164,13 @@ def payment_record_list(request):
         date_from=date_from,
         date_to=date_to,
     )
+    page_obj, pagination_qs = paginate(request, records)
     return render(
         request,
         "payments/admin_record_list.html",
         {
-            "records": records,
+            "page_obj": page_obj,
+            "pagination_qs": pagination_qs,
             "payment_status_choices": PAYMENT_STATUS_CHOICES,
             "current_status": status,
             "current_student_q": student_q,
@@ -185,3 +190,26 @@ def payment_record_detail(request, record_id):
         id=record_id,
     )
     return render(request, "payments/admin_record_detail.html", {"record": record})
+
+
+@require_POST
+@login_required
+@role_required(*ROLE_PAYMENT_STAFF)
+def enrollment_payment_toggle(request, student_id, enrollment_type, enrollment_id):
+    """Mark an enrollment paid or unpaid."""
+    from apps.students.models import StudentProfile
+
+    student = get_object_or_404(StudentProfile, pk=student_id)
+    action = request.POST.get("payment_action")
+    if action == "mark_paid":
+        mark_enrollment_paid(student, enrollment_type, enrollment_id, actor=request.user)
+        messages.success(request, _("Enrollment marked as paid."))
+    elif action == "mark_unpaid":
+        count = mark_enrollment_unpaid(student, enrollment_type, enrollment_id)
+        if count:
+            messages.info(request, _("Enrollment marked as unpaid."))
+        else:
+            messages.warning(request, _("No paid records to revert."))
+    else:
+        messages.error(request, _("Invalid action."))
+    return redirect(request.POST.get("next", "payments:record_list"))

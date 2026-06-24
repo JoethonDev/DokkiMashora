@@ -85,8 +85,8 @@ def mcq_question(exam):
         exam=exam, question_type=QUESTION_TYPE_MCQ,
         text="Sample MCQ", points=Decimal("10.00"), order=1,
     )
-    EntranceChoice.objects.create(question=q, text="Wrong", is_correct=False, order=1)
-    EntranceChoice.objects.create(question=q, text="Correct", is_correct=True, order=2)
+    EntranceChoice.objects.create(question=q, text="Wrong", score=Decimal("0.00"), order=1)
+    EntranceChoice.objects.create(question=q, text="Correct", score=Decimal("10.00"), order=2)
     return q
 
 
@@ -158,15 +158,15 @@ class TestEntranceQuestionModel:
     def test_unique_choice_order_per_question(self, mcq_question):
         with pytest.raises(IntegrityError):
             EntranceChoice.objects.create(
-                question=mcq_question, text="Dup", is_correct=False, order=1,
+                question=mcq_question, text="Dup", score=Decimal("0.00"), order=1,
             )
 
-    def test_choice_is_correct_default(self, mcq_question):
+    def test_choice_score_default(self, mcq_question):
         choices = list(mcq_question.choices.all())
         wrong = next(c for c in choices if c.text == "Wrong")
         correct = next(c for c in choices if c.text == "Correct")
-        assert wrong.is_correct is False
-        assert correct.is_correct is True
+        assert wrong.score == Decimal("0.00")
+        assert correct.score == Decimal("10.00")
 
     def test_question_str(self, mcq_question):
         assert str(mcq_question) == mcq_question.text[:50]
@@ -196,7 +196,7 @@ class TestEntranceAttemptModel:
 @pytest.mark.django_db
 class TestEntranceAnswerModel:
     def test_create_mcq_answer(self, attempt, mcq_question):
-        choice = mcq_question.choices.get(is_correct=True)
+        choice = mcq_question.choices.get(score__gt=0)
         answer = EntranceAnswer.objects.create(
             attempt=attempt, question=mcq_question,
             selected_choice=choice, score=Decimal("10.00"),

@@ -8,7 +8,7 @@
     <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{% trans "Your classes" %}</h1>
   </header>
 
-  <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
     {% include "accounts/dashboards/_tile.html" with title=_("Active cohorts") value="0" sub=_("Assigned to you") %}
     {% include "accounts/dashboards/_tile.html" with title=_("Homework to grade") value="0" sub=_("This week") %}
     {% include "accounts/dashboards/_tile.html" with title=_("Quizzes") value="0" sub=_("Draft + published") %}

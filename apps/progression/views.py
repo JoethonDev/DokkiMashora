@@ -46,10 +46,6 @@ from .services import (
 )
 
 
-def _is_htmx(request):
-    return request.headers.get("HX-Request") == "true"
-
-
 def _get_student_or_404(student_id):
     return get_object_or_404(StudentProfile, id=student_id)
 

@@ -1,46 +1,208 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n static ui_tags %}
 {% block title %}{% trans "Admin dashboard" %} | {{ SITE_NAME_AR }}{% endblock title %}
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
   <header class="mb-6">
-    <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Admin" %}</p>
-    <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{% trans "Operations dashboard" %}</h1>
-    <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{% trans "Pending items and quick actions." %}</p>
+    <p class="text-xs sm:text-sm font-semibold dm-page-eyebrow tracking-wide uppercase">{% trans "Admin" %}</p>
+    <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display dm-page-title">{% trans "Operations dashboard" %}</h1>
+    <p class="mt-1 text-sm dm-page-subtitle">{% trans "Overview of pending items, queues, and recent activity." %}</p>
   </header>
 
-  <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-    <a href="{% url 'applications:admin_list' %}" class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 hover:border-brand-500 transition">
-      <p class="text-sm text-slate-500 dark:text-slate-400">{% trans "Applications" %}</p>
-      <p class="mt-1 text-3xl font-bold tabular-nums tracking-tight font-display text-slate-900 dark:text-slate-100">{{ pending_applications_count|default:"0" }}</p>
-      <p class="mt-1 text-xs text-brand-600 dark:text-brand-400">{% trans "Review queue" %} &rarr;</p>
-    </a>
-    <a href="{% url 'exams:admin_list' %}" class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 hover:border-brand-500 transition">
-      <p class="text-sm text-slate-500 dark:text-slate-400">{% trans "Exams" %}</p>
-      <p class="mt-1 text-3xl font-bold tabular-nums tracking-tight font-display text-slate-900 dark:text-slate-100">{{ active_exams_count|default:"0" }}</p>
-      <p class="mt-1 text-xs text-brand-600 dark:text-brand-400">{% trans "Manage exams" %} &rarr;</p>
-    </a>
-    <a href="{% url 'academics:admin_diploma_list' %}" class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 hover:border-brand-500 transition">
-      <p class="text-sm text-slate-500 dark:text-slate-400">{% trans "Academics" %}</p>
-      <p class="mt-1 text-3xl font-bold tabular-nums tracking-tight font-display text-slate-900 dark:text-slate-100">{{ diploma_count|default:"0" }}</p>
-      <p class="mt-1 text-xs text-brand-600 dark:text-brand-400">{% trans "Diplomas & courses" %} &rarr;</p>
-    </a>
-    <a href="{% url 'core:design_showcase' %}" class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 hover:border-brand-500 transition">
-      <p class="text-sm text-slate-500 dark:text-slate-400">{% trans "Designs" %}</p>
-      <p class="mt-1 text-3xl font-bold tabular-nums tracking-tight font-display text-slate-900 dark:text-slate-100">3</p>
-      <p class="mt-1 text-xs text-brand-600 dark:text-brand-400">{% trans "Review UI options" %} &rarr;</p>
-    </a>
+  {# ── KPI Row ── #}
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-8">
+    <div class="dm-card rounded-xl p-4">
+      <p class="text-xs dm-muted">{% trans "Pending" %}</p>
+      <p class="mt-1 text-2xl font-bold tabular-nums dm-text">{{ pending_app_count }}</p>
+      <p class="mt-0.5 text-xs dm-muted">{% trans "Applications" %}</p>
+    </div>
+    <div class="dm-card rounded-xl p-4">
+      <p class="text-xs dm-muted">{% trans "Under review" %}</p>
+      <p class="mt-1 text-2xl font-bold tabular-nums dm-text">{{ under_review_app_count }}</p>
+      <p class="mt-0.5 text-xs dm-muted">{% trans "Applications" %}</p>
+    </div>
+    <div class="dm-card rounded-xl p-4">
+      <p class="text-xs dm-muted">{% trans "Needs grading" %}</p>
+      <p class="mt-1 text-2xl font-bold tabular-nums dm-text">{{ assessment_ungraded|add:entrance_ungraded }}</p>
+      <p class="mt-0.5 text-xs dm-muted">{% trans "Assessments & exams" %}</p>
+    </div>
+    <div class="dm-card rounded-xl p-4">
+      <p class="text-xs dm-muted">{% trans "Unmatched" %}</p>
+      <p class="mt-1 text-2xl font-bold tabular-nums dm-text">{{ unmatched_upload_count }}</p>
+      <p class="mt-0.5 text-xs dm-muted">{% trans "Payment rows" %}</p>
+    </div>
+    <div class="dm-card rounded-xl p-4">
+      <p class="text-xs dm-muted">{% trans "Active" %}</p>
+      <p class="mt-1 text-2xl font-bold tabular-nums dm-text">{{ active_diploma_count }}</p>
+      <p class="mt-0.5 text-xs dm-muted">{% trans "Diplomas" %}</p>
+    </div>
+    <div class="dm-card rounded-xl p-4">
+      <p class="text-xs dm-muted">{% trans "Unpublished" %}</p>
+      <p class="mt-1 text-2xl font-bold tabular-nums dm-text">{{ unpublished_lecture_count }}</p>
+      <p class="mt-0.5 text-xs dm-muted">{% trans "Lectures" %}</p>
+    </div>
   </div>
 
-  <div class="mt-8 sm:mt-10 grid lg:grid-cols-2 gap-4 sm:gap-6">
-    <a href="{% url 'exams:admin_grade_list' %}" class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 hover:border-brand-500 transition">
-      <h2 class="font-semibold text-slate-900 dark:text-slate-100">{% trans "Pending grading" %}</h2>
-      <p class="mt-1 text-3xl font-bold tabular-nums tracking-tight font-display text-slate-900 dark:text-slate-100">{{ pending_grading_count|default:"0" }}</p>
-      <p class="mt-1 text-xs text-brand-600 dark:text-brand-400">{% trans "Grade submissions" %} &rarr;</p>
-    </a>
-    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
-      <h2 class="font-semibold text-slate-900 dark:text-slate-100">{% trans "Server time" %}</h2>
-      <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{% trans "All schedules run in" %} {% now "e" %}. {% trans "Current time:" %} {% now "H:i" %}.</p>
+  {# ── Work Queues ── #}
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+    {# Applications queue #}
+    <div class="dm-panel rounded-xl p-5">
+      <h2 class="text-sm font-bold dm-text mb-3">{% trans "Applications by status" %}</h2>
+      <div class="space-y-2 text-sm">
+        <div class="flex justify-between dm-muted"><span>{% trans "Pending" %}</span><span class="tabular-nums font-semibold dm-text">{{ pending_app_count }}</span></div>
+        <div class="flex justify-between dm-muted"><span>{% trans "Under review" %}</span><span class="tabular-nums font-semibold dm-text">{{ under_review_app_count }}</span></div>
+        <div class="flex justify-between dm-muted"><span>{% trans "Approved" %}</span><span class="tabular-nums font-semibold dm-text">{{ approved_app_count }}</span></div>
+        <div class="flex justify-between dm-muted"><span>{% trans "Rejected" %}</span><span class="tabular-nums font-semibold dm-text">{{ rejected_app_count }}</span></div>
+        <div class="flex justify-between dm-muted"><span>{% trans "Activated" %}</span><span class="tabular-nums font-semibold dm-text">{{ activated_app_count }}</span></div>
+      </div>
+      <div class="mt-3 pt-3 border-t dm-border">
+        <h3 class="text-xs font-bold dm-muted mb-2">{% trans "Program applications" %}</h3>
+        <div class="space-y-1.5 text-xs">
+          <div class="flex justify-between dm-muted"><span>{% trans "Submitted" %}</span><span class="tabular-nums font-semibold dm-text">{{ prog_submitted_count }}</span></div>
+          <div class="flex justify-between dm-muted"><span>{% trans "Under review" %}</span><span class="tabular-nums font-semibold dm-text">{{ prog_under_review_count }}</span></div>
+          <div class="flex justify-between dm-muted"><span>{% trans "Invited" %}</span><span class="tabular-nums font-semibold dm-text">{{ prog_invited_count }}</span></div>
+          <div class="flex justify-between dm-muted"><span>{% trans "Accepted" %}</span><span class="tabular-nums font-semibold dm-text">{{ prog_accepted_count }}</span></div>
+          <div class="flex justify-between dm-muted"><span>{% trans "Rejected" %}</span><span class="tabular-nums font-semibold dm-text">{{ prog_rejected_count }}</span></div>
+          <div class="flex justify-between dm-muted"><span>{% trans "Activated" %}</span><span class="tabular-nums font-semibold dm-text">{{ prog_activated_count }}</span></div>
+        </div>
+      </div>
+    </div>
+
+    {# Entrance exam queue #}
+    <div class="dm-panel rounded-xl p-5">
+      <h2 class="text-sm font-bold dm-text mb-3">{% trans "Entrance exam queue" %}</h2>
+      <div class="space-y-2 text-sm">
+        <div class="flex justify-between dm-muted"><span>{% trans "Assigned" %}</span><span class="tabular-nums font-semibold dm-text">{{ entrance_assigned_count }}</span></div>
+        <div class="flex justify-between dm-muted"><span>{% trans "In progress" %}</span><span class="tabular-nums font-semibold dm-text">{{ entrance_in_progress_count }}</span></div>
+        <div class="flex justify-between dm-muted"><span>{% trans "Completed (needs grading)" %}</span><span class="tabular-nums font-semibold dm-text">{{ entrance_completed_count }}</span></div>
+        <div class="flex justify-between dm-muted"><span>{% trans "Graded" %}</span><span class="tabular-nums font-semibold dm-text">{{ entrance_graded_count }}</span></div>
+      </div>
+      <div class="mt-3 pt-3 border-t dm-border">
+        <h3 class="text-xs font-bold dm-muted mb-2">{% trans "Grading queue" %}</h3>
+        <div class="space-y-1.5 text-xs">
+          <div class="flex justify-between dm-muted"><span>{% trans "Assessment attempts" %}</span><span class="tabular-nums font-semibold dm-text">{{ assessment_ungraded }}</span></div>
+          <div class="flex justify-between dm-muted"><span>{% trans "Entrance exams" %}</span><span class="tabular-nums font-semibold dm-text">{{ entrance_ungraded }}</span></div>
+        </div>
+      </div>
+    </div>
+
+    {# Payment queue #}
+    <div class="dm-panel rounded-xl p-5">
+      <h2 class="text-sm font-bold dm-text mb-3">{% trans "Payment queue" %}</h2>
+      <div class="space-y-2 text-sm">
+        <div class="flex justify-between dm-muted"><span>{% trans "Paid" %}</span><span class="tabular-nums font-semibold dm-text">{{ paid_count }}</span></div>
+        <div class="flex justify-between dm-muted"><span>{% trans "Unpaid" %}</span><span class="tabular-nums font-semibold dm-text">{{ unpaid_count }}</span></div>
+        <div class="flex justify-between dm-muted"><span>{% trans "Unmatched upload rows" %}</span><span class="tabular-nums font-semibold dm-text">{{ unmatched_upload_count }}</span></div>
+      </div>
+      {% if pending_uploads %}
+      <div class="mt-3 pt-3 border-t dm-border">
+        <h3 class="text-xs font-bold dm-muted mb-2">{% trans "Recent uploads" %}</h3>
+        <ul class="space-y-1">
+          {% for up in pending_uploads %}
+          <li class="text-xs dm-muted truncate">{{ up.original_filename }} — {{ up.get_status_display }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Cohort Health ── #}
+  {% if cohorts_starting_soon %}
+  <div class="dm-panel rounded-xl p-5 mb-8">
+    <h2 class="text-sm font-bold dm-text mb-3">{% trans "Cohorts starting soon" %}</h2>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="dm-table-head text-xs dm-muted">
+          <tr>
+            <th class="text-start px-3 py-2 font-semibold">{% trans "Cohort" %}</th>
+            <th class="text-start px-3 py-2 font-semibold">{% trans "Diploma" %}</th>
+            <th class="text-start px-3 py-2 font-semibold">{% trans "Start date" %}</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y dm-border">
+          {% for c in cohorts_starting_soon %}
+          <tr class="dm-table-row">
+            <td class="px-3 py-2 dm-text">{{ c.name }}</td>
+            <td class="px-3 py-2 dm-text">{{ c.diploma.title }}</td>
+            <td class="px-3 py-2 dm-text">{% dt c.start_date %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Recent Activity ── #}
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+    <div class="dm-panel rounded-xl p-5">
+      <h2 class="text-sm font-bold dm-text mb-3">{% trans "Recent applications" %}</h2>
+      {% if recent_applications %}
+      <ul class="space-y-2 text-sm">
+        {% for app in recent_applications %}
+        <li class="flex justify-between items-center">
+          <span class="truncate dm-muted">{{ app.student.full_name }}</span>
+          {% include "partials/_badge.html" with label=app.get_status_display tone=app.status %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="text-sm dm-muted">{% trans "No recent applications." %}</p>
+      {% endif %}
+    </div>
+
+    <div class="dm-panel rounded-xl p-5">
+      <h2 class="text-sm font-bold dm-text mb-3">{% trans "Recent payments" %}</h2>
+      {% if recent_payments %}
+      <ul class="space-y-2 text-sm">
+        {% for p in recent_payments %}
+        <li class="flex justify-between items-center">
+          <span class="truncate dm-muted">{{ p.student.full_name }}</span>
+          <span class="tabular-nums font-semibold dm-text">{{ p.amount }} {{ p.currency }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="text-sm dm-muted">{% trans "No recent payments." %}</p>
+      {% endif %}
+    </div>
+
+    <div class="dm-panel rounded-xl p-5">
+      <h2 class="text-sm font-bold dm-text mb-3">{% trans "Recent audit" %}</h2>
+      {% if recent_audit %}
+      <ul class="space-y-2 text-sm">
+        {% for ev in recent_audit %}
+        <li class="text-sm dm-muted truncate">
+          <span class="dm-text">{{ ev.get_action_display }}</span>
+          {% if ev.actor %}— {{ ev.actor.full_name }}{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="text-sm dm-muted">{% trans "No recent audit events." %}</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Quick Actions ── #}
+  <div class="dm-panel rounded-xl p-5">
+    <h2 class="text-sm font-bold dm-text mb-3">{% trans "Quick actions" %}</h2>
+    <div class="flex flex-wrap gap-2">
+      <a href="{% url 'applications:admin_list' %}" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Applications" %}</a>
+      <a href="{% url 'accounts:admin_user_list' %}" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Users" %}</a>
+      <a href="{% url 'academics:admin_diploma_list' %}" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Diplomas" %}</a>
+      <a href="{% url 'academics:admin_course_list' %}" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Courses" %}</a>
+      <a href="{% url 'assessments:admin_list' %}" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Assessments" %}</a>
+      <a href="{% url 'entrance_exams:admin_list' %}" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Entrance exams" %}</a>
+      <a href="{% url 'entrance_exams:admin_grade_list' %}" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Grade exams" %}</a>
+      <a href="{% url 'payments:upload_list' %}" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Payment uploads" %}</a>
+      <a href="{% url 'communications:admin_template_list' %}" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Email templates" %}</a>
+      {% url 'entrance_exams:admin_email_log_list' as email_log_url %}
+      <a href="{{ email_log_url }}" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Email log" %}</a>
+      {% url 'admin:index' as admin_url %}{% if admin_url %}
+      <a href="{{ admin_url }}" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Django admin" %}</a>
+      {% endif %}
     </div>
   </div>
 </div>

@@ -139,7 +139,13 @@ class EntranceChoice(TimeStampedModel):
         verbose_name=_("question"),
     )
     text = models.CharField(_("text"), max_length=500)
-    is_correct = models.BooleanField(_("correct"), default=False)
+    score = models.DecimalField(
+        _("score"),
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(0)],
+    )
     order = models.PositiveIntegerField(_("order"), db_index=True)
 
     class Meta:

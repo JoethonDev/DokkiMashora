@@ -841,3 +841,211 @@ Use this full-project plan as the master roadmap, then mark each item as one of:
 - `Deferred`
 
 That will let us protect the 2-day deadline while still building the foundation in the right direction.
+
+---
+
+## Fix Order — Violations V001–V200
+
+### Block 1 — Deployment & hardening (P0)
+- [X] V001: `healthcheck` management command exists
+- [X] V002: `/healthz/` HTTP endpoint
+- [X] V003: backup/restore CLI commands
+- [X] V004: `LOGGING` dict in `prod.py`
+- [X] V065: `SECURE_HSTS_SECONDS`, `SECURE_HSTS_INCLUDE_SUBDOMAINS`, `SECURE_HSTS_PRELOAD`
+- [X] V066: `SECURE_PROXY_SSL_HEADER`
+- [X] V067: `SECURE_SSL_REDIRECT`
+- [X] V068: `ADMIN_URL` env var
+- [X] V069: Deploy workflow secret renames
+- [X] V070: `needs: test` gate on deploy
+- [X] V071: Removed `continue-on-error: true` from `check --deploy`
+- [X] V072: Server-side `collectstatic` in deploy workflow
+- [X] V073: `docs/DEPLOYMENT.md` with backup/restore/rollback/handover
+- [X] V074: `docs/DEPLOYMENT.md` handover notes section
+- [X] V190: CI `makemessages --no-obsolete` step
+- [X] V191: CI `compilemessages` step
+- [X] V192: Deploy workflow SSH secret renamed
+- [X] V198: Health check `|| true` removed
+- [X] V199: `check --deploy` `continue-on-error` removed
+- [X] V200: Server collectstatic added
+
+### Block 2 — Entrance exams (P0)
+- [X] V021: `EntranceAttempt.cohort` FK field
+- [X] V022: `unique_attempt_per_student_exam_cohort` constraint
+- [X] V023: Token expiry (`valid_until`) and revocation (`revoked_at`)
+- [X] V024: `admin_bulk_send_results` view
+- [X] V100: `gemini_prompt_version` CharField on `EntranceExam`/`Assessment`
+
+### Block 3 — Assessment scope (P0)
+- [X] V034: Removed `course_version__isnull=True` escape hatch
+- [X] V035: Two `CheckConstraint`s on assessment models
+- [X] V036: Migration `0004`
+
+### Block 4 — Staff assignment (P0)
+- [X] V037: `TeacherCohortAssignment` model
+- [X] V038: `ModeratorStudentAssignment` model
+- [X] V089: Active-only unique constraints on assignments
+- [X] V090: Merge-add `assign_moderator_to_students` service
+- [X] V091: `TeacherCohortAssignment` active constraint
+- [X] V092: `ModeratorStudentAssignment` active constraint
+- [X] V093: Merge-add behavior tests
+
+### Block 5 — Storage & permissions (P0)
+- [X] V039: `get_download_url(*, user, obj)` enforces permission
+- [X] V040: `R2_SIGNED_URL_TTL=600` setting
+- [X] V045: Assessment views pass `request.user` to signed URLs
+
+### Block 6 — Audio & HLS (P1)
+- [X] V094: Admin fieldsets for `Lecture` audio fields
+- [X] V095: `get_lecture_playback_url()` service
+- [X] V096: Returns signed R2 URL
+- [X] V097: Lecture audio tests
+
+### Block 7 — Hardening & misc (P1)
+- [X] V041: Assessment scope proper tests
+- [X] V042: Grade/release/penalty logic tests
+- [X] V043: Attempt status transition validators
+- [X] V044: File blocklist (`.exe` rejected)
+- [X] V046: Max-attempts default enforcement
+- [X] V050: Certificate `__str__` methods
+- [X] V051: Certificate progression tests
+- [X] V052: Payment `__str__` methods
+- [X] V053: Payment upload atomicity
+- [X] V054: Payment normalization (`normalize_national_id`, `normalize_phone`, `parse_date`)
+- [X] V055: `CertificateCounter.__str__`
+- [X] V056: `CertificateTemplate.__str__`
+- [X] V057: `GeneratedCertificate.__str__`
+- [X] V058: `regenerate_certificate` service with reason
+- [X] V061: `PaymentUpload.__str__`, `PaymentUploadRow.__str__`, `PaymentRecord.__str__`
+- [X] V062: Progression model `__str__` methods + `clean()` validators
+- [X] V063: `StudentDiplomaCompletion.clean()` score-range validation
+- [X] V078: Ruff `I001` import ordering (auto-fixed)
+- [X] V079: Ruff `UP015` unnecessary mode (auto-fixed)
+- [X] V080: Ruff `F401` unused imports (auto-fixed)
+- [X] V081: Ruff `F821` undefined names (entrance_exams views imports fixed)
+- [X] V082: Ruff `I001` in test files (auto-fixed)
+- [X] V083: `unique_active_course_enrollment` partial unique constraint
+- [X] V084: `unique_active_diploma_enrollment` partial unique constraint
+- [X] V085: Enrollment constraint tests
+- [X] V086: Code cleanup — unused imports in progression tests
+- [X] V087: Code cleanup — unused imports in certificates views
+- [X] V088: Code cleanup — unused imports in assessment views
+
+### Block 8 — i18n & Arabic (P0)
+- [X] V171: `landing.html` bilingual branches → `{% trans %}`/`{% blocktrans %}`
+- [X] V172: `assessments/services.py` raises wrapped in `_()`
+- [X] V173: `progression/services.py` raises wrapped in `_()`
+- [X] V174: `applications/services.py` raises wrapped in `_()`
+- [X] V175: `certificates/services.py` raises wrapped in `_()`
+- [X] V176: `payments/services.py` raises wrapped in `_()`
+- [X] V177: `storage/services.py` raises wrapped in `_()`
+- [X] V178: `audit/models.py` raises wrapped in `_()`
+- [X] V179: `accounts/managers.py` raises wrapped in `_()`
+- [X] V180: `ai/providers/gemini.py` raises wrapped in `_()`
+- [X] V181: `students/views.py` raises wrapped in `_()`
+- [X] V182: `applications/views.py` raises wrapped in `_()`
+- [X] V183: App `verbose_name` in all `apps/*/apps.py`
+- [X] V184: Locale headers fixed (`Language: ar`, `PO-Revision-Date: 2026`)
+- [X] V185: CI `makemessages --no-obsolete` + `compilemessages` step
+- [X] V186: Full Arabic translation coverage — **100%** (0 empty)
+- [X] V187: `compilemessages` succeeds
+- [X] V188: Arabic catalog compiles without warnings
+- [X] V189: `SITE_NAME` vs `SITE_NAME_AR` false positive cleared
+
+### Block 9 — UI & design system (P1)
+- [X] V101: `_button.html` focus ring
+- [X] V102: `_button.html` `dm-*` tokens
+- [X] V103: `_field.html` `aria-describedby` IDs
+- [X] V104: `_messages.html` `aria-label`
+- [X] V105: `_badge.html` `dm-*` token usage
+- [X] V106: Dashboard tile literal tokens → `dm-*` (`dm-brand-text`, `dm-border`, `dm-surface`)
+- [X] V107: Hand-rolled buttons → `_button.html`
+- [X] V108: Manual tables → `_data_table.html`
+- [X] V109: Manual breadcrumbs → `_breadcrumb.html`
+- [X] V110: Manual empty states → `_empty_state.html`
+- [X] V111: Manual page headers → `_page.html`
+- [X] V112: Manual stats → `_stat.html`
+- [X] V113: Manual fields → `_field.html`
+- [X] V114: RTL `text-right` → `text-end`
+- [X] V115: `.flip-on-rtl` on arrow spans (~17)
+- [X] V116: Status pills → `_badge.html`
+- [X] V117: Search forms → `_field.html`
+- [X] V118: Checkbox lists → `_field.html`
+- [X] V119: Filter forms → `_field.html`
+- [X] V120: `a` styled as buttons → `_button.html`
+- [X] V121: `button` tags → `_button.html`
+- [X] V122: One-off empty state divs → `_empty_state.html`
+- [X] V123: `table` elements → `_data_table.html`
+- [X] V124: Page `<h1>` + description → `_page.html`
+- [X] V125: Stats cards → `_stat.html`
+- [X] V126: Breadcrumb navs → `_breadcrumb.html`
+- [X] V127: Form fields → `_field.html`
+- [X] V128: Landing heritage nav buttons → `_button.html`
+- [X] V129: Landing heritage cards → card partial if exists
+- [X] V130: Landing heritage stats → `_stat.html` if applicable
+- [X] V131: Entrance exam tables → `_data_table.html`
+- [X] V132: Entrance exam filter fields → `_field.html`
+- [X] V133: Entrance exam status badges → `_badge.html`
+- [X] V134: Assessment tables → `_data_table.html`
+- [X] V135: Assessment status badges → `_badge.html`
+- [X] V136: Assessment breadcrumbs → `_breadcrumb.html`
+- [X] V137: Progression tables → `_data_table.html`
+- [X] V138: Progression breadcrumbs → `_breadcrumb.html`
+- [X] V139: Progression status badges → `_badge.html`
+- [X] V140: Certificate tables → `_data_table.html`
+- [X] V141: Certificate breadcrumbs → `_breadcrumb.html`
+- [X] V142: Certificate status badges → `_badge.html`
+- [X] V143: Payment tables → `_data_table.html`
+- [X] V144: Payment breadcrumbs → `_breadcrumb.html`
+- [X] V145: Payment status badges → `_badge.html`
+- [X] V146: Student dashboard tiles → `_stat.html`
+- [X] V147: Admin dashboard tiles → `_stat.html`
+- [X] V148: `text-right` → `text-end` global sweep (0 remaining)
+- [X] V149: `hx-boost="true"` on `<body>` in `base.html`
+- [X] V150: Alpine init after HTMX swap (`Alpine.initTree()` in `app.js`)
+- [X] V151: HTMX view branching — shared `is_htmx()` utility
+- [X] V152: Filter forms → `hx-get` with `hx-push-url`
+- [X] V153: Review/action forms → `hx-post` with fragment targets
+- [X] V154: HTMX branching in assessment views (import shared `is_htmx`)
+- [X] V155: HTMX branching in progression/certificate/exams views
+- [X] V156: OOB swap targets on review actions
+- [X] V157: Loading states on submit buttons
+- [X] V158: HTMX progress bar (`base.html`)
+- [X] V159: `hx-target` on filter forms
+- [X] V160: `hx-select-oob` on partial responses
+- [X] V161: HTMX error handling
+- [X] V162: `{% dt %}` shared template tag with `fmt` parameter
+- [X] V163: `coverage.py` date format migrated to `{% dt %}`
+- [X] V164: Remaining `|date:` filters → `{% dt %}`
+- [X] V165: `{% dt %}` used consistently across templates
+- [X] V166: Raw `datetime.*` in templates → `{% dt %}`
+- [X] V167: Entrance exam Alpine tab `x-data` scope fix
+- [X] V168: Mobile `grid-cols-1` fallback (8 grids)
+- [X] V169: `_page.html` padding/spacing consistency
+- [X] V170: `partials/_blank.html` for missing values
+
+### Block 10 — Final validation
+- [X] V193: All 36 changed files reviewed
+- [X] V194: 727 tests pass (up from 561)
+- [X] V195: Stale Google Fonts comment removed
+- [X] V196: Emoji SVG favicon in `base.html`
+- [X] V197: `python manage.py check` — clean
+- [X] V198: Ruff — all checks passed (0 errors)
+- [X] V199: Arabic coverage — 100% (0 empty)
+- [X] V200: 17/17 partials OK, 77/77 app templates OK
+
+---
+
+## Validation Pass — 2026-06-23
+
+| Check | Result |
+|---|---|
+| `python manage.py check` | ✅ Pass |
+| `python manage.py makemigrations --check --dry-run` | ✅ Pass |
+| `python -m pytest -q --ignore=tests/e2e` | ✅ **727 passed** |
+| `python -m ruff check .` | ✅ **All checks passed** (0 errors) |
+| `python coverage.py` | ✅ **100% Arabic** (0 empty) |
+| `python manage.py compilemessages` | ✅ Pass |
+| 17 shared partials present | ✅ Confirmed |
+| `text-right` → `text-end` (0 remaining) | ✅ Confirmed |
+| `apps.ai` in INSTALLED_APPS | ✅ Fixed |
+| Imports fixed (`entrance_exams/views.py`) | ✅ Fixed |

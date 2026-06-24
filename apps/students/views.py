@@ -30,7 +30,7 @@ def _get_profile_or_404(user):
     """Return the StudentProfile for the logged-in user, or 404."""
     if not hasattr(user, "student_profile"):
         from django.http import Http404
-        raise Http404("No student profile.")
+        raise Http404(_("No student profile."))
     return user.student_profile
 
 

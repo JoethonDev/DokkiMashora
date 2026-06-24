@@ -4,7 +4,7 @@
 {% include "partials/_page.html" with title=_("Bulk Email Detail") subtitle=send.subject %}
 <section class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-10">
 <div class="space-y-5">
-  <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+  <div class="grid grid-cols-1 sm:grid-cols-2 sm:grid-cols-4 gap-4">
     <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
       <p class="text-xs text-slate-500 dark:text-slate-400">{% trans "Status" %}</p>
       <p class="text-lg font-semibold mt-1">{% if send.status == "sent" %}<span class="text-emerald-600">{% trans "Sent" %}</span>{% elif send.status == "partial" %}<span class="text-amber-600">{% trans "Partial" %}</span>{% else %}{% trans "Draft" %}{% endif %}</p>
@@ -30,7 +30,7 @@
     <h2 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">{% trans "Body" %}</h2>
     <div class="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">{{ send.body }}</div>
   </div>
-  {% if messages %}
+  {% if page_obj %}
   <div>
     <h2 class="text-lg font-semibold mb-3">{% trans "Individual Messages" %} ({{ messages|length }})</h2>
     <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
@@ -44,7 +44,7 @@
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
-          {% for m in messages %}
+          {% for m in page_obj %}
           <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
             <td class="px-4 py-3 font-mono text-xs">{{ m.to_email }}</td>
             <td class="px-4 py-3">{% if m.status == "sent" %}<span class="text-emerald-600 font-medium">{% trans "Sent" %}</span>{% elif m.status == "failed" %}<span class="text-rose-600 font-medium">{% trans "Failed" %}</span>{% else %}<span class="text-slate-400">{% trans "Queued" %}</span>{% endif %}</td>
@@ -52,6 +52,7 @@
             <td class="px-4 py-3 text-xs text-rose-500 max-w-xs truncate">{{ m.error|default:"—" }}</td>
           </tr>
           {% endfor %}
+{% include "partials/_pagination.html" %}
         </tbody>
       </table>
     </div>

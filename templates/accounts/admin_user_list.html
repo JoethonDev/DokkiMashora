@@ -1,0 +1,19 @@
+{% extends "base.html" %}{% load i18n %}
+{% block title %}{% trans "Manage Users" %} - {{ block.super }}{% endblock %}
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <header class="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Admin" %}</p>
+      <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{% trans "Users" %}</h1>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{% trans "Manage registered users" %}</p>
+    </div>
+  </header>
+
+  {% include "partials/_search_filter.html" with class="mb-6" %}
+
+  <div id="list-table">
+    {% include "accounts/partials/_user_list_table.html" %}
+  </div>
+</div>
+{% endblock %}

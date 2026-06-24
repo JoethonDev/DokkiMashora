@@ -16,6 +16,7 @@ from apps.audit.constants import (
     ACTION_CERTIFICATE_REVOKED,
 )
 from apps.audit.services import record_audit_event
+from apps.core.pagination import paginate
 from apps.core.permissions import ROLE_SENIOR_STAFF, is_admin, is_moderator, role_required
 from apps.progression.constants import CERTIFICATE_STATUS_AVAILABLE
 from apps.students.models import StudentProfile
@@ -26,9 +27,6 @@ from .services import generate_certificate_pdf, revoke_certificate
 
 logger = logging.getLogger(__name__)
 
-def _is_htmx(request):
-    return request.headers.get("HX-Request") == "true"
-
 
 # ---------------------------------------------------------------------------
 # Admin: template management
@@ -38,9 +36,11 @@ def _is_htmx(request):
 @login_required
 @role_required(*ROLE_SENIOR_STAFF)
 def admin_template_list(request):
-    templates = CertificateTemplate.objects.select_related("diploma", "created_by").all()
+    templates = CertificateTemplate.objects.select_related("diploma", "created_by").order_by("-created_at")
+    page_obj, pagination_qs = paginate(request, templates)
     ctx = {
-        "templates": templates,
+        "page_obj": page_obj,
+        "pagination_qs": pagination_qs,
         "breadcrumb_items": [{"label": _("Certificate Templates")}],
     }
     return render(request, "certificates/admin_template_list.html", ctx)
@@ -107,8 +107,10 @@ def admin_certificate_list(request):
         "student__user", "diploma_enrollment__cohort__diploma", "certificate_template",
     ).all().order_by("-generated_at")
 
+    page_obj, pagination_qs = paginate(request, certs)
     ctx = {
-        "certificates": certs,
+        "page_obj": page_obj,
+        "pagination_qs": pagination_qs,
         "breadcrumb_items": [{"label": _("Certificates")}],
     }
     return render(request, "certificates/admin_certificate_list.html", ctx)

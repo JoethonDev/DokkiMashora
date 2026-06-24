@@ -14,12 +14,22 @@ from django.http import (
 from django.shortcuts import render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.utils.translation import gettext as _
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods
 
 from apps.academics.models import Cohort, Course, Diploma, Lecture
+from apps.applications.constants import APP_STATUS_CHOICES
 from apps.applications.models import Application
+from apps.core.models import LandingAnnouncement
 from apps.core.permissions import ROLE_SENIOR_STAFF, role_required
+
+
+def safe_next_url(request, default=""):
+    url = request.POST.get("next", "") or request.GET.get("next", "")
+    if url and url_has_allowed_host_and_scheme(url, allowed_hosts={request.get_host()}):
+        return url
+    return default
 
 
 def landing(request: HttpRequest) -> HttpResponse:
@@ -51,12 +61,31 @@ def landing(request: HttpRequest) -> HttpResponse:
         )
         .order_by("title")[:6]
     )
+    standalone_courses = Course.objects.filter(is_active=True, is_standalone=True).order_by("title")[:4]
+    latest_lectures = (
+        Lecture.objects.filter(is_published=True)
+        .select_related("course_version__course", "course_version__cohort", "course_version__semester")
+        .order_by("-release_at", "-created_at")[:4]
+    )
+    status_labels = dict(APP_STATUS_CHOICES)
+    application_status_counts = [
+        {
+            "status": row["status"],
+            "label": status_labels.get(row["status"], row["status"]),
+            "count": row["count"],
+        }
+        for row in Application.objects.values("status").annotate(count=Count("id")).order_by("status")
+    ]
     context = {
         "url_accounts_dashboard": reverse("accounts:dashboard"),
         "url_accounts_login": reverse("accounts:login"),
         "url_applications_register": reverse("applications:register"),
+        "landing_announcement": LandingAnnouncement.current(),
         "featured_cohorts": featured_cohorts,
         "active_diplomas": active_diplomas,
+        "standalone_courses": standalone_courses,
+        "latest_lectures": latest_lectures,
+        "application_status_counts": application_status_counts,
         "landing_stats": {
             "active_diplomas": Diploma.objects.filter(is_active=True).count(),
             "active_cohorts": Cohort.objects.filter(is_active=True, diploma__is_active=True).count(),
@@ -371,7 +400,7 @@ def set_language(request: HttpRequest) -> HttpResponse:
     next_url = request.POST.get("next", "/")
     available_codes = {code for code, _name in settings.LANGUAGES}
     if new_language not in available_codes:
-        return HttpResponseBadRequest("Invalid language")
+        return HttpResponseBadRequest(_("Invalid language"))
     if not url_has_allowed_host_and_scheme(
         url=next_url,
         allowed_hosts={request.get_host()},

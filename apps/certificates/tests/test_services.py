@@ -118,3 +118,89 @@ class CertificateServiceTests(TestCase):
                 certificate_number="DM-2026-1-1-0003",
                 status=CERTIFICATE_STATUS_GENERATED,
             )
+
+    def test_regenerate_certificate_requires_reason(self):
+        from apps.certificates.models import GeneratedCertificate
+        from apps.certificates.services import regenerate_certificate
+        cert = GeneratedCertificate.objects.create(
+            student=self.student,
+            diploma_enrollment=self.enrollment,
+            certificate_number="DM-2026-1-1-0100",
+            status=CERTIFICATE_STATUS_AVAILABLE,
+        )
+        with self.assertRaises(ValueError, msg="Reason is required"):
+            regenerate_certificate(cert, actor=self.admin)
+
+    def test_regenerate_certificate_changes_status(self):
+        from unittest.mock import patch
+
+        from apps.certificates.models import GeneratedCertificate
+        from apps.certificates.services import regenerate_certificate
+        from apps.progression.models import PromotionDecision
+        StudentDiplomaCompletion.objects.create(
+            student=self.student,
+            diploma_enrollment=self.enrollment,
+            status=DIPLOMA_COMPLETION_COMPLETED,
+            completed_at=timezone.now(),
+        )
+        cert = GeneratedCertificate.objects.create(
+            student=self.student,
+            diploma_enrollment=self.enrollment,
+            certificate_number="DM-2026-1-1-0101",
+            status=CERTIFICATE_STATUS_AVAILABLE,
+            pdf_storage_key="old/key.pdf",
+        )
+        with patch("apps.certificates.services._html_to_pdf", return_value=b"%PDF-dummy"):
+            new_cert = regenerate_certificate(cert, actor=self.admin, reason="Lost original")
+        self.assertEqual(new_cert.status, CERTIFICATE_STATUS_AVAILABLE)
+        self.assertNotEqual(new_cert.pdf_storage_key, "old/key.pdf")
+        self.assertTrue(PromotionDecision.objects.filter(reason="Lost original").exists())
+
+
+class CertificateModelStringTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(email="admin@test.com", password="pass123", is_staff=True)
+        admin_group, _ = Group.objects.get_or_create(name=GROUP_ADMIN)
+        self.admin.groups.add(admin_group)
+        self.diploma = Diploma.objects.create(title="Test Diploma", total_semesters=2, created_by=self.admin)
+
+    def test_certificate_counter_str(self):
+        from apps.certificates.models import CertificateCounter
+        counter = CertificateCounter.objects.create(diploma=self.diploma, year=2026, last_sequence=5)
+        self.assertIn("Test Diploma", str(counter))
+        self.assertIn("2026", str(counter))
+        self.assertIn("5", str(counter))
+
+    def test_certificate_template_str(self):
+        from apps.certificates.models import CertificateTemplate
+        template = CertificateTemplate.objects.create(
+            name="My Template",
+            diploma=self.diploma,
+            language="ar",
+            created_by=self.admin,
+        )
+        self.assertIn("My Template", str(template))
+        self.assertIn("ar", str(template))
+
+    def test_generated_certificate_str(self):
+        from apps.certificates.models import GeneratedCertificate
+        student_user = User.objects.create_user(email="s@test.com", password="x")
+        from apps.students.models import StudentProfile
+        student = StudentProfile.objects.create(
+            user=student_user, full_name="A Student",
+            national_id="10000000000001", phone="01000000001",
+            date_of_birth=timezone.now().date(),
+        )
+        from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE
+        from apps.academics.models import Cohort, DiplomaEnrollment
+        cohort = Cohort.objects.create(
+            diploma=self.diploma, name="C1", start_date=timezone.now().date(),
+            created_by=self.admin,
+        )
+        enrollment = DiplomaEnrollment.objects.create(student=student, cohort=cohort, status=ENROLLMENT_STATUS_ACTIVE)
+        cert = GeneratedCertificate.objects.create(
+            student=student, diploma_enrollment=enrollment,
+            certificate_number="DM-1-1-0001", status=CERTIFICATE_STATUS_GENERATED,
+        )
+        self.assertIn("DM-1-1-0001", str(cert))
+        self.assertIn("A Student", str(cert))

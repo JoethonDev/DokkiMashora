@@ -338,10 +338,13 @@ def _get_eligibilities(student_profile: StudentProfile) -> list[FinalExamEligibi
 
 def _get_payments(student_profile: StudentProfile) -> dict:
     try:
-        from apps.payments.selectors import get_student_payment_summary
-        return get_student_payment_summary(student_profile)
+        from apps.payments.selectors import get_enrollment_payment_status, get_student_payment_summary
+        summary = get_student_payment_summary(student_profile)
+        enrollments = get_enrollment_payment_status(student_profile)
+        summary.update(enrollments)
+        return summary
     except Exception:
-        return {"total_paid": 0, "record_count": 0, "records": []}
+        return {"total_paid": 0, "record_count": 0, "records": [], "diploma_enrollments": [], "course_enrollments": []}
 
 
 # ---------------------------------------------------------------------------

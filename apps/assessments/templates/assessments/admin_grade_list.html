@@ -16,7 +16,7 @@
         </tr>
       </thead>
       <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
-        {% for attempt in queue %}
+        {% for attempt in queue_page %}
           <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
             <td class="px-4 py-3 text-slate-900 dark:text-slate-100">{{ attempt.student.email }}</td>
             <td class="px-4 py-3 text-slate-900 dark:text-slate-100">{{ attempt.assessment.title }}</td>
@@ -36,6 +36,7 @@
         {% endfor %}
       </tbody>
     </table>
+    {% include "partials/_pagination.html" %}
   </div>
 </section>
 {% endblock %}

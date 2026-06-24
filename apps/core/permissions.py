@@ -10,8 +10,8 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db.models import F, Q
 
-from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE
-from apps.academics.models import DiplomaEnrollment, ModeratorStudentAssignment, TeacherCohortAssignment
+from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE, SCOPE_DIPLOMA_COHORT
+from apps.academics.models import DiplomaEnrollment, ModeratorStudentAssignment, TeacherAssignment
 from apps.accounts.constants import (
     GROUP_ADMIN,
     GROUP_MODERATOR,
@@ -91,8 +91,9 @@ def is_teacher_of_cohort(user, cohort) -> bool:
         return False
     if is_admin(user):
         return True
-    return TeacherCohortAssignment.objects.filter(
+    return TeacherAssignment.objects.filter(
         teacher=user,
+        scope_type=SCOPE_DIPLOMA_COHORT,
         cohort=cohort,
         active=True,
     ).exists()
@@ -134,12 +135,15 @@ def can_view_student_progress(user, student, cohort=None) -> bool:
     student_profile = _student_profile(student)
     if student_profile is None:
         return False
+    if student_profile.user_id == user.id:
+        return True
     if is_moderator_for_student(user, student_profile, cohort):
         return True
     if cohort is not None:
         return is_teacher_of_cohort(user, cohort)
-    assigned_cohorts = TeacherCohortAssignment.objects.filter(
+    assigned_cohorts = TeacherAssignment.objects.filter(
         teacher=user,
+        scope_type=SCOPE_DIPLOMA_COHORT,
         active=True,
     ).values("cohort_id")
     return DiplomaEnrollment.objects.filter(
@@ -154,8 +158,9 @@ def assessment_staff_scope_filter(user, prefix: str = "") -> Q:
         return Q(pk__isnull=True)
     if is_admin(user):
         return Q()
-    teacher_cohorts = TeacherCohortAssignment.objects.filter(
+    teacher_cohorts = TeacherAssignment.objects.filter(
         teacher=user,
+        scope_type=SCOPE_DIPLOMA_COHORT,
         active=True,
     ).values("cohort_id")
     filter_prefix = f"{prefix}__" if prefix else ""
@@ -191,8 +196,9 @@ def entrance_staff_scope_filter(user) -> Q:
         return Q(pk__isnull=True)
     if is_admin(user):
         return Q()
-    teacher_cohorts = TeacherCohortAssignment.objects.filter(
+    teacher_cohorts = TeacherAssignment.objects.filter(
         teacher=user,
+        scope_type=SCOPE_DIPLOMA_COHORT,
         active=True,
     ).values("cohort_id")
     return (

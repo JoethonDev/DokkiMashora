@@ -1,0 +1,52 @@
+{% extends "base.html" %}{% load i18n %}{% load form_tags %}
+{% block title %}{% trans "Edit Template" %} - {{ block.super }}{% endblock %}
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <nav class="text-sm text-slate-500 dark:text-slate-400 mb-4">
+    <a href="{% url 'communications:admin_template_list' %}" class="hover:text-brand-600">{% trans "Email Templates" %}</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-800 dark:text-slate-200 font-medium">{{ template.name }}</span>
+  </nav>
+
+  <h1 class="text-2xl sm:text-3xl font-bold tracking-tight font-display mb-6">{{ template.name }}</h1>
+
+  <form method="post" class="space-y-6">
+    {% csrf_token %}
+
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-5">
+      <div>
+        <label for="id_subject" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{% trans "Subject" %}</label>
+        <input id="id_subject" name="subject" type="text" value="{{ template.subject }}" class="dm-input w-full rounded-lg px-3 py-2 text-sm shadow-sm" required>
+      </div>
+      <div>
+        <label for="id_body" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{% trans "Body" %}</label>
+        <textarea id="id_body" name="body" rows="12" class="dm-input w-full rounded-lg px-3 py-2 text-sm shadow-sm font-mono" required>{{ template.body }}</textarea>
+        <p class="mt-1 text-xs text-slate-400">{% trans "Use {{ variable_name }} for placeholders." %}</p>
+      </div>
+
+      {% if required_vars %}
+        <div class="rounded-lg bg-slate-50 dark:bg-slate-800/50 p-3">
+          <h3 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">{% trans "Available Variables" %}</h3>
+          <div class="flex flex-wrap gap-2">
+            {% for var in required_vars %}
+              <code class="px-2 py-0.5 rounded text-xs font-mono bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-brand-800">{% templatetag openvariable %} {{ var }} {% templatetag closevariable %}</code>
+            {% endfor %}
+          </div>
+          <p class="mt-1.5 text-xs text-slate-400">{% trans "These variables are required and must appear in the body." %}</p>
+        </div>
+      {% endif %}
+
+      <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="is_enabled_for_action" {% if template.is_enabled_for_action %}checked{% endif %} class="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500">
+        {% trans "Enabled for automatic sending" %}
+      </label>
+    </div>
+
+    <div class="flex flex-wrap gap-3">
+      {% include "partials/_button.html" with label=_("Save") variant="primary" type="submit" %}
+      <a href="{% url 'communications:admin_template_preview' template.slug %}" class="inline-flex items-center px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition">{% trans "Preview" %}</a>
+      <a href="{% url 'communications:admin_template_list' %}" class="inline-flex items-center px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition">{% trans "Cancel" %}</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

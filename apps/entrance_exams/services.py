@@ -105,7 +105,7 @@ def submit_attempt(
                 choice = EntranceChoice.objects.filter(
                     id=answer_data.selected_choice_id, question=question,
                 ).first()
-                score = question.points if (choice and choice.is_correct) else Decimal("0.00")
+                score = choice.score if choice else Decimal("0.00")
                 EntranceAnswer.objects.create(
                     attempt=attempt,
                     question=question,

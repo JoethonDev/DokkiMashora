@@ -73,8 +73,8 @@ class Command(BaseCommand):
                 "points": Decimal("10.00"),
                 "order": 2,
                 "choices": [
-                    ("Matthew", False, 1), ("Luke", False, 2),
-                    ("John Mark", True, 3), ("Paul", False, 4),
+                    ("Matthew", Decimal("0.00"), 1), ("Luke", Decimal("0.00"), 2),
+                    ("John Mark", Decimal("10.00"), 3), ("Paul", Decimal("0.00"), 4),
                 ],
             },
             {
@@ -83,8 +83,8 @@ class Command(BaseCommand):
                 "points": Decimal("10.00"),
                 "order": 3,
                 "choices": [
-                    ("Psalms", False, 1), ("Exodus", False, 2),
-                    ("Genesis", True, 3), ("Leviticus", False, 4),
+                    ("Psalms", Decimal("0.00"), 1), ("Exodus", Decimal("0.00"), 2),
+                    ("Genesis", Decimal("10.00"), 3), ("Leviticus", Decimal("0.00"), 4),
                 ],
             },
             {
@@ -106,9 +106,9 @@ class Command(BaseCommand):
         for q_data in questions_data:
             choices = q_data.pop("choices", [])
             question = EntranceQuestion.objects.create(exam=exam, **q_data)
-            for text, is_correct, order in choices:
+            for text, score, order in choices:
                 EntranceChoice.objects.create(
-                    question=question, text=text, is_correct=is_correct, order=order,
+                    question=question, text=text, score=score, order=order,
                 )
 
         exam.refresh_from_db()

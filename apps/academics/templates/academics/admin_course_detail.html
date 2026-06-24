@@ -5,33 +5,87 @@
 
 {% block content %}
 <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
-  <header class="mb-6 flex flex-wrap items-end justify-between gap-3">
+  <header class="mb-8 flex flex-wrap items-end justify-between gap-3">
     <div>
       <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Course" %}</p>
       <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ course.title }}</h1>
       {% if course.description %}<p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{{ course.description }}</p>{% endif %}
+      {% if semester_courses %}
+        <div class="mt-2 flex flex-wrap gap-2">
+          {% for sc in semester_courses %}
+            <a href="{% url 'academics:admin_diploma_detail' sc.semester.diploma_id %}" class="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline">{% blocktrans with diploma=sc.semester.diploma.title semester=sc.semester.title %}{{ diploma }} — {{ semester }}{% endblocktrans %}</a>
+          {% endfor %}
+        </div>
+      {% endif %}
     </div>
-    <div class="flex flex-wrap gap-2">
-      <a href="{% url 'academics:admin_course_edit' course.id %}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Edit" %}</a>
-      <a href="{% url 'academics:admin_version_create' course.id %}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm bg-brand-600 text-white hover:bg-brand-700 shadow-sm">+ {% trans "Add version" %}</a>
+    <div class="dm-action-row">
+      <a href="{% url 'academics:admin_course_edit' course.id %}?next={{ request.path|urlencode }}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Edit" %}</a>
+      {% if not semester_courses %}
+        <a href="{% url 'academics:admin_version_create' course.id %}?next={{ request.path|urlencode }}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm bg-brand-600 text-white hover:bg-brand-700 shadow-sm">+ {% trans "Add version" %}</a>
+      {% endif %}
     </div>
   </header>
-  <h2 class="text-lg sm:text-xl font-semibold mb-4">{% trans "Course versions" %}</h2>
-  {% if versions %}
-    <div class="space-y-3">
-      {% for version in versions %}
-        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 flex justify-between items-center">
-          <div>
-            <span class="font-medium">{{ version.label }}</span>
-            {% if version.cohort %}<span class="ms-2 text-sm text-slate-500 dark:text-slate-400">{{ version.cohort.name }}</span>{% endif %}
-            {% if version.access_duration_days %}<span class="ms-2 text-xs text-slate-500 dark:text-slate-400">{{ version.access_duration_days }} {% trans "days" %}</span>{% endif %}
-          </div>
-          <a href="{% url 'academics:admin_version_detail' course.id version.id %}" class="text-brand-600 dark:text-brand-400 hover:underline text-sm font-semibold">{% trans "View lectures" %}</a>
-        </div>
-      {% endfor %}
-    </div>
-  {% else %}
+
+  {% if not versions %}
     {% include "partials/_empty_state.html" with title=_("No versions yet") subtitle=_("Create a version for a cohort") %}
   {% endif %}
+
+  {% for version in versions %}
+    <div class="mb-8 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-lg font-semibold">{{ version.label }}</span>
+          {% if version.cohort %}<span class="text-sm text-slate-500 dark:text-slate-400">· {{ version.cohort.name }}</span>{% endif %}
+          {% if version.semester %}<span class="text-sm text-slate-500 dark:text-slate-400">· {{ version.semester.name }}</span>{% endif %}
+          {% if version.access_duration_days %}<span class="text-xs text-slate-500 dark:text-slate-400">· {{ version.access_duration_days }} {% trans "days" %}</span>{% endif %}
+          {% if version.is_active %}{% include "partials/_badge.html" with label=_("Active") tone="success" %}{% else %}{% include "partials/_badge.html" with label=_("Inactive") tone="danger" %}{% endif %}
+        </div>
+        <div class="dm-action-row" x-data="{ confirmId: null }" @modal-confirm.window="if($event.detail.id===confirmId) document.getElementById($event.detail.id+'-form').requestSubmit()">
+          <a href="{% url 'academics:admin_lecture_create' course.id version.id %}?next={{ request.path|urlencode }}" class="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300">+ {% trans "Lecture" %}</a>
+          <a href="{% url 'academics:admin_version_detail' course.id version.id %}" class="text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-brand-600">{% trans "Manage" %}</a>
+          <form id="del-version-{{ version.id }}-form" method="post" action="{% url 'academics:admin_version_delete' course.id version.id %}" hx-post="{% url 'academics:admin_version_delete' course.id version.id %}" hx-target="body" class="inline">
+            {% csrf_token %}
+            <button type="submit" hidden></button>
+            <input type="hidden" name="next" value="{{ request.path }}">
+            <button type="button" @click="confirmId='del-version-{{ version.id }}'; $dispatch('open-modal', {id:'del-version-{{ version.id }}'})" class="text-xs font-semibold text-rose-600 hover:text-rose-800 bg-transparent border-0 cursor-pointer">{% trans "Delete" %}</button>
+          </form>
+          {% include "partials/_modal.html" with modal_id="del-version-"|add:version.id|stringformat:"s" title=_("Confirm Delete") body=_("Delete this version and all its lectures?") confirm_label=_("Delete") %}
+        </div>
+      </div>
+      <div class="p-5">
+        {% if version.lectures.all %}
+          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {% for lecture in version.lectures.all %}
+              <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-4 flex flex-col gap-2">
+                <div class="flex items-start justify-between gap-2">
+                  <span class="text-xs font-medium text-slate-500 dark:text-slate-400 tabular-nums">#{{ lecture.order }}</span>
+                  <div class="dm-action-row shrink-0">
+                    <a href="{% url 'academics:admin_lecture_edit' course.id version.id lecture.id %}?next={{ request.path|urlencode }}" class="inline-flex items-center text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-brand-600">{% trans "Edit" %}</a>
+                    <div x-data="{ confirmId: null }" @modal-confirm.window="if($event.detail.id===confirmId) document.getElementById($event.detail.id+'-form').requestSubmit()">
+                      <form id="del-lecture-{{ lecture.id }}-form" method="post" action="{% url 'academics:admin_lecture_delete' course.id version.id lecture.id %}" hx-post="{% url 'academics:admin_lecture_delete' course.id version.id lecture.id %}" hx-target="body" class="inline-flex items-center">{% csrf_token %}<button type="submit" hidden></button><input type="hidden" name="next" value="{{ request.path }}"><button type="button" @click="confirmId='del-lecture-{{ lecture.id }}'; $dispatch('open-modal', {id:'del-lecture-{{ lecture.id }}'})" class="text-xs font-semibold text-rose-600 hover:text-rose-800 bg-transparent border-0 cursor-pointer">{% trans "Delete" %}</button></form>
+                      {% include "partials/_modal.html" with modal_id="del-lecture-"|add:lecture.id|stringformat:"s" title=_("Confirm Delete") body=_("Delete this lecture?") confirm_label=_("Delete") %}
+                    </div>
+                  </div>
+                </div>
+                <p class="text-sm font-medium leading-snug">{{ lecture.title }}</p>
+                <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                  {% if lecture.is_published %}
+                    {% include "partials/_badge.html" with label=_("Published") tone="success" %}
+                  {% else %}
+                    {% include "partials/_badge.html" with label=_("Draft") tone="warning" %}
+                  {% endif %}
+                  {% if lecture.release_at %}
+                    <span>{{ lecture.release_at|date:"M j, Y" }}</span>
+                  {% endif %}
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="text-sm text-slate-500 dark:text-slate-400 text-center py-6">{% trans "No lectures in this version yet." %}</p>
+        {% endif %}
+      </div>
+    </div>
+  {% endfor %}
 </div>
 {% endblock %}

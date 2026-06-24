@@ -2,28 +2,54 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
+import json
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.http import Http404
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods, require_POST
 
-from apps.applications.models import ProgramApplication
+from apps.core.htmx import is_htmx
+
+from apps.applications.constants import (
+    PROGRAM_APP_STATUS_INVITED,
+    PROGRAM_APP_STATUS_REJECTED,
+)
+from apps.applications.models import (
+    ApplicationEmailLog,
+    EMAIL_ACTION_INVITATION,
+    EMAIL_ACTION_REJECTION,
+    ProgramApplication,
+)
+from apps.audit.constants import ACTION_BULK_EMAIL_SENT
+from apps.audit.services import record_audit_event
+from apps.communications.constants import (
+    TEMPLATE_ENTRANCE_EXAM_FAIL,
+    TEMPLATE_ENTRANCE_EXAM_INVITATION,
+    TEMPLATE_ENTRANCE_EXAM_PASS,
+    TEMPLATE_REJECTION,
+)
+from apps.communications.services import send_templated_email
+from apps.core.pagination import paginate
 from apps.core.permissions import can_grade_attempt, is_admin, is_moderator
 
 from .constants import (
     ATTEMPT_STATUS_ASSIGNED,
     ATTEMPT_STATUS_COMPLETED,
     ATTEMPT_STATUS_IN_PROGRESS,
+    QUESTION_TYPE_MCQ,
+    RESULT_FAIL,
+    RESULT_PASS,
 )
-from .forms import EntranceExamForm
-from .models import EntranceAttempt, EntranceExam
+from .forms import EntranceChoiceFormSet, EntranceExamForm, EntranceQuestionForm
+from .models import EntranceAttempt, EntranceChoice, EntranceExam, EntranceQuestion
 from .services import (
     AnswerData,
     assign_attempt,
@@ -202,7 +228,8 @@ def admin_list(request):
     if not (is_admin(request.user) or is_moderator(request.user)):
         raise PermissionDenied
     exams = EntranceExam.objects.all().select_related("diploma", "cohort", "created_by")
-    return render(request, "entrance_exams/admin_list.html", {"exams": exams})
+    page_obj, pagination_qs = paginate(request, exams)
+    return render(request, "entrance_exams/admin_list.html", {"page_obj": page_obj, "pagination_qs": pagination_qs})
 
 
 @login_required
@@ -217,6 +244,29 @@ def admin_detail(request, exam_id):
         id=exam_id,
     )
     return render(request, "entrance_exams/admin_detail.html", {"exam": exam})
+
+
+@login_required
+def admin_preview(request, exam_id):
+    """Render the student-facing take page for admin preview (no attempt)."""
+    if not (is_admin(request.user) or is_moderator(request.user)):
+        raise PermissionDenied
+    exam = get_object_or_404(
+        EntranceExam.objects.prefetch_related("questions__choices"),
+        id=exam_id,
+    )
+    questions = exam.questions.all()
+    return render(
+        request,
+        "entrance_exams/take_exam.html",
+        {
+            "exam": exam,
+            "is_preview": True,
+            "attempt": None,
+            "questions": questions,
+            "remaining_seconds": 0,
+        },
+    )
 
 
 @login_required
@@ -281,8 +331,10 @@ def admin_grade_list(request):
     if not (is_admin(request.user) or is_moderator(request.user)):
         raise PermissionDenied
     pending = get_pending_grading(request.user)
+    page_obj, pagination_qs = paginate(request, pending)
     return render(request, "entrance_exams/admin_grade_list.html", {
-        "attempts": pending,
+        "page_obj": page_obj,
+        "pagination_qs": pagination_qs,
     })
 
 
@@ -317,4 +369,470 @@ def admin_grade_attempt(request, attempt_id):
     return render(request, "entrance_exams/admin_grade_attempt.html", {
         "attempt": attempt,
         "question_answer_pairs": question_answer_pairs,
+    })
+
+
+# ---------------------------------------------------------------------------
+# Question builder (Phase 9)
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Question builder helpers (inline HTMX)
+# ---------------------------------------------------------------------------
+
+def _question_form_context(exam, question=None, form=None, formset=None):
+    if form is None:
+        form = EntranceQuestionForm(instance=question)
+    if formset is None:
+        formset = EntranceChoiceFormSet(instance=question or EntranceQuestion())
+    return {
+        "exam": exam,
+        "question": question,
+        "form": form,
+        "formset": formset,
+        "title": _("Edit question") if question else _("Add question"),
+    }
+
+
+def _save_question_from_json(request, exam, question=None):
+    data = json.loads(request.body)
+    if question is None:
+        question = EntranceQuestion(exam=exam)
+        last = exam.questions.order_by("order").last()
+        question.order = (last.order + 1) if last else 1
+    question.text = data.get("text", "")
+    question.question_type = data.get("question_type", QUESTION_TYPE_MCQ)
+    try:
+        question.points = Decimal(str(data.get("points", 0) or 0))
+    except (InvalidOperation, ValueError, TypeError):
+        question.points = Decimal('0')
+    question.rubric = data.get("rubric", "")
+    question.save()
+    existing = {c.id: c for c in question.choices.all()}
+    submitted_ids = set()
+    for i, c in enumerate(data.get("choices", [])):
+        cid = c.get("id")
+        if cid and int(cid) in existing:
+            choice = existing[int(cid)]
+        else:
+            choice = EntranceChoice(question=question)
+        choice.text = c["text"]
+        try:
+            choice.score = Decimal(str(c.get("score", 0) or 0))
+        except (InvalidOperation, ValueError, TypeError):
+            choice.score = Decimal('0')
+        choice.order = c.get("order", i + 1)
+        choice.save()
+        submitted_ids.add(choice.id)
+    for old_id in set(existing.keys()) - submitted_ids:
+        existing[old_id].delete()
+    exam.recompute_total_points()
+    return question
+
+
+def _question_json(question):
+    return {
+        "id": question.id,
+        "text": question.text,
+        "question_type": question.question_type,
+        "points": str(question.points or 0),
+        "rubric": question.rubric,
+        "choices": [
+            {
+                "id": c.id,
+                "text": c.text,
+                "score": str(c.score or 0),
+                "order": c.order,
+            }
+            for c in question.choices.all()
+        ],
+    }
+
+
+def _render_question_form(request, exam, question=None, form=None, formset=None):
+    context = _question_form_context(exam, question=question, form=form, formset=formset)
+    template = "entrance_exams/partials/_question_form.html" if is_htmx(request) else "entrance_exams/admin_question_form.html"
+    return render(request, template, context)
+
+
+@login_required
+def admin_add_question(request, exam_id):
+    """Add a new question with inline choices to an entrance exam."""
+    if not is_admin(request.user):
+        raise PermissionDenied
+    exam = get_object_or_404(EntranceExam, id=exam_id)
+    if request.method == "POST":
+        if request.content_type == "application/json":
+            question = _save_question_from_json(request, exam)
+            messages.success(request, _("Question added."))
+            if is_htmx(request):
+                data = _question_json(question)
+                response = JsonResponse(data, status=201)
+                response["HX-Trigger"] = json.dumps({"question-saved": None})
+                return response
+            return redirect("entrance_exams:admin_detail", exam_id=exam.id)
+        form = EntranceQuestionForm(request.POST)
+        if form.is_valid():
+            question = form.save(commit=False)
+            question.exam = exam
+            question.save()
+            formset = EntranceChoiceFormSet(request.POST, instance=question)
+            if formset.is_valid():
+                formset.save()
+                exam.recompute_total_points()
+                messages.success(request, _("Question added."))
+                if is_htmx(request):
+                    data = _question_json(question)
+                    response = JsonResponse(data, status=201)
+                    response["HX-Trigger"] = json.dumps({"question-saved": None})
+                    return response
+                return redirect("entrance_exams:admin_detail", exam_id=exam.id)
+            question.delete()
+        formset = EntranceChoiceFormSet(request.POST, instance=EntranceQuestion())
+    else:
+        last = exam.questions.order_by("order").last()
+        form = EntranceQuestionForm(initial={
+            "order": (last.order + 1) if last else 1,
+            "question_type": QUESTION_TYPE_MCQ,
+        })
+        formset = EntranceChoiceFormSet(instance=EntranceQuestion())
+    return _render_question_form(request, exam, form=form, formset=formset)
+
+
+@login_required
+def admin_edit_question(request, exam_id, question_id):
+    """Edit an existing question and its choices."""
+    if not is_admin(request.user):
+        raise PermissionDenied
+    exam = get_object_or_404(EntranceExam, id=exam_id)
+    question = get_object_or_404(EntranceQuestion, id=question_id, exam=exam)
+    if request.method == "POST":
+        if request.content_type == "application/json":
+            _save_question_from_json(request, exam, question=question)
+            messages.success(request, _("Question updated."))
+            if is_htmx(request):
+                data = _question_json(question)
+                response = JsonResponse(data)
+                response["HX-Trigger"] = json.dumps({"question-saved": None})
+                return response
+            return redirect("entrance_exams:admin_detail", exam_id=exam.id)
+        form = EntranceQuestionForm(request.POST, instance=question)
+        formset = EntranceChoiceFormSet(request.POST, instance=question)
+        if form.is_valid() and formset.is_valid():
+            form.save()
+            formset.save()
+            exam.recompute_total_points()
+            messages.success(request, _("Question updated."))
+            if is_htmx(request):
+                data = _question_json(question)
+                response = JsonResponse(data)
+                response["HX-Trigger"] = json.dumps({"question-saved": None})
+                return response
+            return redirect("entrance_exams:admin_detail", exam_id=exam.id)
+    else:
+        form = EntranceQuestionForm(instance=question)
+        formset = EntranceChoiceFormSet(instance=question)
+    return _render_question_form(request, exam, question=question, form=form, formset=formset)
+
+
+@login_required
+@require_POST
+def admin_delete_question(request, exam_id, question_id):
+    """Delete a question."""
+    if not is_admin(request.user):
+        raise PermissionDenied
+    exam = get_object_or_404(EntranceExam, id=exam_id)
+    question = get_object_or_404(EntranceQuestion, id=question_id, exam=exam)
+    question.delete()
+    messages.success(request, _("Question deleted."))
+    if is_htmx(request):
+        response = HttpResponse(status=204)
+        response["HX-Trigger"] = json.dumps({"question-saved": None})
+        return response
+    return redirect("entrance_exams:admin_detail", exam_id=exam.id)
+
+
+@login_required
+@require_POST
+def admin_bulk_send_results(request, exam_id):
+    """Send pass/fail email templates to all students of an exam (V024)."""
+    if not is_admin(request.user):
+        raise PermissionDenied
+    exam = get_object_or_404(EntranceExam, id=exam_id)
+    decision = request.POST.get("decision", "")
+    if decision not in (RESULT_PASS, RESULT_FAIL):
+        messages.error(request, _("Invalid decision. Choose pass or fail."))
+        return redirect("entrance_exams:admin_detail", exam_id=exam.id)
+
+    slug = TEMPLATE_ENTRANCE_EXAM_PASS if decision == RESULT_PASS else TEMPLATE_ENTRANCE_EXAM_FAIL
+    attempts = list(
+        exam.attempts.filter(result=decision).select_related("student__user")
+    )
+    if not attempts:
+        messages.warning(
+            request,
+            _("No attempts with result '%(result)s' to email.") % {"result": decision},
+        )
+        return redirect("entrance_exams:admin_detail", exam_id=exam.id)
+
+    sent = 0
+    failed = 0
+    for attempt in attempts:
+        email_to = attempt.student.user.email
+        if not email_to:
+            failed += 1
+            continue
+        try:
+            record = send_templated_email(
+                slug=slug,
+                to_email=email_to,
+                context={
+                    "full_name": attempt.student.full_name or attempt.student.user.get_full_name() or "",
+                    "exam_title": exam.title,
+                },
+                sent_by=request.user,
+            )
+        except Exception:
+            failed += 1
+            continue
+        if record.status == "sent":
+            sent += 1
+        else:
+            failed += 1
+
+    record_audit_event(
+        actor=request.user,
+        action=ACTION_BULK_EMAIL_SENT,
+        target_type="entrance_exam",
+        target_id=str(exam.id),
+        metadata={
+            "decision": decision,
+            "attempt_count": len(attempts),
+            "sent": sent,
+            "failed": failed,
+        },
+    )
+    messages.success(
+        request,
+        _("Sent %(sent)d emails (%(failed)d failed) for result '%(result)s'.")
+        % {"sent": sent, "failed": failed, "result": decision},
+    )
+    return redirect("entrance_exams:admin_detail", exam_id=exam.id)
+
+
+def _eligible_applications(cohort, action):
+    """Return ProgramApplications eligible for the given email action."""
+    status_map = {
+        EMAIL_ACTION_INVITATION: PROGRAM_APP_STATUS_INVITED,
+        EMAIL_ACTION_REJECTION: PROGRAM_APP_STATUS_REJECTED,
+    }
+    status_filter = status_map.get(action)
+    if not status_filter:
+        return ProgramApplication.objects.none()
+
+    already_sent = ApplicationEmailLog.objects.filter(
+        cohort=cohort, action=action, status="sent", is_resend=False,
+    ).values_list("application_id", flat=True)
+
+    return ProgramApplication.objects.filter(
+        cohort=cohort, status=status_filter,
+    ).exclude(
+        root_application_id__in=list(already_sent),
+    ).select_related("student__user", "root_application")
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def admin_cohort_email(request, exam_id):
+    """Bulk-send invitation or rejection emails for this exam's cohort."""
+    if not is_admin(request.user):
+        raise PermissionDenied
+    exam = get_object_or_404(EntranceExam.objects.select_related("cohort__diploma"), id=exam_id)
+    cohort = exam.cohort
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action not in (EMAIL_ACTION_INVITATION, EMAIL_ACTION_REJECTION):
+            messages.error(request, _("Invalid email action."))
+            return redirect("entrance_exams:admin_cohort_email", exam_id=exam.id)
+
+        eligible = _eligible_applications(cohort, action)
+        if not eligible:
+            messages.warning(request, _("No eligible applications for this action."))
+            return redirect("entrance_exams:admin_cohort_email", exam_id=exam.id)
+
+        slug = (
+            TEMPLATE_ENTRANCE_EXAM_INVITATION
+            if action == EMAIL_ACTION_INVITATION
+            else TEMPLATE_REJECTION
+        )
+        sent_count = 0
+        failed_count = 0
+        for prog_app in eligible:
+            email_to = prog_app.student.user.email
+            if not email_to:
+                failed_count += 1
+                continue
+            try:
+                record = send_templated_email(
+                    slug=slug,
+                    to_email=email_to,
+                    context={
+                        "full_name": prog_app.student.full_name or "",
+                        "exam_title": exam.title,
+                        "cohort_name": cohort.name if cohort else "",
+                    },
+                    sent_by=request.user,
+                )
+            except Exception:
+                failed_count += 1
+                ApplicationEmailLog.objects.create(
+                    application=prog_app.root_application,
+                    cohort=cohort, action=action, template_slug=slug,
+                    recipient=email_to, status="failed",
+                    error="Exception during send",
+                )
+                continue
+
+            ApplicationEmailLog.objects.create(
+                application=prog_app.root_application,
+                cohort=cohort, action=action, template_slug=slug,
+                recipient=email_to, sent_at=record.sent_at or timezone.now(),
+                sent_by=request.user, status=record.status,
+            )
+            if record.status == "sent":
+                sent_count += 1
+            else:
+                failed_count += 1
+
+        record_audit_event(
+            actor=request.user, action=ACTION_BULK_EMAIL_SENT,
+            target_type="entrance_exam", target_id=str(exam.id),
+            metadata={
+                "action": action, "eligible_count": len(eligible),
+                "sent": sent_count, "failed": failed_count,
+            },
+        )
+        messages.success(
+            request,
+            _("Sent %(sent)d emails (%(failed)d failed).")
+            % {"sent": sent_count, "failed": failed_count},
+        )
+        return redirect("entrance_exams:admin_detail", exam_id=exam.id)
+
+    sent_logs = ApplicationEmailLog.objects.filter(
+        cohort=cohort, status="sent",
+    ).select_related("application__student", "sent_by").order_by("-sent_at")[:50]
+    context = {
+        "exam": exam,
+        "eligible_invitation": _eligible_applications(cohort, EMAIL_ACTION_INVITATION),
+        "eligible_rejection": _eligible_applications(cohort, EMAIL_ACTION_REJECTION),
+        "sent_logs": sent_logs,
+    }
+    # ponytail: batch-lookup ProgramApplication ids for resend links
+    prog_app_ids = dict(
+        ProgramApplication.objects.filter(
+            root_application_id__in=[l.application_id for l in sent_logs],
+            cohort=cohort,
+        ).values_list("root_application_id", "id")
+    )
+    for log in sent_logs:
+        log.prog_app_id = prog_app_ids.get(log.application_id)
+    
+    return render(request, "entrance_exams/admin_cohort_email.html", context)
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def admin_app_email_resend(request, exam_id, app_id):
+    """Resend an email to a single application with confirmation."""
+    if not is_admin(request.user):
+        raise PermissionDenied
+    exam = get_object_or_404(EntranceExam, id=exam_id)
+    cohort = exam.cohort
+    prog_app = get_object_or_404(
+        ProgramApplication.objects.select_related("student__user", "root_application"),
+        id=app_id, cohort=cohort,
+    )
+
+    if request.method == "GET":
+        action = request.GET.get("action")
+        if action not in (EMAIL_ACTION_INVITATION, EMAIL_ACTION_REJECTION):
+            messages.error(request, _("Invalid email action."))
+            return redirect("entrance_exams:admin_detail", exam_id=exam.id)
+        email_to = prog_app.student.user.email
+        slug = (
+            TEMPLATE_ENTRANCE_EXAM_INVITATION
+            if action == EMAIL_ACTION_INVITATION
+            else TEMPLATE_REJECTION
+        )
+        return render(request, "entrance_exams/admin_email_resend_confirm.html", {
+            "exam": exam,
+            "prog_app": prog_app,
+            "action": action,
+            "slug": slug,
+            "email_to": email_to or "",
+        })
+
+    action = request.POST.get("action")
+    if action not in (EMAIL_ACTION_INVITATION, EMAIL_ACTION_REJECTION):
+        messages.error(request, _("Invalid email action."))
+        return redirect("entrance_exams:admin_detail", exam_id=exam.id)
+
+    email_to = prog_app.student.user.email
+    if not email_to:
+        messages.error(request, _("Student has no email address."))
+        return redirect("entrance_exams:admin_detail", exam_id=exam.id)
+
+    slug = (
+        TEMPLATE_ENTRANCE_EXAM_INVITATION
+        if action == EMAIL_ACTION_INVITATION
+        else TEMPLATE_REJECTION
+    )
+    try:
+        record = send_templated_email(
+            slug=slug, to_email=email_to,
+            context={
+                "full_name": prog_app.student.full_name or "",
+                "exam_title": exam.title,
+                "cohort_name": cohort.name if cohort else "",
+            },
+            sent_by=request.user,
+        )
+    except Exception:
+        ApplicationEmailLog.objects.create(
+            application=prog_app.root_application, cohort=cohort,
+            action=action, template_slug=slug, recipient=email_to,
+            status="failed", error="Exception during send", is_resend=True,
+        )
+        messages.error(request, _("Failed to resend email."))
+        return redirect("entrance_exams:admin_detail", exam_id=exam.id)
+
+    ApplicationEmailLog.objects.create(
+        application=prog_app.root_application, cohort=cohort,
+        action=action, template_slug=slug, recipient=email_to,
+        sent_at=record.sent_at or timezone.now(),
+        sent_by=request.user, status=record.status, is_resend=True,
+    )
+    record_audit_event(
+        actor=request.user, action=ACTION_BULK_EMAIL_SENT,
+        target_type="entrance_exam", target_id=str(exam.id),
+        metadata={"action": "resend_" + action, "application_id": app_id, "status": record.status},
+    )
+    messages.success(request, _("Email resent."))
+    return redirect("entrance_exams:admin_detail", exam_id=exam.id)
+
+
+@login_required
+def admin_email_log_list(request):
+    """List ApplicationEmailLog records in the custom admin UI."""
+    if not is_admin(request.user):
+        raise PermissionDenied
+    from apps.applications.models import ApplicationEmailLog as AEL
+    qs = AEL.objects.select_related("application__student", "cohort", "sent_by").all()
+    page_obj, pagination_qs = paginate(request, qs, per_page=25)
+    return render(request, "entrance_exams/admin_email_log_list.html", {
+        "page_obj": page_obj,
+        "pagination_qs": pagination_qs,
     })

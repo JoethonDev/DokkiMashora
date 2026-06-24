@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from django.db.models import Prefetch, Q, QuerySet, Sum
+from django.db.models import Exists, OuterRef, Prefetch, Q, QuerySet, Sum
 
+from apps.academics.models import CourseEnrollment, DiplomaEnrollment
 from apps.students.models import StudentProfile
 
 from .constants import PAYMENT_STATUS_PAID
@@ -54,6 +55,32 @@ def get_student_payment_summary(student: StudentProfile) -> dict:
         "total_paid": total_paid,
         "record_count": len(records),
         "records": records,
+    }
+
+
+def get_enrollment_payment_status(student: StudentProfile) -> dict:
+    """Return diploma + course enrollments annotated with has_paid."""
+    paid = PaymentRecord.objects.filter(
+        status=PAYMENT_STATUS_PAID, student=student,
+        diploma_enrollment=OuterRef("pk"),
+    )
+    diploma_qs = (
+        DiplomaEnrollment.objects.filter(student=student)
+        .annotate(has_paid=Exists(paid))
+        .select_related("cohort__diploma")
+    )
+    paid = PaymentRecord.objects.filter(
+        status=PAYMENT_STATUS_PAID, student=student,
+        course_enrollment=OuterRef("pk"),
+    )
+    course_qs = (
+        CourseEnrollment.objects.filter(student=student)
+        .annotate(has_paid=Exists(paid))
+        .select_related("course_version__course")
+    )
+    return {
+        "diploma_enrollments": list(diploma_qs),
+        "course_enrollments": list(course_qs),
     }
 
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from django.utils.translation import gettext_lazy as _
+
 # Role group names.
 GROUP_SUPER_ADMIN = "Super Admin"
 GROUP_ADMIN = "Admin"
@@ -39,7 +41,7 @@ USER_STATUS_INACTIVE = "inactive"
 USER_STATUS_SUSPENDED = "suspended"
 
 USER_STATUS_CHOICES = (
-    (USER_STATUS_ACTIVE, "Active"),
-    (USER_STATUS_INACTIVE, "Inactive"),
-    (USER_STATUS_SUSPENDED, "Suspended"),
+    (USER_STATUS_ACTIVE, _("Active")),
+    (USER_STATUS_INACTIVE, _("Inactive")),
+    (USER_STATUS_SUSPENDED, _("Suspended")),
 )

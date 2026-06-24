@@ -13,6 +13,12 @@ from .constants import (
     AUDIO_PROCESSING_STATUS_CHOICES,
     ENROLLMENT_STATUS_CHOICES,
     ENROLLMENT_STATUS_PENDING,
+    SCOPE_CHOICES,
+    SCOPE_DIPLOMA_COHORT,
+    SCOPE_DIPLOMA_SEMESTER,
+    SCOPE_SEMESTER_COHORT,
+    SCOPE_STANDALONE_COURSE,
+    SCOPE_WHOLE_DIPLOMA,
 )
 
 
@@ -81,6 +87,16 @@ class Course(TimeStampedModel):
         verbose_name_plural = _("courses")
         ordering = ("title",)
 
+    @property
+    def is_attached_to_diploma(self):
+        return self.pk and self.semester_courses.exists()
+
+    def clean(self):
+        if self.is_standalone and self.pk:
+            if self.semester_courses.exists():
+                from django.core.exceptions import ValidationError
+                raise ValidationError(_("Standalone course cannot be linked to a semester."))
+
     def __str__(self):
         return self.title
 
@@ -107,6 +123,15 @@ class SemesterCourse(TimeStampedModel):
         verbose_name_plural = _("semester courses")
         unique_together = (("semester", "course"),)
         ordering = ("semester", "order")
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.course_id and self.course.is_standalone:
+            raise ValidationError(_("Standalone course cannot be linked to a semester."))
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.semester} - {self.course}"
@@ -325,57 +350,120 @@ class CourseEnrollment(TimeStampedModel):
         return timezone.now() >= self.expires_at
 
 
-class TeacherCohortAssignment(TimeStampedModel):
-    """Explicit teacher scope for one cohort."""
+class TeacherAssignment(TimeStampedModel):
+    """Generalized teacher scope: one scope type per assignment row."""
 
     teacher = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
-        related_name="teacher_cohort_assignments",
+        related_name="teacher_assignments",
         verbose_name=_("teacher"),
+    )
+    scope_type = models.CharField(
+        _("scope type"),
+        max_length=24,
+        choices=SCOPE_CHOICES,
+        db_index=True,
+    )
+    course = models.ForeignKey(
+        Course,
+        on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name="teacher_assignments",
+        verbose_name=_("course"),
+    )
+    diploma = models.ForeignKey(
+        Diploma,
+        on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name="teacher_assignments",
+        verbose_name=_("diploma"),
+    )
+    semester = models.ForeignKey(
+        Semester,
+        on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name="teacher_assignments",
+        verbose_name=_("semester"),
     )
     cohort = models.ForeignKey(
         Cohort,
         on_delete=models.PROTECT,
-        related_name="teacher_assignments",
+        null=True, blank=True,
+        related_name="teacher_assignments_new",
         verbose_name=_("cohort"),
     )
     active = models.BooleanField(_("active"), default=True, db_index=True)
     assigned_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
-        related_name="teacher_assignments_created",
+        related_name="ta_assigned_by",
         verbose_name=_("assigned by"),
     )
     revoked_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
-        related_name="teacher_assignments_revoked",
+        null=True, blank=True,
+        related_name="ta_revoked_by",
         verbose_name=_("revoked by"),
-        null=True,
-        blank=True,
     )
     revoked_at = models.DateTimeField(_("revoked at"), null=True, blank=True)
     revoke_reason = models.TextField(_("revoke reason"), blank=True)
 
     class Meta:
-        verbose_name = _("teacher cohort assignment")
-        verbose_name_plural = _("teacher cohort assignments")
+        verbose_name = _("teacher assignment")
+        verbose_name_plural = _("teacher assignments")
         ordering = ("-created_at",)
         constraints = [
             models.UniqueConstraint(
-                fields=("teacher", "cohort"),
+                fields=("teacher", "scope_type", "cohort"),
                 condition=models.Q(active=True),
-                name="unique_active_teacher_cohort_assignment",
+                name="unique_active_teacher_scope_cohort",
             ),
         ]
         indexes = [
             models.Index(fields=("teacher", "active")),
-            models.Index(fields=("cohort", "active")),
+            models.Index(fields=("scope_type", "active")),
         ]
 
     def __str__(self):
-        return f"{self.teacher} - {self.cohort}"
+        return f"{self.teacher} - {self.get_scope_type_display()}"
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.scope_type == SCOPE_STANDALONE_COURSE:
+            if not self.course_id:
+                raise ValidationError(_("Standalone course scope requires a course."))
+            if not Course.objects.filter(id=self.course_id, is_standalone=True).exists():
+                raise ValidationError(_("Course must be standalone."))
+            if self.diploma_id or self.semester_id or self.cohort_id:
+                raise ValidationError(_("Standalone course scope must not have diploma/semester/cohort."))
+        elif self.scope_type == SCOPE_WHOLE_DIPLOMA:
+            if not self.diploma_id:
+                raise ValidationError(_("Whole diploma scope requires a diploma."))
+            if self.course_id or self.semester_id or self.cohort_id:
+                raise ValidationError(_("Whole diploma scope must not have course/semester/cohort."))
+        elif self.scope_type == SCOPE_DIPLOMA_SEMESTER:
+            if not self.semester_id:
+                raise ValidationError(_("Diploma semester scope requires a semester."))
+            if self.course_id or self.cohort_id:
+                raise ValidationError(_("Diploma semester scope must not have course/cohort."))
+        elif self.scope_type == SCOPE_DIPLOMA_COHORT:
+            if not self.cohort_id:
+                raise ValidationError(_("Diploma cohort scope requires a cohort."))
+            if self.course_id or self.semester_id:
+                raise ValidationError(_("Diploma cohort scope must not have course/semester."))
+        elif self.scope_type == SCOPE_SEMESTER_COHORT:
+            if not self.semester_id or not self.cohort_id:
+                raise ValidationError(_("Semester-within-cohort scope requires both semester and cohort."))
+            if self.course_id:
+                raise ValidationError(_("Semester-within-cohort scope must not have a course."))
+        else:
+            raise ValidationError(_("Unknown scope type."))
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
 
 
 class ModeratorStudentAssignment(TimeStampedModel):

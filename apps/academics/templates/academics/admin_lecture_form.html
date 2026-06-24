@@ -16,10 +16,11 @@
       {% if form.non_field_errors %}
         <div class="mb-4 p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded text-rose-800 dark:text-rose-200 text-sm">{{ form.non_field_errors|join:" " }}</div>
       {% endif %}
+      {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
       {% for field in form %}{% include "partials/_field.html" %}{% endfor %}
       <div class="mt-6 flex gap-3">
         {% include "partials/_button.html" with label=_("Save") variant="primary" loading_label=_("Saving...") %}
-        <a href="{% url 'academics:admin_version_detail' course.id version.id %}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Cancel" %}</a>
+        <a href="{% if next %}{{ next }}{% else %}{% url 'academics:admin_version_detail' course.id version.id %}{% endif %}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Cancel" %}</a>
       </div>
     </form>
   </div>

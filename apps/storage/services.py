@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from django.conf import settings
+from django.utils.translation import gettext_lazy as _
 
 logger = logging.getLogger("apps.storage")
 
@@ -78,18 +79,24 @@ def _validate_file(
     ext = Path(original_filename).suffix.lower()
     if ext not in allowed_types and allowed_types:
         raise FileValidationError(
-            f"File type '{ext}' is not allowed. Allowed: {', '.join(allowed_types)}"
+            _("File type '{file_type}' is not allowed. Allowed: {allowed}").format(
+                file_type=ext, allowed=", ".join(allowed_types),
+            )
         )
     expected_mime_types = _ALLOWED_MIME_TYPES_BY_EXTENSION.get(ext)
     if expected_mime_types and content_type and content_type not in expected_mime_types:
         raise FileValidationError(
-            f"File MIME type '{content_type}' does not match the uploaded extension '{ext}'."
+            _("File MIME type '{mime_type}' does not match the uploaded extension '{file_ext}'.").format(
+                mime_type=content_type, file_ext=ext,
+            )
         )
     if not data:
-        raise FileValidationError("Uploaded file is empty.")
+        raise FileValidationError(_("Uploaded file is empty."))
     if len(data) > max_size:
         raise FileValidationError(
-            f"File size exceeds the maximum allowed size of {max_size // (1024*1024)} MB."
+            _("File size exceeds the maximum allowed size of {max_size_mb} MB.").format(
+                max_size_mb=max_size // (1024 * 1024),
+            )
         )
 
 
@@ -118,7 +125,7 @@ class LocalStorageBackend:
     def download(self, key: str) -> bytes:
         full_path = self.base_path / key
         if not full_path.exists():
-            raise StorageError(f"File not found: {key}")
+            raise StorageError(_("File not found: {key}").format(key=key))
         return full_path.read_bytes()
 
 
@@ -151,7 +158,7 @@ class R2StorageBackend:
             )
         except Exception as exc:
             logger.error("R2 upload failed for key=%s: %s", key, exc)
-            raise StorageError("File upload failed. Please try again.") from exc
+            raise StorageError(_("File upload failed. Please try again.")) from exc
 
     def delete(self, key: str) -> None:
         client = self._get_client()
@@ -172,7 +179,7 @@ class R2StorageBackend:
             return url
         except Exception as exc:
             logger.error("R2 presigned URL failed for key=%s: %s", key, exc)
-            raise StorageError("Could not generate download link.") from exc
+            raise StorageError(_("Could not generate download link.")) from exc
 
     def exists(self, key: str) -> bool:
         client = self._get_client()
@@ -189,7 +196,7 @@ class R2StorageBackend:
             return response["Body"].read()
         except Exception as exc:
             logger.error("R2 download failed for key=%s: %s", key, exc)
-            raise StorageError("File download failed.") from exc
+            raise StorageError(_("File download failed.")) from exc
 
 
 class StorageService:
@@ -248,9 +255,9 @@ class StorageService:
         ``permission_fn(user)`` must return True for access to be granted.
         """
         if not permission_fn(user):
-            raise StorageError("Access denied.")
+            raise StorageError(_("Access denied."))
         if getattr(settings, "PRODUCTION_DEPLOYMENT", False) and not settings.USE_R2_STORAGE:
-            raise StorageError("Protected file storage requires R2 in production.")
+            raise StorageError(_("Protected file storage requires R2 in production."))
         return self.get_download_url(key, expires_in=expires_in)
 
     def exists(self, key: str) -> bool:

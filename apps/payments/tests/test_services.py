@@ -582,3 +582,259 @@ class SafeDateStrTests(TestCase):
         self.assertIsNone(safe_date_str("2026-13-01"))
         self.assertIsNone(safe_date_str(""))
         self.assertIsNone(safe_date_str(None))
+
+
+class NormalizeFunctionTests(TestCase):
+    def test_normalize_national_id_strips_whitespace(self):
+        from ..services import normalize_national_id
+        self.assertEqual(normalize_national_id("  123  456  "), "123456")
+
+    def test_normalize_phone_adds_country_code(self):
+        from ..services import normalize_phone
+        self.assertEqual(normalize_phone("01234567890"), "+201234567890")
+
+    def test_normalize_phone_handles_plus_prefix(self):
+        from ..services import normalize_phone
+        self.assertEqual(normalize_phone("+201234567890"), "+201234567890")
+
+    def test_normalize_phone_handles_double_zero(self):
+        from ..services import normalize_phone
+        self.assertEqual(normalize_phone("00201234567890"), "+201234567890")
+
+    def test_normalize_phone_strips_non_digits(self):
+        from ..services import normalize_phone
+        self.assertEqual(normalize_phone("+20 123 456 7890"), "+201234567890")
+
+
+class ParseDateTests(TestCase):
+    def test_parse_date_iso(self):
+        from ..services import parse_date
+        result = parse_date("2026-01-15")
+        self.assertIsNotNone(result)
+        self.assertEqual(result.year, 2026)
+        self.assertEqual(result.month, 1)
+        self.assertEqual(result.day, 15)
+
+    def test_parse_date_slash_format(self):
+        from ..services import parse_date
+        result = parse_date("15/01/2026")
+        self.assertIsNotNone(result)
+        self.assertEqual(result.day, 15)
+
+    def test_parse_date_reverse_slash(self):
+        from ..services import parse_date
+        result = parse_date("2026/01/15")
+        self.assertIsNotNone(result)
+
+    def test_parse_date_dash_reversed(self):
+        from ..services import parse_date
+        result = parse_date("15-01-2026")
+        self.assertIsNotNone(result)
+
+    def test_parse_date_invalid_returns_none(self):
+        from ..services import parse_date
+        self.assertIsNone(parse_date("not-a-date"))
+        self.assertIsNone(parse_date(""))
+        self.assertIsNone(parse_date("2026-13-01"))
+
+
+class PaymentModelStringTests(TestCase):
+    def setUp(self):
+        from apps.accounts.constants import GROUP_STUDENT
+        self.student_group, _ = Group.objects.get_or_create(name=GROUP_STUDENT)
+        self.user = User.objects.create_user(email="str@test.com", password="x")
+        self.user.groups.add(self.student_group)
+
+    def test_payment_upload_str(self):
+        from ..models import PaymentUpload
+        upload = PaymentUpload(original_filename="test.csv", status="pending")
+        self.assertIn("test.csv", str(upload))
+
+    def test_payment_upload_row_str(self):
+        from ..models import PaymentUploadRow
+        row = PaymentUploadRow(row_number=3, status="parsed")
+        self.assertIn("Row 3", str(row))
+
+    def test_payment_record_str(self):
+        from apps.students.models import StudentProfile
+
+        from ..models import PaymentRecord
+        student = StudentProfile.objects.create(
+            user=self.user, full_name="Test Student",
+            national_id="10000000000099", phone="01000000099",
+            date_of_birth=date(2000, 1, 1),
+        )
+        record = PaymentRecord.objects.create(
+            student=student, amount="1500.00", currency="EGP", status="paid",
+        )
+        self.assertIn("Test Student", str(record))
+        self.assertIn("1500.00", str(record))
+
+
+class EnrollmentPaymentStatusSelectorTests(TestCase):
+    """Tests for get_enrollment_payment_status — per-enrollment has_paid annotation."""
+
+    def setUp(self) -> None:
+        from apps.academics.models import (
+            Cohort, Course, CourseEnrollment, CourseVersion, Diploma, DiplomaEnrollment,
+        )
+        from apps.accounts.constants import GROUP_STUDENT
+        from apps.accounts.models import User as UserModel
+
+        self.student_group, _ = Group.objects.get_or_create(name=GROUP_STUDENT)
+        self.user = UserModel.objects.create_user(email="ep-status@test.com", password="x")
+        self.user.groups.add(self.student_group)
+        self.student = StudentProfile.objects.create(
+            user=self.user, full_name="EP Student",
+            national_id="33333333333333", phone="+201333333333",
+            date_of_birth=date(2000, 3, 3),
+        )
+        diploma = Diploma.objects.create(title="EP Diploma", created_by=self.user)
+        cohort = Cohort.objects.create(
+            diploma=diploma, name="EP Cohort",
+            start_date=date(2026, 1, 1), created_by=self.user,
+        )
+        self.diploma_enrollment = DiplomaEnrollment.objects.create(
+            student=self.student, cohort=cohort,
+        )
+        course = Course.objects.create(title="EP Course", created_by=self.user)
+        course_version = CourseVersion.objects.create(
+            course=course, cohort=cohort, created_by=self.user,
+        )
+        self.course_enrollment = CourseEnrollment.objects.create(
+            student=self.student, course_version=course_version,
+        )
+        # A second course that should be unpaid
+        course2 = Course.objects.create(title="EP Course 2", created_by=self.user)
+        cv2 = CourseVersion.objects.create(
+            course=course2, cohort=cohort, created_by=self.user,
+        )
+        self.course_enrollment_unpaid = CourseEnrollment.objects.create(
+            student=self.student, course_version=cv2,
+        )
+
+    def test_diploma_annotated_paid(self) -> None:
+        PaymentRecord.objects.create(
+            student=self.student, diploma_enrollment=self.diploma_enrollment,
+            amount=Decimal("1000"), status=PAYMENT_STATUS_PAID,
+        )
+        from ..selectors import get_enrollment_payment_status
+        result = get_enrollment_payment_status(self.student)
+        diplomas = result["diploma_enrollments"]
+        self.assertEqual(len(diplomas), 1)
+        self.assertTrue(diplomas[0].has_paid)
+
+    def test_diploma_annotated_unpaid(self) -> None:
+        from ..selectors import get_enrollment_payment_status
+        result = get_enrollment_payment_status(self.student)
+        self.assertFalse(result["diploma_enrollments"][0].has_paid)
+
+    def test_course_annotated_paid(self) -> None:
+        PaymentRecord.objects.create(
+            student=self.student, course_enrollment=self.course_enrollment,
+            amount=Decimal("500"), status=PAYMENT_STATUS_PAID,
+        )
+        from ..selectors import get_enrollment_payment_status
+        result = get_enrollment_payment_status(self.student)
+        courses = {e.course_version.course.title: e.has_paid for e in result["course_enrollments"]}
+        self.assertTrue(courses["EP Course"])
+        self.assertFalse(courses["EP Course 2"])
+
+    def test_course_isolation(self) -> None:
+        """Paying one course must NOT mark another paid."""
+        PaymentRecord.objects.create(
+            student=self.student, course_enrollment=self.course_enrollment,
+            amount=Decimal("200"), status=PAYMENT_STATUS_PAID,
+        )
+        from ..selectors import get_enrollment_payment_status
+        result = get_enrollment_payment_status(self.student)
+        courses = {e.course_version.course.title: e.has_paid for e in result["course_enrollments"]}
+        self.assertTrue(courses["EP Course"])
+        self.assertFalse(courses["EP Course 2"])
+
+
+class EnrollmentPaymentServiceTests(TestCase):
+    """Tests for mark_enrollment_paid / mark_enrollment_unpaid."""
+
+    def setUp(self) -> None:
+        from apps.academics.models import (
+            Cohort, Course, CourseEnrollment, CourseVersion, Diploma, DiplomaEnrollment,
+        )
+        from apps.accounts.constants import GROUP_STUDENT
+        from apps.accounts.models import User as UserModel
+
+        self.student_group, _ = Group.objects.get_or_create(name=GROUP_STUDENT)
+        self.user = UserModel.objects.create_user(email="ep-svc@test.com", password="x")
+        self.user.groups.add(self.student_group)
+        self.student = StudentProfile.objects.create(
+            user=self.user, full_name="EP Svc Student",
+            national_id="44444444444444", phone="+201444444444",
+            date_of_birth=date(2000, 4, 4),
+        )
+        self.admin = UserModel.objects.create_user(
+            email="ep-admin@test.com", password="pass", is_staff=True,
+        )
+        diploma = Diploma.objects.create(title="EP Svc Diploma", created_by=self.admin)
+        cohort = Cohort.objects.create(
+            diploma=diploma, name="EP Svc Cohort",
+            start_date=date(2026, 1, 1), created_by=self.admin,
+        )
+        self.diploma_enrollment = DiplomaEnrollment.objects.create(
+            student=self.student, cohort=cohort,
+        )
+        course = Course.objects.create(title="EP Svc Course", created_by=self.admin)
+        course_version = CourseVersion.objects.create(
+            course=course, cohort=cohort, created_by=self.admin,
+        )
+        self.course_enrollment = CourseEnrollment.objects.create(
+            student=self.student, course_version=course_version,
+        )
+
+    def test_mark_diploma_paid_creates_record(self) -> None:
+        from ..services import mark_enrollment_paid
+        record = mark_enrollment_paid(self.student, "diploma", self.diploma_enrollment.id, self.admin, amount=3000)
+        self.assertEqual(record.student, self.student)
+        self.assertEqual(record.diploma_enrollment, self.diploma_enrollment)
+        self.assertIsNone(record.course_enrollment)
+        self.assertEqual(record.status, PAYMENT_STATUS_PAID)
+        self.assertIsNotNone(record.paid_at)
+
+    def test_mark_course_paid_creates_record(self) -> None:
+        from ..services import mark_enrollment_paid
+        record = mark_enrollment_paid(self.student, "course", self.course_enrollment.id, self.admin, amount=1500)
+        self.assertEqual(record.course_enrollment, self.course_enrollment)
+        self.assertIsNone(record.diploma_enrollment)
+
+    def test_mark_enrollment_unpaid_updates_records(self) -> None:
+        from ..services import mark_enrollment_paid, mark_enrollment_unpaid
+        mark_enrollment_paid(self.student, "course", self.course_enrollment.id, self.admin, amount=1000)
+        count = mark_enrollment_unpaid(self.student, "course", self.course_enrollment.id)
+        self.assertEqual(count, 1)
+        self.assertEqual(
+            PaymentRecord.objects.filter(student=self.student, status=PAYMENT_STATUS_UNPAID).count(), 1,
+        )
+
+    def test_mark_unpaid_no_records_returns_zero(self) -> None:
+        from ..services import mark_enrollment_unpaid
+        count = mark_enrollment_unpaid(self.student, "diploma", 99999)
+        self.assertEqual(count, 0)
+
+    def test_invalid_enrollment_type_raises(self) -> None:
+        from ..services import mark_enrollment_paid
+        with self.assertRaises(ValueError):
+            mark_enrollment_paid(self.student, "invalid", 1, self.admin)
+
+    def test_wrong_student_raises_does_not_create(self) -> None:
+        """Marking payment for another student's enrollment must raise."""
+        from apps.academics.models import DiplomaEnrollment
+        from apps.accounts.constants import GROUP_STUDENT
+        other_user = User.objects.create_user(email="other@test.com", password="x")
+        other_user.groups.add(self.student_group)
+        other_student = StudentProfile.objects.create(
+            user=other_user, full_name="Other",
+            national_id="55555555555555", phone="+201555555555",
+            date_of_birth=date(2000, 5, 5),
+        )
+        from ..services import mark_enrollment_paid
+        with self.assertRaises(DiplomaEnrollment.DoesNotExist):
+            mark_enrollment_paid(other_student, "diploma", self.diploma_enrollment.id, self.admin)

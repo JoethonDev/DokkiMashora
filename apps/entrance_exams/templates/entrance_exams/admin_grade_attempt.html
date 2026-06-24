@@ -40,13 +40,13 @@
             <p class="text-xs font-medium text-slate-500 dark:text-slate-400">{% trans "Choices" %}:</p>
             {% for choice in question.choices.all %}
               <div class="flex items-center gap-2 text-sm px-3 py-1.5 rounded-md
-                {% if choice.is_correct and answer.selected_choice == choice %}bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700
-                {% elif choice.is_correct %}bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800
+                {% if choice.score and answer.selected_choice == choice %}bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700
+                {% elif choice.score %}bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800
                 {% elif answer.selected_choice == choice %}bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-700
                 {% else %}text-slate-600 dark:text-slate-300{% endif %}">
-                {% if choice.is_correct and answer.selected_choice == choice %}
+                {% if choice.score and answer.selected_choice == choice %}
                   ✓
-                {% elif choice.is_correct %}
+                {% elif choice.score %}
                   ({% trans "correct" %})
                 {% elif answer.selected_choice == choice %}
                   ✗

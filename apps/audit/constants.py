@@ -27,6 +27,7 @@ ACTION_CERTIFICATE_GENERATED = "certificate.generated"
 ACTION_CERTIFICATE_REVOKED = "certificate.revoked"
 ACTION_CERTIFICATE_REGENERATED = "certificate.regenerated"
 ACTION_BULK_EMAIL_SENT = "bulk_email.sent"
+ACTION_APPLICATION_DECISION_REVERTED = "application.decision_reverted"
 ACTION_PAYMENT_UPLOAD_PREVIEWED = "payment.upload_previewed"
 ACTION_PAYMENT_UPLOAD_CONFIRMED = "payment.upload_confirmed"
 ACTION_PAYMENT_RECORD_UPDATED = "payment.record_updated"
@@ -36,6 +37,7 @@ AUDIT_ACTION_CHOICES = (
     (ACTION_APPLICATION_APPROVED, _("Application approved")),
     (ACTION_APPLICATION_REJECTED, _("Application rejected")),
     (ACTION_APPLICATION_ACTIVATED, _("Application activated")),
+    (ACTION_APPLICATION_DECISION_REVERTED, _("Application decision reverted")),
     (ACTION_STUDENT_ACCESS_CHANGE, _("Student access change")),
     (ACTION_ENROLLMENT_CHANGE, _("Enrollment change")),
     (ACTION_EXAM_CREATED, _("Exam created")),

@@ -17,7 +17,7 @@
         </tr>
       </thead>
       <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
-        {% for sub in submissions %}
+        {% for sub in page_obj %}
           <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
             <td class="px-4 py-3 text-slate-900 dark:text-slate-100">{{ sub.student.email }}</td>
             <td class="px-4 py-3 text-slate-900 dark:text-slate-100">{{ sub.assessment.title }}</td>
@@ -46,6 +46,7 @@
         {% endfor %}
       </tbody>
     </table>
+    {% include "partials/_pagination.html" %}
   </div>
 </section>
 {% endblock %}

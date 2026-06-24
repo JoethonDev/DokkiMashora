@@ -20,7 +20,7 @@ from apps.assessments.constants import (
     ATTEMPT_STATUS_UNDER_REVIEW,
     HOMEWORK_STATUS_UNDER_REVIEW,
 )
-from apps.assessments.models import Assessment, AssessmentAttempt, HomeworkSubmission
+from apps.assessments.models import Assessment, AssessmentAttempt, AssessmentChoice, AssessmentQuestion, HomeworkSubmission
 from apps.students.models import StudentProfile
 
 
@@ -200,13 +200,46 @@ class HomeworkSubmittedViewTests(TestCase):
     def test_take_page_hides_upload_form_after_submission(self):
         response = self.client.get(reverse("assessments:take", args=[self.assessment.id]))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Homework pending review")
-        self.assertNotContains(response, "Upload your homework file")
+        self.assertContains(response, self.submission.original_filename)
+        self.assertNotContains(response, "Upload your homework files")
 
     def test_results_page_exposes_download_link(self):
         response = self.client.get(reverse("assessments:results", args=[self.assessment.id]))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Download uploaded file")
+        # The download link href is untranslated, so check for it directly.
+        # The button label is translated per request locale.
+        self.assertContains(response, "/media/storage/homework/1/homework.pdf")
+
+
+class AdminPreviewTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.admin = User.objects.create_superuser(email="preview-admin@test.com", password="x")
+        self.client.force_login(self.admin)
+        self.course = Course.objects.create(title="Preview Course", created_by=self.admin)
+        self.course_version = CourseVersion.objects.create(
+            course=self.course, label="v1", created_by=self.admin,
+        )
+        self.assessment = Assessment.objects.create(
+            title="Preview Quiz",
+            assessment_type="quiz",
+            course_version=self.course_version,
+            open_at=timezone.now(),
+            close_at=timezone.now() + timezone.timedelta(days=1),
+            duration_minutes=30,
+            passing_score=Decimal("50.00"),
+            created_by=self.admin,
+        )
+        self.question = AssessmentQuestion.objects.create(
+            assessment=self.assessment, text="q?", question_type="mcq", order=1, points=5,
+        )
+        AssessmentChoice.objects.create(question=self.question, text="a", order=1, is_correct=True)
+
+    def test_admin_preview_renders_banner_without_submit(self):
+        response = self.client.get(reverse("assessments:admin_preview", args=[self.assessment.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Preview")
+        self.assertNotContains(response, "Submit assessment")
 
 
 class AdminGradePermissionTests(TestCase):

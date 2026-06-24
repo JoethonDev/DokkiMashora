@@ -18,10 +18,11 @@
           {{ form.non_field_errors|join:" " }}
         </div>
       {% endif %}
+      {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
       {% for field in form %}{% include "partials/_field.html" %}{% endfor %}
       <div class="mt-6 flex gap-3">
         {% include "partials/_button.html" with label=_("Save") variant="primary" loading_label=_("Saving...") %}
-        <a href="{% url 'academics:admin_diploma_list' %}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Cancel" %}</a>
+        <a href="{% if next %}{{ next }}{% else %}{% url 'academics:admin_diploma_list' %}{% endif %}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Cancel" %}</a>
       </div>
     </form>
   </div>

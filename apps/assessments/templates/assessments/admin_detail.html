@@ -2,7 +2,7 @@
 {% block title %}{{ assessment.title }} - {% trans "Assessment Detail" %}{% endblock %}
 {% block content %}
 <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10" x-data="{ activeTab: 'questions' }">
-  <nav class="mb-6 text-sm text-slate-500 dark:text-slate-400" aria-label="breadcrumb">
+  <nav class="mb-6 text-sm text-slate-500 dark:text-slate-400" aria-label="{% trans "breadcrumb" %}">
     <ol class="flex flex-wrap items-center gap-1">
       <li class="flex items-center gap-1"><a href="{% url 'assessments:admin_list' %}" class="hover:text-brand-600 dark:hover:text-brand-400">{% trans "Assessments" %}</a><span class="text-slate-300 dark:text-slate-600">/</span></li>
       <li class="flex items-center gap-1"><span class="text-slate-700 dark:text-slate-200 font-medium">{{ assessment.title }}</span></li>
@@ -16,8 +16,10 @@
         <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ assessment.get_assessment_type_display }}</p>
       </div>
       <div class="flex flex-wrap gap-2">
+        {% url 'assessments:admin_preview' assessment.id as preview_url %}
+        {% include "partials/_button.html" with href=preview_url label=_("Preview") variant="ghost" size="sm" %}
         {% url 'assessments:admin_edit' assessment.id as edit_url %}
-        {% include "partials/_button.html" with href=edit_url label=_("Edit") variant="secondary" size="sm" %}
+        {% include "partials/_button.html" with href=edit_url|add:"?next="|add:request.path label=_("Edit") variant="secondary" size="sm" %}
         <form method="post" action="{% url 'assessments:admin_toggle' assessment.id %}" class="inline">
           {% csrf_token %}
           {% if assessment.is_active %}
@@ -28,7 +30,7 @@
         </form>
       </div>
     </div>
-    <dl class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+    <dl class="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-sm">
       <div>
         <dt class="text-slate-500 dark:text-slate-400">{% trans "Duration" %}</dt>
         <dd class="font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
@@ -70,8 +72,8 @@
 
   <div class="mt-8 border-b border-slate-200 dark:border-slate-800">
     <nav class="flex gap-4 text-sm" role="tablist">
-      <button role="tab" :aria-selected="activeTab==='questions'" @click="activeTab='questions'" :class="activeTab==='questions' ? 'border-brand-600 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'" class="pb-3 border-b-2 font-medium transition">{% trans "Questions" %}<span class="ms-1.5 text-xs tabular-nums">({{ assessment.questions.count }})</span></button>
-      <button role="tab" :aria-selected="activeTab==='attempts'" @click="activeTab='attempts'" :class="activeTab==='attempts' ? 'border-brand-600 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'" class="pb-3 border-b-2 font-medium transition">{% trans "Attempts" %}<span class="ms-1.5 text-xs tabular-nums">({{ assessment.attempts.count }})</span></button>
+      <button type="button" role="tab" :aria-selected="activeTab==='questions'" @click="activeTab='questions'" :class="activeTab==='questions' ? 'border-brand-600 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'" class="pb-3 border-b-2 font-medium transition">{% trans "Questions" %}<span class="ms-1.5 text-xs tabular-nums">({{ assessment.questions.count }})</span></button>
+      <button type="button" role="tab" :aria-selected="activeTab==='attempts'" @click="activeTab='attempts'" :class="activeTab==='attempts' ? 'border-brand-600 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'" class="pb-3 border-b-2 font-medium transition">{% trans "Attempts" %}<span class="ms-1.5 text-xs tabular-nums">({{ assessment.attempts.count }})</span></button>
     </nav>
   </div>
 
@@ -83,7 +85,7 @@
     <div id="question-form-container"></div>
     <div class="space-y-4">
       {% for question in assessment.questions.all %}
-        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5" id="question-{{ question.id }}">
+        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5" id="question-{{ question.id }}" x-data="{ deleteConfirm: false }">
           <div class="flex justify-between items-start gap-4">
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-2 text-sm">
@@ -113,10 +115,19 @@
             <div class="flex gap-2 shrink-0">
               {% url 'assessments:admin_question_form' assessment.id question.id as edit_question_url %}
               {% include "partials/_button.html" with hx_get=edit_question_url hx_target="#question-form-container" label=_("Edit") variant="ghost" size="sm" %}
-              <form method="post" action="{% url 'assessments:admin_question_delete' assessment.id question.id %}" class="inline" hx-confirm="{% trans 'Delete this question?' %}">
-                {% csrf_token %}
-                {% include "partials/_button.html" with label=_("Delete") variant="danger" size="sm" %}
-              </form>
+              <button type="button" @click="deleteConfirm = true" class="inline-flex items-center justify-center gap-2 rounded-md text-sm font-semibold transition px-3 py-1.5 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-950/50">{% trans "Delete" %}</button>
+            </div>
+          </div>
+          <div x-show="deleteConfirm" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" @click.self="deleteConfirm = false">
+            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 max-w-sm w-full mx-4 shadow-xl">
+              <p class="text-sm text-slate-700 dark:text-slate-200">{% trans "Delete this question? This cannot be undone." %}</p>
+              <div class="mt-4 flex justify-end gap-2">
+                <button type="button" @click="deleteConfirm = false" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Cancel" %}</button>
+                <form method="post" action="{% url 'assessments:admin_question_delete' assessment.id question.id %}" class="inline">
+                  {% csrf_token %}
+                  {% include "partials/_button.html" with label=_("Delete") variant="danger" %}
+                </form>
+              </div>
             </div>
           </div>
         </div>

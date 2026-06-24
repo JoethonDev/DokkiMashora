@@ -9,19 +9,13 @@
       <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Admin" %}</p>
       <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{% trans "Applications" %}</h1>
     </div>
-    <form method="get" class="flex items-center gap-2" hx-get="{% url 'applications:admin_list' %}" hx-target="#applications-list" hx-push-url="true" hx-trigger="change">
-      <label for="status" class="text-sm text-slate-500 dark:text-slate-400">{% trans "Status" %}</label>
-      <select id="status" name="status" class="rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-sm">
-        <option value="">{% trans "All" %}</option>
-        {% for value, label in status_choices %}
-          <option value="{{ value }}" {% if value == status_filter %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </select>
-    </form>
   </header>
+
+  {% include "partials/_search_filter.html" with hx_target="#applications-list" %}
 
   <div id="applications-list">
     {% include "applications/partials/_list_table.html" %}
+    {% include "partials/_pagination.html" %}
   </div>
 </section>
 {% endblock content %}

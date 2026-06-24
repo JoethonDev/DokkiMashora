@@ -90,8 +90,8 @@ def _create_mcq_question(exam):
         exam=exam, question_type=QUESTION_TYPE_MCQ,
         text="Sample MCQ", points=Decimal("10.00"), order=1,
     )
-    EntranceChoice.objects.create(question=q, text="Wrong", is_correct=False, order=1)
-    EntranceChoice.objects.create(question=q, text="Correct", is_correct=True, order=2)
+    EntranceChoice.objects.create(question=q, text="Wrong", score=Decimal("0.00"), order=1)
+    EntranceChoice.objects.create(question=q, text="Correct", score=Decimal("10.00"), order=2)
     return q
 
 
@@ -238,7 +238,7 @@ class TestSubmitExam:
         attempt.started_at = timezone.now()
         attempt.save(update_fields=["status", "started_at"])
         mcq = _create_mcq_question(exam)
-        correct = mcq.choices.get(is_correct=True)
+        correct = mcq.choices.get(score__gt=0)
         response = student_client.post(
             reverse("entrance_exams:submit_exam", args=[exam.id]),
             {f"question_{mcq.id}": str(correct.id)},
@@ -441,3 +441,138 @@ class TestAdminGradeAttempt:
         assert response.status_code == 302
         attempt.refresh_from_db()
         assert attempt.status == "graded"
+
+
+def _create_prog_app(exam, student_profile, status="submitted"):
+    root = Application.objects.create(student=student_profile)
+    return ProgramApplication.objects.create(
+        student=student_profile, root_application=root,
+        program_type="diploma", cohort=exam.cohort, status=status,
+    )
+
+
+@pytest.fixture
+def email_template_invitation():
+    from apps.communications.models import EmailTemplate
+    return EmailTemplate.objects.create(
+        slug="entrance_exam_invitation", name="Invitation",
+        subject="Exam Invitation",
+        body="Hello {{ full_name }}, invited to {{ exam_title }}.",
+        is_active=True,
+    )
+
+
+@pytest.fixture
+def email_template_rejection():
+    from apps.communications.models import EmailTemplate
+    return EmailTemplate.objects.create(
+        slug="rejection", name="Rejection",
+        subject="Application Update",
+        body="Hello {{ full_name }}, your application has been updated.",
+        is_active=True,
+    )
+
+
+@pytest.fixture
+def invited_prog_app(exam, student_profile):
+    return _create_prog_app(exam, student_profile, status="invited_to_entrance")
+
+
+@pytest.fixture
+def rejected_prog_app(exam, student_profile):
+    return _create_prog_app(exam, student_profile, status="rejected")
+
+
+@pytest.mark.django_db
+class TestAdminCohortEmail:
+    def test_requires_login(self, client, exam):
+        response = client.get(reverse("entrance_exams:admin_cohort_email", args=[exam.id]))
+        assert response.status_code == 302
+
+    def test_non_admin_blocked(self, student_client, exam):
+        response = student_client.get(
+            reverse("entrance_exams:admin_cohort_email", args=[exam.id])
+        )
+        assert response.status_code == 403
+
+    def test_get_shows_eligible(self, admin_client, exam, invited_prog_app, rejected_prog_app):
+        response = admin_client.get(
+            reverse("entrance_exams:admin_cohort_email", args=[exam.id])
+        )
+        assert response.status_code == 200
+        html = response.content.decode()
+        # both sections appear
+        assert "entrance_exam_invitation" in html or "Invitation" in html
+        assert "rejection" in html or "Rejection" in html
+
+    def test_send_invitation_creates_log(self, admin_client, exam, invited_prog_app,
+                                         email_template_invitation):
+        response = admin_client.post(
+            reverse("entrance_exams:admin_cohort_email", args=[exam.id]),
+            {"action": "entrance_exam_invitation"},
+        )
+        assert response.status_code == 302
+        from apps.applications.models import ApplicationEmailLog
+        log = ApplicationEmailLog.objects.filter(
+            application=invited_prog_app.root_application,
+            action="entrance_exam_invitation",
+        ).first()
+        assert log is not None
+        assert log.status == "sent"
+        assert log.is_resend is False
+
+    def test_second_send_skips_already_sent(self, admin_client, exam, invited_prog_app,
+                                            email_template_invitation):
+        url = reverse("entrance_exams:admin_cohort_email", args=[exam.id])
+        admin_client.post(url, {"action": "entrance_exam_invitation"})
+        admin_client.post(url, {"action": "entrance_exam_invitation"})
+        from apps.applications.models import ApplicationEmailLog
+        assert ApplicationEmailLog.objects.filter(
+            action="entrance_exam_invitation",
+        ).count() == 1
+
+    def test_rejection_only_targets_rejected(self, admin_client, exam, invited_prog_app,
+                                             rejected_prog_app, email_template_rejection):
+        response = admin_client.post(
+            reverse("entrance_exams:admin_cohort_email", args=[exam.id]),
+            {"action": "rejection"},
+        )
+        assert response.status_code == 302
+        from apps.applications.models import ApplicationEmailLog
+        logs = ApplicationEmailLog.objects.filter(action="rejection")
+        assert logs.count() == 1
+        assert logs.first().application == rejected_prog_app.root_application
+
+    def test_resend_creates_new_log(self, admin_client, exam, invited_prog_app,
+                                    email_template_invitation):
+        # first bulk send
+        admin_client.post(
+            reverse("entrance_exams:admin_cohort_email", args=[exam.id]),
+            {"action": "entrance_exam_invitation"},
+        )
+        # individual resend
+        resend_url = reverse(
+            "entrance_exams:admin_app_email_resend",
+            args=[exam.id, invited_prog_app.id],
+        )
+        response = admin_client.post(resend_url, {"action": "entrance_exam_invitation"})
+        assert response.status_code == 302
+        from apps.applications.models import ApplicationEmailLog
+        logs = ApplicationEmailLog.objects.filter(
+            application=invited_prog_app.root_application,
+            action="entrance_exam_invitation",
+        )
+        assert logs.count() == 2
+        assert logs.filter(is_resend=True).count() == 1
+        assert logs.filter(is_resend=False).count() == 1
+
+    def test_resend_confirmation_page(self, admin_client, exam, invited_prog_app):
+        resend_url = reverse(
+            "entrance_exams:admin_app_email_resend",
+            args=[exam.id, invited_prog_app.id],
+        )
+        response = admin_client.get(resend_url, {"action": "entrance_exam_invitation"})
+        assert response.status_code == 200
+        html = response.content.decode()
+        assert invited_prog_app.student.full_name in html
+        assert "Confirm" in html or "confirm" in html

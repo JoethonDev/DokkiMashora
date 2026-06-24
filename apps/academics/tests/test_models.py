@@ -10,6 +10,7 @@ from apps.academics.constants import (
     ENROLLMENT_STATUS_ACTIVE,
     ENROLLMENT_STATUS_PENDING,
 )
+from apps.academics.constants import SCOPE_DIPLOMA_COHORT
 from apps.academics.models import (
     Cohort,
     Course,
@@ -21,7 +22,7 @@ from apps.academics.models import (
     ModeratorStudentAssignment,
     Semester,
     SemesterCourse,
-    TeacherCohortAssignment,
+    TeacherAssignment,
 )
 from apps.academics.services import (
     assign_moderator_to_students,
@@ -89,6 +90,18 @@ class SemesterCourseTests(TestCase):
     def test_str(self):
         self.assertIn(self.semester.title, str(self.sc))
         self.assertIn(self.course.title, str(self.sc))
+
+    def test_standalone_course_cannot_link_to_semester(self):
+        standalone = Course.objects.create(title="Standalone", created_by=self.admin, is_standalone=True)
+        from django.core.exceptions import ValidationError
+        with self.assertRaises(ValidationError):
+            SemesterCourse.objects.create(semester=self.semester, course=standalone, order=1)
+
+    def test_cannot_mark_attached_course_standalone(self):
+        from django.core.exceptions import ValidationError
+        self.course.is_standalone = True
+        with self.assertRaises(ValidationError):
+            self.course.clean()
 
 
 class CohortTests(TestCase):
@@ -267,8 +280,9 @@ class StaffAssignmentTests(TestCase):
         assign_teacher_to_cohort(self.teacher, self.cohort, self.admin)
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
-                TeacherCohortAssignment.objects.create(
+                TeacherAssignment.objects.create(
                     teacher=self.teacher,
+                    scope_type=SCOPE_DIPLOMA_COHORT,
                     cohort=self.cohort,
                     assigned_by=self.admin,
                 )

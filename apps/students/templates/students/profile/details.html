@@ -2,16 +2,16 @@
 {% block profile_title %}{% trans "Profile Details" %}{% endblock %}
 {% block profile_subtitle %}<p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{% trans "Your personal information." %}</p>{% endblock %}
 {% block profile_content %}
-<div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 mb-4">
+<div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 mb-4 min-w-0 break-words">
   <h2 class="text-base font-semibold mb-3">{% trans "Editable Information" %}</h2>
-  <dl class="grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-x-4 gap-y-2.5 text-sm">
+  <dl class="grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-x-4 gap-y-2.5 text-sm min-w-0">
     {% for field_name in editable_fields %}
       <dt class="text-slate-500 dark:text-slate-400">{{ field_labels|dict_key:field_name }}</dt>
-      <dd class="text-slate-900 dark:text-slate-100">{% include "partials/_blank.html" with value=identity|dict_key:field_name %}</dd>
+      <dd class="text-slate-900 dark:text-slate-100 break-words">{% include "partials/_blank.html" with value=identity|dict_key:field_name %}</dd>
     {% endfor %}
   </dl>
   <div class="mt-4">
-    <a href="{% url 'students:edit_profile' %}" class="text-sm text-brand-600 hover:underline">{% trans "Edit allowed fields" %}</a>
+    <a href="{% url 'students:edit_profile' %}" class="text-sm text-brand-600 hover:text-brand-700 dark:hover:text-brand-300">{% trans "Edit allowed fields" %}</a>
   </div>
 </div>
 

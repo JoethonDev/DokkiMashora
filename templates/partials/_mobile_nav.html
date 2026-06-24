@@ -2,8 +2,15 @@
 <div x-data="{ open: false }" @open-nav.window="open=true" @keydown.escape.window="open=false"
      x-show="open" x-cloak class="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true">
    <div class="absolute inset-0 bg-slate-900/50" @click="open=false" x-show="open" x-transition.opacity></div>
-   <nav class="absolute start-0 top-0 h-full w-72 max-w-[80%] dm-surface p-5 shadow-xl flex flex-col gap-1 border-r dm-border"
-        x-show="open" x-transition @keydown.escape="open=false">
+    <nav class="absolute start-0 top-0 h-full w-72 max-w-[80%] dm-surface p-5 shadow-xl flex flex-col gap-1 border-r dm-border"
+         x-show="open"
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="-translate-x-full"
+         x-transition:enter-end="translate-x-0"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="translate-x-0"
+         x-transition:leave-end="-translate-x-full"
+         @keydown.escape="open=false">
      <a href="{% url 'core:landing' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text">{% trans "Home" %}</a>
      {% if user.is_authenticated %}
        <a href="{% url 'accounts:dashboard' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text">{% trans "Dashboard" %}</a>
@@ -11,13 +18,23 @@
          <a href="{% url 'students:dashboard' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text">{% trans "My Profile" %}</a>
          <a href="{% url 'academics:student_course_list' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text">{% trans "My Courses" %}</a>
        {% endif %}
-       {% if CAN_VIEW_STAFF_NAV %}
-         <a href="{% url 'applications:admin_list' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text">{% trans "Applications" %}</a>
-         <a href="{% url 'academics:admin_diploma_list' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text">{% trans "Academics" %}</a>
-         <a href="{% url 'exams:admin_list' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text">{% trans "Exams" %}</a>
-         <a href="{% url 'entrance_exams:admin_list' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text">{% trans "Entrance" %}</a>
-         <a href="{% url 'assessments:admin_list' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text">{% trans "Assessments" %}</a>
-       {% endif %}
+        {% if CAN_VIEW_STAFF_NAV %}
+           <div class="mt-3 mb-1 px-3 py-1 text-xs font-bold text-brand-600 dark:text-brand-400 uppercase tracking-wider">{% trans "Manage" %}</div>
+           <div class="px-3 text-xs font-bold text-brand-600 dark:text-brand-400">{% trans "People" %}</div>
+          <a href="{% url 'accounts:admin_user_list' %}" class="rounded-md px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text text-sm">{% trans "Users" %}</a>
+          <a href="{% url 'applications:admin_list' %}" class="rounded-md px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text text-sm">{% trans "Applications" %}</a>
+          <a href="{% url 'applications:program_list' %}" class="rounded-md px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text text-sm">{% trans "Program Applications" %}</a>
+          <div class="mt-3 pt-3 border-t dm-border px-3 text-xs font-bold text-brand-600 dark:text-brand-400">{% trans "Academics" %}</div>
+          <a href="{% url 'academics:admin_diploma_list' %}" class="rounded-md px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text text-sm">{% trans "Diplomas" %}</a>
+          <a href="{% url 'academics:admin_course_list' %}" class="rounded-md px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text text-sm">{% trans "Courses" %}</a>
+          <div class="mt-3 pt-3 border-t dm-border px-3 text-xs font-bold text-brand-600 dark:text-brand-400">{% trans "Evaluation" %}</div>
+          <a href="{% url 'assessments:admin_list' %}" class="rounded-md px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text text-sm">{% trans "Assessments" %}</a>
+          <a href="{% url 'entrance_exams:admin_list' %}" class="rounded-md px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text text-sm">{% trans "Entrance Exams" %}</a>
+          <div class="mt-3 pt-3 border-t dm-border px-3 text-xs font-bold text-brand-600 dark:text-brand-400">{% trans "Finance &amp; Comms" %}</div>
+          <a href="{% url 'payments:upload_list' %}" class="rounded-md px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text text-sm">{% trans "Payment Uploads" %}</a>
+          <a href="{% url 'communications:admin_template_list' %}" class="rounded-md px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text text-sm">{% trans "Email Templates" %}</a>
+          <a href="{% url 'entrance_exams:admin_email_log_list' %}" class="rounded-md px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text text-sm">{% trans "Email Log" %}</a>
+        {% endif %}
        {% if CAN_VIEW_DESIGN_SHOWCASE %}
          <a href="{% url 'core:design_showcase' %}" class="rounded-md px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text">{% trans "Design Showcase" %}</a>
        {% endif %}

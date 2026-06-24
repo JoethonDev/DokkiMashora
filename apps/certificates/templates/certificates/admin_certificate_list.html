@@ -12,7 +12,7 @@
         <tr><th class="px-4 py-2.5 text-start font-medium">{% trans "Student" %}</th><th class="px-4 py-2.5 text-start font-medium">{% trans "Number" %}</th><th class="px-4 py-2.5 text-start font-medium">{% trans "Status" %}</th><th class="px-4 py-2.5 text-start font-medium">{% trans "Actions" %}</th></tr>
       </thead>
       <tbody>
-        {% for c in certificates %}<tr>
+        {% for c in page_obj %}<tr>
           <td class="px-4 py-3">{{ c.student }}</td>
           <td class="px-4 py-3 font-mono text-xs">{{ c.certificate_number }}</td>
           <td class="px-4 py-3">{% include "partials/_badge.html" with label=c.get_status_display tone=c.status %}</td>
@@ -36,6 +36,7 @@
               </form>
             </details>{% endif %}</td>
         </tr>{% empty %}<tr><td colspan="4" class="px-4 py-8 text-center text-slate-500">{% trans "No certificates." %}</td></tr>{% endfor %}
+    {% include "partials/_pagination.html" %}
       </tbody>
     </table>
   </div>

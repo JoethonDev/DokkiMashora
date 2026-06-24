@@ -26,6 +26,8 @@ from apps.audit.constants import (
     ACTION_QUESTION_UPDATED,
 )
 from apps.audit.services import record_audit_event
+from apps.core.htmx import is_htmx
+from apps.core.pagination import paginate
 from apps.core.permissions import ROLE_EXAM_STAFF, can_grade_attempt, role_required
 from apps.exams.constants import (
     ASSIGNMENT_STATUS_COMPLETED,
@@ -206,7 +208,8 @@ def _render_results(request, exam, assignment):
 @role_required(*ROLE_EXAM_STAFF)
 def admin_list(request):
     exams = Exam.objects.all().select_related("created_by")
-    return render(request, "exams/admin_list.html", {"exams": exams})
+    page_obj, pagination_qs = paginate(request, exams)
+    return render(request, "exams/admin_list.html", {"page_obj": page_obj, "pagination_qs": pagination_qs})
 
 
 @login_required
@@ -306,7 +309,8 @@ def admin_toggle_active(request, exam_id):
 @role_required(*ROLE_EXAM_STAFF)
 def admin_grade_list(request):
     pending = get_pending_grading()
-    return render(request, "exams/admin_grade_list.html", {"assignments": pending})
+    page_obj, pagination_qs = paginate(request, pending)
+    return render(request, "exams/admin_grade_list.html", {"page_obj": page_obj, "pagination_qs": pagination_qs})
 
 
 @login_required
@@ -360,10 +364,6 @@ def admin_grade_assignment(request, assignment_id):
 # ---------------------------------------------------------------------------
 
 
-def _is_htmx(request):
-    return request.headers.get("HX-Request") == "true"
-
-
 def _htmx_redirect(response, target):
     response["HX-Redirect"] = target
     return response
@@ -390,8 +390,8 @@ def _question_form_context(exam, question=None, form=None, choices=None):
 
 def _render_question_form(request, exam, question=None, form=None, choices=None):
     context = _question_form_context(exam, question=question, form=form, choices=choices)
-    context["full_page"] = not _is_htmx(request)
-    template = "exams/partials/question_form.html" if _is_htmx(request) else "exams/admin_question_form.html"
+    context["full_page"] = not is_htmx(request)
+    template = "exams/partials/question_form.html" if is_htmx(request) else "exams/admin_question_form.html"
     return render(request, template, context)
 
 
@@ -436,7 +436,7 @@ def admin_question_save(request, exam_id, question_id=None):
                 metadata={"exam_id": exam_id, "question_type": question.question_type},
             )
             messages.success(request, _("Question saved."))
-            if _is_htmx(request):
+            if is_htmx(request):
                 response = HttpResponse()
                 return _htmx_redirect(response, reverse("exams:admin_detail", args=[exam.id]))
             return redirect("exams:admin_detail", exam_id=exam.id)
@@ -460,7 +460,7 @@ def admin_question_delete(request, exam_id, question_id):
     )
     question.delete()
     messages.success(request, _("Question deleted."))
-    if _is_htmx(request):
+    if is_htmx(request):
         response = HttpResponse()
         return _htmx_redirect(response, reverse("exams:admin_detail", args=[exam_id]))
     return redirect("exams:admin_detail", exam_id=exam_id)

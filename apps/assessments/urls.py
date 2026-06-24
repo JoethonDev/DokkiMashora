@@ -16,6 +16,7 @@ urlpatterns = [
     path("manage/create/", views.admin_create, name="admin_create"),
     path("manage/<int:assessment_id>/", views.admin_detail, name="admin_detail"),
     path("manage/<int:assessment_id>/edit/", views.admin_edit, name="admin_edit"),
+    path("manage/<int:assessment_id>/preview/", views.admin_preview, name="admin_preview"),
     path("manage/<int:assessment_id>/toggle/", views.admin_toggle_active, name="admin_toggle"),
     path(
         "manage/<int:assessment_id>/questions/form/",

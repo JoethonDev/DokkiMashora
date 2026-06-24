@@ -6,20 +6,32 @@ from dataclasses import dataclass
 from datetime import date
 from typing import TYPE_CHECKING
 
+from django.utils.translation import gettext as _
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.db import transaction
 
 from apps.accounts.constants import GROUP_STUDENT
+from apps.audit.constants import (
+    ACTION_APPLICATION_ACTIVATED,
+    ACTION_APPLICATION_APPROVED,
+    ACTION_APPLICATION_DECISION_REVERTED,
+    ACTION_APPLICATION_REJECTED,
+    ACTION_APPLICATION_STATUS_CHANGE,
+)
+from apps.audit.services import record_audit_event
 from apps.students.models import StudentProfile
 
 from .constants import (
     APP_STATUS_PENDING,
+    APP_STATUS_UNDER_REVIEW,
     PROGRAM_APP_STATUS_SUBMITTED,
+    PROGRAM_APP_STATUS_UNDER_REVIEW,
     PROGRAM_TYPE_COURSE,
     PROGRAM_TYPE_DIPLOMA,
 )
-from .models import Application, ProgramApplication
+from .models import Application, ApplicationDecision, ProgramApplication
 
 if TYPE_CHECKING:
     from apps.academics.models import Cohort, Course
@@ -253,3 +265,213 @@ def _check_duplicate_program_application(
 def _student_group():
     group, _ = Group.objects.get_or_create(name=GROUP_STUDENT)
     return group
+
+
+# ---------------------------------------------------------------------------
+# Decision services (create decision history + audit events)
+# ---------------------------------------------------------------------------
+
+
+def _record_decision(
+    target_type: str,
+    target_id: int,
+    action: str,
+    old_status: str,
+    new_status: str,
+    actor,
+    reason: str = "",
+) -> ApplicationDecision:
+    return ApplicationDecision.objects.create(
+        target_type=target_type,
+        target_id=str(target_id),
+        action=action,
+        old_status=old_status,
+        new_status=new_status,
+        actor=actor,
+        reason=reason,
+    )
+
+
+def _activate_student_user(profile: StudentProfile) -> None:
+    group, _ = Group.objects.get_or_create(name=GROUP_STUDENT)
+    profile.user.groups.add(group)
+    profile.user.is_active = True
+    profile.user.save(update_fields=["is_active", "updated_at"])
+
+
+def approve_application(application, actor, notes: str = "") -> None:
+    old_status = application.status
+    application.approve(actor, notes=notes)
+    _record_decision("application", application.pk, "approve", old_status, application.status, actor)
+    record_audit_event(
+        actor=actor,
+        action=ACTION_APPLICATION_APPROVED,
+        target_type="application",
+        target_id=str(application.pk),
+        metadata={"student_id": application.student_id},
+    )
+
+
+def reject_application(application, actor, reason: str, notes: str = "") -> None:
+    old_status = application.status
+    application.reject(actor, reason=reason, notes=notes)
+    _record_decision("application", application.pk, "reject", old_status, application.status, actor, reason=reason)
+    record_audit_event(
+        actor=actor,
+        action=ACTION_APPLICATION_REJECTED,
+        target_type="application",
+        target_id=str(application.pk),
+        metadata={"reason": reason, "student_id": application.student_id},
+    )
+
+
+def mark_review_application(application, actor) -> None:
+    old_status = application.status
+    application.mark_under_review(actor)
+    _record_decision("application", application.pk, "mark_review", old_status, application.status, actor)
+    record_audit_event(
+        actor=actor,
+        action=ACTION_APPLICATION_STATUS_CHANGE,
+        target_type="application",
+        target_id=str(application.pk),
+        metadata={"status": application.status},
+    )
+
+
+def activate_application(application, actor) -> None:
+    old_status = application.status
+    application.activate()
+    _activate_student_user(application.student)
+    _record_decision("application", application.pk, "activate", old_status, application.status, actor)
+    record_audit_event(
+        actor=actor,
+        action=ACTION_APPLICATION_ACTIVATED,
+        target_type="application",
+        target_id=str(application.pk),
+        metadata={"student_id": application.student_id, "user_id": application.student.user_id},
+    )
+
+
+def revert_application_decision(application, actor, reason: str = "") -> None:
+    from .models import REVERTABLE_ACTIONS
+
+    last = (
+        ApplicationDecision.objects.filter(target_type="application", target_id=str(application.pk))
+        .exclude(action="revert")
+        .order_by("-created_at")
+        .first()
+    )
+    if last is None or last.action not in REVERTABLE_ACTIONS:
+        raise ValueError(_("No revertable decision found for this application."))
+    old_status = application.status
+    application.status = last.old_status
+    application.rejection_reason = ""
+    application.save(update_fields=["status", "rejection_reason", "updated_at"])
+    _record_decision("application", application.pk, "revert", old_status, application.status, actor, reason=reason)
+    record_audit_event(
+        actor=actor,
+        action=ACTION_APPLICATION_DECISION_REVERTED,
+        target_type="application",
+        target_id=str(application.pk),
+        metadata={"old_status": old_status, "new_status": application.status, "reason": reason},
+    )
+
+
+# ---------------------------------------------------------------------------
+# ProgramApplication decision services
+# ---------------------------------------------------------------------------
+
+
+def approve_program_application(application, actor, notes: str = "") -> None:
+    old_status = application.status
+    application.accept(actor, notes=notes)
+    _record_decision("program_application", application.pk, "approve", old_status, application.status, actor)
+    record_audit_event(
+        actor=actor,
+        action=ACTION_APPLICATION_APPROVED,
+        target_type="program_application",
+        target_id=str(application.pk),
+        metadata={"student_id": application.student_id},
+    )
+
+
+def reject_program_application(application, actor, reason: str, notes: str = "") -> None:
+    old_status = application.status
+    application.reject(actor, reason=reason, notes=notes)
+    _record_decision("program_application", application.pk, "reject", old_status, application.status, actor, reason=reason)
+    record_audit_event(
+        actor=actor,
+        action=ACTION_APPLICATION_REJECTED,
+        target_type="program_application",
+        target_id=str(application.pk),
+        metadata={"reason": reason, "student_id": application.student_id},
+    )
+
+
+def mark_review_program_application(application, actor) -> None:
+    old_status = application.status
+    application.mark_under_review(actor)
+    _record_decision("program_application", application.pk, "mark_review", old_status, application.status, actor)
+    record_audit_event(
+        actor=actor,
+        action=ACTION_APPLICATION_STATUS_CHANGE,
+        target_type="program_application",
+        target_id=str(application.pk),
+        metadata={"status": application.status},
+    )
+
+
+def invite_program_application(application, actor) -> None:
+    old_status = application.status
+    application.mark_invited(actor)
+    _record_decision("program_application", application.pk, "invite", old_status, application.status, actor)
+    record_audit_event(
+        actor=actor,
+        action=ACTION_APPLICATION_STATUS_CHANGE,
+        target_type="program_application",
+        target_id=str(application.pk),
+        metadata={"status": application.status},
+    )
+
+
+def activate_program_application(application, actor) -> None:
+    old_status = application.status
+    application.activate()
+    _activate_student_user(application.student)
+    _record_decision("program_application", application.pk, "activate", old_status, application.status, actor)
+    record_audit_event(
+        actor=actor,
+        action=ACTION_APPLICATION_ACTIVATED,
+        target_type="program_application",
+        target_id=str(application.pk),
+        metadata={"student_id": application.student_id, "user_id": application.student.user_id},
+    )
+
+
+def revert_program_application_decision(application, actor, reason: str = "") -> None:
+    from .models import REVERTABLE_ACTIONS
+
+    last = (
+        ApplicationDecision.objects.filter(
+            target_type="program_application", target_id=str(application.pk)
+        )
+        .exclude(action="revert")
+        .order_by("-created_at")
+        .first()
+    )
+    if last is None or last.action not in REVERTABLE_ACTIONS:
+        raise ValueError(_("No revertable decision found for this application."))
+    old_status = application.status
+    application.status = last.old_status
+    application.rejection_reason = ""
+    application.save(update_fields=["status", "rejection_reason", "updated_at"])
+    _record_decision(
+        "program_application", application.pk, "revert", old_status, application.status, actor, reason=reason
+    )
+    record_audit_event(
+        actor=actor,
+        action=ACTION_APPLICATION_DECISION_REVERTED,
+        target_type="program_application",
+        target_id=str(application.pk),
+        metadata={"old_status": old_status, "new_status": application.status, "reason": reason},
+    )

@@ -75,6 +75,11 @@ class Assessment(TimeStampedModel):
         validators=[MinValueValidator(0), MaxValueValidator(100)],
     )
     max_attempts = models.PositiveIntegerField(_("max attempts"), default=1)
+    max_upload_files = models.PositiveIntegerField(
+        _("max uploaded files"),
+        default=1,
+        help_text=_("For homework/file assessments: maximum number of files a student may upload."),
+    )
     is_active = models.BooleanField(_("active"), default=False)
     show_correct_answers = models.BooleanField(_("show correct answers"), default=False)
     show_written_feedback = models.BooleanField(_("show written feedback"), default=False)
@@ -128,6 +133,8 @@ class Assessment(TimeStampedModel):
             raise ValidationError(_("Duration must be positive for timed assessments."))
         if self.max_attempts < 1:
             raise ValidationError(_("Max attempts must be at least 1."))
+        if self.max_upload_files < 1:
+            raise ValidationError(_("Max uploaded files must be at least 1."))
 
 
 class AssessmentQuestion(TimeStampedModel):

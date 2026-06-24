@@ -11,7 +11,7 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.core.models import TimeStampedModel
 
-from .constants import BULK_STATUS_CHOICES, BULK_STATUS_DRAFT, TEMPLATE_SLUGS
+from .constants import BULK_STATUS_CHOICES, BULK_STATUS_DRAFT, REQUIRED_VARIABLES_BY_SLUG, TEMPLATE_SLUGS
 
 
 class EmailTemplate(TimeStampedModel):
@@ -27,6 +27,7 @@ class EmailTemplate(TimeStampedModel):
     subject = models.CharField(_("subject"), max_length=255)
     body = models.TextField(_("body"))
     is_active = models.BooleanField(_("active"), default=True)
+    is_enabled_for_action = models.BooleanField(_("enabled for action"), default=True)
 
     class Meta:
         verbose_name = _("email template")
@@ -40,6 +41,14 @@ class EmailTemplate(TimeStampedModel):
         super().clean()
         if self.slug and self.slug not in TEMPLATE_SLUGS:
             raise ValidationError({"slug": _("Unknown template slug.")})
+        required = REQUIRED_VARIABLES_BY_SLUG.get(self.slug, [])
+        for var in required:
+            if f"{{{{ {var} }}}}" not in self.body:
+                raise ValidationError(
+                    _("Body must contain the required variable {{ %(var)s }}.") % {"var": var}
+                )
+        if self.slug and EmailTemplate.objects.filter(slug=self.slug).exclude(pk=self.pk).exists():
+            raise ValidationError({"slug": _("A template for this action already exists.")})
 
     def variable_names(self) -> list[str]:
         return sorted(set(re.findall(r"{{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*}}", self.body)))
@@ -53,6 +62,21 @@ class EmailTemplate(TimeStampedModel):
             subject_out = subject_out.replace(token, str(value))
             body_out = body_out.replace(token, str(value))
         return subject_out, body_out
+
+
+class EmailFooter(models.Model):
+    """Singleton global email footer appended to all outgoing emails."""
+
+    body = models.TextField(_("body"), blank=True, default="",
+                            help_text=_("Appended to every outgoing email. Supports {{ variable }} placeholders."))
+    updated_at = models.DateTimeField(_("updated at"), auto_now=True)
+
+    class Meta:
+        verbose_name = _("email footer")
+        verbose_name_plural = _("email footer")
+
+    def __str__(self) -> str:
+        return _("Global email footer")
 
 
 class BulkEmailSend(TimeStampedModel):

@@ -21,11 +21,33 @@ class DiplomaForm(forms.ModelForm):
             "description": forms.Textarea(attrs={"rows": 4}),
         }
 
+    def clean_total_semesters(self):
+        total = self.cleaned_data["total_semesters"]
+        if self.instance and self.instance.pk:
+            existing = self.instance.semesters.count()
+            if total < existing:
+                raise forms.ValidationError(
+                    _("Cannot reduce below %(count)s existing semester(s).") % {"count": existing}
+                )
+        return total
+
 
 class SemesterForm(forms.ModelForm):
     class Meta:
         model = Semester
         fields = ["order", "title", "is_active"]
+
+    def __init__(self, *args, **kwargs):
+        self.diploma = kwargs.pop("diploma", None)
+        super().__init__(*args, **kwargs)
+
+    def clean_order(self):
+        order = self.cleaned_data["order"]
+        if self.diploma and order > self.diploma.total_semesters:
+            raise forms.ValidationError(
+                _("Order cannot exceed diploma total of %(max)s semesters.") % {"max": self.diploma.total_semesters}
+            )
+        return order
 
 
 class CourseForm(forms.ModelForm):
@@ -35,6 +57,16 @@ class CourseForm(forms.ModelForm):
         widgets = {
             "description": forms.Textarea(attrs={"rows": 4}),
         }
+
+    def clean(self):
+        cleaned = super().clean()
+        standalone = cleaned.get("is_standalone")
+        if standalone and self.instance and self.instance.pk:
+            if self.instance.semester_courses.exists():
+                raise forms.ValidationError(
+                    _("This course is linked to a semester. Unlink it first before marking as standalone.")
+                )
+        return cleaned
 
 
 class CohortForm(forms.ModelForm):

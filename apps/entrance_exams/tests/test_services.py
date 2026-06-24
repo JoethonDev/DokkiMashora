@@ -115,8 +115,8 @@ def mcq_question(exam):
         exam=exam, question_type=QUESTION_TYPE_MCQ,
         text="Sample MCQ", points=Decimal("10.00"), order=1,
     )
-    EntranceChoice.objects.create(question=q, text="Wrong", is_correct=False, order=1)
-    EntranceChoice.objects.create(question=q, text="Correct", is_correct=True, order=2)
+    EntranceChoice.objects.create(question=q, text="Wrong", score=0, order=1)
+    EntranceChoice.objects.create(question=q, text="Correct", score=Decimal("10.00"), order=2)
     return q
 
 
@@ -217,7 +217,7 @@ class TestStartAttempt:
 class TestSubmitAttempt:
     def test_submit_mcq_correct(self, attempt, mcq_question):
         start_attempt(attempt)
-        correct_choice = mcq_question.choices.get(is_correct=True)
+        correct_choice = mcq_question.choices.get(score__gt=0)
         answers = [AnswerData(question_id=mcq_question.id, selected_choice_id=correct_choice.id)]
         a = submit_attempt(attempt, answers)
         assert a.status == ATTEMPT_STATUS_GRADED
@@ -226,7 +226,7 @@ class TestSubmitAttempt:
 
     def test_submit_mcq_wrong(self, attempt, mcq_question):
         start_attempt(attempt)
-        wrong_choice = mcq_question.choices.get(is_correct=False)
+        wrong_choice = mcq_question.choices.get(score=0)
         answers = [AnswerData(question_id=mcq_question.id, selected_choice_id=wrong_choice.id)]
         a = submit_attempt(attempt, answers)
         assert a.score == Decimal("0.00")
@@ -244,7 +244,7 @@ class TestSubmitAttempt:
 
     def test_submit_mixed_questions(self, attempt, mcq_question, written_question):
         start_attempt(attempt)
-        correct_choice = mcq_question.choices.get(is_correct=True)
+        correct_choice = mcq_question.choices.get(score__gt=0)
         answers = [
             AnswerData(question_id=mcq_question.id, selected_choice_id=correct_choice.id),
             AnswerData(question_id=written_question.id, written_text="My answer"),
@@ -305,7 +305,7 @@ class TestGradeAnswer:
 
     def test_grade_all_mcq_auto(self, attempt, mcq_question):
         start_attempt(attempt)
-        correct_choice = mcq_question.choices.get(is_correct=True)
+        correct_choice = mcq_question.choices.get(score__gt=0)
         submit_attempt(attempt, [AnswerData(question_id=mcq_question.id, selected_choice_id=correct_choice.id)])
         attempt.refresh_from_db()
         assert attempt.status == ATTEMPT_STATUS_GRADED
@@ -317,14 +317,14 @@ class TestGradeAnswer:
             text="Extra MCQ", points=Decimal("50.00"), order=3,
         )
         start_attempt(attempt)
-        correct_choice = mcq_question.choices.get(is_correct=True)
+        correct_choice = mcq_question.choices.get(score__gt=0)
         submit_attempt(attempt, [AnswerData(question_id=mcq_question.id, selected_choice_id=correct_choice.id)])
         attempt.refresh_from_db()
         assert attempt.score == Decimal("10.00")
 
     def test_program_application_updated_on_fail(self, attempt, mcq_question):
         start_attempt(attempt)
-        wrong_choice = mcq_question.choices.get(is_correct=False)
+        wrong_choice = mcq_question.choices.get(score=0)
         submit_attempt(attempt, [AnswerData(question_id=mcq_question.id, selected_choice_id=wrong_choice.id)])
         attempt.program_application.refresh_from_db()
         assert attempt.program_application.status == PROGRAM_APP_STATUS_REJECTED
@@ -344,7 +344,7 @@ class TestQueryHelpers:
     def test_get_pending_grading(self, attempt, mcq_question):
         assert list(get_pending_grading()) == []
         start_attempt(attempt)
-        correct_choice = mcq_question.choices.get(is_correct=True)
+        correct_choice = mcq_question.choices.get(score__gt=0)
         submit_attempt(attempt, [AnswerData(question_id=mcq_question.id, selected_choice_id=correct_choice.id)])
         assert list(get_pending_grading()) == []
 
@@ -355,3 +355,90 @@ class TestQueryHelpers:
         pending = list(get_pending_grading())
         assert len(pending) == 1
         assert pending[0] == attempt
+
+
+@pytest.mark.django_db
+class TestScoringWithScores:
+    """Phase 9: MCQ choices have numeric scores, not just correct/incorrect."""
+
+    def test_choice_score_affects_attempt_score(self, exam, student_profile, admin_user):
+        """Choice A (score 3) + Choice B (score 7) → selecting each gives correct partial score."""
+        root = Application.objects.create(student=student_profile)
+        prog_app = ProgramApplication.objects.create(
+            student=student_profile, root_application=root, program_type="diploma",
+            cohort=exam.cohort,
+        )
+        q = EntranceQuestion.objects.create(
+            exam=exam, question_type=QUESTION_TYPE_MCQ,
+            text="Score test", points=Decimal("10.00"), order=99,
+        )
+        choice_a = EntranceChoice.objects.create(question=q, text="A", score=Decimal("3.00"), order=1)
+        choice_b = EntranceChoice.objects.create(question=q, text="B", score=Decimal("7.00"), order=2)
+        choice_c = EntranceChoice.objects.create(question=q, text="C", score=Decimal("0.00"), order=3)
+
+        attempt = EntranceAttempt.objects.create(
+            exam=exam, program_application=prog_app, student=student_profile,
+        )
+        start_attempt(attempt)
+
+        # Select only choice A → score should be 3
+        a = submit_attempt(attempt, [AnswerData(question_id=q.id, selected_choice_id=choice_a.id)])
+        assert a.score == Decimal("3.00")
+
+    def test_multiple_choice_scores_sum_correctly(self, exam, student_profile, admin_user):
+        """Multiple questions: choice scores sum per question, not across questions."""
+        root = Application.objects.create(student=student_profile)
+        prog_app = ProgramApplication.objects.create(
+            student=student_profile, root_application=root, program_type="diploma",
+            cohort=exam.cohort,
+        )
+        q1 = EntranceQuestion.objects.create(
+            exam=exam, question_type=QUESTION_TYPE_MCQ,
+            text="Q1", points=Decimal("5.00"), order=1,
+        )
+        q2 = EntranceQuestion.objects.create(
+            exam=exam, question_type=QUESTION_TYPE_MCQ,
+            text="Q2", points=Decimal("15.00"), order=2,
+        )
+        c1 = EntranceChoice.objects.create(question=q1, text="Q1 correct", score=Decimal("5.00"), order=1)
+        c2 = EntranceChoice.objects.create(question=q2, text="Q2 correct", score=Decimal("15.00"), order=1)
+        EntranceChoice.objects.create(question=q2, text="Q2 wrong", score=Decimal("0.00"), order=2)
+
+        attempt = EntranceAttempt.objects.create(
+            exam=exam, program_application=prog_app, student=student_profile,
+        )
+        start_attempt(attempt)
+        a = submit_attempt(attempt, [
+            AnswerData(question_id=q1.id, selected_choice_id=c1.id),
+            AnswerData(question_id=q2.id, selected_choice_id=c2.id),
+        ])
+        assert a.score == Decimal("20.00")
+
+
+@pytest.mark.django_db
+class TestScoreVisibility:
+    """Phase 9: Choice scores must never render on the take-exam page."""
+
+    def test_choice_score_is_not_in_take_exam_context(self, rf, exam, student_profile, admin_user):
+        from apps.entrance_exams.views import take_exam
+
+        q = EntranceQuestion.objects.create(
+            exam=exam, question_type=QUESTION_TYPE_MCQ,
+            text="Hidden score test", points=Decimal("5.00"), order=1,
+        )
+        EntranceChoice.objects.create(question=q, text="Option with score", score=Decimal("10.00"), order=1)
+
+        root = Application.objects.create(student=student_profile)
+        prog_app = ProgramApplication.objects.create(
+            student=student_profile, root_application=root, program_type="diploma",
+            cohort=exam.cohort,
+        )
+        EntranceAttempt.objects.create(
+            exam=exam, program_application=prog_app, student=student_profile, status="in_progress",
+            started_at=timezone.now(),
+        )
+        request = rf.get("/")
+        request.user = student_profile.user
+        response = take_exam(request, exam.id)
+        html = response.content.decode()
+        assert "10.00 pts" not in html, "Choice score value must not appear in take-exam HTML"

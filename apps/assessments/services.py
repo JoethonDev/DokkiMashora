@@ -10,6 +10,7 @@ from django.conf import settings
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE
 from apps.academics.models import CourseEnrollment, DiplomaEnrollment
@@ -87,20 +88,20 @@ def check_assessment_access(student, assessment: Assessment) -> None:
     """Raise ValueError if the student cannot access the assessment."""
     now = timezone.now()
     if not assessment.is_active:
-        raise ValueError("Assessment is not active.")
+        raise ValueError(_("Assessment is not active."))
     if assessment.open_at and now < assessment.open_at:
-        raise ValueError("Assessment has not opened yet.")
+        raise ValueError(_("Assessment has not opened yet."))
     if assessment.close_at and now > assessment.close_at:
-        raise ValueError("Assessment has already closed.")
+        raise ValueError(_("Assessment has already closed."))
     if not has_active_enrollment(student, assessment):
-        raise ValueError("You do not have an active enrollment for this course.")
+        raise ValueError(_("You do not have an active enrollment for this course."))
     attempt_count = AssessmentAttempt.objects.filter(
         assessment=assessment, student=student,
     ).exclude(
         status__in=[ATTEMPT_STATUS_CANCELLED, ATTEMPT_STATUS_EXPIRED],
     ).count()
     if attempt_count >= assessment.max_attempts:
-        raise ValueError("You have reached the maximum number of attempts.")
+        raise ValueError(_("You have reached the maximum number of attempts."))
 
 
 # ---------------------------------------------------------------------------
@@ -121,7 +122,7 @@ def start_assessment(student, assessment: Assessment) -> AssessmentAttempt:
         assessment=assessment, student=student,
     ).count() + 1
     if attempt_number > assessment.max_attempts:
-        raise ValueError("You have reached the maximum number of attempts.")
+        raise ValueError(_("You have reached the maximum number of attempts."))
     attempt = AssessmentAttempt.objects.create(
         assessment=assessment,
         student=student,
@@ -134,24 +135,24 @@ def start_assessment(student, assessment: Assessment) -> AssessmentAttempt:
 
 def submit_assessment(attempt: AssessmentAttempt, answers: list[AssessmentAnswerData]) -> AssessmentAttempt:
     if attempt.status != ATTEMPT_STATUS_IN_PROGRESS:
-        raise ValueError("Assessment can only be submitted from in_progress status.")
+        raise ValueError(_("Assessment can only be submitted from in_progress status."))
     assessment = attempt.assessment
     now = timezone.now()
     if not assessment.is_active:
-        raise ValueError("Assessment is not active.")
+        raise ValueError(_("Assessment is not active."))
     if assessment.close_at and now > assessment.close_at and not assessment.allow_late_submission:
-        raise ValueError("Assessment has already closed.")
+        raise ValueError(_("Assessment has already closed."))
     if attempt.started_at and assessment.duration_minutes:
         deadline = attempt.started_at + timezone.timedelta(minutes=assessment.duration_minutes)
         if now > deadline:
-            raise ValueError("Assessment duration has expired.")
+            raise ValueError(_("Assessment duration has expired."))
 
     questions = list(assessment.questions.select_related("assessment").prefetch_related("choices"))
     question_map = {q.id: q for q in questions}
     answered_question_ids = {answer_data.question_id for answer_data in answers}
     missing_required = [q for q in questions if q.required and q.id not in answered_question_ids]
     if missing_required:
-        raise ValueError("Please answer all required questions before submitting.")
+        raise ValueError(_("Please answer all required questions before submitting."))
 
     has_ungraded = False
     total_score = Decimal("0.00")
@@ -164,7 +165,7 @@ def submit_assessment(attempt: AssessmentAttempt, answers: list[AssessmentAnswer
                 continue
             if question.question_type == QUESTION_TYPE_MCQ:
                 if answer_data.written_text:
-                    raise ValueError("MCQ answer must not carry written text.")
+                    raise ValueError(_("MCQ answer must not carry written text."))
                 choice = _resolve_choice(question, answer_data.selected_choice_id)
                 score = _score_mcq_answer(choice, question, assessment)
                 AssessmentAnswer.objects.update_or_create(
@@ -179,7 +180,7 @@ def submit_assessment(attempt: AssessmentAttempt, answers: list[AssessmentAnswer
                 total_score += score
             elif question.question_type == QUESTION_TYPE_WRITTEN:
                 if answer_data.selected_choice_id is not None:
-                    raise ValueError("Written answer must not carry a selected choice.")
+                    raise ValueError(_("Written answer must not carry a selected choice."))
                 AssessmentAnswer.objects.update_or_create(
                     attempt=attempt, question=question,
                     defaults={
@@ -202,6 +203,37 @@ def submit_assessment(attempt: AssessmentAttempt, answers: list[AssessmentAnswer
             ],
         )
     return attempt
+
+
+# ponytail: V154 — save in-progress answers without scoring or status change.
+def autosave_attempt(attempt: AssessmentAttempt, answers: list[AssessmentAnswerData]) -> None:
+    if attempt.status != ATTEMPT_STATUS_IN_PROGRESS:
+        return
+    answers_by_question = {a.question_id: a for a in answers}
+    questions = list(attempt.assessment.questions.prefetch_related("choices"))
+    with transaction.atomic():
+        for question in questions:
+            answer_data = answers_by_question.get(question.id)
+            if not answer_data:
+                continue
+            if question.question_type == QUESTION_TYPE_MCQ:
+                AssessmentAnswer.objects.update_or_create(
+                    attempt=attempt,
+                    question=question,
+                    defaults={
+                        "selected_choice_id": answer_data.selected_choice_id,
+                        "written_text": "",
+                    },
+                )
+            elif question.question_type == QUESTION_TYPE_WRITTEN:
+                AssessmentAnswer.objects.update_or_create(
+                    attempt=attempt,
+                    question=question,
+                    defaults={
+                        "selected_choice": None,
+                        "written_text": answer_data.written_text,
+                    },
+                )
 
 
 def _resolve_choice(question: AssessmentQuestion, choice_id: int | None) -> AssessmentChoice | None:
@@ -239,25 +271,25 @@ def submit_homework(
 ) -> HomeworkSubmission:
     """Submit a homework file, creating an attempt and storage record."""
     if assessment.assessment_type != ASSESSMENT_TYPE_HOMEWORK:
-        raise ValueError("This assessment does not accept homework uploads.")
+        raise ValueError(_("This assessment does not accept homework uploads."))
     now = timezone.now()
     if not assessment.is_active:
-        raise ValueError("Assessment is not active.")
+        raise ValueError(_("Assessment is not active."))
     if assessment.open_at and now < assessment.open_at:
-        raise ValueError("Assessment has not opened yet.")
+        raise ValueError(_("Assessment has not opened yet."))
     if assessment.close_at and now > assessment.close_at and not assessment.allow_late_submission:
-        raise ValueError("Assessment has already closed.")
+        raise ValueError(_("Assessment has already closed."))
     if not has_active_enrollment(student, assessment):
-        raise ValueError("You do not have an active enrollment for this course.")
-    if HomeworkSubmission.objects.filter(assessment=assessment, student=student).exists():
-        raise ValueError("Homework has already been submitted.")
+        raise ValueError(_("You do not have an active enrollment for this course."))
+    if HomeworkSubmission.objects.filter(assessment=assessment, student=student).count() >= assessment.max_upload_files:
+        raise ValueError(_("Maximum number of files reached for this assessment."))
     attempt_count = AssessmentAttempt.objects.filter(
         assessment=assessment, student=student,
     ).exclude(
         status__in=[ATTEMPT_STATUS_CANCELLED, ATTEMPT_STATUS_EXPIRED],
     ).count()
     if attempt_count >= assessment.max_attempts:
-        raise ValueError("You have reached the maximum number of attempts.")
+        raise ValueError(_("You have reached the maximum number of attempts."))
     max_size = settings.HOMEWORK_MAX_UPLOAD_MB * 1024 * 1024
     result = storage_service.upload_file(
         data=file_data,
@@ -306,10 +338,12 @@ def grade_written_answer(
 ) -> AssessmentAnswer:
     answer = AssessmentAnswer.objects.select_related("attempt__assessment").get(id=answer_id)
     if score < 0:
-        raise ValueError("Score cannot be negative.")
+        raise ValueError(_("Score cannot be negative."))
     if answer.question and score > answer.question.points:
         raise ValueError(
-            f"Score ({score}) cannot exceed question points ({answer.question.points})."
+            _("Score ({score}) cannot exceed question points ({max_points}).").format(
+                score=score, max_points=answer.question.points,
+            )
         )
     is_override = answer.score is not None and answer.score != score
     answer.score = score
@@ -318,7 +352,7 @@ def grade_written_answer(
     answer.graded_by = grader
     if is_override:
         if not override_reason:
-            raise ValueError("An override reason is required when changing a previously-graded answer.")
+            raise ValueError(_("An override reason is required when changing a previously-graded answer."))
         answer.score_override_reason = override_reason
     answer.save(update_fields=["score", "feedback", "graded_at", "graded_by", "score_override_reason"])
     _update_attempt_grade(answer.attempt)
@@ -373,7 +407,7 @@ def _update_attempt_grade(attempt: AssessmentAttempt):
 
 def release_grades(attempt: AssessmentAttempt) -> AssessmentAttempt:
     if attempt.status != ATTEMPT_STATUS_GRADED:
-        raise ValueError("Only graded attempts can be released.")
+        raise ValueError(_("Only graded attempts can be released."))
     attempt.status = ATTEMPT_STATUS_RELEASED
     attempt.visible_to_student = True
     attempt.save(update_fields=["status", "visible_to_student"])

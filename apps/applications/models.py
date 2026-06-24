@@ -25,6 +25,17 @@ from .constants import (
     PROGRAM_TYPE_CHOICES,
 )
 
+DECISION_ACTION_CHOICES = (
+    ("mark_review", _("Marked under review")),
+    ("approve", _("Approved")),
+    ("reject", _("Rejected")),
+    ("activate", _("Activated")),
+    ("invite", _("Invited to entrance")),
+    ("revert", _("Decision reverted")),
+)
+
+REVERTABLE_ACTIONS = frozenset({"mark_review", "approve", "reject", "invite"})
+
 
 class Application(TimeStampedModel):
     """A registration request. A student may have multiple applications for different cohorts."""
@@ -245,3 +256,92 @@ class ProgramApplication(TimeStampedModel):
         self.status = PROGRAM_APP_STATUS_ACTIVATED
         self.activated_at = timezone.now()
         self.save(update_fields=["status", "activated_at", "updated_at"])
+
+
+EMAIL_ACTION_INVITATION = "entrance_exam_invitation"
+EMAIL_ACTION_REJECTION = "rejection"
+
+EMAIL_ACTION_CHOICES = (
+    (EMAIL_ACTION_INVITATION, _("Entrance exam invitation")),
+    (EMAIL_ACTION_REJECTION, _("Rejection")),
+)
+
+
+class ApplicationEmailLog(TimeStampedModel):
+    """Tracks entrance exam invitation/rejection emails per application."""
+
+    application = models.ForeignKey(
+        Application, on_delete=models.CASCADE,
+        related_name="email_logs",
+    )
+    cohort = models.ForeignKey(
+        "academics.Cohort", on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="application_email_logs",
+        verbose_name=_("cohort"),
+    )
+    action = models.CharField(max_length=32, choices=EMAIL_ACTION_CHOICES, db_index=True)
+    template_slug = models.CharField(max_length=64)
+    recipient = models.EmailField()
+    sent_at = models.DateTimeField(null=True, blank=True)
+    sent_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="application_email_logs",
+    )
+    status = models.CharField(max_length=8, default="sent")
+    error = models.TextField(blank=True)
+    is_resend = models.BooleanField(default=False)
+
+    class Meta:
+        verbose_name = _("application email log")
+        verbose_name_plural = _("application email logs")
+        ordering = ("-created_at",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=["application", "cohort", "action"],
+                name="uq_appemail_once_per_action",
+                condition=models.Q(status="sent") & models.Q(is_resend=False),
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.application} - {self.get_action_display()} — {self.status}"
+
+
+class ApplicationDecision(TimeStampedModel):
+    """Historical record of every admin action on an Application or ProgramApplication."""
+
+    TARGET_APPLICATION = "application"
+    TARGET_PROGRAM = "program_application"
+
+    target_type = models.CharField(max_length=32, db_index=True)
+    target_id = models.CharField(max_length=32, db_index=True)
+    action = models.CharField(max_length=24, choices=DECISION_ACTION_CHOICES)
+    old_status = models.CharField(max_length=24)
+    new_status = models.CharField(max_length=24)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="application_decisions",
+    )
+    reason = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = _("application decision")
+        verbose_name_plural = _("application decisions")
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=("target_type", "target_id")),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.get_action_display()} on {self.target_type}#{self.target_id} by {self.actor}"
+
+    def delete(self, *args, **kwargs) -> tuple[int, dict[str, int]]:
+        raise PermissionError("Application decisions are append-only.")
+
+    def save(self, *args, **kwargs) -> None:
+        if self.pk is not None:
+            raise PermissionError("Application decisions are append-only.")
+        super().save(*args, **kwargs)

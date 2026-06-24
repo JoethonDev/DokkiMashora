@@ -10,6 +10,7 @@ from typing import Any
 
 from django.db import transaction
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 from apps.academics.models import CourseEnrollment, DiplomaEnrollment
 from apps.applications.models import Application
@@ -64,11 +65,11 @@ def validate_csv_content(content: bytes) -> list[dict[str, str]]:
     text = content.decode("utf-8-sig")
     reader = csv.DictReader(io.StringIO(text))
     if not reader.fieldnames:
-        raise ValueError("CSV file appears to be empty or malformed")
+        raise ValueError(_("CSV file appears to be empty or malformed"))
     headers = [h.strip().lower() for h in reader.fieldnames]
     missing = [h for h in REQUIRED_CSV_HEADERS if h not in headers]
     if missing:
-        raise ValueError(f"Missing required columns: {', '.join(missing)}")
+        raise ValueError(_("Missing required columns: {columns}").format(columns=", ".join(missing)))
     rows = []
     for row in reader:
         cleaned = {k.strip().lower(): (v or "").strip() for k, v in row.items()}
@@ -203,9 +204,9 @@ def preview_upload(upload_id: int) -> PaymentUpload:
 def confirm_upload(upload_id: int, confirmed_by) -> PaymentUpload:
     upload = PaymentUpload.objects.get(id=upload_id)
     if upload.status != UPLOAD_STATUS_PREVIEWED:
-        raise ValueError(f"Upload {upload_id} is not in previewed state")
+        raise ValueError(_("Upload is not in previewed state"))
     if upload.matched_rows == 0:
-        raise ValueError("No rows matched; nothing to import")
+        raise ValueError(_("No rows matched; nothing to import"))
 
     errors: list[str] = []
     created = updated = 0
@@ -251,7 +252,7 @@ def confirm_upload(upload_id: int, confirmed_by) -> PaymentUpload:
             errors.append(f"Row {row.row_number}: {e}")
 
     if errors:
-        raise ValueError(f"Import failed for {len(errors)} row(s)")
+        raise ValueError(_("Import failed for {count} row(s)").format(count=len(errors)))
 
     upload.created_rows = created
     upload.updated_rows = updated
@@ -314,3 +315,54 @@ def create_upload(original_filename: str, content: bytes, uploaded_by) -> Paymen
             **parsed,
         )
     return upload
+
+
+# ---------------------------------------------------------------------------
+# Per-enrollment payment toggle (Phase 8)
+# ---------------------------------------------------------------------------
+
+
+@transaction.atomic
+def mark_enrollment_paid(
+    student: StudentProfile,
+    enrollment_type: str,
+    enrollment_id: int,
+    actor,
+    amount: Decimal | int = 0,
+) -> PaymentRecord:
+    """Create a paid PaymentRecord linked to the given enrollment."""
+    kwargs: dict = {
+        "student": student,
+        "amount": Decimal(str(amount)) if amount else Decimal("0"),
+        "currency": CURRENCY_EGP,
+        "status": PAYMENT_STATUS_PAID,
+        "paid_at": timezone.now(),
+        "imported_by": actor,
+        "notes": f"Manual payment by {actor.email}",
+    }
+    if enrollment_type == "diploma":
+        enrollment = DiplomaEnrollment.objects.get(pk=enrollment_id, student=student)
+        kwargs["diploma_enrollment"] = enrollment
+    elif enrollment_type == "course":
+        enrollment = CourseEnrollment.objects.get(pk=enrollment_id, student=student)
+        kwargs["course_enrollment"] = enrollment
+    else:
+        raise ValueError(_("Invalid enrollment type: {t}").format(t=enrollment_type))
+    app = student.applications.order_by("-created_at").first()
+    if app:
+        kwargs["application"] = app
+    return PaymentRecord.objects.create(**kwargs)
+
+
+def mark_enrollment_unpaid(student: StudentProfile, enrollment_type: str, enrollment_id: int) -> int:
+    """Set all paid PaymentRecords for this enrollment to unpaid. Returns count."""
+    from .constants import PAYMENT_STATUS_UNPAID
+
+    filters = {"student": student, "status": PAYMENT_STATUS_PAID}
+    if enrollment_type == "diploma":
+        filters["diploma_enrollment_id"] = enrollment_id
+    elif enrollment_type == "course":
+        filters["course_enrollment_id"] = enrollment_id
+    else:
+        raise ValueError(_("Invalid enrollment type: {t}").format(t=enrollment_type))
+    return PaymentRecord.objects.filter(**filters).update(status=PAYMENT_STATUS_UNPAID)

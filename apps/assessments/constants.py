@@ -11,7 +11,6 @@ ASSESSMENT_TYPE_CHOICES = [
     (ASSESSMENT_TYPE_SEMESTER_EXAM, _("Semester exam")),
     (ASSESSMENT_TYPE_FINAL_EXAM, _("Final exam")),
     (ASSESSMENT_TYPE_HOMEWORK, _("Homework")),
-    (ASSESSMENT_TYPE_ADDITIONAL, _("Additional assessment")),
 ]
 
 QUESTION_TYPE_MCQ = "mcq"

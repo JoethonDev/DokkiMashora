@@ -1,7 +1,49 @@
 {% extends "students/profile/base_profile.html" %}{% load i18n %}
 {% block profile_title %}{% trans "Payments" %}{% endblock %}
 {% block profile_content %}
+
+{# Per-enrollment breakdown #}
+{% if diploma_enrollments or course_enrollments %}
+<h3 class="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">{% trans "Programs" %}</h3>
+<div class="space-y-2 mb-6">
+  {% for e in diploma_enrollments %}
+  <div class="flex items-center justify-between rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3 text-sm">
+    <div>
+      <span class="text-slate-800 dark:text-slate-200">{{ e.cohort.diploma.title }}</span>
+      <span class="ml-2 text-xs text-slate-400 dark:text-slate-500">{% trans "Diploma" %}</span>
+    </div>
+    <div class="flex items-center gap-2">
+      {% include "partials/_badge.html" with label=e.get_status_display %}
+      {% if e.has_paid %}
+        {% include "partials/_badge.html" with label=_("Paid") tone="paid" %}
+      {% else %}
+        {% include "partials/_badge.html" with label=_("Unpaid") tone="unpaid" %}
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+  {% for e in course_enrollments %}
+  <div class="flex items-center justify-between rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3 text-sm">
+    <div>
+      <span class="text-slate-800 dark:text-slate-200">{{ e.course_version.course.title }}</span>
+      <span class="ml-2 text-xs text-slate-400 dark:text-slate-500">{% trans "Course" %}</span>
+    </div>
+    <div class="flex items-center gap-2">
+      {% include "partials/_badge.html" with label=e.get_status_display %}
+      {% if e.has_paid %}
+        {% include "partials/_badge.html" with label=_("Paid") tone="paid" %}
+      {% else %}
+        {% include "partials/_badge.html" with label=_("Unpaid") tone="unpaid" %}
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{# Transaction history #}
 {% if summary.records %}
+<h3 class="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">{% trans "Transactions" %}</h3>
 <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
   <table class="w-full text-sm">
     <thead class="bg-slate-50 dark:bg-slate-800/50">

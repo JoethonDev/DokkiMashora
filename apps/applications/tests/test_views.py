@@ -124,3 +124,32 @@ class AdminActionTests(TestCase):
         self.application.refresh_from_db()
         self.assertEqual(self.application.status, APP_STATUS_ACTIVATED)
         self.assertTrue(self.application.student.user.groups.filter(name="Student").exists())
+
+    def test_revert_approve_restores_pending(self) -> None:
+        self.client.post(self.detail_url, {"action": "approve", "admin_notes": "ok"})
+        response = self.client.post(self.detail_url, {"action": "revert", "revert_reason": "mistake"})
+        self.assertEqual(response.status_code, 302)
+        self.application.refresh_from_db()
+        self.assertEqual(self.application.status, APP_STATUS_PENDING)
+
+    def test_revert_reject_restores_pending(self) -> None:
+        self.client.post(self.detail_url, {"action": "reject", "rejection_reason": "incomplete"})
+        response = self.client.post(self.detail_url, {"action": "revert", "revert_reason": "reconsidered"})
+        self.assertEqual(response.status_code, 302)
+        self.application.refresh_from_db()
+        self.assertEqual(self.application.status, APP_STATUS_PENDING)
+
+    def test_revert_requires_reason(self) -> None:
+        self.client.post(self.detail_url, {"action": "approve", "admin_notes": "ok"})
+        response = self.client.post(self.detail_url, {"action": "revert", "revert_reason": ""})
+        self.assertEqual(response.status_code, 302)
+        self.application.refresh_from_db()
+        self.assertEqual(self.application.status, APP_STATUS_APPROVED)
+
+    def test_revert_not_allowed_on_activated(self) -> None:
+        self.application.approve(self.admin)
+        self.client.post(self.detail_url, {"action": "activate"})
+        response = self.client.post(self.detail_url, {"action": "revert", "revert_reason": "too late"})
+        self.assertEqual(response.status_code, 200)
+        self.application.refresh_from_db()
+        self.assertEqual(self.application.status, APP_STATUS_ACTIVATED)

@@ -19,7 +19,7 @@ from .constants import (
     EMAIL_STATUS_SENT,
 )
 from .email_message import EmailMessage
-from .models import BulkEmailSend, EmailTemplate
+from .models import BulkEmailSend, EmailFooter, EmailTemplate
 
 logger = logging.getLogger("apps.communications")
 
@@ -31,9 +31,15 @@ def has_unresolved_variables(text: str) -> bool:
     return bool(VARIABLE_PATTERN.search(text))
 
 
+def get_global_footer() -> str:
+    """Return the global email footer body, or empty string."""
+    footer = EmailFooter.objects.first()
+    return footer.body if footer else ""
+
+
 def render_template(slug: str, context: dict[str, Any]) -> tuple[str, str]:
     """Render an EmailTemplate by slug, returning (subject, body)."""
-    template = EmailTemplate.objects.get(slug=slug, is_active=True)
+    template = EmailTemplate.objects.get(slug=slug, is_active=True, is_enabled_for_action=True)
     return template.render(context)
 
 
@@ -46,8 +52,11 @@ def send_templated_email(
     cc: list[str] | None = None,
 ) -> EmailMessage:
     """Render a template, send via SMTP, and record the result."""
-    template = EmailTemplate.objects.get(slug=slug, is_active=True)
+    template = EmailTemplate.objects.get(slug=slug, is_active=True, is_enabled_for_action=True)
     subject, body = template.render(context)
+    footer = get_global_footer()
+    if footer:
+        body = template.render(context)[1] + "\n" + footer
     return send_email(
         template_slug=slug,
         to_email=to_email,

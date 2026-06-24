@@ -5,6 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, render
 
 from apps.accounts.constants import GROUP_ADMIN, GROUP_SUPER_ADMIN
+from apps.core.pagination import paginate
 from apps.core.permissions import role_required, safe_date_str, safe_int
 
 from .constants import AUDIT_ACTION_CHOICES
@@ -35,11 +36,13 @@ def audit_list(request):
         days=None,
     )
     actor_choices = User.objects.filter(is_staff=True, is_active=True).order_by("full_name")
+    page_obj, pagination_qs = paginate(request, events)
     return render(
         request,
         "audit/admin_list.html",
         {
-            "events": events,
+            "page_obj": page_obj,
+            "pagination_qs": pagination_qs,
             "action_choices": AUDIT_ACTION_CHOICES,
             "actor_choices": actor_choices,
             "current_action": action,

@@ -1,0 +1,75 @@
+{% extends "base.html" %}{% load i18n %}
+{% block title %}{% trans "Preview" %} - {{ template.name }} - {{ block.super }}{% endblock %}
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10" x-data="{ design: '{{ selected_design }}' }">
+  <nav class="text-sm text-slate-500 dark:text-slate-400 mb-4">
+    <a href="{% url 'communications:admin_template_list' %}" class="hover:text-brand-600">{% trans "Email Templates" %}</a>
+    <span class="mx-2">/</span>
+    <a href="{% url 'communications:admin_template_edit' template.slug %}" class="hover:text-brand-600">{{ template.name }}</a>
+    <span class="mx-2">/</span>
+    <span class="text-slate-800 dark:text-slate-200 font-medium">{% trans "Preview" %}</span>
+  </nav>
+
+  <h1 class="text-2xl sm:text-3xl font-bold tracking-tight font-display mb-2">{{ template.name }}</h1>
+  <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">{% trans "Preview with sample context." %}</p>
+
+  <div class="space-y-6">
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+      <h2 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">{% trans "Rendered Subject" %}</h2>
+      <p class="text-base font-medium text-slate-900 dark:text-slate-100">{{ rendered_subject }}</p>
+    </div>
+
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{% trans "Email Preview" %}</h2>
+        <div class="flex items-center gap-2">
+          <label for="design-select" class="text-xs text-slate-500 dark:text-slate-400">{% trans "Design:" %}</label>
+          <select id="design-select" x-model="design" @change="window.location.href='?design=' + design" class="text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-2 py-1">
+            <option value="">{% trans "None" %}</option>
+            {% for d in designs %}
+              <option value="{{ d }}">{{ d|title }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      {% if selected_design and rendered_html %}
+        <iframe id="preview-frame" class="w-full border border-slate-200 dark:border-slate-700 rounded-lg" style="min-height:400px" title="{% trans 'Email preview' %}"></iframe>
+        <script>(function(){document.getElementById('preview-frame').srcdoc='{{ rendered_html|escapejs|safe }}'})()</script>
+      {% else %}
+        <div class="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap text-slate-800 dark:text-slate-200">{{ rendered_body }}</div>
+      {% endif %}
+    </div>
+
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+      <h2 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">{% trans "Sample Context" %}</h2>
+      {% if sample_context %}
+        <table class="w-full text-sm">
+          <thead><tr class="text-slate-600 dark:text-slate-300"><th class="text-start px-2 py-1 font-medium">{% trans "Variable" %}</th><th class="text-start px-2 py-1 font-medium">{% trans "Value" %}</th></tr></thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+            {% for key, value in sample_context.items %}
+              <tr><td class="px-2 py-1 font-mono text-xs text-brand-600">{% templatetag openvariable %} {{ key }} {% templatetag closevariable %}</td><td class="px-2 py-1 text-slate-700 dark:text-slate-300">{{ value }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="text-sm text-slate-500">{% trans "No sample context defined for this template." %}</p>
+      {% endif %}
+    </div>
+
+    {% if missing %}
+      <div class="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-5">
+        <h2 class="text-sm font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-2">{% trans "Missing Variables" %}</h2>
+        <p class="text-sm text-amber-600 dark:text-amber-300">{% trans "These variables are used in the template but not provided in sample context:" %}</p>
+        <ul class="mt-2 list-disc list-inside text-sm text-amber-700 dark:text-amber-400">
+          {% for var in missing %}<li class="font-mono text-xs">{% templatetag openvariable %} {{ var }} {% templatetag closevariable %}</li>{% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <div class="flex flex-wrap gap-3">
+      <a href="{% url 'communications:admin_template_edit' template.slug %}" class="inline-flex items-center px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition">{% trans "Back to Edit" %}</a>
+      <a href="{% url 'communications:admin_template_list' %}" class="inline-flex items-center px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition">{% trans "All Templates" %}</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -5,18 +5,29 @@
 {% block title %}{{ exam.title }} - {% trans "Take Exam" %}{% endblock %}
 
 {% block content %}
-<div x-data="examTimer({{ remaining_seconds }}, {{ exam.id }})" class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+{% if is_preview %}
+  <div class="bg-amber-100 dark:bg-amber-950/40 border-b border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex items-center gap-2">
+      <svg class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+      <span class="font-semibold">{% trans "Preview" %}</span>
+      <span>{% trans "This is how the exam appears to a student. No submission is recorded." %}</span>
+    </div>
+  </div>
+{% endif %}
+<div {% if not is_preview %}x-data="examTimer({{ remaining_seconds }}, {{ exam.id }})"{% endif %} class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
   <div class="sticky top-16 z-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 mb-8 flex items-center justify-between gap-4">
     <h1 class="truncate text-base font-semibold text-slate-900 dark:text-slate-100">{{ exam.title }}</h1>
     <div class="flex items-center gap-4 shrink-0">
-      <div class="text-lg font-mono font-bold tabular-nums"
-           :class="{'text-rose-600 animate-pulse': timeLeft < 120, 'text-brand-600': timeLeft >= 120}"
-           x-show="timeLeft > 0"
-           x-text="formatTime(timeLeft)"></div>
-      <div class="text-lg font-bold text-rose-600" x-show="timeLeft <= 0">
-        {% trans "Time's up!" %}
-      </div>
-      {% include "partials/_button.html" with label=_("Submit") variant="primary" size="sm" attrs='form="exam-form"' type="submit" %}
+      {% if not is_preview %}
+        <div class="text-lg font-mono font-bold tabular-nums"
+             :class="{'text-rose-600 animate-pulse': timeLeft < 120, 'text-brand-600': timeLeft >= 120}"
+             x-show="timeLeft > 0"
+             x-text="formatTime(timeLeft)"></div>
+        <div class="text-lg font-bold text-rose-600" x-show="timeLeft <= 0">
+          {% trans "Time's up!" %}
+        </div>
+        {% include "partials/_button.html" with label=_("Submit") variant="primary" size="sm" attrs='form="exam-form"' type="submit" %}
+      {% endif %}
     </div>
   </div>
 
@@ -54,7 +65,9 @@
     {% endfor %}
 
     <div class="text-center py-8">
-      {% include "partials/_button.html" with label=_("Submit exam") variant="primary" size="lg" type="submit" loading_label=_("Submitting...") %}
+      {% if not is_preview %}
+        {% include "partials/_button.html" with label=_("Submit exam") variant="primary" size="lg" type="submit" loading_label=_("Submitting...") %}
+      {% endif %}
     </div>
   </form>
 </div>

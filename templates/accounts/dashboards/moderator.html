@@ -1,24 +1,48 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n ui_tags %}
 {% block title %}{% trans "Moderator dashboard" %} | {{ SITE_NAME_AR }}{% endblock title %}
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
   <header class="mb-6">
-    <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Moderator" %}</p>
-    <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{% trans "Review queue" %}</h1>
+    <p class="text-xs sm:text-sm font-semibold dm-page-eyebrow tracking-wide uppercase">{% trans "Moderator" %}</p>
+    <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display dm-page-title">{% trans "Review queue" %}</h1>
   </header>
 
-  <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-    <a href="{% url 'applications:admin_list' %}" class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 hover:border-brand-500 transition">
-      <p class="text-sm text-slate-500 dark:text-slate-400">{% trans "Registration queue" %}</p>
-      <p class="mt-1 text-3xl font-bold tabular-nums tracking-tight font-display text-slate-900 dark:text-slate-100">{{ pending_applications_count|default:"0" }}</p>
-      <p class="mt-1 text-xs text-brand-600 dark:text-brand-400">{% trans "To verify" %} &rarr;</p>
-    </a>
-    {% include "accounts/dashboards/_tile.html" with title=_("Written answers") value="0" sub=_("Under review") %}
-    {% include "accounts/dashboards/_tile.html" with title=_("Email previews") value="0" sub=_("Awaiting send") %}
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
+    <div class="dm-card rounded-xl p-5">
+      <p class="text-sm dm-muted">{% trans "Registration queue" %}</p>
+      <p class="mt-1 text-3xl font-bold tabular-nums dm-text">{{ pending_applications_count|default:"0" }}</p>
+      <p class="mt-1 text-xs dm-muted">{% trans "Pending & under review" %}</p>
+    </div>
+    <div class="dm-card rounded-xl p-5">
+      <p class="text-sm dm-muted">{% trans "Active users" %}</p>
+      <p class="mt-1 text-3xl font-bold tabular-nums dm-text">{{ user_count|default:"0" }}</p>
+      <p class="mt-1 text-xs dm-muted">{% trans "In the system" %}</p>
+    </div>
+    <div class="dm-card rounded-xl p-5">
+      <p class="text-sm dm-muted">{% trans "Cohorts starting soon" %}</p>
+      <p class="mt-1 text-3xl font-bold tabular-nums dm-text">{{ cohorts_starting_soon|length|default:"0" }}</p>
+      <p class="mt-1 text-xs dm-muted">{% trans "Next 30 days" %}</p>
+    </div>
   </div>
-  <div class="mt-8 sm:mt-10 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 text-sm text-slate-500 dark:text-slate-400">
-    {% trans "Phase 2 and Phase 3 will populate this dashboard with real data." %}
+
+  {% if cohorts_starting_soon %}
+  <div class="dm-panel rounded-xl p-5 mb-8">
+    <h2 class="text-sm font-bold dm-text mb-3">{% trans "Upcoming cohorts" %}</h2>
+    <div class="space-y-2 text-sm">
+      {% for c in cohorts_starting_soon %}
+      <div class="flex justify-between items-center py-1">
+        <span class="dm-text">{{ c.name }} — {{ c.diploma.title }}</span>
+        <span class="dm-muted text-xs">{% trans "Starts" %} {% dt c.start_date %}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="dm-action-row">
+    <a href="{% url 'applications:admin_list' %}" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Review applications" %}</a>
+    <a href="{% url 'accounts:admin_user_list' %}" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Browse users" %}</a>
   </div>
 </div>
 {% endblock content %}

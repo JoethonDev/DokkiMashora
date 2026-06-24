@@ -1,0 +1,6 @@
+{% extends "partials/_base.html" %}{% load i18n %}{% block content %}
+<div class="max-w-3xl mx-auto px-4 pt-6 pb-12">
+  <h1 class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-6">{{ title }}</h1>
+  {% include "entrance_exams/partials/_question_form.html" with full_page=True %}
+</div>
+{% endblock %}

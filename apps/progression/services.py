@@ -7,6 +7,7 @@ from decimal import Decimal
 
 from django.db import transaction
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE
 from apps.academics.models import Cohort, Diploma, DiplomaEnrollment, Semester
@@ -165,18 +166,18 @@ def evaluate_semester_progress(
 ) -> StudentSemesterProgress:
     if not is_override:
         if diploma_enrollment.status != ENROLLMENT_STATUS_ACTIVE:
-            raise ValueError("Enrollment is not active.")
+            raise ValueError(_("Enrollment is not active."))
         if semester.diploma_id != diploma_enrollment.cohort.diploma_id:
-            raise ValueError("Semester does not belong to the diploma.")
+            raise ValueError(_("Semester does not belong to the diploma."))
 
     existing = StudentSemesterProgress.objects.filter(
         diploma_enrollment=diploma_enrollment,
         semester=semester,
     ).first()
     if not is_override and existing and existing.status == SEMESTER_PROGRESS_LOCKED:
-        raise ValueError("Student progress is locked.")
+        raise ValueError(_("Student progress is locked."))
 
-    progress, _ = StudentSemesterProgress.objects.get_or_create(
+    progress, __ = StudentSemesterProgress.objects.get_or_create(
         diploma_enrollment=diploma_enrollment,
         semester=semester,
         defaults={
@@ -322,7 +323,7 @@ def _try_auto_promote(
             )
 
             if next_semester:
-                next_progress, _ = StudentSemesterProgress.objects.get_or_create(
+                next_progress, __ = StudentSemesterProgress.objects.get_or_create(
                     diploma_enrollment=enrollment,
                     semester=next_semester,
                     defaults={
@@ -356,10 +357,10 @@ def manual_promote(
 ) -> StudentSemesterProgress:
     semesters = list(Semester.objects.filter(diploma=enrollment.cohort.diploma).order_by("order"))
     if not semesters:
-        raise ValueError("Diploma has no semesters.")
+        raise ValueError(_("Diploma has no semesters."))
 
     if target_semester.id not in [s.id for s in semesters]:
-        raise ValueError("Target semester does not belong to the diploma.")
+        raise ValueError(_("Target semester does not belong to the diploma."))
 
     # Determine the student's current highest progress semester
     latest_progress = (
@@ -377,7 +378,9 @@ def manual_promote(
 
     if target_semester.id != expected_semester.id:
         raise ValueError(
-            f"Can only promote from the current semester: {expected_semester.title}"
+            _("Can only promote from the current semester: {semester_title}").format(
+                semester_title=expected_semester.title,
+            )
         )
 
     if not override_failed:
@@ -388,9 +391,9 @@ def manual_promote(
         if semester_progress:
             if semester_progress.status in (SEMESTER_PROGRESS_LOCKED, SEMESTER_PROGRESS_FAILED, SEMESTER_PROGRESS_RETAKE_REQUIRED):
                 if not reason:
-                    raise ValueError("Reason is required when overriding failed/locked/retake status.")
+                    raise ValueError(_("Reason is required when overriding failed/locked/retake status."))
             if semester_progress.status == SEMESTER_PROGRESS_LOCKED:
-                raise ValueError("Student is locked. Unlock before promoting.")
+                raise ValueError(_("Student is locked. Unlock before promoting."))
 
     next_semester = None
     for i, sem in enumerate(semesters):
@@ -405,7 +408,7 @@ def manual_promote(
         ).first()
         previous_status = existing.status if existing else SEMESTER_PROGRESS_NOT_STARTED
 
-        progress, _ = StudentSemesterProgress.objects.update_or_create(
+        progress, __ = StudentSemesterProgress.objects.update_or_create(
             diploma_enrollment=enrollment,
             semester=target_semester,
             defaults={
@@ -432,7 +435,7 @@ def manual_promote(
         )
 
         if next_semester:
-            next_progress, _ = StudentSemesterProgress.objects.get_or_create(
+            next_progress, __ = StudentSemesterProgress.objects.get_or_create(
                 diploma_enrollment=enrollment,
                 semester=next_semester,
                 defaults={
@@ -459,17 +462,17 @@ def demote_student(
     reason: str = "",
 ) -> StudentSemesterProgress:
     if not reason:
-        raise ValueError("Reason is required for demotion.")
+        raise ValueError(_("Reason is required for demotion."))
 
     semesters = list(Semester.objects.filter(diploma=enrollment.cohort.diploma).order_by("order"))
     if not semesters:
-        raise ValueError("Diploma has no semesters.")
+        raise ValueError(_("Diploma has no semesters."))
 
     if target_semester.id not in [s.id for s in semesters]:
-        raise ValueError("Target semester does not belong to the diploma.")
+        raise ValueError(_("Target semester does not belong to the diploma."))
 
     if target_semester.id == semesters[0].id:
-        raise ValueError("Cannot demote below first semester.")
+        raise ValueError(_("Cannot demote below first semester."))
 
     # Must demote from the student's current highest-progress semester
     latest_progress = (
@@ -479,10 +482,12 @@ def demote_student(
         .first()
     )
     if latest_progress is None:
-        raise ValueError("Student has no progress to demote from.")
+        raise ValueError(_("Student has no progress to demote from."))
     if target_semester.id != latest_progress.semester.id:
         raise ValueError(
-            f"Can only demote from the current semester: {latest_progress.semester.title}"
+            _("Can only demote from the current semester: {semester_title}").format(
+                semester_title=latest_progress.semester.title,
+            )
         )
 
     target_idx = next(i for i, s in enumerate(semesters) if s.id == target_semester.id)
@@ -508,7 +513,7 @@ def demote_student(
             },
         )
 
-        prev_progress, _ = StudentSemesterProgress.objects.get_or_create(
+        prev_progress, __ = StudentSemesterProgress.objects.get_or_create(
             diploma_enrollment=enrollment,
             semester=prev_semester,
             defaults={
@@ -549,9 +554,9 @@ def override_student_progress(
     reason: str = "",
 ) -> StudentSemesterProgress:
     if not reason:
-        raise ValueError("Reason is required for override.")
+        raise ValueError(_("Reason is required for override."))
 
-    progress, _ = StudentSemesterProgress.objects.get_or_create(
+    progress, __ = StudentSemesterProgress.objects.get_or_create(
         diploma_enrollment=enrollment,
         semester=semester,
         defaults={
@@ -604,7 +609,7 @@ def lock_student(
     reason: str = "",
 ) -> list[StudentSemesterProgress]:
     if not reason:
-        raise ValueError("Reason is required for lock.")
+        raise ValueError(_("Reason is required for lock."))
 
     progress_qs = StudentSemesterProgress.objects.filter(
         diploma_enrollment=enrollment,
@@ -648,7 +653,7 @@ def unlock_student(
     reason: str = "",
 ) -> list[StudentSemesterProgress]:
     if not reason:
-        raise ValueError("Reason is required for unlock.")
+        raise ValueError(_("Reason is required for unlock."))
 
     progress_qs = StudentSemesterProgress.objects.filter(
         diploma_enrollment=enrollment,
@@ -698,7 +703,7 @@ def assign_retake(
     reason: str = "",
 ) -> StudentSemesterProgress:
     if not reason:
-        raise ValueError("Reason is required for assigning retake.")
+        raise ValueError(_("Reason is required for assigning retake."))
 
     rule = DiplomaProgressionRule.objects.filter(
         diploma=enrollment.cohort.diploma,
@@ -710,9 +715,9 @@ def assign_retake(
         semester=semester,
     ).first()
     if rule and rule.max_retake_count > 0 and existing and existing.retake_count >= rule.max_retake_count:
-        raise ValueError(f"Maximum retake count ({rule.max_retake_count}) reached.")
+        raise ValueError(_("Maximum retake count ({max_retake}) reached.").format(max_retake=rule.max_retake_count))
 
-    progress, _ = StudentSemesterProgress.objects.get_or_create(
+    progress, __ = StudentSemesterProgress.objects.get_or_create(
         diploma_enrollment=enrollment,
         semester=semester,
         defaults={
@@ -807,7 +812,7 @@ def check_final_exam_eligibility(student_profile: StudentProfile, enrollment: Di
     blocked_reasons = []
 
     if not rule:
-        blocked_reasons.append("No active progression rule.")
+        blocked_reasons.append(str(_("No active progression rule.")))
     elif rule.require_final_exam:
         all_passed = all(
             progress_records.get(s.id) and progress_records[s.id].status in (
@@ -816,16 +821,16 @@ def check_final_exam_eligibility(student_profile: StudentProfile, enrollment: Di
             for s in semesters
         )
         if not all_passed:
-            blocked_reasons.append("Not all semesters have been passed.")
+            blocked_reasons.append(str(_("Not all semesters have been passed.")))
 
     for prog in progress_records.values():
         if prog.status == SEMESTER_PROGRESS_LOCKED:
-            blocked_reasons.append("Student progression is locked.")
+            blocked_reasons.append(str(_("Student progression is locked.")))
             break
 
     for prog in progress_records.values():
         if prog.retake_required:
-            blocked_reasons.append("Student has unresolved retake requirements.")
+            blocked_reasons.append(str(_("Student has unresolved retake requirements.")))
             break
 
     now = timezone.now()
@@ -860,19 +865,19 @@ def mark_requirements_met(student_profile: StudentProfile, enrollment: DiplomaEn
         for s in semesters
     )
     if not all_completed:
-        raise ValueError("Not all semesters have been passed.")
+        raise ValueError(_("Not all semesters have been passed."))
 
     has_lock = any(
         p.status == SEMESTER_PROGRESS_LOCKED for p in progress_records.values()
     )
     if has_lock:
-        raise ValueError("Student progression is locked.")
+        raise ValueError(_("Student progression is locked."))
 
     has_retake = any(p.retake_required for p in progress_records.values())
     if has_retake:
-        raise ValueError("Student has unresolved retake requirements.")
+        raise ValueError(_("Student has unresolved retake requirements."))
 
-    completion, _ = StudentDiplomaCompletion.objects.get_or_create(
+    completion, __ = StudentDiplomaCompletion.objects.get_or_create(
         diploma_enrollment=enrollment,
         defaults={"student": student_profile},
     )
@@ -900,7 +905,7 @@ def mark_completed(
             diploma_enrollment=enrollment,
         ).first()
         if not eligibility or not eligibility.eligible:
-            raise ValueError("Student is not eligible for final exam.")
+            raise ValueError(_("Student is not eligible for final exam."))
         if eligibility.passed_final_exam is not True:
             completion.status = DIPLOMA_COMPLETION_FINAL_EXAM_PENDING
             completion.save()
@@ -947,7 +952,7 @@ def mark_graduated(
             diploma_enrollment=enrollment,
         ).first()
         if not eligibility or not eligibility.eligible:
-            raise ValueError("Student is not eligible for final exam.")
+            raise ValueError(_("Student is not eligible for final exam."))
         if eligibility.passed_final_exam is not True:
             completion.status = DIPLOMA_COMPLETION_FINAL_EXAM_PENDING
             completion.save()

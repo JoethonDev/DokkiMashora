@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% load ui_tags %}
+
+{% block title %}{{ exam.title }} - {% trans "Cohort Emails" %}{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <nav class="mb-4">
+    <a href="{% url 'entrance_exams:admin_detail' exam.id %}" class="text-sm text-brand-600 hover:text-brand-700">&larr; {% trans "Back to exam" %}</a>
+  </nav>
+  {% include "partials/_page.html" with title=exam.title %}
+
+  <div class="mt-6 space-y-8">
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+      <h2 class="text-lg font-semibold mb-1">{% trans "Entrance Exam Invitations" %}</h2>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">
+        {% trans "Send invitation emails to applications with status" %}
+        <strong>{% trans "Invited to Entrance Assessment" %}</strong>
+        {% trans "in cohort" %} <strong>{{ exam.cohort }}</strong>.
+        {% trans "Already-sent applications are excluded." %}
+      </p>
+
+      {% if eligible_invitation %}
+        <div class="overflow-x-auto rounded-lg border mb-4">
+          <table class="min-w-[500px] w-full divide-y text-sm">
+            <thead class="bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300">
+              <tr>
+                <th class="px-3 py-2 text-start font-medium">{% trans "Student" %}</th>
+                <th class="px-3 py-2 text-start font-medium">{% trans "Email" %}</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+              {% for app in eligible_invitation %}
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                  <td class="px-3 py-2 text-slate-900 dark:text-slate-100">{{ app.student.full_name }}</td>
+                  <td class="px-3 py-2 text-slate-600 dark:text-slate-400">{{ app.student.user.email }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <form method="post" action="{% url 'entrance_exams:admin_cohort_email' exam.id %}">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="entrance_exam_invitation">
+          {% include "partials/_button.html" with label=_("Send Invitations")|add:" ("|add:eligible_invitation|length|stringformat:"s"|add:")" variant="primary" size="sm" type="submit" %}
+        </form>
+      {% else %}
+        {% include "partials/_empty_state.html" with message=_("No eligible applications for invitation.") %}
+      {% endif %}
+    </div>
+
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+      <h2 class="text-lg font-semibold mb-1">{% trans "Rejection Emails" %}</h2>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">
+        {% trans "Send rejection emails to applications with status" %}
+        <strong>{% trans "Rejected" %}</strong>
+        {% trans "in cohort" %} <strong>{{ exam.cohort }}</strong>.
+      </p>
+
+      {% if eligible_rejection %}
+        <div class="overflow-x-auto rounded-lg border mb-4">
+          <table class="min-w-[500px] w-full divide-y text-sm">
+            <thead class="bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300">
+              <tr>
+                <th class="px-3 py-2 text-start font-medium">{% trans "Student" %}</th>
+                <th class="px-3 py-2 text-start font-medium">{% trans "Email" %}</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+              {% for app in eligible_rejection %}
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                  <td class="px-3 py-2 text-slate-900 dark:text-slate-100">{{ app.student.full_name }}</td>
+                  <td class="px-3 py-2 text-slate-600 dark:text-slate-400">{{ app.student.user.email }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <form method="post" action="{% url 'entrance_exams:admin_cohort_email' exam.id %}">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="rejection">
+          {% include "partials/_button.html" with label=_("Send Rejections")|add:" ("|add:eligible_rejection|length|stringformat:"s"|add:")" variant="danger" size="sm" type="submit" %}
+        </form>
+      {% else %}
+        {% include "partials/_empty_state.html" with message=_("No eligible applications for rejection.") %}
+      {% endif %}
+    </div>
+  </div>
+
+  {% if sent_logs %}
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+      <h2 class="text-lg font-semibold mb-1">{% trans "Previously sent" %}</h2>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">{% trans "Recent emails sent for this cohort." %}</p>
+      <div class="overflow-x-auto rounded-lg border">
+        <table class="min-w-[500px] w-full divide-y text-sm">
+          <thead class="bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300">
+            <tr>
+              <th class="px-3 py-2 text-start font-medium">{% trans "Student" %}</th>
+              <th class="px-3 py-2 text-start font-medium">{% trans "Action" %}</th>
+              <th class="px-3 py-2 text-start font-medium">{% trans "Status" %}</th>
+              <th class="px-3 py-2 text-start font-medium">{% trans "Sent at" %}</th>
+              <th class="px-3 py-2 text-start font-medium">{% trans "Resend" %}</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+            {% for log in sent_logs %}
+              <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                <td class="px-3 py-2 text-slate-900 dark:text-slate-100">{{ log.application.student.full_name }}</td>
+                <td class="px-3 py-2">
+                  {% if log.action == "entrance_exam_invitation" %}
+                    {% include "partials/_badge.html" with label=_("Invitation") tone="info" %}
+                  {% elif log.action == "rejection" %}
+                    {% include "partials/_badge.html" with label=_("Rejection") tone="danger" %}
+                  {% endif %}
+                </td>
+                <td class="px-3 py-2">
+                  {% if log.status == "sent" %}
+                    {% include "partials/_badge.html" with label=_("Sent") tone="success" %}
+                  {% else %}
+                    {% include "partials/_badge.html" with label=_("Failed") tone="danger" %}
+                  {% endif %}
+                </td>
+                <td class="px-3 py-2 text-slate-500 dark:text-slate-400 text-xs tabular-nums">{% dt log.sent_at %}</td>
+                <td class="px-3 py-2">
+                  {% if log.prog_app_id %}
+                    {% url 'entrance_exams:admin_app_email_resend' exam.id log.prog_app_id as resend_url %}
+                    <a href="{{ resend_url }}?action={{ log.action }}" class="text-brand-600 hover:text-brand-700 text-xs font-medium">{% trans "Resend" %}</a>
+                  {% else %}
+                    <span class="text-slate-400 text-xs">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

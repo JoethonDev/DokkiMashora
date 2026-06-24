@@ -4,16 +4,20 @@ from __future__ import annotations
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.utils.translation import gettext_lazy as _
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_http_methods, require_POST
 
 from apps.audit.constants import ACTION_BULK_EMAIL_SENT
 from apps.audit.services import record_audit_event
+from apps.core.pagination import paginate
 from apps.core.permissions import ROLE_SENIOR_STAFF, role_required, safe_int
 
+from .constants import REQUIRED_VARIABLES_BY_SLUG, SAMPLE_CONTEXT_BY_SLUG, TEMPLATE_SLUGS
 from .models import BulkEmailSend, EmailTemplate
-from .services import create_bulk_draft, has_unresolved_variables, resolve_recipients, send_bulk_email
+from .services import create_bulk_draft, get_global_footer, has_unresolved_variables, resolve_recipients, send_bulk_email
 
 
 @login_required
@@ -137,8 +141,10 @@ def bulk_email_preview(request):
 @role_required(*ROLE_SENIOR_STAFF)
 def bulk_email_history(request):
     sends = BulkEmailSend.objects.filter(sent_by=request.user).select_related("template")
+    page_obj, pagination_qs = paginate(request, sends)
     return render(request, "communications/bulk_email_history.html", {
-        "sends": sends,
+        "page_obj": page_obj,
+        "pagination_qs": pagination_qs,
     })
 
 
@@ -150,9 +156,11 @@ def bulk_email_detail(request, send_id):
         id=send_id,
     )
     messages_list = send.messages.select_related("sent_by").all()
+    page_obj, pagination_qs = paginate(request, messages_list)
     return render(request, "communications/bulk_email_detail.html", {
         "send": send,
-        "messages": messages_list,
+        "page_obj": page_obj,
+        "pagination_qs": pagination_qs,
     })
 
 
@@ -164,3 +172,145 @@ def bulk_email_discard(request):
         del request.session["bulk_email_draft"]
         messages.info(request, _("Draft discarded."))
     return redirect("communications:bulk_email_create")
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+def admin_template_list(request):
+    """List all EmailTemplate records with preview links."""
+    templates = EmailTemplate.objects.all().order_by("slug")
+    from .models import EmailFooter
+    footer = EmailFooter.objects.first()
+    return render(request, "communications/admin_template_list.html", {
+        "templates": templates,
+        "global_footer": footer.body if footer else "",
+    })
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_http_methods(["GET", "POST"])
+def admin_template_edit(request, slug):
+    """Edit an EmailTemplate subject, body, is_enabled_for_action."""
+    template = get_object_or_404(EmailTemplate, slug=slug)
+    if request.method == "POST":
+        subject = request.POST.get("subject", "").strip()
+        body = request.POST.get("body", "").strip()
+        enabled = request.POST.get("is_enabled_for_action") == "on"
+        if not subject:
+            messages.error(request, _("Subject is required."))
+        elif not body:
+            messages.error(request, _("Body is required."))
+        else:
+            template.subject = subject
+            template.body = body
+            template.is_enabled_for_action = enabled
+            try:
+                template.full_clean()
+                template.save(update_fields=["subject", "body", "is_enabled_for_action"])
+                messages.success(request, _("Template updated."))
+                return redirect("communications:admin_template_list")
+            except ValidationError as e:
+                for field, errors in e.message_dict.items():
+                    for err in errors:
+                        messages.error(request, f"{field}: {err}")
+    return render(request, "communications/admin_template_form.html", {
+        "template": template,
+        "required_vars": REQUIRED_VARIABLES_BY_SLUG.get(slug, []),
+        "all_slugs": TEMPLATE_SLUGS,
+    })
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+def admin_template_preview(request, slug):
+    """Preview an EmailTemplate rendered with sample context."""
+    template = get_object_or_404(EmailTemplate, slug=slug)
+    context = SAMPLE_CONTEXT_BY_SLUG.get(slug, {})
+    try:
+        rendered_subject, rendered_body = template.render(context)
+    except Exception:
+        rendered_subject, rendered_body = template.subject, template.body
+    design = request.GET.get("design", "")
+    footer_text = get_global_footer()
+    rendered_html = ""
+    if design in ("basic", "branded", "minimal"):
+        rendered_html = render_to_string(
+            f"communications/email_designs/{design}.html",
+            {"content": rendered_body, "footer": footer_text},
+            request=request,
+        )
+    return render(request, "communications/admin_template_preview.html", {
+        "template": template,
+        "rendered_subject": rendered_subject,
+        "rendered_body": rendered_body,
+        "rendered_html": rendered_html,
+        "selected_design": design,
+        "designs": ["basic", "branded", "minimal"],
+        "sample_context": context,
+        "missing": [v for v in template.variable_names() if v not in context],
+    })
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_http_methods(["GET", "POST"])
+def admin_template_create(request):
+    """Create a new EmailTemplate for a chosen slug/action."""
+    used_slugs = set(EmailTemplate.objects.values_list("slug", flat=True))
+    available = [s for s in TEMPLATE_SLUGS if s not in used_slugs]
+    if request.method == "POST":
+        slug = request.POST.get("slug", "").strip()
+        name = request.POST.get("name", "").strip()
+        subject = request.POST.get("subject", "").strip()
+        body = request.POST.get("body", "").strip()
+        enabled = request.POST.get("is_enabled_for_action") == "on"
+        if slug not in TEMPLATE_SLUGS:
+            messages.error(request, _("Invalid action."))
+        elif slug in used_slugs:
+            messages.error(request, _("A template for this action already exists."))
+        elif not name:
+            messages.error(request, _("Name is required."))
+        elif not subject:
+            messages.error(request, _("Subject is required."))
+        elif not body:
+            messages.error(request, _("Body is required."))
+        else:
+            template = EmailTemplate(
+                slug=slug, name=name, subject=subject, body=body,
+                is_enabled_for_action=enabled,
+            )
+            try:
+                template.full_clean()
+                template.save()
+                messages.success(request, _("Template created."))
+                return redirect("communications:admin_template_list")
+            except ValidationError as e:
+                for field, errors in e.message_dict.items():
+                    for err in errors:
+                        messages.error(request, f"{field}: {err}")
+    return render(request, "communications/admin_template_create.html", {
+        "available_slugs": available,
+        "all_slugs": TEMPLATE_SLUGS,
+        "required_vars_by_slug": REQUIRED_VARIABLES_BY_SLUG,
+    })
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_http_methods(["GET", "POST"])
+def admin_footer_edit(request):
+    """Edit the global email footer."""
+    from .models import EmailFooter
+    footer = EmailFooter.objects.first()
+    if not footer:
+        footer = EmailFooter.objects.create(body="")
+    if request.method == "POST":
+        body = request.POST.get("body", "").strip()
+        footer.body = body
+        footer.save(update_fields=["body"])
+        messages.success(request, _("Global footer updated."))
+        return redirect("communications:admin_template_list")
+    return render(request, "communications/admin_footer_form.html", {
+        "footer": footer,
+    })

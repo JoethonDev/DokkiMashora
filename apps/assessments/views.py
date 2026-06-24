@@ -8,12 +8,17 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
+from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext_lazy as _, ngettext_lazy
 from django.views.decorators.http import require_POST
+
+from apps.core.htmx import is_htmx
+from apps.core.pagination import paginate
+from apps.core.views import safe_next_url
 
 from apps.assessments.constants import (
     ASSESSMENT_TYPE_HOMEWORK,
@@ -57,16 +62,13 @@ from apps.audit.constants import (
     ACTION_QUESTION_UPDATED,
 )
 from apps.audit.services import record_audit_event
+from apps.core.htmx import is_htmx
 from apps.core.permissions import ROLE_EXAM_STAFF, can_grade_attempt, is_admin, is_moderator, role_required
 from apps.storage.services import FileValidationError, StorageError, storage_service
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _is_htmx(request):
-    return request.headers.get("HX-Request") == "true"
 
 
 def _htmx_redirect(response, target):
@@ -152,16 +154,18 @@ def take_assessment(request, assessment_id):
         if assessment.close_at and now > assessment.close_at and not assessment.allow_late_submission:
             messages.error(request, _("Assessment has already closed."))
             return redirect("assessments:student_list")
-        existing = HomeworkSubmission.objects.filter(
+        existing_qs = HomeworkSubmission.objects.filter(
             assessment=assessment, student=request.user,
-        ).select_related("attempt").order_by("-created_at").first()
-        existing_download_url = None
-        if existing:
-            existing_download_url = storage_service.get_protected_download_url(
-                existing.storage_key,
+        ).select_related("attempt").order_by("-created_at")
+        existing_submissions = list(existing_qs)
+        remaining_uploads = max(0, assessment.max_upload_files - len(existing_submissions))
+        existing_download_urls = {}
+        for s in existing_submissions:
+            existing_download_urls[s.id] = storage_service.get_protected_download_url(
+                s.storage_key,
                 user=request.user,
-                permission_fn=lambda u: (
-                    u == existing.student
+                permission_fn=lambda u, _s=s: (
+                    u == _s.student
                     or is_admin(u) or is_moderator(u)
                 ),
             )
@@ -170,8 +174,9 @@ def take_assessment(request, assessment_id):
             "assessments/take_assessment.html",
             {
                 "assessment": assessment,
-                "existing_submission": existing,
-                "existing_submission_download_url": existing_download_url,
+                "existing_submissions": existing_submissions,
+                "existing_download_urls": existing_download_urls,
+                "remaining_uploads": remaining_uploads,
             },
         )
     attempt = AssessmentAttempt.objects.filter(
@@ -231,23 +236,46 @@ def submit_homework_view(request, assessment_id):
     if assessment.assessment_type != ASSESSMENT_TYPE_HOMEWORK:
         messages.error(request, _("This is not a homework assessment."))
         return redirect("assessments:instructions", assessment_id=assessment_id)
-    if "homework_file" not in request.FILES:
-        messages.error(request, _("Please select a file to upload."))
+    uploaded_files = request.FILES.getlist("homework_files")
+    if not uploaded_files:
+        messages.error(request, _("Please select at least one file to upload."))
         return redirect("assessments:take", assessment_id=assessment_id)
-    uploaded = request.FILES["homework_file"]
-    try:
-        submit_homework(
-            student=request.user,
-            assessment=assessment,
-            file_data=uploaded.read(),
-            original_filename=uploaded.name,
-            content_type=uploaded.content_type,
+    submitted = 0
+    errors = []
+    for uploaded in uploaded_files:
+        try:
+            submit_homework(
+                student=request.user,
+                assessment=assessment,
+                file_data=uploaded.read(),
+                original_filename=uploaded.name,
+                content_type=uploaded.content_type,
+            )
+            submitted += 1
+        except (FileValidationError, StorageError, ValueError) as exc:
+            errors.append(f"{uploaded.name}: {exc}")
+    if submitted and not errors:
+        messages.success(
+            request,
+            ngettext_lazy(
+                "Homework submitted successfully.",
+                "%(count)d files submitted successfully.",
+                submitted,
+            ) % {"count": submitted},
         )
-        messages.success(request, _("Homework submitted successfully."))
         return redirect("assessments:results", assessment_id=assessment_id)
-    except (FileValidationError, StorageError, ValueError) as exc:
-        messages.error(request, str(exc))
-        return redirect("assessments:take", assessment_id=assessment_id)
+    if submitted:
+        messages.warning(
+            request,
+            ngettext_lazy(
+                "One file submitted; the rest failed.",
+                "%(count)d files submitted; the rest failed.",
+                submitted,
+            ) % {"count": submitted},
+        )
+    for err in errors:
+        messages.error(request, err)
+    return redirect("assessments:take", assessment_id=assessment_id)
 
 
 @login_required
@@ -322,8 +350,30 @@ def _parse_answers(request, assessment):
 @login_required
 @role_required(*ROLE_EXAM_STAFF)
 def admin_list(request):
+    q = request.GET.get("q", "")
+    type_filter = request.GET.get("type", "")
     assessments = Assessment.objects.all().select_related("created_by")
-    return render(request, "assessments/admin_list.html", {"assessments": assessments})
+    if q:
+        assessments = assessments.filter(Q(title__icontains=q) | Q(description__icontains=q))
+    if type_filter:
+        assessments = assessments.filter(assessment_type=type_filter)
+    filters = []
+    if type_filter is not None:
+        filters.append({
+            "name": "type",
+            "label": _("Type"),
+            "value": type_filter,
+            "options": [
+                {"value": "exam", "label": _("Exam"), "selected": type_filter == "exam"},
+                {"value": "quiz", "label": _("Quiz"), "selected": type_filter == "quiz"},
+                {"value": "homework", "label": _("Homework"), "selected": type_filter == "homework"},
+            ],
+        })
+    page_obj, pagination_qs = paginate(request, assessments)
+    ctx = {"page_obj": page_obj, "pagination_qs": pagination_qs, "search_value": q, "filters": filters}
+    if is_htmx(request):
+        return render(request, "assessments/partials/_assessment_list_table.html", ctx)
+    return render(request, "assessments/admin_list.html", ctx)
 
 
 @login_required
@@ -342,7 +392,39 @@ def admin_detail(request, assessment_id):
 
 @login_required
 @role_required(*ROLE_EXAM_STAFF)
+def admin_preview(request, assessment_id):
+    """Render the student-facing take page for admin preview (no attempt/upload)."""
+    assessment = get_object_or_404(Assessment, id=assessment_id)
+    if assessment.assessment_type == ASSESSMENT_TYPE_HOMEWORK:
+        return render(
+            request,
+            "assessments/take_assessment.html",
+            {
+                "assessment": assessment,
+                "is_preview": True,
+                "existing_submissions": [],
+                "existing_download_urls": {},
+                "remaining_uploads": 0,
+            },
+        )
+    questions = assessment.questions.prefetch_related("choices").all()
+    return render(
+        request,
+        "assessments/take_assessment.html",
+        {
+            "assessment": assessment,
+            "is_preview": True,
+            "attempt": None,
+            "questions": questions,
+            "remaining_seconds": 0,
+        },
+    )
+
+
+@login_required
+@role_required(*ROLE_EXAM_STAFF)
 def admin_create(request):
+    next_url = safe_next_url(request)
     if request.method == "POST":
         form = AssessmentForm(request.POST)
         if form.is_valid():
@@ -357,13 +439,13 @@ def admin_create(request):
                 metadata={"title": assessment.title, "assessment_type": assessment.assessment_type},
             )
             messages.success(request, _("Assessment created."))
-            return redirect("assessments:admin_detail", assessment_id=assessment.id)
+            return redirect(next_url) if next_url else redirect("assessments:admin_detail", assessment_id=assessment.id)
     else:
         form = AssessmentForm()
     return render(
         request,
         "assessments/admin_assessment_form.html",
-        {"form": form, "title": _("Create assessment")},
+        {"form": form, "title": _("Create assessment"), "next": next_url},
     )
 
 
@@ -371,6 +453,7 @@ def admin_create(request):
 @role_required(*ROLE_EXAM_STAFF)
 def admin_edit(request, assessment_id):
     assessment = get_object_or_404(Assessment, id=assessment_id)
+    next_url = safe_next_url(request)
     if request.method == "POST":
         form = AssessmentForm(request.POST, instance=assessment)
         if form.is_valid():
@@ -383,13 +466,13 @@ def admin_edit(request, assessment_id):
                 metadata={"title": assessment.title},
             )
             messages.success(request, _("Assessment updated."))
-            return redirect("assessments:admin_detail", assessment_id=assessment.id)
+            return redirect(next_url) if next_url else redirect("assessments:admin_detail", assessment_id=assessment.id)
     else:
         form = AssessmentForm(instance=assessment)
     return render(
         request,
         "assessments/admin_assessment_form.html",
-        {"form": form, "title": _("Edit assessment"), "assessment": assessment},
+        {"form": form, "title": _("Edit assessment"), "assessment": assessment, "next": next_url},
     )
 
 
@@ -438,8 +521,8 @@ def _question_form_context(assessment, question=None, form=None, choices=None):
 
 def _render_question_form(request, assessment, question=None, form=None, choices=None):
     context = _question_form_context(assessment, question=question, form=form, choices=choices)
-    context["full_page"] = not _is_htmx(request)
-    template = "assessments/partials/question_form.html" if _is_htmx(request) else "assessments/admin_question_form.html"
+    context["full_page"] = not is_htmx(request)
+    template = "assessments/partials/question_form.html" if is_htmx(request) else "assessments/admin_question_form.html"
     return render(request, template, context)
 
 
@@ -482,7 +565,7 @@ def admin_question_save(request, assessment_id, question_id=None):
                 metadata={"assessment_id": assessment_id, "question_type": question.question_type},
             )
             messages.success(request, _("Question saved."))
-            if _is_htmx(request):
+            if is_htmx(request):
                 response = HttpResponse()
                 return _htmx_redirect(response, reverse("assessments:admin_detail", args=[assessment.id]))
             return redirect("assessments:admin_detail", assessment_id=assessment.id)
@@ -505,7 +588,7 @@ def admin_question_delete(request, assessment_id, question_id):
     )
     question.delete()
     messages.success(request, _("Question deleted."))
-    if _is_htmx(request):
+    if is_htmx(request):
         response = HttpResponse()
         return _htmx_redirect(response, reverse("assessments:admin_detail", args=[assessment_id]))
     return redirect("assessments:admin_detail", assessment_id=assessment_id)
@@ -593,10 +676,12 @@ def _save_choices_from_parsed(question, parsed_choices):
 def admin_grade_list(request):
     queue = get_grading_queue(request.user)
     homework_queue = get_homework_pending_grading(request.user)
+    queue_page, _ = paginate(request, queue)
+    hw_page, _ = paginate(request, homework_queue)
     return render(
         request,
         "assessments/admin_grade_list.html",
-        {"queue": queue, "homework_queue": homework_queue},
+        {"queue_page": queue_page, "homework_queue_page": hw_page},
     )
 
 
@@ -604,10 +689,11 @@ def admin_grade_list(request):
 @role_required(*ROLE_EXAM_STAFF)
 def admin_homework_grade_list(request):
     submissions = get_homework_pending_grading(request.user).order_by("-created_at")
+    page_obj, pagination_qs = paginate(request, submissions)
     return render(
         request,
         "assessments/admin_homework_list.html",
-        {"submissions": submissions},
+        {"page_obj": page_obj, "pagination_qs": pagination_qs},
     )
 
 

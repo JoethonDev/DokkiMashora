@@ -4,6 +4,7 @@ from datetime import date
 
 from django.contrib.auth.models import Group
 from django.test import TestCase
+from django.utils import translation
 from django.urls import reverse
 
 from apps.academics.models import (
@@ -120,6 +121,20 @@ class AdminViewTests(TestCase):
     def test_course_edit_get(self):
         r = self.client.get(reverse("academics:admin_course_edit", args=[self.course.id]))
         self.assertEqual(r.status_code, 200)
+
+    def test_attached_course_form_hides_standalone(self):
+        diploma = Diploma.objects.create(title="D2", total_semesters=2, created_by=self.admin)
+        semester = Semester.objects.create(diploma=diploma, order=1, title="S1")
+        course = Course.objects.create(title="Attached", created_by=self.admin)
+        from apps.academics.models import SemesterCourse
+        SemesterCourse.objects.create(course=course, semester=semester, order=1)
+        r = self.client.get(reverse("academics:admin_course_edit", args=[course.id]))
+        self.assertNotContains(r, 'name="is_standalone"')
+
+    def test_standalone_course_form_still_shows_standalone(self):
+        standalone = Course.objects.create(title="Standalone", created_by=self.admin, is_standalone=True)
+        r = self.client.get(reverse("academics:admin_course_edit", args=[standalone.id]))
+        self.assertContains(r, 'name="is_standalone"')
 
     def test_cohort_create_get(self):
         r = self.client.get(reverse("academics:admin_cohort_create", args=[self.diploma.id]))
@@ -315,6 +330,7 @@ class StudentNoProfileTests(TestCase):
         self.client.force_login(self.user)
 
     def test_course_list_returns_empty(self):
-        r = self.client.get(reverse("academics:student_course_list"))
+        with translation.override("en"):
+            r = self.client.get(reverse("academics:student_course_list"))
         self.assertEqual(r.status_code, 200)
         self.assertContains(r, "No courses yet")

@@ -4,6 +4,15 @@
 {% block title %}{{ lecture.title }} - {{ block.super }}{% endblock %}
 
 {% block content %}
+{% if is_preview %}
+  <div class="bg-amber-100 dark:bg-amber-950/40 border-b border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-sm">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex items-center gap-2">
+      <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+      <span class="font-semibold">{% trans "Preview" %}</span>
+      <span>{% trans "This is how the lecture appears to a student. No submission is recorded." %}</span>
+    </div>
+  </div>
+{% endif %}
 <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
   <header class="mb-6">
     <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Lecture" %}</p>
@@ -21,7 +30,7 @@
     <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 mb-6">
       <h2 class="text-lg font-semibold mb-3">{% trans "Video" %}</h2>
       <div class="aspect-video w-full">
-        <iframe class="w-full h-full rounded-lg" src="{{ lecture.youtube_url|youtube_embed }}" frameborder="0" allowfullscreen></iframe>
+        <iframe class="w-full h-full rounded-lg" src="{{ lecture.youtube_url|youtube_embed }}" frameborder="0" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"></iframe>
       </div>
     </div>
   {% endif %}
@@ -41,7 +50,11 @@
   {% endif %}
 
   <div>
-    <a href="{% url 'academics:student_course_detail' version.id %}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Back to lectures" %}</a>
+    {% if is_preview %}
+      <a href="{% url 'academics:admin_version_detail' version.course.id version.id %}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Back to version" %}</a>
+    {% else %}
+      <a href="{% url 'academics:student_course_detail' version.id %}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Back to lectures" %}</a>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

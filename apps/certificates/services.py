@@ -9,6 +9,7 @@ from io import BytesIO
 from django.db import transaction
 from django.template.loader import render_to_string
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 from apps.academics.models import DiplomaEnrollment
 from apps.progression.constants import (
@@ -84,7 +85,7 @@ def generate_certificate_pdf(
     ).first()
 
     if not completion:
-        raise ValueError("Student has not completed/graduated yet.")
+        raise ValueError(_("Student has not completed/graduated yet."))
 
     template = CertificateTemplate.objects.filter(
         diploma=enrollment.cohort.diploma,
@@ -99,7 +100,7 @@ def generate_certificate_pdf(
         status__in=[CERTIFICATE_STATUS_GENERATED, CERTIFICATE_STATUS_AVAILABLE],
     ).first()
     if existing_active:
-        raise ValueError("An active certificate already exists for this enrollment.")
+        raise ValueError(_("An active certificate already exists for this enrollment."))
 
     certificate_number = get_next_certificate_number(
         enrollment.cohort.diploma_id, student.id,
@@ -200,7 +201,7 @@ def revoke_certificate(
     reason: str = "",
 ) -> GeneratedCertificate:
     if not reason:
-        raise ValueError("Reason is required for revocation.")
+        raise ValueError(_("Reason is required for revocation."))
     cert.status = CERTIFICATE_STATUS_REVOKED
     cert.revoked_at = timezone.now()
     cert.revoked_by = actor
@@ -218,7 +219,7 @@ def regenerate_certificate(
     reason: str = "",
 ) -> GeneratedCertificate:
     if not reason:
-        raise ValueError("Reason is required for regeneration.")
+        raise ValueError(_("Reason is required for regeneration."))
     cert.status = CERTIFICATE_STATUS_REGENERATION
     cert.save(update_fields=["status"])
 

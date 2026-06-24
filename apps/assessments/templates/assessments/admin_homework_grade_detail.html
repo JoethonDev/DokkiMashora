@@ -2,7 +2,7 @@
 {% block title %}{{ submission.assessment.title }} - {% trans "Grade Homework" %}{% endblock %}
 {% block content %}
 <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
-  <nav class="mb-6 text-sm text-slate-500 dark:text-slate-400" aria-label="breadcrumb">
+  <nav class="mb-6 text-sm text-slate-500 dark:text-slate-400" aria-label="{% trans "breadcrumb" %}">
     <ol class="flex flex-wrap items-center gap-1">
       <li class="flex items-center gap-1"><a href="{% url 'assessments:admin_homework_list' %}" class="hover:text-brand-600 dark:hover:text-brand-400">{% trans "Homework" %}</a><span class="text-slate-300 dark:text-slate-600">/</span></li>
       <li class="flex items-center gap-1"><span class="text-slate-700 dark:text-slate-200 font-medium">{{ submission.student.email }}</span></li>
@@ -27,7 +27,7 @@
         </p>
       </div>
     </div>
-    <dl class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+    <dl class="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-sm">
       <div>
         <dt class="text-slate-500 dark:text-slate-400">{% trans "Submitted at" %}</dt>
         <dd class="font-semibold text-slate-900 dark:text-slate-100 text-xs tabular-nums">{% dt submission.submitted_at %}</dd>

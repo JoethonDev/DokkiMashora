@@ -55,3 +55,6 @@ Thumbs.db
 
 # --- Root-level screenshots -------------------------------------------------
 localhost_*.png
+node_modules/
+scripts/
+tests/

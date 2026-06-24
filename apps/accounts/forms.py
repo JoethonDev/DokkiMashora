@@ -56,3 +56,9 @@ class AdminUserChangeForm(UserChangeForm):
             "is_active",
             "is_staff",
         )
+
+
+class UserEditForm(forms.ModelForm):
+    class Meta:
+        model = User
+        fields = ["full_name", "full_name_ar", "phone", "national_id", "status", "is_active"]

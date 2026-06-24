@@ -19,4 +19,9 @@ urlpatterns = [
         views.payment_record_detail,
         name="record_detail",
     ),
+    path(
+        "enrollment/<int:student_id>/<str:enrollment_type>/<int:enrollment_id>/toggle/",
+        views.enrollment_payment_toggle,
+        name="enrollment_payment_toggle",
+    ),
 ]
