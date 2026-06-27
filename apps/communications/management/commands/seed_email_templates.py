@@ -5,9 +5,11 @@ from __future__ import annotations
 from django.core.management.base import BaseCommand
 
 from apps.communications.constants import (
+    DESIGN_BRANDED,
     TEMPLATE_ACCEPTANCE,
     TEMPLATE_ACTIVATION,
     TEMPLATE_ENTRANCE_EXAM_INVITATION,
+    TEMPLATE_PAYMENT_NOTIFICATION,
     TEMPLATE_RECEIVED,
     TEMPLATE_REJECTION,
 )
@@ -69,6 +71,19 @@ DEFAULT_TEMPLATES = {
             "Welcome aboard!\nDokkiMashora admissions"
         ),
     },
+    TEMPLATE_PAYMENT_NOTIFICATION: {
+        "name": "Payment notification",
+        "subject": "Payment received for your enrollment",
+        "body": (
+            "Hello {{ full_name }},\n\n"
+            "Payment has been received for your enrollment.\n\n"
+            "Amount: {{ amount }} {{ currency }}\n"
+            "Date: {{ due_at }}\n"
+            "Reference: {{ reference }}\n"
+            "Status: {{ status }}\n\n"
+            "Thank you,\nDokkiMashora admissions"
+        ),
+    },
 }
 
 
@@ -84,6 +99,7 @@ class Command(BaseCommand):
                     "subject": payload["subject"],
                     "body": payload["body"],
                     "is_active": True,
+                    "design": DESIGN_BRANDED,
                 },
             )
             self.stdout.write(

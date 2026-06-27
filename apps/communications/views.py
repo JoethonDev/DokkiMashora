@@ -7,17 +7,44 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
+from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods, require_POST
 
+from apps.academics.constants import ENROLLMENT_STATUS_CHOICES
+from apps.academics.models import Cohort, Diploma
 from apps.audit.constants import ACTION_BULK_EMAIL_SENT
 from apps.audit.services import record_audit_event
 from apps.core.pagination import paginate
 from apps.core.permissions import ROLE_SENIOR_STAFF, role_required, safe_int
 
-from .constants import REQUIRED_VARIABLES_BY_SLUG, SAMPLE_CONTEXT_BY_SLUG, TEMPLATE_SLUGS
-from .models import BulkEmailSend, EmailTemplate
-from .services import create_bulk_draft, get_global_footer, has_unresolved_variables, resolve_recipients, send_bulk_email
+from .constants import (
+    ALL_VARIABLE_SAMPLES,
+    AVAILABLE_VARIABLES_BY_SLUG,
+    DESIGN_BRANDED,
+    DESIGN_CHOICES,
+    REQUIRED_VARIABLES_BY_SLUG,
+    SAMPLE_CONTEXT_BY_SLUG,
+    TEMPLATE_SLUGS,
+)
+from .models import BulkEmailSend, EmailFooter, EmailTemplate
+from .services import (
+    _wrap_in_design,
+    create_bulk_draft,
+    get_global_footer,
+    has_unresolved_variables,
+    resolve_recipients,
+    send_bulk_email,
+)
+
+
+def _bulk_email_form_context():
+    return {
+        "diplomas": Diploma.objects.filter(is_active=True).order_by("title"),
+        "cohorts": Cohort.objects.filter(is_active=True).select_related("diploma").order_by("-start_date"),
+        "status_choices": ENROLLMENT_STATUS_CHOICES,
+    }
+
 
 
 @login_required
@@ -31,20 +58,17 @@ def bulk_email_create(request):
         filter_diploma = request.POST.get("filter_diploma", "").strip()
         filter_cohort = request.POST.get("filter_cohort", "").strip()
         filter_status = request.POST.get("filter_status", "").strip()
+        recipient_search = request.POST.get("recipient_search", "").strip()
         manual_emails = request.POST.get("manual_emails", "").strip()
 
         if not subject or not body:
+            ctx = {"templates": templates, "subject": subject, "body": body,
+                   "template_id": template_id, "filter_diploma": filter_diploma,
+                   "filter_cohort": filter_cohort, "filter_status": filter_status,
+                   "recipient_search": recipient_search, "manual_emails": manual_emails}
+            ctx.update(_bulk_email_form_context())
             messages.error(request, _("Subject and body are required."))
-            return render(request, "communications/bulk_email_create.html", {
-                "templates": templates,
-                "subject": subject,
-                "body": body,
-                "template_id": template_id,
-                "filter_diploma": filter_diploma,
-                "filter_cohort": filter_cohort,
-                "filter_status": filter_status,
-                "manual_emails": manual_emails,
-            })
+            return render(request, "communications/bulk_email_create.html", ctx)
 
         filter_criteria = {}
         diploma_val = safe_int(filter_diploma)
@@ -61,13 +85,14 @@ def bulk_email_create(request):
             "body": body,
             "template_id": template_id,
             "filter_criteria": filter_criteria,
+            "recipient_search": recipient_search,
             "manual_emails": manual_emails,
         }
         return redirect("communications:bulk_email_preview")
 
-    return render(request, "communications/bulk_email_create.html", {
-        "templates": templates,
-    })
+    ctx = {"templates": templates}
+    ctx.update(_bulk_email_form_context())
+    return render(request, "communications/bulk_email_create.html", ctx)
 
 
 @login_required
@@ -78,10 +103,29 @@ def bulk_email_preview(request):
         messages.info(request, _("No draft found. Start a new bulk email."))
         return redirect("communications:bulk_email_create")
 
+    # Look up template for design info
+    template_obj = None
+    design = DESIGN_BRANDED
+    design_label = ""
+    tid = draft.get("template_id")
+    if tid:
+        try:
+            template_obj = EmailTemplate.objects.get(id=tid)
+            design = template_obj.design
+            design_label = template_obj.get_design_display()
+        except EmailTemplate.DoesNotExist:
+            pass
+    footer_text = get_global_footer()
+    rendered_html = _wrap_in_design(draft["body"], design, footer_text)
+
     recipients = resolve_recipients(
         filter_criteria=draft.get("filter_criteria"),
         manual_emails=draft.get("manual_emails", ""),
+        search_query=draft.get("recipient_search", ""),
     )
+    source_counts: dict[str, int] = {}
+    for r in recipients:
+        source_counts[r["source"]] = source_counts.get(r["source"], 0) + 1
 
     if request.method == "POST":
         if not recipients:
@@ -97,6 +141,9 @@ def bulk_email_preview(request):
                 "draft": draft,
                 "recipients": recipients,
                 "recipient_count": len(recipients),
+                "source_counts": source_counts,
+                "rendered_html": rendered_html,
+                "design_label": design_label,
             })
 
         bulk_send = create_bulk_draft(
@@ -105,6 +152,7 @@ def bulk_email_preview(request):
             template_id=draft.get("template_id"),
             filter_criteria=draft.get("filter_criteria"),
             manual_emails=draft.get("manual_emails", ""),
+            resolved_recipients=recipients,
             sent_by=request.user,
         )
         send_bulk_email(bulk_send)
@@ -134,6 +182,9 @@ def bulk_email_preview(request):
         "draft": draft,
         "recipients": recipients,
         "recipient_count": len(recipients),
+        "source_counts": source_counts,
+        "rendered_html": rendered_html,
+        "design_label": design_label,
     })
 
 
@@ -179,7 +230,6 @@ def bulk_email_discard(request):
 def admin_template_list(request):
     """List all EmailTemplate records with preview links."""
     templates = EmailTemplate.objects.all().order_by("slug")
-    from .models import EmailFooter
     footer = EmailFooter.objects.first()
     return render(request, "communications/admin_template_list.html", {
         "templates": templates,
@@ -197,6 +247,7 @@ def admin_template_edit(request, slug):
         subject = request.POST.get("subject", "").strip()
         body = request.POST.get("body", "").strip()
         enabled = request.POST.get("is_enabled_for_action") == "on"
+        design = request.POST.get("design", "").strip()
         if not subject:
             messages.error(request, _("Subject is required."))
         elif not body:
@@ -205,19 +256,27 @@ def admin_template_edit(request, slug):
             template.subject = subject
             template.body = body
             template.is_enabled_for_action = enabled
+            if design in dict(DESIGN_CHOICES):
+                template.design = design
             try:
                 template.full_clean()
-                template.save(update_fields=["subject", "body", "is_enabled_for_action"])
+                template.save(update_fields=["subject", "body", "is_enabled_for_action", "design"])
                 messages.success(request, _("Template updated."))
                 return redirect("communications:admin_template_list")
             except ValidationError as e:
                 for field, errors in e.message_dict.items():
                     for err in errors:
                         messages.error(request, f"{field}: {err}")
+    avail = AVAILABLE_VARIABLES_BY_SLUG.get(slug, {})
     return render(request, "communications/admin_template_form.html", {
         "template": template,
         "required_vars": REQUIRED_VARIABLES_BY_SLUG.get(slug, []),
+        "available_vars": avail,
+        "all_variable_samples": ALL_VARIABLE_SAMPLES,
         "all_slugs": TEMPLATE_SLUGS,
+        "design_choices": DESIGN_CHOICES,
+        "href_preview": reverse("communications:admin_template_preview", args=[slug]),
+        "href_list": reverse("communications:admin_template_list"),
     })
 
 
@@ -226,29 +285,40 @@ def admin_template_edit(request, slug):
 def admin_template_preview(request, slug):
     """Preview an EmailTemplate rendered with sample context."""
     template = get_object_or_404(EmailTemplate, slug=slug)
+    design = request.GET.get("design", template.design)
+    if design not in dict(DESIGN_CHOICES):
+        design = template.design
     context = SAMPLE_CONTEXT_BY_SLUG.get(slug, {})
     try:
         rendered_subject, rendered_body = template.render(context)
     except Exception:
         rendered_subject, rendered_body = template.subject, template.body
-    design = request.GET.get("design", "")
     footer_text = get_global_footer()
-    rendered_html = ""
-    if design in ("basic", "branded", "minimal"):
-        rendered_html = render_to_string(
-            f"communications/email_designs/{design}.html",
-            {"content": rendered_body, "footer": footer_text},
-            request=request,
-        )
+    rendered_html = render_to_string(
+        f"communications/email_designs/{design}.html",
+        {"content": rendered_body, "footer": footer_text},
+        request=request,
+    )
     return render(request, "communications/admin_template_preview.html", {
         "template": template,
         "rendered_subject": rendered_subject,
         "rendered_body": rendered_body,
         "rendered_html": rendered_html,
-        "selected_design": design,
-        "designs": ["basic", "branded", "minimal"],
         "sample_context": context,
         "missing": [v for v in template.variable_names() if v not in context],
+        "design_choices": DESIGN_CHOICES,
+        "current_design": design,
+    })
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+def admin_template_variables(request, slug: str):
+    """HTMX partial: available variables for the given slug."""
+    avail = AVAILABLE_VARIABLES_BY_SLUG.get(slug, {})
+    return render(request, "communications/partials/_template_variables.html", {
+        "available_vars": avail,
+        "all_variable_samples": ALL_VARIABLE_SAMPLES,
     })
 
 
@@ -265,6 +335,9 @@ def admin_template_create(request):
         subject = request.POST.get("subject", "").strip()
         body = request.POST.get("body", "").strip()
         enabled = request.POST.get("is_enabled_for_action") == "on"
+        design = request.POST.get("design", "").strip()
+        if design not in dict(DESIGN_CHOICES):
+            design = DESIGN_BRANDED
         if slug not in TEMPLATE_SLUGS:
             messages.error(request, _("Invalid action."))
         elif slug in used_slugs:
@@ -278,7 +351,7 @@ def admin_template_create(request):
         else:
             template = EmailTemplate(
                 slug=slug, name=name, subject=subject, body=body,
-                is_enabled_for_action=enabled,
+                is_enabled_for_action=enabled, design=design,
             )
             try:
                 template.full_clean()
@@ -293,6 +366,8 @@ def admin_template_create(request):
         "available_slugs": available,
         "all_slugs": TEMPLATE_SLUGS,
         "required_vars_by_slug": REQUIRED_VARIABLES_BY_SLUG,
+        "design_choices": DESIGN_CHOICES,
+        "href_list": reverse("communications:admin_template_list"),
     })
 
 
@@ -301,7 +376,6 @@ def admin_template_create(request):
 @require_http_methods(["GET", "POST"])
 def admin_footer_edit(request):
     """Edit the global email footer."""
-    from .models import EmailFooter
     footer = EmailFooter.objects.first()
     if not footer:
         footer = EmailFooter.objects.create(body="")

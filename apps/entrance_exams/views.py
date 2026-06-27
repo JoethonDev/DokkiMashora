@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from decimal import Decimal, InvalidOperation
 import json
+from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -11,23 +11,20 @@ from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods, require_POST
-
-from apps.core.htmx import is_htmx
 
 from apps.applications.constants import (
     PROGRAM_APP_STATUS_INVITED,
     PROGRAM_APP_STATUS_REJECTED,
 )
 from apps.applications.models import (
-    ApplicationEmailLog,
     EMAIL_ACTION_INVITATION,
     EMAIL_ACTION_REJECTION,
     ProgramApplication,
 )
+from apps.applications.models import ApplicationEmailLog as AEL  # noqa: N817
 from apps.audit.constants import ACTION_BULK_EMAIL_SENT
 from apps.audit.services import record_audit_event
 from apps.communications.constants import (
@@ -37,8 +34,10 @@ from apps.communications.constants import (
     TEMPLATE_REJECTION,
 )
 from apps.communications.services import send_templated_email
+from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import can_grade_attempt, is_admin, is_moderator
+from apps.students.models import StudentProfile
 
 from .constants import (
     ATTEMPT_STATUS_ASSIGNED,
@@ -62,8 +61,6 @@ from .services import (
 
 
 def _get_profile(user):
-    from apps.students.models import StudentProfile
-
     try:
         return StudentProfile.objects.get(user=user)
     except StudentProfile.DoesNotExist:
@@ -596,7 +593,7 @@ def admin_bulk_send_results(request, exam_id):
         except Exception:
             failed += 1
             continue
-        if record.status == "sent":
+        if record and record.status == "sent":
             sent += 1
         else:
             failed += 1
@@ -631,7 +628,7 @@ def _eligible_applications(cohort, action):
     if not status_filter:
         return ProgramApplication.objects.none()
 
-    already_sent = ApplicationEmailLog.objects.filter(
+    already_sent = AEL.objects.filter(
         cohort=cohort, action=action, status="sent", is_resend=False,
     ).values_list("application_id", flat=True)
 
@@ -674,20 +671,32 @@ def admin_cohort_email(request, exam_id):
             if not email_to:
                 failed_count += 1
                 continue
+            context = {
+                "full_name": prog_app.student.full_name or "",
+            }
+            if slug == TEMPLATE_ENTRANCE_EXAM_INVITATION:
+                context.update(
+                    exam_title=exam.title,
+                    cohort_name=cohort.name or "",
+                    exam_url="",
+                    exam_open_at="",
+                    exam_close_at="",
+                )
+            else:
+                context.update(
+                    rejection_reason=prog_app.rejection_reason or "",
+                    cohort_name=cohort.name or "",
+                )
             try:
                 record = send_templated_email(
                     slug=slug,
                     to_email=email_to,
-                    context={
-                        "full_name": prog_app.student.full_name or "",
-                        "exam_title": exam.title,
-                        "cohort_name": cohort.name if cohort else "",
-                    },
+                    context=context,
                     sent_by=request.user,
                 )
             except Exception:
                 failed_count += 1
-                ApplicationEmailLog.objects.create(
+                AEL.objects.create(
                     application=prog_app.root_application,
                     cohort=cohort, action=action, template_slug=slug,
                     recipient=email_to, status="failed",
@@ -695,13 +704,14 @@ def admin_cohort_email(request, exam_id):
                 )
                 continue
 
-            ApplicationEmailLog.objects.create(
+            AEL.objects.create(
                 application=prog_app.root_application,
                 cohort=cohort, action=action, template_slug=slug,
-                recipient=email_to, sent_at=record.sent_at or timezone.now(),
-                sent_by=request.user, status=record.status,
+                recipient=email_to,
+                sent_at=record.sent_at or timezone.now() if record else None,
+                sent_by=request.user, status=record.status if record else "failed",
             )
-            if record.status == "sent":
+            if record and record.status == "sent":
                 sent_count += 1
             else:
                 failed_count += 1
@@ -721,7 +731,7 @@ def admin_cohort_email(request, exam_id):
         )
         return redirect("entrance_exams:admin_detail", exam_id=exam.id)
 
-    sent_logs = ApplicationEmailLog.objects.filter(
+    sent_logs = AEL.objects.filter(
         cohort=cohort, status="sent",
     ).select_related("application__student", "sent_by").order_by("-sent_at")[:50]
     context = {
@@ -733,7 +743,7 @@ def admin_cohort_email(request, exam_id):
     # ponytail: batch-lookup ProgramApplication ids for resend links
     prog_app_ids = dict(
         ProgramApplication.objects.filter(
-            root_application_id__in=[l.application_id for l in sent_logs],
+            root_application_id__in=[log.application_id for log in sent_logs],
             cohort=cohort,
         ).values_list("root_application_id", "id")
     )
@@ -790,18 +800,28 @@ def admin_app_email_resend(request, exam_id, app_id):
         if action == EMAIL_ACTION_INVITATION
         else TEMPLATE_REJECTION
     )
+    context = {"full_name": prog_app.student.full_name or ""}
+    if slug == TEMPLATE_ENTRANCE_EXAM_INVITATION:
+        context.update(
+            exam_title=exam.title,
+            cohort_name=cohort.name or "",
+            exam_url="",
+            exam_open_at="",
+            exam_close_at="",
+        )
+    else:
+        context.update(
+            rejection_reason=prog_app.rejection_reason or "",
+            cohort_name=cohort.name or "",
+        )
     try:
         record = send_templated_email(
             slug=slug, to_email=email_to,
-            context={
-                "full_name": prog_app.student.full_name or "",
-                "exam_title": exam.title,
-                "cohort_name": cohort.name if cohort else "",
-            },
+            context=context,
             sent_by=request.user,
         )
     except Exception:
-        ApplicationEmailLog.objects.create(
+        AEL.objects.create(
             application=prog_app.root_application, cohort=cohort,
             action=action, template_slug=slug, recipient=email_to,
             status="failed", error="Exception during send", is_resend=True,
@@ -809,11 +829,11 @@ def admin_app_email_resend(request, exam_id, app_id):
         messages.error(request, _("Failed to resend email."))
         return redirect("entrance_exams:admin_detail", exam_id=exam.id)
 
-    ApplicationEmailLog.objects.create(
+    AEL.objects.create(
         application=prog_app.root_application, cohort=cohort,
         action=action, template_slug=slug, recipient=email_to,
-        sent_at=record.sent_at or timezone.now(),
-        sent_by=request.user, status=record.status, is_resend=True,
+        sent_at=record.sent_at or timezone.now() if record else None,
+        sent_by=request.user, status=record.status if record else "failed", is_resend=True,
     )
     record_audit_event(
         actor=request.user, action=ACTION_BULK_EMAIL_SENT,
@@ -829,7 +849,6 @@ def admin_email_log_list(request):
     """List ApplicationEmailLog records in the custom admin UI."""
     if not is_admin(request.user):
         raise PermissionDenied
-    from apps.applications.models import ApplicationEmailLog as AEL
     qs = AEL.objects.select_related("application__student", "cohort", "sent_by").all()
     page_obj, pagination_qs = paginate(request, qs, per_page=25)
     return render(request, "entrance_exams/admin_email_log_list.html", {

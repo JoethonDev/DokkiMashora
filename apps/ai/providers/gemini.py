@@ -10,6 +10,11 @@ from django.utils.translation import gettext_lazy as _
 
 from ..prompts import DEFAULT_PROMPT_VERSION, get_prompt
 
+try:
+    from google import genai
+except ImportError:
+    genai = None
+
 logger = logging.getLogger(__name__)
 
 GEMINI_DISABLED_REVIEW = object()
@@ -28,8 +33,8 @@ class GeminiProvider:
 
     def _get_client(self) -> Any:
         if self._client is None:
-            from google import genai
-
+            if genai is None:
+                raise ImportError("google.genai is not available")
             self._client = genai.Client(
                 api_key=self.api_key,
                 http_options={"timeout": self.timeout * 1000},

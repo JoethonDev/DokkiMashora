@@ -20,6 +20,18 @@
     <dd class="text-slate-900 dark:text-slate-100">{{ record.imported_by.get_full_name|default:"—" }}</dd>
     <dt class="text-slate-500 dark:text-slate-400">{% trans "Notes" %}</dt>
     <dd class="text-slate-900 dark:text-slate-100">{{ record.notes|default:"—" }}</dd>
+    {% if record.target_type %}
+    <dt class="text-slate-500 dark:text-slate-400">{% trans "Target" %}</dt>
+    <dd class="text-slate-900 dark:text-slate-100">
+      {% if record.target_type == "diploma" %}
+        {% trans "Diploma" %} — {{ record.target_snapshot.diploma_title|default:"—" }}
+        ({{ record.target_snapshot.cohort_name|default:"—" }})
+      {% elif record.target_type == "course" %}
+        {% trans "Course" %} — {{ record.target_snapshot.course_title|default:"—" }}
+        ({{ record.target_snapshot.course_version_name|default:"—" }})
+      {% endif %}
+    </dd>
+    {% endif %}
   </dl>
 </div>
 {% endblock %}

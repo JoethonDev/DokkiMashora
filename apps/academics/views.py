@@ -1,10 +1,12 @@
 """Views for academic structure management and student content access."""
 
 import logging
+import threading
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -13,6 +15,7 @@ from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_POST
 
 from apps.academics.audio import transcode_to_hls, validate_audio_file
+from apps.academics.constants import ENROLLMENT_STATUS_CHOICES
 from apps.academics.forms import (
     CohortForm,
     CourseForm,
@@ -24,12 +27,32 @@ from apps.academics.forms import (
 from apps.academics.models import (
     Cohort,
     Course,
+    CourseEnrollment,
     CourseVersion,
     Diploma,
+    DiplomaEnrollment,
     Lecture,
     Semester,
     SemesterCourse,
 )
+from apps.academics.services import (
+    can_access_course,
+    can_access_lecture,
+    get_student_course_versions,
+    get_visible_lectures,
+)
+from apps.core.htmx import is_htmx
+from apps.core.pagination import paginate
+from apps.core.permissions import (
+    ROLE_EXAM_STAFF,
+    can_manage_course_version,
+    enrollment_scope_filter,
+    is_student,
+    role_required,
+)
+from apps.core.views import safe_next_url
+from apps.storage.services import storage_service
+from apps.students.models import StudentProfile
 
 
 def _auto_create_cohort_versions(course, semester, user):
@@ -45,18 +68,6 @@ def _auto_create_cohort_versions(course, semester, user):
         if not created and cv.semester_id != semester.id:
             cv.semester = semester
             cv.save(update_fields=["semester", "updated_at"])
-from apps.academics.services import (
-    can_access_course,
-    can_access_lecture,
-    get_student_course_versions,
-    get_visible_lectures,
-)
-from apps.core.htmx import is_htmx
-from apps.core.pagination import paginate
-from apps.core.permissions import ROLE_EXAM_STAFF, is_student, role_required
-from apps.core.views import safe_next_url
-from apps.storage.services import storage_service
-from apps.students.models import StudentProfile
 
 logger = logging.getLogger(__name__)
 
@@ -561,6 +572,8 @@ def admin_version_detail(request, course_id, version_id):
 def admin_lecture_create(request, course_id, version_id):
     course = get_object_or_404(Course, id=course_id)
     version = get_object_or_404(CourseVersion, id=version_id, course=course)
+    if not can_manage_course_version(request.user, version):
+        raise PermissionDenied
     next_url = safe_next_url(request)
     if request.method == "POST":
         form = LectureForm(request.POST, request.FILES)
@@ -586,6 +599,8 @@ def admin_lecture_edit(request, course_id, version_id, lecture_id):
     course = get_object_or_404(Course, id=course_id)
     version = get_object_or_404(CourseVersion, id=version_id, course=course)
     lecture = get_object_or_404(Lecture, id=lecture_id, course_version=version)
+    if not can_manage_course_version(request.user, version):
+        raise PermissionDenied
     next_url = safe_next_url(request)
     if request.method == "POST":
         form = LectureForm(request.POST, request.FILES, instance=lecture)
@@ -610,6 +625,8 @@ def admin_lecture_delete(request, course_id, version_id, lecture_id):
     course = get_object_or_404(Course, id=course_id)
     version = get_object_or_404(CourseVersion, id=version_id, course=course)
     lecture = get_object_or_404(Lecture, id=lecture_id, course_version=version)
+    if not can_manage_course_version(request.user, version):
+        raise PermissionDenied
     next_url = safe_next_url(request)
     lecture.delete()
     messages.success(request, _("Lecture deleted."))
@@ -656,7 +673,6 @@ def _process_lecture_audio(request, lecture, files):
             "audio_content_type", "audio_byte_size", "audio_checksum",
         ])
         # ponytail: sync FFmpeg blocks the request. Switch to Celery/Task queue if uploads >50MB.
-        import threading
         threading.Thread(target=transcode_to_hls, args=(lecture, data, filename, content_type), daemon=True).start()
     except Exception as exc:
         logger.exception("Audio upload/processing failed for lecture %s", lecture.id)
@@ -786,3 +802,115 @@ def admin_lecture_preview(request, course_id, version_id, lecture_id):
         "academics/student_lecture_view.html",
         {"version": version, "lecture": lecture, "is_preview": True},
     )
+
+
+@login_required
+@role_required(*ROLE_EXAM_STAFF)
+def admin_course_enrollment_list(request, course_id):
+    """Show who is enrolled in each version of a course."""
+    course = get_object_or_404(Course, id=course_id)
+    q = request.GET.get("q", "")
+    status_filter = request.GET.get("status", "")
+    version_filter = request.GET.get("version", "")
+    enrollments = CourseEnrollment.objects.filter(
+        course_version__course=course
+    ).select_related(
+        "student", "student__user", "course_version"
+    ).order_by("-created_at")
+    enrollments = enrollments.filter(enrollment_scope_filter(request.user, "course"))
+    if status_filter:
+        enrollments = enrollments.filter(status=status_filter)
+    if version_filter:
+        enrollments = enrollments.filter(course_version_id=version_filter)
+    if q:
+        enrollments = enrollments.filter(
+            Q(student__user__full_name__icontains=q)
+            | Q(student__user__email__icontains=q)
+        )
+    paginator = Paginator(enrollments, 25)
+    page_number = request.GET.get("page", 1)
+    page_obj = paginator.get_page(page_number)
+    versions = CourseVersion.objects.filter(course=course)
+    status_choices = [
+        {"value": code, "label": str(label), "selected": status_filter == code}
+        for code, label in ENROLLMENT_STATUS_CHOICES
+    ]
+    version_choices = [
+        {"value": str(v.id), "label": str(v), "selected": version_filter == str(v.id)}
+        for v in versions
+    ]
+    filters = [
+        {"name": "status", "label": _("Enrollment Status"), "value": status_filter, "options": status_choices},
+        {"name": "version", "label": _("Version"), "value": version_filter, "options": version_choices},
+    ]
+    pagination_qs = request.GET.copy()
+    if "page" in pagination_qs:
+        del pagination_qs["page"]
+    pagination_qs = pagination_qs.urlencode()
+    ctx = {
+        "page_obj": page_obj,
+        "search_value": q,
+        "filters": filters,
+        "pagination_qs": pagination_qs,
+        "course": course,
+        "enrollment_type": "course",
+    }
+    if is_htmx(request):
+        return render(request, "academics/partials/_enrollment_table.html", ctx)
+    return render(request, "academics/admin_enrollment_list.html", ctx)
+
+
+@login_required
+@role_required(*ROLE_EXAM_STAFF)
+def admin_diploma_enrollment_list(request, diploma_id):
+    """Show who is enrolled in a diploma, optionally filtered by cohort."""
+    diploma = get_object_or_404(Diploma, id=diploma_id)
+    q = request.GET.get("q", "")
+    status_filter = request.GET.get("status", "")
+    cohort_filter = request.GET.get("cohort", "")
+    enrollments = DiplomaEnrollment.objects.filter(
+        cohort__diploma=diploma
+    ).select_related(
+        "student", "student__user", "cohort"
+    ).order_by("-created_at")
+    enrollments = enrollments.filter(enrollment_scope_filter(request.user, "diploma"))
+    if status_filter:
+        enrollments = enrollments.filter(status=status_filter)
+    if cohort_filter:
+        enrollments = enrollments.filter(cohort_id=cohort_filter)
+    if q:
+        enrollments = enrollments.filter(
+            Q(student__user__full_name__icontains=q)
+            | Q(student__user__email__icontains=q)
+        )
+    paginator = Paginator(enrollments, 25)
+    page_number = request.GET.get("page", 1)
+    page_obj = paginator.get_page(page_number)
+    cohorts = diploma.cohorts.all()
+    status_choices = [
+        {"value": code, "label": str(label), "selected": status_filter == code}
+        for code, label in ENROLLMENT_STATUS_CHOICES
+    ]
+    cohort_choices = [
+        {"value": str(c.id), "label": c.name, "selected": cohort_filter == str(c.id)}
+        for c in cohorts
+    ]
+    filters = [
+        {"name": "status", "label": _("Enrollment Status"), "value": status_filter, "options": status_choices},
+        {"name": "cohort", "label": _("Cohort"), "value": cohort_filter, "options": cohort_choices},
+    ]
+    pagination_qs = request.GET.copy()
+    if "page" in pagination_qs:
+        del pagination_qs["page"]
+    pagination_qs = pagination_qs.urlencode()
+    ctx = {
+        "page_obj": page_obj,
+        "search_value": q,
+        "filters": filters,
+        "pagination_qs": pagination_qs,
+        "diploma": diploma,
+        "enrollment_type": "diploma",
+    }
+    if is_htmx(request):
+        return render(request, "academics/partials/_enrollment_table.html", ctx)
+    return render(request, "academics/admin_enrollment_list.html", ctx)

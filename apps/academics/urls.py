@@ -12,6 +12,7 @@ urlpatterns = [
     path("manage/diplomas/create/", views.admin_diploma_create, name="admin_diploma_create"),
     path("manage/diplomas/<int:diploma_id>/", views.admin_diploma_detail, name="admin_diploma_detail"),
     path("manage/diplomas/<int:diploma_id>/edit/", views.admin_diploma_edit, name="admin_diploma_edit"),
+    path("manage/diplomas/<int:diploma_id>/enrollments/", views.admin_diploma_enrollment_list, name="admin_diploma_enrollment_list"),
     # Admin: semesters
     path(
         "manage/diplomas/<int:diploma_id>/semesters/create/",
@@ -50,6 +51,7 @@ urlpatterns = [
     path("manage/diplomas/semester-options/", views.admin_diploma_semester_options, name="admin_diploma_semester_options"),
     path("manage/courses/<int:course_id>/", views.admin_course_detail, name="admin_course_detail"),
     path("manage/courses/<int:course_id>/edit/", views.admin_course_edit, name="admin_course_edit"),
+    path("manage/courses/<int:course_id>/enrollments/", views.admin_course_enrollment_list, name="admin_course_enrollment_list"),
     # Admin: course versions
     path(
         "manage/courses/<int:course_id>/versions/create/",

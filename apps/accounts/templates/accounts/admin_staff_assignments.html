@@ -1,0 +1,233 @@
+{% extends "base.html" %}{% load i18n %}
+{% block title %}{{ staff_user.full_name|default:staff_user.email }} — {% trans "Assignments" %} — {{ block.super }}{% endblock %}
+{% block content %}
+{% url 'accounts:admin_staff_list' as staff_list_url %}
+{% url 'accounts:admin_staff_assignments' staff_user.id as assignments_url %}
+
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <header class="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Staff" %}</p>
+      <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ staff_user.full_name|default:staff_user.email }}</h1>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{{ staff_role }}</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a href="{% url 'accounts:admin_user_edit' staff_user.id %}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Edit" %}</a>
+      <a href="{{ back_url }}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm bg-brand-600 text-white hover:bg-brand-700 shadow-sm">{% trans "Back" %}</a>
+    </div>
+  </header>
+
+  {% if staff_role == GROUP_TEACHER or staff_role == GROUP_ADMIN or staff_role == GROUP_SUPER_ADMIN %}
+  {% comment %}Teacher assignments{% endcomment %}
+  <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 mb-6">
+    <h2 class="text-base font-semibold mb-4">{% trans "Teacher Assignments" %}</h2>
+
+    <form method="post" action="{% url 'accounts:admin_teacher_assignment_create' staff_user.id %}" class="flex flex-wrap gap-3 items-end mb-4 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+      {% csrf_token %}
+      <div>
+        <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{% trans "Course Version" %}</label>
+        <select name="course_version" class="rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm">
+          <option value="">{% trans "Select…" %}</option>
+          {% for cv in course_versions %}
+            <option value="{{ cv.id }}">{{ cv }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        {% include "partials/_button.html" with label=_("Add Teacher Assignment") variant="primary" type="submit" size="sm" %}
+      </div>
+    </form>
+
+    {% if teacher_assignments %}
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm divide-y divide-slate-200 dark:divide-slate-800">
+          <thead class="bg-slate-50 dark:bg-slate-800/50">
+            <tr class="text-slate-600 dark:text-slate-300">
+              <th class="px-3 py-2 text-start font-medium">{% trans "Scope" %}</th>
+              <th class="px-3 py-2 text-start font-medium">{% trans "Course / Version" %}</th>
+              <th class="px-3 py-2 text-start font-medium">{% trans "Active" %}</th>
+              <th class="px-3 py-2 text-start font-medium">{% trans "Actions" %}</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+            {% for ta in teacher_assignments %}
+              <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                <td class="px-3 py-2">{{ ta.get_scope_type_display }}</td>
+                <td class="px-3 py-2">{{ ta.course_version|default:"—" }}</td>
+                <td class="px-3 py-2">
+                  {% if ta.active %}
+                    {% include "partials/_badge.html" with label=_("Active") tone="success" %}
+                  {% else %}
+                    {% include "partials/_badge.html" with label=_("Inactive") tone="danger" %}
+                  {% endif %}
+                </td>
+                <td class="px-3 py-2">
+                  {% if ta.active %}
+                    <form method="post" action="{% url 'accounts:admin_teacher_assignment_delete' staff_user.id ta.id %}" onsubmit="return confirm('{% trans "Revoke this assignment?" %}')">
+                      {% csrf_token %}
+                      {% include "partials/_button.html" with label=_("Revoke") variant="danger" type="submit" size="sm" %}
+                    </form>
+                  {% else %}
+                    <span class="text-xs text-slate-400">{% trans "Revoked" %}</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="text-sm text-slate-500 dark:text-slate-400">{% trans "No teacher assignments." %}</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if staff_role == GROUP_MODERATOR or staff_role == GROUP_ADMIN or staff_role == GROUP_SUPER_ADMIN %}
+  {% comment %}Moderator assignments{% endcomment %}
+  <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 mb-6">
+    <h2 class="text-base font-semibold mb-4">{% trans "Moderator Assignments" %}</h2>
+
+    <form method="post" action="{% url 'accounts:admin_moderator_assignment_create' staff_user.id %}" class="flex flex-wrap gap-3 items-end mb-4 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+      {% csrf_token %}
+      <div>
+        <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{% trans "Course Version" %}</label>
+        <select name="course_version" required class="rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm">
+          <option value="">{% trans "Select…" %}</option>
+          {% for cv in course_versions %}
+            <option value="{{ cv.id }}">{{ cv }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{% trans "Scope" %}</label>
+        <select name="scope" class="rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm" onchange="toggleModeratorScope(this.value)">
+          <option value="cohort">{% trans "Entire cohort" %}</option>
+          <option value="cluster">{% trans "Specific cluster" %}</option>
+        </select>
+      </div>
+      <div id="cohort-field">
+        <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{% trans "Cohort" %}</label>
+        <select name="cohort" class="rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm">
+          <option value="">{% trans "Select…" %}</option>
+          {% for c in cohorts %}
+            <option value="{{ c.id }}">{{ c }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div id="cluster-field" style="display:none">
+        <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{% trans "Cluster" %}</label>
+        <select name="cluster" class="rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm">
+          <option value="">{% trans "Select…" %}</option>
+          {% for c in cohorts %}
+            {% for cluster in c.clusters.all %}
+              <option value="{{ cluster.id }}">{{ cluster.name }} ({{ c.name }})</option>
+            {% endfor %}
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        {% include "partials/_button.html" with label=_("Add Moderator Assignment") variant="primary" type="submit" size="sm" %}
+      </div>
+    </form>
+    <script>
+    function toggleModeratorScope(val) {
+      document.getElementById('cohort-field').style.display = val === 'cohort' ? '' : 'none';
+      document.getElementById('cluster-field').style.display = val === 'cluster' ? '' : 'none';
+    }
+    </script>
+
+    {% if moderator_assignments %}
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm divide-y divide-slate-200 dark:divide-slate-800">
+          <thead class="bg-slate-50 dark:bg-slate-800/50">
+            <tr class="text-slate-600 dark:text-slate-300">
+              <th class="px-3 py-2 text-start font-medium">{% trans "Course Version" %}</th>
+              <th class="px-3 py-2 text-start font-medium">{% trans "Cohort" %}</th>
+              <th class="px-3 py-2 text-start font-medium">{% trans "Cluster" %}</th>
+              <th class="px-3 py-2 text-start font-medium">{% trans "Active" %}</th>
+              <th class="px-3 py-2 text-start font-medium">{% trans "Actions" %}</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+            {% for ma in moderator_assignments %}
+              <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                <td class="px-3 py-2">{{ ma.course_version }}</td>
+                <td class="px-3 py-2">{{ ma.cohort }}</td>
+                <td class="px-3 py-2">{% include "partials/_blank.html" with value=ma.cluster %}</td>
+                <td class="px-3 py-2">
+                  {% if ma.active %}
+                    {% include "partials/_badge.html" with label=_("Active") tone="success" %}
+                  {% else %}
+                    {% include "partials/_badge.html" with label=_("Inactive") tone="danger" %}
+                  {% endif %}
+                </td>
+                <td class="px-3 py-2">
+                  {% if ma.active %}
+                    <form method="post" action="{% url 'accounts:admin_moderator_assignment_delete' staff_user.id ma.id %}" onsubmit="return confirm('{% trans "Revoke this assignment?" %}')">
+                      {% csrf_token %}
+                      {% include "partials/_button.html" with label=_("Revoke") variant="danger" type="submit" size="sm" %}
+                    </form>
+                  {% else %}
+                    <span class="text-xs text-slate-400">{% trans "Revoked" %}</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="text-sm text-slate-500 dark:text-slate-400">{% trans "No moderator assignments." %}</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if staff_role == GROUP_MODERATOR or staff_role == GROUP_ADMIN or staff_role == GROUP_SUPER_ADMIN %}
+  {% comment %}Student clusters{% endcomment %}
+  <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 mb-6">
+    <h2 class="text-base font-semibold mb-4">{% trans "Student Clusters" %}</h2>
+    {% regroup cohorts by diploma as diploma_groups %}
+    {% for group in diploma_groups %}
+      <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mt-4 mb-2">{{ group.grouper }}</h3>
+      {% for cohort in group.list %}
+        <div class="mb-4 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <span class="text-sm font-medium">{{ cohort.name }}</span>
+            <form method="post" action="{% url 'accounts:admin_student_cluster_create' cohort.id %}" class="flex gap-2 items-center">
+              {% csrf_token %}
+              <input type="text" name="name" placeholder="{% trans "Cluster name" %}" class="rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-xs">
+              {% include "partials/_button.html" with label=_("Create Cluster") variant="primary" type="submit" size="sm" %}
+            </form>
+          </div>
+          {% for cluster in cohort.clusters.all %}
+            <details class="mt-2 group">
+              <summary class="cursor-pointer text-sm font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700">{{ cluster.name }}</summary>
+              <div class="mt-2 ml-2">
+                <div id="cluster-{{ cluster.id }}-members">
+                  {% include "accounts/_cluster_members.html" %}
+                </div>
+                <form method="post"
+                      hx-post="{% url 'accounts:admin_student_cluster_membership_add' cluster.id %}"
+                      hx-target="#cluster-{{ cluster.id }}-members"
+                      hx-swap="outerHTML"
+                      class="flex flex-wrap gap-2 items-center">
+                  {% csrf_token %}
+                  <select name="students" multiple class="rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-xs max-h-24">
+                    {% for enrollment in cohort.enrollments.select_related %}
+                      <option value="{{ enrollment.student.id }}">{{ enrollment.student }}</option>
+                    {% endfor %}
+                  </select>
+                  {% include "partials/_button.html" with label=_("Add Selected") variant="primary" type="submit" size="sm" %}
+                </form>
+              </div>
+            </details>
+          {% empty %}
+            <p class="text-xs text-slate-400 ml-1">{% trans "No clusters yet." %}</p>
+          {% endfor %}
+        </div>
+      {% endfor %}
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

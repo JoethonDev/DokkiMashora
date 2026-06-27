@@ -1,5 +1,6 @@
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -65,7 +66,6 @@ class DiplomaProgressionRule(TimeStampedModel):
         return f"Rules: {self.diploma.title}"
 
     def clean(self):
-        from django.core.exceptions import ValidationError
         if self.final_exam_pass_percent < 0 or self.final_exam_pass_percent > 100:
             raise ValidationError(_("Final exam pass percent must be between 0 and 100."))
         if self.semester_pass_percent < 0 or self.semester_pass_percent > 100:
@@ -112,7 +112,6 @@ class SemesterProgressionRule(TimeStampedModel):
         return f"{self.semester} rule"
 
     def clean(self):
-        from django.core.exceptions import ValidationError
         if self.semester.diploma_id != self.diploma_rule.diploma_id:
             raise ValidationError(_("Semester must belong to the same diploma as the rule."))
 
@@ -391,6 +390,5 @@ class StudentDiplomaCompletion(TimeStampedModel):
         return f"{self.student} - {self.status}"
 
     def clean(self):
-        from django.core.exceptions import ValidationError
         if self.final_score is not None and (self.final_score < 0 or self.final_score > 100):
             raise ValidationError(_("Final score must be between 0 and 100."))

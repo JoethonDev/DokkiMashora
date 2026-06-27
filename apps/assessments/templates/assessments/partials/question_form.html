@@ -1,24 +1,10 @@
 {% load i18n form_tags %}
 {% if not full_page %}<div id="question-form-container">{% endif %}
 <form method="post" action="{{ question_save_url }}" class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-6"
-      {% if not full_page %}hx-post="{{ question_save_url }}" hx-target="#question-form-container" hx-swap="outerHTML"{% endif %}>
-  {% csrf_token %}
-  {% if form.non_field_errors %}
-    <div class="rounded-md border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 px-3 py-2 text-sm text-rose-800 dark:text-rose-200">{{ form.non_field_errors|join:" " }}</div>
-  {% endif %}
-
-  <fieldset>
-    <legend class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">{% trans "Question" %}</legend>
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
-      <div class="lg:col-span-7">{% include "partials/_field.html" with field=form.text %}</div>
-      <div class="lg:col-span-3">{% include "partials/_field.html" with field=form.question_type %}</div>
-      <div class="lg:col-span-2">{% include "partials/_field.html" with field=form.points %}</div>
-    </div>
-  </fieldset>
-
-  <div x-data="{
-    questionType: '{{ form.question_type.value|default:"mcq" }}',
-    choices: [
+      {% if not full_page %}hx-post="{{ question_save_url }}" hx-target="#question-form-container" hx-swap="outerHTML"{% endif %}
+      x-data="{
+        questionType: '{{ form.question_type.value|default:"mcq" }}',
+        choices: [
       {% for choice in choices %}
         { id: '{{ choice.id }}', text: '{{ choice.text|escapejs }}', is_correct: {% if choice.is_correct %}true{% else %}false{% endif %}, order: {{ choice.order|default:forloop.counter }} }{% if not forloop.last %},{% endif %}
       {% endfor %}
@@ -33,6 +19,30 @@
       this.choices.forEach((c, i) => c.order = i + 1);
     }
   }">
+  {% csrf_token %}
+  {% if form.non_field_errors %}
+    <div class="rounded-md border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 px-3 py-2 text-sm text-rose-800 dark:text-rose-200">{{ form.non_field_errors|join:" " }}</div>
+  {% endif %}
+
+  <fieldset>
+    <legend class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">{% trans "Question" %}</legend>
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <div class="lg:col-span-7">{% include "partials/_field.html" with field=form.text %}</div>
+      <div class="lg:col-span-3">
+        <label for="{{ form.question_type.id_for_label }}" class="block text-sm font-medium dm-text">{{ form.question_type.label }}{% if form.question_type.field.required %} <span class="text-rose-600">*</span>{% endif %}</label>
+        <div class="mt-1">
+          <select name="{{ form.question_type.html_name }}" id="{{ form.question_type.id_for_label }}" x-model="questionType"
+                  class="dm-input w-full rounded-lg px-3 py-2 text-sm shadow-sm">
+            {% for val, label in form.question_type.field.choices %}
+            <option value="{{ val }}" {% if form.question_type.value == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="lg:col-span-2">{% include "partials/_field.html" with field=form.points %}</div>
+    </div>
+  </fieldset>
+
     <div x-show="questionType === 'mcq'" x-cloak class="space-y-3">
       <div class="flex items-center justify-between gap-3">
         <h4 class="text-sm font-semibold text-slate-700 dark:text-slate-200">{% trans "Answer Choices" %}</h4>
@@ -53,7 +63,7 @@
                         class="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500">
                 <span>{% trans "Correct" %}</span>
               </label>
-              {% include "partials/_button.html" with type="button" label="×" variant="ghost" size="sm" class="text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:text-rose-400 dark:hover:bg-rose-950/40" attrs='@click="removeChoice(index)"' %}
+              {% include "partials/_button.html" with type="button" label="&#x2715;" variant="ghost" size="sm" class="text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:text-rose-400 dark:hover:bg-rose-950/40" attrs='@click="removeChoice(index)"' %}
             </div>
           </div>
         </template>
@@ -64,7 +74,6 @@
       {% include "partials/_field.html" with field=form.rubric %}
       <p class="text-xs text-slate-500 dark:text-slate-400">{% trans "The rubric is shown to graders, not to students." %}</p>
     </div>
-  </div>
 
   <div class="flex gap-2 pt-4">
     {% include "partials/_button.html" with label=_("Save Question") variant="primary" loading_label=_("Saving...") %}

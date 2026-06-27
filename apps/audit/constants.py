@@ -8,6 +8,7 @@ ACTION_APPLICATION_REJECTED = "application.rejected"
 ACTION_APPLICATION_ACTIVATED = "application.activated"
 ACTION_STUDENT_ACCESS_CHANGE = "student.access_change"
 ACTION_ENROLLMENT_CHANGE = "enrollment.change"
+ACTION_ENROLLMENT_DELETED = "enrollment.deleted"
 ACTION_EXAM_CREATED = "exam.created"
 ACTION_EXAM_UPDATED = "exam.updated"
 ACTION_EXAM_TOGGLED = "exam.toggled"
@@ -31,6 +32,9 @@ ACTION_APPLICATION_DECISION_REVERTED = "application.decision_reverted"
 ACTION_PAYMENT_UPLOAD_PREVIEWED = "payment.upload_previewed"
 ACTION_PAYMENT_UPLOAD_CONFIRMED = "payment.upload_confirmed"
 ACTION_PAYMENT_RECORD_UPDATED = "payment.record_updated"
+ACTION_PAYMENT_RECORD_DELETED = "payment.record_deleted"
+ACTION_USER_IMPORT_PREVIEWED = "user_import.previewed"
+ACTION_USER_IMPORT_CONFIRMED = "user_import.confirmed"
 
 AUDIT_ACTION_CHOICES = (
     (ACTION_APPLICATION_STATUS_CHANGE, _("Application status change")),
@@ -40,6 +44,7 @@ AUDIT_ACTION_CHOICES = (
     (ACTION_APPLICATION_DECISION_REVERTED, _("Application decision reverted")),
     (ACTION_STUDENT_ACCESS_CHANGE, _("Student access change")),
     (ACTION_ENROLLMENT_CHANGE, _("Enrollment change")),
+    (ACTION_ENROLLMENT_DELETED, _("Enrollment deleted")),
     (ACTION_EXAM_CREATED, _("Exam created")),
     (ACTION_EXAM_UPDATED, _("Exam updated")),
     (ACTION_EXAM_TOGGLED, _("Exam toggled")),
@@ -62,4 +67,7 @@ AUDIT_ACTION_CHOICES = (
     (ACTION_PAYMENT_UPLOAD_PREVIEWED, _("Payment upload previewed")),
     (ACTION_PAYMENT_UPLOAD_CONFIRMED, _("Payment upload confirmed")),
     (ACTION_PAYMENT_RECORD_UPDATED, _("Payment record updated")),
+    (ACTION_PAYMENT_RECORD_DELETED, _("Payment record deleted")),
+    (ACTION_USER_IMPORT_PREVIEWED, _("User import previewed")),
+    (ACTION_USER_IMPORT_CONFIRMED, _("User import confirmed")),
 )

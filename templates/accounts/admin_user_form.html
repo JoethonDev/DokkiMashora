@@ -14,8 +14,8 @@
     {% endfor %}
     <div class="flex gap-3 pt-2">
       {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
-      <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm bg-brand-600 text-white hover:bg-brand-700 shadow-sm">{% trans "Save" %}</button>
-      <a href="{% if next %}{{ next }}{% else %}{% url 'accounts:admin_user_detail' user_obj.id %}{% endif %}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Cancel" %}</a>
+      {% include "partials/_button.html" with label=_("Save") variant="primary" type="submit" %}
+      <a href="{% if next %}{{ next }}{% else %}{% url 'accounts:admin_user_detail' user_obj.id %}{% endif %}" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Cancel" %}</a>
     </div>
   </form>
 </div>

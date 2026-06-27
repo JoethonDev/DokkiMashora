@@ -1,0 +1,38 @@
+{% extends "base.html" %}{% load i18n %}
+{% block title %}{% if enrollment_type == "course" %}{{ course.title }}{% else %}{{ diploma.title }}{% endif %} - {% trans "Enrollments" %} - {{ block.super }}{% endblock %}
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <header class="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Admin" %}</p>
+      <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">
+        {% if enrollment_type == "course" %}
+          {% blocktrans with title=course.title %}{{ title }} — Enrollments{% endblocktrans %}
+        {% else %}
+          {% blocktrans with title=diploma.title %}{{ title }} — Enrollments{% endblocktrans %}
+        {% endif %}
+      </h1>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">
+        {% if enrollment_type == "course" %}
+          {% trans "Students enrolled in each version of this course" %}
+        {% else %}
+          {% trans "Students enrolled in this diploma, grouped by cohort" %}
+        {% endif %}
+      </p>
+    </div>
+    <div class="dm-action-row">
+      {% if enrollment_type == "course" %}
+        {% url 'academics:admin_course_detail' course.id as back_url %}{% include "partials/_button.html" with href=back_url label=_("Back to Course") variant="secondary" %}
+      {% else %}
+        {% url 'academics:admin_diploma_detail' diploma.id as back_url %}{% include "partials/_button.html" with href=back_url label=_("Back to Diploma") variant="secondary" %}
+      {% endif %}
+    </div>
+  </header>
+
+  {% include "partials/_search_filter.html" with class="mb-6" %}
+
+  <div id="list-table">
+    {% include "academics/partials/_enrollment_table.html" %}
+  </div>
+</div>
+{% endblock %}

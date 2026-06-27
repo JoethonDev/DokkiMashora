@@ -1,16 +1,27 @@
 from __future__ import annotations
 
+import csv
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_POST
 
 from apps.accounts.constants import GROUP_ADMIN, GROUP_MODERATOR, GROUP_SUPER_ADMIN
-from apps.audit.constants import ACTION_PAYMENT_UPLOAD_CONFIRMED, ACTION_PAYMENT_UPLOAD_PREVIEWED
+from apps.audit.constants import (
+    ACTION_PAYMENT_RECORD_DELETED,
+    ACTION_PAYMENT_UPLOAD_CONFIRMED,
+    ACTION_PAYMENT_UPLOAD_PREVIEWED,
+)
 from apps.audit.services import record_audit_event
+from apps.communications.constants import TEMPLATE_PAYMENT_NOTIFICATION
+from apps.communications.services import send_templated_email
 from apps.core.pagination import paginate
 from apps.core.permissions import role_required, safe_date_str
+from apps.students.models import StudentProfile
 
 from .constants import PAYMENT_STATUS_CHOICES, UPLOAD_STATUS_CHOICES, UPLOAD_STATUS_PREVIEWED
 from .forms import PaymentUploadForm
@@ -20,7 +31,13 @@ from .selectors import (
     get_upload_detail,
     get_upload_queryset,
 )
-from .services import confirm_upload, create_upload, mark_enrollment_paid, mark_enrollment_unpaid, preview_upload
+from .services import (
+    confirm_upload,
+    create_upload,
+    mark_enrollment_paid,
+    mark_enrollment_unpaid,
+    preview_upload,
+)
 
 ROLE_PAYMENT_STAFF = (GROUP_SUPER_ADMIN, GROUP_ADMIN, GROUP_MODERATOR)
 
@@ -51,6 +68,18 @@ def upload_list(request):
             "current_date_to": raw_date_to,
         },
     )
+
+
+@login_required
+@role_required(*ROLE_PAYMENT_STAFF)
+def download_payment_csv_template(request):
+    headers = ["national_id", "amount", "payment_date", "external_reference", "email", "phone", "notes", "diploma_enrollment_id", "course_enrollment_id", "target_type", "target_ref"]
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = 'attachment; filename="payment_template.csv"'
+    writer = csv.writer(response)
+    writer.writerow(headers)
+    writer.writerow(["29001010100001", "500.00", "2026-01-15", "INV-001", "student@example.com", "+201234567890", "Tuition fee", "", "", "diploma", "42"])
+    return response
 
 
 @login_required
@@ -197,12 +226,23 @@ def payment_record_detail(request, record_id):
 @role_required(*ROLE_PAYMENT_STAFF)
 def enrollment_payment_toggle(request, student_id, enrollment_type, enrollment_id):
     """Mark an enrollment paid or unpaid."""
-    from apps.students.models import StudentProfile
-
     student = get_object_or_404(StudentProfile, pk=student_id)
     action = request.POST.get("payment_action")
     if action == "mark_paid":
-        mark_enrollment_paid(student, enrollment_type, enrollment_id, actor=request.user)
+        record = mark_enrollment_paid(student, enrollment_type, enrollment_id, actor=request.user)
+        send_templated_email(
+            TEMPLATE_PAYMENT_NOTIFICATION,
+            student.user.email,
+            {
+                "full_name": student.full_name,
+                "amount": str(record.amount),
+                "currency": record.currency,
+                "due_at": record.due_at.strftime("%Y-%m-%d") if record.due_at else record.paid_at.strftime("%Y-%m-%d") if record.paid_at else "",
+                "reference": record.external_reference or str(record.id),
+                "status": record.get_status_display(),
+            },
+            sent_by=request.user,
+        )
         messages.success(request, _("Enrollment marked as paid."))
     elif action == "mark_unpaid":
         count = mark_enrollment_unpaid(student, enrollment_type, enrollment_id)
@@ -213,3 +253,26 @@ def enrollment_payment_toggle(request, student_id, enrollment_type, enrollment_i
     else:
         messages.error(request, _("Invalid action."))
     return redirect(request.POST.get("next", "payments:record_list"))
+
+
+@require_POST
+@login_required
+@role_required(*ROLE_PAYMENT_STAFF)
+def payment_record_delete(request, record_id):
+    record = get_object_or_404(PaymentRecord, id=record_id, deleted_at__isnull=True)
+    record.deleted_at = timezone.now()
+    record.deleted_by = request.user
+    record.save(update_fields=["deleted_at", "deleted_by", "updated_at"])
+    record_audit_event(
+        actor=request.user,
+        action=ACTION_PAYMENT_RECORD_DELETED,
+        target_type="PaymentRecord",
+        target_id=str(record.id),
+        metadata={
+            "student_id": record.student_id,
+            "amount": str(record.amount),
+            "status": record.status,
+        },
+    )
+    messages.success(request, _("Payment record deleted."))
+    return redirect("payments:record_list")

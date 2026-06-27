@@ -1,7 +1,7 @@
 """Template tags for UI helpers (datetime formatting, YouTube embed, etc.)."""
 
 import re
-from datetime import date as date_type, datetime as datetime_type
+from datetime import date as date_type
 
 from django import template
 from django.conf import settings

@@ -7,12 +7,17 @@ from typing import TYPE_CHECKING
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 
+from apps.academics.models import Cohort
+from apps.academics.models import Course as CourseModel
 from apps.applications.constants import (
     PROGRAM_APP_STATUS_REJECTED,
     PROGRAM_APP_STATUS_SUBMITTED,
     PROGRAM_APP_STATUS_UNDER_REVIEW,
+    PROGRAM_TYPE_COURSE,
+    PROGRAM_TYPE_DIPLOMA,
 )
 from apps.applications.models import ProgramApplication
+from apps.applications.services import submit_program_application
 
 if TYPE_CHECKING:
     from apps.students.models import StudentProfile
@@ -52,7 +57,6 @@ def check_reapply_eligibility(profile: StudentProfile, cohort=None, course=None)
         }
 
     if cohort is not None:
-        from apps.academics.models import Cohort
         if not isinstance(cohort, Cohort):
             cohort = Cohort.objects.get(pk=cohort)
         prior = ProgramApplication.objects.filter(
@@ -67,7 +71,6 @@ def check_reapply_eligibility(profile: StudentProfile, cohort=None, course=None)
             }
 
     if course is not None:
-        from apps.academics.models import Course as CourseModel
         if not isinstance(course, CourseModel):
             course = CourseModel.objects.get(pk=course)
         prior = ProgramApplication.objects.filter(
@@ -92,9 +95,6 @@ def submit_reapply_application(profile: StudentProfile, cohort=None, course=None
     pending or under review (belt-and-suspenders guard), or if the target
     has already been applied for.
     """
-    from apps.applications.constants import PROGRAM_TYPE_COURSE, PROGRAM_TYPE_DIPLOMA
-    from apps.applications.services import submit_program_application
-
     if cohort is not None:
         return submit_program_application(
             profile, program_type=PROGRAM_TYPE_DIPLOMA, cohort=cohort

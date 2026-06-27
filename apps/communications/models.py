@@ -11,7 +11,14 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.core.models import TimeStampedModel
 
-from .constants import BULK_STATUS_CHOICES, BULK_STATUS_DRAFT, REQUIRED_VARIABLES_BY_SLUG, TEMPLATE_SLUGS
+from .constants import (
+    BULK_STATUS_CHOICES,
+    BULK_STATUS_DRAFT,
+    DESIGN_BRANDED,
+    DESIGN_CHOICES,
+    REQUIRED_VARIABLES_BY_SLUG,
+    TEMPLATE_SLUGS,
+)
 
 
 class EmailTemplate(TimeStampedModel):
@@ -28,6 +35,7 @@ class EmailTemplate(TimeStampedModel):
     body = models.TextField(_("body"))
     is_active = models.BooleanField(_("active"), default=True)
     is_enabled_for_action = models.BooleanField(_("enabled for action"), default=True)
+    design = models.CharField(_("design"), max_length=16, choices=DESIGN_CHOICES, default=DESIGN_BRANDED)
 
     class Meta:
         verbose_name = _("email template")
@@ -93,6 +101,7 @@ class BulkEmailSend(TimeStampedModel):
     )
     recipient_filter = models.JSONField(_("recipient filter"), default=dict, blank=True)
     recipient_emails = models.TextField(_("recipient emails"), blank=True, help_text=_("One email per line, used when filter is empty"))
+    resolved_recipients = models.JSONField(_("resolved recipients"), default=list, blank=True, help_text=_("Exact recipient list approved in preview"))
     recipient_count = models.IntegerField(_("recipient count"), default=0)
     success_count = models.IntegerField(_("success count"), default=0)
     failure_count = models.IntegerField(_("failure count"), default=0)

@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import HttpRequest, HttpResponse
+from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods
 
+from apps.academics.models import Cohort, Course
 from apps.assessments.constants import (
     GRADE_VISIBILITY_HIDDEN,
     GRADE_VISIBILITY_RELEASED,
@@ -29,7 +30,6 @@ from .services import check_reapply_eligibility, submit_reapply_application
 def _get_profile_or_404(user):
     """Return the StudentProfile for the logged-in user, or 404."""
     if not hasattr(user, "student_profile"):
-        from django.http import Http404
         raise Http404(_("No student profile."))
     return user.student_profile
 
@@ -230,7 +230,6 @@ def notification_history(request: HttpRequest) -> HttpResponse:
 @require_http_methods(["GET", "POST"])
 def reapply(request: HttpRequest) -> HttpResponse:
     """Reapply flow -- create a new ProgramApplication if eligible."""
-    from apps.academics.models import Cohort, Course
 
     profile = _get_profile_or_404(request.user)
     eligibility = check_reapply_eligibility(profile)

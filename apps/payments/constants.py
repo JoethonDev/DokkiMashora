@@ -73,6 +73,7 @@ REQUIRED_CSV_HEADERS = ["national_id", "amount", "payment_date"]
 OPTIONAL_CSV_HEADERS = [
     "external_reference", "email", "phone", "notes",
     "application_id", "diploma_enrollment_id", "course_enrollment_id",
+    "target_type", "target_ref",
 ]
 
 ALL_CSV_HEADERS = REQUIRED_CSV_HEADERS + list(OPTIONAL_CSV_HEADERS)

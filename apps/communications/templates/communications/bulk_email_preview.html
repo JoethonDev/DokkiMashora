@@ -9,18 +9,52 @@
     <p class="text-lg font-medium">{{ draft.subject }}</p>
   </div>
   <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
-    <h2 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">{% trans "Body" %}</h2>
-    <div class="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">{{ draft.body }}</div>
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">{% trans "Email Preview" %}</h2>
+      </div>
+    <iframe class="w-full border border-slate-200 dark:border-slate-700 rounded-lg" style="min-height:400px" title="{% trans 'Email preview' %}" srcdoc="{{ rendered_html|escapejs|safe }}"></iframe>
   </div>
   <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
     <h2 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">{% trans "Recipients" %}</h2>
-    <p class="mb-3">{% blocktrans count count=recipient_count %}{{ count }} recipient{% plural %}{{ count }} recipients{% endblocktrans %}</p>
+    <div class="mb-3 flex flex-wrap gap-2 text-sm">
+      <span class="font-semibold">{% blocktrans count count=recipient_count %}{{ count }} recipient{% plural %}{{ count }} recipients{% endblocktrans %}</span>
+      {% if source_counts.filter %}
+      <span class="inline-flex items-center gap-1 rounded-full bg-blue-100 dark:bg-blue-900 px-2 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-200">{% trans "Filter" %}: {{ source_counts.filter }}</span>
+      {% endif %}
+      {% if source_counts.search %}
+      <span class="inline-flex items-center gap-1 rounded-full bg-green-100 dark:bg-green-900 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-200">{% trans "Search" %}: {{ source_counts.search }}</span>
+      {% endif %}
+      {% if source_counts.manual %}
+      <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-900 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-200">{% trans "Manual" %}: {{ source_counts.manual }}</span>
+      {% endif %}
+    </div>
     {% if recipients %}
-    <ul class="text-sm text-slate-600 dark:text-slate-300 max-h-48 overflow-y-auto space-y-1">
-      {% for email in recipients %}
-      <li class="font-mono text-xs">{{ email }}</li>
-      {% endfor %}
-    </ul>
+    <div class="max-h-64 overflow-y-auto">
+      <table class="w-full text-sm">
+        <thead class="text-xs text-slate-500 dark:text-slate-400 uppercase">
+          <tr>
+            <th class="text-left py-1 pr-2">{% trans "Email" %}</th>
+            <th class="text-left py-1">{% trans "Source" %}</th>
+          </tr>
+        </thead>
+        <tbody class="text-slate-600 dark:text-slate-300">
+          {% for entry in recipients %}
+          <tr class="border-t border-slate-100 dark:border-slate-800">
+            <td class="py-1 pr-2 font-mono text-xs">{{ entry.email }}</td>
+            <td class="py-1 text-xs">
+              {% if entry.source == "filter" %}
+              <span class="text-blue-600 dark:text-blue-400">{% trans "filter" %}</span>
+              {% elif entry.source == "search" %}
+              <span class="text-green-600 dark:text-green-400">{% trans "search" %}</span>
+              {% elif entry.source == "manual" %}
+              <span class="text-amber-600 dark:text-amber-400">{% trans "manual" %}</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
     {% endif %}
   </div>
   <div class="flex gap-3">

@@ -134,6 +134,55 @@
   </div>
   {% endif %}
 
+  {# ── AI Configuration ── #}
+  <div class="dm-panel rounded-xl p-5 mb-8">
+    <h2 class="text-sm font-bold dm-text mb-3">{% trans "AI Configuration" %}</h2>
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm mb-4">
+      <div><span class="text-xs dm-muted block">{% trans "Status" %}</span>
+        {% if ai_config.enabled %}{% include "partials/_badge.html" with label=_("Enabled") tone="success" %}{% else %}{% include "partials/_badge.html" with label=_("Disabled") tone="danger" %}{% endif %}
+      </div>
+      <div><span class="text-xs dm-muted block">{% trans "Provider" %}</span><span class="dm-text">{{ ai_config.provider }}</span></div>
+      <div><span class="text-xs dm-muted block">{% trans "Model" %}</span><span class="dm-text font-mono text-xs">{{ ai_config.model }}</span></div>
+      <div><span class="text-xs dm-muted block">{% trans "Timeout" %}</span><span class="dm-text">{{ ai_config.timeout }}s</span></div>
+      <div><span class="text-xs dm-muted block">{% trans "Prompt version" %}</span><span class="dm-text font-mono text-xs">{{ ai_config.prompt_version }}</span></div>
+      <div><span class="text-xs dm-muted block">{% trans "Reviews total" %}</span><span class="dm-text tabular-nums">{{ ai_config.review_count }}</span></div>
+      <div><span class="text-xs dm-muted block">{% trans "Pending" %}</span><span class="dm-text tabular-nums">{{ ai_config.review_pending }}</span></div>
+      <div><span class="text-xs dm-muted block">{% trans "Accepted / Rejected" %}</span><span class="dm-text tabular-nums">{{ ai_config.review_accepted }} / {{ ai_config.review_rejected }}</span></div>
+    </div>
+    {% if ai_config.last_review_at %}
+    <div class="pt-3 border-t dm-border text-xs dm-muted">
+      {% trans "Last review" %}: {% dt ai_config.last_review_at %} ({{ ai_config.last_review_decision }})
+    </div>
+    {% endif %}
+  </div>
+
+  {# ── Site Configuration ── #}
+  <div class="dm-panel rounded-xl p-5 mb-8">
+    <h2 class="text-sm font-bold dm-text mb-3">{% trans "Site Configuration" %}</h2>
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+      <div><span class="text-xs dm-muted block">{% trans "Site name" %}</span><span class="dm-text">{{ site_config.site_name }}</span></div>
+      <div><span class="text-xs dm-muted block">{% trans "Site name (Arabic)" %}</span><span class="dm-text">{{ site_config.site_name_ar }}</span></div>
+      <div><span class="text-xs dm-muted block">{% trans "Timezone" %}</span><span class="dm-text">{{ site_config.timezone }}</span></div>
+      <div><span class="text-xs dm-muted block">{% trans "Language" %}</span><span class="dm-text">{{ site_config.language_code }}</span></div>
+      <div><span class="text-xs dm-muted block">{% trans "Default from email" %}</span><span class="dm-text font-mono text-xs">{{ site_config.default_from_email }}</span></div>
+      <div><span class="text-xs dm-muted block">{% trans "Email backend" %}</span><span class="dm-text">{{ site_config.email_backend }}</span></div>
+      <div><span class="text-xs dm-muted block">{% trans "Storage" %}</span><span class="dm-text">{{ site_config.storage_backend }}</span></div>
+      <div><span class="text-xs dm-muted block">{% trans "Available languages" %}</span><span class="dm-text">{% for code, name in site_config.languages.items %}{{ name }}{% if not forloop.last %}, {% endif %}{% endfor %}</span></div>
+      <div><span class="text-xs dm-muted block">{% trans "Email sent" %}</span><span class="dm-text tabular-nums">{{ site_config.email_sent }} / {{ site_config.email_total }}</span></div>
+      <div><span class="text-xs dm-muted block">{% trans "Email failed" %}</span><span class="dm-text tabular-nums">{{ site_config.email_failed }}</span></div>
+      {% if site_config.last_email_to %}
+      <div><span class="text-xs dm-muted block">{% trans "Last email" %}</span><span class="dm-text truncate" title="{{ site_config.last_email_to }}">{{ site_config.last_email_to }}</span></div>
+      {% endif %}
+    </div>
+    {% if active_announcement %}
+    <div class="mt-3 pt-3 border-t dm-border">
+      <h3 class="text-xs font-bold dm-muted mb-1">{% trans "Active announcement" %}</h3>
+      <p class="text-sm dm-text">{{ active_announcement.title }}</p>
+      <p class="text-xs dm-muted">{{ active_announcement.message|truncatechars:120 }}</p>
+    </div>
+    {% endif %}
+  </div>
+
   {# ── Recent Activity ── #}
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
     <div class="dm-panel rounded-xl p-5">
@@ -190,7 +239,7 @@
     <h2 class="text-sm font-bold dm-text mb-3">{% trans "Quick actions" %}</h2>
     <div class="flex flex-wrap gap-2">
       <a href="{% url 'applications:admin_list' %}" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Applications" %}</a>
-      <a href="{% url 'accounts:admin_user_list' %}" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Users" %}</a>
+      <a href="{% url 'accounts:admin_student_list' %}" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Students" %}</a>
       <a href="{% url 'academics:admin_diploma_list' %}" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Diplomas" %}</a>
       <a href="{% url 'academics:admin_course_list' %}" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Courses" %}</a>
       <a href="{% url 'assessments:admin_list' %}" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Assessments" %}</a>

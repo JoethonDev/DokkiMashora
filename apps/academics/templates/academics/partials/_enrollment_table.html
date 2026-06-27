@@ -1,0 +1,48 @@
+{% load i18n %}
+<div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+  <table class="min-w-[640px] w-full divide-y divide-slate-200 dark:divide-slate-800 text-sm">
+    <thead class="bg-slate-50 dark:bg-slate-800/50">
+      <tr class="text-slate-600 dark:text-slate-300">
+        <th class="px-4 py-2.5 text-start font-medium">{% trans "Student" %}</th>
+        <th class="px-4 py-2.5 text-start font-medium">{% trans "Email" %}</th>
+        {% if enrollment_type == "course" %}
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Version" %}</th>
+        {% else %}
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Cohort" %}</th>
+        {% endif %}
+        <th class="px-4 py-2.5 text-start font-medium">{% trans "Status" %}</th>
+        <th class="px-4 py-2.5 text-start font-medium">{% trans "Activated" %}</th>
+        <th class="px-4 py-2.5 text-start font-medium">{% trans "Expires" %}</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+      {% for e in page_obj %}
+        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+          <td class="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">{{ e.student.user.full_name|default:e.student.user.email }}</td>
+          <td class="px-4 py-3 text-slate-500 dark:text-slate-400">{{ e.student.user.email }}</td>
+          {% if enrollment_type == "course" %}
+            <td class="px-4 py-3 text-slate-500 dark:text-slate-400">{{ e.course_version.label }}</td>
+          {% else %}
+            <td class="px-4 py-3 text-slate-500 dark:text-slate-400">{{ e.cohort.name }}</td>
+          {% endif %}
+          <td class="px-4 py-3">
+            {% if e.status == "active" %}
+              {% include "partials/_badge.html" with label=_("Active") tone="success" %}
+            {% elif e.status == "pending" %}
+              {% include "partials/_badge.html" with label=_("Pending") tone="warning" %}
+            {% elif e.status == "expired" %}
+              {% include "partials/_badge.html" with label=_("Expired") tone="danger" %}
+            {% else %}
+              {% include "partials/_badge.html" with label=e.get_status_display tone="danger" %}
+            {% endif %}
+          </td>
+          <td class="px-4 py-3 tabular-nums text-slate-500 dark:text-slate-400">{% include "partials/_blank.html" with value=e.activated_at|date:"DATE_FORMAT" %}</td>
+          <td class="px-4 py-3 tabular-nums text-slate-500 dark:text-slate-400">{% include "partials/_blank.html" with value=e.expires_at|date:"DATE_FORMAT" %}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6" class="px-4 py-10 text-center text-slate-500 dark:text-slate-400">{% trans "No enrollments found." %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% include "partials/_pagination.html" %}

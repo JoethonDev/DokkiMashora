@@ -12,21 +12,25 @@
       {% if version.cohort %}<p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{{ version.cohort.name }}</p>{% endif %}
     </div>
     <div class="dm-action-row">
-      <a href="{% url 'academics:admin_lecture_create' course.id version.id %}?next={{ request.path|urlencode }}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm bg-brand-600 text-white hover:bg-brand-700 shadow-sm">+ {% trans "Add lecture" %}</a>
+      {% url 'academics:admin_lecture_create' course.id version.id as add_lec_url %}
+      {% trans "Add lecture" as add_lec_label %}{% include "partials/_button.html" with href=add_lec_url|add:"?next="|add:request.path label="+ "|add:add_lec_label variant="primary" %}
       <div x-data="{ confirmId: null }" @modal-confirm.window="if($event.detail.id===confirmId) document.getElementById($event.detail.id+'-form').requestSubmit()" class="inline">
-        <form id="del-version-{{ version.id }}-form" method="post" action="{% url 'academics:admin_version_delete' course.id version.id %}" hx-post="{% url 'academics:admin_version_delete' course.id version.id %}" hx-target="body" class="inline">
+        {% with ver_id=version.id|stringformat:"d" %}{% with del_ver_id="del-version-"|add:ver_id %}
+        <form id="{{ del_ver_id }}-form" method="post" action="{% url 'academics:admin_version_delete' course.id version.id %}" hx-post="{% url 'academics:admin_version_delete' course.id version.id %}" hx-target="body" class="inline">
           {% csrf_token %}
           <button type="submit" hidden></button>
           <input type="hidden" name="next" value="{% url 'academics:admin_course_detail' course.id %}">
-          <button type="button" @click="confirmId='del-version-{{ version.id }}'; $dispatch('open-modal', {id:'del-version-{{ version.id }}'})" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm border border-rose-300 dark:border-rose-700 text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-900/20">{% trans "Delete version" %}</button>
+          {% include "partials/_button.html" with label=_("Delete version") variant="danger" size="sm" type="button" attrs='@click="confirmId=\''|add:del_ver_id|add:'\'; $dispatch(\'open-modal\', {id:\''|add:del_ver_id|add:'\'})"' %}
         </form>
-        {% include "partials/_modal.html" with modal_id="del-version-"|add:version.id|stringformat:"s" title=_("Confirm Delete") body=_("Delete this version and all its lectures?") confirm_label=_("Delete") %}
+        {% include "partials/_modal.html" with modal_id=del_ver_id title=_("Confirm Delete") body=_("Delete this version and all its lectures?") confirm_label=_("Delete") %}
+        {% endwith %}{% endwith %}
       </div>
     </div>
   </header>
   {% if lectures %}
     <div class="space-y-3">
       {% for lecture in lectures %}
+      {% with lec_id=lecture.id|stringformat:"d" %}{% with del_lec_id="del-lecture-"|add:lec_id %}
         <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
           <div class="flex justify-between items-center">
             <div class="flex items-center gap-3">
@@ -40,22 +44,26 @@
               </div>
             </div>
             <div class="flex items-center gap-2">
-              <a href="{% url 'academics:admin_lecture_edit' course.id version.id lecture.id %}?next={{ request.path|urlencode }}" class="inline-flex items-center text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-brand-600">{% trans "Edit" %}</a>
+              {% url 'academics:admin_lecture_edit' course.id version.id lecture.id as edit_lec_url %}
+              {% include "partials/_button.html" with href=edit_lec_url|add:"?next="|add:request.path label=_("Edit") variant="ghost" size="sm" %}
               <div x-data="{ confirmId: null }" @modal-confirm.window="if($event.detail.id===confirmId) document.getElementById($event.detail.id+'-form').requestSubmit()" class="inline-flex items-center">
-                <form id="del-lecture-{{ lecture.id }}-form" method="post" action="{% url 'academics:admin_lecture_delete' course.id version.id lecture.id %}" hx-post="{% url 'academics:admin_lecture_delete' course.id version.id lecture.id %}" hx-target="body" class="inline">
+                {% url 'academics:admin_lecture_delete' course.id version.id lecture.id as del_lec_url %}
+                <form id="{{ del_lec_id }}-form" method="post" action="{{ del_lec_url }}" hx-post="{{ del_lec_url }}" hx-target="body" class="inline">
                   {% csrf_token %}
                   <button type="submit" hidden></button>
                   <input type="hidden" name="next" value="{{ request.path }}">
-                  <button type="button" @click="confirmId='del-lecture-{{ lecture.id }}'; $dispatch('open-modal', {id:'del-lecture-{{ lecture.id }}'})" class="text-sm font-semibold text-rose-600 hover:text-rose-800 bg-transparent border-0 cursor-pointer">{% trans "Delete" %}</button>
+                  {% include "partials/_button.html" with label=_("Delete") variant="danger" size="sm" type="button" attrs='@click="confirmId=\''|add:del_lec_id|add:'\'; $dispatch(\'open-modal\', {id:\''|add:del_lec_id|add:'\'})"' %}
                 </form>
-                {% include "partials/_modal.html" with modal_id="del-lecture-"|add:lecture.id|stringformat:"s" title=_("Confirm Delete") body=_("Delete this lecture?") confirm_label=_("Delete") %}
+                {% include "partials/_modal.html" with modal_id=del_lec_id title=_("Confirm Delete") body=_("Delete this lecture?") confirm_label=_("Delete") %}
               </div>
             </div>
           </div>
           <div class="flex justify-end mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-            <a href="{% url 'academics:admin_lecture_preview' course.id version.id lecture.id %}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm bg-brand-600 text-white hover:bg-brand-700 shadow-sm">{% trans "Preview" %}</a>
+            {% url 'academics:admin_lecture_preview' course.id version.id lecture.id as preview_url %}
+            {% include "partials/_button.html" with href=preview_url label=_("Preview") variant="primary" %}
           </div>
         </div>
+      {% endwith %}{% endwith %}
       {% endfor %}
     </div>
   {% else %}

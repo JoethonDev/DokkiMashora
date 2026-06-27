@@ -48,7 +48,7 @@
         <input type="hidden" name="action" value="{{ action }}">
         {% include "partials/_button.html" with label=_("Confirm resend") variant="primary" size="sm" type="submit" %}
       </form>
-      <a href="{% url 'entrance_exams:admin_detail' exam.id %}" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Cancel" %}</a>
+      {% url 'entrance_exams:admin_detail' exam.id as cancel_url %}{% include "partials/_button.html" with href=cancel_url label=_("Cancel") variant="secondary" %}
     </div>
   </div>
 </div>

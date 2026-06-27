@@ -1,0 +1,60 @@
+{% load i18n %}<div id="scope-detail-fields">
+{% if form.scope_type.value == "course" %}
+  {% include "partials/_field.html" with field=form.standalone_course %}
+{% elif form.scope_type.value == "diploma" %}
+  <div class="space-y-4">
+    <div>
+      <label for="{{ form.diploma.id_for_label }}" class="block text-sm font-medium dm-text">{% trans "Diploma" %} <span class="text-rose-600">*</span></label>
+      <div class="mt-1">
+        <select name="{{ form.diploma.name }}" id="{{ form.diploma.id_for_label }}"
+                hx-get="{% url 'assessments:admin_scope_fields' %}?scope_type=diploma"
+                hx-trigger="change"
+                hx-target="#scope-detail-fields"
+                hx-swap="outerHTML"
+                hx-include="#assessmentForm"
+                class="dm-input w-full rounded-lg px-3 py-2 text-sm shadow-sm">
+          <option value="">{% trans "Select diploma…" %}</option>
+          {% for d in form.diploma.field.queryset %}
+          <option value="{{ d.id }}"{% if form.diploma.value|stringformat:"s" == d.id|stringformat:"s" %} selected{% endif %}>{{ d.title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    {% if form.diploma.value %}
+    <div>
+      <label for="{{ form.semester.id_for_label }}" class="block text-sm font-medium dm-text">{% trans "Semester" %}</label>
+      <div class="mt-1">
+        <select name="{{ form.semester.name }}" id="{{ form.semester.id_for_label }}"
+                hx-get="{% url 'assessments:admin_scope_fields' %}?scope_type=diploma&diploma={{ form.diploma.value }}"
+                hx-trigger="change"
+                hx-target="#scope-detail-fields"
+                hx-swap="outerHTML"
+                hx-include="#assessmentForm"
+                class="dm-input w-full rounded-lg px-3 py-2 text-sm shadow-sm">
+          <option value="">{% trans "Select semester…" %}</option>
+          {% for s in form.semester.field.queryset %}
+          <option value="{{ s.id }}"{% if form.semester.value|stringformat:"s" == s.id|stringformat:"s" %} selected{% endif %}>{{ s.title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    {% endif %}
+    {% if form.semester.value %}
+    <div>
+      <label for="{{ form.cohort.id_for_label }}" class="block text-sm font-medium dm-text">{% trans "Cohort" %}</label>
+      <div class="mt-1">
+        <select name="{{ form.cohort.name }}" id="{{ form.cohort.id_for_label }}"
+                class="dm-input w-full rounded-lg px-3 py-2 text-sm shadow-sm">
+          <option value="">{% trans "Select cohort…" %}</option>
+          {% for c in form.cohort.field.queryset %}
+          <option value="{{ c.id }}"{% if form.cohort.value|stringformat:"s" == c.id|stringformat:"s" %} selected{% endif %}>{{ c.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+{% else %}
+  <p class="text-sm text-slate-500 dark:text-slate-400 italic">{% trans "Select a scope to continue…" %}</p>
+{% endif %}
+</div>

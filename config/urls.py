@@ -11,6 +11,11 @@ from django.urls import include, path
 from apps.core import health
 from apps.core import views as core_views
 
+try:
+    import debug_toolbar  # type: ignore[import-untyped]  # noqa: F401
+except ImportError:
+    debug_toolbar = None
+
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("i18n/setlang/", core_views.set_language, name="set_language"),
@@ -18,13 +23,8 @@ urlpatterns = [
 ]
 
 # Optional: Django debug toolbar (dev only).
-if settings.DEBUG:
-    try:
-        import debug_toolbar  # type: ignore[import-untyped]  # noqa: F401
-
-        urlpatterns.insert(0, path("__debug__/", include("debug_toolbar.urls")))
-    except ImportError:  # pragma: no cover - optional dependency
-        pass
+if settings.DEBUG and debug_toolbar is not None:
+    urlpatterns.insert(0, path("__debug__/", include("debug_toolbar.urls")))
 
 urlpatterns += i18n_patterns(
     path("", include("apps.core.urls")),

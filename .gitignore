@@ -50,6 +50,7 @@ htmlcov/
 .idea/
 .vscode/
 *.swp
+*.html.py
 .DS_Store
 Thumbs.db
 

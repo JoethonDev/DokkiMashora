@@ -7,6 +7,8 @@ from datetime import date
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
+from apps.academics.models import Cohort, Course
+from apps.applications.constants import PROGRAM_TYPE_CHOICES
 from apps.applications.models import Application
 from apps.applications.services import RegistrationData, find_duplicate, normalize_phone
 from apps.students.constants import EDUCATION_CHOICES, GENDER_CHOICES
@@ -56,9 +58,6 @@ class RegistrationForm(forms.Form):
         self._load_program_choices()
 
     def _load_program_choices(self) -> None:
-        from apps.academics.models import Cohort, Course
-        from apps.applications.constants import PROGRAM_TYPE_CHOICES
-
         self.fields["program_type"].choices = PROGRAM_TYPE_CHOICES
         cohorts = Cohort.objects.filter(is_active=True).select_related("diploma").order_by("-start_date")
         courses = Course.objects.filter(is_active=True).order_by("title")

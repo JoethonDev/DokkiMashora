@@ -29,6 +29,7 @@
             <div class="flex gap-2">
               <a href="{% url 'accounts:admin_user_detail' u.id %}" class="text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 text-sm font-semibold">{% trans "View" %}</a>
               <a href="{% url 'accounts:admin_user_edit' u.id %}" class="text-slate-600 dark:text-slate-300 hover:text-brand-600 text-sm font-semibold">{% trans "Edit" %}</a>
+              {% if staff_list %}<a href="{% url 'accounts:admin_staff_assignments' u.id %}" class="text-slate-600 dark:text-slate-300 hover:text-brand-600 text-sm font-semibold">{% trans "Assignments" %}</a>{% endif %}
             </div>
           </td>
         </tr>

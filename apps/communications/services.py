@@ -10,11 +10,19 @@ from django.conf import settings
 from django.core.mail import EmailMessage as DjangoEmailMessage
 from django.core.mail import get_connection
 from django.core.validators import validate_email
+from django.db.models import Q
+from django.template.exceptions import TemplateDoesNotExist
+from django.template.loader import render_to_string
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
+
+from apps.students.models import StudentProfile
 
 from .constants import (
     BULK_STATUS_PARTIAL,
     BULK_STATUS_SENT,
+    DESIGN_BRANDED,
+    DESIGN_CHOICES,
     EMAIL_STATUS_FAILED,
     EMAIL_STATUS_SENT,
 )
@@ -24,6 +32,15 @@ from .models import BulkEmailSend, EmailFooter, EmailTemplate
 logger = logging.getLogger("apps.communications")
 
 VARIABLE_PATTERN = re.compile(r"{{\s*[a-zA-Z_][a-zA-Z0-9_]*\s*}}")
+
+
+def _wrap_in_design(body: str, design: str, footer: str) -> str:
+    """Wrap body in an email design template, returning full HTML."""
+    if design not in dict(DESIGN_CHOICES):
+        design = DESIGN_BRANDED
+    return render_to_string(f"communications/email_designs/{design}.html", {
+        "content": body, "footer": footer,
+    })
 
 
 def has_unresolved_variables(text: str) -> bool:
@@ -50,18 +67,38 @@ def send_templated_email(
     *,
     sent_by=None,
     cc: list[str] | None = None,
-) -> EmailMessage:
-    """Render a template, send via SMTP, and record the result."""
-    template = EmailTemplate.objects.get(slug=slug, is_active=True, is_enabled_for_action=True)
+) -> EmailMessage | None:
+    """Render a template, wrap in design, send via SMTP, and record the result.
+
+    Returns None silently if no active/enabled template exists for the slug.
+    Raises ValueError if the rendered subject or body still contains
+    unresolved {{ variable }} placeholders.
+    """
+    try:
+        template = EmailTemplate.objects.get(slug=slug, is_active=True, is_enabled_for_action=True)
+    except EmailTemplate.DoesNotExist:
+        logger.warning("No active/enabled template found for slug=%s, skipping send", slug)
+        return None
     subject, body = template.render(context)
+    static_template = f"communications/email_designs/{slug}.html"
+    try:
+        body = render_to_string(static_template, {**context, "content": body})
+    except TemplateDoesNotExist:
+        pass
+    if has_unresolved_variables(subject) or has_unresolved_variables(body):
+        missing = VARIABLE_PATTERN.findall(subject) + VARIABLE_PATTERN.findall(body)
+        raise ValueError(
+            _("Template '%(slug)s' has unresolved variables after rendering: %(missing)s")
+            % {"slug": slug, "missing": set(missing)}
+        )
     footer = get_global_footer()
-    if footer:
-        body = template.render(context)[1] + "\n" + footer
+    html_body = _wrap_in_design(body, template.design, footer)
     return send_email(
         template_slug=slug,
         to_email=to_email,
         subject=subject,
         body=body,
+        html_body=html_body,
         sent_by=sent_by,
         cc=cc or [],
     )
@@ -73,6 +110,7 @@ def send_email(
     to_email: str,
     subject: str,
     body: str,
+    html_body: str | None = None,
     sent_by=None,
     cc: list[str] | None = None,
     bulk_send: BulkEmailSend | None = None,
@@ -91,14 +129,17 @@ def send_email(
     try:
         connection = get_connection()
         connection.open()
+        payload = html_body or body
         message = DjangoEmailMessage(
             subject=subject,
-            body=body,
+            body=payload,
             from_email=settings.DEFAULT_FROM_EMAIL,
             to=[to_email],
             cc=cc,
             connection=connection,
         )
+        if html_body:
+            message.content_subtype = "html"
         message.send(fail_silently=False)
         connection.close()
         record.status = EMAIL_STATUS_SENT
@@ -112,15 +153,21 @@ def send_email(
     return record
 
 
-def resolve_recipients(*, filter_criteria: dict | None = None, manual_emails: str = "") -> list[str]:
-    """Resolve a list of recipient email addresses from filter criteria or manual list.
+RecipientEntry = dict[str, str]
 
-    Manual emails are deduplicated and validated. Invalid addresses are silently skipped.
-    Filter-based and manual lists are merged and deduplicated.
+
+def resolve_recipients(
+    *,
+    filter_criteria: dict | None = None,
+    manual_emails: str = "",
+    search_query: str = "",
+) -> list[RecipientEntry]:
+    """Resolve recipient email addresses from filter criteria, search, or manual list.
+
+    Returns a list of dicts: {"email": str, "source": "filter"|"search"|"manual"}.
+    Entries are deduplicated by normalized email across all sources.
     """
-    from apps.students.models import StudentProfile
-
-    emails: list[str] = []
+    entries: list[RecipientEntry] = []
 
     if filter_criteria:
         qs = StudentProfile.objects.select_related("user").all()
@@ -128,12 +175,23 @@ def resolve_recipients(*, filter_criteria: dict | None = None, manual_emails: st
         cohort_id = filter_criteria.get("cohort_id")
         status = filter_criteria.get("status")
         if diploma_id:
-            qs = qs.filter(diplomaenrollment__cohort__diploma_id=diploma_id)
+            qs = qs.filter(diploma_enrollments__cohort__diploma_id=diploma_id)
         if cohort_id:
-            qs = qs.filter(diplomaenrollment__cohort_id=cohort_id)
+            qs = qs.filter(diploma_enrollments__cohort_id=cohort_id)
         if status:
-            qs = qs.filter(diplomaenrollment__status=status)
-        emails = [p.user.email for p in qs if p.user.email]
+            qs = qs.filter(diploma_enrollments__status=status)
+        for p in qs:
+            if p.user.email:
+                entries.append({"email": p.user.email, "source": "filter"})
+
+    if search_query:
+        q = search_query.strip()
+        sq = StudentProfile.objects.select_related("user").filter(
+            Q(full_name__icontains=q) | Q(user__email__icontains=q)
+        )
+        for p in sq:
+            if p.user.email:
+                entries.append({"email": p.user.email, "source": "search"})
 
     for raw in manual_emails.split("\n"):
         e = raw.strip()
@@ -141,17 +199,17 @@ def resolve_recipients(*, filter_criteria: dict | None = None, manual_emails: st
             continue
         try:
             validate_email(e)
-            emails.append(e)
+            entries.append({"email": e, "source": "manual"})
         except Exception:  # noqa: BLE001
             logger.warning("Skipping invalid email address: %s", e)
 
     seen: set[str] = set()
-    result: list[str] = []
-    for e in emails:
-        key = e.lower()
+    result: list[RecipientEntry] = []
+    for entry in entries:
+        key = entry["email"].lower()
         if key not in seen:
             seen.add(key)
-            result.append(e)
+            result.append(entry)
     return result
 
 
@@ -162,9 +220,12 @@ def create_bulk_draft(
     template_id: int | None = None,
     filter_criteria: dict | None = None,
     manual_emails: str = "",
+    resolved_recipients: list[RecipientEntry] | None = None,
     sent_by,
 ) -> BulkEmailSend:
-    recipients = resolve_recipients(filter_criteria=filter_criteria, manual_emails=manual_emails)
+    recipients = resolved_recipients or resolve_recipients(
+        filter_criteria=filter_criteria, manual_emails=manual_emails
+    )
     template = None
     if template_id:
         template = EmailTemplate.objects.filter(id=template_id).first()
@@ -174,6 +235,7 @@ def create_bulk_draft(
         template=template,
         recipient_filter=filter_criteria or {},
         recipient_emails=manual_emails,
+        resolved_recipients=recipients,
         recipient_count=len(recipients),
         sent_by=sent_by,
     )
@@ -181,7 +243,7 @@ def create_bulk_draft(
 
 def send_bulk_email(bulk_send: BulkEmailSend) -> BulkEmailSend:
     """Send all emails for a bulk send operation. Returns updated BulkEmailSend."""
-    recipients = resolve_recipients(
+    recipients = bulk_send.resolved_recipients if bulk_send.resolved_recipients else resolve_recipients(
         filter_criteria=bulk_send.recipient_filter if bulk_send.recipient_filter else None,
         manual_emails=bulk_send.recipient_emails,
     )
@@ -190,14 +252,18 @@ def send_bulk_email(bulk_send: BulkEmailSend) -> BulkEmailSend:
         bulk_send.sent_at = timezone.now()
         bulk_send.save(update_fields=["status", "sent_at", "updated_at"])
         return bulk_send
+    design = bulk_send.template.design if bulk_send.template else DESIGN_BRANDED
+    footer = get_global_footer()
     success = 0
     failure = 0
-    for email in recipients:
+    for entry in recipients:
+        html_body = _wrap_in_design(bulk_send.body, design, footer)
         record = send_email(
             template_slug=bulk_send.template.slug if bulk_send.template else "",
-            to_email=email,
+            to_email=entry["email"],
             subject=bulk_send.subject,
             body=bulk_send.body,
+            html_body=html_body,
             sent_by=bulk_send.sent_by,
             bulk_send=bulk_send,
         )

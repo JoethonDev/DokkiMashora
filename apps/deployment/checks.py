@@ -9,6 +9,8 @@ from __future__ import annotations
 from django.conf import settings
 from django.core.checks import Error, register
 
+from apps.storage.models import StoredFile
+
 
 @register()
 def r2_storage_production_check(app_configs, **kwargs) -> list[Error]:
@@ -29,8 +31,6 @@ def r2_storage_production_check(app_configs, **kwargs) -> list[Error]:
         return errors
 
     try:
-        from apps.storage.models import StoredFile
-
         protected_count = StoredFile.objects.filter(
             storage_backend="local", visibility="private",
         ).count()

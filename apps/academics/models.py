@@ -1,6 +1,7 @@
 """Academic structure models for the LMS."""
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -14,6 +15,7 @@ from .constants import (
     ENROLLMENT_STATUS_CHOICES,
     ENROLLMENT_STATUS_PENDING,
     SCOPE_CHOICES,
+    SCOPE_COURSE_VERSION,
     SCOPE_DIPLOMA_COHORT,
     SCOPE_DIPLOMA_SEMESTER,
     SCOPE_SEMESTER_COHORT,
@@ -94,7 +96,6 @@ class Course(TimeStampedModel):
     def clean(self):
         if self.is_standalone and self.pk:
             if self.semester_courses.exists():
-                from django.core.exceptions import ValidationError
                 raise ValidationError(_("Standalone course cannot be linked to a semester."))
 
     def __str__(self):
@@ -125,7 +126,6 @@ class SemesterCourse(TimeStampedModel):
         ordering = ("semester", "order")
 
     def clean(self):
-        from django.core.exceptions import ValidationError
         if self.course_id and self.course.is_standalone:
             raise ValidationError(_("Standalone course cannot be linked to a semester."))
 
@@ -372,6 +372,13 @@ class TeacherAssignment(TimeStampedModel):
         related_name="teacher_assignments",
         verbose_name=_("course"),
     )
+    course_version = models.ForeignKey(
+        CourseVersion,
+        on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name="teacher_assignments",
+        verbose_name=_("course version"),
+    )
     diploma = models.ForeignKey(
         Diploma,
         on_delete=models.PROTECT,
@@ -430,7 +437,6 @@ class TeacherAssignment(TimeStampedModel):
         return f"{self.teacher} - {self.get_scope_type_display()}"
 
     def clean(self):
-        from django.core.exceptions import ValidationError
         if self.scope_type == SCOPE_STANDALONE_COURSE:
             if not self.course_id:
                 raise ValidationError(_("Standalone course scope requires a course."))
@@ -458,6 +464,16 @@ class TeacherAssignment(TimeStampedModel):
                 raise ValidationError(_("Semester-within-cohort scope requires both semester and cohort."))
             if self.course_id:
                 raise ValidationError(_("Semester-within-cohort scope must not have a course."))
+        elif self.scope_type == SCOPE_COURSE_VERSION:
+            if not self.course_version_id:
+                raise ValidationError(_("Course version scope requires a course version."))
+            if self.course_id or self.diploma_id or self.semester_id or self.cohort_id:
+                raise ValidationError(_("Course version scope must not have course/diploma/semester/cohort."))
+            if TeacherAssignment.objects.filter(
+                teacher=self.teacher, scope_type=SCOPE_COURSE_VERSION,
+                course_version=self.course_version, active=True,
+            ).exclude(pk=self.pk).exists():
+                raise ValidationError(_("Teacher already has an active assignment for this course version."))
         else:
             raise ValidationError(_("Unknown scope type."))
 
@@ -523,3 +539,131 @@ class ModeratorStudentAssignment(TimeStampedModel):
 
     def __str__(self):
         return f"{self.moderator} - {self.student} - {self.cohort}"
+
+
+class StudentCluster(TimeStampedModel):
+    """Group of students within a cohort. A student belongs to at most one cluster per cohort."""
+
+    name = models.CharField(_("name"), max_length=255)
+    cohort = models.ForeignKey(
+        Cohort, on_delete=models.CASCADE, related_name="clusters", verbose_name=_("cohort")
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, verbose_name=_("created by")
+    )
+
+    class Meta:
+        verbose_name = _("student cluster")
+        verbose_name_plural = _("student clusters")
+        unique_together = (("name", "cohort"),)
+
+    def __str__(self):
+        return f"{self.name} ({self.cohort.name})"
+
+
+class StudentClusterMembership(TimeStampedModel):
+    """Links a student to a cluster. One cluster per student per cohort."""
+
+    cluster = models.ForeignKey(
+        StudentCluster, on_delete=models.CASCADE, related_name="memberships", verbose_name=_("cluster")
+    )
+    student = models.ForeignKey(
+        StudentProfile, on_delete=models.CASCADE, related_name="cluster_memberships", verbose_name=_("student")
+    )
+    assigned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, verbose_name=_("assigned by")
+    )
+
+    class Meta:
+        verbose_name = _("student cluster membership")
+        verbose_name_plural = _("student cluster memberships")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("student", "cluster"),
+                name="unique_student_per_cohort_cluster",
+                violation_error_message=_("A student can belong to at most one cluster per cohort."),
+            ),
+        ]
+
+    def clean(self):
+        if self.cluster_id and self.student_id:
+            if StudentClusterMembership.objects.filter(
+                student=self.student,
+                cluster__cohort=self.cluster.cohort,
+            ).exclude(pk=self.pk).exists():
+                raise ValidationError(_("Student already belongs to a cluster in this cohort."))
+            if not DiplomaEnrollment.objects.filter(
+                student=self.student,
+                cohort=self.cluster.cohort,
+            ).exists():
+                raise ValidationError(_("Student is not enrolled in the cluster's cohort."))
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.student} → {self.cluster.name}"
+
+
+class ModeratorAssignment(TimeStampedModel):
+    """Moderator scoped to a course version + student scope (cluster or manual)."""
+
+    moderator = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="moderator_assignments",
+        verbose_name=_("moderator"),
+    )
+    course_version = models.ForeignKey(
+        CourseVersion,
+        on_delete=models.PROTECT,
+        related_name="moderator_assignments",
+        verbose_name=_("course version"),
+    )
+    cohort = models.ForeignKey(
+        Cohort, on_delete=models.PROTECT, related_name="moderator_version_assignments", verbose_name=_("cohort")
+    )
+    cluster = models.ForeignKey(
+        StudentCluster,
+        on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name="moderator_assignments",
+        verbose_name=_("cluster"),
+    )
+    active = models.BooleanField(_("active"), default=True, db_index=True)
+    assigned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="mod_assignments_created",
+        verbose_name=_("assigned by"),
+    )
+
+    class Meta:
+        verbose_name = _("moderator assignment")
+        verbose_name_plural = _("moderator assignments")
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=("moderator", "active")),
+            models.Index(fields=("course_version", "active")),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("moderator", "course_version", "cohort", "cluster"),
+                condition=models.Q(active=True),
+                name="unique_active_moderator_assignment",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.moderator} - {self.course_version} ({self.cohort})"
+
+    def clean(self):
+        if self.cluster_id and self.cluster.cohort_id != self.cohort_id:
+            raise ValidationError(_("Cluster must belong to the same cohort as the assignment."))
+        if self.course_version_id and self.cohort_id and self.course_version.cohort_id != self.cohort_id:
+            raise ValidationError(_("Course version must belong to the same cohort as the assignment."))
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)

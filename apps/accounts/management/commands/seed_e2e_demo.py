@@ -26,15 +26,20 @@ from apps.academics.constants import (
     ENROLLMENT_STATUS_EXPIRED,
     ENROLLMENT_STATUS_PENDING,
     ENROLLMENT_STATUS_RESTRICTED,
+    SCOPE_DIPLOMA_COHORT,
 )
 from apps.academics.models import (
     Cohort,
     Course,
+    CourseEnrollment,
     CourseVersion,
     Diploma,
+    DiplomaEnrollment,
     Lecture,
+    ModeratorStudentAssignment,
     Semester,
     SemesterCourse,
+    TeacherAssignment,
 )
 from apps.applications.constants import (
     APP_STATUS_ACTIVATED,
@@ -664,8 +669,6 @@ class Command(BaseCommand):
         return apps_map
 
     def _ensure_enrollments(self, profiles, cohort_a, ver_a, ver_b):
-        from apps.academics.models import CourseEnrollment, DiplomaEnrollment
-
         now = timezone.now()
 
         # active student: active diploma + active course.
@@ -1020,9 +1023,6 @@ class Command(BaseCommand):
             self._report("EntranceAttempt: pending student (assigned)", created)
 
     def _ensure_teacher_moderator(self, admin, teacher, moderator, cohort_a, profiles):
-        from apps.academics.constants import SCOPE_DIPLOMA_COHORT
-        from apps.academics.models import ModeratorStudentAssignment, TeacherAssignment
-
         _obj, created = TeacherAssignment.objects.update_or_create(
             teacher=teacher, scope_type=SCOPE_DIPLOMA_COHORT, cohort=cohort_a,
             defaults={"active": True, "assigned_by": admin},
@@ -1084,8 +1084,6 @@ class Command(BaseCommand):
             self._report(f"EmailTemplate: {slug}", created)
 
     def _ensure_certificates(self, admin, profiles, cohort_a, diploma):
-        from apps.academics.models import DiplomaEnrollment
-
         cert_template, created = CertificateTemplate.objects.update_or_create(
             diploma=diploma, language="ar", template_type="completion",
             defaults={

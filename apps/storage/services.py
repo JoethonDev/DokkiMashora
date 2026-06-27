@@ -30,6 +30,11 @@ from pathlib import Path
 from django.conf import settings
 from django.utils.translation import gettext_lazy as _
 
+try:
+    import boto3
+except ImportError:
+    boto3 = None
+
 logger = logging.getLogger("apps.storage")
 
 _ALLOWED_MIME_TYPES_BY_EXTENSION = {
@@ -137,7 +142,8 @@ class R2StorageBackend:
 
     def _get_client(self):
         if self._client is None:
-            import boto3
+            if boto3 is None:
+                raise ImportError("boto3 is not available")
             self._client = boto3.client(
                 "s3",
                 endpoint_url=settings.R2_ENDPOINT_URL,

@@ -9,11 +9,12 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Q
-from django.http import HttpRequest, HttpResponse
+from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods
 
+from apps.academics.models import Cohort, Course
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import is_admin, is_moderator
@@ -21,25 +22,28 @@ from apps.entrance_exams.services import assign_exam_for_application
 
 from .constants import (
     APP_STATUS_ACTIVATED as APP_TERMINAL,
+)
+from .constants import (
     APP_STATUS_APPROVED,
     APP_STATUS_PENDING,
     APP_STATUS_UNDER_REVIEW,
     PROGRAM_APP_STATUS_ACCEPTED,
-    PROGRAM_APP_STATUS_ACTIVATED as PROG_TERMINAL,
-    PROGRAM_APP_STATUS_INVITED,
     PROGRAM_APP_STATUS_SUBMITTED,
+)
+from .constants import (
+    PROGRAM_APP_STATUS_ACTIVATED as PROG_TERMINAL,
 )
 from .constants import (
     PROGRAM_APP_STATUS_UNDER_REVIEW as PROGRAM_UNDER_REVIEW,
 )
 from .forms import ApplicationDecisionForm, RegistrationForm
-from .models import Application, ApplicationDecision, ProgramApplication, REVERTABLE_ACTIONS
+from .models import REVERTABLE_ACTIONS, Application, ApplicationDecision, ProgramApplication
 from .services import (
     RegistrationData,
     activate_application,
+    activate_program_application,
     approve_application,
     approve_program_application,
-    activate_program_application,
     invite_program_application,
     mark_review_application,
     mark_review_program_application,
@@ -47,6 +51,7 @@ from .services import (
     reject_program_application,
     revert_application_decision,
     revert_program_application_decision,
+    submit_program_application,
     submit_registration,
 )
 
@@ -124,8 +129,8 @@ def application_list(request: HttpRequest) -> HttpResponse:
             "name": "status",
             "label": _("Status"),
             "value": status_filter,
-            "options": [{"value": v, "label": _(l), "selected": status_filter == v}
-                        for v, l in Application._meta.get_field("status").choices],
+            "options": [{"value": v, "label": _(label_text), "selected": status_filter == v}
+                        for v, label_text in Application._meta.get_field("status").choices],
         })
     page_obj, pagination_qs = paginate(request, applications)
     context = {
@@ -238,15 +243,15 @@ def program_application_list(request: HttpRequest) -> HttpResponse:
             "name": "status",
             "label": _("Status"),
             "value": status_filter,
-            "options": [{"value": v, "label": _(l), "selected": status_filter == v}
-                        for v, l in ProgramApplication._meta.get_field("status").choices],
+            "options": [{"value": v, "label": _(label_text), "selected": status_filter == v}
+                        for v, label_text in ProgramApplication._meta.get_field("status").choices],
         },
         {
             "name": "program_type",
             "label": _("Type"),
             "value": program_type_filter,
-            "options": [{"value": v, "label": _(l), "selected": program_type_filter == v}
-                        for v, l in ProgramApplication._meta.get_field("program_type").choices],
+            "options": [{"value": v, "label": _(label_text), "selected": program_type_filter == v}
+                        for v, label_text in ProgramApplication._meta.get_field("program_type").choices],
         },
     ]
     page_obj, pagination_qs = paginate(request, applications)
@@ -342,11 +347,7 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
 @require_http_methods(["GET", "POST"])
 def dashboard_apply(request: HttpRequest) -> HttpResponse:
     """Dashboard apply flow — creates a child ProgramApplication."""
-    from apps.academics.models import Cohort, Course
-
     profile = _get_profile_or_404(request.user)
-
-    from .services import submit_program_application
 
     cohorts = list(Cohort.objects.filter(is_active=True).select_related("diploma").order_by("-start_date"))
     courses = list(Course.objects.filter(is_active=True).order_by("title"))
@@ -381,7 +382,6 @@ def dashboard_apply(request: HttpRequest) -> HttpResponse:
 
 def _get_profile_or_404(user):
     if not hasattr(user, "student_profile"):
-        from django.http import Http404
         raise Http404(_("No student profile."))
     return user.student_profile
 

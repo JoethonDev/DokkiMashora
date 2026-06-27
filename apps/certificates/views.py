@@ -19,11 +19,12 @@ from apps.audit.services import record_audit_event
 from apps.core.pagination import paginate
 from apps.core.permissions import ROLE_SENIOR_STAFF, is_admin, is_moderator, role_required
 from apps.progression.constants import CERTIFICATE_STATUS_AVAILABLE
+from apps.storage.services import storage_service
 from apps.students.models import StudentProfile
 
 from .forms import CertificateTemplateForm
 from .models import CertificateTemplate, GeneratedCertificate
-from .services import generate_certificate_pdf, revoke_certificate
+from .services import generate_certificate_pdf, regenerate_certificate, revoke_certificate
 
 logger = logging.getLogger(__name__)
 
@@ -180,7 +181,6 @@ def admin_revoke_certificate(request, cert_id):
 def admin_regenerate_certificate(request, cert_id):
     cert = get_object_or_404(GeneratedCertificate, id=cert_id)
     reason = request.POST.get("reason", "")
-    from .services import regenerate_certificate
 
     try:
         new_cert = regenerate_certificate(cert, actor=request.user, reason=reason)
@@ -246,7 +246,6 @@ def _serve_certificate_pdf(request, cert):
         messages.error(request, _("Certificate PDF is not available."))
         return redirect("certificates:student_certificate_list")
 
-    from apps.storage.services import storage_service
     try:
         url = storage_service.get_protected_download_url(
             cert.pdf_storage_key,

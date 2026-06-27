@@ -13,18 +13,15 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.translation import gettext_lazy as _, ngettext_lazy
+from django.utils.translation import gettext_lazy as _
+from django.utils.translation import ngettext_lazy
 from django.views.decorators.http import require_POST
-
-from apps.core.htmx import is_htmx
-from apps.core.pagination import paginate
-from apps.core.views import safe_next_url
 
 from apps.assessments.constants import (
     ASSESSMENT_TYPE_HOMEWORK,
     ATTEMPT_STATUS_IN_PROGRESS,
 )
-from apps.assessments.forms import AssessmentForm, QuestionForm
+from apps.assessments.forms import AssessmentForm, QuestionForm, _choices_for_template
 from apps.assessments.models import (
     Assessment,
     AssessmentAnswer,
@@ -63,7 +60,16 @@ from apps.audit.constants import (
 )
 from apps.audit.services import record_audit_event
 from apps.core.htmx import is_htmx
-from apps.core.permissions import ROLE_EXAM_STAFF, can_grade_attempt, is_admin, is_moderator, role_required
+from apps.core.pagination import paginate
+from apps.core.permissions import (
+    ROLE_EXAM_STAFF,
+    assessment_scope_filter,
+    can_grade_attempt,
+    is_admin,
+    is_moderator,
+    role_required,
+)
+from apps.core.views import safe_next_url
 from apps.storage.services import FileValidationError, StorageError, storage_service
 
 # ---------------------------------------------------------------------------
@@ -353,6 +359,7 @@ def admin_list(request):
     q = request.GET.get("q", "")
     type_filter = request.GET.get("type", "")
     assessments = Assessment.objects.all().select_related("created_by")
+    assessments = assessments.filter(assessment_scope_filter(request.user))
     if q:
         assessments = assessments.filter(Q(title__icontains=q) | Q(description__icontains=q))
     if type_filter:
@@ -419,6 +426,19 @@ def admin_preview(request, assessment_id):
             "remaining_seconds": 0,
         },
     )
+
+
+@login_required
+@role_required(*ROLE_EXAM_STAFF)
+def admin_scope_fields(request):
+    scope_type = request.GET.get("scope_type", "")
+    data = {"scope_type": scope_type}
+    if scope_type == "diploma":
+        data["diploma"] = request.GET.get("diploma", "")
+        data["semester"] = request.GET.get("semester", "")
+        data["cohort"] = request.GET.get("cohort", "")
+    form = AssessmentForm(data)
+    return render(request, "assessments/partials/_scope_fields.html", {"form": form})
 
 
 @login_required
@@ -501,7 +521,6 @@ def admin_toggle_active(request, assessment_id):
 
 
 def _question_form_context(assessment, question=None, form=None, choices=None):
-    from apps.assessments.forms import QuestionForm
     if form is None:
         form = QuestionForm(instance=question)
     if choices is None:
@@ -569,7 +588,6 @@ def admin_question_save(request, assessment_id, question_id=None):
                 response = HttpResponse()
                 return _htmx_redirect(response, reverse("assessments:admin_detail", args=[assessment.id]))
             return redirect("assessments:admin_detail", assessment_id=assessment.id)
-    from apps.assessments.forms import _choices_for_template
     choices = _choices_for_template(parsed_choices, question)
     return _render_question_form(request, assessment, question=question, form=form, choices=choices)
 

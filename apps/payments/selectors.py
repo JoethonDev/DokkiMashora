@@ -39,7 +39,7 @@ def get_upload_detail(upload_id: int) -> PaymentUpload | None:
 
 
 def get_student_payment_records(student: StudentProfile) -> QuerySet[PaymentRecord]:
-    return PaymentRecord.objects.filter(student=student).select_related(
+    return PaymentRecord.objects.filter(student=student, deleted_at__isnull=True).select_related(
         "student__user", "upload_row"
     ).order_by("-paid_at", "-created_at")
 
@@ -90,7 +90,7 @@ def get_payment_record_queryset(
     date_from: str | None = None,
     date_to: str | None = None,
 ) -> QuerySet[PaymentRecord]:
-    qs = PaymentRecord.objects.select_related("student__user", "upload_row").all()
+    qs = PaymentRecord.objects.select_related("student__user", "upload_row").filter(deleted_at__isnull=True)
     if status:
         qs = qs.filter(status=status)
     if student_q:

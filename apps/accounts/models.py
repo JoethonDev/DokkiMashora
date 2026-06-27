@@ -10,7 +10,18 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.core.models import TimeStampedModel
 
-from .constants import GROUP_STUDENT, STAFF_ROLE_GROUPS, USER_STATUS_ACTIVE, USER_STATUS_CHOICES
+from .constants import (
+    GROUP_STUDENT,
+    MATCH_METHOD_CHOICES,
+    MATCH_METHOD_NONE,
+    ROW_STATUS_CHOICES,
+    ROW_STATUS_PARSED,
+    STAFF_ROLE_GROUPS,
+    UPLOAD_STATUS_CHOICES,
+    UPLOAD_STATUS_PENDING,
+    USER_STATUS_ACTIVE,
+    USER_STATUS_CHOICES,
+)
 from .managers import UserManager
 
 
@@ -90,3 +101,95 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
     @property
     def is_staff_member(self) -> bool:
         return self.is_staff or bool(self.primary_role and self.primary_role != "Student")
+
+
+class UserUpload(TimeStampedModel):
+    """A bulk user import batch from CSV."""
+
+    uploaded_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="user_uploads",
+        verbose_name=_("uploaded by"),
+    )
+    original_filename = models.CharField(_("original filename"), max_length=255)
+    file_hash = models.CharField(_("file hash"), max_length=64, blank=True)
+    status = models.CharField(
+        _("status"),
+        max_length=16,
+        choices=UPLOAD_STATUS_CHOICES,
+        default=UPLOAD_STATUS_PENDING,
+        db_index=True,
+    )
+    total_rows = models.IntegerField(_("total rows"), default=0)
+    matched_rows = models.IntegerField(_("matched rows"), default=0)
+    unmatched_rows = models.IntegerField(_("unmatched rows"), default=0)
+    created_rows = models.IntegerField(_("created rows"), default=0)
+    updated_rows = models.IntegerField(_("updated rows"), default=0)
+    failed_rows = models.IntegerField(_("failed rows"), default=0)
+    started_at = models.DateTimeField(_("started at"), null=True, blank=True)
+    completed_at = models.DateTimeField(_("completed at"), null=True, blank=True)
+    error_summary = models.TextField(_("error summary"), blank=True)
+
+    class Meta:
+        verbose_name = _("user upload")
+        verbose_name_plural = _("user uploads")
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return f"{self.original_filename} ({self.get_status_display()})"
+
+
+class UserUploadRow(TimeStampedModel):
+    """A single row from a bulk user import CSV."""
+
+    upload = models.ForeignKey(
+        UserUpload,
+        on_delete=models.CASCADE,
+        related_name="rows",
+        verbose_name=_("upload"),
+    )
+    row_number = models.IntegerField(_("row number"))
+    raw_data = models.JSONField(_("raw data"), default=dict, blank=True)
+    normalized_email = models.EmailField(_("normalized email"), max_length=254, blank=True)
+    normalized_national_id = models.CharField(_("normalized national ID"), max_length=32, blank=True)
+    normalized_phone = models.CharField(_("normalized phone"), max_length=32, blank=True)
+    status = models.CharField(
+        _("status"),
+        max_length=16,
+        choices=ROW_STATUS_CHOICES,
+        default=ROW_STATUS_PARSED,
+        db_index=True,
+    )
+    match_method = models.CharField(
+        _("match method"),
+        max_length=16,
+        choices=MATCH_METHOD_CHOICES,
+        default=MATCH_METHOD_NONE,
+        blank=True,
+    )
+    matched_user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="import_rows",
+        verbose_name=_("matched user"),
+    )
+    action = models.CharField(
+        _("action"),
+        max_length=10,
+        blank=True,
+        help_text=_("create or update"),
+    )
+    error_message = models.TextField(_("error message"), blank=True)
+
+    class Meta:
+        verbose_name = _("user upload row")
+        verbose_name_plural = _("user upload rows")
+        ordering = ("upload", "row_number")
+        unique_together = (("upload", "row_number"),)
+
+    def __str__(self) -> str:
+        return f"Row {self.row_number} — {self.get_status_display()}"

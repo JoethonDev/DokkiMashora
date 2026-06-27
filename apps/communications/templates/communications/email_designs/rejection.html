@@ -1,0 +1,6 @@
+{% load i18n %}
+<p style="font-size:18px;font-weight:700;margin:0 0 12px">{% blocktrans with name=full_name %}Dear {{ name }},{% endblocktrans %}</p>
+{{ content|safe }}
+{% if rejection_reason %}
+<p style="margin:0 0 12px">{% trans "Reason" %}: {{ rejection_reason }}</p>
+{% endif %}

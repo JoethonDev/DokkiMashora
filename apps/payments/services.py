@@ -24,6 +24,7 @@ from .constants import (
     MATCH_METHOD_NONE,
     MATCH_METHOD_PHONE,
     PAYMENT_STATUS_PAID,
+    PAYMENT_STATUS_UNPAID,
     REQUIRED_CSV_HEADERS,
     ROW_STATUS_AMBIGUOUS,
     ROW_STATUS_CREATED,
@@ -147,7 +148,7 @@ def _lookup_diploma_enrollment(data: dict, student: StudentProfile) -> DiplomaEn
     if not enroll_id:
         return None
     try:
-        return DiplomaEnrollment.objects.filter(id=int(enroll_id), student=student).first()
+        return DiplomaEnrollment.objects.select_related("cohort__diploma").filter(id=int(enroll_id), student=student).first()
     except (ValueError, TypeError):
         return None
 
@@ -157,9 +158,25 @@ def _lookup_course_enrollment(data: dict, student: StudentProfile) -> CourseEnro
     if not enroll_id:
         return None
     try:
-        return CourseEnrollment.objects.filter(id=int(enroll_id), student=student).first()
+        return CourseEnrollment.objects.select_related("course_version__course").filter(id=int(enroll_id), student=student).first()
     except (ValueError, TypeError):
         return None
+
+
+def _build_target_snapshot(row) -> tuple[str, dict]:
+    if row.matched_diploma_enrollment:
+        enroll = row.matched_diploma_enrollment
+        return "diploma", {
+            "cohort_name": enroll.cohort.name if enroll.cohort else "",
+            "diploma_title": enroll.cohort.diploma.title if enroll.cohort and enroll.cohort.diploma else "",
+        }
+    if row.matched_course_enrollment:
+        enroll = row.matched_course_enrollment
+        return "course", {
+            "course_title": enroll.course_version.course.title if enroll.course_version and enroll.course_version.course else "",
+            "course_version_name": enroll.course_version.label if enroll.course_version else "",
+        }
+    return "", {}
 
 
 def preview_upload(upload_id: int) -> PaymentUpload:
@@ -216,6 +233,7 @@ def confirm_upload(upload_id: int, confirmed_by) -> PaymentUpload:
                 student=row.matched_student,
                 external_reference=row.external_reference,
             ).first() if row.external_reference else None
+            target_type, target_snapshot = _build_target_snapshot(row)
             if existing:
                 existing.amount = row.amount
                 existing.paid_at = row.paid_at
@@ -225,9 +243,15 @@ def confirm_upload(upload_id: int, confirmed_by) -> PaymentUpload:
                 existing.application = row.matched_application
                 existing.diploma_enrollment = row.matched_diploma_enrollment
                 existing.course_enrollment = row.matched_course_enrollment
+                if target_type:
+                    existing.target_type = target_type
+                    existing.target_snapshot = target_snapshot
+                target_ref = row.raw_data.get("target_ref", "")
+                if target_ref:
+                    existing.target_ref = target_ref
                 existing.save(update_fields=["amount", "paid_at", "status", "notes", "imported_by",
                                               "application", "diploma_enrollment", "course_enrollment",
-                                              "updated_at"])
+                                              "target_type", "target_snapshot", "target_ref", "updated_at"])
                 row.status = ROW_STATUS_UPDATED
                 updated += 1
             else:
@@ -244,6 +268,9 @@ def confirm_upload(upload_id: int, confirmed_by) -> PaymentUpload:
                     application=row.matched_application,
                     diploma_enrollment=row.matched_diploma_enrollment,
                     course_enrollment=row.matched_course_enrollment,
+                    target_type=row.raw_data.get("target_type", target_type),
+                    target_ref=row.raw_data.get("target_ref", ""),
+                    target_snapshot=target_snapshot,
                 )
                 row.status = ROW_STATUS_CREATED
                 created += 1
@@ -330,7 +357,11 @@ def mark_enrollment_paid(
     actor,
     amount: Decimal | int = 0,
 ) -> PaymentRecord:
-    """Create a paid PaymentRecord linked to the given enrollment."""
+    """Create a paid PaymentRecord linked to the given enrollment.
+
+    Snapshots the target enrollment name so financial history survives
+    target deletion.
+    """
     kwargs: dict = {
         "student": student,
         "amount": Decimal(str(amount)) if amount else Decimal("0"),
@@ -339,13 +370,24 @@ def mark_enrollment_paid(
         "paid_at": timezone.now(),
         "imported_by": actor,
         "notes": f"Manual payment by {actor.email}",
+        "target_type": enrollment_type,
     }
     if enrollment_type == "diploma":
         enrollment = DiplomaEnrollment.objects.get(pk=enrollment_id, student=student)
         kwargs["diploma_enrollment"] = enrollment
+        kwargs["target_ref"] = str(enrollment.id)
+        kwargs["target_snapshot"] = {
+            "cohort_name": enrollment.cohort.name if enrollment.cohort else "",
+            "diploma_title": enrollment.cohort.diploma.title if enrollment.cohort and enrollment.cohort.diploma else "",
+        }
     elif enrollment_type == "course":
         enrollment = CourseEnrollment.objects.get(pk=enrollment_id, student=student)
         kwargs["course_enrollment"] = enrollment
+        kwargs["target_ref"] = str(enrollment.id)
+        kwargs["target_snapshot"] = {
+            "course_title": enrollment.course_version.course.title if enrollment.course_version and enrollment.course_version.course else "",
+            "course_version_name": enrollment.course_version.label if enrollment.course_version else "",
+        }
     else:
         raise ValueError(_("Invalid enrollment type: {t}").format(t=enrollment_type))
     app = student.applications.order_by("-created_at").first()
@@ -356,7 +398,6 @@ def mark_enrollment_paid(
 
 def mark_enrollment_unpaid(student: StudentProfile, enrollment_type: str, enrollment_id: int) -> int:
     """Set all paid PaymentRecords for this enrollment to unpaid. Returns count."""
-    from .constants import PAYMENT_STATUS_UNPAID
 
     filters = {"student": student, "status": PAYMENT_STATUS_PAID}
     if enrollment_type == "diploma":

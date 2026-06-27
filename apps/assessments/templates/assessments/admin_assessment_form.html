@@ -11,29 +11,39 @@
 
   <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
     <h1 class="text-2xl sm:text-3xl font-bold tracking-tight font-display">{% if assessment %}{% trans "Edit Assessment" %}{% else %}{% trans "Create Assessment" %}{% endif %}</h1>
-    <form method="post" class="mt-6 space-y-5" id="assessmentForm">
+    <form method="post" class="mt-6 space-y-5" id="assessmentForm"
+      x-data="assessmentForm({
+        scopeType: '{{ form.scope_type.value|default:"" }}',
+        diplomaId: '{{ form.diploma.value|default:"" }}',
+        semesterId: '{{ form.semester.value|default:"" }}',
+        cohortId: '{{ form.cohort.value|default:"" }}',
+      })">
       {% csrf_token %}
-      {% for field in form %}{% include "partials/_field.html" %}{% endfor %}
-      <script>
-        (function() {
-          var scopeEl = document.getElementById('id_scope_type');
-          if (!scopeEl) return;
-          var courseWrapper = document.querySelector('[for="id_course_version"]')?.parentElement;
-          var semWrapper = document.querySelector('[for="id_semester"]')?.parentElement;
-          var cohortWrapper = document.querySelector('[for="id_cohort"]')?.parentElement;
-          var diplomaWrapper = document.querySelector('[for="id_diploma"]')?.parentElement;
-          var diplomaEl = document.getElementById('id_diploma');
-          function toggleScope(val) {
-            if (courseWrapper) { courseWrapper.style.display = val === 'course' ? '' : 'none'; if (val !== 'course') courseWrapper.querySelector('select').value = ''; }
-            if (semWrapper) { semWrapper.style.display = val === 'diploma' ? '' : 'none'; if (val !== 'diploma') semWrapper.querySelector('select').value = ''; }
-            if (cohortWrapper) { cohortWrapper.style.display = val === 'diploma' ? '' : 'none'; if (val !== 'diploma') cohortWrapper.querySelector('select').value = ''; }
-            if (diplomaWrapper) { diplomaWrapper.style.display = val === 'diploma' ? '' : 'none'; if (val !== 'diploma') diplomaWrapper.querySelector('select').value = ''; }
-          }
-          toggleScope(scopeEl.value);
-          scopeEl.addEventListener('change', function() { toggleScope(this.value); });
-          if (diplomaEl) diplomaEl.addEventListener('change', function() { this.form.requestSubmit(); });
-        })();
-      </script>
+      <div>
+        <label for="{{ form.scope_type.id_for_label }}" class="block text-sm font-medium dm-text">{% trans "Scope" %} <span class="text-rose-600">*</span></label>
+        <div class="mt-1">
+          <select name="{{ form.scope_type.name }}" id="{{ form.scope_type.id_for_label }}" x-model="scopeType"
+                  hx-get="{% url 'assessments:admin_scope_fields' %}"
+                  hx-trigger="change"
+                  hx-target="#scope-detail-fields"
+                  hx-swap="outerHTML"
+                  hx-include="#assessmentForm"
+                  class="dm-input w-full rounded-lg px-3 py-2 text-sm shadow-sm">
+            <option value="">{% trans "Select scope…" %}</option>
+            {% for val, label in form.scope_type.field.choices %}
+            <option value="{{ val }}"{% if form.scope_type.value == val %} selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div id="scope-detail-fields">
+        {% include "assessments/partials/_scope_fields.html" %}
+      </div>
+      {% for field in form %}
+      {% if field.name != 'scope_type' and field.name != 'standalone_course' and field.name != 'diploma' and field.name != 'semester' and field.name != 'cohort' and field.name != 'course_version' %}
+      {% include "partials/_field.html" %}
+      {% endif %}
+      {% endfor %}
       <div class="flex gap-2 pt-4">
         {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
         {% include "partials/_button.html" with label=_("Save") variant="primary" %}
@@ -46,4 +56,19 @@
     </form>
   </div>
 </div>
+<script>
+function assessmentForm(opts) {
+  return {
+    scopeType: opts.scopeType || '',
+    diplomaId: opts.diplomaId || '',
+    semesterId: opts.semesterId || '',
+    cohortId: opts.cohortId || '',
+    init() {
+      this.$watch('scopeType', val => { if (val !== 'diploma') { this.diplomaId = ''; this.semesterId = ''; this.cohortId = ''; } });
+      this.$watch('diplomaId', val => { if (!val) { this.semesterId = ''; this.cohortId = ''; } });
+      this.$watch('semesterId', val => { if (!val) this.cohortId = ''; });
+    }
+  }
+}
+</script>
 {% endblock %}

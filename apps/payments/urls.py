@@ -6,6 +6,7 @@ app_name = "payments"
 
 urlpatterns = [
     path("", views.upload_list, name="upload_list"),
+    path("upload/template/", views.download_payment_csv_template, name="download_payment_csv_template"),
     path("upload/", views.upload_create, name="upload_create"),
     path("upload/<int:upload_id>/", views.upload_detail, name="upload_detail"),
     path(
@@ -23,5 +24,10 @@ urlpatterns = [
         "enrollment/<int:student_id>/<str:enrollment_type>/<int:enrollment_id>/toggle/",
         views.enrollment_payment_toggle,
         name="enrollment_payment_toggle",
+    ),
+    path(
+        "records/<int:record_id>/delete/",
+        views.payment_record_delete,
+        name="record_delete",
     ),
 ]

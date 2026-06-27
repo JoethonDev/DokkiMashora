@@ -23,6 +23,7 @@ from apps.assessments.services import get_student_attempts
 from apps.certificates.models import GeneratedCertificate
 from apps.communications.email_message import EmailMessage
 from apps.entrance_exams.models import EntranceAttempt
+from apps.payments.selectors import get_enrollment_payment_status, get_student_payment_summary
 from apps.progression.constants import CERTIFICATE_STATUS_AVAILABLE
 from apps.progression.models import (
     FinalExamEligibility,
@@ -338,7 +339,6 @@ def _get_eligibilities(student_profile: StudentProfile) -> list[FinalExamEligibi
 
 def _get_payments(student_profile: StudentProfile) -> dict:
     try:
-        from apps.payments.selectors import get_enrollment_payment_status, get_student_payment_summary
         summary = get_student_payment_summary(student_profile)
         enrollments = get_enrollment_payment_status(student_profile)
         summary.update(enrollments)

@@ -7,7 +7,8 @@ from types import SimpleNamespace
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
-from apps.academics.models import Cohort, Diploma, Semester
+from apps.academics.models import Cohort, Course, Diploma, Semester
+
 from .models import Assessment, AssessmentQuestion
 
 SCOPE_COURSE = "course"
@@ -21,8 +22,12 @@ SCOPE_CHOICES = [
 
 class AssessmentForm(forms.ModelForm):
     scope_type = forms.ChoiceField(choices=SCOPE_CHOICES, label=_("Scope"))
+    standalone_course = forms.ModelChoiceField(
+        queryset=Course.objects.filter(is_standalone=True, is_active=True),
+        required=False, label=_("Standalone course"),
+    )
     diploma = forms.ModelChoiceField(
-        queryset=Diploma.objects.all(), required=False, label=_("Diploma"),
+        queryset=Diploma.objects.filter(is_active=True), required=False, label=_("Diploma"),
     )
 
     class Meta:
@@ -68,36 +73,47 @@ class AssessmentForm(forms.ModelForm):
                 diploma_id = instance.cohort.diploma_id
             if instance.course_version_id:
                 self.fields["scope_type"].initial = SCOPE_COURSE
+                cv = instance.course_version
+                if cv and cv.course.is_standalone:
+                    self.fields["standalone_course"].initial = cv.course
             elif instance.semester_id or instance.cohort_id:
                 self.fields["scope_type"].initial = SCOPE_DIPLOMA
         if diploma_id:
-            self.fields["semester"].queryset = Semester.objects.filter(diploma_id=diploma_id)
-            self.fields["cohort"].queryset = Cohort.objects.filter(diploma_id=diploma_id)
+            self.fields["semester"].queryset = Semester.objects.filter(diploma_id=diploma_id, is_active=True)
+            self.fields["cohort"].queryset = Cohort.objects.filter(diploma_id=diploma_id, is_active=True)
+            self.fields["diploma"].initial = diploma_id
         else:
             self.fields["semester"].queryset = Semester.objects.none()
             self.fields["cohort"].queryset = Cohort.objects.none()
         self.fields["semester"].required = False
         self.fields["cohort"].required = False
+        self.fields["course_version"].required = False
 
     def clean(self):
         cleaned = super().clean()
         scope_type = cleaned.get("scope_type")
-        course_version = cleaned.get("course_version")
+        standalone_course = cleaned.get("standalone_course")
         semester = cleaned.get("semester")
         cohort = cleaned.get("cohort")
 
         if scope_type == SCOPE_COURSE:
-            if not course_version:
+            if not standalone_course:
                 raise forms.ValidationError(
-                    _("Course version is required for course-scoped assessments.")
+                    _("Standalone course is required for course-scoped assessments.")
                 )
             cleaned["semester"] = None
             cleaned["cohort"] = None
+            cv = standalone_course.versions.filter(is_active=True).first()
+            if not cv:
+                raise forms.ValidationError(
+                    _("Selected standalone course has no active version.")
+                )
+            cleaned["course_version"] = cv
         elif scope_type == SCOPE_DIPLOMA:
-            if not semester and not cohort:
+            if not semester or not cohort:
                 self.add_error(
                     "semester",
-                    _("Semester or cohort is required for diploma-scoped assessments."),
+                    _("Both semester and cohort are required for diploma-scoped assessments."),
                 )
             cleaned["course_version"] = None
             if semester and cohort and semester.diploma_id != cohort.diploma_id:

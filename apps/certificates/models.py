@@ -1,4 +1,7 @@
+import re
+
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
@@ -73,13 +76,11 @@ class CertificateTemplate(TimeStampedModel):
         return f"{self.name} ({self.language})"
 
     def clean(self):
-        from django.core.exceptions import ValidationError
         known_vars = [
             "student_name", "diploma_title", "cohort_name",
             "completion_date", "certificate_number", "issue_date",
         ]
         if self.body_html:
-            import re
             found = re.findall(r"\{\{(\w+)\}\}", self.body_html)
             unknown = [v for v in found if v not in known_vars]
             if unknown:

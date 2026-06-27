@@ -13,6 +13,8 @@
       {% if diploma.description %}<p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{{ diploma.description }}</p>{% endif %}
     </div>
     <div class="flex flex-wrap gap-2">
+      {% url 'academics:admin_diploma_enrollment_list' diploma.id as enroll_url %}
+      {% include "partials/_button.html" with href=enroll_url label=_("Enrollments") variant="ghost" size="sm" %}
       <a href="{% url 'academics:admin_diploma_edit' diploma.id %}?next={{ request.path|urlencode }}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Edit" %}</a>
     </div>
   </header>

@@ -24,6 +24,8 @@ env = environ.Env(
     EMAIL_HOST_USER=(str, ""),
     EMAIL_HOST_PASSWORD=(str, ""),
     EMAIL_USE_TLS=(bool, True),
+    SITE_NAME=(str, "DokkiMashora LMS"),
+    SITE_NAME_AR=(str, "دكى مشورة"),
     DEFAULT_FROM_EMAIL=(str, "no-reply@dokkimashora.local"),
     GEMINI_API_KEY=(str, ""),
     GEMINI_MODEL=(str, "gemini-1.5-flash"),
@@ -179,6 +181,8 @@ EMAIL_PORT = env("EMAIL_PORT")
 EMAIL_HOST_USER = env("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD")
 EMAIL_USE_TLS = env("EMAIL_USE_TLS")
+SITE_NAME = env("SITE_NAME")
+SITE_NAME_AR = env("SITE_NAME_AR")
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL")
 
 # --- Gemini ------------------------------------------------------------------

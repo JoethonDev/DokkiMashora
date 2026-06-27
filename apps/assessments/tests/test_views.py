@@ -9,8 +9,18 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE
-from apps.academics.models import Cohort, Course, CourseEnrollment, CourseVersion, Diploma
-from apps.accounts.constants import GROUP_TEACHER
+from apps.academics.models import (
+    Cohort,
+    Course,
+    CourseEnrollment,
+    CourseVersion,
+    Diploma,
+    DiplomaEnrollment,
+    ModeratorAssignment,
+    StudentCluster,
+    StudentClusterMembership,
+)
+from apps.accounts.constants import GROUP_MODERATOR, GROUP_TEACHER
 from apps.accounts.models import User
 from apps.assessments.constants import (
     ASSESSMENT_TYPE_HOMEWORK,
@@ -20,7 +30,13 @@ from apps.assessments.constants import (
     ATTEMPT_STATUS_UNDER_REVIEW,
     HOMEWORK_STATUS_UNDER_REVIEW,
 )
-from apps.assessments.models import Assessment, AssessmentAttempt, AssessmentChoice, AssessmentQuestion, HomeworkSubmission
+from apps.assessments.models import (
+    Assessment,
+    AssessmentAttempt,
+    AssessmentChoice,
+    AssessmentQuestion,
+    HomeworkSubmission,
+)
 from apps.students.models import StudentProfile
 
 
@@ -288,3 +304,119 @@ class AdminGradePermissionTests(TestCase):
         response = self.client.get(reverse("assessments:admin_grade_detail", args=[self.attempt.id]))
 
         self.assertEqual(response.status_code, 403)
+
+
+class ModeratorCrossScopeTests(TestCase):
+    """Cluster-scoped moderator CANNOT grade attempts of students outside their cluster."""
+
+    def setUp(self):
+        self.client = Client()
+        self.admin = User.objects.create_superuser(email="mod-scope-admin@test.com", password="x")
+        cohort = Cohort.objects.create(
+            diploma=Diploma.objects.create(title="Mod Diploma", total_semesters=2, created_by=self.admin),
+            name="Mod Cohort", start_date=date(2026, 1, 1), created_by=self.admin,
+        )
+        cluster_a = StudentCluster.objects.create(name="A", cohort=cohort, created_by=self.admin)
+        cluster_b = StudentCluster.objects.create(name="B", cohort=cohort, created_by=self.admin)
+        self.student_a = User.objects.create_user(email="student-a@test.com", password="x")
+        _create_profile(self.student_a, national_id="10000000000201", phone="01000000201")
+        self.student_b = User.objects.create_user(email="student-b@test.com", password="x")
+        _create_profile(self.student_b, national_id="10000000000202", phone="01000000202")
+        DiplomaEnrollment.objects.create(student=self.student_a.student_profile, cohort=cohort, status=ENROLLMENT_STATUS_ACTIVE)
+        DiplomaEnrollment.objects.create(student=self.student_b.student_profile, cohort=cohort, status=ENROLLMENT_STATUS_ACTIVE)
+        StudentClusterMembership.objects.create(student=self.student_a.student_profile, cluster=cluster_a, assigned_by=self.admin)
+        StudentClusterMembership.objects.create(student=self.student_b.student_profile, cluster=cluster_b, assigned_by=self.admin)
+        course = Course.objects.create(title="Mod Course", created_by=self.admin)
+        course_version = CourseVersion.objects.create(course=course, cohort=cohort, label="v1", created_by=self.admin)
+        self.assessment = Assessment.objects.create(
+            title="Mod Quiz", assessment_type=ASSESSMENT_TYPE_QUIZ,
+            course_version=course_version,
+            open_at=timezone.now() - timezone.timedelta(days=1),
+            close_at=timezone.now() + timezone.timedelta(days=7),
+            passing_score=Decimal("50.00"), is_active=True, created_by=self.admin,
+        )
+        self.attempt_a = AssessmentAttempt.objects.create(
+            assessment=self.assessment, student=self.student_a, attempt_number=1, status=ATTEMPT_STATUS_UNDER_REVIEW,
+        )
+        self.attempt_b = AssessmentAttempt.objects.create(
+            assessment=self.assessment, student=self.student_b, attempt_number=2, status=ATTEMPT_STATUS_UNDER_REVIEW,
+        )
+        self.moderator = User.objects.create_user(email="moderator@test.com", password="x")
+        group, _ = Group.objects.get_or_create(name=GROUP_MODERATOR)
+        self.moderator.groups.add(group)
+        ModeratorAssignment.objects.create(
+            moderator=self.moderator, course_version=course_version,
+            cohort=cohort, cluster=cluster_a, active=True, assigned_by=self.admin,
+        )
+
+    def test_cluster_moderator_can_grade_own_cluster_student(self):
+        self.client.force_login(self.moderator)
+        response = self.client.get(reverse("assessments:admin_grade_detail", args=[self.attempt_a.id]))
+        self.assertEqual(response.status_code, 200)
+
+    def test_cluster_moderator_cannot_grade_other_cluster_student(self):
+        self.client.force_login(self.moderator)
+        response = self.client.get(reverse("assessments:admin_grade_detail", args=[self.attempt_b.id]))
+        self.assertEqual(response.status_code, 403)
+
+
+class AssessmentScopeDependencyTests(TestCase):
+    """HTMX scope-fields endpoint returns correct partials for each scope type."""
+
+    def setUp(self):
+        self.client = Client()
+        self.admin = User.objects.create_superuser(email="admin@scope.com", password="x")
+        self.client.force_login(self.admin)
+        self.diploma = Diploma.objects.create(title="Scope Diploma", total_semesters=2, created_by=self.admin)
+        self.cohort = Cohort.objects.create(
+            diploma=self.diploma, name="Scope Cohort",
+            start_date=date(2026, 1, 1), created_by=self.admin,
+        )
+        self.course = Course.objects.create(title="Scope Course", created_by=self.admin)
+
+    def test_scope_standalone_course_shows_course_field(self):
+        response = self.client.get(
+            reverse("assessments:admin_scope_fields"),
+            {"scope_type": "course"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "standalone_course")
+        self.assertContains(response, "scope-detail-fields")
+
+    def test_scope_diploma_shows_diploma_selector(self):
+        response = self.client.get(
+            reverse("assessments:admin_scope_fields"),
+            {"scope_type": "diploma"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "diploma")
+        self.assertNotContains(response, "semester")
+        self.assertNotContains(response, "cohort")
+
+    def test_scope_diploma_with_diploma_shows_semester(self):
+        response = self.client.get(reverse("assessments:admin_scope_fields"), {
+            "scope_type": "diploma",
+            "diploma": str(self.diploma.id),
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "semester")
+
+    def test_scope_diploma_with_semester_shows_cohort(self):
+        semester = self.diploma.semesters.create(title="Sem1", order=1)
+        response = self.client.get(reverse("assessments:admin_scope_fields"), {
+            "scope_type": "diploma",
+            "diploma": str(self.diploma.id),
+            "semester": str(semester.id),
+            "cohort": str(self.cohort.id),
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "cohort")
+
+    def test_scope_get_cannot_save(self):
+        """GET scope endpoint must not create or update assessments."""
+        response = self.client.get(
+            reverse("assessments:admin_scope_fields"),
+            {"scope_type": "course", "standalone_course": str(self.course.id)},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Assessment.objects.count(), 0)

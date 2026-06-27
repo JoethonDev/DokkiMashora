@@ -7,6 +7,7 @@ from datetime import date
 from io import BytesIO
 
 from django.db import transaction
+from django.template import Context, Template
 from django.template.loader import render_to_string
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -22,10 +23,21 @@ from apps.progression.constants import (
     DIPLOMA_COMPLETION_GRADUATED,
     PROMOTION_DECISION_GRADUATE,
 )
-from apps.progression.models import StudentDiplomaCompletion
+from apps.progression.models import PromotionDecision, StudentDiplomaCompletion
+from apps.storage.services import storage_service
 from apps.students.models import StudentProfile
 
 from .models import CertificateCounter, CertificateTemplate, GeneratedCertificate
+
+try:
+    from weasyprint import HTML
+except (ImportError, OSError):
+    HTML = None
+
+try:
+    from xhtml2pdf import pisa
+except ImportError:
+    pisa = None
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +78,6 @@ def render_certificate_html(
     }
 
     if template.body_html:
-        from django.template import Context, Template
         t = Template(template.body_html)
         return t.render(Context(context))
 
@@ -126,7 +137,6 @@ def generate_certificate_pdf(
             html = render_certificate_html(student, template, completion, certificate_number)
             pdf_bytes = _html_to_pdf(html)
 
-            from apps.storage.services import storage_service
             result = storage_service.upload_file(
                 data=pdf_bytes,
                 key_prefix=f"certificates/{enrollment.id}",
@@ -153,16 +163,15 @@ def generate_certificate_pdf(
 
 
 def _html_to_pdf(html: str) -> bytes:
-    try:
-        from weasyprint import HTML
+    if HTML is not None:
         pdf_bytes = BytesIO()
         HTML(string=html).write_pdf(pdf_bytes)
         return pdf_bytes.getvalue()
-    except ImportError:
-        from xhtml2pdf import pisa
+    if pisa is not None:
         pdf_bytes = BytesIO()
         pisa.CreatePDF(html, dest=pdf_bytes)
         return pdf_bytes.getvalue()
+    raise ImportError("Neither weasyprint nor xhtml2pdf are available.")
 
 
 def _create_placeholder_template(enrollment: DiplomaEnrollment, actor) -> CertificateTemplate:
@@ -223,7 +232,6 @@ def regenerate_certificate(
     cert.status = CERTIFICATE_STATUS_REGENERATION
     cert.save(update_fields=["status"])
 
-    from apps.progression.models import PromotionDecision
     PromotionDecision.objects.create(
         student=cert.student,
         diploma_enrollment=cert.diploma_enrollment,

@@ -10,7 +10,15 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE, ENROLLMENT_STATUS_EXPIRED
-from apps.academics.models import Cohort, Course, CourseVersion, Diploma, Semester
+from apps.academics.models import (
+    Cohort,
+    Course,
+    CourseEnrollment,
+    CourseVersion,
+    Diploma,
+    DiplomaEnrollment,
+    Semester,
+)
 from apps.applications.constants import APP_STATUS_APPROVED, APP_STATUS_PENDING, APP_STATUS_REJECTED
 from apps.applications.models import Application
 from apps.assessments.constants import (
@@ -34,7 +42,7 @@ from apps.assessments.models import (
 from apps.audit.models import AuditEvent
 from apps.certificates.models import CertificateTemplate, GeneratedCertificate
 from apps.communications.email_message import EmailMessage
-from apps.communications.models import BulkEmailSend
+from apps.communications.models import BulkEmailSend, EmailTemplate
 from apps.exams.constants import ASSIGNMENT_STATUS_GRADED
 from apps.exams.models import Answer, Assignment, Exam
 from apps.payments.models import PaymentRecord, PaymentUpload, PaymentUploadRow
@@ -120,7 +128,6 @@ class Command(BaseCommand):
         self._report("Rejected application", _)
 
         # ── Enrollments ───────────────────────────────────────────────
-        from apps.academics.models import CourseEnrollment, DiplomaEnrollment
 
         diploma_enr, _ = DiplomaEnrollment.objects.get_or_create(
             student=profile, cohort=cohort,
@@ -485,7 +492,6 @@ class Command(BaseCommand):
         self._report("Audit event", True)
 
         # ── Bulk email history ─────────────────────────────────────────
-        from apps.communications.models import EmailTemplate
 
         email_tpl = EmailTemplate.objects.first()
         if email_tpl:

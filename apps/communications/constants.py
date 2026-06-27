@@ -12,6 +12,7 @@ TEMPLATE_ENTRANCE_EXAM_FAIL = "entrance_exam_fail"
 TEMPLATE_ACCEPTANCE = "acceptance"
 TEMPLATE_REJECTION = "rejection"
 TEMPLATE_ACTIVATION = "activation"
+TEMPLATE_PAYMENT_NOTIFICATION = "payment_notification"
 
 TEMPLATE_SLUGS = (
     TEMPLATE_REGISTRATION_RECEIVED,
@@ -21,6 +22,7 @@ TEMPLATE_SLUGS = (
     TEMPLATE_ACCEPTANCE,
     TEMPLATE_REJECTION,
     TEMPLATE_ACTIVATION,
+    TEMPLATE_PAYMENT_NOTIFICATION,
 )
 
 EMAIL_STATUS_QUEUED = "queued"
@@ -44,23 +46,96 @@ BULK_STATUS_CHOICES = (
 )
 
 REQUIRED_VARIABLES_BY_SLUG: dict[str, list[str]] = {
-    TEMPLATE_REGISTRATION_RECEIVED: ["full_name"],
-    TEMPLATE_ENTRANCE_EXAM_INVITATION: ["full_name", "exam_title", "cohort_name"],
+    TEMPLATE_REGISTRATION_RECEIVED: ["full_name", "national_id", "email"],
+    TEMPLATE_ENTRANCE_EXAM_INVITATION: ["full_name"],
     TEMPLATE_ENTRANCE_EXAM_PASS: ["full_name", "exam_title"],
     TEMPLATE_ENTRANCE_EXAM_FAIL: ["full_name", "exam_title"],
-    TEMPLATE_ACCEPTANCE: ["full_name", "cohort_name"],
-    TEMPLATE_REJECTION: ["full_name", "cohort_name"],
-    TEMPLATE_ACTIVATION: ["full_name", "cohort_name"],
+    TEMPLATE_ACCEPTANCE: ["full_name"],
+    TEMPLATE_REJECTION: ["full_name", "rejection_reason"],
+    TEMPLATE_ACTIVATION: ["full_name", "activation_url"],
+    TEMPLATE_PAYMENT_NOTIFICATION: ["full_name", "amount", "currency", "due_at", "reference", "status"],
 }
 
+ALL_VARIABLE_SAMPLES: dict[str, str] = {
+    "full_name": "ماري جرجس",
+    "email": "mary@example.com",
+    "phone": "01234567890",
+    "national_id": "12345678901234",
+    "date_of_birth": "١٥ مارس ٢٠٠٠",
+    "gender": "أنثى",
+    "education": "بكالوريوس",
+    "church": "كنيسة السيدة العذراء",
+    "priest_name": "القس يوحنا",
+    "program_type": "دبلومة",
+    "course_title": "مدخل إلى اللاهوت",
+    "diploma_title": "دبلومة الدراسات اللاهوتية",
+    "cohort_name": "دفعة ٢٠٢٦",
+    "exam_title": "امتحان القبول للدبلومة",
+    "exam_url": "https://example.com/exam/123",
+    "exam_open_at": "١ يونيو ٢٠٢٦",
+    "exam_close_at": "١٥ يونيو ٢٠٢٦",
+    "rejection_reason": "لم يستوفِ متطلبات القبول",
+    "activation_url": "https://example.com/activate/abc123",
+}
+
+AVAILABLE_VARIABLES_BY_SLUG: dict[str, dict[str, list[str]]] = {
+    TEMPLATE_REGISTRATION_RECEIVED: {
+        "required": ["full_name", "national_id", "email"],
+        "optional": ["phone", "date_of_birth", "gender", "education", "church", "priest_name", "program_type", "course_title", "diploma_title"],
+    },
+    TEMPLATE_ENTRANCE_EXAM_INVITATION: {
+        "required": ["full_name"],
+        "optional": ["exam_title", "cohort_name", "exam_url", "exam_open_at", "exam_close_at"],
+    },
+    TEMPLATE_ENTRANCE_EXAM_PASS: {
+        "required": ["full_name", "exam_title"],
+        "optional": ["cohort_name"],
+    },
+    TEMPLATE_ENTRANCE_EXAM_FAIL: {
+        "required": ["full_name", "exam_title"],
+        "optional": ["rejection_reason"],
+    },
+    TEMPLATE_ACCEPTANCE: {
+        "required": ["full_name"],
+        "optional": ["cohort_name", "diploma_title", "program_type", "activation_url"],
+    },
+    TEMPLATE_REJECTION: {
+        "required": ["full_name", "rejection_reason"],
+        "optional": ["cohort_name"],
+    },
+    TEMPLATE_ACTIVATION: {
+        "required": ["full_name", "activation_url"],
+        "optional": ["email", "phone", "cohort_name", "diploma_title"],
+    },
+    TEMPLATE_PAYMENT_NOTIFICATION: {
+        "required": ["full_name", "amount", "currency", "due_at", "reference", "status"],
+        "optional": [],
+    },
+}
+
+DESIGN_BRANDED = "branded"
+DESIGN_MINIMAL = "minimal"
+DESIGN_MODERN = "modern"
+DESIGN_ELEGANT = "elegant"
+DESIGN_CLEAN = "clean"
+
+DESIGN_CHOICES = (
+    (DESIGN_BRANDED, _("Branded")),
+    (DESIGN_MINIMAL, _("Minimal")),
+    (DESIGN_MODERN, _("Modern")),
+    (DESIGN_ELEGANT, _("Elegant")),
+    (DESIGN_CLEAN, _("Clean")),
+)
+
 SAMPLE_CONTEXT_BY_SLUG: dict[str, dict[str, str]] = {
-    TEMPLATE_REGISTRATION_RECEIVED: {"full_name": "ماري جرجس"},
-    TEMPLATE_ENTRANCE_EXAM_INVITATION: {"full_name": "ماري جرجس", "exam_title": "امتحان القبول للدبلومة", "cohort_name": "دفعة ٢٠٢٦"},
+    TEMPLATE_REGISTRATION_RECEIVED: {"full_name": "ماري جرجس", "email": "mary@example.com", "national_id": "12345678901234", "phone": "01234567890"},
+    TEMPLATE_ENTRANCE_EXAM_INVITATION: {"full_name": "ماري جرجس", "exam_title": "امتحان القبول للدبلومة", "cohort_name": "دفعة ٢٠٢٦", "exam_url": "https://example.com/exam/123", "exam_open_at": "١ يونيو ٢٠٢٦", "exam_close_at": "١٥ يونيو ٢٠٢٦"},
     TEMPLATE_ENTRANCE_EXAM_PASS: {"full_name": "ماري جرجس", "exam_title": "امتحان القبول للدبلومة"},
-    TEMPLATE_ENTRANCE_EXAM_FAIL: {"full_name": "ماري جرجس", "exam_title": "امتحان القبول للدبلومة"},
-    TEMPLATE_ACCEPTANCE: {"full_name": "ماري جرجس", "cohort_name": "دفعة ٢٠٢٦"},
-    TEMPLATE_REJECTION: {"full_name": "ماري جرجس", "cohort_name": "دفعة ٢٠٢٦"},
-    TEMPLATE_ACTIVATION: {"full_name": "ماري جرجس", "cohort_name": "دفعة ٢٠٢٦"},
+    TEMPLATE_ENTRANCE_EXAM_FAIL: {"full_name": "ماري جرجس", "exam_title": "امتحان القبول للدبلومة", "rejection_reason": "لم يحقق الدرجة المطلوبة"},
+    TEMPLATE_ACCEPTANCE: {"full_name": "ماري جرجس", "cohort_name": "دفعة ٢٠٢٦", "diploma_title": "دبلومة الدراسات اللاهوتية"},
+    TEMPLATE_REJECTION: {"full_name": "ماري جرجس", "cohort_name": "دفعة ٢٠٢٦", "rejection_reason": "لم يستوفِ متطلبات القبول"},
+    TEMPLATE_ACTIVATION: {"full_name": "ماري جرجس", "activation_url": "https://example.com/activate/abc123", "cohort_name": "دفعة ٢٠٢٦", "email": "mary@example.com", "diploma_title": "دبلومة الدراسات اللاهوتية"},
+    TEMPLATE_PAYMENT_NOTIFICATION: {"full_name": "ماري جرجس", "amount": "500.00", "currency": "EGP", "due_at": "2026-06-30", "reference": "INV-001", "status": "مدفوع"},
 }
 
 TEMPLATE_SAMPLE_CONTEXT = SAMPLE_CONTEXT_BY_SLUG

@@ -2,50 +2,59 @@
 
 from __future__ import annotations
 
+import csv
+
+from django.conf import settings as django_settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView, LogoutView
 from django.core.paginator import Paginator
 from django.db.models import Count, Q
-from django.http import HttpRequest, HttpResponse
+from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods
 
-from apps.academics.constants import SCOPE_DIPLOMA_COHORT
+from apps.academics.constants import SCOPE_COURSE_VERSION, SCOPE_DIPLOMA_COHORT
 from apps.academics.models import (
     Cohort,
     Course,
+    CourseVersion,
     Diploma,
-    DiplomaEnrollment,
     Lecture,
+    ModeratorAssignment,
     ModeratorStudentAssignment,
+    StudentCluster,
+    StudentClusterMembership,
     TeacherAssignment,
 )
 from apps.academics.services import get_student_course_versions
+from apps.ai.models import GeminiReview
+from apps.ai.prompts import DEFAULT_PROMPT_VERSION
 from apps.applications.constants import (
-    APP_STATUS_PENDING,
-    APP_STATUS_UNDER_REVIEW,
     APP_STATUS_ACTIVATED,
     APP_STATUS_APPROVED,
+    APP_STATUS_PENDING,
     APP_STATUS_REJECTED,
-    PROGRAM_APP_STATUS_SUBMITTED,
-    PROGRAM_APP_STATUS_UNDER_REVIEW,
+    APP_STATUS_UNDER_REVIEW,
     PROGRAM_APP_STATUS_ACCEPTED,
-    PROGRAM_APP_STATUS_REJECTED,
     PROGRAM_APP_STATUS_ACTIVATED,
     PROGRAM_APP_STATUS_INVITED,
+    PROGRAM_APP_STATUS_REJECTED,
+    PROGRAM_APP_STATUS_SUBMITTED,
+    PROGRAM_APP_STATUS_UNDER_REVIEW,
 )
 from apps.applications.models import Application, ProgramApplication
 from apps.assessments.constants import ATTEMPT_STATUS_SUBMITTED, ATTEMPT_STATUS_UNDER_REVIEW
 from apps.assessments.models import AssessmentAttempt
 from apps.audit.models import AuditEvent
+from apps.communications.email_message import EmailMessage as CommEmailMessage
 from apps.core.htmx import is_htmx
-from apps.core.permissions import ROLE_EXAM_STAFF, is_admin, role_required
+from apps.core.models import LandingAnnouncement
+from apps.core.permissions import ROLE_EXAM_STAFF, ROLE_SENIOR_STAFF, is_admin, role_required
 from apps.core.views import safe_next_url
-from apps.entrance_exams.constants import ATTEMPT_STATUS_COMPLETED
 from apps.entrance_exams.models import EntranceAttempt
 from apps.payments.constants import (
     PAYMENT_STATUS_PAID,
@@ -58,7 +67,6 @@ from apps.payments.models import PaymentRecord, PaymentUpload, PaymentUploadRow
 from apps.students.models import StudentProfile
 
 from .constants import (
-    ALL_ROLE_GROUPS,
     GROUP_ADMIN,
     GROUP_MODERATOR,
     GROUP_STUDENT,
@@ -66,8 +74,9 @@ from .constants import (
     GROUP_TEACHER,
     USER_STATUS_CHOICES,
 )
-from .forms import EmailAuthenticationForm, ProfileForm, UserEditForm
-from .models import User
+from .forms import EmailAuthenticationForm, ProfileForm, UserEditForm, UserUploadForm
+from .models import User, UserUpload
+from .services import confirm_upload, create_upload, preview_upload
 
 
 class EmailLoginView(LoginView):
@@ -116,6 +125,18 @@ def admin_dashboard(request: HttpRequest) -> HttpResponse:
     context["user_role"] = request.user.primary_role or _("Super Admin")
     context["show_role_label"] = True
     return render(request, "accounts/dashboards/admin.html", context)
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+def admin_settings(request: HttpRequest) -> HttpResponse:
+    ai_config = {
+        "enabled": bool(django_settings.GEMINI_API_KEY),
+        "provider": "Gemini",
+        "model": django_settings.GEMINI_MODEL,
+        "timeout": django_settings.GEMINI_TIMEOUT_SECONDS,
+    }
+    return render(request, "accounts/admin_settings.html", {"ai_config": ai_config})
 
 
 @login_required
@@ -223,7 +244,6 @@ def _admin_dashboard_data() -> dict:
     active_diploma_count = Diploma.objects.filter(is_active=True).count()
 
     # 10) Single query: standalone courses + unpublished lectures + course counts
-    from django.db.models import Q
     course_stats = Course.objects.aggregate(
         standalone_count=Count("id", filter=Q(is_active=True, is_standalone=True)),
     )
@@ -249,6 +269,58 @@ def _admin_dashboard_data() -> dict:
 
     # Combined grade count from entrance attempts (already fetched in #3)
     entrance_ungraded = entrance_status_counts.get("completed", 0)
+
+    # AI configuration status
+    ai_enabled = bool(django_settings.GEMINI_API_KEY)
+    ai_review_totals = GeminiReview.objects.aggregate(
+        total=Count("id"),
+        pending=Count("id", filter=Q(decision="pending")),
+        accepted=Count("id", filter=Q(decision="accepted")),
+        rejected=Count("id", filter=Q(decision="rejected")),
+    )
+    last_review = GeminiReview.objects.order_by("-created_at").values("created_at", "decision").first()
+    ai_config = {
+        "enabled": ai_enabled,
+        "provider": "Gemini",
+        "model": django_settings.GEMINI_MODEL,
+        "timeout": django_settings.GEMINI_TIMEOUT_SECONDS,
+        "prompt_version": DEFAULT_PROMPT_VERSION,
+        "review_count": ai_review_totals["total"],
+        "review_pending": ai_review_totals["pending"],
+        "review_accepted": ai_review_totals["accepted"],
+        "review_rejected": ai_review_totals["rejected"],
+        "last_review_at": last_review["created_at"] if last_review else None,
+        "last_review_decision": last_review["decision"] if last_review else None,
+    }
+
+    # Email health
+    email_health = CommEmailMessage.objects.aggregate(
+        total=Count("id"),
+        sent=Count("id", filter=Q(status="sent")),
+        failed=Count("id", filter=Q(status="failed")),
+    )
+    last_email = CommEmailMessage.objects.order_by("-created_at").values("to_email", "created_at", "status").first()
+
+    # Active announcement
+    active_announcement = LandingAnnouncement.current()
+
+    # Site configuration
+    site_config = {
+        "site_name": "DokkiMashora LMS",
+        "site_name_ar": "دكى مشورة",
+        "timezone": django_settings.TIME_ZONE,
+        "language_code": "ar",
+        "languages": dict(django_settings.LANGUAGES),
+        "default_from_email": django_settings.DEFAULT_FROM_EMAIL,
+        "email_backend": django_settings.EMAIL_BACKEND.split(".")[-1],
+        "storage_backend": getattr(django_settings, "STORAGE_BACKEND", "local"),
+        "email_total": email_health["total"],
+        "email_sent": email_health["sent"],
+        "email_failed": email_health["failed"],
+        "last_email_to": last_email["to_email"] if last_email else None,
+        "last_email_at": last_email["created_at"] if last_email else None,
+        "last_email_status": last_email["status"] if last_email else None,
+    }
 
     return {
         "pending_app_count": app_status_counts.get(APP_STATUS_PENDING, 0),
@@ -277,8 +349,11 @@ def _admin_dashboard_data() -> dict:
         "assessment_ungraded": assessment_ungraded,
         "entrance_ungraded": entrance_ungraded,
         "recent_audit": recent_audit,
+        "ai_config": ai_config,
+        "site_config": site_config,
         "recent_applications": recent_applications,
         "recent_payments": recent_payments,
+        "active_announcement": active_announcement,
         "now": now,
     }
 
@@ -289,119 +364,69 @@ def _admin_dashboard_data() -> dict:
 
 @login_required
 @role_required(*ROLE_EXAM_STAFF)
-def admin_user_list(request):
+def admin_student_list(request):
     current_user = request.user
     q = request.GET.get("q", "")
-    role_filter = request.GET.get("role", "")
     status_filter = request.GET.get("status", "")
-    cohort_filter = request.GET.get("cohort", "")
-    diploma_filter = request.GET.get("diploma", "")
-    course_filter = request.GET.get("course", "")
-    payment_filter = request.GET.get("payment", "")
 
-    # ponytail: scoped base queryset, upgrade to service if reused elsewhere
     if is_admin(current_user):
-        users = User.objects.all()
+        users = User.objects.filter(groups__name=GROUP_STUDENT)
     elif current_user.primary_role == GROUP_TEACHER:
-        cohort_ids = TeacherAssignment.objects.filter(
-            teacher=current_user, scope_type=SCOPE_DIPLOMA_COHORT, active=True
-        ).values_list("cohort_id", flat=True)
-        users = User.objects.filter(
-            student_profile__diploma_enrollments__cohort_id__in=list(cohort_ids)
-        )
+        assignments = TeacherAssignment.objects.filter(teacher=current_user, active=True)
+        cohort_ids = list(assignments.filter(
+            scope_type=SCOPE_DIPLOMA_COHORT
+        ).values_list("cohort_id", flat=True))
+        cv_ids = list(assignments.filter(
+            scope_type=SCOPE_COURSE_VERSION
+        ).values_list("course_version_id", flat=True))
+        users = User.objects.filter(groups__name=GROUP_STUDENT)
+        filters = Q()
+        if cohort_ids:
+            filters |= Q(student_profile__diploma_enrollments__cohort_id__in=cohort_ids)
+        if cv_ids:
+            filters |= Q(student_profile__course_enrollments__course_version_id__in=cv_ids)
+        users = users.filter(filters) if filters else User.objects.none()
     elif current_user.primary_role == GROUP_MODERATOR:
-        student_user_ids = ModeratorStudentAssignment.objects.filter(
+        manual_ids = ModeratorStudentAssignment.objects.filter(
             moderator=current_user, active=True
         ).values_list("student__user_id", flat=True)
-        users = User.objects.filter(id__in=list(student_user_ids))
+        cluster_ids = StudentClusterMembership.objects.filter(
+            cluster__moderator_assignments__moderator=current_user,
+            cluster__moderator_assignments__active=True,
+        ).values_list("student__user_id", flat=True)
+        cohort_ids = list(ModeratorAssignment.objects.filter(
+            moderator=current_user, active=True
+        ).exclude(cohort__isnull=True).values_list("cohort_id", flat=True))
+        cohort_student_ids = list(User.objects.filter(
+            groups__name=GROUP_STUDENT,
+            student_profile__diploma_enrollments__cohort_id__in=cohort_ids
+        ).values_list("id", flat=True)) if cohort_ids else []
+        student_user_ids = set(list(manual_ids) + list(cluster_ids) + cohort_student_ids)
+        users = User.objects.filter(id__in=student_user_ids, groups__name=GROUP_STUDENT)
     else:
         users = User.objects.none()
 
     users = users.prefetch_related("groups").distinct()
 
-    # Filters (order matters: filter before search)
-    if role_filter:
-        users = users.filter(groups__name=role_filter)
     if status_filter:
         users = users.filter(status=status_filter)
-    if cohort_filter:
-        users = users.filter(student_profile__diploma_enrollments__cohort_id=cohort_filter)
-    if diploma_filter:
-        users = users.filter(student_profile__diploma_enrollments__cohort__diploma_id=diploma_filter)
-    if course_filter:
-        users = users.filter(student_profile__course_enrollments__course_version__course_id=course_filter)
-    if payment_filter:
-        if payment_filter == "paid":
-            users = users.filter(student_profile__payment_records__status=PAYMENT_STATUS_PAID)
-        elif payment_filter == "unpaid":
-            users = users.filter(student_profile__payment_records__status=PAYMENT_STATUS_UNPAID)
 
-    # Search
     if q:
         users = users.filter(
             Q(full_name__icontains=q) | Q(email__icontains=q) | Q(phone__icontains=q) | Q(national_id__icontains=q)
         )
 
-    # Pagination
     paginator = Paginator(users, 25)
     page_number = request.GET.get("page", 1)
     page_obj = paginator.get_page(page_number)
 
-    # Build filter options
-    role_choices = [
-        {"value": name, "label": _(name), "selected": role_filter == name}
-        for name in (GROUP_SUPER_ADMIN, GROUP_ADMIN, GROUP_MODERATOR, GROUP_TEACHER, GROUP_STUDENT)
-    ]
     status_choices = [
         {"value": code, "label": str(label), "selected": status_filter == code}
         for code, label in USER_STATUS_CHOICES
     ]
 
-    if is_admin(current_user):
-        cohorts = Cohort.objects.all()
-        diplomas = Diploma.objects.all()
-    elif current_user.primary_role == GROUP_TEACHER:
-        cohorts = Cohort.objects.filter(
-            teacher_assignments_new__teacher=current_user, teacher_assignments_new__active=True
-        )
-        diplomas = Diploma.objects.filter(cohorts__in=cohorts).distinct()
-    elif current_user.primary_role == GROUP_MODERATOR:
-        cids = ModeratorStudentAssignment.objects.filter(
-            moderator=current_user, active=True
-        ).values_list("cohort_id", flat=True)
-        cohorts = Cohort.objects.filter(id__in=list(cids))
-        diplomas = Diploma.objects.filter(cohorts__in=cohorts).distinct()
-    else:
-        cohorts = Cohort.objects.none()
-        diplomas = Diploma.objects.none()
-
-    cohort_choices = [
-        {"value": str(c.id), "label": str(c), "selected": cohort_filter == str(c.id)}
-        for c in cohorts
-    ]
-    diploma_choices = [
-        {"value": str(d.id), "label": str(d), "selected": diploma_filter == str(d.id)}
-        for d in diplomas
-    ]
-
-    standalone_courses = Course.objects.filter(is_standalone=True)
-    course_choices = [
-        {"value": str(c.id), "label": str(c), "selected": course_filter == str(c.id)}
-        for c in standalone_courses
-    ]
-
-    payment_choices = [
-        {"value": "unpaid", "label": _("Unpaid"), "selected": payment_filter == "unpaid"},
-        {"value": "paid", "label": _("Paid"), "selected": payment_filter == "paid"},
-    ]
-
     filters = [
-        {"name": "role", "label": _("Role"), "value": role_filter, "options": role_choices},
         {"name": "status", "label": _("Status"), "value": status_filter, "options": status_choices},
-        {"name": "cohort", "label": _("Cohort"), "value": cohort_filter, "options": cohort_choices},
-        {"name": "diploma", "label": _("Diploma"), "value": diploma_filter, "options": diploma_choices},
-        {"name": "course", "label": _("Course"), "value": course_filter, "options": course_choices},
-        {"name": "payment", "label": _("Payment"), "value": payment_filter, "options": payment_choices},
     ]
 
     pagination_qs = request.GET.copy()
@@ -414,6 +439,60 @@ def admin_user_list(request):
         "search_value": q,
         "filters": filters,
         "pagination_qs": pagination_qs,
+        "student_list": True,
+    }
+
+    if is_htmx(request):
+        return render(request, "accounts/partials/_user_list_table.html", ctx)
+    return render(request, "accounts/admin_user_list.html", ctx)
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+def admin_staff_list(request):
+    q = request.GET.get("q", "")
+    role_filter = request.GET.get("role", "")
+    status_filter = request.GET.get("status", "")
+
+    staff_role_names = [GROUP_SUPER_ADMIN, GROUP_ADMIN, GROUP_MODERATOR, GROUP_TEACHER]
+    users = User.objects.filter(groups__name__in=staff_role_names).prefetch_related("groups").distinct()
+
+    if role_filter:
+        users = users.filter(groups__name=role_filter)
+    if status_filter:
+        users = users.filter(status=status_filter)
+    if q:
+        users = users.filter(Q(full_name__icontains=q) | Q(email__icontains=q) | Q(phone__icontains=q) | Q(national_id__icontains=q))
+
+    paginator = Paginator(users, 25)
+    page_number = request.GET.get("page", 1)
+    page_obj = paginator.get_page(page_number)
+
+    role_choices = [
+        {"value": name, "label": _(name), "selected": role_filter == name}
+        for name in staff_role_names
+    ]
+    status_choices = [
+        {"value": code, "label": str(label), "selected": status_filter == code}
+        for code, label in USER_STATUS_CHOICES
+    ]
+
+    filters = [
+        {"name": "role", "label": _("Role"), "value": role_filter, "options": role_choices},
+        {"name": "status", "label": _("Status"), "value": status_filter, "options": status_choices},
+    ]
+
+    pagination_qs = request.GET.copy()
+    if "page" in pagination_qs:
+        del pagination_qs["page"]
+    pagination_qs = pagination_qs.urlencode()
+
+    ctx = {
+        "page_obj": page_obj,
+        "search_value": q,
+        "filters": filters,
+        "pagination_qs": pagination_qs,
+        "staff_list": True,
     }
 
     if is_htmx(request):
@@ -442,6 +521,260 @@ def admin_user_edit(request, user_id):
     else:
         form = UserEditForm(instance=user_obj)
     return render(request, "accounts/admin_user_form.html", {"form": form, "user_obj": user_obj, "next": next_url})
+
+
+@login_required
+def admin_download_csv_template(request, kind):
+    headers = {
+        "students": ["email", "full_name", "phone", "national_id", "date_of_birth", "gender", "address", "education", "specialization", "employer", "current_job", "church", "priest_name", "priest_contact"],
+        "payments": ["national_id", "amount", "payment_date", "external_reference", "email", "phone", "notes"],
+    }.get(kind)
+    if not headers:
+        raise Http404
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = f'attachment; filename="{kind}_template.csv"'
+    writer = csv.writer(response)
+    writer.writerow(headers)
+    if kind == "students":
+        writer.writerow(["student@example.com", "John Doe", "+201234567890", "29001010100001", "2000-01-01", "male", "Cairo", "Bachelor", "CS", "Company", "Engineer", "St. Mary", "Fr. George", "+201111111111"])
+    elif kind == "payments":
+        writer.writerow(["29001010100001", "500.00", "2026-01-15", "INV-001", "student@example.com", "+201234567890", "Tuition fee"])
+    return response
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+def admin_download_student_csv_template(request):
+    return admin_download_csv_template(request, "students")
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+def admin_student_import(request):
+    """Upload CSV to bulk-import or bulk-update student users."""
+    form = UserUploadForm()
+    if request.method == "POST":
+        form = UserUploadForm(request.POST, request.FILES)
+        if form.is_valid():
+            try:
+                content = request.FILES["csv_file"].read()
+                upload = create_upload(
+                    original_filename=request.FILES["csv_file"].name,
+                    content=content,
+                    uploaded_by=request.user,
+                )
+                upload = preview_upload(upload.id)
+                if upload.status == UPLOAD_STATUS_PREVIEWED:
+                    messages.success(request, _("File parsed. Review matches below."))
+                else:
+                    messages.warning(request, _("Some rows could not be matched. Review errors below."))
+                return redirect("accounts:admin_student_import_detail", upload_id=upload.id)
+            except ValueError as e:
+                messages.error(request, str(e))
+            except Exception as e:
+                messages.error(request, _("Failed to process file: %(error)s") % {"error": str(e)})
+    return render(request, "accounts/admin_import_form.html", {"form": form})
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+def admin_student_import_detail(request, upload_id):
+    upload = get_object_or_404(UserUpload.objects.prefetch_related("rows__matched_user"), id=upload_id)
+    return render(request, "accounts/admin_import_detail.html", {"upload": upload})
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_http_methods(["POST"])
+def admin_student_import_confirm(request, upload_id):
+    upload = get_object_or_404(UserUpload, id=upload_id)
+    if upload.status != UPLOAD_STATUS_PREVIEWED:
+        messages.error(request, _("Upload is not in preview state."))
+        return redirect("accounts:admin_student_import_detail", upload_id=upload.id)
+    try:
+        upload = confirm_upload(upload.id, confirmed_by=request.user)
+        messages.success(
+            request,
+            _("Import completed: %(created)d created, %(updated)d updated.")
+            % {"created": upload.created_rows, "updated": upload.updated_rows},
+        )
+    except ValueError as e:
+        messages.error(request, str(e))
+    return redirect("accounts:admin_student_import_detail", upload_id=upload.id)
+
+
+# ---------------------------------------------------------------------------
+# Admin: Staff assignments & student clusters
+# ---------------------------------------------------------------------------
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+def admin_staff_assignments(request, user_id):
+    """Manage teacher and moderator assignments for a staff member."""
+    staff_user = get_object_or_404(User, id=user_id)
+    staff_role = staff_user.primary_role
+    back_url = request.GET.get("next") or request.META.get("HTTP_REFERER") or reverse("accounts:admin_staff_list")
+
+    teacher_assignments = TeacherAssignment.objects.filter(teacher=staff_user).select_related(
+        "course", "course_version", "diploma", "semester", "cohort"
+    )
+    moderator_assignments = ModeratorAssignment.objects.filter(moderator=staff_user).select_related(
+        "course_version", "cohort", "cluster"
+    )
+
+    cohorts = Cohort.objects.all()
+    course_versions = CourseVersion.objects.select_related("course", "cohort").all()
+
+    ctx = {
+        "staff_user": staff_user,
+        "staff_role": staff_role,
+        "back_url": back_url,
+        "teacher_assignments": teacher_assignments,
+        "moderator_assignments": moderator_assignments,
+        "cohorts": cohorts,
+        "course_versions": course_versions,
+        "SCOPE_COURSE_VERSION": SCOPE_COURSE_VERSION,
+        "SCOPE_DIPLOMA_COHORT": SCOPE_DIPLOMA_COHORT,
+        "GROUP_ADMIN": GROUP_ADMIN,
+        "GROUP_SUPER_ADMIN": GROUP_SUPER_ADMIN,
+        "GROUP_MODERATOR": GROUP_MODERATOR,
+        "GROUP_TEACHER": GROUP_TEACHER,
+    }
+    return render(request, "accounts/admin_staff_assignments.html", ctx)
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_http_methods(["POST"])
+def admin_teacher_assignment_create(request, user_id):
+    staff_user = get_object_or_404(User, id=user_id)
+    if GROUP_TEACHER not in staff_user.groups.values_list("name", flat=True):
+        messages.error(request, _("Target user is not a Teacher."))
+        return redirect("accounts:admin_staff_assignments", user_id=staff_user.id)
+    version_id = request.POST.get("course_version")
+    if not version_id:
+        messages.error(request, _("Course version is required."))
+        return redirect("accounts:admin_staff_assignments", user_id=staff_user.id)
+    version = get_object_or_404(CourseVersion, id=version_id)
+    TeacherAssignment.objects.create(
+        teacher=staff_user,
+        scope_type=SCOPE_COURSE_VERSION,
+        course_version=version,
+        active=True,
+        assigned_by=request.user,
+    )
+    messages.success(request, _("Teacher assignment created."))
+    return redirect("accounts:admin_staff_assignments", user_id=staff_user.id)
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_http_methods(["POST"])
+def admin_teacher_assignment_delete(request, user_id, assignment_id):
+    assignment = get_object_or_404(TeacherAssignment, id=assignment_id, teacher_id=user_id)
+    assignment.active = False
+    assignment.revoked_by = request.user
+    assignment.revoked_at = timezone.now()
+    assignment.save()
+    messages.success(request, _("Teacher assignment revoked."))
+    return redirect("accounts:admin_staff_assignments", user_id=user_id)
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_http_methods(["POST"])
+def admin_moderator_assignment_create(request, user_id):
+    staff_user = get_object_or_404(User, id=user_id)
+    if GROUP_MODERATOR not in staff_user.groups.values_list("name", flat=True):
+        messages.error(request, _("Target user is not a Moderator."))
+        return redirect("accounts:admin_staff_assignments", user_id=staff_user.id)
+    version_id = request.POST.get("course_version")
+    scope = request.POST.get("scope", "cohort")
+    cohort_id = request.POST.get("cohort")
+    cluster_id = request.POST.get("cluster")
+    if not version_id:
+        messages.error(request, _("Course version is required."))
+        return redirect("accounts:admin_staff_assignments", user_id=staff_user.id)
+    if scope == "cohort" and not cohort_id:
+        messages.error(request, _("Cohort is required for cohort-wide assignment."))
+        return redirect("accounts:admin_staff_assignments", user_id=staff_user.id)
+    if scope == "cluster" and not cluster_id:
+        messages.error(request, _("Cluster is required for cluster-specific assignment."))
+        return redirect("accounts:admin_staff_assignments", user_id=staff_user.id)
+    version = get_object_or_404(CourseVersion, id=version_id)
+    cluster = get_object_or_404(StudentCluster, id=cluster_id) if cluster_id else None
+    cohort = cluster.cohort if cluster else get_object_or_404(Cohort, id=cohort_id)
+    ModeratorAssignment.objects.create(
+        moderator=staff_user,
+        course_version=version,
+        cohort=cohort,
+        cluster=cluster,
+        active=True,
+        assigned_by=request.user,
+    )
+    messages.success(request, _("Moderator assignment created."))
+    return redirect("accounts:admin_staff_assignments", user_id=staff_user.id)
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_http_methods(["POST"])
+def admin_moderator_assignment_delete(request, user_id, assignment_id):
+    assignment = get_object_or_404(ModeratorAssignment, id=assignment_id, moderator_id=user_id)
+    assignment.active = False
+    assignment.save()
+    messages.success(request, _("Moderator assignment revoked."))
+    return redirect("accounts:admin_staff_assignments", user_id=user_id)
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_http_methods(["POST"])
+def admin_student_cluster_create(request, cohort_id):
+    cohort = get_object_or_404(Cohort, id=cohort_id)
+    name = request.POST.get("name")
+    if not name:
+        messages.error(request, _("Cluster name is required."))
+        return redirect(request.META.get("HTTP_REFERER") or reverse("academics:admin_diploma_detail", kwargs={"diploma_id": cohort.diploma_id}))
+    StudentCluster.objects.create(name=name, cohort=cohort, created_by=request.user)
+    messages.success(request, _("Cluster created."))
+    return redirect(request.META.get("HTTP_REFERER") or reverse("academics:admin_diploma_detail", kwargs={"diploma_id": cohort.diploma_id}))
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_http_methods(["POST"])
+def admin_student_cluster_membership_add(request, cluster_id):
+    cluster = get_object_or_404(StudentCluster, id=cluster_id)
+    student_ids = request.POST.getlist("students")
+    if not student_ids:
+        messages.error(request, _("Select at least one student."))
+        return redirect(request.META.get("HTTP_REFERER") or reverse("academics:admin_diploma_detail", kwargs={"diploma_id": cluster.cohort.diploma_id}))
+    added = 0
+    for sid in student_ids:
+        profile = get_object_or_404(StudentProfile, id=sid)
+        __, created = StudentClusterMembership.objects.get_or_create(
+            cluster=cluster, student=profile, defaults={"assigned_by": request.user}
+        )
+        if created:
+            added += 1
+    messages.success(request, _("%(count)d student(s) added to cluster.") % {"count": added})
+    if is_htmx(request):
+        return render(request, "accounts/_cluster_members.html", {"cluster": cluster})
+    return redirect(request.META.get("HTTP_REFERER") or reverse("academics:admin_diploma_detail", kwargs={"diploma_id": cluster.cohort.diploma_id}))
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_http_methods(["POST"])
+def admin_student_cluster_membership_remove(request, cluster_id, membership_id):
+    membership = get_object_or_404(StudentClusterMembership, id=membership_id, cluster_id=cluster_id)
+    membership.delete()
+    messages.success(request, _("Student removed from cluster."))
+    if is_htmx(request):
+        return render(request, "accounts/_cluster_members.html", {"cluster": membership.cluster})
+    return redirect(request.META.get("HTTP_REFERER") or reverse("academics:admin_diploma_detail", kwargs={"diploma_id": membership.cluster.cohort.diploma_id}))
 
 
 def _dashboard_url_name(user: User) -> str:

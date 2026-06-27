@@ -9,6 +9,6 @@
   {% if hx_confirm %}hx-confirm="{{ hx_confirm }}"{% endif %}
   {% if hx_indicator %}hx-indicator="{{ hx_indicator }}"{% endif %}
   {% if loading_label %}data-loading-disable data-loading-label="{{ loading_label }}"{% endif %}
-  {{ attrs|default:"" }}>
+   {{ attrs|default:""|safe }}>
   {{ label }}
 </{% if href %}a{% else %}button{% endif %}>

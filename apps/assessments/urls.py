@@ -13,6 +13,7 @@ urlpatterns = [
     path("<int:assessment_id>/submit-homework/", views.submit_homework_view, name="submit_homework"),
     path("<int:assessment_id>/results/", views.assessment_results, name="results"),
     path("manage/", views.admin_list, name="admin_list"),
+    path("manage/scope-fields/", views.admin_scope_fields, name="admin_scope_fields"),
     path("manage/create/", views.admin_create, name="admin_create"),
     path("manage/<int:assessment_id>/", views.admin_detail, name="admin_detail"),
     path("manage/<int:assessment_id>/edit/", views.admin_edit, name="admin_edit"),

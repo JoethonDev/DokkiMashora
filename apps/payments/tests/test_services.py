@@ -7,6 +7,7 @@ from decimal import Decimal
 from django.contrib.auth.models import Group
 from django.db import IntegrityError
 from django.test import TestCase
+from django.utils import timezone
 
 from apps.accounts.constants import GROUP_STUDENT
 from apps.accounts.models import User
@@ -676,7 +677,12 @@ class EnrollmentPaymentStatusSelectorTests(TestCase):
 
     def setUp(self) -> None:
         from apps.academics.models import (
-            Cohort, Course, CourseEnrollment, CourseVersion, Diploma, DiplomaEnrollment,
+            Cohort,
+            Course,
+            CourseEnrollment,
+            CourseVersion,
+            Diploma,
+            DiplomaEnrollment,
         )
         from apps.accounts.constants import GROUP_STUDENT
         from apps.accounts.models import User as UserModel
@@ -758,7 +764,12 @@ class EnrollmentPaymentServiceTests(TestCase):
 
     def setUp(self) -> None:
         from apps.academics.models import (
-            Cohort, Course, CourseEnrollment, CourseVersion, Diploma, DiplomaEnrollment,
+            Cohort,
+            Course,
+            CourseEnrollment,
+            CourseVersion,
+            Diploma,
+            DiplomaEnrollment,
         )
         from apps.accounts.constants import GROUP_STUDENT
         from apps.accounts.models import User as UserModel
@@ -827,7 +838,6 @@ class EnrollmentPaymentServiceTests(TestCase):
     def test_wrong_student_raises_does_not_create(self) -> None:
         """Marking payment for another student's enrollment must raise."""
         from apps.academics.models import DiplomaEnrollment
-        from apps.accounts.constants import GROUP_STUDENT
         other_user = User.objects.create_user(email="other@test.com", password="x")
         other_user.groups.add(self.student_group)
         other_student = StudentProfile.objects.create(
@@ -838,3 +848,107 @@ class EnrollmentPaymentServiceTests(TestCase):
         from ..services import mark_enrollment_paid
         with self.assertRaises(DiplomaEnrollment.DoesNotExist):
             mark_enrollment_paid(other_student, "diploma", self.diploma_enrollment.id, self.admin)
+
+
+class PaymentSoftDeleteTests(TestCase):
+    """Soft deletion preserves records but excludes them from queries."""
+
+    def setUp(self) -> None:
+        self.student_group, _ = Group.objects.get_or_create(name=GROUP_STUDENT)
+        self.user = User.objects.create_user(email="sd@test.com", password="x")
+        self.user.groups.add(self.student_group)
+        self.student = StudentProfile.objects.create(
+            user=self.user, full_name="SD Student",
+            national_id="66666666666666", phone="+201666666666",
+            date_of_birth=date(2000, 6, 6),
+        )
+        self.admin = User.objects.create_user(
+            email="sd-admin@test.com", password="pass", is_staff=True,
+        )
+        self.record = PaymentRecord.objects.create(
+            student=self.student, amount=Decimal("500"), status=PAYMENT_STATUS_PAID,
+        )
+
+    def test_delete_sets_deleted_at_and_deleted_by(self) -> None:
+        self.record.deleted_at = timezone.now()
+        self.record.deleted_by = self.admin
+        self.record.save(update_fields=["deleted_at", "deleted_by"])
+        self.record.refresh_from_db()
+        self.assertIsNotNone(self.record.deleted_at)
+        self.assertEqual(self.record.deleted_by, self.admin)
+
+    def test_deleted_records_excluded_from_selector(self) -> None:
+        self.record.deleted_at = timezone.now()
+        self.record.deleted_by = self.admin
+        self.record.save(update_fields=["deleted_at", "deleted_by"])
+        from ..selectors import get_payment_record_queryset
+        self.assertEqual(get_payment_record_queryset().count(), 0)
+        self.assertEqual(PaymentRecord.objects.filter(deleted_at__isnull=True).count(), 0)
+
+    def test_deleted_records_still_exist_in_db(self) -> None:
+        self.record.deleted_at = timezone.now()
+        self.record.deleted_by = self.admin
+        self.record.save(update_fields=["deleted_at", "deleted_by"])
+        self.assertEqual(PaymentRecord.objects.count(), 1)
+
+
+class PaymentTargetRefTests(TestCase):
+    """mark_enrollment_paid populates target_ref for stable identity."""
+
+    def setUp(self) -> None:
+        from apps.academics.models import Cohort, Diploma, DiplomaEnrollment
+
+        self.student_group, _ = Group.objects.get_or_create(name=GROUP_STUDENT)
+        self.user = User.objects.create_user(email="tr@test.com", password="x")
+        self.user.groups.add(self.student_group)
+        self.student = StudentProfile.objects.create(
+            user=self.user, full_name="TR Student",
+            national_id="77777777777777", phone="+201777777777",
+            date_of_birth=date(2000, 7, 7),
+        )
+        self.admin = User.objects.create_user(
+            email="tr-admin@test.com", password="pass", is_staff=True,
+        )
+        diploma = Diploma.objects.create(title="TR Diploma", created_by=self.admin)
+        cohort = Cohort.objects.create(
+            diploma=diploma, name="TR Cohort",
+            start_date=date(2026, 1, 1), created_by=self.admin,
+        )
+        self.diploma_enrollment = DiplomaEnrollment.objects.create(
+            student=self.student, cohort=cohort,
+        )
+
+    def test_mark_enrollment_paid_sets_target_ref(self) -> None:
+        from ..services import mark_enrollment_paid
+        record = mark_enrollment_paid(self.student, "diploma", self.diploma_enrollment.id, self.admin, amount=1000)
+        record.refresh_from_db()
+        self.assertEqual(record.target_ref, str(self.diploma_enrollment.id))
+        self.assertEqual(record.target_type, "diploma")
+
+    def test_csv_import_sets_target_ref(self) -> None:
+        raw_data = {
+            "national_id": "77777777777777",
+            "amount": "2000",
+            "payment_date": "2026-03-01",
+            "target_type": "diploma",
+            "target_ref": str(self.diploma_enrollment.id),
+        }
+        upload = PaymentUpload.objects.create(
+            uploaded_by=self.admin, original_filename="tr.csv",
+            total_rows=1,
+        )
+        PaymentUploadRow.objects.create(
+            upload=upload, row_number=1,
+            raw_data=raw_data,
+            normalized_national_id="77777777777777",
+            amount=Decimal("2000"), currency="EGP",
+            status=ROW_STATUS_MATCHED,
+            matched_student=self.student,
+        )
+        upload.status = UPLOAD_STATUS_PREVIEWED
+        upload.matched_rows = 1
+        upload.save(update_fields=["status", "matched_rows"])
+        confirm_upload(upload.id, confirmed_by=self.admin)
+        record = PaymentRecord.objects.filter(student=self.student).first()
+        self.assertEqual(record.target_ref, str(self.diploma_enrollment.id))
+        self.assertEqual(record.target_type, "diploma")

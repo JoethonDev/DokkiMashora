@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -125,7 +126,6 @@ class Assessment(TimeStampedModel):
         return self.title
 
     def clean(self):
-        from django.core.exceptions import ValidationError
 
         if self.open_at and self.close_at and self.open_at >= self.close_at:
             raise ValidationError(_("Open time must be before close time."))
@@ -155,6 +155,7 @@ class AssessmentQuestion(TimeStampedModel):
         _("points"),
         max_digits=5,
         decimal_places=2,
+        default=Decimal("1.00"),
         validators=[MinValueValidator(0)],
     )
     order = models.PositiveIntegerField(_("order"), db_index=True)

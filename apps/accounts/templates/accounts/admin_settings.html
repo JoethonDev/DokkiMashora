@@ -1,0 +1,37 @@
+{% extends "base.html" %}{% load i18n %}
+{% block title %}{% trans "Settings" %} — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+{% include "partials/_page.html" with title=_("Settings &amp; AI Configuration") %}
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 mb-6">
+    <h2 class="text-base font-semibold mb-4">{% trans "AI Configuration" %}</h2>
+    <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+      <div>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Status" %}</dt>
+        <dd class="font-semibold">
+          {% if ai_config.enabled %}
+            <span class="text-green-600 dark:text-green-400">{% trans "Enabled" %}</span>
+          {% else %}
+            <span class="text-red-600 dark:text-red-400">{% trans "Disabled" %}</span>
+          {% endif %}
+        </dd>
+      </div>
+      <div>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Provider" %}</dt>
+        <dd class="font-semibold">{{ ai_config.provider }}</dd>
+      </div>
+      <div>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Model" %}</dt>
+        <dd class="font-semibold">{{ ai_config.model }}</dd>
+      </div>
+      <div>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Timeout" %}</dt>
+        <dd class="font-semibold">{{ ai_config.timeout }}s</dd>
+      </div>
+    </dl>
+    <p class="mt-4 text-xs text-slate-500 dark:text-slate-400">
+      {% trans "AI configuration is managed via server environment variables (.env). Changes require a server restart." %}
+    </p>
+  </div>
+</div>
+{% endblock %}

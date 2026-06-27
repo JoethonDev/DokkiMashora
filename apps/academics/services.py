@@ -16,7 +16,6 @@ from apps.academics.constants import (
     SCOPE_WHOLE_DIPLOMA,
 )
 from apps.academics.models import (
-    Cohort,
     CourseEnrollment,
     CourseVersion,
     DiplomaEnrollment,
@@ -24,6 +23,7 @@ from apps.academics.models import (
     ModeratorStudentAssignment,
     TeacherAssignment,
 )
+from apps.accounts.models import User
 
 
 def activate_diploma_enrollment(enrollment: DiplomaEnrollment) -> DiplomaEnrollment:
@@ -273,5 +273,4 @@ def teacher_students(user) -> list:
                 cohort=a.cohort
             ).values_list("student__user_id", flat=True)
             student_ids.update(ids)
-    from apps.accounts.models import User
     return User.objects.filter(id__in=list(student_ids)) if student_ids else User.objects.none()

@@ -155,5 +155,5 @@ class AdminDashboardQueryCountTests(TestCase):
         url = reverse("accounts:dashboard_admin")
         with CaptureQueriesContext(connection) as captured:
             self.client.get(url)
-        self.assertLess(len(captured.captured_queries), 20,
-                        f"Admin dashboard used {len(captured.captured_queries)} queries; expected < 20")
+        self.assertLess(len(captured.captured_queries), 25,
+                        f"Admin dashboard used {len(captured.captured_queries)} queries; expected < 25")

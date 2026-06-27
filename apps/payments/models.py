@@ -146,7 +146,7 @@ class PaymentUploadRow(TimeStampedModel):
 class PaymentRecord(TimeStampedModel):
     student = models.ForeignKey(
         "students.StudentProfile",
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="payment_records",
         verbose_name=_("student"),
         db_index=True,
@@ -198,6 +198,33 @@ class PaymentRecord(TimeStampedModel):
         blank=True,
         related_name="payment_records",
         verbose_name=_("course enrollment"),
+    )
+    target_type = models.CharField(
+        _("target type"),
+        max_length=16,
+        blank=True,
+        help_text=_("diploma or course"),
+    )
+    target_ref = models.CharField(
+        _("target reference"),
+        max_length=255,
+        blank=True,
+        help_text=_("Stable reference to the target enrollment (survives target deletion)"),
+    )
+    target_snapshot = models.JSONField(
+        _("target snapshot"),
+        default=dict,
+        blank=True,
+        help_text=_("Snapshot of target enrollment info at payment time"),
+    )
+    deleted_at = models.DateTimeField(_("deleted at"), null=True, blank=True)
+    deleted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="deleted_payments",
+        verbose_name=_("deleted by"),
     )
     notes = models.TextField(_("notes"), blank=True)
     imported_by = models.ForeignKey(

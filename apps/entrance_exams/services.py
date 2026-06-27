@@ -10,7 +10,11 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from apps.applications.constants import PROGRAM_APP_STATUS_ACCEPTED, PROGRAM_APP_STATUS_REJECTED
+from apps.applications.constants import (
+    PROGRAM_APP_STATUS_ACCEPTED,
+    PROGRAM_APP_STATUS_REJECTED,
+    PROGRAM_TYPE_DIPLOMA,
+)
 from apps.audit.constants import ACTION_APPLICATION_APPROVED, ACTION_APPLICATION_REJECTED
 from apps.audit.services import record_audit_event
 from apps.communications.email_message import EmailMessage
@@ -22,7 +26,10 @@ from .constants import (
     ATTEMPT_STATUS_GRADED,
     ATTEMPT_STATUS_IN_PROGRESS,
     QUESTION_TYPE_MCQ,
+    RESULT_FAIL,
+    RESULT_PASS,
 )
+from .models import EntranceAnswer, EntranceAttempt, EntranceChoice, EntranceExam
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
@@ -50,8 +57,6 @@ def assign_attempt(
     program_application: ProgramApplication,
     student: StudentProfile,
 ) -> EntranceAttempt:
-    from .models import EntranceAttempt
-
     return EntranceAttempt.objects.create(
         exam=exam,
         program_application=program_application,
@@ -92,8 +97,6 @@ def submit_attempt(
         deadline = attempt.started_at + timezone.timedelta(minutes=exam.duration_minutes)
         if now > deadline:
             raise ValueError(_("Exam duration has expired."))
-    from .models import EntranceAnswer, EntranceChoice
-
     questions = list(exam.questions.all())
     question_map = {q.id: q for q in questions}
     with transaction.atomic():
@@ -168,8 +171,6 @@ def _recompute_attempt_grade(attempt: EntranceAttempt, actor: User | None = None
 
 
 def _compute_result(score: Decimal, passing_score: Decimal) -> str:
-    from .constants import RESULT_FAIL, RESULT_PASS
-
     return RESULT_PASS if score >= passing_score else RESULT_FAIL
 
 
@@ -178,8 +179,6 @@ def _update_program_application_from_result(
     result: str,
     actor: User | None = None,
 ) -> None:
-    from .constants import RESULT_PASS
-
     prog_app = attempt.program_application
     if result == RESULT_PASS:
         prog_app.status = PROGRAM_APP_STATUS_ACCEPTED
@@ -236,10 +235,6 @@ def assign_exam_for_application(program_application: ProgramApplication) -> Entr
     an EntranceAttempt.  Returns ``None`` when no exam exists (the admin can
     still create one later and assign manually).
     """
-    from apps.applications.constants import PROGRAM_TYPE_DIPLOMA
-
-    from .models import EntranceAttempt, EntranceExam
-
     if program_application.program_type != PROGRAM_TYPE_DIPLOMA:
         return None
     cohort = program_application.cohort
@@ -257,8 +252,6 @@ def assign_exam_for_application(program_application: ProgramApplication) -> Entr
 
 
 def get_student_attempts(student: StudentProfile) -> list[EntranceAttempt]:
-    from .models import EntranceAttempt
-
     return list(
         EntranceAttempt.objects.filter(student=student)
         .select_related("exam", "program_application")
@@ -267,8 +260,6 @@ def get_student_attempts(student: StudentProfile) -> list[EntranceAttempt]:
 
 
 def get_pending_grading(user=None) -> list[EntranceAttempt]:
-    from .models import EntranceAttempt
-
     qs = (
         EntranceAttempt.objects.filter(status=ATTEMPT_STATUS_COMPLETED)
         .select_related("exam", "student__user")
@@ -280,8 +271,6 @@ def get_pending_grading(user=None) -> list[EntranceAttempt]:
 
 
 def get_active_exams_for_cohort(cohort_id: int) -> list[EntranceExam]:
-    from .models import EntranceExam
-
     now = timezone.now()
     return list(
         EntranceExam.objects.filter(
@@ -294,8 +283,6 @@ def get_active_exams_for_cohort(cohort_id: int) -> list[EntranceExam]:
 
 
 def student_has_attempt(student: StudentProfile, exam: EntranceExam) -> EntranceAttempt | None:
-    from .models import EntranceAttempt
-
     return EntranceAttempt.objects.filter(
         student=student,
         exam=exam,
