@@ -6,6 +6,7 @@
   <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">404</p>
   <h1 class="mt-2 text-3xl font-bold tracking-tight font-display">{% trans "Page not found" %}</h1>
   <p class="mt-2 text-slate-600 dark:text-slate-300">{% trans "The page you are looking for does not exist." %}</p>
-  {% include "partials/_button.html" with href=url_core_landing label=_("Back to home") variant="primary" class="mt-6" %}
+  {% url 'core:landing' as home_url %}
+  {% include "partials/_button.html" with href=home_url label=_("Back to home") variant="primary" class="mt-6" %}
 </section>
 {% endblock content %}

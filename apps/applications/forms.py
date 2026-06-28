@@ -5,9 +5,11 @@ from __future__ import annotations
 from datetime import date
 
 from django import forms
+from django.db import models
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from apps.academics.models import Cohort, Course
+from apps.academics.models import Cohort, Course, Diploma
 from apps.applications.constants import PROGRAM_TYPE_CHOICES
 from apps.applications.models import Application
 from apps.applications.services import RegistrationData, find_duplicate, normalize_phone
@@ -27,12 +29,12 @@ class RegistrationForm(forms.Form):
     phone = forms.CharField(label=_("Mobile number"), max_length=32)
     email = forms.EmailField(label=_("Email"))
     education = forms.ChoiceField(label=_("Education level"), choices=EDUCATION_CHOICES)
-    specialization = forms.CharField(label=_("Specialization"), max_length=120, required=False)
-    employer = forms.CharField(label=_("Employer"), max_length=120, required=False)
-    current_job = forms.CharField(label=_("Current job"), max_length=120, required=False)
-    church = forms.CharField(label=_("Church"), max_length=120, required=False)
-    priest_name = forms.CharField(label=_("Priest name"), max_length=120, required=False)
-    priest_contact = forms.CharField(label=_("Priest contact"), max_length=120, required=False)
+    specialization = forms.CharField(label=_("Specialization"), max_length=120)
+    employer = forms.CharField(label=_("Employer"), max_length=120)
+    current_job = forms.CharField(label=_("Current job"), max_length=120)
+    church = forms.CharField(label=_("Church"), max_length=120)
+    priest_name = forms.CharField(label=_("Priest name"), max_length=120)
+    priest_contact = forms.CharField(label=_("Priest contact"), max_length=120)
     national_id = forms.CharField(label=_("National ID"), max_length=32)
 
     # Optional program selection
@@ -47,6 +49,11 @@ class RegistrationForm(forms.Form):
         required=False,
         widget=forms.RadioSelect,
     )
+    diploma = forms.ChoiceField(
+        label=_("Diploma"),
+        choices=[],
+        required=False,
+    )
     program_target = forms.ChoiceField(
         label=_("Program"),
         choices=[],
@@ -59,14 +66,22 @@ class RegistrationForm(forms.Form):
 
     def _load_program_choices(self) -> None:
         self.fields["program_type"].choices = PROGRAM_TYPE_CHOICES
-        cohorts = Cohort.objects.filter(is_active=True).select_related("diploma").order_by("-start_date")
+        now = timezone.now()
+        diploma_ids = (
+            Cohort.objects.filter(
+                is_active=True,
+                entrance_exams__close_at__gte=now
+            )
+            .values_list("diploma_id", flat=True)
+            .distinct()
+        )
+        diplomas = Diploma.objects.filter(pk__in=diploma_ids, is_active=True).order_by("title")
+        self.fields["diploma"].choices = [("", _("Select a diploma"))] + [
+            (str(d.pk), d.title) for d in diplomas
+        ]
         courses = Course.objects.filter(is_active=True).order_by("title")
-        cohort_choices = [(f"cohort_{c.pk}", f"{c.diploma.title} - {c.name}") for c in cohorts]
-        course_choices = [(f"course_{c.pk}", c.title) for c in courses]
-        self._program_target_choices = {
-            "diploma": cohort_choices,
-            "course": course_choices,
-        }
+        course_choices = [("", _("Select a course"))] + [(f"course_{c.pk}", c.title) for c in courses]
+        self._course_choices = course_choices
 
     def clean_date_of_birth(self) -> date:
         value: date = self.cleaned_data["date_of_birth"]
@@ -100,6 +115,12 @@ class RegistrationForm(forms.Form):
             "gender",
             "address",
             "education",
+            "specialization",
+            "employer",
+            "current_job",
+            "church",
+            "priest_name",
+            "priest_contact",
         )
         if all(cleaned.get(field) for field in required):
             data = RegistrationData(
@@ -131,15 +152,33 @@ class RegistrationForm(forms.Form):
             apply_program = cleaned.get("apply_program")
             program_type = cleaned.get("program_type")
             program_target = cleaned.get("program_target")
+            diploma = cleaned.get("diploma")
             if apply_program:
                 if not program_type:
                     self.add_error("program_type", _("Please select a program type."))
-                if not program_target:
-                    self.add_error("program_target", _("Please select a program."))
-                if program_type and program_target:
-                    if program_type == "diploma" and not program_target.startswith("cohort_"):
-                        self.add_error("program_target", _("Invalid diploma selection."))
-                    if program_type == "course" and not program_target.startswith("course_"):
+                if program_type == "diploma":
+                    if not diploma:
+                        self.add_error("diploma", _("Please select a diploma."))
+                    else:
+                        now = timezone.now()
+                        cohort = (
+                            Cohort.objects.filter(
+                                diploma_id=diploma,
+                                is_active=True,
+                                entrance_exams__close_at__gte=now,
+                            )
+                            .distinct()
+                            .order_by("-start_date")
+                            .first()
+                        )
+                        if not cohort:
+                            self.add_error("diploma", _("No active cohort with an entrance exam found for this diploma."))
+                        else:
+                            cleaned["_auto_cohort_id"] = cohort.pk
+                if program_type == "course":
+                    if not program_target:
+                        self.add_error("program_target", _("Please select a course."))
+                    if program_target and not program_target.startswith("course_"):
                         self.add_error("program_target", _("Invalid course selection."))
 
         return cleaned
@@ -150,13 +189,16 @@ class RegistrationForm(forms.Form):
         if not self.cleaned_data.get("apply_program"):
             return result
         program_type = self.cleaned_data.get("program_type")
-        program_target = self.cleaned_data.get("program_target")
-        if program_type == "diploma" and program_target and program_target.startswith("cohort_"):
-            result["program_type"] = "diploma"
-            result["cohort_id"] = int(program_target.split("_", 1)[1])
-        elif program_type == "course" and program_target and program_target.startswith("course_"):
-            result["program_type"] = "course"
-            result["course_id"] = int(program_target.split("_", 1)[1])
+        if program_type == "diploma":
+            cohort_id = self.cleaned_data.get("_auto_cohort_id")
+            if cohort_id:
+                result["program_type"] = "diploma"
+                result["cohort_id"] = cohort_id
+        elif program_type == "course":
+            program_target = self.cleaned_data.get("program_target")
+            if program_target and program_target.startswith("course_"):
+                result["program_type"] = "course"
+                result["course_id"] = int(program_target.split("_", 1)[1])
         return result
 
 

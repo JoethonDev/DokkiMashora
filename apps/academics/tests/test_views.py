@@ -35,6 +35,44 @@ def _create_student_profile(user):
     )
 
 
+class CourseDetailModalIdTests(TestCase):
+    """Course detail renders unique modal IDs for each version and lecture."""
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser(email="modal@test.com", password="pass")
+        self.client.force_login(self.admin)
+        self.course = Course.objects.create(title="Modal Course", created_by=self.admin)
+        self.cohort = Cohort.objects.create(
+            diploma=Diploma.objects.create(title="Modal D", total_semesters=2, created_by=self.admin),
+            name="Modal C", start_date=date(2026, 1, 1), created_by=self.admin,
+        )
+        v1 = CourseVersion.objects.create(course=self.course, cohort=self.cohort, label="v1", created_by=self.admin)
+        v2 = CourseVersion.objects.create(course=self.course, cohort=self.cohort, label="v2", created_by=self.admin)
+        self.lec1 = Lecture.objects.create(course_version=v1, order=1, title="L1")
+        self.lec2 = Lecture.objects.create(course_version=v1, order=2, title="L2")
+
+    def test_version_modal_ids_are_unique(self) -> None:
+        response = self.client.get(reverse("academics:admin_course_detail", args=[self.course.id]))
+        html = response.content.decode()
+
+        # ponytail: count unique id="del-version-..." patterns
+        import re
+        version_ids = re.findall(r'id="del-version-(\d+)"', html)
+        unique_ids = set(version_ids)
+        self.assertEqual(len(version_ids), len(unique_ids),
+                         f"Duplicate version modal IDs: {version_ids}")
+
+    def test_lecture_modal_ids_are_unique(self) -> None:
+        response = self.client.get(reverse("academics:admin_course_detail", args=[self.course.id]))
+        html = response.content.decode()
+
+        import re
+        lecture_ids = re.findall(r'id="del-lecture-(\d+)"', html)
+        unique_ids = set(lecture_ids)
+        self.assertEqual(len(lecture_ids), len(unique_ids),
+                         f"Duplicate lecture modal IDs: {lecture_ids}")
+
+
 class AdminViewTests(TestCase):
     """Test that admin CRUD views render (staff role required)."""
 

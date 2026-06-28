@@ -16,4 +16,6 @@ urlpatterns = [
     path("programs/", views.program_application_list, name="program_list"),
     path("programs/<int:application_id>/", views.program_application_detail, name="program_detail"),
     path("apply/", views.dashboard_apply, name="dashboard_apply"),
+    path("program-diplomas/", views.program_diplomas, name="program_diplomas"),
+    path("program-targets/", views.program_targets, name="program_targets"),
 ]

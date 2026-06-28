@@ -8,13 +8,15 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
+from django.db import models
 from django.db.models import Q
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods
 
-from apps.academics.models import Cohort, Course
+from apps.academics.models import Cohort, Course, Diploma
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import is_admin, is_moderator
@@ -56,6 +58,28 @@ from .services import (
 )
 
 PUBLIC_REGISTRATION_SESSION_KEY = "registration_email"
+
+
+@require_http_methods(["GET"])
+def program_diplomas(request: HttpRequest) -> HttpResponse:
+    """Return diploma <option>s for HTMX."""
+    now = timezone.now()
+    diploma_ids = (
+        Cohort.objects.filter(is_active=True, entrance_exams__close_at__gte=now)
+        .values_list("diploma_id", flat=True)
+        .distinct()
+    )
+    diplomas = Diploma.objects.filter(pk__in=diploma_ids, is_active=True).order_by("title")
+    options = [(str(d.pk), d.title) for d in diplomas]
+    return render(request, "applications/partials/_program_options.html", {"options": options, "placeholder": "Select a diploma"})
+
+
+@require_http_methods(["GET"])
+def program_targets(request: HttpRequest) -> HttpResponse:
+    """Return course <option>s for HTMX."""
+    courses = Course.objects.filter(is_active=True, is_standalone=True).order_by("title")
+    options = [(f"course_{c.pk}", c.title) for c in courses]
+    return render(request, "applications/partials/_program_options.html", {"options": options, "placeholder": "Select a course"})
 
 
 @require_http_methods(["GET", "POST"])

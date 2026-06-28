@@ -570,6 +570,10 @@ class StudentClusterMembership(TimeStampedModel):
     student = models.ForeignKey(
         StudentProfile, on_delete=models.CASCADE, related_name="cluster_memberships", verbose_name=_("student")
     )
+    cohort = models.ForeignKey(
+        Cohort, on_delete=models.CASCADE, related_name="cluster_memberships", verbose_name=_("cohort"),
+        null=True, blank=True,
+    )
     assigned_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, verbose_name=_("assigned by")
     )
@@ -583,15 +587,15 @@ class StudentClusterMembership(TimeStampedModel):
                 name="unique_student_per_cohort_cluster",
                 violation_error_message=_("A student can belong to at most one cluster per cohort."),
             ),
+            models.UniqueConstraint(
+                fields=("student", "cohort"),
+                name="unique_student_per_cohort",
+                violation_error_message=_("A student can belong to at most one cluster per cohort."),
+            ),
         ]
 
     def clean(self):
         if self.cluster_id and self.student_id:
-            if StudentClusterMembership.objects.filter(
-                student=self.student,
-                cluster__cohort=self.cluster.cohort,
-            ).exclude(pk=self.pk).exists():
-                raise ValidationError(_("Student already belongs to a cluster in this cohort."))
             if not DiplomaEnrollment.objects.filter(
                 student=self.student,
                 cohort=self.cluster.cohort,
@@ -599,6 +603,7 @@ class StudentClusterMembership(TimeStampedModel):
                 raise ValidationError(_("Student is not enrolled in the cluster's cohort."))
 
     def save(self, *args, **kwargs):
+        self.cohort = self.cluster.cohort
         self.clean()
         super().save(*args, **kwargs)
 

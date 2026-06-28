@@ -32,7 +32,7 @@
       <p class="text-xs text-slate-500 dark:text-slate-400">{% trans "The rubric is shown to graders, not to students." %}</p>
     </div>
 
-  <div class="border-t border-slate-200 dark:border-slate-700 pt-6">
+  <div x-show="questionType === 'mcq'" x-cloak class="border-t border-slate-200 dark:border-slate-700 pt-6">
     <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">{% trans "Answer Choices" %}</h2>
     <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">{% trans "Add choices and assign a score to each. Only MCQ questions use scores." %}</p>
 

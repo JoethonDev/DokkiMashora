@@ -12,6 +12,7 @@ urlpatterns = [
     path("<int:exam_id>/submit/", views.submit_exam, name="submit_exam"),
     path("<int:exam_id>/results/", views.exam_results, name="results"),
     path("manage/", views.admin_list, name="admin_list"),
+    path("manage/cohorts-for-diploma/", views.admin_cohorts_for_diploma, name="admin_cohorts_for_diploma"),
     path("manage/create/", views.admin_create_exam, name="admin_create_exam"),
     path("manage/<int:exam_id>/", views.admin_detail, name="admin_detail"),
     path("manage/<int:exam_id>/edit/", views.admin_edit_exam, name="admin_edit_exam"),

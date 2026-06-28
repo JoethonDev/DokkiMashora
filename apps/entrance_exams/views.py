@@ -15,6 +15,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods, require_POST
 
+from apps.academics.models import Cohort
 from apps.applications.constants import (
     PROGRAM_APP_STATUS_INVITED,
     PROGRAM_APP_STATUS_REJECTED,
@@ -230,6 +231,20 @@ def admin_list(request):
 
 
 @login_required
+def admin_cohorts_for_diploma(request):
+    """Return cohort <option>s filtered by diploma (HTMX)."""
+    if not (is_admin(request.user) or is_moderator(request.user)):
+        raise PermissionDenied
+    diploma_id = request.GET.get("diploma", "")
+    if diploma_id:
+        cohorts = Cohort.objects.filter(diploma_id=diploma_id).order_by("name")
+    else:
+        cohorts = Cohort.objects.none()
+    print(f"admin_cohorts_for_diploma: diploma_id={diploma_id}, cohorts={list(cohorts)}")
+    return render(request, "entrance_exams/partials/_cohort_options.html", {"cohorts": cohorts})
+
+
+@login_required
 def admin_detail(request, exam_id):
     """Show entrance exam detail including questions and attempts."""
     if not (is_admin(request.user) or is_moderator(request.user)):
@@ -272,6 +287,7 @@ def admin_create_exam(request):
     if not is_admin(request.user):
         raise PermissionDenied
     if request.method == "POST":
+        print(request.POST.dict())
         form = EntranceExamForm(request.POST)
         if form.is_valid():
             exam = form.save(commit=False)

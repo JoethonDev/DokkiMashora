@@ -192,3 +192,24 @@ class SendTemplatedEmailDesignTests(TestCase):
             sent_by=self.admin_user,
         )
         self.assertIsNone(result)
+
+
+class EmailDesignRenderTests(TestCase):
+    """All 5 layout designs and 3 action-specific designs render without error."""
+
+    LAYOUT_DESIGNS = ["branded", "minimal", "modern", "elegant", "clean"]
+    ACTION_DESIGNS = ["acceptance", "rejection", "payment_notification"]
+
+    def test_all_layout_designs_render(self) -> None:
+        from django.template.loader import render_to_string
+
+        for slug in self.LAYOUT_DESIGNS:
+            html = render_to_string(f"communications/email_designs/{slug}.html", {"content": "<p>Test</p>"})
+            self.assertIn("Test", html)
+
+    def test_all_action_designs_render(self) -> None:
+        from django.template.loader import render_to_string
+
+        for slug in self.ACTION_DESIGNS:
+            html = render_to_string(f"communications/email_designs/{slug}.html", {"content": "<p>Test</p>"})
+            self.assertIn("Test", html)

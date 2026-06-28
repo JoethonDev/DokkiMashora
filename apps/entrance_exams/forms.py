@@ -23,12 +23,17 @@ class EntranceExamForm(forms.ModelForm):
         widgets = {
             "open_at": forms.DateTimeInput(attrs={"type": "datetime-local"}),
             "close_at": forms.DateTimeInput(attrs={"type": "datetime-local"}),
+            "cohort": forms.Select(attrs={"class": "dm-input w-full rounded-lg px-3 py-2 text-sm shadow-sm"}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["diploma"].queryset = Diploma.objects.all()
-        self.fields["cohort"].queryset = Cohort.objects.select_related("diploma").all()
+        cohort_qs = Cohort.objects.none()
+        cohort_val = self.data.get("cohort") or self.initial.get("cohort")
+        if cohort_val:
+            cohort_qs = Cohort.objects.filter(pk=cohort_val)
+        self.fields["cohort"].queryset = cohort_qs
         self.fields["diploma"].empty_label = _("— Select —")
         self.fields["cohort"].empty_label = _("— Select —")
 

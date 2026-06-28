@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.db import transaction
+from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from apps.academics.models import Cohort, Course
@@ -26,6 +27,7 @@ from apps.audit.services import record_audit_event
 from apps.communications.constants import (
     TEMPLATE_ACCEPTANCE,
     TEMPLATE_ACTIVATION,
+    TEMPLATE_ENTRANCE_EXAM_INVITATION,
     TEMPLATE_REGISTRATION_RECEIVED,
     TEMPLATE_REJECTION,
 )
@@ -42,10 +44,10 @@ from .constants import (
     PROGRAM_TYPE_COURSE,
     PROGRAM_TYPE_DIPLOMA,
 )
-from .models import REVERTABLE_ACTIONS, Application, ApplicationDecision, ProgramApplication
+from .models import EMAIL_ACTION_INVITATION, REVERTABLE_ACTIONS, Application, ApplicationDecision, ApplicationEmailLog, ProgramApplication
+from apps.entrance_exams.models import EntranceExam
+from apps.academics.models import Cohort, Course
 
-if TYPE_CHECKING:
-    from apps.academics.models import Cohort, Course
 
 User = get_user_model()
 
@@ -508,6 +510,46 @@ def mark_review_program_application(application, actor) -> None:
     )
 
 
+def _send_invitation_email(application, actor) -> None:
+    """Send entrance exam invitation email and log it."""
+    email_to = application.student.user.email
+    if not email_to:
+        return
+
+    cohort = application.cohort
+    exam = EntranceExam.objects.filter(cohort=cohort, is_active=True).first() if cohort else None
+    context = {"full_name": application.student.full_name or ""}
+    if exam:
+        context.update(
+            exam_title=exam.title,
+            cohort_name=cohort.name or "",
+            exam_url="",
+            exam_open_at="",
+            exam_close_at="",
+        )
+
+    try:
+        record = send_templated_email(
+            slug=TEMPLATE_ENTRANCE_EXAM_INVITATION,
+            to_email=email_to,
+            context=context,
+            sent_by=actor,
+        )
+    except Exception:
+        record = None
+
+    ApplicationEmailLog.objects.create(
+        application=application.root_application,
+        cohort=cohort,
+        action=EMAIL_ACTION_INVITATION,
+        template_slug=TEMPLATE_ENTRANCE_EXAM_INVITATION,
+        recipient=email_to,
+        sent_at=record.sent_at or timezone.now() if record else None,
+        sent_by=actor,
+        status=record.status if record else "failed",
+    )
+
+
 def invite_program_application(application, actor) -> None:
     old_status = application.status
     application.mark_invited(actor)
@@ -519,6 +561,7 @@ def invite_program_application(application, actor) -> None:
         target_id=str(application.pk),
         metadata={"status": application.status},
     )
+    _send_invitation_email(application, actor)
 
 
 def activate_program_application(application, actor) -> None:

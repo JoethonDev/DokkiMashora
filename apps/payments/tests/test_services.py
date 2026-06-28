@@ -952,3 +952,65 @@ class PaymentTargetRefTests(TestCase):
         record = PaymentRecord.objects.filter(student=self.student).first()
         self.assertEqual(record.target_ref, str(self.diploma_enrollment.id))
         self.assertEqual(record.target_type, "diploma")
+
+
+class PaymentTargetDeletionTests(TestCase):
+    """Deleting a target enrollment preserves PaymentRecord and logs audit event."""
+
+    def setUp(self) -> None:
+        from apps.academics.models import Cohort, Course, CourseEnrollment, CourseVersion, Diploma
+
+        self.student_group, _ = Group.objects.get_or_create(name=GROUP_STUDENT)
+        self.user = User.objects.create_user(email="ptd@test.com", password="x")
+        self.user.groups.add(self.student_group)
+        self.student = StudentProfile.objects.create(
+            user=self.user, full_name="PTD Student",
+            national_id="88888888888888", phone="+201888888888",
+            date_of_birth=date(2000, 8, 8),
+        )
+        self.admin = User.objects.create_user(
+            email="ptd-admin@test.com", password="pass", is_staff=True,
+        )
+        diploma = Diploma.objects.create(title="PTD Diploma", created_by=self.admin)
+        cohort = Cohort.objects.create(
+            diploma=diploma, name="PTD Cohort",
+            start_date=date(2026, 1, 1), created_by=self.admin,
+        )
+        course = Course.objects.create(title="PTD Course", created_by=self.admin)
+        course_version = CourseVersion.objects.create(
+            course=course, cohort=cohort, created_by=self.admin,
+        )
+        self.enrollment = CourseEnrollment.objects.create(
+            student=self.student, course_version=course_version,
+        )
+        self.record = PaymentRecord.objects.create(
+            student=self.student,
+            course_enrollment=self.enrollment,
+            target_type="course",
+            target_ref=str(self.enrollment.id),
+            amount=Decimal("1000"),
+            status=PAYMENT_STATUS_PAID,
+        )
+
+    def test_record_survives_enrollment_deletion(self) -> None:
+        enrollment_id = self.enrollment.id
+        self.enrollment.delete()
+        self.record.refresh_from_db()
+        self.assertIsNone(self.record.course_enrollment)
+        self.assertEqual(self.record.target_ref, str(enrollment_id))
+        self.assertEqual(self.record.target_type, "course")
+        self.assertIsNotNone(self.record.student)
+
+    def test_enrollment_deletion_logs_audit_event(self) -> None:
+        from apps.audit.constants import ACTION_ENROLLMENT_DELETED
+        from apps.audit.models import AuditEvent
+
+        enrollment_id = self.enrollment.id
+        self.enrollment.delete()
+        self.assertTrue(
+            AuditEvent.objects.filter(
+                action=ACTION_ENROLLMENT_DELETED,
+                target_type="course_enrollment",
+                target_id=str(enrollment_id),
+            ).exists(),
+        )

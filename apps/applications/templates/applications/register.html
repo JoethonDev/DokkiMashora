@@ -3,28 +3,222 @@
 
 {% block title %}{% trans "Register" %} | {{ SITE_NAME_AR }}{% endblock title %}
 {% block content %}
-<div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12">
+<div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12"
+     x-data="{
+       applyProgram: false,
+       programType: '{{ form.program_type.value|default:"" }}',
+       showProgramFields: false,
+       get showDiplomaFields() { return this.showProgramFields && this.programType === 'diploma'; },
+       get showCourseField() { return this.showProgramFields && this.programType === 'course'; },
+       init() {
+         this.applyProgram = this.$refs.applyProgramCheckbox.checked;
+         this.showProgramFields = this.applyProgram;
+         this.$watch('programType', function(val) {
+           if (val === 'diploma') htmx.trigger('#id_diploma', 'refresh');
+           else if (val === 'course') htmx.trigger('#id_program_target', 'refresh');
+         });
+       }
+     }">
   <header class="mb-6">
     <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Register" %}</p>
     <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{% trans "Register" %}</h1>
     <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{% trans "Please fill in the form below. Our team will review your application and contact you." %}</p>
   </header>
 
-  <form method="post" class="space-y-5" novalidate>
+  <form method="post" id="registration-form" class="space-y-5" novalidate>
     {% csrf_token %}
     {% if form.non_field_errors %}
       <div class="rounded-md bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-200 text-sm px-3 py-2">
         {{ form.non_field_errors|join:" " }}
       </div>
     {% endif %}
+
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
       {% for field in form %}
-        <div class="{% if field.name == 'address' or field.name == 'priest_contact' %}sm:col-span-2{% endif %}">
-          {% include "partials/_field.html" %}
-        </div>
+        {% if field.name != "apply_program" and field.name != "program_type" and field.name != "diploma" and field.name != "program_target" %}
+          <div class="{% if field.name == 'address' or field.name == 'priest_contact' %}sm:col-span-2{% endif %}">
+            {% include "partials/_field.html" %}
+          </div>
+        {% endif %}
       {% endfor %}
     </div>
+
+    <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-4 space-y-4">
+      <label class="flex items-center gap-3 cursor-pointer">
+        <input type="checkbox" name="apply_program" value="true"
+               x-ref="applyProgramCheckbox"
+               {% if form.apply_program.value %}checked{% endif %}
+               class="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+               @change="applyProgram = $el.checked; showProgramFields = applyProgram; if (!applyProgram) { programType = ''; }">
+        <span class="text-sm font-medium dm-text">{% trans "I want to apply for a program" %}</span>
+      </label>
+
+      <div x-show="showProgramFields" x-transition x-cloak class="space-y-4">
+        {# ── Program type radios ── #}
+        <div>
+          <label class="block text-sm font-medium dm-text mb-2">{% trans "Program type" %} <span class="text-rose-600">*</span></label>
+          {% if form.program_type.errors %}<p class="mt-1 text-xs text-rose-600 dark:text-rose-400">{{ form.program_type.errors|join:" " }}</p>{% endif %}
+          <div class="flex gap-3">
+            {% for choice in form.program_type.field.choices %}
+              <label class="flex-1 relative cursor-pointer">
+                <input type="radio" name="program_type" value="{{ choice.0 }}"
+                       class="peer sr-only"
+                       {% if form.program_type.value == choice.0 %}checked{% endif %}
+                       x-model="programType">
+                <div class="rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 text-center transition
+                            peer-checked:border-brand-500 peer-checked:bg-brand-50 dark:peer-checked:bg-brand-950/30 peer-checked:ring-1 peer-checked:ring-brand-500
+                            hover:border-slate-300 dark:hover:border-slate-600">
+                  <span class="text-sm font-medium dm-text">{{ choice.1 }}</span>
+                </div>
+              </label>
+            {% endfor %}
+          </div>
+        </div>
+
+        {# ── Diploma select (only when diploma type selected) ── #}
+        <div x-show="showDiplomaFields" x-transition x-cloak>
+          <label for="id_diploma" class="block text-sm font-medium dm-text mb-1">{% trans "Diploma" %} <span class="text-rose-600">*</span></label>
+          {% if form.diploma.errors %}<p class="mt-1 text-xs text-rose-600 dark:text-rose-400">{{ form.diploma.errors|join:" " }}</p>{% endif %}
+          <select name="diploma" id="id_diploma"
+                  class="dm-input w-full rounded-lg px-3 py-2 text-sm shadow-sm"
+                  hx-get="{% url 'applications:program_diplomas' %}"
+                  hx-trigger="refresh"
+                  hx-swap="innerHTML">
+            <option value="">{% trans "Select diploma type first" %}</option>
+          </select>
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{% trans "The system will automatically assign the active cohort." %}</p>
+        </div>
+
+        {# ── Course select (HTMX loaded when course type selected) ── #}
+        <div x-show="showCourseField" x-transition x-cloak>
+          <label for="id_program_target" class="block text-sm font-medium dm-text mb-1">{% trans "Course" %} <span class="text-rose-600">*</span></label>
+          {% if form.program_target.errors %}<p class="mt-1 text-xs text-rose-600 dark:text-rose-400">{{ form.program_target.errors|join:" " }}</p>{% endif %}
+          <select name="program_target" id="id_program_target"
+                  class="dm-input w-full rounded-lg px-3 py-2 text-sm shadow-sm"
+                  hx-get="{% url 'applications:program_targets' %}"
+                  hx-trigger="refresh"
+                  hx-swap="innerHTML">
+            <option value="">{% trans "Select course type first" %}</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
     {% include "partials/_button.html" with label=_("Submit registration") variant="primary" class="w-full justify-center" %}
   </form>
 </div>
+
 {% endblock content %}
+
+{% block extra_js %}
+<script>
+(function() {
+  var form = document.getElementById('registration-form');
+  if (!form) return;
+
+  var ERR_CLASS = 'border-rose-500 dark:border-rose-400';
+  var INPUTS = 'input:not([type=hidden]):not([type=checkbox]):not([type=radio]), select, textarea';
+
+  function mark(el) { el.classList.add(ERR_CLASS); }
+  function unmark(el) { el.classList.remove(ERR_CLASS); }
+
+  function err(name, msg) {
+    clearErr(name);
+    var input = form.querySelector('[name="' + name + '"]');
+    if (!input) return;
+    mark(input);
+    var p = document.createElement('p');
+    p.id = 'ce-' + name;
+    p.className = 'mt-1 text-xs text-rose-600 dark:text-rose-400';
+    p.textContent = msg;
+    input.closest('.mt-1').after(p);
+  }
+
+  function clearErr(name) {
+    var el = document.getElementById('ce-' + name);
+    if (el) el.remove();
+    var input = form.querySelector('[name="' + name + '"]');
+    if (input) unmark(input);
+  }
+
+  function clearAll() {
+    form.querySelectorAll('[id^="ce-"]').forEach(function(el) { el.remove(); });
+    form.querySelectorAll('.' + ERR_CLASS.replace(/ /g, '.')).forEach(unmark);
+  }
+
+  function val(name) {
+    var el = form.querySelector('[name="' + name + '"]');
+    return el ? el.value.trim() : '';
+  }
+
+  function isEmail(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }
+
+  function validate() {
+    clearAll();
+    var ok = true;
+    var fields = [
+      ['full_name',    'Full name is required.'],
+      ['date_of_birth','Date of birth is required.'],
+      ['gender',       'Gender is required.'],
+      ['address',      'Address is required.'],
+      ['phone',        'Mobile number is required.'],
+      ['email',        'Email is required.'],
+      ['education',    'Education level is required.'],
+      ['specialization','Specialization is required.'],
+      ['employer',     'Employer is required.'],
+      ['current_job',  'Current job is required.'],
+      ['church',       'Church is required.'],
+      ['priest_name',  'Priest name is required.'],
+      ['priest_contact','Priest contact is required.'],
+      ['national_id',  'National ID is required.'],
+    ];
+
+    fields.forEach(function(f) {
+      if (!val(f[0])) { err(f[0], f[1]); ok = false; }
+    });
+
+    var email = val('email');
+    if (email && !isEmail(email)) { err('email', 'Enter a valid email address.'); ok = false; }
+
+    var phone = val('phone');
+    if (phone && phone.replace(/\D/g, '').length < 7) { err('phone', 'Enter a valid mobile number.'); ok = false; }
+
+    var dob = val('date_of_birth');
+    if (dob && new Date(dob) >= new Date()) { err('date_of_birth', 'Date of birth must be in the past.'); ok = false; }
+
+    if (val('national_id').length < 3) { err('national_id', 'Enter a valid National ID.'); ok = false; }
+
+    var apply = form.querySelector('[name="apply_program"]');
+    if (apply && apply.checked) {
+      var typeEl = form.querySelector('[name="program_type"]:checked');
+      if (!typeEl) { err('program_type', 'Please select a program type.'); ok = false; }
+
+      if (typeEl && typeEl.value === 'diploma') {
+        if (!val('diploma')) { err('diploma', 'Please select a diploma.'); ok = false; }
+      }
+
+      if (typeEl && typeEl.value === 'course') {
+        var target = val('program_target');
+        if (!target) { err('program_target', 'Please select a course.'); ok = false; }
+        else if (!target.startsWith('course_')) { err('program_target', 'Invalid course selection.'); ok = false; }
+      }
+    }
+
+    return ok;
+  }
+
+  form.addEventListener('submit', function(e) {
+    if (!validate()) {
+      e.preventDefault();
+      var first = form.querySelector('.text-rose-600');
+      if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  });
+
+  form.querySelectorAll(INPUTS).forEach(function(input) {
+    input.addEventListener('input',  function() { clearErr(this.name); });
+    input.addEventListener('change', function() { clearErr(this.name); });
+  });
+})();
+</script>
+{% endblock extra_js %}

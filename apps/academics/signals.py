@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from django.db.models.signals import post_delete
+from django.db.models.signals import pre_delete
 from django.dispatch import receiver
 
 from apps.audit.constants import ACTION_ENROLLMENT_DELETED
@@ -12,7 +12,12 @@ from .models import CourseEnrollment, DiplomaEnrollment
 def _log_deleted_enrollment(instance, enrollment_type: str, fk_field: str) -> None:
     from apps.payments.models import PaymentRecord
 
-    count = PaymentRecord.objects.filter(**{fk_field: instance}).count()
+    qs = PaymentRecord.objects.filter(**{fk_field: instance})
+    count = qs.count()
+    if count == 0:
+        count = PaymentRecord.objects.filter(
+            target_type=enrollment_type, target_ref=str(instance.id),
+        ).count()
     if count > 0:
         record_audit_event(
             actor=None,
@@ -26,11 +31,11 @@ def _log_deleted_enrollment(instance, enrollment_type: str, fk_field: str) -> No
         )
 
 
-@receiver(post_delete, sender=CourseEnrollment, dispatch_uid="log_course_enrollment_deletion")
+@receiver(pre_delete, sender=CourseEnrollment, dispatch_uid="log_course_enrollment_deletion")
 def _on_course_enrollment_deleted(sender, instance, **kwargs):
     _log_deleted_enrollment(instance, "course", "course_enrollment")
 
 
-@receiver(post_delete, sender=DiplomaEnrollment, dispatch_uid="log_diploma_enrollment_deletion")
+@receiver(pre_delete, sender=DiplomaEnrollment, dispatch_uid="log_diploma_enrollment_deletion")
 def _on_diploma_enrollment_deleted(sender, instance, **kwargs):
     _log_deleted_enrollment(instance, "diploma", "diploma_enrollment")
