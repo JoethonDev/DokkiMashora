@@ -19,8 +19,6 @@ from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods
 
 from apps.academics.models import Cohort, Course, Diploma, Lecture
-from apps.applications.constants import APP_STATUS_CHOICES
-from apps.applications.models import Application
 from apps.core.models import LandingAnnouncement
 from apps.core.permissions import ROLE_SENIOR_STAFF, role_required
 
@@ -44,7 +42,7 @@ def landing(request: HttpRequest) -> HttpResponse:
                 filter=Q(course_versions__lectures__is_published=True),
                 distinct=True,
             ),
-            application_count=Count("applications", distinct=True),
+            # application_count=Count("applications", distinct=True),
         )
         .order_by("start_date", "name")[:3]
     )
@@ -67,15 +65,6 @@ def landing(request: HttpRequest) -> HttpResponse:
         .select_related("course_version__course", "course_version__cohort", "course_version__semester")
         .order_by("-release_at", "-created_at")[:4]
     )
-    status_labels = dict(APP_STATUS_CHOICES)
-    application_status_counts = [
-        {
-            "status": row["status"],
-            "label": status_labels.get(row["status"], row["status"]),
-            "count": row["count"],
-        }
-        for row in Application.objects.values("status").annotate(count=Count("id")).order_by("status")
-    ]
     context = {
         "url_accounts_dashboard": reverse("accounts:dashboard"),
         "url_accounts_login": reverse("accounts:login"),
@@ -85,13 +74,11 @@ def landing(request: HttpRequest) -> HttpResponse:
         "active_diplomas": active_diplomas,
         "standalone_courses": standalone_courses,
         "latest_lectures": latest_lectures,
-        "application_status_counts": application_status_counts,
         "landing_stats": {
             "active_diplomas": Diploma.objects.filter(is_active=True).count(),
             "active_cohorts": Cohort.objects.filter(is_active=True, diploma__is_active=True).count(),
             "active_courses": Course.objects.filter(is_active=True).count(),
             "published_lectures": Lecture.objects.filter(is_published=True).count(),
-            "applications": Application.objects.count(),
         },
     }
     return render(request, "core/landing.html", context)

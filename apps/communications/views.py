@@ -23,7 +23,6 @@ from .constants import (
     AVAILABLE_VARIABLES_BY_SLUG,
     DESIGN_BRANDED,
     DESIGN_CHOICES,
-    REQUIRED_VARIABLES_BY_SLUG,
     SAMPLE_CONTEXT_BY_SLUG,
     TEMPLATE_SLUGS,
 )
@@ -248,6 +247,7 @@ def admin_template_edit(request, slug):
         body = request.POST.get("body", "").strip()
         enabled = request.POST.get("is_enabled_for_action") == "on"
         design = request.POST.get("design", "").strip()
+        required_vars = request.POST.getlist("required_variables")
         if not subject:
             messages.error(request, _("Subject is required."))
         elif not body:
@@ -256,11 +256,12 @@ def admin_template_edit(request, slug):
             template.subject = subject
             template.body = body
             template.is_enabled_for_action = enabled
+            template.required_variables = required_vars
             if design in dict(DESIGN_CHOICES):
                 template.design = design
             try:
                 template.full_clean()
-                template.save(update_fields=["subject", "body", "is_enabled_for_action", "design"])
+                template.save(update_fields=["subject", "body", "is_enabled_for_action", "design", "required_variables"])
                 messages.success(request, _("Template updated."))
                 return redirect("communications:admin_template_list")
             except ValidationError as e:
@@ -268,10 +269,12 @@ def admin_template_edit(request, slug):
                     for err in errors:
                         messages.error(request, f"{field}: {err}")
     avail = AVAILABLE_VARIABLES_BY_SLUG.get(slug, {})
+    all_vars = avail.get("optional", []) + avail.get("required", [])
     return render(request, "communications/admin_template_form.html", {
         "template": template,
-        "required_vars": REQUIRED_VARIABLES_BY_SLUG.get(slug, []),
         "available_vars": avail,
+        "all_vars": all_vars,
+        "required_vars": template.required_variables or [],
         "all_variable_samples": ALL_VARIABLE_SAMPLES,
         "all_slugs": TEMPLATE_SLUGS,
         "design_choices": DESIGN_CHOICES,
@@ -316,9 +319,12 @@ def admin_template_preview(request, slug):
 def admin_template_variables(request, slug: str):
     """HTMX partial: available variables for the given slug."""
     avail = AVAILABLE_VARIABLES_BY_SLUG.get(slug, {})
+    all_vars = avail.get("optional", []) + avail.get("required", [])
     return render(request, "communications/partials/_template_variables.html", {
         "available_vars": avail,
+        "all_vars": all_vars,
         "all_variable_samples": ALL_VARIABLE_SAMPLES,
+        "editable": False,
     })
 
 
@@ -365,7 +371,6 @@ def admin_template_create(request):
     return render(request, "communications/admin_template_create.html", {
         "available_slugs": available,
         "all_slugs": TEMPLATE_SLUGS,
-        "required_vars_by_slug": REQUIRED_VARIABLES_BY_SLUG,
         "design_choices": DESIGN_CHOICES,
         "href_list": reverse("communications:admin_template_list"),
     })

@@ -6,9 +6,11 @@ import csv
 
 from django.conf import settings as django_settings
 from django.contrib import messages
+from django.contrib.auth import login as auth_login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView, LogoutView
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Count, Q
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -34,11 +36,6 @@ from apps.academics.services import get_student_course_versions
 from apps.ai.models import GeminiReview
 from apps.ai.prompts import DEFAULT_PROMPT_VERSION
 from apps.applications.constants import (
-    APP_STATUS_ACTIVATED,
-    APP_STATUS_APPROVED,
-    APP_STATUS_PENDING,
-    APP_STATUS_REJECTED,
-    APP_STATUS_UNDER_REVIEW,
     PROGRAM_APP_STATUS_ACCEPTED,
     PROGRAM_APP_STATUS_ACTIVATED,
     PROGRAM_APP_STATUS_INVITED,
@@ -46,7 +43,7 @@ from apps.applications.constants import (
     PROGRAM_APP_STATUS_SUBMITTED,
     PROGRAM_APP_STATUS_UNDER_REVIEW,
 )
-from apps.applications.models import Application, ProgramApplication
+from apps.applications.models import ProgramApplication
 from apps.assessments.constants import ATTEMPT_STATUS_SUBMITTED, ATTEMPT_STATUS_UNDER_REVIEW
 from apps.assessments.models import AssessmentAttempt
 from apps.audit.models import AuditEvent
@@ -55,6 +52,7 @@ from apps.core.htmx import is_htmx
 from apps.core.models import LandingAnnouncement
 from apps.core.permissions import ROLE_EXAM_STAFF, ROLE_SENIOR_STAFF, is_admin, role_required
 from apps.core.views import safe_next_url
+from apps.audit.services import record_audit_event
 from apps.entrance_exams.models import EntranceAttempt
 from apps.payments.constants import (
     PAYMENT_STATUS_PAID,
@@ -76,7 +74,8 @@ from .constants import (
 )
 from .forms import EmailAuthenticationForm, ProfileForm, UserEditForm, UserUploadForm
 from .models import User, UserUpload
-from .services import confirm_upload, create_upload, preview_upload
+from .services import confirm_upload, create_upload, preview_upload, send_activation_email
+from .tokens import validate_activation_token
 
 
 class EmailLoginView(LoginView):
@@ -143,8 +142,8 @@ def admin_settings(request: HttpRequest) -> HttpResponse:
 def moderator_dashboard(request: HttpRequest) -> HttpResponse:
     context = _dashboard_context(request.user)
     now = timezone.now()
-    context["pending_applications_count"] = Application.objects.filter(
-        status__in=[APP_STATUS_PENDING, APP_STATUS_UNDER_REVIEW]
+    context["pending_applications_count"] = ProgramApplication.objects.filter(
+        status__in=[PROGRAM_APP_STATUS_SUBMITTED, PROGRAM_APP_STATUS_UNDER_REVIEW]
     ).count()
     context["cohorts_starting_soon"] = (
         Cohort.objects.filter(is_active=True, start_date__gte=now.date())
@@ -187,14 +186,7 @@ def _admin_dashboard_data() -> dict:
 
     # Batch counts into a few aggregation queries instead of many .count() calls.
 
-    # 1) Single query: Application statuses
-    app_status_counts = dict(
-        Application.objects.values_list("status")
-        .annotate(cnt=Count("id"))
-        .values_list("status", "cnt")
-    )
-
-    # 2) Single query: ProgramApplication statuses
+    # 1) Single query: ProgramApplication statuses
     prog_app_status_counts = dict(
         ProgramApplication.objects.values_list("status")
         .annotate(cnt=Count("id"))
@@ -236,7 +228,7 @@ def _admin_dashboard_data() -> dict:
     cohorts_starting_soon = list(
         Cohort.objects.filter(is_active=True, start_date__gte=today)
         .select_related("diploma")
-        .annotate(application_count=Count("applications"))
+        .annotate(application_count=Count("program_applications"))
         .order_by("start_date")[:5]
     )
 
@@ -255,9 +247,9 @@ def _admin_dashboard_data() -> dict:
         .order_by("-created_at")[:10]
     )
 
-    # 12) Single query: recent applications
+    # 12) Single query: recent program applications
     recent_applications = list(
-        Application.objects.select_related("student", "cohort")
+        ProgramApplication.objects.select_related("student__user", "cohort__diploma", "course")
         .order_by("-created_at")[:10]
     )
 
@@ -323,11 +315,6 @@ def _admin_dashboard_data() -> dict:
     }
 
     return {
-        "pending_app_count": app_status_counts.get(APP_STATUS_PENDING, 0),
-        "under_review_app_count": app_status_counts.get(APP_STATUS_UNDER_REVIEW, 0),
-        "approved_app_count": app_status_counts.get(APP_STATUS_APPROVED, 0),
-        "rejected_app_count": app_status_counts.get(APP_STATUS_REJECTED, 0),
-        "activated_app_count": app_status_counts.get(APP_STATUS_ACTIVATED, 0),
         "prog_submitted_count": prog_app_status_counts.get(PROGRAM_APP_STATUS_SUBMITTED, 0),
         "prog_under_review_count": prog_app_status_counts.get(PROGRAM_APP_STATUS_UNDER_REVIEW, 0),
         "prog_invited_count": prog_app_status_counts.get(PROGRAM_APP_STATUS_INVITED, 0),
@@ -416,7 +403,7 @@ def admin_student_list(request):
             Q(full_name__icontains=q) | Q(email__icontains=q) | Q(phone__icontains=q) | Q(national_id__icontains=q)
         )
 
-    paginator = Paginator(users, 25)
+    paginator = Paginator(users, 15)
     page_number = request.GET.get("page", 1)
     page_obj = paginator.get_page(page_number)
 
@@ -464,7 +451,7 @@ def admin_staff_list(request):
     if q:
         users = users.filter(Q(full_name__icontains=q) | Q(email__icontains=q) | Q(phone__icontains=q) | Q(national_id__icontains=q))
 
-    paginator = Paginator(users, 25)
+    paginator = Paginator(users, 15)
     page_number = request.GET.get("page", 1)
     page_obj = paginator.get_page(page_number)
 
@@ -508,14 +495,30 @@ def admin_user_detail(request, user_id):
 
 
 @login_required
-@role_required(*ROLE_EXAM_STAFF)
+@role_required(*ROLE_SENIOR_STAFF)
 def admin_user_edit(request, user_id):
     user_obj = get_object_or_404(User, id=user_id)
+    profile = getattr(user_obj, "student_profile", None)
     next_url = safe_next_url(request)
     if request.method == "POST":
         form = UserEditForm(request.POST, instance=user_obj)
         if form.is_valid():
-            form.save()
+            old_is_active = user_obj.is_active
+            password_changed = bool(form.cleaned_data.get("new_password"))
+            with transaction.atomic():
+                form.save()
+                if old_is_active != user_obj.is_active or password_changed:
+                    record_audit_event(
+                        actor=request.user,
+                        action="user.updated",
+                        target_type="user",
+                        target_id=str(user_obj.id),
+                        metadata={
+                            "is_active": user_obj.is_active,
+                            "password_reset": password_changed,
+                            "student_profile_id": profile.id if profile else None,
+                        },
+                    )
             messages.success(request, _("User updated."))
             return redirect(next_url) if next_url else redirect("accounts:admin_user_detail", user_id=user_obj.id)
     else:
@@ -788,3 +791,37 @@ def _dashboard_url_name(user: User) -> str:
     if role == GROUP_STUDENT:
         return "accounts:dashboard_student"
     return "core:landing"
+
+
+@require_http_methods(["GET"])
+def activate_account(request, uidb64, token):
+    pk = validate_activation_token(uidb64, token)
+    if pk is None:
+        messages.error(request, _("Activation link is invalid or expired."))
+        return redirect("core:landing")
+    with transaction.atomic():
+        user = User.objects.select_for_update().filter(pk=pk).first()
+        if not user:
+            messages.error(request, _("Activation link is invalid or expired."))
+            return redirect("core:landing")
+        if user.email_activated_at is not None:
+            messages.info(request, _("Account is already activated. Please log in."))
+            return redirect("accounts:login")
+        user.is_active = True
+        user.email_activated_at = timezone.now()
+        user.save(update_fields=["is_active", "email_activated_at", "updated_at"])
+    auth_login(request, user)
+    messages.success(request, _("Account activated successfully. Welcome!"))
+    return redirect(_dashboard_url_name(user))
+
+
+@require_http_methods(["GET", "POST"])
+def resend_activation_email(request):
+    if request.method == "POST":
+        email = request.POST.get("email", "").strip()
+        user = User.objects.filter(email=email, is_active=False, email_activated_at__isnull=True).first()
+        if user:
+            send_activation_email(user)
+        messages.success(request, _("If an inactive account exists, a new activation email was sent."))
+        return redirect("accounts:login")
+    return render(request, "accounts/resend_activation.html")

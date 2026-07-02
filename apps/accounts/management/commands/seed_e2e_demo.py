@@ -42,16 +42,12 @@ from apps.academics.models import (
     TeacherAssignment,
 )
 from apps.applications.constants import (
-    APP_STATUS_ACTIVATED,
-    APP_STATUS_PENDING,
-    APP_STATUS_REJECTED,
-    PROGRAM_APP_STATUS_ACTIVATED,
+    PROGRAM_APP_STATUS_ACCEPTED,
     PROGRAM_APP_STATUS_REJECTED,
     PROGRAM_APP_STATUS_SUBMITTED,
-    PROGRAM_TYPE_COURSE,
     PROGRAM_TYPE_DIPLOMA,
 )
-from apps.applications.models import Application, ProgramApplication
+from apps.applications.models import ProgramApplication
 from apps.assessments.constants import (
     ASSESSMENT_TYPE_FINAL_EXAM,
     ASSESSMENT_TYPE_HOMEWORK,
@@ -521,150 +517,59 @@ class Command(BaseCommand):
         self._report("Lecture: Published Released (Ver B)", created)
 
     def _ensure_applications(self, profiles, admin, cohort_a, cohort_b, course):
-        """Create one root Application plus a child ProgramApplication per
-        student. Each (student, program_type, cohort/course) combination
-        is unique.
-        """
-        apps_map: dict[str, Application] = {}
+        """Create program applications for the demo students."""
+        apps_map: dict[str, ProgramApplication] = {}
         now = timezone.now()
 
-        # student.active: activated diploma + activated course.
         p = profiles["student.active@dokkimashora.test"]
-        root, created = Application.objects.update_or_create(
+        app, created = ProgramApplication.objects.update_or_create(
             student=p,
-            defaults={
-                "status": APP_STATUS_ACTIVATED,
-                "reviewed_by": admin,
-                "activated_at": now,
-            },
+            program_type=PROGRAM_TYPE_DIPLOMA,
+            cohort=cohort_a,
+            defaults={"status": PROGRAM_APP_STATUS_ACCEPTED, "reviewed_by": admin, "reviewed_at": now},
         )
-        self._report("Application: active student (activated)", created)
-        apps_map["student.active"] = root
+        self._report("ProgramApplication: active student (accepted)", created)
+        apps_map["student.active"] = app
 
-        _obj, created = ProgramApplication.objects.update_or_create(
-            root_application=root, student=p,
-            program_type=PROGRAM_TYPE_DIPLOMA, cohort=cohort_a,
-            defaults={
-                "status": PROGRAM_APP_STATUS_ACTIVATED,
-                "reviewed_by": admin,
-                "activated_at": now,
-            },
-        )
-        self._report("ProgramApplication: active -> diploma Cohort A", created)
-
-        _obj, created = ProgramApplication.objects.update_or_create(
-            root_application=root, student=p,
-            program_type=PROGRAM_TYPE_COURSE, course=course,
-            defaults={
-                "status": PROGRAM_APP_STATUS_ACTIVATED,
-                "reviewed_by": admin,
-                "activated_at": now,
-            },
-        )
-        self._report("ProgramApplication: active -> course standalone", created)
-
-        # student.expired: activated diploma (long ago) and activated course.
         p = profiles["student.expired@dokkimashora.test"]
-        expired_at = now - timedelta(days=200)
-        root, created = Application.objects.update_or_create(
+        app, created = ProgramApplication.objects.update_or_create(
             student=p,
-            defaults={
-                "status": APP_STATUS_ACTIVATED,
-                "reviewed_by": admin,
-                "activated_at": expired_at,
-            },
+            program_type=PROGRAM_TYPE_DIPLOMA,
+            cohort=cohort_b,
+            defaults={"status": PROGRAM_APP_STATUS_ACCEPTED, "reviewed_by": admin, "reviewed_at": now - timedelta(days=200)},
         )
-        self._report("Application: expired student (activated)", created)
-        apps_map["student.expired"] = root
+        self._report("ProgramApplication: expired student (accepted)", created)
+        apps_map["student.expired"] = app
 
-        _obj, created = ProgramApplication.objects.update_or_create(
-            root_application=root, student=p,
-            program_type=PROGRAM_TYPE_DIPLOMA, cohort=cohort_a,
-            defaults={
-                "status": PROGRAM_APP_STATUS_ACTIVATED,
-                "reviewed_by": admin,
-                "activated_at": expired_at,
-            },
-        )
-        self._report("ProgramApplication: expired -> diploma Cohort A", created)
-
-        # The expired student also has a course program application
-        # matching the expired CourseEnrollment below. This keeps
-        # application history consistent with the enrollment state.
-        _obj, created = ProgramApplication.objects.update_or_create(
-            root_application=root, student=p,
-            program_type=PROGRAM_TYPE_COURSE, course=course,
-            defaults={
-                "status": PROGRAM_APP_STATUS_ACTIVATED,
-                "reviewed_by": admin,
-                "activated_at": expired_at,
-            },
-        )
-        self._report("ProgramApplication: expired -> course standalone", created)
-
-        # student.restricted: activated.
         p = profiles["student.restricted@dokkimashora.test"]
-        root, created = Application.objects.update_or_create(
+        app, created = ProgramApplication.objects.update_or_create(
             student=p,
-            defaults={
-                "status": APP_STATUS_ACTIVATED,
-                "reviewed_by": admin,
-                "activated_at": now,
-            },
+            program_type=PROGRAM_TYPE_DIPLOMA,
+            cohort=cohort_a,
+            defaults={"status": PROGRAM_APP_STATUS_ACCEPTED, "reviewed_by": admin, "reviewed_at": now},
         )
-        self._report("Application: restricted student (activated)", created)
-        apps_map["student.restricted"] = root
+        self._report("ProgramApplication: restricted student (accepted)", created)
+        apps_map["student.restricted"] = app
 
-        _obj, created = ProgramApplication.objects.update_or_create(
-            root_application=root, student=p,
-            program_type=PROGRAM_TYPE_DIPLOMA, cohort=cohort_a,
-            defaults={
-                "status": PROGRAM_APP_STATUS_ACTIVATED,
-                "reviewed_by": admin,
-                "activated_at": now,
-            },
-        )
-        self._report("ProgramApplication: restricted -> diploma Cohort A", created)
-
-        # student.pending: pending application.
         p = profiles["student.pending@dokkimashora.test"]
-        root, created = Application.objects.update_or_create(
+        app, created = ProgramApplication.objects.update_or_create(
             student=p,
-            defaults={"status": APP_STATUS_PENDING},
-        )
-        self._report("Application: pending student (pending)", created)
-        apps_map["student.pending"] = root
-
-        _obj, created = ProgramApplication.objects.update_or_create(
-            root_application=root, student=p,
-            program_type=PROGRAM_TYPE_DIPLOMA, cohort=cohort_a,
+            program_type=PROGRAM_TYPE_DIPLOMA,
+            cohort=cohort_a,
             defaults={"status": PROGRAM_APP_STATUS_SUBMITTED},
         )
-        self._report("ProgramApplication: pending -> diploma Cohort A", created)
+        self._report("ProgramApplication: pending student (submitted)", created)
+        apps_map["student.pending"] = app
 
-        # student.noaccess: rejected.
         p = profiles["student.noaccess@dokkimashora.test"]
-        root, created = Application.objects.update_or_create(
+        app, created = ProgramApplication.objects.update_or_create(
             student=p,
-            defaults={
-                "status": APP_STATUS_REJECTED,
-                "reviewed_by": admin,
-                "rejection_reason": "E2E test: rejected application",
-            },
+            program_type=PROGRAM_TYPE_DIPLOMA,
+            cohort=cohort_a,
+            defaults={"status": PROGRAM_APP_STATUS_REJECTED, "reviewed_by": admin, "rejection_reason": "E2E test: rejected program application", "reviewed_at": now},
         )
-        self._report("Application: noaccess student (rejected)", created)
-        apps_map["student.noaccess"] = root
-
-        _obj, created = ProgramApplication.objects.update_or_create(
-            root_application=root, student=p,
-            program_type=PROGRAM_TYPE_DIPLOMA, cohort=cohort_a,
-            defaults={
-                "status": PROGRAM_APP_STATUS_REJECTED,
-                "reviewed_by": admin,
-                "rejection_reason": "E2E test: rejected program application",
-            },
-        )
-        self._report("ProgramApplication: noaccess -> diploma Cohort A (rejected)", created)
+        self._report("ProgramApplication: noaccess student (rejected)", created)
+        apps_map["student.noaccess"] = app
 
         return apps_map
 
@@ -1143,18 +1048,16 @@ class Command(BaseCommand):
         p = profiles["student.active@dokkimashora.test"]
         scope = "e2e_demo"
 
-        # 1. Application activated (uses the real Application pk).
-        application_pk = (
-            Application.objects.filter(student=p).values_list("pk", flat=True).first()
-        )
+        # 1. Application activated (uses the real ProgramApplication pk).
+        application_pk = ProgramApplication.objects.filter(student=p).values_list("pk", flat=True).first()
         if application_pk is not None and not AuditEvent.objects.filter(
             actor=admin, action=ACTION_APPLICATION_ACTIVATED,
-            target_type="application", target_id=str(application_pk),
+            target_type="program_application", target_id=str(application_pk),
             metadata__scope=scope,
         ).exists():
             AuditEvent.objects.create(
                 actor=admin, action=ACTION_APPLICATION_ACTIVATED,
-                target_type="application", target_id=str(application_pk),
+                target_type="program_application", target_id=str(application_pk),
                 metadata={"email": p.user.email, "scope": scope},
                 ip_address="127.0.0.1",
             )

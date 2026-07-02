@@ -16,10 +16,22 @@
       <li><strong>{% trans "Passing score" %}:</strong> {{ exam.passing_score }}%</li>
       <li><strong>{% trans "Total questions" %}:</strong> {{ exam.questions.count }}</li>
     </ul>
-    <div class="mt-6 rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 p-4">
-      <p class="text-amber-800 dark:text-amber-200 text-sm">
-        {% trans "Once you start, the timer begins and cannot be paused. Make sure you have a stable internet connection." %}
-      </p>
+    <div class="mt-6 space-y-3">
+      <div class="rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 p-4">
+        <p class="text-amber-800 dark:text-amber-200 text-sm">
+          {% trans "Once you start, the timer begins and cannot be paused. Make sure you have a stable internet connection." %}
+        </p>
+      </div>
+      <div class="rounded-md bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-900 p-4">
+        <p class="text-sky-800 dark:text-sky-200 text-sm">
+          <strong>{% trans "Auto-saving:" %}</strong> {% trans "Your answers are saved locally and sent to the server every few seconds. If your browser crashes, you can return and continue from your last save." %}
+        </p>
+      </div>
+      <div class="rounded-md bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-900 p-4">
+        <p class="text-violet-800 dark:text-violet-200 text-sm">
+          <strong>{% trans "Auto-submission:" %}</strong> {% trans "When 30 seconds remain, the exam auto-submits your latest answers. An admin can recover from server snapshots if submission fails." %}
+        </p>
+      </div>
     </div>
     <form method="post" action="{% if token %}{% url 'exams:start_exam_token' token %}{% else %}{% url 'exams:start_exam' exam.id %}{% endif %}" class="mt-6">
       {% csrf_token %}

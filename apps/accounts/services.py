@@ -7,13 +7,17 @@ import re
 from datetime import datetime
 from typing import Any
 
+from django.conf import settings
 from django.contrib.auth.models import Group
 from django.db import transaction
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.audit.constants import ACTION_USER_IMPORT_CONFIRMED, ACTION_USER_IMPORT_PREVIEWED
 from apps.audit.models import AuditEvent
+from apps.communications.constants import TEMPLATE_ACTIVATION
+from apps.communications.services import send_templated_email
 from apps.students.models import StudentProfile
 
 from .constants import (
@@ -28,6 +32,8 @@ from .constants import (
     MATCH_METHOD_NONE,
     MATCH_METHOD_PHONE,
     REQUIRED_CSV_HEADERS,
+)
+from .constants import (
     ROW_STATUS_AMBIGUOUS,
     ROW_STATUS_CREATED,
     ROW_STATUS_FAILED,
@@ -395,3 +401,18 @@ def confirm_upload(upload_id: int, confirmed_by) -> UserUpload:
         metadata={"created": created, "updated": updated, "errors": errors},
     )
     return upload
+
+
+def send_activation_email(user, password: str | None = None) -> None:
+    from .tokens import generate_activation_token
+    from apps.applications.services import normalize_phone as application_normalize_phone
+
+    uidb64, token = generate_activation_token(user)
+    activation_url = settings.SITE_URL + reverse("accounts:activate", kwargs={"uidb64": uidb64, "token": token})
+    full_name = getattr(user, "full_name", "") or ""
+    password = password or application_normalize_phone(user.phone or "")
+    send_templated_email(
+        TEMPLATE_ACTIVATION, user.email,
+        {"full_name": full_name, "activation_url": activation_url, "email": user.email, "password": password},
+        sent_by=None,
+    )

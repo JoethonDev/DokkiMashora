@@ -60,6 +60,7 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
     is_staff = models.BooleanField(_("staff status"), default=False)
     is_active = models.BooleanField(_("active"), default=True)
     date_joined = models.DateTimeField(_("date joined"), default=timezone.now)
+    email_activated_at = models.DateTimeField(_("email activated at"), null=True, blank=True)
 
     objects = UserManager()
 

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import EntranceAnswer, EntranceAttempt, EntranceChoice, EntranceExam, EntranceQuestion
+from .models import EntranceAnswer, EntranceAttempt, EntranceChoice, EntranceExam, EntranceQuestion, EntranceSnapshot
 
 
 class EntranceQuestionInline(admin.TabularInline):
@@ -34,3 +34,10 @@ class EntranceAttemptAdmin(admin.ModelAdmin):
     search_fields = ("student__full_name", "student__user__email", "exam__title")
     list_select_related = ("student__user", "exam")
     inlines = [EntranceAnswerInline]
+
+
+@admin.register(EntranceSnapshot)
+class EntranceSnapshotAdmin(admin.ModelAdmin):
+    list_display = ("attempt", "question", "snapshot_at")
+    list_filter = ("attempt__status",)
+    list_select_related = ("attempt__student__user", "question")

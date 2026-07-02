@@ -45,24 +45,15 @@
           </div>
         {% endif %}
         <div class="flex flex-wrap gap-2">
-          {% if application.status == "submitted" %}
-            {% include "partials/_button.html" with label=_("Mark under review") size="sm" variant="secondary" attrs='name="action" value="mark_review"' %}
-          {% endif %}
           {% if application.status == "submitted" or application.status == "under_review" %}
-            {% include "partials/_button.html" with label=_("Invite to entrance") size="sm" variant="primary" attrs='name="action" value="invite"' %}
             {% include "partials/_button.html" with label=_("Accept") size="sm" variant="success" attrs='name="action" value="accept"' %}
             {% include "partials/_button.html" with label=_("Reject") size="sm" variant="danger" attrs='name="action" value="reject"' %}
           {% endif %}
-          {% if application.status == "accepted" %}
-            {% include "partials/_button.html" with label=_("Activate") size="sm" variant="primary" attrs='name="action" value="activate"' %}
-          {% endif %}
         </div>
-        {% if can_revert and application.status != "activated" %}
-          <hr class="my-3 border-slate-200 dark:border-slate-700">
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Revert reason" %}</label>
-          <textarea name="revert_reason" rows="2" class="mt-1 mb-2 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900 dark:text-slate-100" placeholder="{% trans 'Why are you reverting this decision?' %}"></textarea>
-          {% include "partials/_button.html" with label=_("Revert last decision") size="sm" variant="warning" attrs='name="action" value="revert"' %}
-        {% endif %}
+        <div class="flex items-center gap-2">
+          <input type="checkbox" name="send_email" id="send_email" class="rounded border-slate-300 dark:border-slate-700 text-brand-600 focus:ring-brand-500">
+          <label for="send_email" class="text-sm text-slate-700 dark:text-slate-200">{% trans "Send email notification" %}</label>
+        </div>
       </form>
       {% if application.reviewed_by %}
         <p class="mt-3 text-xs text-slate-500 dark:text-slate-400 tabular-nums">{% trans "Last reviewer" %}: {{ application.reviewed_by.email }} {% if application.reviewed_at %}({% dt application.reviewed_at %}){% endif %}</p>
@@ -97,6 +88,7 @@
           </tbody>
         </table>
       </div>
+      {% include "partials/_pagination.html" with page_obj=decisions pagination_qs=pagination_qs %}
     </div>
   {% endif %}
 

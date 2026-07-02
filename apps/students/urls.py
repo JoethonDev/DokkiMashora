@@ -11,6 +11,7 @@ urlpatterns = [
     path("details/", views.details, name="details"),
     path("edit/", views.edit_profile, name="edit_profile"),
     path("applications/", views.application_history, name="application_history"),
+    path("apply/", views.apply, name="apply"),
     path("enrollments/", views.enrollment_history, name="enrollment_history"),
     path("access/", views.access_list, name="access_list"),
     path("exams/", views.exam_results, name="exam_results"),
@@ -20,5 +21,4 @@ urlpatterns = [
     path("certificates/", views.certificate_list, name="certificate_list"),
     path("payments/", views.payment_status, name="payment_status"),
     path("notifications/", views.notification_history, name="notification_history"),
-    path("reapply/", views.reapply, name="reapply"),
 ]

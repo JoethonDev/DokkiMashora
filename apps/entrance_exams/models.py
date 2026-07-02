@@ -1,4 +1,5 @@
 from decimal import Decimal
+import uuid
 
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
@@ -18,9 +19,52 @@ from .constants import (
 )
 
 
+class EntranceSnapshot(TimeStampedModel):
+    """Periodic answer snapshot for auto-recovery when student fails to submit."""
+    attempt = models.ForeignKey(
+        "EntranceAttempt",
+        on_delete=models.CASCADE,
+        related_name="snapshots",
+        verbose_name=_("attempt"),
+    )
+    question = models.ForeignKey(
+        "EntranceQuestion",
+        on_delete=models.CASCADE,
+        related_name="snapshots",
+        verbose_name=_("question"),
+    )
+    selected_choice = models.ForeignKey(
+        "EntranceChoice",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="snapshots",
+        verbose_name=_("selected choice"),
+    )
+    written_text = models.TextField(_("written answer"), blank=True)
+    snapshot_at = models.DateTimeField(_("snapshot at"), auto_now=True)
+
+    class Meta:
+        verbose_name = _("entrance snapshot")
+        verbose_name_plural = _("entrance snapshots")
+        ordering = ("question__order",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("attempt", "question"),
+                name="unique_snapshot_per_attempt_question",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Snapshot Q{self.question.order} for {self.attempt}"
+
+
 class EntranceExam(TimeStampedModel):
     title = models.CharField(_("title"), max_length=255)
     description = models.TextField(_("description"), blank=True)
+    access_token = models.UUIDField(
+        _("access token"), default=uuid.uuid4, unique=True, editable=False,
+    )
     diploma = models.ForeignKey(
         "academics.Diploma",
         on_delete=models.PROTECT,
@@ -34,17 +78,20 @@ class EntranceExam(TimeStampedModel):
         verbose_name=_("cohort"),
     )
     duration_minutes = models.PositiveIntegerField(_("duration (minutes)"))
-    passing_score = models.DecimalField(
-        _("passing score"),
-        max_digits=5,
-        decimal_places=2,
-        validators=[MinValueValidator(0), MaxValueValidator(100)],
-    )
-    total_points = models.DecimalField(
-        _("total points"),
+    total_score = models.DecimalField(
+        _("total score"),
         max_digits=7,
         decimal_places=2,
         default=0,
+        help_text=_("Maximum possible score for this exam."),
+    )
+    pass_percentage = models.DecimalField(
+        _("pass percentage"),
+        max_digits=5,
+        decimal_places=2,
+        default=50,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        help_text=_("Minimum percentage required to pass."),
     )
     is_active = models.BooleanField(_("active"), default=False)
     open_at = models.DateTimeField(_("open at"))
@@ -67,17 +114,12 @@ class EntranceExam(TimeStampedModel):
             ),
         ]
 
-    def recompute_total_points(self) -> None:
-        total = (
-            self.questions.aggregate(total=models.Sum("points"))["total"]
-            or Decimal("0.00")
-        )
-        if self.total_points != total:
-            self.total_points = total
-            self.save(update_fields=["total_points", "updated_at"])
-
     def __str__(self):
         return f"{self.title} — {self.cohort}"
+
+    def regenerate_access_token(self):
+        self.access_token = uuid.uuid4()
+        self.save(update_fields=["access_token"])
 
 
 class EntranceQuestion(TimeStampedModel):
@@ -94,17 +136,11 @@ class EntranceQuestion(TimeStampedModel):
         choices=QUESTION_TYPE_CHOICES,
         default=QUESTION_TYPE_MCQ,
     )
-    points = models.DecimalField(
-        _("points"),
-        max_digits=5,
-        decimal_places=2,
-        validators=[MinValueValidator(0)],
-    )
     order = models.PositiveIntegerField(_("order"), db_index=True)
     rubric = models.TextField(
         _("scoring rubric / model answer"),
         blank=True,
-        help_text=_("Instructions for scoring this question. Sent to Gemini for weighted scoring."),
+        help_text=_("Instructions for scoring written answers."),
     )
 
     class Meta:
@@ -117,15 +153,6 @@ class EntranceQuestion(TimeStampedModel):
                 name="unique_entrance_question_order",
             ),
         ]
-
-    def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
-        self.exam.recompute_total_points()
-
-    def delete(self, *args, **kwargs):
-        exam = self.exam
-        super().delete(*args, **kwargs)
-        exam.recompute_total_points()
 
     def __str__(self):
         return self.text[:50]

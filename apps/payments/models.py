@@ -108,7 +108,7 @@ class PaymentUploadRow(TimeStampedModel):
         verbose_name=_("matched student"),
     )
     matched_application = models.ForeignKey(
-        "applications.Application",
+        "applications.ProgramApplication",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -152,12 +152,12 @@ class PaymentRecord(TimeStampedModel):
         db_index=True,
     )
     application = models.ForeignKey(
-        "applications.Application",
+        "applications.ProgramApplication",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="payment_records",
-        verbose_name=_("application"),
+        verbose_name=_("program application"),
     )
     upload_row = models.ForeignKey(
         PaymentUploadRow,

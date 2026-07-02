@@ -1,4 +1,4 @@
-"""Student profile views -- dashboard, details, history sections, reapply."""
+"""Student profile views -- dashboard, details, history sections, apply."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods
 
 from apps.academics.models import Cohort, Course
+from apps.core.pagination import paginate
 from apps.assessments.constants import (
     GRADE_VISIBILITY_HIDDEN,
     GRADE_VISIBILITY_RELEASED,
@@ -20,7 +21,7 @@ from apps.entrance_exams.constants import ATTEMPT_STATUS_GRADED
 from .forms import StudentProfileUpdateForm
 from .policies import EDITABLE_FIELDS, RESTRICTED_FIELDS, get_field_label
 from .selectors import get_dashboard_data
-from .services import check_reapply_eligibility, submit_reapply_application
+from .services import check_apply_eligibility, submit_apply_application
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -94,7 +95,10 @@ def edit_profile(request: HttpRequest) -> HttpResponse:
 def application_history(request: HttpRequest) -> HttpResponse:
     """Show all applications submitted by the student."""
     profile = _get_profile_or_404(request.user)
-    data = get_dashboard_data(profile, sections=["applications", "reapply"])
+    applications = profile.program_applications.select_related("reviewed_by", "cohort__diploma", "course").order_by("-created_at")
+    page_obj, pagination_qs = paginate(request, applications, per_page=15)
+    data = get_dashboard_data(profile, sections=["apply"])
+    data.update({"applications": page_obj, "pagination_qs": pagination_qs})
     return render(request, "students/profile/applications.html", data)
 
 
@@ -222,64 +226,124 @@ def notification_history(request: HttpRequest) -> HttpResponse:
 
 
 # ---------------------------------------------------------------------------
-# Reapply
+# Apply
 # ---------------------------------------------------------------------------
 
 
 @login_required
 @require_http_methods(["GET", "POST"])
-def reapply(request: HttpRequest) -> HttpResponse:
-    """Reapply flow -- create a new ProgramApplication if eligible."""
+def apply(request: HttpRequest) -> HttpResponse:
+    """Apply flow -- create a new ProgramApplication if eligible."""
 
     profile = _get_profile_or_404(request.user)
-    eligibility = check_reapply_eligibility(profile)
-    cohorts = list(Cohort.objects.filter(is_active=True).select_related("diploma").order_by("-start_date"))
-    courses = list(Course.objects.filter(is_active=True).order_by("title"))
+    selected_program_type = request.POST.get("program_type") if request.method == "POST" else request.GET.get("program_type", "diploma")
+    selected_target_id = request.POST.get("target_id") if request.method == "POST" else request.GET.get("target_id", "")
+    eligibility = check_apply_eligibility(profile)
+    now_cohorts = Cohort.objects.filter(is_active=True).select_related("diploma").order_by("-start_date")
+    cohorts = []
+    for cohort in now_cohorts:
+        check = check_apply_eligibility(profile, cohort=cohort)
+        if check["allowed"]:
+            cohorts.append(cohort)
+    courses = [course for course in Course.objects.filter(is_active=True).order_by("title") if check_apply_eligibility(profile, course=course)["allowed"]]
+    if selected_program_type not in {"diploma", "course"}:
+        selected_program_type = "course" if courses and not cohorts else "diploma"
 
     if request.method == "POST":
         program_type = request.POST.get("program_type")
         target_id = request.POST.get("target_id")
         if not program_type or not target_id:
             messages.error(request, _("Please select a program."))
-            return redirect("students:reapply")
+            return render(request, "students/profile/apply.html", {
+                "eligibility": eligibility,
+                "cohorts": cohorts,
+                "courses": courses,
+                "selected_program_type": selected_program_type,
+                "selected_target_id": selected_target_id,
+            })
 
         if program_type == "diploma":
             cohort = next((c for c in cohorts if str(c.pk) == target_id), None)
             if not cohort:
                 messages.error(request, _("Invalid cohort selected."))
-                return redirect("students:reapply")
-            cohort_eligibility = check_reapply_eligibility(profile, cohort=cohort)
+                return render(request, "students/profile/apply.html", {
+                    "eligibility": eligibility,
+                    "cohorts": cohorts,
+                    "courses": courses,
+                    "selected_program_type": program_type,
+                    "selected_target_id": target_id,
+                })
+            cohort_eligibility = check_apply_eligibility(profile, cohort=cohort)
             if not cohort_eligibility["allowed"]:
-                messages.error(request, cohort_eligibility["reason"] or _("You are not eligible to reapply."))
-                return redirect("students:reapply")
+                messages.error(request, cohort_eligibility["reason"] or _("You are not eligible to apply."))
+                return render(request, "students/profile/apply.html", {
+                    "eligibility": eligibility,
+                    "cohorts": cohorts,
+                    "courses": courses,
+                    "selected_program_type": program_type,
+                    "selected_target_id": target_id,
+                })
             try:
-                submit_reapply_application(profile, cohort=cohort)
+                submit_apply_application(profile, cohort=cohort)
             except ValueError as exc:
                 messages.error(request, str(exc))
-                return redirect("students:reapply")
+                return render(request, "students/profile/apply.html", {
+                    "eligibility": eligibility,
+                    "cohorts": cohorts,
+                    "courses": courses,
+                    "selected_program_type": program_type,
+                    "selected_target_id": target_id,
+                })
         elif program_type == "course":
-            course = next((c for c in courses if str(c.pk) == target_id), None)
+            course_id = target_id.split("_", 1)[1] if target_id.startswith("course_") else target_id
+            course = next((c for c in courses if str(c.pk) == course_id), None)
             if not course:
                 messages.error(request, _("Invalid course selected."))
-                return redirect("students:reapply")
-            course_eligibility = check_reapply_eligibility(profile, course=course)
+                return render(request, "students/profile/apply.html", {
+                    "eligibility": eligibility,
+                    "cohorts": cohorts,
+                    "courses": courses,
+                    "selected_program_type": program_type,
+                    "selected_target_id": target_id,
+                })
+            course_eligibility = check_apply_eligibility(profile, course=course)
             if not course_eligibility["allowed"]:
-                messages.error(request, course_eligibility["reason"] or _("You are not eligible to reapply."))
-                return redirect("students:reapply")
+                messages.error(request, course_eligibility["reason"] or _("You are not eligible to apply."))
+                return render(request, "students/profile/apply.html", {
+                    "eligibility": eligibility,
+                    "cohorts": cohorts,
+                    "courses": courses,
+                    "selected_program_type": program_type,
+                    "selected_target_id": target_id,
+                })
             try:
-                submit_reapply_application(profile, course=course)
+                submit_apply_application(profile, course=course)
             except ValueError as exc:
                 messages.error(request, str(exc))
-                return redirect("students:reapply")
+                return render(request, "students/profile/apply.html", {
+                    "eligibility": eligibility,
+                    "cohorts": cohorts,
+                    "courses": courses,
+                    "selected_program_type": program_type,
+                    "selected_target_id": target_id,
+                })
         else:
             messages.error(request, _("Invalid program type."))
-            return redirect("students:reapply")
+            return render(request, "students/profile/apply.html", {
+                "eligibility": eligibility,
+                "cohorts": cohorts,
+                "courses": courses,
+                "selected_program_type": program_type,
+                "selected_target_id": target_id,
+            })
 
         messages.success(request, _("Your application has been submitted."))
         return redirect("students:application_history")
 
-    return render(request, "students/profile/reapply.html", {
+    return render(request, "students/profile/apply.html", {
         "eligibility": eligibility,
         "cohorts": cohorts,
         "courses": courses,
+        "selected_program_type": selected_program_type,
+        "selected_target_id": selected_target_id,
     })

@@ -6,9 +6,9 @@
   <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Thank you" %}</p>
   <h1 class="mt-2 text-3xl font-bold tracking-tight font-display">{% trans "Your registration was received" %}</h1>
   {% if email %}
-    <p class="mt-3 text-slate-600 dark:text-slate-300">{% blocktrans %}We will contact <strong>{{ email }}</strong> with the next steps.{% endblocktrans %}</p>
+    <p class="mt-3 text-slate-600 dark:text-slate-300">{% blocktrans %}Check <strong>{{ email }}</strong> for the activation link and initial login details.{% endblocktrans %}</p>
   {% else %}
-    <p class="mt-3 text-slate-600 dark:text-slate-300">{% trans "We will contact you with the next steps." %}</p>
+    <p class="mt-3 text-slate-600 dark:text-slate-300">{% trans "Check your email for the activation link and initial login details." %}</p>
   {% endif %}
   {% url 'core:landing' as home_url %}
   {% include "partials/_button.html" with href=home_url label=_("Back to home") variant="primary" class="mt-6" %}

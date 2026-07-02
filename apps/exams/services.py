@@ -13,7 +13,7 @@ from apps.exams.constants import (
     QUESTION_TYPE_ESSAY,
     QUESTION_TYPE_MCQ,
 )
-from apps.exams.models import Answer, Assignment, Choice, Exam
+from apps.exams.models import Answer, Assignment, Choice, Exam, ExamSnapshot
 
 
 @dataclass
@@ -160,4 +160,84 @@ def get_exam_with_questions(exam_id: int) -> Exam | None:
     )
 
 
+# ---------------------------------------------------------------------------
+# Snapshot save & finalization
+# ---------------------------------------------------------------------------
 
+
+def save_snapshot(assignment: Assignment, question_id: int, choice_id: int | None = None, essay_text: str = "") -> None:
+    """Save or update a single answer snapshot for the given assignment/question."""
+    question = assignment.exam.questions.filter(id=question_id).first()
+    if not question:
+        return
+    ExamSnapshot.objects.update_or_create(
+        assignment=assignment,
+        question=question,
+        defaults={
+            "selected_choice_id": choice_id,
+            "essay_text": essay_text,
+        },
+    )
+
+
+def finalize_assignment_from_snapshots(assignment: Assignment) -> Assignment:
+    """Rebuild answers from the latest snapshots and submit the assignment.
+
+    Used when a student's browser fails to submit (timeout, crash, etc.)
+    and an admin triggers recovery. Bypasses deadline checks.
+    """
+    if assignment.status != ASSIGNMENT_STATUS_IN_PROGRESS:
+        return assignment
+    snapshots = ExamSnapshot.objects.filter(assignment=assignment).select_related("question")
+    if not snapshots:
+        assignment.status = ASSIGNMENT_STATUS_COMPLETED
+        assignment.submitted_at = timezone.now()
+        assignment.save(update_fields=["status", "submitted_at"])
+        return assignment
+    questions = {q.id: q for q in assignment.exam.questions.all()}
+    with transaction.atomic():
+        for snap in snapshots:
+            question = questions.get(snap.question_id)
+            if not question:
+                continue
+            if question.question_type == QUESTION_TYPE_MCQ:
+                choice = Choice.objects.filter(
+                    id=snap.selected_choice_id, question=question,
+                ).first() if snap.selected_choice_id else None
+                score = question.points if (choice and choice.is_correct) else Decimal("0.00")
+                Answer.objects.update_or_create(
+                    assignment=assignment,
+                    question=question,
+                    defaults={
+                        "selected_choice": choice,
+                        "score": score,
+                    },
+                )
+            else:
+                Answer.objects.update_or_create(
+                    assignment=assignment,
+                    question=question,
+                    defaults={
+                        "essay_text": snap.essay_text,
+                    },
+                )
+        assignment.status = ASSIGNMENT_STATUS_COMPLETED
+        assignment.submitted_at = timezone.now()
+        assignment.score = grade_mcq_assignment(assignment)
+        assignment.save(update_fields=["status", "submitted_at", "score"])
+    return assignment
+
+
+def finalize_all_pending_for_exam(exam: Exam) -> int:
+    """Finalize all in-progress assignments for an exam using their snapshots.
+
+    Returns the count of finalized assignments.
+    """
+    assignments = Assignment.objects.filter(
+        exam=exam, status=ASSIGNMENT_STATUS_IN_PROGRESS,
+    )
+    count = 0
+    for a in assignments:
+        finalize_assignment_from_snapshots(a)
+        count += 1
+    return count

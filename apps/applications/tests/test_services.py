@@ -5,28 +5,13 @@ from __future__ import annotations
 from datetime import date
 
 from django.contrib.auth.hashers import check_password
-from django.contrib.auth.models import Group
 from django.test import TestCase
 
-from apps.accounts.constants import GROUP_ADMIN
 from apps.accounts.models import User
-from apps.applications.constants import (
-    APP_STATUS_APPROVED,
-    APP_STATUS_ACTIVATED,
-    APP_STATUS_PENDING,
-    APP_STATUS_REJECTED,
-    APP_STATUS_UNDER_REVIEW,
-)
-from apps.applications.models import Application, ApplicationDecision
 from apps.applications.services import (
     RegistrationData,
-    activate_application,
-    approve_application,
     find_duplicate,
-    mark_review_application,
     normalize_phone,
-    reject_application,
-    revert_application_decision,
     submit_registration,
 )
 from apps.students.constants import EDUCATION_BACHELOR, GENDER_MALE
@@ -108,20 +93,18 @@ class FindDuplicateTests(TestCase):
 
 class SubmitRegistrationTests(TestCase):
     def test_first_submission_creates_inactive_user_with_phone_password(self) -> None:
-        profile, application, _ = submit_registration(make_data(phone="01000000000"))
+        profile, _application = submit_registration(make_data(phone="01000000000"))
         user = profile.user
         self.assertFalse(user.is_active)
         self.assertTrue(user.groups.filter(name="Student").exists())
         self.assertTrue(check_password("1000000000", user.password))
-        self.assertEqual(application.status, APP_STATUS_PENDING)
-        self.assertEqual(Application.objects.count(), 1)
 
     def test_normalizes_phone_before_setting_password(self) -> None:
-        profile, _, _ = submit_registration(make_data(phone="+201000000000"))
+        profile, _ = submit_registration(make_data(phone="+201000000000"))
         self.assertTrue(check_password("1000000000", profile.user.password))
 
     def test_stores_original_phone_on_profile(self) -> None:
-        profile, _, _ = submit_registration(make_data(phone="+201000000000"))
+        profile, _ = submit_registration(make_data(phone="+201000000000"))
         self.assertEqual(profile.phone, "+201000000000")
 
     def test_duplicate_email_raises_value_error(self) -> None:
@@ -165,96 +148,3 @@ class SubmitRegistrationTests(TestCase):
             )
         self.assertEqual(User.objects.count(), 1)
         self.assertEqual(StudentProfile.objects.count(), 1)
-        self.assertEqual(Application.objects.count(), 1)
-
-
-class DecisionServiceTests(TestCase):
-    def setUp(self) -> None:
-        Group.objects.get_or_create(name=GROUP_ADMIN)
-        self.admin = User.objects.create_user(email="admin@test.com", password="x", is_staff=True)
-        self.admin.groups.add(Group.objects.get(name=GROUP_ADMIN))
-        user = User.objects.create_user(email="s@test.com", password="x")
-        self.profile = StudentProfile.objects.create(
-            user=user,
-            full_name="S",
-            date_of_birth=date(2000, 1, 1),
-            gender=GENDER_MALE,
-            address="X",
-            phone="01000000000",
-            national_id="29001010100011",
-            education=EDUCATION_BACHELOR,
-        )
-        self.application = Application.objects.create(student=self.profile)
-
-    def test_approve_creates_decision_and_audit(self) -> None:
-        approve_application(self.application, self.admin, notes="ok")
-        self.application.refresh_from_db()
-        self.assertEqual(self.application.status, APP_STATUS_APPROVED)
-        decision = ApplicationDecision.objects.filter(target_type="application").first()
-        self.assertIsNotNone(decision)
-        self.assertEqual(decision.action, "approve")
-        self.assertEqual(decision.old_status, APP_STATUS_PENDING)
-        self.assertEqual(decision.new_status, APP_STATUS_APPROVED)
-        self.assertEqual(decision.actor, self.admin)
-
-    def test_reject_creates_decision_and_audit(self) -> None:
-        reject_application(self.application, self.admin, reason="incomplete")
-        self.application.refresh_from_db()
-        self.assertEqual(self.application.status, APP_STATUS_REJECTED)
-        self.assertEqual(self.application.rejection_reason, "incomplete")
-        decision = ApplicationDecision.objects.filter(target_type="application").first()
-        self.assertEqual(decision.action, "reject")
-
-    def test_mark_review_creates_decision(self) -> None:
-        mark_review_application(self.application, self.admin)
-        self.application.refresh_from_db()
-        self.assertEqual(self.application.status, APP_STATUS_UNDER_REVIEW)
-        self.assertEqual(ApplicationDecision.objects.count(), 1)
-
-    def test_activate_creates_decision_and_activates_user(self) -> None:
-        approve_application(self.application, self.admin)
-        activate_application(self.application, self.admin)
-        self.application.refresh_from_db()
-        self.assertEqual(self.application.status, APP_STATUS_ACTIVATED)
-        self.assertTrue(self.profile.user.groups.filter(name="Student").exists())
-        decisions = ApplicationDecision.objects.filter(target_type="application").order_by("-pk")
-        self.assertEqual(decisions.count(), 2)
-        self.assertEqual(decisions[0].action, "activate")
-
-    def test_revert_approve_restores_previous_status(self) -> None:
-        approve_application(self.application, self.admin)
-        revert_application_decision(self.application, self.admin, reason="mistake")
-        self.application.refresh_from_db()
-        self.assertEqual(self.application.status, APP_STATUS_PENDING)
-        decisions = ApplicationDecision.objects.filter(target_type="application").order_by("-pk")
-        self.assertEqual(decisions.count(), 2)
-        last = decisions[0]
-        self.assertEqual(last.action, "revert")
-        self.assertEqual(last.old_status, APP_STATUS_APPROVED)
-        self.assertEqual(last.new_status, APP_STATUS_PENDING)
-        self.assertEqual(last.reason, "mistake")
-
-    def test_revert_reject_restores_previous_status(self) -> None:
-        reject_application(self.application, self.admin, reason="incomplete")
-        revert_application_decision(self.application, self.admin, reason="reconsidered")
-        self.application.refresh_from_db()
-        self.assertEqual(self.application.status, APP_STATUS_PENDING)
-
-    def test_revert_raises_error_when_no_decision(self) -> None:
-        with self.assertRaises(ValueError):
-            revert_application_decision(self.application, self.admin, reason="x")
-
-    def test_revert_approve_under_review(self) -> None:
-        self.application.mark_under_review(self.admin)
-        approve_application(self.application, self.admin)
-        revert_application_decision(self.application, self.admin, reason="mistake")
-        self.application.refresh_from_db()
-        self.assertEqual(self.application.status, APP_STATUS_UNDER_REVIEW)
-
-    def test_revert_not_allowed_activated(self) -> None:
-        self.application.approve(self.admin)
-        activate_application(self.application, self.admin)
-        self.application.refresh_from_db()
-        self.assertEqual(self.application.status, APP_STATUS_ACTIVATED)
-        with self.assertRaises(ValueError):
-            revert_application_decision(self.application, self.admin, reason="too late")

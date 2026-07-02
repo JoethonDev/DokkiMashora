@@ -13,7 +13,6 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.academics.models import CourseEnrollment, DiplomaEnrollment
-from apps.applications.models import Application
 from apps.students.models import StudentProfile
 
 from .constants import (
@@ -133,12 +132,13 @@ def match_student(row: dict[str, str]) -> tuple[StudentProfile | None, str, str]
     return match, method, ""
 
 
-def _lookup_application(data: dict, student: StudentProfile) -> Application | None:
+def _lookup_application(data: dict, student: StudentProfile):
     app_id = data.get("application_id", "").strip()
     if not app_id:
         return None
     try:
-        return Application.objects.filter(id=int(app_id), student=student).first()
+        from apps.applications.models import ProgramApplication
+        return ProgramApplication.objects.filter(id=int(app_id), student=student).first()
     except (ValueError, TypeError):
         return None
 

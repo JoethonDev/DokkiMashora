@@ -51,4 +51,19 @@ urlpatterns = [
         views.admin_grade_assignment,
         name="admin_grade_assignment",
     ),
+    path(
+        "manage/<int:exam_id>/emails/",
+        views.admin_exam_emails,
+        name="admin_exam_emails",
+    ),
+    path(
+        "manage/<int:exam_id>/snapshot/",
+        views.save_exam_snapshot,
+        name="save_exam_snapshot",
+    ),
+    path(
+        "manage/<int:exam_id>/finalize-pending/",
+        views.admin_finalize_pending,
+        name="admin_finalize_pending",
+    ),
 ]

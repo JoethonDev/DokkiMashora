@@ -19,8 +19,14 @@ from apps.academics.models import (
     DiplomaEnrollment,
     Semester,
 )
-from apps.applications.constants import APP_STATUS_APPROVED, APP_STATUS_PENDING, APP_STATUS_REJECTED
-from apps.applications.models import Application
+from apps.applications.constants import (
+    PROGRAM_APP_STATUS_ACCEPTED,
+    PROGRAM_APP_STATUS_REJECTED,
+    PROGRAM_APP_STATUS_SUBMITTED,
+    PROGRAM_TYPE_COURSE,
+    PROGRAM_TYPE_DIPLOMA,
+)
+from apps.applications.models import ProgramApplication
 from apps.assessments.constants import (
     ASSESSMENT_TYPE_HOMEWORK,
     ASSESSMENT_TYPE_QUIZ,
@@ -108,24 +114,32 @@ class Command(BaseCommand):
         )
         self._report("Student profile", _)
 
-        # ── Applications ──────────────────────────────────────────────
-        app_pending, _ = Application.objects.get_or_create(
-            student=profile, status=APP_STATUS_PENDING,
-            defaults={"cohort": cohort},
+        # ── Program applications ──────────────────────────────────────
+        _, created = ProgramApplication.objects.get_or_create(
+            student=profile,
+            program_type=PROGRAM_TYPE_DIPLOMA,
+            cohort=cohort,
+            status=PROGRAM_APP_STATUS_SUBMITTED,
         )
-        self._report("Pending application", _)
+        self._report("Pending program application", created)
 
-        app_accepted, _ = Application.objects.get_or_create(
-            student=profile, status=APP_STATUS_APPROVED,
-            defaults={"cohort": cohort, "reviewed_by": admin, "activated_at": timezone.now()},
+        _, created = ProgramApplication.objects.get_or_create(
+            student=profile,
+            program_type=PROGRAM_TYPE_COURSE,
+            course=course_ot,
+            status=PROGRAM_APP_STATUS_ACCEPTED,
+            defaults={"reviewed_by": admin, "reviewed_at": timezone.now()},
         )
-        self._report("Accepted application", _)
+        self._report("Accepted program application", created)
 
-        Application.objects.get_or_create(
-            student=profile, status=APP_STATUS_REJECTED,
-            defaults={"cohort": cohort, "reviewed_by": admin, "rejection_reason": "Incomplete documents"},
+        _, created = ProgramApplication.objects.get_or_create(
+            student=profile,
+            program_type=PROGRAM_TYPE_COURSE,
+            course=course_nt,
+            status=PROGRAM_APP_STATUS_REJECTED,
+            defaults={"reviewed_by": admin, "rejection_reason": "Incomplete documents", "reviewed_at": timezone.now()},
         )
-        self._report("Rejected application", _)
+        self._report("Rejected program application", created)
 
         # ── Enrollments ───────────────────────────────────────────────
 

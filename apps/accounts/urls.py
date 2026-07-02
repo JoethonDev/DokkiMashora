@@ -40,4 +40,7 @@ urlpatterns = [
     path("manage/students/import/", views.admin_student_import, name="admin_student_import"),
     path("manage/students/import/<int:upload_id>/", views.admin_student_import_detail, name="admin_student_import_detail"),
     path("manage/students/import/<int:upload_id>/confirm/", views.admin_student_import_confirm, name="admin_student_import_confirm"),
+    # Account activation
+    path("activate/<uidb64>/<token>/", views.activate_account, name="activate"),
+    path("resend-activation/", views.resend_activation_email, name="resend_activation"),
 ]

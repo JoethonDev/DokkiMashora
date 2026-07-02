@@ -15,6 +15,46 @@ from apps.exams.constants import (
 )
 
 
+class ExamSnapshot(TimeStampedModel):
+    """Periodic answer snapshot for auto-recovery when student fails to submit."""
+    assignment = models.ForeignKey(
+        "Assignment",
+        on_delete=models.CASCADE,
+        related_name="snapshots",
+        verbose_name=_("assignment"),
+    )
+    question = models.ForeignKey(
+        "Question",
+        on_delete=models.CASCADE,
+        related_name="snapshots",
+        verbose_name=_("question"),
+    )
+    selected_choice = models.ForeignKey(
+        "Choice",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="snapshots",
+        verbose_name=_("selected choice"),
+    )
+    essay_text = models.TextField(_("essay text"), blank=True)
+    snapshot_at = models.DateTimeField(_("snapshot at"), auto_now=True)
+
+    class Meta:
+        verbose_name = _("exam snapshot")
+        verbose_name_plural = _("exam snapshots")
+        ordering = ("question__order",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("assignment", "question"),
+                name="unique_snapshot_per_assignment_question",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Snapshot Q{self.question.order} for {self.assignment}"
+
+
 class Exam(TimeStampedModel):
     title = models.CharField(_("title"), max_length=255)
     description = models.TextField(_("description"), blank=True)
@@ -239,3 +279,33 @@ class Answer(TimeStampedModel):
 
     def __str__(self):
         return f"Answer to Q{self.question.order} by {self.assignment.student}"
+
+
+class EmailLog(TimeStampedModel):
+    """Tracks exam invitation/notification emails."""
+    exam = models.ForeignKey(
+        Exam, on_delete=models.CASCADE,
+        related_name="email_logs", verbose_name=_("exam"),
+    )
+    assignment = models.ForeignKey(
+        Assignment, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="email_logs",
+        verbose_name=_("assignment"),
+    )
+    recipient = models.EmailField(_("recipient"))
+    template_slug = models.CharField(_("template"), max_length=64)
+    sent_at = models.DateTimeField(_("sent at"), auto_now_add=True)
+    sent_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="exam_email_logs",
+        verbose_name=_("sent by"),
+    )
+    status = models.CharField(_("status"), max_length=8, default="sent")
+
+    class Meta:
+        verbose_name = _("exam email log")
+        verbose_name_plural = _("exam email logs")
+        ordering = ("-sent_at",)
+
+    def __str__(self):
+        return f"{self.recipient} — {self.template_slug} ({self.status})"

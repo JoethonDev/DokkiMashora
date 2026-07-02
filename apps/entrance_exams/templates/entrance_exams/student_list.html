@@ -17,7 +17,7 @@
             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ exam.cohort }}</p>
           </div>
           <div class="shrink-0">
-            <a href="{% url 'entrance_exams:exam_instructions' exam.id %}" class="inline-flex items-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 transition">{% trans "Start" %}</a>
+            <a href="{% url 'entrance_exams:exam_access_token' exam.access_token %}" class="inline-flex items-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 transition">{% trans "Start" %}</a>
           </div>
         </div>
       {% endfor %}
@@ -34,7 +34,7 @@
             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ a.exam.cohort }}</p>
           </div>
           <div class="shrink-0">
-            <a href="{% url 'entrance_exams:exam_instructions' a.exam.id %}" class="inline-flex items-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 transition">{% trans "View" %}</a>
+            <a href="{% url 'entrance_exams:exam_access_token' a.exam.access_token %}" class="inline-flex items-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 transition">{% trans "View" %}</a>
           </div>
         </div>
       {% endfor %}

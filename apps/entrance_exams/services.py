@@ -17,7 +17,11 @@ from apps.applications.constants import (
 )
 from apps.audit.constants import ACTION_APPLICATION_APPROVED, ACTION_APPLICATION_REJECTED
 from apps.audit.services import record_audit_event
-from apps.communications.email_message import EmailMessage
+from apps.communications.constants import (
+    TEMPLATE_ENTRANCE_EXAM_FAIL,
+    TEMPLATE_ENTRANCE_EXAM_PASS,
+)
+from apps.communications.services import send_templated_email
 from apps.core.permissions import entrance_staff_scope_filter
 
 from .constants import (
@@ -29,7 +33,7 @@ from .constants import (
     RESULT_FAIL,
     RESULT_PASS,
 )
-from .models import EntranceAnswer, EntranceAttempt, EntranceChoice, EntranceExam
+from .models import EntranceAnswer, EntranceAttempt, EntranceChoice, EntranceExam, EntranceSnapshot
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
@@ -161,7 +165,8 @@ def _recompute_attempt_grade(attempt: EntranceAttempt, actor: User | None = None
     attempt.score = total
     if all_graded:
         exam = attempt.exam
-        attempt.result = _compute_result(total, exam.passing_score)
+        percentage = (total / exam.total_score * 100) if exam.total_score else Decimal("0.00")
+        attempt.result = RESULT_PASS if percentage >= exam.pass_percentage else RESULT_FAIL
         attempt.status = ATTEMPT_STATUS_GRADED
         attempt.graded_at = timezone.now()
         attempt.save(update_fields=["score", "status", "graded_at", "result"])
@@ -170,8 +175,9 @@ def _recompute_attempt_grade(attempt: EntranceAttempt, actor: User | None = None
         attempt.save(update_fields=["score"])
 
 
-def _compute_result(score: Decimal, passing_score: Decimal) -> str:
-    return RESULT_PASS if score >= passing_score else RESULT_FAIL
+def _compute_result(score: Decimal, total_score: Decimal, pass_percentage: Decimal) -> str:
+    percentage = (score / total_score * 100) if total_score else Decimal("0.00")
+    return RESULT_PASS if percentage >= pass_percentage else RESULT_FAIL
 
 
 def _update_program_application_from_result(
@@ -203,24 +209,19 @@ def _update_program_application_from_result(
 
     email_to = attempt.student.user.email
     exam_title = attempt.exam.title
+    cohort_name = attempt.exam.cohort.name or ""
     if result == RESULT_PASS:
-        subject = _("Entrance exam passed — %(title)s") % {"title": exam_title}
-        body = _(
-            "Congratulations! You have passed the entrance exam '%(title)s'. "
-            "Your application has been accepted."
-        ) % {"title": exam_title}
+        slug = TEMPLATE_ENTRANCE_EXAM_PASS
     else:
-        subject = _("Entrance exam result — %(title)s") % {"title": exam_title}
-        body = _(
-            "You did not pass the entrance exam '%(title)s'. "
-            "Your application has been rejected."
-        ) % {"title": exam_title}
-    EmailMessage.objects.create(
-        template_slug="entrance_exam_result",
-        to_email=email_to,
-        subject=subject,
-        body=body,
-    )
+        slug = TEMPLATE_ENTRANCE_EXAM_FAIL
+    context = {
+        "full_name": attempt.student.full_name or "",
+        "exam_title": exam_title,
+        "cohort_name": cohort_name,
+    }
+    if result == RESULT_FAIL:
+        context["rejection_reason"] = attempt.program_application.rejection_reason or ""
+    send_templated_email(slug=slug, to_email=email_to, context=context)
 
 
 # ---------------------------------------------------------------------------
@@ -289,3 +290,86 @@ def student_has_attempt(student: StudentProfile, exam: EntranceExam) -> Entrance
     ).exclude(
         status=ATTEMPT_STATUS_ASSIGNED,
     ).first()
+
+
+# ---------------------------------------------------------------------------
+# Snapshot save & finalization
+# ---------------------------------------------------------------------------
+
+
+def save_snapshot(attempt: EntranceAttempt, question_id: int, choice_id: int | None = None, written_text: str = "") -> None:
+    """Save or update a single answer snapshot for the given attempt/question."""
+    question = attempt.exam.questions.filter(id=question_id).first()
+    if not question:
+        return
+    snapshot, _ = EntranceSnapshot.objects.update_or_create(
+        attempt=attempt,
+        question=question,
+        defaults={
+            "selected_choice_id": choice_id,
+            "written_text": written_text,
+        },
+    )
+
+
+def finalize_attempt_from_snapshots(attempt: EntranceAttempt) -> EntranceAttempt:
+    """Rebuild answers from the latest snapshots and submit the attempt.
+
+    Used when a student's browser fails to submit (timeout, crash, etc.)
+    and an admin triggers recovery. Bypasses deadline checks.
+    """
+    if attempt.status != ATTEMPT_STATUS_IN_PROGRESS:
+        return attempt
+    snapshots = EntranceSnapshot.objects.filter(attempt=attempt).select_related("question")
+    if not snapshots:
+        attempt.status = ATTEMPT_STATUS_COMPLETED
+        attempt.submitted_at = timezone.now()
+        attempt.save(update_fields=["status", "submitted_at"])
+        return attempt
+    questions = {q.id: q for q in attempt.exam.questions.all()}
+    with transaction.atomic():
+        for snap in snapshots:
+            question = questions.get(snap.question_id)
+            if not question:
+                continue
+            if question.question_type == QUESTION_TYPE_MCQ:
+                choice = EntranceChoice.objects.filter(
+                    id=snap.selected_choice_id, question=question,
+                ).first() if snap.selected_choice_id else None
+                score = choice.score if choice else Decimal("0.00")
+                EntranceAnswer.objects.update_or_create(
+                    attempt=attempt,
+                    question=question,
+                    defaults={
+                        "selected_choice": choice,
+                        "score": score,
+                    },
+                )
+            else:
+                EntranceAnswer.objects.update_or_create(
+                    attempt=attempt,
+                    question=question,
+                    defaults={
+                        "written_text": snap.written_text,
+                    },
+                )
+        attempt.status = ATTEMPT_STATUS_COMPLETED
+        attempt.submitted_at = timezone.now()
+        attempt.save(update_fields=["status", "submitted_at"])
+        _recompute_attempt_grade(attempt)
+    return attempt
+
+
+def finalize_all_pending_for_exam(exam: EntranceExam) -> int:
+    """Finalize all in-progress attempts for an exam using their snapshots.
+
+    Returns the count of finalized attempts.
+    """
+    attempts = EntranceAttempt.objects.filter(
+        exam=exam, status=ATTEMPT_STATUS_IN_PROGRESS,
+    )
+    count = 0
+    for attempt in attempts:
+        finalize_attempt_from_snapshots(attempt)
+        count += 1
+    return count

@@ -15,7 +15,7 @@
       <dd class="text-slate-900 dark:text-slate-100 break-words">{{ attempt.get_status_display }}</dd>
       {% if attempt.score is not None %}
         <dt class="text-slate-500 dark:text-slate-400">{% trans "Current score" %}</dt>
-        <dd class="text-slate-900 dark:text-slate-100 break-words tabular-nums">{{ attempt.score }}</dd>
+        <dd class="text-slate-900 dark:text-slate-100 break-words tabular-nums">{{ attempt.score }} / {{ attempt.exam.total_score }}</dd>
       {% endif %}
     </dl>
   </div>
@@ -28,7 +28,6 @@
           <h3 class="text-base font-semibold text-slate-900 dark:text-slate-100">
             {% trans "Question" %} {{ forloop.counter }}
           </h3>
-          {% include "partials/_badge.html" with label=question.points|stringformat:"s"|add:" pts" tone="neutral" %}
         </div>
         <p class="text-base leading-relaxed text-slate-800 dark:text-slate-200 max-w-prose">{{ question.text }}</p>
         {% if question.rubric %}
@@ -56,7 +55,7 @@
             {% endfor %}
             {% if answer and answer.score is not None %}
               <p class="text-sm text-slate-500 dark:text-slate-400">
-                {% trans "Auto-graded" %}: {{ answer.score }} / {{ question.points }}
+                {% trans "Auto-graded" %}: {{ answer.score }}
               </p>
             {% endif %}
           </div>
@@ -77,11 +76,11 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">
-                  {% trans "Score" %} ({% trans "max" %}: {{ question.points }})
+                  {% trans "Score" %}
                 </label>
                 <input type="number" name="score_{{ question.id }}"
                        value="{{ answer.score|default:'' }}"
-                       step="0.01" min="0" max="{{ question.points }}"
+                       step="0.01" min="0"
                        class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900 dark:text-slate-100">
               </div>
               <div>

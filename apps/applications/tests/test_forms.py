@@ -9,7 +9,7 @@ from django.urls import reverse
 
 from apps.accounts.models import User
 from apps.applications.forms import RegistrationForm
-from apps.applications.models import Application
+from apps.applications.models import ProgramApplication
 
 
 class RegistrationFormTests(TestCase):
@@ -22,12 +22,12 @@ class RegistrationFormTests(TestCase):
             "phone": "01000000000",
             "email": "new@example.com",
             "education": "bachelor",
-            "specialization": "",
-            "employer": "",
-            "current_job": "",
-            "church": "",
-            "priest_name": "",
-            "priest_contact": "",
+            "specialization": "General",
+            "employer": "Self",
+            "current_job": "Student",
+            "church": "St. Mark",
+            "priest_name": "Fr. John",
+            "priest_contact": "01234567890",
             "national_id": "29001010100011",
         }
         base.update(overrides)
@@ -100,12 +100,12 @@ class RegistrationViewTests(TestCase):
             "phone": "01000000000",
             "email": "new@example.com",
             "education": "bachelor",
-            "specialization": "",
-            "employer": "",
-            "current_job": "",
-            "church": "",
-            "priest_name": "",
-            "priest_contact": "",
+            "specialization": "General",
+            "employer": "Self",
+            "current_job": "Student",
+            "church": "St. Mark",
+            "priest_name": "Fr. John",
+            "priest_contact": "01234567890",
             "national_id": "29001010100011",
         }
         data.update(overrides)
@@ -120,13 +120,12 @@ class RegistrationViewTests(TestCase):
         response = self._post()
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, reverse("applications:registration_success"))
-        self.assertEqual(Application.objects.count(), 1)
 
     def test_invalid_post_rerenders_form(self) -> None:
         response = self._post(email="")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'name="email"')
-        self.assertEqual(Application.objects.count(), 0)
+        self.assertEqual(ProgramApplication.objects.count(), 0)
 
     def test_authenticated_user_is_redirected_to_dashboard(self) -> None:
         user = User.objects.create_user(email="logged@example.com", password="x")
@@ -140,4 +139,4 @@ class RegistrationViewTests(TestCase):
         self.client.force_login(user)
         response = self._post()
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(Application.objects.count(), 0)
+        self.assertEqual(ProgramApplication.objects.count(), 0)

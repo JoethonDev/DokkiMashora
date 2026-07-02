@@ -1,141 +1,206 @@
 {% extends "base.html" %}
 {% load i18n %}
 {% load ui_tags %}
+{% load exam_filters %}
 
-{% block title %}{{ exam.title }} - {% trans "Cohort Emails" %}{% endblock %}
+{% block title %}{{ exam.title }} - {% trans "Emails" %}{% endblock %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10" x-data="{ tab: '{{ tab }}' }">
   <nav class="mb-4">
     <a href="{% url 'entrance_exams:admin_detail' exam.id %}" class="text-sm text-brand-600 hover:text-brand-700">&larr; {% trans "Back to exam" %}</a>
   </nav>
-  {% include "partials/_page.html" with title=exam.title %}
+  <h1 class="text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ exam.title }}</h1>
+  <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ exam.cohort.diploma.title }} — {{ exam.cohort }}</p>
 
-  <div class="mt-6 space-y-8">
+  <div class="mt-6 mb-6 border-b border-slate-200 dark:border-slate-700">
+    <nav class="flex gap-6 text-sm font-medium" role="tablist">
+      <button type="button" role="tab"
+              @click="tab = 'invitation'; window.location.href = '?tab=invitation'"
+              :class="tab === 'invitation' ? 'border-b-2 border-brand-600 text-brand-600' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
+              class="pb-2 -mb-px transition">
+        {% trans "Exam Invitation" %}
+      </button>
+      <button type="button" role="tab"
+              @click="tab = 'results'; window.location.href = '?tab=results'"
+              :class="tab === 'results' ? 'border-b-2 border-brand-600 text-brand-600' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
+              class="pb-2 -mb-px transition">
+        {% trans "Acceptance / Rejection" %}
+      </button>
+      <button type="button" role="tab"
+              @click="tab = 'history'; window.location.href = '?tab=history'"
+              :class="tab === 'history' ? 'border-b-2 border-brand-600 text-brand-600' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
+              class="pb-2 -mb-px transition">
+        {% trans "Sent History" %}
+      </button>
+    </nav>
+  </div>
+
+  <div x-show="tab === 'invitation'" x-cloak id="invitation-panel" role="tabpanel">
     <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
-      <h2 class="text-lg font-semibold mb-1">{% trans "Entrance Exam Invitations" %}</h2>
+      <h2 class="text-lg font-semibold">{% trans "Send Exam Invitations" %}</h2>
       <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">
-        {% trans "Send invitation emails to applications with status" %}
-        <strong>{% trans "Invited to Entrance Assessment" %}</strong>
-        {% trans "in cohort" %} <strong>{{ exam.cohort }}</strong>.
-        {% trans "Already-sent applications are excluded." %}
+        {% trans "Select students to send entrance exam invitation emails." %}
       </p>
-
-      {% if eligible_invitation %}
-        <div class="overflow-x-auto rounded-lg border mb-4">
-          <table class="min-w-[500px] w-full divide-y text-sm">
-            <thead class="bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300">
-              <tr>
-                <th class="px-3 py-2 text-start font-medium">{% trans "Student" %}</th>
-                <th class="px-3 py-2 text-start font-medium">{% trans "Email" %}</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
-              {% for app in eligible_invitation %}
-                <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                  <td class="px-3 py-2 text-slate-900 dark:text-slate-100">{{ app.student.full_name }}</td>
-                  <td class="px-3 py-2 text-slate-600 dark:text-slate-400">{{ app.student.user.email }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-        <form method="post" action="{% url 'entrance_exams:admin_cohort_email' exam.id %}">
+      {% if invitation_page %}
+        <form method="post">
           {% csrf_token %}
-          <input type="hidden" name="action" value="entrance_exam_invitation">
-          {% include "partials/_button.html" with label=_("Send Invitations")|add:" ("|add:eligible_invitation|length|stringformat:"s"|add:")" variant="primary" size="sm" type="submit" %}
+          <input type="hidden" name="tab" value="invitation">
+          <div class="overflow-x-auto rounded-lg border mb-4">
+            <table class="min-w-[500px] w-full divide-y text-sm">
+              <thead class="bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300">
+                <tr>
+                  <th class="px-3 py-2 w-10">
+                    <input type="checkbox" onchange="document.querySelectorAll('.invite-check').forEach(c => c.checked = this.checked)" class="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500">
+                  </th>
+                  <th class="px-3 py-2 text-start font-medium">{% trans "Student" %}</th>
+                  <th class="px-3 py-2 text-start font-medium">{% trans "Email" %}</th>
+                  <th class="px-3 py-2 text-start font-medium">{% trans "Status" %}</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+                {% for app in invitation_page %}
+                  <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                    <td class="px-3 py-2">
+                      <input type="checkbox" name="student_ids" value="{{ app.id }}" class="invite-check h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500">
+                    </td>
+                    <td class="px-3 py-2 text-slate-900 dark:text-slate-100">{{ app.student.full_name }}</td>
+                    <td class="px-3 py-2 text-slate-600 dark:text-slate-400">{{ app.student.user.email }}</td>
+                    <td class="px-3 py-2">{% include "partials/_badge.html" with label=app.get_status_display tone="info" %}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% include "partials/_pagination.html" with page_obj=invitation_page %}
+          <button type="submit" class="inline-flex items-center px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 transition">
+            {% trans "Send Invitations" %}
+          </button>
         </form>
       {% else %}
         {% include "partials/_empty_state.html" with message=_("No eligible applications for invitation.") %}
       {% endif %}
     </div>
+  </div>
 
+  <div x-show="tab === 'results'" x-cloak id="results-panel" role="tabpanel">
     <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
-      <h2 class="text-lg font-semibold mb-1">{% trans "Rejection Emails" %}</h2>
+      <h2 class="text-lg font-semibold">{% trans "Completed / Graded Attempts" %}</h2>
       <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">
-        {% trans "Send rejection emails to applications with status" %}
-        <strong>{% trans "Rejected" %}</strong>
-        {% trans "in cohort" %} <strong>{{ exam.cohort }}</strong>.
+        {% trans "Select students and send result emails. The email type (pass/fail) is auto-detected from each student's result." %}
       </p>
-
-      {% if eligible_rejection %}
-        <div class="overflow-x-auto rounded-lg border mb-4">
-          <table class="min-w-[500px] w-full divide-y text-sm">
-            <thead class="bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300">
-              <tr>
-                <th class="px-3 py-2 text-start font-medium">{% trans "Student" %}</th>
-                <th class="px-3 py-2 text-start font-medium">{% trans "Email" %}</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
-              {% for app in eligible_rejection %}
-                <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                  <td class="px-3 py-2 text-slate-900 dark:text-slate-100">{{ app.student.full_name }}</td>
-                  <td class="px-3 py-2 text-slate-600 dark:text-slate-400">{{ app.student.user.email }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-        <form method="post" action="{% url 'entrance_exams:admin_cohort_email' exam.id %}">
+      <div class="flex items-center gap-2 mb-4 text-sm">
+        <span class="text-slate-500">{% trans "Filter:" %}</span>
+        <a href="?tab=results" class="px-2 py-1 rounded {% if result_filter == '' %}bg-brand-100 text-brand-700 font-medium{% else %}text-slate-600 hover:text-slate-800{% endif %}">{% trans "All" %}</a>
+        <a href="?tab=results&result=pass" class="px-2 py-1 rounded {% if result_filter == 'pass' %}bg-green-100 text-green-700 font-medium{% else %}text-slate-600 hover:text-slate-800{% endif %}">{% trans "Pass" %}</a>
+        <a href="?tab=results&result=fail" class="px-2 py-1 rounded {% if result_filter == 'fail' %}bg-red-100 text-red-700 font-medium{% else %}text-slate-600 hover:text-slate-800{% endif %}">{% trans "Fail" %}</a>
+      </div>
+      {% if results_page %}
+        <form method="post">
           {% csrf_token %}
-          <input type="hidden" name="action" value="rejection">
-          {% include "partials/_button.html" with label=_("Send Rejections")|add:" ("|add:eligible_rejection|length|stringformat:"s"|add:")" variant="danger" size="sm" type="submit" %}
+          <input type="hidden" name="tab" value="results">
+          <div class="overflow-x-auto rounded-lg border mb-4">
+            <table class="min-w-[500px] w-full divide-y text-sm">
+              <thead class="bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300">
+                <tr>
+                  <th class="px-3 py-2 w-10">
+                    <input type="checkbox" onchange="document.querySelectorAll('.result-check').forEach(c => c.checked = this.checked)" class="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500">
+                  </th>
+                  <th class="px-3 py-2 text-start font-medium">{% trans "Student" %}</th>
+                  <th class="px-3 py-2 text-start font-medium">{% trans "Email" %}</th>
+                  <th class="px-3 py-2 text-start font-medium">{% trans "Result" %}</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+                {% for a in results_page %}
+                  <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                    <td class="px-3 py-2">
+                      <input type="checkbox" name="student_ids" value="{{ a.id }}" class="result-check h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500">
+                    </td>
+                    <td class="px-3 py-2 text-slate-900 dark:text-slate-100">{{ a.student.full_name }}</td>
+                    <td class="px-3 py-2 text-slate-600 dark:text-slate-400">{{ a.student.user.email }}</td>
+                    <td class="px-3 py-2">
+                      {% if a.result == "pass" %}
+                        {% include "partials/_badge.html" with label=_("Pass") tone="success" %}
+                      {% elif a.result == "fail" %}
+                        {% include "partials/_badge.html" with label=_("Fail") tone="danger" %}
+                      {% else %}
+                        <span class="text-slate-400">&mdash;</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% include "partials/_pagination.html" with page_obj=results_page %}
+          <button type="submit" class="inline-flex items-center px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 transition">
+            {% trans "Send Results" %}
+          </button>
         </form>
       {% else %}
-        {% include "partials/_empty_state.html" with message=_("No eligible applications for rejection.") %}
+        {% include "partials/_empty_state.html" with message=_("No completed or graded attempts yet.") %}
       {% endif %}
     </div>
   </div>
 
-  {% if sent_logs %}
+  <div x-show="tab === 'history'" x-cloak id="history-panel" role="tabpanel">
     <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
-      <h2 class="text-lg font-semibold mb-1">{% trans "Previously sent" %}</h2>
-      <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">{% trans "Recent emails sent for this cohort." %}</p>
-      <div class="overflow-x-auto rounded-lg border">
-        <table class="min-w-[500px] w-full divide-y text-sm">
-          <thead class="bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300">
-            <tr>
-              <th class="px-3 py-2 text-start font-medium">{% trans "Student" %}</th>
-              <th class="px-3 py-2 text-start font-medium">{% trans "Action" %}</th>
-              <th class="px-3 py-2 text-start font-medium">{% trans "Status" %}</th>
-              <th class="px-3 py-2 text-start font-medium">{% trans "Sent at" %}</th>
-              <th class="px-3 py-2 text-start font-medium">{% trans "Resend" %}</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
-            {% for log in sent_logs %}
-              <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                <td class="px-3 py-2 text-slate-900 dark:text-slate-100">{{ log.application.student.full_name }}</td>
-                <td class="px-3 py-2">
-                  {% if log.action == "entrance_exam_invitation" %}
-                    {% include "partials/_badge.html" with label=_("Invitation") tone="info" %}
-                  {% elif log.action == "rejection" %}
-                    {% include "partials/_badge.html" with label=_("Rejection") tone="danger" %}
-                  {% endif %}
-                </td>
-                <td class="px-3 py-2">
-                  {% if log.status == "sent" %}
-                    {% include "partials/_badge.html" with label=_("Sent") tone="success" %}
-                  {% else %}
-                    {% include "partials/_badge.html" with label=_("Failed") tone="danger" %}
-                  {% endif %}
-                </td>
-                <td class="px-3 py-2 text-slate-500 dark:text-slate-400 text-xs tabular-nums">{% dt log.sent_at %}</td>
-                <td class="px-3 py-2">
-                  {% if log.prog_app_id %}
-                    {% url 'entrance_exams:admin_app_email_resend' exam.id log.prog_app_id as resend_url %}
-                    <a href="{{ resend_url }}?action={{ log.action }}" class="text-brand-600 hover:text-brand-700 text-xs font-medium">{% trans "Resend" %}</a>
-                  {% else %}
-                    <span class="text-slate-400 text-xs">—</span>
-                  {% endif %}
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+      <h2 class="text-lg font-semibold">{% trans "Sent Emails" %}</h2>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">{% trans "All email logs for this cohort. Select logs to bulk-resend." %}</p>
+      {% if history_page %}
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="tab" value="history">
+          <div class="overflow-x-auto rounded-lg border mb-4">
+            <table class="min-w-[600px] w-full divide-y text-sm">
+              <thead class="bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300">
+                <tr>
+                  <th class="px-3 py-2 w-10">
+                    <input type="checkbox" onchange="document.querySelectorAll('.history-check').forEach(c => c.checked = this.checked)" class="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500">
+                  </th>
+                  <th class="px-3 py-2 text-start font-medium">{% trans "Student" %}</th>
+                  <th class="px-3 py-2 text-start font-medium">{% trans "Action" %}</th>
+                  <th class="px-3 py-2 text-start font-medium">{% trans "Status" %}</th>
+                  <th class="px-3 py-2 text-start font-medium">{% trans "Sent at" %}</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+                {% for log in history_page %}
+                  <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                    <td class="px-3 py-2">
+                      <input type="checkbox" name="log_ids" value="{{ log.id }}" class="history-check h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500">
+                    </td>
+                    <td class="px-3 py-2 text-slate-900 dark:text-slate-100">{{ log.application.student.full_name }}</td>
+                    <td class="px-3 py-2">
+                      {% if log.action == "entrance_exam_invitation" %}
+                        {% include "partials/_badge.html" with label=_("Invitation") tone="info" %}
+                      {% elif log.action == "rejection" %}
+                        {% include "partials/_badge.html" with label=_("Rejection") tone="danger" %}
+                      {% endif %}
+                    </td>
+                    <td class="px-3 py-2">
+                      {% if log.status == "sent" %}
+                        {% include "partials/_badge.html" with label=_("Sent") tone="success" %}
+                      {% else %}
+                        {% include "partials/_badge.html" with label=_("Failed") tone="danger" %}
+                      {% endif %}
+                    </td>
+                    <td class="px-3 py-2 text-slate-500 dark:text-slate-400 text-xs tabular-nums">{% dt log.sent_at %}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% include "partials/_pagination.html" with page_obj=history_page %}
+          <button type="submit" class="inline-flex items-center px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 transition">
+            {% trans "Resend Selected" %}
+          </button>
+        </form>
+      {% else %}
+        {% include "partials/_empty_state.html" with message=_("No sent emails yet.") %}
+      {% endif %}
     </div>
-  {% endif %}
+  </div>
 </div>
 {% endblock %}

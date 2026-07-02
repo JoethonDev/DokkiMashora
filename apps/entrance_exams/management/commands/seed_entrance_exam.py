@@ -41,7 +41,8 @@ class Command(BaseCommand):
             "diploma": diploma,
             "cohort": cohort,
             "duration_minutes": 60,
-            "passing_score": Decimal("50.00"),
+            "total_score": Decimal("70.00"),
+            "pass_percentage": Decimal("50.00"),
             "is_active": True,
             "open_at": now,
             "close_at": now + timezone.timedelta(days=90),
@@ -61,16 +62,14 @@ class Command(BaseCommand):
             {
                 "text": "How many books are in the Old Testament?",
                 "question_type": "mcq",
-                "points": Decimal("10.00"),
                 "order": 1,
                 "choices": [
-                    ("27", False, 1), ("39", True, 2), ("66", False, 3), ("46", False, 4),
+                    ("27", Decimal("0.00"), 1), ("39", Decimal("10.00"), 2), ("66", Decimal("0.00"), 3), ("46", Decimal("0.00"), 4),
                 ],
             },
             {
                 "text": "Who wrote the Gospel of Mark?",
                 "question_type": "mcq",
-                "points": Decimal("10.00"),
                 "order": 2,
                 "choices": [
                     ("Matthew", Decimal("0.00"), 1), ("Luke", Decimal("0.00"), 2),
@@ -80,7 +79,6 @@ class Command(BaseCommand):
             {
                 "text": "What is the first book of the Bible?",
                 "question_type": "mcq",
-                "points": Decimal("10.00"),
                 "order": 3,
                 "choices": [
                     ("Psalms", Decimal("0.00"), 1), ("Exodus", Decimal("0.00"), 2),
@@ -90,14 +88,12 @@ class Command(BaseCommand):
             {
                 "text": "Explain the significance of the resurrection in Christian faith.",
                 "question_type": "written",
-                "points": Decimal("20.00"),
                 "order": 4,
                 "choices": [],
             },
             {
                 "text": "Describe the role of the Holy Spirit in the life of a believer.",
                 "question_type": "written",
-                "points": Decimal("20.00"),
                 "order": 5,
                 "choices": [],
             },
@@ -115,6 +111,6 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 f"Created entrance exam '{exam.title}' with "
-                f"{exam.questions.count()} questions ({exam.total_points} pts)."
+                f"{exam.questions.count()} questions (total_score={exam.total_score})."
             )
         )

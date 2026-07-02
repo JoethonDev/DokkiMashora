@@ -28,11 +28,11 @@
 </div>
 {% endif %}
 
-{% if reapply and reapply.allowed %}
+{% if apply and apply.allowed %}
 <div class="rounded-xl border border-brand-200 dark:border-brand-800 bg-brand-50 dark:bg-brand-900/20 p-4 mb-4">
   <p class="text-sm font-medium text-brand-700 dark:text-brand-200">{% trans "Ready to apply for a program?" %}</p>
-  <p class="text-xs text-slate-600 dark:text-slate-300 mt-1">{% trans "Submit a new application to join a cohort." %}</p>
-  <a href="{% url 'students:reapply' %}" class="inline-block mt-2 text-sm font-medium text-brand-600 hover:text-brand-700 dark:hover:text-brand-300">{% trans "Reapply now" %} &rarr;</a>
+  <p class="text-xs text-slate-600 dark:text-slate-300 mt-1">{% trans "Submit a new application to join a cohort or course." %}</p>
+  <a href="{% url 'students:apply' %}" class="inline-block mt-2 text-sm font-medium text-brand-600 hover:text-brand-700 dark:hover:text-brand-300">{% trans "Apply now" %} &rarr;</a>
 </div>
 {% endif %}
 

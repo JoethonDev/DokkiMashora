@@ -24,7 +24,7 @@
         <p class="mt-1 text-xs text-slate-400">{% trans "Use {{ variable_name }} for placeholders." %}</p>
       </div>
 
-      {% if available_vars %}
+      {% if all_vars %}
         <div class="rounded-lg bg-slate-50 dark:bg-slate-800/50 p-3">
           <h3 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">{% trans "Available Variables" %}</h3>
           <div class="overflow-x-auto">
@@ -37,24 +37,22 @@
                 </tr>
               </thead>
               <tbody>
-                {% for var in available_vars.required %}
+                {% for var in all_vars %}
                 <tr class="border-b border-slate-100 dark:border-slate-800">
                   <td class="py-1 pr-2 font-mono text-brand-700 dark:text-brand-300">{% templatetag openvariable %} {{ var }} {% templatetag closevariable %}</td>
-                  <td class="py-1 pr-2"><span class="text-rose-600">{% trans "Yes" %}</span></td>
-                  <td class="py-1 text-slate-500 dark:text-slate-400">{{ all_variable_samples|dictsort:var|first|default:"—" }}</td>
-                </tr>
-                {% endfor %}
-                {% for var in available_vars.optional %}
-                <tr class="border-b border-slate-100 dark:border-slate-800">
-                  <td class="py-1 pr-2 font-mono text-slate-600 dark:text-slate-300">{% templatetag openvariable %} {{ var }} {% templatetag closevariable %}</td>
-                  <td class="py-1 pr-2 text-slate-400">{% trans "No" %}</td>
-                  <td class="py-1 text-slate-500 dark:text-slate-400">{{ all_variable_samples|dictsort:var|first|default:"—" }}</td>
+                  <td class="py-1 pr-2">
+                    <label class="inline-flex items-center gap-1 cursor-pointer">
+                      <input type="checkbox" name="required_variables" value="{{ var }}" {% if var in required_vars %}checked{% endif %} class="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500">
+                      <span class="text-slate-400">{% trans "Required" %}</span>
+                    </label>
+                  </td>
+                  <td class="py-1 text-slate-500 dark:text-slate-400">{{ all_variable_samples|get_item:var|default:"—" }}</td>
                 </tr>
                 {% endfor %}
               </tbody>
             </table>
           </div>
-          <p class="mt-1.5 text-xs text-slate-400">{% trans "Required variables must appear in the body. Optional variables may be omitted." %}</p>
+          <p class="mt-1.5 text-xs text-slate-400">{% trans "Tick the variables that must appear in the body." %}</p>
         </div>
       {% endif %}
 

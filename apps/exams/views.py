@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -9,14 +10,15 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_http_methods, require_POST
 
 from apps.audit.constants import (
+    ACTION_BULK_EMAIL_SENT,
     ACTION_EXAM_CREATED,
     ACTION_EXAM_TOGGLED,
     ACTION_EXAM_UPDATED,
@@ -26,10 +28,17 @@ from apps.audit.constants import (
     ACTION_QUESTION_UPDATED,
 )
 from apps.audit.services import record_audit_event
+from apps.communications.constants import (
+    TEMPLATE_EXAM_INVITATION,
+    TEMPLATE_ENTRANCE_EXAM_PASS,
+    TEMPLATE_ENTRANCE_EXAM_FAIL,
+)
+from apps.communications.services import send_templated_email
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import ROLE_EXAM_STAFF, can_grade_attempt, role_required
 from apps.exams.constants import (
+    ASSIGNMENT_STATUS_ASSIGNED,
     ASSIGNMENT_STATUS_COMPLETED,
     ASSIGNMENT_STATUS_GRADED,
     ASSIGNMENT_STATUS_IN_PROGRESS,
@@ -37,14 +46,16 @@ from apps.exams.constants import (
     QUESTION_TYPE_MCQ,
 )
 from apps.exams.forms import ExamForm, QuestionForm
-from apps.exams.models import Assignment, Choice, Exam, Question
+from apps.exams.models import Assignment, Choice, EmailLog, Exam, Question
 from apps.exams.services import (
     ExamAnswerData,
+    finalize_all_pending_for_exam,
     get_active_exams,
     get_exam_with_questions,
     get_pending_grading,
     get_student_assignments,
     grade_essay_answer,
+    save_snapshot,
     start_exam,
     submit_exam,
 )
@@ -357,6 +368,241 @@ def admin_grade_assignment(request, assignment_id):
             "question_answer_pairs": question_answer_pairs,
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Email management
+# ---------------------------------------------------------------------------
+
+
+@login_required
+@role_required(*ROLE_EXAM_STAFF)
+@require_http_methods(["GET", "POST"])
+def admin_exam_emails(request, exam_id):
+    """3-tab email management: invitations, results, sent history."""
+    exam = get_object_or_404(Exam, id=exam_id)
+
+    if request.method == "POST":
+        tab = request.POST.get("tab")
+        student_ids = request.POST.getlist("student_ids")
+        log_ids = request.POST.getlist("log_ids")
+        if tab == "history":
+            return _resend_exam_emails(request, exam, log_ids)
+        if not student_ids:
+            messages.warning(request, _("No students selected."))
+            return redirect("exams:admin_exam_emails", exam_id=exam.id)
+        if tab == "invitation":
+            assignments = Assignment.objects.filter(
+                id__in=student_ids, exam=exam,
+            ).select_related("student")
+            sent = failed = 0
+            for a in assignments:
+                email_to = a.student.email
+                if not email_to:
+                    failed += 1
+                    continue
+                context = {
+                    "full_name": a.student.get_full_name() or a.student.email,
+                    "email": email_to,
+                    "exam_title": exam.title,
+                    "exam_url": "",
+                    "exam_open_at": "",
+                    "exam_close_at": "",
+                }
+                try:
+                    record = send_templated_email(
+                        slug=TEMPLATE_EXAM_INVITATION, to_email=email_to,
+                        context=context, sent_by=request.user,
+                    )
+                except Exception:
+                    failed += 1
+                    continue
+                EmailLog.objects.create(
+                    exam=exam, assignment=a, recipient=email_to,
+                    template_slug=TEMPLATE_EXAM_INVITATION, sent_by=request.user,
+                    status=record.status if record else "failed",
+                )
+                if record and record.status == "sent":
+                    sent += 1
+                else:
+                    failed += 1
+            msg = _("Sent %(sent)d invitations (%(failed)d failed).") % {"sent": sent, "failed": failed}
+            if sent:
+                messages.success(request, msg)
+            else:
+                messages.warning(request, msg)
+            return redirect(request.path + "?tab=invitation")
+        if tab == "results":
+            return _send_exam_results(request, exam, student_ids)
+        messages.error(request, _("Invalid tab."))
+        return redirect("exams:admin_exam_emails", exam_id=exam.id)
+
+    tab = request.GET.get("tab", "invitation")
+    result_filter = request.GET.get("result", "")
+    invitation_qs = Assignment.objects.filter(exam=exam, status=ASSIGNMENT_STATUS_ASSIGNED).select_related("student")
+    results_qs = Assignment.objects.filter(
+        exam=exam, status__in=[ASSIGNMENT_STATUS_COMPLETED, ASSIGNMENT_STATUS_GRADED],
+    ).select_related("student")
+    if result_filter == "pass":
+        results_qs = results_qs.filter(score__gte=exam.passing_score)
+    elif result_filter == "fail":
+        results_qs = results_qs.filter(score__lt=exam.passing_score, score__isnull=False)
+    history_qs = EmailLog.objects.filter(exam=exam).select_related("sent_by", "assignment__student").order_by("-sent_at")
+
+    inv_page = res_page = hist_page = None
+    if tab == "invitation":
+        inv_page, _inv_pagination = paginate(request, invitation_qs, per_page=20)
+    if tab == "results":
+        res_page, _res_pagination = paginate(request, results_qs, per_page=20)
+    if tab == "history":
+        hist_page, _hist_pagination = paginate(request, history_qs, per_page=25)
+
+    return render(request, "exams/admin_exam_emails.html", {
+        "exam": exam,
+        "tab": tab,
+        "result_filter": result_filter,
+        "invitation_page": inv_page,
+        "results_page": res_page,
+        "history_page": hist_page,
+    })
+
+
+def _send_exam_results(request, exam, student_ids):
+    """Send pass/fail result emails — auto-detects from score vs passing_score."""
+    assignments = Assignment.objects.filter(
+        id__in=student_ids, exam=exam, status__in=[ASSIGNMENT_STATUS_COMPLETED, ASSIGNMENT_STATUS_GRADED],
+    ).select_related("student")
+    sent_count = failed_count = 0
+    pass_count = fail_count = 0
+    for a in assignments:
+        email_to = a.student.email
+        if not email_to or a.score is None:
+            failed_count += 1
+            continue
+        is_pass = a.score >= exam.passing_score
+        slug = TEMPLATE_ENTRANCE_EXAM_PASS if is_pass else TEMPLATE_ENTRANCE_EXAM_FAIL
+        if is_pass:
+            pass_count += 1
+        else:
+            fail_count += 1
+        context = {
+            "full_name": a.student.get_full_name() or a.student.email,
+            "exam_title": exam.title,
+            "cohort_name": "",
+        }
+        try:
+            record = send_templated_email(slug=slug, to_email=email_to, context=context, sent_by=request.user)
+        except Exception:
+            failed_count += 1
+            continue
+        EmailLog.objects.create(
+            exam=exam, assignment=a, recipient=email_to,
+            template_slug=slug, sent_by=request.user,
+            status=record.status if record else "failed",
+        )
+        if record and record.status == "sent":
+            sent_count += 1
+        else:
+            failed_count += 1
+    msg = _("Sent %(sent)d result emails (%(failed)d failed).") % {"sent": sent_count, "failed": failed_count}
+    if sent_count:
+        messages.success(request, msg)
+    else:
+        messages.warning(request, msg)
+    return redirect(request.path + "?tab=results")
+
+
+def _resend_exam_emails(request, exam, log_ids):
+    """Bulk-resend selected exam email logs."""
+    if not log_ids:
+        messages.warning(request, _("No emails selected."))
+        return redirect("exams:admin_exam_emails", exam_id=exam.id)
+    logs = EmailLog.objects.filter(
+        id__in=log_ids, exam=exam,
+    ).select_related("assignment__student")
+    sent_count = failed_count = 0
+    for log in logs:
+        email_to = log.recipient or (log.assignment.student.email if log.assignment else None)
+        if not email_to:
+            failed_count += 1
+            continue
+        context = {
+            "full_name": (log.assignment.student.get_full_name() or log.assignment.student.email) if log.assignment else "",
+            "email": email_to,
+            "exam_title": exam.title,
+            "exam_url": "",
+            "exam_open_at": "",
+            "exam_close_at": "",
+        }
+        try:
+            record = send_templated_email(
+                slug=log.template_slug, to_email=email_to,
+                context=context, sent_by=request.user,
+            )
+        except Exception:
+            failed_count += 1
+            continue
+        EmailLog.objects.create(
+            exam=exam, assignment=log.assignment, recipient=email_to,
+            template_slug=log.template_slug, sent_by=request.user,
+            status=record.status if record else "failed",
+        )
+        if record and record.status == "sent":
+            sent_count += 1
+        else:
+            failed_count += 1
+    msg = _("Resent %(sent)d emails (%(failed)d failed).") % {"sent": sent_count, "failed": failed_count}
+    if sent_count:
+        messages.success(request, msg)
+    else:
+        messages.warning(request, msg)
+    return redirect(request.path + "?tab=history")
+
+
+# ---------------------------------------------------------------------------
+# Snapshot save & finalization (auto-recovery)
+# ---------------------------------------------------------------------------
+
+
+@login_required
+@require_POST
+def save_exam_snapshot(request, exam_id):
+    """Save periodic answer snapshots for auto-recovery (AJAX, returns JSON)."""
+    exam = get_object_or_404(Exam, id=exam_id, is_active=True)
+    assignment = get_object_or_404(
+        Assignment, exam=exam, student=request.user, status=ASSIGNMENT_STATUS_IN_PROGRESS,
+    )
+    try:
+        data = json.loads(request.body)
+        answers = data.get("answers", {})
+        for qid_str, value in answers.items():
+            qid = int(qid_str)
+            if isinstance(value, dict):
+                choice_id = value.get("choice")
+                essay = value.get("text", "")
+            elif isinstance(value, str):
+                choice_id = int(value) if value.isdigit() else None
+                essay = ""
+            else:
+                continue
+            save_snapshot(assignment, qid, choice_id=choice_id, essay_text=essay)
+        return JsonResponse({"ok": True})
+    except (json.JSONDecodeError, ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Invalid data"}, status=400)
+
+
+@login_required
+@role_required(*ROLE_EXAM_STAFF)
+@require_POST
+def admin_finalize_pending(request, exam_id):
+    """Finalize all in-progress assignments for an exam using saved snapshots."""
+    exam = get_object_or_404(Exam, id=exam_id)
+    count = finalize_all_pending_for_exam(exam)
+    messages.success(
+        request,
+        _("Finalized %(count)d pending assignment(s).") % {"count": count},
+    )
+    return redirect("exams:admin_detail", exam_id=exam.id)
 
 
 # ---------------------------------------------------------------------------

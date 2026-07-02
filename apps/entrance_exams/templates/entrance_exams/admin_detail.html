@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% load i18n %}
 {% load ui_tags %}
+{% load exam_tags %}
 
 {% block title %}{{ exam.title }} - {% trans "Entrance Exam Detail" %}{% endblock %}
 
@@ -35,12 +36,12 @@
         <dd class="font-semibold text-slate-900 dark:text-slate-100 tabular-nums">{{ exam.duration_minutes }} {% trans "minutes" %}</dd>
       </div>
       <div>
-        <dt class="text-slate-500 dark:text-slate-400">{% trans "Total points" %}</dt>
-        <dd class="font-semibold text-slate-900 dark:text-slate-100 tabular-nums">{{ exam.total_points }}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Total score" %}</dt>
+        <dd class="font-semibold text-slate-900 dark:text-slate-100 tabular-nums">{{ exam.total_score }}</dd>
       </div>
       <div>
-        <dt class="text-slate-500 dark:text-slate-400">{% trans "Passing score" %}</dt>
-        <dd class="font-semibold text-slate-900 dark:text-slate-100 tabular-nums">{{ exam.passing_score }}%</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% trans "Pass percentage" %}</dt>
+        <dd class="font-semibold text-slate-900 dark:text-slate-100 tabular-nums">{{ exam.pass_percentage }}%</dd>
       </div>
       <div>
         <dt class="text-slate-500 dark:text-slate-400">{% trans "Active" %}</dt>
@@ -80,6 +81,12 @@
               class="pb-2 -mb-px transition">
         {% trans "Attempts" %} ({{ exam.attempts.count }})
       </button>
+      <button id="access-tab" type="button" role="tab" aria-controls="access-panel" :aria-selected="activeTab === 'access'"
+              @click="activeTab = 'access'"
+              :class="activeTab === 'access' ? 'border-b-2 border-brand-600 text-brand-600' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
+              class="pb-2 -mb-px transition">
+        {% trans "Access URL" %}
+      </button>
     </nav>
   </div>
 
@@ -88,7 +95,6 @@
     "{{ q.id }}": {
       "text": "{{ q.text|escapejs }}",
       "question_type": "{{ q.question_type }}",
-      "points": "{{ q.points|default_if_none:'0' }}",
       "rubric": "{{ q.rubric|escapejs }}",
       "choices": [
         {% for c in q.choices.all %}
@@ -104,7 +110,7 @@
     deleteAction: '',
     showForm: false,
     editingId: null,
-    form: { text: '', question_type: 'mcq', points: 1, rubric: '', choices: [] },
+    form: { text: '', question_type: 'mcq', rubric: '', choices: [] },
 
     openEdit(id) {
       this.editingId = id;
@@ -113,7 +119,6 @@
       this.form = {
         text: q.text,
         question_type: q.question_type,
-        points: parseFloat(q.points) || 0,
         rubric: q.rubric,
         choices: q.choices.length ? q.choices.map(c => ({...c, score: parseFloat(c.score) || 0})) : emptyChoices.map((c, i) => ({...c, order: i + 1}))
       };
@@ -125,7 +130,6 @@
       this.form = {
         text: '',
         question_type: 'mcq',
-        points: 1,
         rubric: '',
         choices: [{text: '', score: '0', order: 1}, {text: '', score: '0', order: 2}]
       };
@@ -181,7 +185,7 @@
           <fieldset>
             <legend class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">{% trans "Question" %}</legend>
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
-              <div class="lg:col-span-7">
+              <div class="lg:col-span-9">
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{% trans "Question text" %}</label>
                 <textarea x-model="form.text" rows="4" class="dm-input w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900 resize-y"></textarea>
               </div>
@@ -191,10 +195,6 @@
                   <option value="mcq">{% trans "Multiple choice" %}</option>
                   <option value="written">{% trans "Written" %}</option>
                 </select>
-              </div>
-              <div class="lg:col-span-2">
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{% trans "Points" %}</label>
-                <input type="number" step="0.01" min="0" x-model="form.points" class="dm-input w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900">
               </div>
             </div>
           </fieldset>
@@ -206,7 +206,7 @@
 
           <div x-show="form.question_type === 'mcq'" x-cloak class="border-t border-slate-200 dark:border-slate-700 pt-6">
             <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">{% trans "Answer Choices" %}</h2>
-            <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">{% trans "Add choices and assign a score to each. Only MCQ questions use scores." %}</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">{% trans "Add choices and assign a score/weight to each. Only MCQ choices have scores." %}</p>
             <div class="space-y-3">
               <template x-for="(choice, index) in form.choices" :key="index">
                 <div class="flex items-start gap-3 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/30">
@@ -255,7 +255,6 @@
                   <div class="flex items-center gap-2">
                     {% include "partials/_badge.html" with label=question.order|stringformat:"s" tone="neutral" %}
                     {% include "partials/_badge.html" with label=question.get_question_type_display tone="info" %}
-                    {% include "partials/_badge.html" with label=question.points|stringformat:"s"|add:" pts" tone="neutral" %}
                   </div>
                   <div class="flex items-center gap-1">
                     <button @click="openEdit('{{ question.id }}')" type="button" class="inline-flex items-center px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition">
@@ -294,7 +293,20 @@
     </div>
 
     <div x-show="activeTab === 'attempts'" x-cloak id="attempts-panel" role="tabpanel" aria-labelledby="attempts-tab" tabindex="0">
-      <h2 class="text-lg sm:text-xl font-semibold mb-4">{% trans "Attempts" %}</h2>
+      {% get_pending_count exam as pending_num %}
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg sm:text-xl font-semibold">{% trans "Attempts" %}</h2>
+        {% if pending_num %}
+          <div x-data="{ confirmId: null }" @modal-confirm.window="if($event.detail.id===confirmId) document.getElementById('finalize-pending-form').requestSubmit()" class="inline">
+            <button type="button" @click="confirmId='finalize-pending'; $dispatch('open-modal', {id:'finalize-pending'})"
+                    class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-medium hover:bg-amber-700 transition">
+              <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+              {% trans "Finalize Pending" %} ({{ pending_num }})
+            </button>
+          </div>
+        {% endif %}
+        <form id="finalize-pending-form" method="post" action="{% url 'entrance_exams:admin_finalize_pending' exam.id %}" class="hidden">{% csrf_token %}</form>
+      </div>
       <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
         <table class="min-w-[640px] w-full divide-y divide-slate-200 dark:divide-slate-800 text-sm">
           <thead class="bg-slate-50 dark:bg-slate-800/50">
@@ -304,6 +316,7 @@
               <th class="px-4 py-2.5 text-start font-medium">{% trans "Score" %}</th>
               <th class="px-4 py-2.5 text-start font-medium">{% trans "Result" %}</th>
               <th class="px-4 py-2.5 text-start font-medium">{% trans "Submitted" %}</th>
+              <th class="px-4 py-2.5 text-start font-medium">{% trans "Actions" %}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
@@ -328,14 +341,55 @@
                   {% endif %}
                 </td>
                 <td class="px-4 py-3 text-slate-500 dark:text-slate-400 text-xs tabular-nums">{% include "partials/_blank.html" with value=a.submitted_at|date:"DATETIME_FORMAT" %}</td>
+                <td class="px-4 py-3">
+                  {% if a.status == "completed" %}
+                    <a href="{% url 'entrance_exams:admin_grade_attempt' a.id %}" class="text-brand-600 hover:text-brand-700 dark:hover:text-brand-300 font-medium text-sm">{% trans "Grade" %}</a>
+                  {% elif a.status == "graded" %}
+                    <a href="{% url 'entrance_exams:admin_grade_attempt' a.id %}" class="text-brand-600 hover:text-brand-700 dark:hover:text-brand-300 font-medium text-sm">{% trans "Review" %}</a>
+                  {% else %}
+                    <span class="text-slate-400 text-sm">&mdash;</span>
+                  {% endif %}
+                </td>
               </tr>
             {% empty %}
               <tr>
-                <td colspan="5" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400">{% trans "No attempts yet." %}</td>
+                <td colspan="6" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400">{% trans "No attempts yet." %}</td>
               </tr>
             {% endfor %}
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <div x-show="activeTab === 'access'" x-cloak id="access-panel" role="tabpanel" aria-labelledby="access-tab" tabindex="0">
+      <div id="access-url-section" class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg sm:text-xl font-semibold">{% trans "Access URL" %}</h2>
+          <button type="button" onclick="printAccessUrl()" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition">
+            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+            {% trans "Print" %}
+          </button>
+        </div>
+        <div class="flex flex-col md:flex-row gap-6">
+          <div class="flex-1">
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-2">{% trans "Student access link:" %}</p>
+            <div class="flex items-center gap-2">
+              <input type="text" readonly value="{{ request.scheme }}://{{ request.get_host }}/entrance-exams/access/{{ exam.access_token }}/"
+                     class="flex-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm font-mono text-slate-700 dark:text-slate-300" id="exam-access-url" />
+              <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('exam-access-url').value)"
+                      class="shrink-0 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition">
+                {% trans "Copy" %}
+              </button>
+            </div>
+            {% if not exam.is_active %}
+              <p class="mt-2 text-xs text-amber-600 dark:text-amber-400">{% trans "Exam is inactive. Link will not work until activated." %}</p>
+            {% endif %}
+          </div>
+          <div class="shrink-0 flex flex-col items-center">
+            <img src="{% url 'entrance_exams:exam_qr_code' exam.access_token %}" alt="Exam QR Code" class="rounded-lg border border-slate-200 dark:border-slate-700 w-40 h-40" />
+            <p class="mt-1 text-xs text-slate-400">QR Code</p>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -372,6 +426,15 @@
         </div>
       </div>
     </div>
+    {% include "partials/_modal.html" with modal_id="finalize-pending" title=_("Finalize Pending Attempts") body=_("Rebuild answers from the latest saved snapshots and grade all in-progress attempts. This cannot be undone.") confirm_label=_("Finalize") confirm_class="bg-amber-600 text-white hover:bg-amber-700" %}
   </div>
 </div>
+<script>
+function printAccessUrl() {
+  var section = document.getElementById('access-url-section');
+  document.body.innerHTML = section.outerHTML;
+  window.print();
+  location.reload();
+}
+</script>
 {% endblock %}

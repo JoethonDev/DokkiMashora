@@ -13,7 +13,7 @@
     {% endif %}
     <ul class="mt-6 space-y-2 text-sm text-slate-600 dark:text-slate-300">
       <li><strong>{% trans "Duration" %}:</strong> {{ exam.duration_minutes }} {% trans "minutes" %}</li>
-      <li><strong>{% trans "Passing score" %}:</strong> {{ exam.passing_score }}%</li>
+      <li><strong>{% trans "Pass percentage" %}:</strong> {{ exam.pass_percentage }}%</li>
       <li><strong>{% trans "Total questions" %}:</strong> {{ exam.questions.count }}</li>
     </ul>
     <div class="mt-6 rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 p-4">
@@ -21,7 +21,19 @@
         {% trans "Once you start, the timer begins and cannot be paused. Make sure you have a stable internet connection." %}
       </p>
     </div>
-    <form method="post" action="{% url 'entrance_exams:start_exam' exam.id %}" class="mt-6">
+    <div class="mt-4 rounded-md bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-900 p-4">
+      <h3 class="text-sky-800 dark:text-sky-200 text-sm font-semibold mb-1">{% trans "Auto-saving" %}</h3>
+      <p class="text-sky-700 dark:text-sky-300 text-sm">
+        {% trans "Your answers are saved automatically every few seconds. A copy is also stored locally on your device. If your browser closes or you lose connection, your latest answers will be recovered." %}
+      </p>
+    </div>
+    <div class="mt-4 rounded-md bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-900 p-4">
+      <h3 class="text-violet-800 dark:text-violet-200 text-sm font-semibold mb-1">{% trans "Auto-submission" %}</h3>
+      <p class="text-violet-700 dark:text-violet-300 text-sm">
+        {% trans "When the timer reaches zero, your exam will be submitted automatically with your saved answers. If auto-submission fails (e.g. no internet), an administrator will finalize your attempt from the latest saved snapshot." %}
+      </p>
+    </div>
+    <form method="post" action="{% url 'entrance_exams:start_exam' access_token %}" class="mt-6">
       {% csrf_token %}
       {% include "partials/_button.html" with label=_("Start Exam") variant="primary" size="lg" %}
     </form>

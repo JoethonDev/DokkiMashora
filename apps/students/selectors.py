@@ -16,7 +16,7 @@ from apps.academics.constants import (
     ENROLLMENT_STATUS_EXPIRED,
     ENROLLMENT_STATUS_RESTRICTED,
 )
-from apps.academics.models import CourseEnrollment, CourseVersion, DiplomaEnrollment
+from apps.academics.models import Cohort, Course, CourseEnrollment, CourseVersion, DiplomaEnrollment
 from apps.applications.models import ProgramApplication
 from apps.assessments.models import AssessmentAttempt, HomeworkSubmission
 from apps.assessments.services import get_student_attempts
@@ -31,7 +31,7 @@ from apps.progression.models import (
     StudentDiplomaCompletion,
     StudentSemesterProgress,
 )
-from apps.students.services import check_reapply_eligibility
+from apps.students.services import check_apply_eligibility
 
 if TYPE_CHECKING:
     from apps.accounts.models import User
@@ -42,7 +42,7 @@ ALL_SECTIONS = [
     "identity", "applications", "diploma_enrollments", "course_enrollments",
     "active_courses", "expired_courses", "exam_assignments",
     "assessment_attempts", "homework_submissions", "semester_progress",
-    "promotion_decisions", "completions", "certificates", "eligibilities",
+    "promotion_decisions", "completions", "certificates", "eligibilities", "apply",
     "payments", "notifications",
 ]
 
@@ -63,7 +63,7 @@ _SECTION_LOADERS: dict[str, tuple] = {
     "eligibilities": ("eligibilities", lambda p, u: _get_eligibilities(p)),
     "payments": ("payments", lambda p, u: _get_payments(p)),
     "notifications": ("notifications", lambda p, u: _get_notifications(p)),
-    "reapply": ("reapply", lambda p, u: _reapply_eligibility(p)),
+    "apply": ("apply", lambda p, u: _apply_eligibility(p)),
 }
 
 
@@ -91,7 +91,7 @@ def get_dashboard_data(
             key, loader_fn = loader
             result[key] = loader_fn(student_profile, user)
 
-    result.setdefault("reapply", None)
+    result.setdefault("apply", None)
     return result
 
 
@@ -128,7 +128,7 @@ def _identity_summary(profile: StudentProfile, user: User) -> dict:
 def _get_applications(student_profile: StudentProfile) -> list[ProgramApplication]:
     return list(
         ProgramApplication.objects.filter(student=student_profile)
-        .select_related("reviewed_by", "cohort__diploma", "course", "root_application")
+        .select_related("reviewed_by", "cohort__diploma", "course")
         .order_by("-created_at")
     )
 
@@ -365,5 +365,15 @@ def _get_notifications(student_profile: StudentProfile) -> list[EmailMessage]:
 # ---------------------------------------------------------------------------
 
 
-def _reapply_eligibility(student_profile: StudentProfile) -> dict:
-    return check_reapply_eligibility(student_profile)
+def _apply_eligibility(student_profile: StudentProfile) -> dict:
+    if any(
+        check_apply_eligibility(student_profile, cohort=cohort)["allowed"]
+        for cohort in Cohort.objects.filter(is_active=True).select_related("diploma").order_by("-start_date")
+    ):
+        return {"allowed": True, "reason_code": None, "reason": None}
+    if any(
+        check_apply_eligibility(student_profile, course=course)["allowed"]
+        for course in Course.objects.filter(is_active=True, is_standalone=True).order_by("title")
+    ):
+        return {"allowed": True, "reason_code": None, "reason": None}
+    return {"allowed": False, "reason_code": None, "reason": None}

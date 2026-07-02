@@ -36,6 +36,7 @@ env = environ.Env(
     R2_ENDPOINT_URL=(str, ""),
     R2_PUBLIC_BASE_URL=(str, ""),
     USE_R2_STORAGE=(bool, False),
+    SITE_URL=(str, "http://localhost:8000"),
 )
 
 # Read .env file if it exists.
@@ -101,6 +102,7 @@ MIDDLEWARE = [
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.locale.LocaleMiddleware",
+    "apps.core.admin_middleware.ForceEnglishAdminMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -197,6 +199,7 @@ R2_SECRET_ACCESS_KEY = env("R2_SECRET_ACCESS_KEY")
 R2_BUCKET_NAME = env("R2_BUCKET_NAME")
 R2_ENDPOINT_URL = env("R2_ENDPOINT_URL")
 R2_PUBLIC_BASE_URL = env("R2_PUBLIC_BASE_URL")
+SITE_URL = env("SITE_URL")
 
 # --- File upload limits ----------------------------------------------------
 HOMEWORK_MAX_UPLOAD_MB = 25

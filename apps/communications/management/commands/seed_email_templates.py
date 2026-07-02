@@ -8,7 +8,10 @@ from apps.communications.constants import (
     DESIGN_BRANDED,
     TEMPLATE_ACCEPTANCE,
     TEMPLATE_ACTIVATION,
+    TEMPLATE_ENTRANCE_EXAM_FAIL,
     TEMPLATE_ENTRANCE_EXAM_INVITATION,
+    TEMPLATE_ENTRANCE_EXAM_PASS,
+    TEMPLATE_EXAM_INVITATION,
     TEMPLATE_PAYMENT_NOTIFICATION,
     TEMPLATE_RECEIVED,
     TEMPLATE_REJECTION,
@@ -35,6 +38,37 @@ DEFAULT_TEMPLATES = {
             "Hello {{ full_name }},\n\n"
             "Your entrance exam is now available. "
             "You can take it from {{ exam_open_at }} until {{ exam_close_at }}.\n\n"
+            "Please log in to start: {{ exam_url }}\n\n"
+            "Good luck!\nDokkiMashora admissions"
+        ),
+    },
+    TEMPLATE_ENTRANCE_EXAM_PASS: {
+        "name": "Entrance exam passed",
+        "subject": "You passed the entrance exam",
+        "body": (
+            "Hello {{ full_name }},\n\n"
+            "Congratulations! You have passed the entrance exam '{{ exam_title }}'.\n\n"
+            "Your application has been accepted. We will contact you with the next steps.\n\n"
+            "Thank you,\nDokkiMashora admissions"
+        ),
+    },
+    TEMPLATE_ENTRANCE_EXAM_FAIL: {
+        "name": "Entrance exam failed",
+        "subject": "Entrance exam result",
+        "body": (
+            "Hello {{ full_name }},\n\n"
+            "Thank you for taking the entrance exam '{{ exam_title }}'.\n\n"
+            "Unfortunately, you did not pass at this time.\n\n"
+            "You are welcome to apply again in a future cycle.\n\n"
+            "DokkiMashora admissions"
+        ),
+    },
+    TEMPLATE_EXAM_INVITATION: {
+        "name": "Exam invitation",
+        "subject": "Your exam is ready",
+        "body": (
+            "Hello {{ full_name }},\n\n"
+            "Your exam '{{ exam_title }}' is now available.\n\n"
             "Please log in to start: {{ exam_url }}\n\n"
             "Good luck!\nDokkiMashora admissions"
         ),
@@ -66,8 +100,10 @@ DEFAULT_TEMPLATES = {
         "subject": "Activate your account",
         "body": (
             "Hello {{ full_name }},\n\n"
-            "Your account is approved. Please activate it using the link below:\n\n"
+            "Your account has been created. Your login email is {{ email }} and your initial password is {{ password }}.\n\n"
+            "Please activate your account using the link below:\n\n"
             "{{ activation_url }}\n\n"
+            "You can change your password after logging in.\n\n"
             "Welcome aboard!\nDokkiMashora admissions"
         ),
     },

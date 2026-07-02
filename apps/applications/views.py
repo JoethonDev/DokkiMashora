@@ -8,11 +8,9 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db import models
 from django.db.models import Q
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods
 
@@ -20,39 +18,18 @@ from apps.academics.models import Cohort, Course, Diploma
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import is_admin, is_moderator
-from apps.entrance_exams.services import assign_exam_for_application
+from apps.students.services import check_apply_eligibility
 
 from .constants import (
-    APP_STATUS_ACTIVATED as APP_TERMINAL,
-)
-from .constants import (
-    APP_STATUS_APPROVED,
-    APP_STATUS_PENDING,
-    APP_STATUS_UNDER_REVIEW,
-    PROGRAM_APP_STATUS_ACCEPTED,
     PROGRAM_APP_STATUS_SUBMITTED,
+    PROGRAM_APP_STATUS_UNDER_REVIEW,
 )
-from .constants import (
-    PROGRAM_APP_STATUS_ACTIVATED as PROG_TERMINAL,
-)
-from .constants import (
-    PROGRAM_APP_STATUS_UNDER_REVIEW as PROGRAM_UNDER_REVIEW,
-)
-from .forms import ApplicationDecisionForm, RegistrationForm
-from .models import REVERTABLE_ACTIONS, Application, ApplicationDecision, ProgramApplication
+from .forms import RegistrationForm
+from .models import ProgramApplication
 from .services import (
     RegistrationData,
-    activate_application,
-    activate_program_application,
-    approve_application,
-    approve_program_application,
-    invite_program_application,
-    mark_review_application,
-    mark_review_program_application,
-    reject_application,
+    accept_program_application,
     reject_program_application,
-    revert_application_decision,
-    revert_program_application_decision,
     submit_program_application,
     submit_registration,
 )
@@ -63,13 +40,23 @@ PUBLIC_REGISTRATION_SESSION_KEY = "registration_email"
 @require_http_methods(["GET"])
 def program_diplomas(request: HttpRequest) -> HttpResponse:
     """Return diploma <option>s for HTMX."""
+    from django.utils import timezone
     now = timezone.now()
-    diploma_ids = (
-        Cohort.objects.filter(is_active=True, entrance_exams__close_at__gte=now)
-        .values_list("diploma_id", flat=True)
-        .distinct()
-    )
-    diplomas = Diploma.objects.filter(pk__in=diploma_ids, is_active=True).order_by("title")
+    profile = getattr(request.user, "student_profile", None)
+    diplomas = []
+    for diploma in Diploma.objects.filter(is_active=True).order_by("title"):
+        if profile is not None:
+            cohort = (
+                Cohort.objects.filter(diploma=diploma, is_active=True, entrance_exams__close_at__gte=now)
+                .order_by("-start_date")
+                .first()
+            )
+            if not cohort or not check_apply_eligibility(profile, cohort=cohort)["allowed"]:
+                continue
+        else:
+            if not Cohort.objects.filter(diploma=diploma, is_active=True, entrance_exams__close_at__gte=now).exists():
+                continue
+        diplomas.append(diploma)
     options = [(str(d.pk), d.title) for d in diplomas]
     return render(request, "applications/partials/_program_options.html", {"options": options, "placeholder": "Select a diploma"})
 
@@ -77,7 +64,10 @@ def program_diplomas(request: HttpRequest) -> HttpResponse:
 @require_http_methods(["GET"])
 def program_targets(request: HttpRequest) -> HttpResponse:
     """Return course <option>s for HTMX."""
+    profile = getattr(request.user, "student_profile", None)
     courses = Course.objects.filter(is_active=True, is_standalone=True).order_by("title")
+    if profile is not None:
+        courses = [course for course in courses if check_apply_eligibility(profile, course=course)["allowed"]]
     options = [(f"course_{c.pk}", c.title) for c in courses]
     return render(request, "applications/partials/_program_options.html", {"options": options, "placeholder": "Select a course"})
 
@@ -112,9 +102,9 @@ def register(request: HttpRequest) -> HttpResponse:
                     cohort_id=program_data["cohort_id"],
                     course_id=program_data["course_id"],
                 )
-                _profile, _root_application, _program_application = submit_registration(data)
+                _profile, _program_application = submit_registration(data)
             request.session[PUBLIC_REGISTRATION_SESSION_KEY] = form.cleaned_data["email"]
-            messages.success(request, _("Registration received. We will contact you shortly."))
+            messages.success(request, _("Account created! Check your email for the activation link."))
             return redirect("applications:registration_success")
     else:
         form = RegistrationForm()
@@ -128,124 +118,14 @@ def registration_success(request: HttpRequest) -> HttpResponse:
 
 
 # ---------------------------------------------------------------------------
-# Root Application admin (legacy, kept for backward compatibility)
-# ---------------------------------------------------------------------------
-
-
-@require_http_methods(["GET"])
-@login_required
-def application_list(request: HttpRequest) -> HttpResponse:
-    """Admin list of all root applications, with status filter."""
-    if not (is_admin(request.user) or is_moderator(request.user)):
-        raise PermissionDenied
-    status_filter = request.GET.get("status", "")
-    q = request.GET.get("q", "")
-    applications = Application.objects.select_related("student__user", "reviewed_by").order_by("-created_at")
-    if q:
-        applications = applications.filter(
-            Q(student__full_name__icontains=q) | Q(student__user__email__icontains=q)
-        )
-    if status_filter:
-        applications = applications.filter(status=status_filter)
-    filters = []
-    if status_filter is not None:
-        filters.append({
-            "name": "status",
-            "label": _("Status"),
-            "value": status_filter,
-            "options": [{"value": v, "label": _(label_text), "selected": status_filter == v}
-                        for v, label_text in Application._meta.get_field("status").choices],
-        })
-    page_obj, pagination_qs = paginate(request, applications)
-    context = {
-        "page_obj": page_obj,
-        "pagination_qs": pagination_qs,
-        "search_value": q,
-        "filters": filters,
-    }
-    if request.headers.get("HX-Target") == "applications-list":
-        return render(request, "applications/partials/_list_table.html", context)
-    return render(request, "applications/admin_list.html", context)
-
-
-@require_http_methods(["GET", "POST"])
-@login_required
-def application_detail(request: HttpRequest, application_id: int) -> HttpResponse:
-    """Admin detail/edit view with approve/reject/activate/revert actions."""
-    if not (is_admin(request.user) or is_moderator(request.user)):
-        raise PermissionDenied
-    application = get_object_or_404(
-        Application.objects.select_related("student__user", "reviewed_by"),
-        pk=application_id,
-    )
-    decision_form = ApplicationDecisionForm(instance=application)
-    if request.method == "POST":
-        action = request.POST.get("action")
-        decision_form = ApplicationDecisionForm(request.POST, instance=application)
-        if action == "mark_review" and application.status == APP_STATUS_PENDING:
-            mark_review_application(application, request.user)
-            messages.info(request, _("Application marked as under review."))
-            return redirect("applications:admin_detail", application_id=application.id)
-        if action == "approve" and application.status in {APP_STATUS_PENDING, APP_STATUS_UNDER_REVIEW}:
-            if not decision_form.is_valid():
-                return _render_detail(request, application, decision_form)
-            approve_application(application, request.user, notes=decision_form.cleaned_data.get("admin_notes", ""))
-            messages.success(request, _("Application approved."))
-            return redirect("applications:admin_detail", application_id=application.id)
-        if action == "reject" and application.status in {APP_STATUS_PENDING, APP_STATUS_UNDER_REVIEW}:
-            reason = (request.POST.get("rejection_reason") or "").strip()
-            if not reason:
-                decision_form.add_error("rejection_reason", _("Rejection reason is required."))
-                return _render_detail(request, application, decision_form)
-            admin_notes = (request.POST.get("admin_notes") or "").strip()
-            reject_application(application, request.user, reason=reason, notes=admin_notes)
-            messages.warning(request, _("Application rejected."))
-            return redirect("applications:admin_detail", application_id=application.id)
-        if action == "activate" and application.status == APP_STATUS_APPROVED:
-            activate_application(application, request.user)
-            messages.success(request, _("Application activated."))
-            return redirect("applications:admin_detail", application_id=application.id)
-        if action == "revert" and application.status != APP_TERMINAL:
-            reason = (request.POST.get("revert_reason") or "").strip()
-            if not reason:
-                messages.error(request, _("Please provide a reason for reverting."))
-                return redirect("applications:admin_detail", application_id=application.id)
-            try:
-                revert_application_decision(application, request.user, reason=reason)
-                messages.success(request, _("Decision reverted."))
-            except ValueError as e:
-                messages.error(request, str(e))
-            return redirect("applications:admin_detail", application_id=application.id)
-        messages.error(request, _("Action not allowed for the current status."))
-    return _render_detail(request, application, decision_form)
-
-
-def _render_detail(
-    request: HttpRequest, application: Application, form: ApplicationDecisionForm
-) -> HttpResponse:
-    base_qs = ApplicationDecision.objects.filter(
-        target_type="application", target_id=str(application.pk)
-    )
-    can_revert = (
-        application.status != APP_TERMINAL
-        and base_qs.filter(action__in=REVERTABLE_ACTIONS).exists()
-    )
-    return render(
-        request,
-        "applications/admin_detail.html",
-        {"application": application, "form": form, "decisions": base_qs[:20], "can_revert": can_revert},
-    )
-
-
-# ---------------------------------------------------------------------------
-# Program Application admin (new child-request workflow)
+# Program Application admin
 # ---------------------------------------------------------------------------
 
 
 @require_http_methods(["GET"])
 @login_required
 def program_application_list(request: HttpRequest) -> HttpResponse:
-    """Admin list of program applications/requests, with status filter."""
+    """Admin list of program applications, with status filter."""
     if not (is_admin(request.user) or is_moderator(request.user)):
         raise PermissionDenied
     status_filter = request.GET.get("status", "")
@@ -278,7 +158,7 @@ def program_application_list(request: HttpRequest) -> HttpResponse:
                         for v, label_text in ProgramApplication._meta.get_field("program_type").choices],
         },
     ]
-    page_obj, pagination_qs = paginate(request, applications)
+    page_obj, pagination_qs = paginate(request, applications, per_page=15)
     context = {
         "page_obj": page_obj,
         "pagination_qs": pagination_qs,
@@ -293,7 +173,7 @@ def program_application_list(request: HttpRequest) -> HttpResponse:
 @require_http_methods(["GET", "POST"])
 @login_required
 def program_application_detail(request: HttpRequest, application_id: int) -> HttpResponse:
-    """Admin detail/edit view for a ProgramApplication with workflow actions."""
+    """Admin detail/edit view for a ProgramApplication with Accept/Reject actions."""
     if not (is_admin(request.user) or is_moderator(request.user)):
         raise PermissionDenied
     application = get_object_or_404(
@@ -304,110 +184,50 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
     )
     if request.method == "POST":
         action = request.POST.get("action")
-        if action == "mark_review" and application.status == PROGRAM_APP_STATUS_SUBMITTED:
-            mark_review_program_application(application, request.user)
-            messages.info(request, _("Application marked as under review."))
-            return redirect("applications:program_detail", application_id=application.id)
-        if action == "invite" and application.status in {PROGRAM_APP_STATUS_SUBMITTED, PROGRAM_UNDER_REVIEW}:
-            invite_program_application(application, request.user)
-            if assign_exam_for_application(application):
-                messages.success(request, _("Applicant invited to entrance assessment."))
-            else:
-                messages.success(
-                    request,
-                    _("Applicant invited. No active entrance exam exists for this cohort — please create one."),
-                )
-            return redirect("applications:program_detail", application_id=application.id)
-        if action == "accept" and application.status in {PROGRAM_APP_STATUS_SUBMITTED, PROGRAM_UNDER_REVIEW}:
+        send_email = request.POST.get("send_email") == "on"
+
+        if action == "accept" and application.status in {PROGRAM_APP_STATUS_SUBMITTED, PROGRAM_APP_STATUS_UNDER_REVIEW}:
             notes = (request.POST.get("admin_notes") or "").strip()
-            approve_program_application(application, request.user, notes=notes)
+            accept_program_application(application, request.user, notes=notes, send_email=send_email)
             messages.success(request, _("Application accepted."))
             return redirect("applications:program_detail", application_id=application.id)
-        if action == "reject":
+
+        if action == "reject" and application.status in {PROGRAM_APP_STATUS_SUBMITTED, PROGRAM_APP_STATUS_UNDER_REVIEW}:
             reason = (request.POST.get("rejection_reason") or "").strip()
             if not reason:
                 messages.error(request, _("Rejection reason is required."))
                 return redirect("applications:program_detail", application_id=application.id)
             admin_notes = (request.POST.get("admin_notes") or "").strip()
-            reject_program_application(application, request.user, reason=reason, notes=admin_notes)
+            reject_program_application(application, request.user, reason=reason, notes=admin_notes, send_email=send_email)
             messages.warning(request, _("Application rejected."))
             return redirect("applications:program_detail", application_id=application.id)
-        if action == "activate" and application.status == PROGRAM_APP_STATUS_ACCEPTED:
-            activate_program_application(application, request.user)
-            messages.success(request, _("Application activated."))
-            return redirect("applications:program_detail", application_id=application.id)
-        if action == "revert" and application.status != PROG_TERMINAL:
-            reason = (request.POST.get("revert_reason") or "").strip()
-            if not reason:
-                messages.error(request, _("Please provide a reason for reverting."))
-                return redirect("applications:program_detail", application_id=application.id)
-            try:
-                revert_program_application_decision(application, request.user, reason=reason)
-                messages.success(request, _("Decision reverted."))
-            except ValueError as e:
-                messages.error(request, str(e))
-            return redirect("applications:program_detail", application_id=application.id)
+
         messages.error(request, _("Action not allowed for the current status."))
-    base_qs = ApplicationDecision.objects.filter(
-        target_type="program_application", target_id=str(application.pk)
-    )
-    can_revert = (
-        application.status != PROG_TERMINAL
-        and base_qs.filter(action__in=REVERTABLE_ACTIONS).exists()
+
+    decisions, decisions_qs = paginate(
+        request,
+        application.decisions.select_related("actor").order_by("-created_at"),
+        per_page=15,
     )
     return render(
         request,
         "applications/admin_program_detail.html",
-        {"application": application, "decisions": base_qs[:20], "can_revert": can_revert},
+        {"application": application, "decisions": decisions, "pagination_qs": decisions_qs},
     )
 
 
 # ---------------------------------------------------------------------------
-# Dashboard reapply (creates child ProgramApplication, not root Application)
+# Dashboard apply (authenticated student apply flow)
 # ---------------------------------------------------------------------------
 
 
 @login_required
 @require_http_methods(["GET", "POST"])
 def dashboard_apply(request: HttpRequest) -> HttpResponse:
-    """Dashboard apply flow — creates a child ProgramApplication."""
-    profile = _get_profile_or_404(request.user)
-
-    cohorts = list(Cohort.objects.filter(is_active=True).select_related("diploma").order_by("-start_date"))
-    courses = list(Course.objects.filter(is_active=True).order_by("title"))
-
-    if request.method == "POST":
-        program_type = request.POST.get("program_type")
-        target_id = request.POST.get("target_id")
-        if not program_type or not target_id:
-            messages.error(request, _("Please select a program."))
-            return redirect("applications:dashboard_apply")
-        try:
-            with transaction.atomic():
-                if program_type == "diploma":
-                    cohort = Cohort.objects.get(pk=target_id)
-                    submit_program_application(profile, program_type="diploma", cohort=cohort)
-                elif program_type == "course":
-                    course = Course.objects.get(pk=target_id)
-                    submit_program_application(profile, program_type="course", course=course)
-                else:
-                    messages.error(request, _("Invalid program type."))
-                    return redirect("applications:dashboard_apply")
-        except ValueError as exc:
-            messages.error(request, str(exc))
-            return redirect("applications:dashboard_apply")
-        messages.success(request, _("Your application has been submitted."))
-        return redirect("students:application_history")
-    return render(request, "applications/dashboard_apply.html", {
-        "cohorts": cohorts,
-        "courses": courses,
-    })
+    return redirect("students:apply")
 
 
 def _get_profile_or_404(user):
     if not hasattr(user, "student_profile"):
         raise Http404(_("No student profile."))
     return user.student_profile
-
-
-

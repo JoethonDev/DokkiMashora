@@ -1,6 +1,7 @@
 from django.contrib import admin
 
-from apps.exams.models import Answer, Assignment, Choice, Exam, Question
+from apps.exams.models import Answer, Assignment, Choice, Exam, ExamSnapshot, Question
+from apps.exams.models import EmailLog
 
 
 class QuestionInline(admin.TabularInline):
@@ -43,3 +44,17 @@ class AssignmentAdmin(admin.ModelAdmin):
 @admin.register(Answer)
 class AnswerAdmin(admin.ModelAdmin):
     list_display = ("assignment", "question", "score", "graded_at")
+
+
+@admin.register(ExamSnapshot)
+class ExamSnapshotAdmin(admin.ModelAdmin):
+    list_display = ("assignment", "question", "snapshot_at")
+    list_filter = ("snapshot_at",)
+    list_select_related = ("assignment", "question")
+
+
+@admin.register(EmailLog)
+class EmailLogAdmin(admin.ModelAdmin):
+    list_display = ("recipient", "exam", "template_slug", "sent_at", "status")
+    list_filter = ("status", "template_slug")
+    search_fields = ("recipient",)

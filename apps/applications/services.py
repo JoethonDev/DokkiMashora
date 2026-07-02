@@ -13,40 +13,30 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from apps.academics.models import Cohort, Course
-from apps.academics.models import Cohort as CohortModel
-from apps.academics.models import Course as CourseModel
 from apps.accounts.constants import GROUP_STUDENT
-from apps.audit.constants import (
-    ACTION_APPLICATION_ACTIVATED,
-    ACTION_APPLICATION_APPROVED,
-    ACTION_APPLICATION_DECISION_REVERTED,
-    ACTION_APPLICATION_REJECTED,
-    ACTION_APPLICATION_STATUS_CHANGE,
-)
+from apps.audit.constants import ACTION_APPLICATION_DECISION_REVERTED
 from apps.audit.services import record_audit_event
 from apps.communications.constants import (
     TEMPLATE_ACCEPTANCE,
     TEMPLATE_ACTIVATION,
-    TEMPLATE_ENTRANCE_EXAM_INVITATION,
-    TEMPLATE_REGISTRATION_RECEIVED,
     TEMPLATE_REJECTION,
 )
 from apps.communications.services import send_templated_email
-from apps.payments.constants import PAYMENT_STATUS_UNPAID
-from apps.payments.models import PaymentRecord
 from apps.students.models import StudentProfile
 
 from .constants import (
-    APP_STATUS_PENDING,
     PROGRAM_APP_STATUS_ACCEPTED,
-    PROGRAM_APP_STATUS_ACTIVATED,
+    PROGRAM_APP_STATUS_REJECTED,
     PROGRAM_APP_STATUS_SUBMITTED,
     PROGRAM_TYPE_COURSE,
     PROGRAM_TYPE_DIPLOMA,
 )
-from .models import EMAIL_ACTION_INVITATION, REVERTABLE_ACTIONS, Application, ApplicationDecision, ApplicationEmailLog, ProgramApplication
-from apps.entrance_exams.models import EntranceExam
-from apps.academics.models import Cohort, Course
+from .models import ProgramApplication, ProgramApplicationDecision, ProgramApplicationEmailLog
+
+if TYPE_CHECKING:
+    from apps.accounts.models import User as UserModel
+
+from apps.accounts.services import send_activation_email
 
 
 User = get_user_model()
@@ -97,14 +87,7 @@ class RegistrationData:
 
 
 def normalize_phone(raw: str) -> str:
-    """Strip the country code, +, 00, and leading 0 from a phone number.
-
-    Examples:
-        +201234567890 -> 1234567890
-        00201234567890 -> 1234567890
-        0100 123 4567  -> 1001234567
-        +1 555-123-4567 -> 5551234567
-    """
+    """Strip the country code, +, 00, and leading 0 from a phone number."""
     digits = "".join(c for c in raw if c.isdigit())
     if not digits:
         return ""
@@ -120,10 +103,7 @@ def normalize_phone(raw: str) -> str:
 
 
 def find_duplicate(data: RegistrationData) -> str | None:
-    """Return the field name that conflicts, or None when the data is fresh.
-
-    Check order per guardrails: national ID -> email -> phone.
-    """
+    """Return the field name that conflicts, or None when the data is fresh."""
     if StudentProfile.objects.filter(national_id=data.national_id).exists():
         return "national_id"
     if User.objects.filter(email__iexact=data.email).exists():
@@ -139,11 +119,11 @@ def find_duplicate(data: RegistrationData) -> str | None:
 @transaction.atomic
 def submit_registration(
     data: RegistrationData,
-) -> tuple[StudentProfile, Application, ProgramApplication | None]:
-    """Create a user, profile, root application, and optional program request.
+) -> tuple[StudentProfile, ProgramApplication | None]:
+    """Create a user, profile, and optional program application.
 
-    Raises ValueError with a duplicate field name if the data conflicts
-    with an existing record.
+    Returns (StudentProfile, ProgramApplication | None).
+    Raises ValueError with a duplicate field name if the data conflicts.
     """
     duplicate_on = find_duplicate(data)
     if duplicate_on:
@@ -177,13 +157,11 @@ def submit_registration(
         priest_name=data.priest_name,
         priest_contact=data.priest_contact,
     )
-    root_application = Application.objects.create(student=profile, status=APP_STATUS_PENDING)
 
     program_application = None
     if data.program_type == PROGRAM_TYPE_DIPLOMA and data.cohort_id:
         cohort = Cohort.objects.get(pk=data.cohort_id)
         program_application = ProgramApplication.objects.create(
-            root_application=root_application,
             student=profile,
             program_type=PROGRAM_TYPE_DIPLOMA,
             cohort=cohort,
@@ -192,16 +170,15 @@ def submit_registration(
     elif data.program_type == PROGRAM_TYPE_COURSE and data.course_id:
         course = Course.objects.get(pk=data.course_id)
         program_application = ProgramApplication.objects.create(
-            root_application=root_application,
             student=profile,
             program_type=PROGRAM_TYPE_COURSE,
             course=course,
             status=PROGRAM_APP_STATUS_SUBMITTED,
         )
 
-    _send_registration_received_email(profile, root_application, program_application)
+    transaction.on_commit(lambda: send_activation_email(user, user_password))
 
-    return profile, root_application, program_application
+    return profile, program_application
 
 
 def submit_program_application(
@@ -210,20 +187,10 @@ def submit_program_application(
     cohort: Cohort | None = None,
     course: Course | None = None,
 ) -> ProgramApplication:
-    """Create a new program application for an existing student.
-
-    Enforces:
-    - No duplicate pending/active program application for the same target.
-    - Student must have a root Application record.
-    """
-    root_application = Application.objects.filter(student=profile).order_by("-created_at").first()
-    if root_application is None:
-        root_application = Application.objects.create(student=profile, status=APP_STATUS_PENDING)
-
+    """Create a new program application for an existing student."""
     _check_duplicate_program_application(profile, program_type, cohort=cohort, course=course)
 
     return ProgramApplication.objects.create(
-        root_application=root_application,
         student=profile,
         program_type=program_type,
         cohort=cohort,
@@ -240,14 +207,14 @@ def _check_duplicate_program_application(
 ) -> None:
     """Raise ValueError if the student already has a pending/active program for the same target."""
     if program_type == PROGRAM_TYPE_DIPLOMA and cohort is not None:
-        if not isinstance(cohort, CohortModel):
-            cohort = CohortModel.objects.get(pk=cohort)
+        if not isinstance(cohort, Cohort):
+            cohort = Cohort.objects.get(pk=cohort)
         existing = ProgramApplication.objects.filter(
             student=profile,
             program_type=PROGRAM_TYPE_DIPLOMA,
             cohort=cohort,
         ).exclude(
-            status="rejected",
+            status=PROGRAM_APP_STATUS_REJECTED,
         ).exists()
         if existing:
             raise ValueError(
@@ -255,14 +222,14 @@ def _check_duplicate_program_application(
             )
 
     elif program_type == PROGRAM_TYPE_COURSE and course is not None:
-        if not isinstance(course, CourseModel):
-            course = CourseModel.objects.get(pk=course)
+        if not isinstance(course, Course):
+            course = Course.objects.get(pk=course)
         existing = ProgramApplication.objects.filter(
             student=profile,
             program_type=PROGRAM_TYPE_COURSE,
             course=course,
         ).exclude(
-            status="rejected",
+            status=PROGRAM_APP_STATUS_REJECTED,
         ).exists()
         if existing:
             raise ValueError(
@@ -276,22 +243,45 @@ def _student_group():
 
 
 # ---------------------------------------------------------------------------
-# Decision services (create decision history + audit events)
+# Decision services
 # ---------------------------------------------------------------------------
 
 
-def _record_decision(
-    target_type: str,
-    target_id: int,
-    action: str,
-    old_status: str,
-    new_status: str,
-    actor,
-    reason: str = "",
-) -> ApplicationDecision:
-    return ApplicationDecision.objects.create(
-        target_type=target_type,
-        target_id=str(target_id),
+def accept_program_application(application, actor, notes: str = "", send_email: bool = False) -> None:
+    with transaction.atomic():
+        old_status = application.status
+        application.accept(actor, notes=notes)
+        _record_decision(application, "accept", old_status, application.status, actor)
+        record_audit_event(
+            actor=actor,
+            action="application.approved",
+            target_type="program_application",
+            target_id=str(application.pk),
+            metadata={"student_id": application.student_id, "send_email": send_email},
+        )
+        if send_email:
+            transaction.on_commit(lambda: _send_program_app_acceptance_email(application))
+
+
+def reject_program_application(application, actor, reason: str, notes: str = "", send_email: bool = False) -> None:
+    with transaction.atomic():
+        old_status = application.status
+        application.reject(actor, reason=reason, notes=notes)
+        _record_decision(application, "reject", old_status, application.status, actor, reason=reason)
+        record_audit_event(
+            actor=actor,
+            action="application.rejected",
+            target_type="program_application",
+            target_id=str(application.pk),
+            metadata={"reason": reason, "student_id": application.student_id, "send_email": send_email},
+        )
+        if send_email:
+            transaction.on_commit(lambda: _send_program_app_rejection_email(application, reason))
+
+
+def _record_decision(application, action, old_status, new_status, actor, reason: str = ""):
+    return ProgramApplicationDecision.objects.create(
+        program_application=application,
         action=action,
         old_status=old_status,
         new_status=new_status,
@@ -300,306 +290,26 @@ def _record_decision(
     )
 
 
-def _activate_student_user(profile: StudentProfile) -> None:
-    group, _ = Group.objects.get_or_create(name=GROUP_STUDENT)
-    profile.user.groups.add(group)
-    profile.user.is_active = True
-    profile.user.save(update_fields=["is_active", "updated_at"])
-
-
-def _send_registration_received_email(profile, root_application=None, program_application=None):
-    email = profile.user.email
+def _send_program_app_acceptance_email(prog_app) -> None:
+    email = prog_app.student.user.email
+    if not email:
+        return
     context = {
-        "full_name": profile.full_name,
-        "email": email,
-        "national_id": profile.national_id or "",
-        "phone": profile.phone or "",
-        "date_of_birth": profile.date_of_birth.isoformat() if profile.date_of_birth else "",
-        "gender": profile.gender or "",
-        "education": profile.education or "",
-        "church": profile.church or "",
-        "priest_name": profile.priest_name or "",
-        "program_type": "",
-        "course_title": "",
-        "diploma_title": "",
-    }
-    if program_application:
-        context["program_type"] = program_application.program_type or ""
-        if program_application.cohort_id and program_application.cohort:
-            context["diploma_title"] = program_application.cohort.diploma.title or ""
-        if program_application.course:
-            context["course_title"] = program_application.course.title or ""
-    send_templated_email(TEMPLATE_REGISTRATION_RECEIVED, email, context, sent_by=None)
-
-
-def _get_program_app(application):
-    return application.program_applications.filter(
-        status__in=[PROGRAM_APP_STATUS_ACCEPTED, PROGRAM_APP_STATUS_ACTIVATED]
-    ).first()
-
-
-def _send_acceptance_email(application):
-    email = application.student.user.email
-    prog_app = _get_program_app(application)
-    context = {
-        "full_name": application.student.full_name,
-        "cohort_name": prog_app.cohort.name if prog_app and prog_app.cohort else "",
-        "activation_url": "",
-        "diploma_title": prog_app.cohort.diploma.title if prog_app and prog_app.cohort and prog_app.cohort.diploma else "",
-        "program_type": prog_app.program_type if prog_app else "",
+        "full_name": prog_app.student.full_name or "",
+        "cohort_name": prog_app.cohort.name if prog_app.cohort else "",
+        "diploma_title": prog_app.cohort.diploma.title if prog_app.cohort and prog_app.cohort.diploma else "",
+        "program_type": prog_app.program_type or "",
     }
     send_templated_email(TEMPLATE_ACCEPTANCE, email, context, sent_by=None)
 
 
-def _send_rejection_email(application, reason: str):
-    email = application.student.user.email
-    prog_app = _get_program_app(application)
+def _send_program_app_rejection_email(prog_app, reason: str) -> None:
+    email = prog_app.student.user.email
+    if not email:
+        return
     context = {
-        "full_name": application.student.full_name,
+        "full_name": prog_app.student.full_name or "",
         "rejection_reason": reason,
-        "cohort_name": prog_app.cohort.name if prog_app and prog_app.cohort else "",
+        "cohort_name": prog_app.cohort.name if prog_app.cohort else "",
     }
     send_templated_email(TEMPLATE_REJECTION, email, context, sent_by=None)
-
-
-def _send_activation_email(application):
-    email = application.student.user.email
-    prog_app = _get_program_app(application)
-    context = {
-        "full_name": application.student.full_name,
-        "activation_url": "",
-        "cohort_name": prog_app.cohort.name if prog_app and prog_app.cohort else "",
-        "email": email,
-        "phone": application.student.phone or "",
-        "diploma_title": prog_app.cohort.diploma.title if prog_app and prog_app.cohort and prog_app.cohort.diploma else "",
-    }
-    send_templated_email(TEMPLATE_ACTIVATION, email, context, sent_by=None)
-
-
-def _create_payment_record_on_activation(application, actor):
-    PaymentRecord.objects.create(
-        student=application.student,
-        application=application,
-        amount=0,
-        status=PAYMENT_STATUS_UNPAID,
-        imported_by=actor,
-    )
-
-
-def approve_application(application, actor, notes: str = "") -> None:
-    old_status = application.status
-    application.approve(actor, notes=notes)
-    _record_decision("application", application.pk, "approve", old_status, application.status, actor)
-    record_audit_event(
-        actor=actor,
-        action=ACTION_APPLICATION_APPROVED,
-        target_type="application",
-        target_id=str(application.pk),
-        metadata={"student_id": application.student_id},
-    )
-    _send_acceptance_email(application)
-
-
-def reject_application(application, actor, reason: str, notes: str = "") -> None:
-    old_status = application.status
-    application.reject(actor, reason=reason, notes=notes)
-    _record_decision("application", application.pk, "reject", old_status, application.status, actor, reason=reason)
-    record_audit_event(
-        actor=actor,
-        action=ACTION_APPLICATION_REJECTED,
-        target_type="application",
-        target_id=str(application.pk),
-        metadata={"reason": reason, "student_id": application.student_id},
-    )
-    _send_rejection_email(application, reason)
-
-
-def mark_review_application(application, actor) -> None:
-    old_status = application.status
-    application.mark_under_review(actor)
-    _record_decision("application", application.pk, "mark_review", old_status, application.status, actor)
-    record_audit_event(
-        actor=actor,
-        action=ACTION_APPLICATION_STATUS_CHANGE,
-        target_type="application",
-        target_id=str(application.pk),
-        metadata={"status": application.status},
-    )
-
-
-def activate_application(application, actor) -> None:
-    old_status = application.status
-    application.activate()
-    _activate_student_user(application.student)
-    _record_decision("application", application.pk, "activate", old_status, application.status, actor)
-    record_audit_event(
-        actor=actor,
-        action=ACTION_APPLICATION_ACTIVATED,
-        target_type="application",
-        target_id=str(application.pk),
-        metadata={"student_id": application.student_id, "user_id": application.student.user_id},
-    )
-    _send_activation_email(application)
-    _create_payment_record_on_activation(application, actor)
-
-
-def revert_application_decision(application, actor, reason: str = "") -> None:
-    last = (
-        ApplicationDecision.objects.filter(target_type="application", target_id=str(application.pk))
-        .exclude(action="revert")
-        .order_by("-created_at")
-        .first()
-    )
-    if last is None or last.action not in REVERTABLE_ACTIONS:
-        raise ValueError(_("No revertable decision found for this application."))
-    old_status = application.status
-    application.status = last.old_status
-    application.rejection_reason = ""
-    application.save(update_fields=["status", "rejection_reason", "updated_at"])
-    _record_decision("application", application.pk, "revert", old_status, application.status, actor, reason=reason)
-    record_audit_event(
-        actor=actor,
-        action=ACTION_APPLICATION_DECISION_REVERTED,
-        target_type="application",
-        target_id=str(application.pk),
-        metadata={"old_status": old_status, "new_status": application.status, "reason": reason},
-    )
-
-
-# ---------------------------------------------------------------------------
-# ProgramApplication decision services
-# ---------------------------------------------------------------------------
-
-
-def approve_program_application(application, actor, notes: str = "") -> None:
-    old_status = application.status
-    application.accept(actor, notes=notes)
-    _record_decision("program_application", application.pk, "approve", old_status, application.status, actor)
-    record_audit_event(
-        actor=actor,
-        action=ACTION_APPLICATION_APPROVED,
-        target_type="program_application",
-        target_id=str(application.pk),
-        metadata={"student_id": application.student_id},
-    )
-
-
-def reject_program_application(application, actor, reason: str, notes: str = "") -> None:
-    old_status = application.status
-    application.reject(actor, reason=reason, notes=notes)
-    _record_decision("program_application", application.pk, "reject", old_status, application.status, actor, reason=reason)
-    record_audit_event(
-        actor=actor,
-        action=ACTION_APPLICATION_REJECTED,
-        target_type="program_application",
-        target_id=str(application.pk),
-        metadata={"reason": reason, "student_id": application.student_id},
-    )
-
-
-def mark_review_program_application(application, actor) -> None:
-    old_status = application.status
-    application.mark_under_review(actor)
-    _record_decision("program_application", application.pk, "mark_review", old_status, application.status, actor)
-    record_audit_event(
-        actor=actor,
-        action=ACTION_APPLICATION_STATUS_CHANGE,
-        target_type="program_application",
-        target_id=str(application.pk),
-        metadata={"status": application.status},
-    )
-
-
-def _send_invitation_email(application, actor) -> None:
-    """Send entrance exam invitation email and log it."""
-    email_to = application.student.user.email
-    if not email_to:
-        return
-
-    cohort = application.cohort
-    exam = EntranceExam.objects.filter(cohort=cohort, is_active=True).first() if cohort else None
-    context = {"full_name": application.student.full_name or ""}
-    if exam:
-        context.update(
-            exam_title=exam.title,
-            cohort_name=cohort.name or "",
-            exam_url="",
-            exam_open_at="",
-            exam_close_at="",
-        )
-
-    try:
-        record = send_templated_email(
-            slug=TEMPLATE_ENTRANCE_EXAM_INVITATION,
-            to_email=email_to,
-            context=context,
-            sent_by=actor,
-        )
-    except Exception:
-        record = None
-
-    ApplicationEmailLog.objects.create(
-        application=application.root_application,
-        cohort=cohort,
-        action=EMAIL_ACTION_INVITATION,
-        template_slug=TEMPLATE_ENTRANCE_EXAM_INVITATION,
-        recipient=email_to,
-        sent_at=record.sent_at or timezone.now() if record else None,
-        sent_by=actor,
-        status=record.status if record else "failed",
-    )
-
-
-def invite_program_application(application, actor) -> None:
-    old_status = application.status
-    application.mark_invited(actor)
-    _record_decision("program_application", application.pk, "invite", old_status, application.status, actor)
-    record_audit_event(
-        actor=actor,
-        action=ACTION_APPLICATION_STATUS_CHANGE,
-        target_type="program_application",
-        target_id=str(application.pk),
-        metadata={"status": application.status},
-    )
-    _send_invitation_email(application, actor)
-
-
-def activate_program_application(application, actor) -> None:
-    old_status = application.status
-    application.activate()
-    _activate_student_user(application.student)
-    _record_decision("program_application", application.pk, "activate", old_status, application.status, actor)
-    record_audit_event(
-        actor=actor,
-        action=ACTION_APPLICATION_ACTIVATED,
-        target_type="program_application",
-        target_id=str(application.pk),
-        metadata={"student_id": application.student_id, "user_id": application.student.user_id},
-    )
-
-
-def revert_program_application_decision(application, actor, reason: str = "") -> None:
-    last = (
-        ApplicationDecision.objects.filter(
-            target_type="program_application", target_id=str(application.pk)
-        )
-        .exclude(action="revert")
-        .order_by("-created_at")
-        .first()
-    )
-    if last is None or last.action not in REVERTABLE_ACTIONS:
-        raise ValueError(_("No revertable decision found for this application."))
-    old_status = application.status
-    application.status = last.old_status
-    application.rejection_reason = ""
-    application.save(update_fields=["status", "rejection_reason", "updated_at"])
-    _record_decision(
-        "program_application", application.pk, "revert", old_status, application.status, actor, reason=reason
-    )
-    record_audit_event(
-        actor=actor,
-        action=ACTION_APPLICATION_DECISION_REVERTED,
-        target_type="program_application",
-        target_id=str(application.pk),
-        metadata={"old_status": old_status, "new_status": application.status, "reason": reason},
-    )

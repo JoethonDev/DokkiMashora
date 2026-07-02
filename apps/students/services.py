@@ -1,4 +1,4 @@
-"""Student profile services — profile update, reapply eligibility."""
+"""Student profile services — profile update, apply eligibility."""
 
 from __future__ import annotations
 
@@ -7,17 +7,23 @@ from typing import TYPE_CHECKING
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 
-from apps.academics.models import Cohort
-from apps.academics.models import Course as CourseModel
+from apps.academics.constants import (
+    ENROLLMENT_STATUS_ACTIVE,
+    ENROLLMENT_STATUS_COMPLETED,
+    ENROLLMENT_STATUS_PENDING,
+)
+from apps.academics.models import Cohort, Course as CourseModel
 from apps.applications.constants import (
     PROGRAM_APP_STATUS_REJECTED,
-    PROGRAM_APP_STATUS_SUBMITTED,
-    PROGRAM_APP_STATUS_UNDER_REVIEW,
     PROGRAM_TYPE_COURSE,
     PROGRAM_TYPE_DIPLOMA,
 )
 from apps.applications.models import ProgramApplication
 from apps.applications.services import submit_program_application
+from apps.progression.constants import (
+    DIPLOMA_COMPLETION_COMPLETED,
+    DIPLOMA_COMPLETION_GRADUATED,
+)
 
 if TYPE_CHECKING:
     from apps.students.models import StudentProfile
@@ -38,63 +44,121 @@ def update_profile(profile, data: dict) -> StudentProfile:
     return profile
 
 
-def check_reapply_eligibility(profile: StudentProfile, cohort=None, course=None) -> dict:
-    """Return whether the student can submit a new program application, and why.
+def check_apply_eligibility(
+    profile: StudentProfile,
+    program_type: str | None = None,
+    cohort=None,
+    course=None,
+) -> dict:
+    """Target-aware eligibility check.
 
-    Returns a dict with keys ``allowed`` (bool) and ``reason`` (str | None).
-    When *cohort* or *course* is provided, also checks for existing requests.
+    Returns a dict with keys:
+      ``allowed`` (bool)
+      ``reason_code`` (str | None) — one of completed, active_enrollment,
+          pending_application, or None.
+      ``reason`` (str | None) — human-readable message.
+
+    When *program_type*/*cohort*/*course* are None, only checks for global
+    blocking conditions (none currently). When a specific target is given,
+    checks completions, active/pending enrollments, and blocking requests.
     """
-    pending_or_review = ProgramApplication.objects.filter(
-        student=profile,
-        status__in=(PROGRAM_APP_STATUS_SUBMITTED, PROGRAM_APP_STATUS_UNDER_REVIEW),
-    ).exists()
-
-    if pending_or_review:
-        return {
-            "allowed": False,
-            "reason": _("You already have an application that is under review. "
-                         "Please wait for a decision before submitting a new one."),
-        }
-
-    if cohort is not None:
+    if program_type == PROGRAM_TYPE_DIPLOMA or cohort is not None:
+        if cohort is None:
+            return {"allowed": True, "reason_code": None, "reason": None}
         if not isinstance(cohort, Cohort):
             cohort = Cohort.objects.get(pk=cohort)
-        prior = ProgramApplication.objects.filter(
+        diploma = cohort.diploma
+
+        # Completed/graduated diploma
+        from apps.progression.models import StudentDiplomaCompletion
+        if StudentDiplomaCompletion.objects.filter(
             student=profile,
-            cohort=cohort,
-        ).exclude(status=PROGRAM_APP_STATUS_REJECTED).exists()
-        if prior:
+            diploma_enrollment__cohort__diploma=diploma,
+            status__in=(DIPLOMA_COMPLETION_COMPLETED, DIPLOMA_COMPLETION_GRADUATED),
+        ).exists():
             return {
                 "allowed": False,
-                "reason": _("You already have an application for this cohort. "
-                             "Choose a different program or cohort."),
+                "reason_code": "completed",
+                "reason": _("You have already completed this diploma."),
             }
 
-    if course is not None:
+        # Active/pending enrollment in any cohort of same diploma
+        from apps.academics.models import DiplomaEnrollment
+        if DiplomaEnrollment.objects.filter(
+            student=profile,
+            cohort__diploma=diploma,
+            status__in=(ENROLLMENT_STATUS_ACTIVE, ENROLLMENT_STATUS_PENDING),
+        ).exists():
+            return {
+                "allowed": False,
+                "reason_code": "active_enrollment",
+                "reason": _("You are already enrolled in this diploma."),
+            }
+
+        # Blocking program application for any cohort of same diploma
+        if ProgramApplication.objects.filter(
+            student=profile,
+            program_type=PROGRAM_TYPE_DIPLOMA,
+            cohort__diploma=diploma,
+        ).exclude(status=PROGRAM_APP_STATUS_REJECTED).exists():
+            return {
+                "allowed": False,
+                "reason_code": "pending_application",
+                "reason": _("You already have a pending application for this diploma."),
+            }
+
+        return {"allowed": True, "reason_code": None, "reason": None}
+
+    if program_type == PROGRAM_TYPE_COURSE or course is not None:
+        if course is None:
+            return {"allowed": True, "reason_code": None, "reason": None}
         if not isinstance(course, CourseModel):
             course = CourseModel.objects.get(pk=course)
-        prior = ProgramApplication.objects.filter(
+
+        # Completed enrollment for any version of same course
+        from apps.academics.models import CourseEnrollment
+        if CourseEnrollment.objects.filter(
             student=profile,
-            course=course,
-        ).exclude(status=PROGRAM_APP_STATUS_REJECTED).exists()
-        if prior:
+            course_version__course=course,
+            status=ENROLLMENT_STATUS_COMPLETED,
+        ).exists():
             return {
                 "allowed": False,
-                "reason": _("You already have an application for this course. "
-                             "Choose a different course."),
+                "reason_code": "completed",
+                "reason": _("You have already completed this course."),
             }
 
-    return {"allowed": True, "reason": None}
+        # Active/pending enrollment for any version of same course
+        if CourseEnrollment.objects.filter(
+            student=profile,
+            course_version__course=course,
+            status__in=(ENROLLMENT_STATUS_ACTIVE, ENROLLMENT_STATUS_PENDING),
+        ).exists():
+            return {
+                "allowed": False,
+                "reason_code": "active_enrollment",
+                "reason": _("You are already enrolled in this course."),
+            }
+
+        # Blocking program application for same course
+        if ProgramApplication.objects.filter(
+            student=profile,
+            program_type=PROGRAM_TYPE_COURSE,
+            course=course,
+        ).exclude(status=PROGRAM_APP_STATUS_REJECTED).exists():
+            return {
+                "allowed": False,
+                "reason_code": "pending_application",
+                "reason": _("You already have a pending application for this course."),
+            }
+
+        return {"allowed": True, "reason_code": None, "reason": None}
+
+    return {"allowed": True, "reason_code": None, "reason": None}
 
 
-def submit_reapply_application(profile: StudentProfile, cohort=None, course=None) -> ProgramApplication:
-    """Create a *new* ProgramApplication record for a reapply.
-
-    Always creates a fresh row.  Callers must have already verified eligibility.
-    Raises ValueError if the student has an open application that is still
-    pending or under review (belt-and-suspenders guard), or if the target
-    has already been applied for.
-    """
+def submit_apply_application(profile: StudentProfile, cohort=None, course=None) -> ProgramApplication:
+    """Create a *new* ProgramApplication record for Apply."""
     if cohort is not None:
         return submit_program_application(
             profile, program_type=PROGRAM_TYPE_DIPLOMA, cohort=cohort
@@ -104,4 +168,5 @@ def submit_reapply_application(profile: StudentProfile, cohort=None, course=None
             profile, program_type=PROGRAM_TYPE_COURSE, course=course
         )
 
-    raise ValueError(_("A cohort or course must be specified for reapplication."))
+    raise ValueError(_("A cohort or course must be specified for application."))
+

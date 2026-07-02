@@ -19,3 +19,11 @@ def add_class(field, css_class):
     existing = widget.attrs.get("class", "")
     widget.attrs["class"] = (existing + " " + css_class).strip()
     return field
+
+
+@register.filter
+def get_item(dictionary, key):
+    """Return dictionary[key] or empty string."""
+    if isinstance(dictionary, dict):
+        return dictionary.get(key, "")
+    return ""

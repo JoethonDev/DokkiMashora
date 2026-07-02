@@ -9,7 +9,7 @@
   <h1 class="text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ exam.title }} - {% trans "Results" %}</h1>
 
   <div class="mt-6 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-center">
       <div>
         <p class="text-sm text-slate-500 dark:text-slate-400">{% trans "Status" %}</p>
         <div class="mt-2 flex justify-center">
@@ -23,29 +23,18 @@
         </div>
       </div>
       <div>
-        <p class="text-sm text-slate-500 dark:text-slate-400">{% trans "Score" %}</p>
-        <p class="mt-1 text-3xl font-bold tabular-nums tracking-tight font-display text-slate-900 dark:text-slate-100">
-          {% if attempt.score is not None %}
-            {{ attempt.score }}
+        <p class="text-sm text-slate-500 dark:text-slate-400">{% trans "Result" %}</p>
+        <div class="mt-2 flex justify-center">
+          {% if attempt.result == "pass" %}
+            {% include "partials/_badge.html" with label=_("Passed") tone="success" %}
+          {% elif attempt.result == "fail" %}
+            {% include "partials/_badge.html" with label=_("Failed") tone="danger" %}
           {% else %}
-            {% include "partials/_blank.html" %}
+            <span class="text-slate-400">—</span>
           {% endif %}
-        </p>
-      </div>
-      <div>
-        <p class="text-sm text-slate-500 dark:text-slate-400">{% trans "Passing score" %}</p>
-        <p class="mt-1 text-3xl font-bold tabular-nums tracking-tight font-display text-slate-900 dark:text-slate-100">{{ exam.passing_score }}</p>
+        </div>
       </div>
     </div>
-    {% if attempt.result %}
-      <div class="mt-4 text-center">
-        {% if attempt.result == "pass" %}
-          {% include "partials/_badge.html" with label=_("Passed") tone="success" %}
-        {% else %}
-          {% include "partials/_badge.html" with label=_("Failed") tone="danger" %}
-        {% endif %}
-      </div>
-    {% endif %}
   </div>
 
   {% for answer in answers %}
@@ -54,7 +43,6 @@
         <h3 class="text-base font-semibold text-slate-900 dark:text-slate-100">
           {% trans "Question" %} {{ forloop.counter }}
         </h3>
-        {% include "partials/_badge.html" with label=answer.question.points|stringformat:"s"|add:" pts" tone="neutral" %}
       </div>
       <p class="text-base leading-relaxed text-slate-800 dark:text-slate-200 max-w-prose">{{ answer.question.text }}</p>
 
@@ -63,25 +51,12 @@
           <p class="text-xs font-medium text-slate-500 dark:text-slate-400">{% trans "Choices" %}:</p>
           {% for choice in answer.question.choices.all %}
             <div class="flex items-center gap-2 text-sm px-3 py-1.5 rounded-md
-              {% if choice.score and answer.selected_choice == choice %}bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700
-              {% elif choice.score %}bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800
-              {% elif answer.selected_choice == choice %}bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-700
+              {% if answer.selected_choice == choice %}bg-brand-50 dark:bg-brand-950/20 text-brand-700 dark:text-brand-300 border border-brand-300 dark:border-brand-700
               {% else %}text-slate-600 dark:text-slate-300{% endif %}">
-              {% if choice.score and answer.selected_choice == choice %}
-                ✓
-              {% elif choice.score %}
-                ({% trans "correct" %})
-              {% elif answer.selected_choice == choice %}
-                ✗
-              {% endif %}
+              {% if answer.selected_choice == choice %}✓{% endif %}
               {{ choice.text }}
             </div>
           {% endfor %}
-          {% if answer.score is not None %}
-            <p class="text-sm text-slate-500 dark:text-slate-400">
-              {% trans "Score" %}: {{ answer.score }} / {{ answer.question.points }}
-            </p>
-          {% endif %}
         </div>
       {% else %}
         <div class="mt-4">
@@ -90,11 +65,6 @@
             <p class="text-slate-700 dark:text-slate-200 whitespace-pre-wrap leading-relaxed max-w-prose">{{ answer.written_text }}</p>
           </div>
         </div>
-        {% if answer.score is not None %}
-          <div class="mt-3 flex items-center gap-4">
-            <span class="text-sm font-semibold text-slate-900 dark:text-slate-100">{% trans "Score" %}: {{ answer.score }}</span>
-          </div>
-        {% endif %}
         {% if answer.feedback %}
           <div class="mt-2">
             <p class="text-xs font-medium text-slate-500 dark:text-slate-400">{% trans "Feedback" %}:</p>

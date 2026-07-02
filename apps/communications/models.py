@@ -16,7 +16,6 @@ from .constants import (
     BULK_STATUS_DRAFT,
     DESIGN_BRANDED,
     DESIGN_CHOICES,
-    REQUIRED_VARIABLES_BY_SLUG,
     TEMPLATE_SLUGS,
 )
 
@@ -36,6 +35,12 @@ class EmailTemplate(TimeStampedModel):
     is_active = models.BooleanField(_("active"), default=True)
     is_enabled_for_action = models.BooleanField(_("enabled for action"), default=True)
     design = models.CharField(_("design"), max_length=16, choices=DESIGN_CHOICES, default=DESIGN_BRANDED)
+    required_variables = models.JSONField(
+        _("required variables"),
+        default=list,
+        blank=True,
+        help_text=_("Variables that must appear in the body. Editable in the template editor."),
+    )
 
     class Meta:
         verbose_name = _("email template")
@@ -49,8 +54,7 @@ class EmailTemplate(TimeStampedModel):
         super().clean()
         if self.slug and self.slug not in TEMPLATE_SLUGS:
             raise ValidationError({"slug": _("Unknown template slug.")})
-        required = REQUIRED_VARIABLES_BY_SLUG.get(self.slug, [])
-        for var in required:
+        for var in (self.required_variables or []):
             if f"{{{{ {var} }}}}" not in self.body:
                 raise ValidationError(
                     _("Body must contain the required variable {{ %(var)s }}.") % {"var": var}

@@ -5,13 +5,11 @@ from __future__ import annotations
 from datetime import date
 
 from django import forms
-from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.academics.models import Cohort, Course, Diploma
 from apps.applications.constants import PROGRAM_TYPE_CHOICES
-from apps.applications.models import Application
 from apps.applications.services import RegistrationData, find_duplicate, normalize_phone
 from apps.students.constants import EDUCATION_CHOICES, GENDER_CHOICES
 
@@ -200,33 +198,3 @@ class RegistrationForm(forms.Form):
                 result["program_type"] = "course"
                 result["course_id"] = int(program_target.split("_", 1)[1])
         return result
-
-
-class ApplicationDecisionForm(forms.ModelForm):
-    """Admin form to capture review notes and a rejection reason."""
-
-    class Meta:
-        model = Application
-        fields = ("admin_notes", "rejection_reason")
-        labels = {
-            "admin_notes": _("Admin notes"),
-            "rejection_reason": _("Rejection reason"),
-        }
-
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-
-
-class ProgramApplicationDecisionForm(forms.ModelForm):
-    """Admin form for ProgramApplication review actions."""
-
-    class Meta:
-        model = Application
-        fields = ("admin_notes", "rejection_reason")
-        labels = {
-            "admin_notes": _("Admin notes"),
-            "rejection_reason": _("Rejection reason"),
-        }
-
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)

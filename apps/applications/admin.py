@@ -2,30 +2,30 @@
 
 from django.contrib import admin
 
-from .models import Application, ApplicationDecision, ApplicationEmailLog
+from .models import ProgramApplication, ProgramApplicationDecision, ProgramApplicationEmailLog
 
 
-@admin.register(Application)
-class ApplicationAdmin(admin.ModelAdmin):
-    list_display = ("student", "status", "reviewed_by", "reviewed_at", "created_at")
-    list_filter = ("status",)
+@admin.register(ProgramApplication)
+class ProgramApplicationAdmin(admin.ModelAdmin):
+    list_display = ("student", "program_type", "status", "reviewed_by", "reviewed_at", "created_at")
+    list_filter = ("status", "program_type")
     search_fields = ("student__full_name", "student__user__email", "student__national_id")
     raw_id_fields = ("student", "reviewed_by")
-    readonly_fields = ("created_at", "updated_at", "reviewed_at", "activated_at")
+    readonly_fields = ("created_at", "updated_at", "reviewed_at")
     date_hierarchy = "created_at"
 
 
-@admin.register(ApplicationEmailLog)
-class ApplicationEmailLogAdmin(admin.ModelAdmin):
-    list_display = ("application", "action", "status", "sent_at", "sent_by", "is_resend")
+@admin.register(ProgramApplicationEmailLog)
+class ProgramApplicationEmailLogAdmin(admin.ModelAdmin):
+    list_display = ("program_application", "action", "status", "sent_at", "sent_by", "is_resend")
     list_filter = ("action", "status", "is_resend")
     search_fields = ("recipient",)
     readonly_fields = ("created_at", "updated_at", "sent_at")
 
 
-@admin.register(ApplicationDecision)
-class ApplicationDecisionAdmin(admin.ModelAdmin):
-    list_display = ("action", "target_type", "target_id", "actor", "old_status", "new_status", "created_at")
-    list_filter = ("action", "target_type")
-    search_fields = ("target_id", "actor__email")
+@admin.register(ProgramApplicationDecision)
+class ProgramApplicationDecisionAdmin(admin.ModelAdmin):
+    list_display = ("action", "program_application", "actor", "old_status", "new_status", "created_at")
+    list_filter = ("action",)
+    search_fields = ("program_application__student__full_name", "actor__email")
     readonly_fields = ("created_at",)
