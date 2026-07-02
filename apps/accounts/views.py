@@ -490,8 +490,15 @@ def admin_staff_list(request):
 @login_required
 @role_required(*ROLE_EXAM_STAFF)
 def admin_user_detail(request, user_id):
-    user_obj = get_object_or_404(User.objects.prefetch_related("groups"), id=user_id)
-    return render(request, "accounts/admin_user_detail.html", {"user_obj": user_obj})
+    user_obj = get_object_or_404(User.objects.select_related("student_profile").prefetch_related("groups"), id=user_id)
+    return render(
+        request,
+        "accounts/admin_user_detail.html",
+        {
+            "user_obj": user_obj,
+            "student_profile": getattr(user_obj, "student_profile", None),
+        },
+    )
 
 
 @login_required

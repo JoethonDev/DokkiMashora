@@ -4,7 +4,8 @@
 {% block profile_subtitle %}<p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{% trans "Submit a new program application." %}</p>{% endblock %}
 {% block profile_content %}
 <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 max-w-2xl"
-     x-data="{ programType: '{{ selected_program_type|default:'diploma' }}', init() { this.$watch('programType', function(val) { if (val === 'diploma') { htmx.trigger('#id_diploma', 'refresh'); } else { htmx.trigger('#id_program_target', 'refresh'); } }); } }">
+      x-data="{ programType: '{{ selected_program_type|default:'diploma' }}' }"
+      x-init="$watch('programType',(val,old)=>{if(old!==undefined){const sel=val==='diploma'?document.querySelector('#id_diploma'):document.querySelector('#id_program_target');if(sel)htmx.trigger(sel,'refresh')}})">
   {% if not cohorts and not courses %}
     <p class="text-sm text-slate-600 dark:text-slate-300">{% trans "There are no eligible programs available right now." %}</p>
   {% endif %}
@@ -28,25 +29,23 @@
     <div x-show="programType === 'diploma'" x-cloak>
       <label for="id_diploma" class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">{% trans "Diploma" %}</label>
       <select name="target_id" id="id_diploma" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
-              hx-get="{% url 'applications:program_diplomas' %}" hx-trigger="refresh" hx-swap="innerHTML">
+              hx-get="{% url 'applications:program_targets' %}?kind=diploma" hx-trigger="load, refresh" hx-swap="innerHTML"
+              :disabled="programType !== 'diploma'">
         <option value="">{% trans "— Select —" %}</option>
-        {% for c in cohorts %}
-          <option value="{{ c.pk }}" {% if selected_target_id == c.pk|stringformat:'s' %}selected{% endif %}>{{ c.diploma.title }} — {{ c.name }}</option>
-        {% endfor %}
       </select>
+      <div id="diploma-loader" class="text-xs text-slate-500 dark:text-slate-400">{% trans "Loading diplomas..." %}</div>
     </div>
 
     <div x-show="programType === 'course'" x-cloak>
       <label for="id_program_target" class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">{% trans "Course" %}</label>
-      <select name="target_id" id="id_program_target" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
-              hx-get="{% url 'applications:program_targets' %}" hx-trigger="refresh" hx-swap="innerHTML">
-        <option value="">{% trans "— Select —" %}</option>
-        {% for course in courses %}
-          {% with course_value='course_'|add:course.pk|stringformat:'s' %}
-            <option value="{{ course_value }}" {% if selected_target_id == course_value %}selected{% endif %}>{{ course.title }}</option>
-          {% endwith %}
-        {% endfor %}
-      </select>
+      <div class="space-y-2">
+        <select name="target_id" id="id_program_target" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
+                hx-get="{% url 'applications:program_targets' %}?kind=course" hx-trigger="load, refresh" hx-swap="innerHTML"
+                :disabled="programType !== 'course'">
+          <option value="">{% trans "— Select —" %}</option>
+        </select>
+        <div id="course-loader" class="text-xs text-slate-500 dark:text-slate-400">{% trans "Loading courses..." %}</div>
+      </div>
     </div>
 
     <div class="pt-2">

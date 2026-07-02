@@ -25,6 +25,7 @@ from .constants import (
 DECISION_ACTION_CHOICES = (
     ("accept", _("Accepted")),
     ("reject", _("Rejected")),
+    ("revert", _("Reverted")),
 )
 
 REVERTABLE_ACTIONS = frozenset({"accept", "reject"})
@@ -219,4 +220,3 @@ class ProgramApplicationDecision(TimeStampedModel):
         if self.pk is not None:
             raise PermissionError("Program application decisions are append-only.")
         super().save(*args, **kwargs)
-

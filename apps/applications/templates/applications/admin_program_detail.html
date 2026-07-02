@@ -43,11 +43,18 @@
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Rejection reason" %}</label>
             <textarea name="rejection_reason" rows="2" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900 dark:text-slate-100">{{ application.rejection_reason }}</textarea>
           </div>
+        {% elif not application.entrance_attempts.all %}
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Revert reason" %}</label>
+            <textarea name="revert_reason" rows="2" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900 dark:text-slate-100"></textarea>
+          </div>
         {% endif %}
         <div class="flex flex-wrap gap-2">
           {% if application.status == "submitted" or application.status == "under_review" %}
             {% include "partials/_button.html" with label=_("Accept") size="sm" variant="success" attrs='name="action" value="accept"' %}
             {% include "partials/_button.html" with label=_("Reject") size="sm" variant="danger" attrs='name="action" value="reject"' %}
+          {% elif not application.entrance_attempts.all %}
+            {% include "partials/_button.html" with label=_("Revert") size="sm" variant="secondary" attrs='name="action" value="revert"' %}
           {% endif %}
         </div>
         <div class="flex items-center gap-2">

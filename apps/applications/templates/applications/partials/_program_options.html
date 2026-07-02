@@ -1,5 +1,18 @@
 {% load i18n %}
-<option value="">{% trans placeholder %}</option>
+{% if page == 1 %}<option value="">{% trans placeholder %}</option>{% endif %}
 {% for value, label in options %}
 <option value="{{ value }}">{{ label }}</option>
 {% endfor %}
+<div id="{{ loader_id }}" hx-swap-oob="outerHTML:#{{ loader_id }}">
+  {% if has_more and load_url %}
+    <button type="button"
+            class="mt-2 text-xs font-medium text-brand-600 dark:text-brand-400"
+            hx-get="{{ load_url }}"
+            hx-target="#{% if loader_id == 'course-loader' %}id_program_target{% else %}id_diploma{% endif %}"
+            hx-swap="beforeend">
+      {% trans "Load more" %}
+    </button>
+  {% else %}
+    <span class="mt-2 block text-xs text-slate-500 dark:text-slate-400">{% trans "No more options" %}</span>
+  {% endif %}
+</div>

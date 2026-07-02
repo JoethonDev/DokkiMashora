@@ -16,19 +16,19 @@
   <div class="mt-6 mb-6 border-b border-slate-200 dark:border-slate-700">
     <nav class="flex gap-6 text-sm font-medium" role="tablist">
       <button type="button" role="tab"
-              @click="tab = 'invitation'; window.location.href = '?tab=invitation'"
+              @click="tab = 'invitation'"
               :class="tab === 'invitation' ? 'border-b-2 border-brand-600 text-brand-600' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
               class="pb-2 -mb-px transition">
         {% trans "Exam Invitation" %}
       </button>
       <button type="button" role="tab"
-              @click="tab = 'results'; window.location.href = '?tab=results'"
+              @click="tab = 'results'"
               :class="tab === 'results' ? 'border-b-2 border-brand-600 text-brand-600' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
               class="pb-2 -mb-px transition">
         {% trans "Acceptance / Rejection" %}
       </button>
       <button type="button" role="tab"
-              @click="tab = 'history'; window.location.href = '?tab=history'"
+              @click="tab = 'history'"
               :class="tab === 'history' ? 'border-b-2 border-brand-600 text-brand-600' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
               class="pb-2 -mb-px transition">
         {% trans "Sent History" %}
@@ -42,7 +42,20 @@
       <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">
         {% trans "Select students to send entrance exam invitation emails." %}
       </p>
-      {% if invitation_page %}
+      <div id="invitation-content">
+        <div class="mb-4 flex gap-2">
+          <input type="search" name="iq" value="{{ iq }}" placeholder="{% trans 'Search by name or email...' %}"
+                 hx-get="{% url 'entrance_exams:admin_cohort_email' exam.id %}?tab=invitation"
+                 hx-trigger="keyup changed delay:200ms"
+                 hx-target="#invitation-content"
+                 hx-select="#invitation-content"
+                 hx-push-url="true"
+                 hx-include="this"
+                 class="flex-1 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm">
+          {% if iq %}<button type="button"
+                        hx-get="?tab=invitation" hx-target="#invitation-content" hx-select="#invitation-content" hx-push-url="true"
+                        class="shrink-0 rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition">{% trans "Clear" %}</button>{% endif %}
+        </div>
         <form method="post">
           {% csrf_token %}
           <input type="hidden" name="tab" value="invitation">
@@ -68,18 +81,22 @@
                     <td class="px-3 py-2 text-slate-600 dark:text-slate-400">{{ app.student.user.email }}</td>
                     <td class="px-3 py-2">{% include "partials/_badge.html" with label=app.get_status_display tone="info" %}</td>
                   </tr>
+                {% empty %}
+                  <tr>
+                    <td colspan="4" class="px-3 py-8 text-center text-slate-500 dark:text-slate-400">{% trans "No data" %}</td>
+                  </tr>
                 {% endfor %}
               </tbody>
             </table>
           </div>
-          {% include "partials/_pagination.html" with page_obj=invitation_page %}
+          <div hx-boost="true" hx-target="#invitation-content" hx-select="#invitation-content" hx-push-url="true">
+            {% include "partials/_pagination.html" with page_obj=invitation_page pagination_qs=inv_pagination_qs %}
+          </div>
           <button type="submit" class="inline-flex items-center px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 transition">
             {% trans "Send Invitations" %}
           </button>
         </form>
-      {% else %}
-        {% include "partials/_empty_state.html" with message=_("No eligible applications for invitation.") %}
-      {% endif %}
+      </div>
     </div>
   </div>
 
@@ -89,13 +106,35 @@
       <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">
         {% trans "Select students and send result emails. The email type (pass/fail) is auto-detected from each student's result." %}
       </p>
-      <div class="flex items-center gap-2 mb-4 text-sm">
-        <span class="text-slate-500">{% trans "Filter:" %}</span>
-        <a href="?tab=results" class="px-2 py-1 rounded {% if result_filter == '' %}bg-brand-100 text-brand-700 font-medium{% else %}text-slate-600 hover:text-slate-800{% endif %}">{% trans "All" %}</a>
-        <a href="?tab=results&result=pass" class="px-2 py-1 rounded {% if result_filter == 'pass' %}bg-green-100 text-green-700 font-medium{% else %}text-slate-600 hover:text-slate-800{% endif %}">{% trans "Pass" %}</a>
-        <a href="?tab=results&result=fail" class="px-2 py-1 rounded {% if result_filter == 'fail' %}bg-red-100 text-red-700 font-medium{% else %}text-slate-600 hover:text-slate-800{% endif %}">{% trans "Fail" %}</a>
-      </div>
-      {% if results_page %}
+      <div id="results-content">
+        <div class="mb-4 flex gap-2">
+          <input type="search" name="rq" value="{{ rq }}" placeholder="{% trans 'Search by name or email...' %}"
+                 hx-get="{% url 'entrance_exams:admin_cohort_email' exam.id %}?tab=results{% if result_filter %}&result={{ result_filter }}{% endif %}"
+                 hx-trigger="keyup changed delay:200ms"
+                 hx-target="#results-content"
+                 hx-select="#results-content"
+                 hx-push-url="true"
+                 hx-include="this"
+                 class="flex-1 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm">
+          {% if rq %}<button type="button"
+                        hx-get="?tab=results{% if result_filter %}&result={{ result_filter }}{% endif %}" hx-target="#results-content" hx-select="#results-content" hx-push-url="true"
+                        class="shrink-0 rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition">{% trans "Clear" %}</button>{% endif %}
+        </div>
+        <div class="flex items-center gap-2 mb-4 text-sm">
+          <span class="text-slate-500">{% trans "Filter:" %}</span>
+          <a href="?tab=results{% if rq %}&rq={{ rq }}{% endif %}"
+             hx-get="?tab=results{% if rq %}&rq={{ rq }}{% endif %}"
+             hx-target="#results-content" hx-select="#results-content" hx-push-url="true"
+             class="px-2 py-1 rounded {% if result_filter == '' %}bg-brand-100 text-brand-700 font-medium{% else %}text-slate-600 hover:text-slate-800{% endif %}">{% trans "All" %}</a>
+          <a href="?tab=results&result=pass{% if rq %}&rq={{ rq }}{% endif %}"
+             hx-get="?tab=results&result=pass{% if rq %}&rq={{ rq }}{% endif %}"
+             hx-target="#results-content" hx-select="#results-content" hx-push-url="true"
+             class="px-2 py-1 rounded {% if result_filter == 'pass' %}bg-green-100 text-green-700 font-medium{% else %}text-slate-600 hover:text-slate-800{% endif %}">{% trans "Pass" %}</a>
+          <a href="?tab=results&result=fail{% if rq %}&rq={{ rq }}{% endif %}"
+             hx-get="?tab=results&result=fail{% if rq %}&rq={{ rq }}{% endif %}"
+             hx-target="#results-content" hx-select="#results-content" hx-push-url="true"
+             class="px-2 py-1 rounded {% if result_filter == 'fail' %}bg-red-100 text-red-700 font-medium{% else %}text-slate-600 hover:text-slate-800{% endif %}">{% trans "Fail" %}</a>
+        </div>
         <form method="post">
           {% csrf_token %}
           <input type="hidden" name="tab" value="results">
@@ -129,18 +168,22 @@
                       {% endif %}
                     </td>
                   </tr>
+                {% empty %}
+                  <tr>
+                    <td colspan="4" class="px-3 py-8 text-center text-slate-500 dark:text-slate-400">{% trans "No data" %}</td>
+                  </tr>
                 {% endfor %}
               </tbody>
             </table>
           </div>
-          {% include "partials/_pagination.html" with page_obj=results_page %}
+          <div hx-boost="true" hx-target="#results-content" hx-select="#results-content" hx-push-url="true">
+            {% include "partials/_pagination.html" with page_obj=results_page pagination_qs=res_pagination_qs %}
+          </div>
           <button type="submit" class="inline-flex items-center px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 transition">
             {% trans "Send Results" %}
           </button>
         </form>
-      {% else %}
-        {% include "partials/_empty_state.html" with message=_("No completed or graded attempts yet.") %}
-      {% endif %}
+      </div>
     </div>
   </div>
 
@@ -148,7 +191,20 @@
     <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
       <h2 class="text-lg font-semibold">{% trans "Sent Emails" %}</h2>
       <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">{% trans "All email logs for this cohort. Select logs to bulk-resend." %}</p>
-      {% if history_page %}
+      <div id="history-content">
+        <div class="mb-4 flex gap-2">
+          <input type="search" name="hq" value="{{ hq }}" placeholder="{% trans 'Search by name or email...' %}"
+                 hx-get="{% url 'entrance_exams:admin_cohort_email' exam.id %}?tab=history"
+                 hx-trigger="keyup changed delay:200ms"
+                 hx-target="#history-content"
+                 hx-select="#history-content"
+                 hx-push-url="true"
+                 hx-include="this"
+                 class="flex-1 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm">
+          {% if hq %}<button type="button"
+                        hx-get="?tab=history" hx-target="#history-content" hx-select="#history-content" hx-push-url="true"
+                        class="shrink-0 rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition">{% trans "Clear" %}</button>{% endif %}
+        </div>
         <form method="post">
           {% csrf_token %}
           <input type="hidden" name="tab" value="history">
@@ -171,7 +227,7 @@
                     <td class="px-3 py-2">
                       <input type="checkbox" name="log_ids" value="{{ log.id }}" class="history-check h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500">
                     </td>
-                    <td class="px-3 py-2 text-slate-900 dark:text-slate-100">{{ log.application.student.full_name }}</td>
+                    <td class="px-3 py-2 text-slate-900 dark:text-slate-100">{{ log.program_application.student.full_name }}</td>
                     <td class="px-3 py-2">
                       {% if log.action == "entrance_exam_invitation" %}
                         {% include "partials/_badge.html" with label=_("Invitation") tone="info" %}
@@ -188,18 +244,22 @@
                     </td>
                     <td class="px-3 py-2 text-slate-500 dark:text-slate-400 text-xs tabular-nums">{% dt log.sent_at %}</td>
                   </tr>
+                {% empty %}
+                  <tr>
+                    <td colspan="5" class="px-3 py-8 text-center text-slate-500 dark:text-slate-400">{% trans "No data" %}</td>
+                  </tr>
                 {% endfor %}
               </tbody>
             </table>
           </div>
-          {% include "partials/_pagination.html" with page_obj=history_page %}
+          <div hx-boost="true" hx-target="#history-content" hx-select="#history-content" hx-push-url="true">
+            {% include "partials/_pagination.html" with page_obj=history_page pagination_qs=hist_pagination_qs %}
+          </div>
           <button type="submit" class="inline-flex items-center px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 transition">
             {% trans "Resend Selected" %}
           </button>
         </form>
-      {% else %}
-        {% include "partials/_empty_state.html" with message=_("No sent emails yet.") %}
-      {% endif %}
+      </div>
     </div>
   </div>
 </div>

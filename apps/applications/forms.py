@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import Any
 
 from django import forms
 from django.utils import timezone
@@ -12,6 +13,7 @@ from apps.academics.models import Cohort, Course, Diploma
 from apps.applications.constants import PROGRAM_TYPE_CHOICES
 from apps.applications.services import RegistrationData, find_duplicate, normalize_phone
 from apps.students.constants import EDUCATION_CHOICES, GENDER_CHOICES
+from apps.students.services import check_apply_eligibility
 
 
 class RegistrationForm(forms.Form):
@@ -52,9 +54,8 @@ class RegistrationForm(forms.Form):
         choices=[],
         required=False,
     )
-    program_target = forms.ChoiceField(
+    program_target = forms.CharField(
         label=_("Program"),
-        choices=[],
         required=False,
     )
 
@@ -64,22 +65,17 @@ class RegistrationForm(forms.Form):
 
     def _load_program_choices(self) -> None:
         self.fields["program_type"].choices = PROGRAM_TYPE_CHOICES
-        now = timezone.now()
-        diploma_ids = (
-            Cohort.objects.filter(
-                is_active=True,
-                entrance_exams__close_at__gte=now
-            )
-            .values_list("diploma_id", flat=True)
-            .distinct()
-        )
-        diplomas = Diploma.objects.filter(pk__in=diploma_ids, is_active=True).order_by("title")
+        diplomas = []
+        seen_diploma_ids = set()
+        for cohort in Cohort.objects.filter(is_active=True, entrance_exams__is_active=True).select_related("diploma").order_by("-start_date").distinct():
+            if cohort.diploma_id in seen_diploma_ids:
+                continue
+            seen_diploma_ids.add(cohort.diploma_id)
+            diplomas.append(cohort.diploma)
         self.fields["diploma"].choices = [("", _("Select a diploma"))] + [
             (str(d.pk), d.title) for d in diplomas
         ]
-        courses = Course.objects.filter(is_active=True).order_by("title")
-        course_choices = [("", _("Select a course"))] + [(f"course_{c.pk}", c.title) for c in courses]
-        self._course_choices = course_choices
+        self._course_choices = []
 
     def clean_date_of_birth(self) -> date:
         value: date = self.cleaned_data["date_of_birth"]
@@ -158,37 +154,43 @@ class RegistrationForm(forms.Form):
                     if not diploma:
                         self.add_error("diploma", _("Please select a diploma."))
                     else:
-                        now = timezone.now()
                         cohort = (
                             Cohort.objects.filter(
                                 diploma_id=diploma,
                                 is_active=True,
-                                entrance_exams__close_at__gte=now,
+                                entrance_exams__is_active=True,
+                                entrance_exams__open_at__lte=timezone.now(),
+                                entrance_exams__close_at__gte=timezone.now(),
                             )
-                            .distinct()
+                            .select_related("diploma")
                             .order_by("-start_date")
                             .first()
                         )
                         if not cohort:
                             self.add_error("diploma", _("No active cohort with an entrance exam found for this diploma."))
                         else:
-                            cleaned["_auto_cohort_id"] = cohort.pk
+                            self._auto_cohort_id = cohort.pk
                 if program_type == "course":
                     if not program_target:
                         self.add_error("program_target", _("Please select a course."))
-                    if program_target and not program_target.startswith("course_"):
+                    elif not str(program_target).startswith("course_"):
                         self.add_error("program_target", _("Invalid course selection."))
+                    else:
+                        course_id = str(program_target).split("_", 1)[1]
+                        course = Course.objects.filter(pk=course_id, is_active=True).first()
+                        if not course:
+                            self.add_error("program_target", _("Invalid course selection."))
 
         return cleaned
 
     def get_program_data(self) -> dict:
         """Extract optional program selection from cleaned data."""
-        result = {"program_type": None, "cohort_id": None, "course_id": None}
+        result: dict[str, Any] = {"program_type": None, "cohort_id": None, "course_id": None}
         if not self.cleaned_data.get("apply_program"):
             return result
         program_type = self.cleaned_data.get("program_type")
         if program_type == "diploma":
-            cohort_id = self.cleaned_data.get("_auto_cohort_id")
+            cohort_id = getattr(self, "_auto_cohort_id", None)
             if cohort_id:
                 result["program_type"] = "diploma"
                 result["cohort_id"] = cohort_id

@@ -11,11 +11,13 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
+from django.db.models import Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods, require_POST
+from urllib.parse import urlencode
 
 from apps.academics.models import Cohort
 from apps.applications.constants import (
@@ -332,6 +334,7 @@ def admin_preview(request, exam_id):
             "attempt": None,
             "questions": questions,
             "remaining_seconds": 0,
+            "access_token": exam.access_token,
         },
     )
 
@@ -386,10 +389,9 @@ def admin_toggle_active(request, exam_id):
         raise PermissionDenied
     exam = get_object_or_404(EntranceExam, id=exam_id)
     exam.is_active = not exam.is_active
+    exam.save(update_fields=["is_active", "updated_at"])
     if exam.is_active:
         exam.regenerate_access_token()
-    else:
-        exam.save(update_fields=["is_active", "updated_at"])
     status = _("activated") if exam.is_active else _("deactivated")
     messages.success(request, _("Entrance exam %(status)s.") % {"status": status})
     return redirect("entrance_exams:admin_detail", exam_id=exam.id)
@@ -714,7 +716,7 @@ def _eligible_applications(cohort, action):
         return ProgramApplication.objects.none()
 
     already_sent = PAEL.objects.filter(
-        cohort=cohort, action=action, status="sent", is_resend=False,
+        program_application__cohort=cohort, action=action, status="sent", is_resend=False,
     ).values_list("program_application_id", flat=True)
 
     return ProgramApplication.objects.filter(
@@ -755,7 +757,7 @@ def _send_invitations(request, exam, cohort, student_ids):
             failed_count += 1
             continue
         PAEL.objects.create(
-            program_application=prog_app, cohort=cohort,
+            program_application=prog_app,
             action=EMAIL_ACTION_INVITATION, template_slug=slug,
             recipient=email_to, sent_by=request.user,
             sent_at=record.sent_at or timezone.now(),
@@ -831,7 +833,7 @@ def _resend_emails(request, exam, cohort, log_ids):
         messages.warning(request, _("No emails selected."))
         return redirect("entrance_exams:admin_cohort_email", exam_id=exam.id)
     logs = PAEL.objects.filter(
-        id__in=log_ids, cohort=cohort,
+        id__in=log_ids, program_application__cohort=cohort,
     ).select_related("program_application__student")
     sent_count = failed_count = 0
     for log in logs:
@@ -860,7 +862,7 @@ def _resend_emails(request, exam, cohort, log_ids):
             failed_count += 1
             continue
         PAEL.objects.create(
-            program_application=log.program_application, cohort=cohort,
+            program_application=log.program_application,
             action=log.action, template_slug=log.template_slug,
             recipient=email_to, sent_by=request.user,
             sent_at=record.sent_at or timezone.now(),
@@ -905,27 +907,50 @@ def admin_cohort_email(request, exam_id):
 
     tab = request.GET.get("tab", "invitation")
     result_filter = request.GET.get("result", "")
+    iq = request.GET.get("iq", "")
+    rq = request.GET.get("rq", "")
+    hq = request.GET.get("hq", "")
+
     invitation_qs = _eligible_applications(cohort, EMAIL_ACTION_INVITATION)
+    if tab == "invitation" and iq:
+        invitation_qs = invitation_qs.filter(
+            Q(student__full_name__icontains=iq) | Q(student__user__email__icontains=iq)
+        )
+
     results_qs = exam.attempts.filter(
         status__in=[ATTEMPT_STATUS_COMPLETED, ATTEMPT_STATUS_GRADED],
         result__isnull=False,
     ).select_related("student__user", "program_application")
+    if tab == "results" and rq:
+        results_qs = results_qs.filter(
+            Q(student__user__email__icontains=rq) | Q(student__full_name__icontains=rq)
+        )
     if result_filter in (RESULT_PASS, RESULT_FAIL):
         results_qs = results_qs.filter(result=result_filter)
-    history_qs = PAEL.objects.filter(cohort=cohort).select_related("program_application__student", "sent_by").order_by("-sent_at")
 
-    inv_page = res_page = hist_page = None
-    if tab == "invitation":
-        inv_page, _inv_pagination = paginate(request, invitation_qs, per_page=20)
-    if tab == "results":
-        res_page, _res_pagination = paginate(request, results_qs, per_page=20)
-    if tab == "history":
-        hist_page, _hist_pagination = paginate(request, history_qs, per_page=25)
+    history_qs = PAEL.objects.filter(program_application__cohort=cohort).select_related("program_application__student", "sent_by").order_by("-sent_at")
+    if tab == "history" and hq:
+        history_qs = history_qs.filter(
+            Q(program_application__student__full_name__icontains=hq) | Q(recipient__icontains=hq)
+        )
+
+    inv_page, _ = paginate(request, invitation_qs, per_page=20)
+    res_page, _ = paginate(request, results_qs, per_page=20)
+    hist_page, _ = paginate(request, history_qs, per_page=25)
+
+    def _make_pq(**extra):
+        return urlencode({"tab": tab, **extra})
 
     return render(request, "entrance_exams/admin_cohort_email.html", {
         "exam": exam,
         "tab": tab,
         "result_filter": result_filter,
+        "iq": iq,
+        "rq": rq,
+        "hq": hq,
+        "inv_pagination_qs": _make_pq(**({"iq": iq} if iq else {})),
+        "res_pagination_qs": _make_pq(**({"rq": rq} if rq else {}), **(("result", result_filter) if result_filter else {})),
+        "hist_pagination_qs": _make_pq(**({"hq": hq} if hq else {})),
         "invitation_page": inv_page,
         "results_page": res_page,
         "history_page": hist_page,
@@ -1005,7 +1030,7 @@ def admin_app_email_resend(request, exam_id, app_id):
         )
     except Exception:
         PAEL.objects.create(
-            program_application=prog_app, cohort=cohort,
+            program_application=prog_app,
             action=action, template_slug=slug, recipient=email_to,
             status="failed", error="Exception during send", is_resend=True,
         )
@@ -1013,7 +1038,7 @@ def admin_app_email_resend(request, exam_id, app_id):
         return redirect("entrance_exams:admin_detail", exam_id=exam.id)
 
     PAEL.objects.create(
-        program_application=prog_app, cohort=cohort,
+        program_application=prog_app,
         action=action, template_slug=slug, recipient=email_to,
         sent_at=record.sent_at or timezone.now() if record else None,
         sent_by=request.user, status=record.status if record else "failed", is_resend=True,
@@ -1032,7 +1057,7 @@ def admin_email_log_list(request):
     """List ApplicationEmailLog records in the custom admin UI."""
     if not is_admin(request.user):
         raise PermissionDenied
-    qs = PAEL.objects.select_related("program_application__student", "cohort", "sent_by").all()
+    qs = PAEL.objects.select_related("program_application__student", "sent_by").all()
     page_obj, pagination_qs = paginate(request, qs, per_page=25)
     return render(request, "entrance_exams/admin_email_log_list.html", {
         "page_obj": page_obj,

@@ -20,6 +20,8 @@ from .constants import (
     UPLOAD_STATUS_CHOICES,
     UPLOAD_STATUS_PENDING,
     USER_STATUS_ACTIVE,
+    USER_STATUS_INACTIVE,
+    USER_STATUS_SUSPENDED,
     USER_STATUS_CHOICES,
 )
 from .managers import UserManager
@@ -79,6 +81,13 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
     # --- Django protocol ----------------------------------------------------
     def __str__(self) -> str:
         return self.full_name or self.email
+
+    def save(self, *args, **kwargs):
+        if self.is_active:
+            self.status = USER_STATUS_ACTIVE
+        elif self.status != USER_STATUS_SUSPENDED:
+            self.status = USER_STATUS_INACTIVE
+        super().save(*args, **kwargs)
 
     def get_full_name(self) -> str:
         return self.full_name or self.email

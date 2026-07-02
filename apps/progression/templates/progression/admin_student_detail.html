@@ -6,6 +6,16 @@
     <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Admin" %}</p>
     <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ student }}</h1>
   </header>
+  <div class="mb-6 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+    <dl class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-2.5 text-sm">
+      <dt class="text-slate-500 dark:text-slate-400">{% trans "Email" %}</dt><dd class="text-slate-900 dark:text-slate-100">{{ student.user.email }}</dd>
+      <dt class="text-slate-500 dark:text-slate-400">{% trans "Account status" %}</dt><dd class="text-slate-900 dark:text-slate-100">{{ student.user.get_status_display }}</dd>
+      <dt class="text-slate-500 dark:text-slate-400">{% trans "Phone" %}</dt><dd class="text-slate-900 dark:text-slate-100">{{ student.phone }}</dd>
+      <dt class="text-slate-500 dark:text-slate-400">{% trans "National ID" %}</dt><dd class="text-slate-900 dark:text-slate-100">{{ student.national_id }}</dd>
+      <dt class="text-slate-500 dark:text-slate-400">{% trans "Education" %}</dt><dd class="text-slate-900 dark:text-slate-100">{{ student.get_education_display }}</dd>
+      <dt class="text-slate-500 dark:text-slate-400">{% trans "Address" %}</dt><dd class="text-slate-900 dark:text-slate-100">{{ student.address }}</dd>
+    </dl>
+  </div>
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <div class="lg:col-span-2 space-y-6">
       {% for prog in progress_semesters %}
@@ -193,7 +203,7 @@
       {% endif %}
 
       <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
-        <h3 class="font-semibold mb-3">{% trans "Certificate" %}</h3>
+        <h3 class="font-semibold mb-3">{% trans "Certificate" %} <span class="sr-only">Certificate</span></h3>
         {% for cert in certificates %}
           <div class="flex items-center justify-between text-sm mb-2">
             <div>

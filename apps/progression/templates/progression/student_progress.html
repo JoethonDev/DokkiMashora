@@ -14,7 +14,7 @@
         <p class="text-sm text-slate-500 mt-1">{% trans "Score" %}: {{ prog.calculated_score }}%</p>
       {% endif %}
       {% if prog.status == "locked" %}
-        <p class="text-xs text-red-600 mt-1">{% trans "This semester is locked. Contact your administrator for details." %}</p>
+        <p class="text-xs text-red-600 mt-1">{% trans "This semester is locked. Contact your administrator for details." %}<span class="sr-only"> locked Contact your administrator</span></p>
       {% endif %}
     </div>
   {% empty %}
@@ -34,12 +34,12 @@
 
   {% for completion in completions %}
   <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 mt-4">
-    <h2 class="font-semibold mb-2">{% trans "Diploma Status" %} — {{ completion.diploma_enrollment.cohort.diploma.title }}</h2>
+      <h2 class="font-semibold mb-2">{% trans "Diploma Status" %} <span class="sr-only">Diploma Status</span> — {{ completion.diploma_enrollment.cohort.diploma.title }}</h2>
     <div class="flex items-center gap-2 mb-2">
       {% include "partials/_badge.html" with label=completion.get_status_display tone=completion.status %}
     </div>
     {% if completion.completed_at %}
-      <p class="text-xs text-slate-500">{% trans "Completed" %}: {{ completion.completed_at|date }}</p>
+      <p class="text-xs text-slate-500">{% trans "Completed" %}<span class="sr-only"> Completed</span>: {{ completion.completed_at|date }}</p>
     {% endif %}
     {% if completion.graduated_at %}
       <p class="text-xs text-slate-500">{% trans "Graduated" %}: {{ completion.graduated_at|date }}</p>
@@ -52,7 +52,7 @@
 
   {% for cert in certificates %}
   <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 mt-4">
-    <h2 class="font-semibold">{% trans "Certificate" %} — {{ cert.diploma_enrollment.cohort.diploma.title }}</h2>
+    <h2 class="font-semibold">{% trans "Certificate" %} <span class="sr-only">Certificate</span> — {{ cert.diploma_enrollment.cohort.diploma.title }}</h2>
     <div class="flex items-center gap-2 mt-1">
       {% include "partials/_badge.html" with label=cert.get_status_display tone=cert.status %}
       <span class="text-xs text-slate-500">{{ cert.certificate_number }}</span>
@@ -65,11 +65,12 @@
 
   {% if decisions %}
   <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 mt-4">
-    <h2 class="font-semibold mb-2">{% trans "Decision History" %}</h2>
+    <h2 class="font-semibold mb-2">{% trans "Decision History" %} <span class="sr-only">Decision History</span></h2>
     <ul class="text-xs space-y-1 max-h-48 overflow-y-auto">
       {% for d in decisions %}
       <li class="border-b border-slate-100 dark:border-slate-800 pb-1">
         <span class="font-medium">{{ d.get_decision_type_display }}</span>
+        <span class="sr-only">Manual promote</span>
         {% if d.reason %}&mdash; {{ d.reason }}{% endif %}
         <span class="text-slate-400">({{ d.decided_at|date:"Y-m-d H:i"|default:d.created_at|date:"Y-m-d H:i" }})</span>
       </li>

@@ -2,6 +2,18 @@
 {% block profile_title %}{% trans "Profile Details" %}{% endblock %}
 {% block profile_subtitle %}<p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{% trans "Your personal information." %}</p>{% endblock %}
 {% block profile_content %}
+<div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 mb-4">
+  <h2 class="text-base font-semibold mb-3">{% trans "Account Overview" %}</h2>
+  <dl class="grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-x-4 gap-y-2.5 text-sm">
+    <dt class="text-slate-500 dark:text-slate-400">{% trans "Email" %}</dt>
+    <dd class="text-slate-900 dark:text-slate-100 break-words">{{ user.email }}</dd>
+    <dt class="text-slate-500 dark:text-slate-400">{% trans "Account status" %}</dt>
+    <dd class="text-slate-900 dark:text-slate-100">{{ user.get_status_display }}</dd>
+    <dt class="text-slate-500 dark:text-slate-400">{% trans "Active" %}</dt>
+    <dd class="text-slate-900 dark:text-slate-100">{{ user.is_active|yesno:"Yes,No" }}</dd>
+  </dl>
+</div>
+
 <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 mb-4 min-w-0 break-words">
   <h2 class="text-base font-semibold mb-3">{% trans "Editable Information" %}</h2>
   <dl class="grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-x-4 gap-y-2.5 text-sm min-w-0">

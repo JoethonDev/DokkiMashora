@@ -21,6 +21,13 @@ RESTRICTED_FIELDS = [
     "email",
     "date_of_birth",
     "gender",
+    "education",
+    "specialization",
+    "employer",
+    "current_job",
+    "church",
+    "priest_name",
+    "priest_contact",
 ]
 
 

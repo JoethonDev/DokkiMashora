@@ -12,6 +12,7 @@ from apps.students.models import StudentProfile
 
 from apps.applications.services import normalize_phone as application_normalize_phone
 
+from .constants import USER_STATUS_ACTIVE, USER_STATUS_INACTIVE, USER_STATUS_SUSPENDED
 from .models import User
 
 
@@ -162,8 +163,17 @@ class UserEditForm(forms.ModelForm):
         user.full_name_ar = data.get("full_name_ar", "")
         user.phone = data.get("phone", "")
         user.national_id = data.get("national_id", "")
-        user.status = data.get("status", user.status)
-        user.is_active = bool(data.get("is_active"))
+        requested_status = data.get("status", user.status)
+        requested_active = bool(data.get("is_active"))
+        if requested_active:
+            user.status = USER_STATUS_ACTIVE
+            user.is_active = True
+        elif requested_status == USER_STATUS_SUSPENDED:
+            user.status = USER_STATUS_SUSPENDED
+            user.is_active = False
+        else:
+            user.status = USER_STATUS_INACTIVE
+            user.is_active = False
         if data.get("new_password"):
             user.set_password(data["new_password"])
         if commit:

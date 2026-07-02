@@ -4,21 +4,22 @@
 {% block title %}{% trans "Register" %} | {{ SITE_NAME_AR }}{% endblock title %}
 {% block content %}
 <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12"
-     x-data="{
-       applyProgram: false,
-       programType: '{{ form.program_type.value|default:"" }}',
-       showProgramFields: false,
-       get showDiplomaFields() { return this.showProgramFields && this.programType === 'diploma'; },
-       get showCourseField() { return this.showProgramFields && this.programType === 'course'; },
-       init() {
-         this.applyProgram = this.$refs.applyProgramCheckbox.checked;
-         this.showProgramFields = this.applyProgram;
-         this.$watch('programType', function(val) {
-           if (val === 'diploma') htmx.trigger('#id_diploma', 'refresh');
-           else if (val === 'course') htmx.trigger('#id_program_target', 'refresh');
-         });
-       }
-     }">
+      x-data="{
+        applyProgram: false,
+        programType: '{{ form.program_type.value|default:"" }}',
+        selectedTarget: '{{ form.program_target.value|default:"" }}',
+        showProgramFields: false,
+        get showDiplomaFields() { return this.showProgramFields && this.programType === 'diploma'; },
+        get showCourseField() { return this.showProgramFields && this.programType === 'course'; },
+        init() {
+          this.applyProgram = this.$refs.applyProgramCheckbox.checked;
+          this.showProgramFields = this.applyProgram;
+          this.$watch('programType', function(val) {
+            if (val === 'diploma') htmx.trigger('#id_diploma', 'refresh');
+            else if (val === 'course') htmx.trigger('#id_program_target', 'refresh');
+          });
+        }
+      }">
   <header class="mb-6">
     <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Register" %}</p>
     <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{% trans "Register" %}</h1>
@@ -81,11 +82,12 @@
           {% if form.diploma.errors %}<p class="mt-1 text-xs text-rose-600 dark:text-rose-400">{{ form.diploma.errors|join:" " }}</p>{% endif %}
           <select name="diploma" id="id_diploma"
                   class="dm-input w-full rounded-lg px-3 py-2 text-sm shadow-sm"
-                  hx-get="{% url 'applications:program_diplomas' %}"
-                  hx-trigger="refresh"
+                  hx-get="{% url 'applications:program_targets' %}?kind=diploma"
+                  hx-trigger="load, refresh"
                   hx-swap="innerHTML">
             <option value="">{% trans "Select diploma type first" %}</option>
           </select>
+          <div id="diploma-loader" class="text-xs text-slate-500 dark:text-slate-400">{% trans "Loading diplomas..." %}</div>
           <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{% trans "The system will automatically assign the active cohort." %}</p>
         </div>
 
@@ -93,13 +95,16 @@
         <div x-show="showCourseField" x-transition x-cloak>
           <label for="id_program_target" class="block text-sm font-medium dm-text mb-1">{% trans "Course" %} <span class="text-rose-600">*</span></label>
           {% if form.program_target.errors %}<p class="mt-1 text-xs text-rose-600 dark:text-rose-400">{{ form.program_target.errors|join:" " }}</p>{% endif %}
-          <select name="program_target" id="id_program_target"
-                  class="dm-input w-full rounded-lg px-3 py-2 text-sm shadow-sm"
-                  hx-get="{% url 'applications:program_targets' %}"
-                  hx-trigger="refresh"
-                  hx-swap="innerHTML">
-            <option value="">{% trans "Select course type first" %}</option>
-          </select>
+          <div class="space-y-2">
+            <select name="program_target" id="id_program_target"
+                    class="dm-input w-full rounded-lg px-3 py-2 text-sm shadow-sm"
+                    hx-get="{% url 'applications:program_targets' %}?kind=course"
+                    hx-trigger="load, refresh"
+                    hx-swap="innerHTML">
+              <option value="">{% trans "Select course type first" %}</option>
+            </select>
+            <div id="course-loader" class="text-xs text-slate-500 dark:text-slate-400">{% trans "Loading courses..." %}</div>
+          </div>
         </div>
       </div>
     </div>

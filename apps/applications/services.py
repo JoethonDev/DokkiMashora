@@ -14,6 +14,7 @@ from django.utils.translation import gettext as _
 
 from apps.academics.models import Cohort, Course
 from apps.accounts.constants import GROUP_STUDENT
+from apps.accounts.constants import USER_STATUS_INACTIVE
 from apps.audit.constants import ACTION_APPLICATION_DECISION_REVERTED
 from apps.audit.services import record_audit_event
 from apps.communications.constants import (
@@ -138,7 +139,8 @@ def submit_registration(
         national_id=data.national_id,
     )
     user.is_active = False
-    user.save(update_fields=["is_active", "updated_at"])
+    user.status = USER_STATUS_INACTIVE
+    user.save(update_fields=["is_active", "status", "updated_at"])
     user.groups.add(_student_group())
 
     profile = StudentProfile.objects.create(
@@ -277,6 +279,30 @@ def reject_program_application(application, actor, reason: str, notes: str = "",
         )
         if send_email:
             transaction.on_commit(lambda: _send_program_app_rejection_email(application, reason))
+
+
+def revert_program_application_decision(application, actor, reason: str = "") -> None:
+    if application.entrance_attempts.exists():
+        raise ValueError(_("You cannot revert an application after an entrance exam attempt exists."))
+
+    last_decision = application.decisions.exclude(action="revert").order_by("-created_at").first()
+    if not last_decision:
+        raise ValueError(_("No decision to revert."))
+
+    with transaction.atomic():
+        old_status = application.status
+        application.status = last_decision.old_status
+        application.reviewed_by = actor
+        application.reviewed_at = timezone.now()
+        application.save(update_fields=["status", "reviewed_by", "reviewed_at", "updated_at"])
+        _record_decision(application, "revert", old_status, application.status, actor, reason=reason)
+        record_audit_event(
+            actor=actor,
+            action=ACTION_APPLICATION_DECISION_REVERTED,
+            target_type="program_application",
+            target_id=str(application.pk),
+            metadata={"student_id": application.student_id, "reason": reason},
+        )
 
 
 def _record_decision(application, action, old_status, new_status, actor, reason: str = ""):

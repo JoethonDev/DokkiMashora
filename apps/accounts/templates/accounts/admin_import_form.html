@@ -4,7 +4,7 @@
 {% url 'accounts:admin_student_list' as student_list_url %}
 {% url 'accounts:admin_download_student_csv_template' as template_url %}
 {% include "partials/_page.html" with title=_("Import Students from CSV") %}
-<div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 max-w-lg">
+<div class="mx-auto w-full max-w-xl rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
   <form method="post" enctype="multipart/form-data">
     {% csrf_token %}
     {% for field in form %}{% include "partials/_field.html" %}{% endfor %}

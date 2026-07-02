@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from django.core.paginator import Paginator
 from django.db import transaction
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.academics.constants import (
@@ -12,7 +14,7 @@ from apps.academics.constants import (
     ENROLLMENT_STATUS_COMPLETED,
     ENROLLMENT_STATUS_PENDING,
 )
-from apps.academics.models import Cohort, Course as CourseModel
+from apps.academics.models import Cohort, Course, CourseVersion
 from apps.applications.constants import (
     PROGRAM_APP_STATUS_REJECTED,
     PROGRAM_TYPE_COURSE,
@@ -112,8 +114,8 @@ def check_apply_eligibility(
     if program_type == PROGRAM_TYPE_COURSE or course is not None:
         if course is None:
             return {"allowed": True, "reason_code": None, "reason": None}
-        if not isinstance(course, CourseModel):
-            course = CourseModel.objects.get(pk=course)
+        if not isinstance(course, Course):
+            course = Course.objects.get(pk=course)
 
         # Completed enrollment for any version of same course
         from apps.academics.models import CourseEnrollment
@@ -157,6 +159,79 @@ def check_apply_eligibility(
     return {"allowed": True, "reason_code": None, "reason": None}
 
 
+def get_open_apply_targets(
+    program_type: str,
+    profile: StudentProfile | None = None,
+    page: int = 1,
+    page_size: int = 10,
+) -> dict:
+    """Return currently open targets for one program type."""
+    now = timezone.now()
+    today = now.date()
+
+    if program_type == PROGRAM_TYPE_DIPLOMA:
+        cohorts_qs = (
+        Cohort.objects.filter(
+            is_active=True,
+            end_date__gte=today,
+            entrance_exams__is_active=True,
+            entrance_exams__open_at__lte=now,
+            entrance_exams__close_at__gte=now,
+        )
+        .select_related("diploma")
+        .order_by("-start_date")
+        .distinct()
+        )
+        cohorts = list(cohorts_qs)
+        if profile is not None:
+            cohorts = [cohort for cohort in cohorts if check_apply_eligibility(profile, cohort=cohort)["allowed"]]
+        paginator = Paginator(cohorts, page_size)
+        page_obj = paginator.get_page(page)
+        return {"items": list(page_obj.object_list), "has_more": page_obj.has_next(), "next_page": page_obj.next_page_number() if page_obj.has_next() else None}
+
+    if program_type == PROGRAM_TYPE_COURSE:
+        course_versions = (
+            CourseVersion.objects.filter(is_active=True, course__is_active=True)
+            .select_related("course", "cohort", "semester")
+            .order_by("course__title", "-created_at", "label")
+        )
+        courses = []
+        seen_course_ids: set[int] = set()
+        for version in course_versions:
+            if not _is_open_course_version(version, now, today):
+                continue
+            course = version.course
+            if course.pk in seen_course_ids:
+                continue
+            if profile is not None and not check_apply_eligibility(profile, course=course)["allowed"]:
+                continue
+            seen_course_ids.add(course.pk)
+            courses.append(course)
+        paginator = Paginator(courses, page_size)
+        page_obj = paginator.get_page(page)
+        return {"items": list(page_obj.object_list), "has_more": page_obj.has_next(), "next_page": page_obj.next_page_number() if page_obj.has_next() else None}
+
+    return {"items": [], "has_more": False, "next_page": None}
+
+
+def _is_open_course_version(version, now, today) -> bool:
+    if not version.is_active or not version.course.is_active:
+        return False
+    if version.semester is not None and not version.semester.is_active:
+        return False
+    if version.cohort is None:
+        return bool(version.course.is_standalone)
+    if not version.cohort.is_active:
+        return False
+    if version.cohort.end_date is not None and version.cohort.end_date < today:
+        return False
+    return version.cohort.entrance_exams.filter(
+        is_active=True,
+        open_at__lte=now,
+        close_at__gte=now,
+    ).exists()
+
+
 def submit_apply_application(profile: StudentProfile, cohort=None, course=None) -> ProgramApplication:
     """Create a *new* ProgramApplication record for Apply."""
     if cohort is not None:
@@ -169,4 +244,3 @@ def submit_apply_application(profile: StudentProfile, cohort=None, course=None) 
         )
 
     raise ValueError(_("A cohort or course must be specified for application."))
-

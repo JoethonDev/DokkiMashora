@@ -18,9 +18,11 @@ from apps.academics.models import Cohort, Course, Diploma
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import is_admin, is_moderator
-from apps.students.services import check_apply_eligibility
+from apps.students.services import check_apply_eligibility, get_open_apply_targets
 
 from .constants import (
+    PROGRAM_APP_STATUS_ACCEPTED,
+    PROGRAM_APP_STATUS_REJECTED,
     PROGRAM_APP_STATUS_SUBMITTED,
     PROGRAM_APP_STATUS_UNDER_REVIEW,
 )
@@ -30,7 +32,7 @@ from .services import (
     RegistrationData,
     accept_program_application,
     reject_program_application,
-    submit_program_application,
+    revert_program_application_decision,
     submit_registration,
 )
 
@@ -38,38 +40,34 @@ PUBLIC_REGISTRATION_SESSION_KEY = "registration_email"
 
 
 @require_http_methods(["GET"])
-def program_diplomas(request: HttpRequest) -> HttpResponse:
-    """Return diploma <option>s for HTMX."""
-    from django.utils import timezone
-    now = timezone.now()
-    profile = getattr(request.user, "student_profile", None)
-    diplomas = []
-    for diploma in Diploma.objects.filter(is_active=True).order_by("title"):
-        if profile is not None:
-            cohort = (
-                Cohort.objects.filter(diploma=diploma, is_active=True, entrance_exams__close_at__gte=now)
-                .order_by("-start_date")
-                .first()
-            )
-            if not cohort or not check_apply_eligibility(profile, cohort=cohort)["allowed"]:
-                continue
-        else:
-            if not Cohort.objects.filter(diploma=diploma, is_active=True, entrance_exams__close_at__gte=now).exists():
-                continue
-        diplomas.append(diploma)
-    options = [(str(d.pk), d.title) for d in diplomas]
-    return render(request, "applications/partials/_program_options.html", {"options": options, "placeholder": "Select a diploma"})
-
-
-@require_http_methods(["GET"])
 def program_targets(request: HttpRequest) -> HttpResponse:
-    """Return course <option>s for HTMX."""
+    """Return program target fragments for HTMX."""
     profile = getattr(request.user, "student_profile", None)
-    courses = Course.objects.filter(is_active=True, is_standalone=True).order_by("title")
-    if profile is not None:
-        courses = [course for course in courses if check_apply_eligibility(profile, course=course)["allowed"]]
-    options = [(f"course_{c.pk}", c.title) for c in courses]
-    return render(request, "applications/partials/_program_options.html", {"options": options, "placeholder": "Select a course"})
+    kind = str(request.GET.get("kind", "diploma")).strip()
+    page = int(request.GET.get("page", 1) or 1)
+    targets = get_open_apply_targets(kind, profile=profile, page=page, page_size=10)
+    if kind == "course":
+        options = [(f"course_{c.pk}", c.title) for c in targets["items"]]
+        placeholder = _("Select a course")
+        loader_id = "course-loader"
+        load_url = f"{request.path}?kind=course&page={targets['next_page']}" if targets["has_more"] and targets["next_page"] else ""
+    else:
+        options = [(str(c.pk), f"{c.diploma.title} — {c.name}") for c in targets["items"]]
+        placeholder = _("Select a diploma")
+        loader_id = "diploma-loader"
+        load_url = f"{request.path}?kind=diploma&page={targets['next_page']}" if targets["has_more"] and targets["next_page"] else ""
+    return render(
+        request,
+        "applications/partials/_program_options.html",
+        {
+            "options": options,
+            "placeholder": placeholder,
+            "page": page,
+            "loader_id": loader_id,
+            "load_url": load_url,
+            "has_more": targets["has_more"],
+        },
+    )
 
 
 @require_http_methods(["GET", "POST"])
@@ -201,6 +199,19 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
             reject_program_application(application, request.user, reason=reason, notes=admin_notes, send_email=send_email)
             messages.warning(request, _("Application rejected."))
             return redirect("applications:program_detail", application_id=application.id)
+
+        if action == "revert" and application.status in {PROGRAM_APP_STATUS_ACCEPTED, PROGRAM_APP_STATUS_REJECTED}:
+            try:
+                revert_program_application_decision(
+                    application,
+                    request.user,
+                    reason=(request.POST.get("revert_reason") or "").strip(),
+                )
+            except ValueError as exc:
+                messages.error(request, str(exc))
+            else:
+                messages.info(request, _("Application reverted."))
+                return redirect("applications:program_detail", application_id=application.id)
 
         messages.error(request, _("Action not allowed for the current status."))
 

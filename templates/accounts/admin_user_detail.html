@@ -31,11 +31,57 @@
       <dd class="text-slate-900 dark:text-slate-100">{{ user_obj.primary_role }}</dd>
       <dt class="text-slate-500 dark:text-slate-400">{% trans "Status" %}</dt>
       <dd class="text-slate-900 dark:text-slate-100">
-        {% if user_obj.is_active %}{% include "partials/_badge.html" with label=_("Active") tone="success" %}{% else %}{% include "partials/_badge.html" with label=_("Inactive") tone="danger" %}{% endif %}
+        {% if user_obj.is_active %}
+          {% include "partials/_badge.html" with label=user_obj.get_status_display tone="success" %}
+        {% else %}
+          {% include "partials/_badge.html" with label=user_obj.get_status_display tone="danger" %}
+        {% endif %}
       </dd>
+      <dt class="text-slate-500 dark:text-slate-400">{% trans "Account active" %}</dt>
+      <dd class="text-slate-900 dark:text-slate-100">{{ user_obj.is_active|yesno:"Yes,No" }}</dd>
+      <dt class="text-slate-500 dark:text-slate-400">{% trans "Groups" %}</dt>
+      <dd class="text-slate-900 dark:text-slate-100">{{ user_obj.groups.all|join:", "|default:"—" }}</dd>
+      <dt class="text-slate-500 dark:text-slate-400">{% trans "Last login" %}</dt>
+      <dd class="text-slate-900 dark:text-slate-100">{{ user_obj.last_login|date:"DATETIME_FORMAT"|default:"—" }}</dd>
+      <dt class="text-slate-500 dark:text-slate-400">{% trans "Email activated" %}</dt>
+      <dd class="text-slate-900 dark:text-slate-100">{{ user_obj.email_activated_at|date:"DATETIME_FORMAT"|default:"—" }}</dd>
       <dt class="text-slate-500 dark:text-slate-400">{% trans "Date joined" %}</dt>
       <dd class="text-slate-900 dark:text-slate-100">{{ user_obj.date_joined|date:"DATETIME_FORMAT" }}</dd>
     </dl>
   </div>
+
+  {% if student_profile %}
+  <div class="mt-6 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+    <h2 class="text-base font-semibold mb-4">{% trans "Student profile" %}</h2>
+    <dl class="grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-x-4 gap-y-2.5 text-sm">
+      <dt class="text-slate-500 dark:text-slate-400">{% trans "Full name" %}</dt>
+      <dd class="text-slate-900 dark:text-slate-100">{{ student_profile.full_name|default:"—" }}</dd>
+      <dt class="text-slate-500 dark:text-slate-400">{% trans "Date of birth" %}</dt>
+      <dd class="text-slate-900 dark:text-slate-100">{{ student_profile.date_of_birth|date:"Y-m-d"|default:"—" }}</dd>
+      <dt class="text-slate-500 dark:text-slate-400">{% trans "Gender" %}</dt>
+      <dd class="text-slate-900 dark:text-slate-100">{{ student_profile.get_gender_display|default:"—" }}</dd>
+      <dt class="text-slate-500 dark:text-slate-400">{% trans "Address" %}</dt>
+      <dd class="text-slate-900 dark:text-slate-100">{{ student_profile.address|default:"—" }}</dd>
+      <dt class="text-slate-500 dark:text-slate-400">{% trans "Phone" %}</dt>
+      <dd class="text-slate-900 dark:text-slate-100">{{ student_profile.phone|default:"—" }}</dd>
+      <dt class="text-slate-500 dark:text-slate-400">{% trans "National ID" %}</dt>
+      <dd class="text-slate-900 dark:text-slate-100">{{ student_profile.national_id|default:"—" }}</dd>
+      <dt class="text-slate-500 dark:text-slate-400">{% trans "Education" %}</dt>
+      <dd class="text-slate-900 dark:text-slate-100">{{ student_profile.get_education_display|default:"—" }}</dd>
+      <dt class="text-slate-500 dark:text-slate-400">{% trans "Specialization" %}</dt>
+      <dd class="text-slate-900 dark:text-slate-100">{{ student_profile.specialization|default:"—" }}</dd>
+      <dt class="text-slate-500 dark:text-slate-400">{% trans "Employer" %}</dt>
+      <dd class="text-slate-900 dark:text-slate-100">{{ student_profile.employer|default:"—" }}</dd>
+      <dt class="text-slate-500 dark:text-slate-400">{% trans "Current job" %}</dt>
+      <dd class="text-slate-900 dark:text-slate-100">{{ student_profile.current_job|default:"—" }}</dd>
+      <dt class="text-slate-500 dark:text-slate-400">{% trans "Church" %}</dt>
+      <dd class="text-slate-900 dark:text-slate-100">{{ student_profile.church|default:"—" }}</dd>
+      <dt class="text-slate-500 dark:text-slate-400">{% trans "Priest name" %}</dt>
+      <dd class="text-slate-900 dark:text-slate-100">{{ student_profile.priest_name|default:"—" }}</dd>
+      <dt class="text-slate-500 dark:text-slate-400">{% trans "Priest contact" %}</dt>
+      <dd class="text-slate-900 dark:text-slate-100">{{ student_profile.priest_contact|default:"—" }}</dd>
+    </dl>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}
