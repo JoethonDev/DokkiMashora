@@ -4,14 +4,15 @@ from __future__ import annotations
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.http import Http404, HttpRequest, HttpResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.template import engines
-from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods
 
-from apps.academics.models import Cohort, Course
+from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE, SCOPE_COURSE_VERSION
+from apps.academics.models import Cohort, Course, CourseEnrollment, CourseVersion, DiplomaEnrollment, ModeratorStudentAssignment, TeacherAssignment
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
 from apps.assessments.constants import (
@@ -145,6 +146,72 @@ def enrollment_history(request: HttpRequest) -> HttpResponse:
     profile = _get_profile_or_404(request.user)
     data = get_dashboard_data(profile, sections=["diploma_enrollments", "course_enrollments"])
     return _render_profile(request, "students/profile/enrollments.html", data)
+
+
+@login_required
+def diploma_course(request: HttpRequest) -> HttpResponse:
+    """Show the student's diploma and course enrollments listing."""
+    profile = _get_profile_or_404(request.user)
+    data = get_dashboard_data(profile, sections=["diploma_enrollments", "course_enrollments"])
+    items = []
+    for de in (data.get("diploma_enrollments") or []):
+        cohort = de.cohort
+        for cv in cohort.course_versions.select_related("course").prefetch_related("lectures"):
+            lecture_count = cv.lectures.filter(is_published=True).count()
+            items.append({
+                "type": "diploma",
+                "label": cohort.diploma.title,
+                "course_title": cv.course.title,
+                "cv_id": cv.id,
+                "joined_at": de.activated_at or de.created_at,
+                "expires_at": de.expires_at,
+                "lecture_count": lecture_count,
+            })
+
+    for ce in (data.get("course_enrollments") or []):
+        cv = ce.course_version
+        lecture_count = cv.lectures.filter(is_published=True).count()
+        items.append({
+            "type": "course",
+            "label": "",
+            "course_title": cv.course.title,
+            "cv_id": cv.id,
+            "joined_at": ce.activated_at or ce.created_at,
+            "expires_at": ce.expires_at,
+            "lecture_count": lecture_count,
+        })
+
+    return _render_profile(request, "students/profile/diploma_course.html", {"items": items})
+
+
+@login_required
+def diploma_course_detail(request: HttpRequest, version_id: int) -> HttpResponse:
+    """Show course content, teacher, and moderator within the profile."""
+    profile = _get_profile_or_404(request.user)
+    cv = get_object_or_404(CourseVersion.objects.select_related("course", "cohort"), id=version_id, is_active=True)
+    has_access = CourseEnrollment.objects.filter(student=profile, course_version=cv, status=ENROLLMENT_STATUS_ACTIVE).exists()
+    if not has_access:
+        has_access = DiplomaEnrollment.objects.filter(
+            student=profile, cohort=cv.cohort, status=ENROLLMENT_STATUS_ACTIVE
+        ).exists()
+    if not has_access:
+        raise PermissionDenied
+    lectures = list(
+        cv.lectures.filter(is_published=True).order_by("order").only("id", "title", "order", "youtube_url", "audio_url", "audio_hls_playlist_key")
+    )
+    teachers = list(
+        TeacherAssignment.objects.filter(scope_type=SCOPE_COURSE_VERSION, course_version=cv, active=True)
+        .select_related("teacher")
+    )
+    moderator = None
+    if cv.cohort_id:
+        m = ModeratorStudentAssignment.objects.filter(
+            student=profile, cohort_id=cv.cohort_id, active=True
+        ).select_related("moderator").first()
+        moderator = m.moderator if m else None
+    return _render_profile(request, "students/profile/diploma_course_detail.html", {
+        "course_version": cv, "lectures": lectures, "teachers": teachers, "moderator": moderator,
+    })
 
 
 # ---------------------------------------------------------------------------

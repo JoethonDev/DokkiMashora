@@ -92,13 +92,23 @@ def can_access_course(student_profile, course_version) -> bool:
     if course_version.course.is_standalone:
         return True
     enrollment = _get_course_enrollment(student_profile, course_version)
-    if enrollment is None:
-        return False
-    if enrollment.status != ENROLLMENT_STATUS_ACTIVE:
-        return False
-    if enrollment.is_access_expired:
-        return False
-    return True
+    if enrollment is not None:
+        if enrollment.status != ENROLLMENT_STATUS_ACTIVE:
+            return False
+        if enrollment.is_access_expired:
+            return False
+        return True
+    # Fall back to diploma enrollment when the course version belongs to a cohort
+    if course_version.cohort_id:
+        now = timezone.now()
+        return DiplomaEnrollment.objects.filter(
+            student=student_profile,
+            cohort_id=course_version.cohort_id,
+            status=ENROLLMENT_STATUS_ACTIVE,
+        ).filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gt=now),
+        ).exists()
+    return False
 
 
 def can_access_lecture(student_profile, lecture) -> bool:
@@ -116,22 +126,28 @@ def _get_course_enrollment(student_profile, course_version):
 
 
 def enroll_student_in_course(student_profile, course_version) -> CourseEnrollment:
-    """Create or get a pending course enrollment for a student."""
+    """Create or get an active course enrollment for a student."""
     enrollment, _ = CourseEnrollment.objects.get_or_create(
         student=student_profile,
         course_version=course_version,
-        defaults={"status": ENROLLMENT_STATUS_PENDING},
+        defaults={"status": ENROLLMENT_STATUS_ACTIVE},
     )
+    if enrollment.status != ENROLLMENT_STATUS_ACTIVE:
+        enrollment.status = ENROLLMENT_STATUS_ACTIVE
+        enrollment.save(update_fields=["status"])
     return enrollment
 
 
 def enroll_student_in_diploma(student_profile, cohort) -> DiplomaEnrollment:
-    """Create or get a pending diploma enrollment for a student."""
+    """Create or get an active diploma enrollment for a student."""
     enrollment, _ = DiplomaEnrollment.objects.get_or_create(
         student=student_profile,
         cohort=cohort,
-        defaults={"status": ENROLLMENT_STATUS_PENDING},
+        defaults={"status": ENROLLMENT_STATUS_ACTIVE},
     )
+    if enrollment.status != ENROLLMENT_STATUS_ACTIVE:
+        enrollment.status = ENROLLMENT_STATUS_ACTIVE
+        enrollment.save(update_fields=["status"])
     return enrollment
 
 

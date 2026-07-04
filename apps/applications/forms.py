@@ -65,17 +65,12 @@ class RegistrationForm(forms.Form):
 
     def _load_program_choices(self) -> None:
         self.fields["program_type"].choices = PROGRAM_TYPE_CHOICES
-        diplomas = []
-        seen_diploma_ids = set()
-        for cohort in Cohort.objects.filter(is_active=True, entrance_exams__is_active=True).select_related("diploma").order_by("-start_date").distinct():
-            if cohort.diploma_id in seen_diploma_ids:
-                continue
-            seen_diploma_ids.add(cohort.diploma_id)
-            diplomas.append(cohort.diploma)
+        cohorts = Cohort.objects.filter(
+            is_active=True, entrance_exams__is_active=True,
+        ).select_related("diploma").order_by("-start_date")
         self.fields["diploma"].choices = [("", _("Select a diploma"))] + [
-            (str(d.pk), d.title) for d in diplomas
+            (str(c.pk), f"{c.diploma.title} — {c.name}") for c in cohorts
         ]
-        self._course_choices = []
 
     def clean_date_of_birth(self) -> date:
         value: date = self.cleaned_data["date_of_birth"]
@@ -154,18 +149,12 @@ class RegistrationForm(forms.Form):
                     if not diploma:
                         self.add_error("diploma", _("Please select a diploma."))
                     else:
-                        cohort = (
-                            Cohort.objects.filter(
-                                diploma_id=diploma,
-                                is_active=True,
-                                entrance_exams__is_active=True,
-                                entrance_exams__open_at__lte=timezone.now(),
-                                entrance_exams__close_at__gte=timezone.now(),
-                            )
-                            .select_related("diploma")
-                            .order_by("-start_date")
-                            .first()
-                        )
+                        cohort = Cohort.objects.filter(
+                            pk=diploma, is_active=True,
+                            entrance_exams__is_active=True,
+                            entrance_exams__open_at__lte=timezone.now(),
+                            entrance_exams__close_at__gte=timezone.now(),
+                        ).select_related("diploma").first()
                         if not cohort:
                             self.add_error("diploma", _("No active cohort with an entrance exam found for this diploma."))
                         else:

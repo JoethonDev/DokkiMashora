@@ -278,16 +278,12 @@ def admin_semester_delete(request, diploma_id, semester_id):
     diploma = get_object_or_404(Diploma, id=diploma_id)
     semester = get_object_or_404(Semester, id=semester_id, diploma=diploma)
     next_url = safe_next_url(request)
-    course_count = CourseVersion.objects.filter(semester=semester).count()
-    if course_count:
-        messages.warning(
-            request,
-            _("Cannot delete semester with %(count)d course version(s). Remove them first.") % {"count": course_count},
-        )
-    else:
-        semester.delete()
-        messages.success(request, _("Semester deleted."))
-    return redirect(next_url) if next_url else redirect("academics:admin_diploma_detail", diploma_id=diploma.id)
+    semester.delete()
+    messages.success(request, _("Semester deleted."))
+    redirect_url = next_url or reverse("academics:admin_diploma_detail", kwargs={"diploma_id": diploma.id})
+    response = HttpResponse()
+    response["HX-Redirect"] = redirect_url
+    return response
 
 
 @login_required
@@ -297,18 +293,15 @@ def admin_semester_course_delete(request, sc_id):
     sc = get_object_or_404(SemesterCourse, id=sc_id)
     diploma_id = sc.semester.diploma_id
     next_url = safe_next_url(request)
-    version_count = CourseVersion.objects.filter(
+    CourseVersion.objects.filter(
         course=sc.course, semester=sc.semester,
-    ).count()
-    if version_count:
-        messages.warning(
-            request,
-            _("Cannot remove course: %(count)d version(s) are linked to it in this semester.") % {"count": version_count},
-        )
-    else:
-        sc.delete()
-        messages.success(request, _("Course removed from semester."))
-    return redirect(next_url) if next_url else redirect("academics:admin_diploma_detail", diploma_id=diploma_id)
+    ).delete()
+    sc.delete()
+    messages.success(request, _("Course removed from semester."))
+    redirect_url = next_url or reverse("academics:admin_diploma_detail", kwargs={"diploma_id": diploma_id})
+    response = HttpResponse()
+    response["HX-Redirect"] = redirect_url
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -640,10 +633,12 @@ def admin_version_delete(request, course_id, version_id):
     course = get_object_or_404(Course, id=course_id)
     version = get_object_or_404(CourseVersion, id=version_id, course=course)
     next_url = safe_next_url(request)
-    # Lectures and course enrollments cascade-delete via FK on_delete=CASCADE.
     version.delete()
     messages.success(request, _("Course version deleted."))
-    return redirect(next_url) if next_url else redirect("academics:admin_course_detail", course_id=course.id)
+    redirect_url = next_url or reverse("academics:admin_course_detail", kwargs={"course_id": course.id})
+    response = HttpResponse()
+    response["HX-Redirect"] = redirect_url
+    return response
 
 
 def _process_lecture_audio(request, lecture, files):

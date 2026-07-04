@@ -55,7 +55,7 @@
             {% csrf_token %}
             <button type="submit" hidden></button>
             <input type="hidden" name="next" value="{{ request.path }}">
-            {% include "partials/_button.html" with label=_("Delete") variant="danger" size="sm" type="button" attrs='@click="confirmId=\''|add:del_ver_id|add:'\'; $dispatch(\'open-modal\', {id:\''|add:del_ver_id|add:'\'})"' %}
+            {% include "partials/_button.html" with label=_("Delete") variant="danger" size="sm" type="button" attrs='@click.stop="confirmId=\''|add:del_ver_id|add:'\'; $dispatch(\'open-modal\', {id:\''|add:del_ver_id|add:'\'})"' %}
           </form>
           {% include "partials/_modal.html" with modal_id=del_ver_id title=_("Confirm Delete") body=_("Delete this version and all its lectures?") confirm_label=_("Delete") %}
         </div>
@@ -77,7 +77,7 @@
                         {% csrf_token %}
                         <button type="submit" hidden></button>
                         <input type="hidden" name="next" value="{{ request.path }}">
-                        {% include "partials/_button.html" with label=_("Delete") variant="danger" size="sm" type="button" attrs='@click="confirmId=\''|add:del_lec_id|add:'\'; $dispatch(\'open-modal\', {id:\''|add:del_lec_id|add:'\'})"' %}
+                        {% include "partials/_button.html" with label=_("Delete") variant="danger" size="sm" type="button" attrs='@click.stop="confirmId=\''|add:del_lec_id|add:'\'; $dispatch(\'open-modal\', {id:\''|add:del_lec_id|add:'\'})"' %}
                       </form>
                       {% include "partials/_modal.html" with modal_id=del_lec_id title=_("Confirm Delete") body=_("Delete this lecture?") confirm_label=_("Delete") %}
                     </div>

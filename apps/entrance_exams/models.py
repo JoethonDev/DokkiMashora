@@ -94,6 +94,11 @@ class EntranceExam(TimeStampedModel):
         help_text=_("Minimum percentage required to pass."),
     )
     is_active = models.BooleanField(_("active"), default=False)
+    auto_send_results = models.BooleanField(
+        _("auto-send results"),
+        default=False,
+        help_text=_("Automatically send pass/fail email when all answers are graded."),
+    )
     open_at = models.DateTimeField(_("open at"))
     close_at = models.DateTimeField(_("close at"))
     created_by = models.ForeignKey(

@@ -5,14 +5,18 @@
 <div class="space-y-3">
   {% for a in assessment_attempts %}
   <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
-    <div class="flex items-center justify-between">
-      <div>
-        <p class="text-sm font-medium">{{ a.assessment.title }}</p>
+    <div class="flex items-center justify-between gap-2">
+      <div class="min-w-0">
+        <p class="text-sm font-medium truncate">{{ a.assessment.title }}</p>
         {% if a.assessment.course_version %}
-        <p class="text-xs text-slate-500">{{ a.assessment.course_version.course.title }}</p>
+        <p class="text-xs text-slate-500 truncate">{{ a.assessment.course_version.course.title }}</p>
         {% endif %}
       </div>
-      {% include "partials/_badge.html" with label=a.get_status_display tone=a.status|status_tone:"assessment_attempt" %}
+      {% if a.status == "assigned" or a.status == "in_progress" %}
+        <a href="{% url 'assessments:instructions' a.assessment.id %}" class="shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700 transition whitespace-nowrap">{% if a.status == "in_progress" %}{% trans "Continue" %}{% else %}{% trans "Access" %}{% endif %}</a>
+      {% else %}
+        <a href="{% url 'assessments:results' a.assessment.id %}" class="shrink-0 rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition whitespace-nowrap">{% trans "Review" %}</a>
+      {% endif %}
     </div>
     <div class="mt-2 text-xs text-slate-500 space-y-1">
       <p>{% trans "Attempt" %} #{{ a.attempt_number }}</p>

@@ -5,24 +5,17 @@
 <div class="space-y-3">
   {% for a in exam_assignments %}
   <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
-    <div class="flex items-center justify-between">
-      <div>
-        <p class="text-sm font-medium">{{ a.exam.title }}</p>
+    <div class="flex items-center justify-between gap-2">
+      <div class="min-w-0">
+        <p class="text-sm font-medium truncate">{{ a.exam.title }}</p>
         <p class="text-xs text-slate-500 mt-1">{% trans "Assigned" %}: {{ a.assigned_at|date:"j M Y" }}</p>
       </div>
-      {% include "partials/_badge.html" with label=a.get_status_display tone=a.status|status_tone:"assignment" %}
+      {% if a.status == "assigned" or a.status == "in_progress" %}
+        <a href="{% url 'entrance_exams:exam_access_token' a.exam.access_token %}" class="shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700 transition whitespace-nowrap">{% trans "Access" %}</a>
+      {% else %}
+        <a href="{% url 'entrance_exams:results' a.exam.access_token %}" class="shrink-0 rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition whitespace-nowrap">{% trans "Review" %}</a>
+      {% endif %}
     </div>
-    {% if a.submitted_at %}
-    <p class="text-xs text-slate-500 mt-1">{% trans "Submitted" %}: {{ a.submitted_at|date:"j M Y, H:i" }}</p>
-    {% endif %}
-    {% if a.score is not None and a.status == attempt_status_graded %}
-    <p class="text-xs mt-1">
-      {% trans "Score" %}: <span class="tabular-nums font-semibold">{{ a.score }}%</span>
-      {% if a.result == "pass" %}<span class="text-emerald-600">({% trans "Passed" %})</span>{% elif a.result == "fail" %}<span class="text-rose-600">({% trans "Failed" %})</span>{% endif %}
-    </p>
-    {% elif a.score is not None and a.status != attempt_status_graded %}
-    <p class="text-xs mt-1 text-slate-400">{% trans "Result pending" %}</p>
-    {% endif %}
   </div>
   {% endfor %}
 </div>

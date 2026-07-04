@@ -1,0 +1,42 @@
+{% extends "students/profile/base_profile.html" %}{% load i18n %}
+{% block profile_title %}{{ course_version.course.title }}{% endblock %}
+{% block profile_content %}
+<header class="mb-6">
+  <a href="{% url 'students:diploma_course' %}" class="text-xs text-brand-600 hover:text-brand-700 mb-2 inline-block">&larr; {% trans "Back" %}</a>
+  <h1 class="text-xl font-bold">{{ course_version.course.title }}</h1>
+</header>
+
+{% if teachers or moderator %}
+<div class="flex flex-wrap gap-4 mb-6 text-sm">
+  {% if teachers %}
+  <div>
+    <span class="text-xs text-slate-500 block">{% trans "Teacher" %}</span>
+    {% for t in teachers %}<span class="font-medium">{{ t.teacher.get_full_name|default:t.teacher.email }}</span>{% if not forloop.last %}<span class="text-slate-400">, </span>{% endif %}{% endfor %}
+  </div>
+  {% endif %}
+  {% if moderator %}
+  <div>
+    <span class="text-xs text-slate-500 block">{% trans "Moderator" %}</span>
+    <span class="font-medium">{{ moderator.get_full_name|default:moderator.email }}</span>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if lectures %}
+<div class="space-y-2">
+  {% for lecture in lectures %}
+  <a href="{% url 'academics:student_lecture_view' course_version.id lecture.id %}" class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 hover:border-brand-500 transition flex items-center gap-3">
+    <span class="text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded tabular-nums">{{ lecture.order }}</span>
+    <span class="font-medium">{{ lecture.title }}</span>
+    <span class="ml-auto flex gap-2">
+      {% if lecture.youtube_url %}<svg class="w-4 h-4 text-slate-400" fill="currentColor" viewBox="0 0 24 24"><path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0C.488 3.45.029 5.804 0 12c.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0C23.512 20.55 23.971 18.196 24 12c-.029-6.185-.484-8.549-4.385-8.816zM9 16V8l8 4-8 4z"/></svg>{% endif %}
+      {% if lecture.audio_hls_playlist_key or lecture.audio_url %}<svg class="w-4 h-4 text-slate-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>{% endif %}
+    </span>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+{% include "partials/_empty_state.html" with title=_("No lectures available") subtitle=_("Lectures will appear here when they are released") %}
+{% endif %}
+{% endblock %}

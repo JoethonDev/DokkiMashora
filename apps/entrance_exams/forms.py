@@ -20,6 +20,7 @@ class EntranceExamForm(forms.ModelForm):
             "pass_percentage",
             "open_at",
             "close_at",
+            "auto_send_results",
         )
         widgets = {
             "open_at": forms.DateTimeInput(attrs={"type": "datetime-local"}),

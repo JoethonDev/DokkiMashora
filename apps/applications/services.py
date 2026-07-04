@@ -13,6 +13,7 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from apps.academics.models import Cohort, Course
+from apps.academics.services import enroll_student_in_course
 from apps.accounts.constants import GROUP_STUDENT
 from apps.accounts.constants import USER_STATUS_INACTIVE
 from apps.audit.constants import ACTION_APPLICATION_DECISION_REVERTED
@@ -261,6 +262,10 @@ def accept_program_application(application, actor, notes: str = "", send_email: 
             target_id=str(application.pk),
             metadata={"student_id": application.student_id, "send_email": send_email},
         )
+        if application.program_type == "course" and application.course:
+            cv = application.course.course_versions.last()
+            if cv:
+                enroll_student_in_course(application.student, cv)
         if send_email:
             transaction.on_commit(lambda: _send_program_app_acceptance_email(application))
 

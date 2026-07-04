@@ -43,18 +43,37 @@
         {% trans "Select students to send entrance exam invitation emails." %}
       </p>
       <div id="invitation-content">
-        <div class="mb-4 flex gap-2">
-          <input type="search" name="iq" value="{{ iq }}" placeholder="{% trans 'Search by name or email...' %}"
-                 hx-get="{% url 'entrance_exams:admin_cohort_email' exam.id %}?tab=invitation"
-                 hx-trigger="keyup changed delay:200ms"
-                 hx-target="#invitation-content"
-                 hx-select="#invitation-content"
-                 hx-push-url="true"
-                 hx-include="this"
-                 class="flex-1 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm">
-          {% if iq %}<button type="button"
-                        hx-get="?tab=invitation" hx-target="#invitation-content" hx-select="#invitation-content" hx-push-url="true"
-                        class="shrink-0 rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition">{% trans "Clear" %}</button>{% endif %}
+        <div class="mb-4 space-y-2">
+          <div class="flex gap-2">
+            <input type="search" name="iq" value="{{ iq }}" placeholder="{% trans 'Search by name or email...' %}"
+                   hx-get="{% url 'entrance_exams:admin_cohort_email' exam.id %}?tab=invitation{% if inv_status %}&inv_status={{ inv_status }}{% endif %}"
+                   hx-trigger="keyup changed delay:200ms"
+                   hx-target="#invitation-content"
+                   hx-select="#invitation-content"
+                   hx-push-url="true"
+                   hx-include="this"
+                   class="min-w-0 flex-1 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm">
+            {% if iq or inv_status %}
+              <a href="?tab=invitation"
+                 hx-get="?tab=invitation" hx-target="#invitation-content" hx-select="#invitation-content" hx-push-url="true"
+                 class="shrink-0 rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition">{% trans "Clear" %}</a>
+            {% endif %}
+          </div>
+          <div class="flex items-center gap-1 text-sm">
+            <span class="text-slate-500">{% trans "Status:" %}</span>
+            <a href="?tab=invitation{% if iq %}&iq={{ iq }}{% endif %}"
+               hx-get="?tab=invitation{% if iq %}&iq={{ iq }}{% endif %}"
+               hx-target="#invitation-content" hx-select="#invitation-content" hx-push-url="true"
+               class="px-2 py-1 rounded {% if inv_status == '' %}bg-brand-100 text-brand-700 font-medium{% else %}text-slate-600 hover:text-slate-800{% endif %}">{% trans "All" %}</a>
+            <a href="?tab=invitation&inv_status=accepted{% if iq %}&iq={{ iq }}{% endif %}"
+               hx-get="?tab=invitation&inv_status=accepted{% if iq %}&iq={{ iq }}{% endif %}"
+               hx-target="#invitation-content" hx-select="#invitation-content" hx-push-url="true"
+               class="px-2 py-1 rounded {% if inv_status == 'accepted' %}bg-brand-100 text-brand-700 font-medium{% else %}text-slate-600 hover:text-slate-800{% endif %}">{% trans "Accepted" %}</a>
+            <a href="?tab=invitation&inv_status=rejected{% if iq %}&iq={{ iq }}{% endif %}"
+               hx-get="?tab=invitation&inv_status=rejected{% if iq %}&iq={{ iq }}{% endif %}"
+               hx-target="#invitation-content" hx-select="#invitation-content" hx-push-url="true"
+               class="px-2 py-1 rounded {% if inv_status == 'rejected' %}bg-brand-100 text-brand-700 font-medium{% else %}text-slate-600 hover:text-slate-800{% endif %}">{% trans "Rejected" %}</a>
+          </div>
         </div>
         <form method="post">
           {% csrf_token %}
@@ -194,7 +213,7 @@
       <div id="history-content">
         <div class="mb-4 flex gap-2">
           <input type="search" name="hq" value="{{ hq }}" placeholder="{% trans 'Search by name or email...' %}"
-                 hx-get="{% url 'entrance_exams:admin_cohort_email' exam.id %}?tab=history"
+                 hx-get="{% url 'entrance_exams:admin_cohort_email' exam.id %}?tab=history{% if ha %}&ha={{ ha }}{% endif %}"
                  hx-trigger="keyup changed delay:200ms"
                  hx-target="#history-content"
                  hx-select="#history-content"
@@ -202,8 +221,27 @@
                  hx-include="this"
                  class="flex-1 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm">
           {% if hq %}<button type="button"
-                        hx-get="?tab=history" hx-target="#history-content" hx-select="#history-content" hx-push-url="true"
+                        hx-get="?tab=history{% if ha %}&ha={{ ha }}{% endif %}" hx-target="#history-content" hx-select="#history-content" hx-push-url="true"
                         class="shrink-0 rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition">{% trans "Clear" %}</button>{% endif %}
+        </div>
+        <div class="flex items-center gap-2 mb-4 text-sm">
+          <span class="text-slate-500">{% trans "Filter:" %}</span>
+          <a href="?tab=history{% if hq %}&hq={{ hq }}{% endif %}"
+             hx-get="?tab=history{% if hq %}&hq={{ hq }}{% endif %}"
+             hx-target="#history-content" hx-select="#history-content" hx-push-url="true"
+             class="px-2 py-1 rounded {% if ha == '' %}bg-brand-100 text-brand-700 font-medium{% else %}text-slate-600 hover:text-slate-800{% endif %}">{% trans "All" %}</a>
+          <a href="?tab=history&ha=entrance_exam_invitation{% if hq %}&hq={{ hq }}{% endif %}"
+             hx-get="?tab=history&ha=entrance_exam_invitation{% if hq %}&hq={{ hq }}{% endif %}"
+             hx-target="#history-content" hx-select="#history-content" hx-push-url="true"
+             class="px-2 py-1 rounded {% if ha == 'entrance_exam_invitation' %}bg-blue-100 text-blue-700 font-medium{% else %}text-slate-600 hover:text-slate-800{% endif %}">{% trans "Invitation" %}</a>
+          <a href="?tab=history&ha=acceptance{% if hq %}&hq={{ hq }}{% endif %}"
+             hx-get="?tab=history&ha=acceptance{% if hq %}&hq={{ hq }}{% endif %}"
+             hx-target="#history-content" hx-select="#history-content" hx-push-url="true"
+             class="px-2 py-1 rounded {% if ha == 'acceptance' %}bg-green-100 text-green-700 font-medium{% else %}text-slate-600 hover:text-slate-800{% endif %}">{% trans "Acceptance" %}</a>
+          <a href="?tab=history&ha=rejection{% if hq %}&hq={{ hq }}{% endif %}"
+             hx-get="?tab=history&ha=rejection{% if hq %}&hq={{ hq }}{% endif %}"
+             hx-target="#history-content" hx-select="#history-content" hx-push-url="true"
+             class="px-2 py-1 rounded {% if ha == 'rejection' %}bg-red-100 text-red-700 font-medium{% else %}text-slate-600 hover:text-slate-800{% endif %}">{% trans "Rejection" %}</a>
         </div>
         <form method="post">
           {% csrf_token %}
@@ -231,6 +269,8 @@
                     <td class="px-3 py-2">
                       {% if log.action == "entrance_exam_invitation" %}
                         {% include "partials/_badge.html" with label=_("Invitation") tone="info" %}
+                      {% elif log.action == "acceptance" %}
+                        {% include "partials/_badge.html" with label=_("Acceptance") tone="success" %}
                       {% elif log.action == "rejection" %}
                         {% include "partials/_badge.html" with label=_("Rejection") tone="danger" %}
                       {% endif %}

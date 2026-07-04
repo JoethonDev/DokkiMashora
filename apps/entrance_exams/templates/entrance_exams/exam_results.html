@@ -9,32 +9,7 @@
   <h1 class="text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ exam.title }} - {% trans "Results" %}</h1>
 
   <div class="mt-6 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-center">
-      <div>
-        <p class="text-sm text-slate-500 dark:text-slate-400">{% trans "Status" %}</p>
-        <div class="mt-2 flex justify-center">
-          {% if attempt.status == "graded" %}
-            {% include "partials/_badge.html" with label=_("Graded") tone="success" %}
-          {% elif attempt.status == "completed" %}
-            {% include "partials/_badge.html" with label=_("Pending grade") tone="warning" %}
-          {% else %}
-            {{ attempt.get_status_display }}
-          {% endif %}
-        </div>
-      </div>
-      <div>
-        <p class="text-sm text-slate-500 dark:text-slate-400">{% trans "Result" %}</p>
-        <div class="mt-2 flex justify-center">
-          {% if attempt.result == "pass" %}
-            {% include "partials/_badge.html" with label=_("Passed") tone="success" %}
-          {% elif attempt.result == "fail" %}
-            {% include "partials/_badge.html" with label=_("Failed") tone="danger" %}
-          {% else %}
-            <span class="text-slate-400">—</span>
-          {% endif %}
-        </div>
-      </div>
-    </div>
+    <p class="text-sm text-slate-500 dark:text-slate-400">{% trans "Submitted" %}: {{ attempt.submitted_at|date:"j M Y, H:i" }}</p>
   </div>
 
   {% for answer in answers %}
@@ -76,8 +51,8 @@
   {% endfor %}
 
   <div class="text-center mt-8 mb-8">
-    {% url 'entrance_exams:student_list' as back_url %}
-    {% include "partials/_button.html" with href=back_url label=_("Back to entrance exams") variant="secondary" %}
+    {% url 'students:exam_results' as back_url %}
+    {% include "partials/_button.html" with href=back_url label=_("Back to my profile") variant="secondary" %}
   </div>
 </section>
 {% endblock %}

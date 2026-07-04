@@ -163,6 +163,24 @@ class Cohort(TimeStampedModel):
         unique_together = (("diploma", "name"),)
         ordering = ("-start_date",)
 
+    def save(self, *args, **kwargs):
+        is_new = self.pk is None
+        super().save(*args, **kwargs)
+        if is_new:
+            semesters = self.diploma.semesters.filter(is_active=True).order_by("order")
+            for semester in semesters:
+                for sc in semester.semester_courses.select_related("course"):
+                    CourseVersion.objects.get_or_create(
+                        course=sc.course,
+                        cohort=self,
+                        semester=semester,
+                        defaults={
+                            "label": "v1",
+                            "is_active": True,
+                            "created_by": self.created_by,
+                        },
+                    )
+
     def __str__(self):
         return f"{self.diploma.title} - {self.name}"
 

@@ -1,0 +1,32 @@
+{% extends "students/profile/base_profile.html" %}{% load i18n student_extras %}
+{% block profile_title %}{% trans "Diploma / Course" %}{% endblock %}
+{% block profile_content %}
+{% if items %}
+<div class="space-y-3">
+  {% for item in items %}
+  <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+    <div class="flex items-center justify-between">
+      <div class="min-w-0 flex-1">
+        {% if item.label %}
+        <p class="text-xs text-slate-500 mb-0.5">{{ item.label }}</p>
+        {% endif %}
+        <p class="text-sm font-medium truncate">{{ item.course_title }}</p>
+        <div class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+          <span>{% trans "Joined" %}: {{ item.joined_at|date:"j M Y" }}</span>
+          {% if item.expires_at %}
+          <span>{% trans "Until" %}: {{ item.expires_at|date:"j M Y" }}</span>
+          {% endif %}
+          <span>{{ item.lecture_count }} {% trans "lectures" %}</span>
+        </div>
+      </div>
+      <a href="{% url 'students:diploma_course_detail' item.cv_id %}" class="shrink-0 ml-3 inline-flex items-center rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700 transition">{% trans "View" %}</a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 text-sm text-slate-500 dark:text-slate-400">
+  <p>{% trans "No diploma or course information yet." %}</p>
+</div>
+{% endif %}
+{% endblock %}

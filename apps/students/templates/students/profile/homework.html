@@ -5,12 +5,12 @@
 <div class="space-y-3">
   {% for hw in homework_submissions %}
   <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
-    <div class="flex items-center justify-between">
-      <div>
-        <p class="text-sm font-medium">{{ hw.assessment.title }}</p>
+    <div class="flex items-center justify-between gap-2">
+      <div class="min-w-0">
+        <p class="text-sm font-medium truncate">{{ hw.assessment.title }}</p>
         <p class="text-xs text-slate-500 mt-1">{{ hw.submitted_at|date:"j M Y, H:i" }}</p>
       </div>
-      {% include "partials/_badge.html" with label=hw.get_status_display tone=hw.status|status_tone:"homework" %}
+      <a href="{% url 'assessments:take' hw.assessment.id %}" class="shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700 transition whitespace-nowrap">{% trans "View" %}</a>
     </div>
     {% if hw.attempt.visible_to_student and hw.score is not None %}
     <p class="text-xs mt-1 text-slate-500">{% trans "Score" %}: <span class="tabular-nums font-semibold">{{ hw.score }}</span></p>
