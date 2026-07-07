@@ -10,15 +10,12 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from apps.academics.services import enroll_student_in_course, enroll_student_in_diploma
 from apps.applications.constants import (
-    PROGRAM_APP_STATUS_ACCEPTED,
-    PROGRAM_APP_STATUS_REJECTED,
+    EMAIL_ACTION_NOTE,
     PROGRAM_TYPE_DIPLOMA,
 )
-from apps.applications.models import EMAIL_ACTION_ACCEPTANCE, EMAIL_ACTION_REJECTION
-from apps.applications.models import ProgramApplicationEmailLog as PAEL
-from apps.audit.constants import ACTION_APPLICATION_APPROVED, ACTION_APPLICATION_REJECTED
+from apps.applications.models import ProgramApplicationEmailLog as PAEL  # noqa: N817
+from apps.applications.services import mark_entrance_submitted, record_program_application_note
 from apps.audit.services import record_audit_event
 from apps.communications.constants import (
     TEMPLATE_ENTRANCE_EXAM_FAIL,
@@ -189,14 +186,10 @@ def _update_program_application_from_result(
     actor: User | None = None,
 ) -> None:
     prog_app = attempt.program_application
-    if result == RESULT_PASS:
-        audit_action = ACTION_APPLICATION_APPROVED
-    else:
-        audit_action = ACTION_APPLICATION_REJECTED
 
     record_audit_event(
         actor=actor,
-        action=audit_action,
+        action="exam_completed",
         target_type="entrance_attempt",
         target_id=str(attempt.id),
         metadata={
@@ -207,43 +200,31 @@ def _update_program_application_from_result(
         },
     )
 
+    mark_entrance_submitted(prog_app, actor=actor, attempt=attempt)
+    note_text = _("Exam passed") if result == RESULT_PASS else _("Exam failed")
+    record_program_application_note(prog_app, actor, note_text)
+
     if not attempt.exam.auto_send_results:
         return
 
-    email_action = EMAIL_ACTION_ACCEPTANCE if result == RESULT_PASS else EMAIL_ACTION_REJECTION
-    new_status = PROGRAM_APP_STATUS_ACCEPTED if result == RESULT_PASS else PROGRAM_APP_STATUS_REJECTED
     slug = TEMPLATE_ENTRANCE_EXAM_PASS if result == RESULT_PASS else TEMPLATE_ENTRANCE_EXAM_FAIL
-
-    if PAEL.objects.filter(program_application=prog_app, action=email_action, status="sent").exists():
-        return
-
     email_to = attempt.student.user.email
     context = {
         "full_name": attempt.student.full_name or "",
         "exam_title": attempt.exam.title,
         "cohort_name": attempt.exam.cohort.name or "",
     }
-    if result == RESULT_FAIL:
-        context["rejection_reason"] = attempt.program_application.rejection_reason or ""
     record = send_templated_email(slug=slug, to_email=email_to, context=context, sent_by=actor)
     if record:
-        prog_app.status = new_status
-        prog_app.save(update_fields=["status", "updated_at"])
         PAEL.objects.create(
             program_application=prog_app,
-            action=email_action,
+            action=EMAIL_ACTION_NOTE,
             template_slug=slug,
             recipient=email_to,
             sent_by=actor,
             sent_at=record.sent_at or timezone.now(),
             status=record.status or "sent",
         )
-        if result == RESULT_PASS and prog_app.program_type == "diploma" and prog_app.cohort:
-            enroll_student_in_diploma(attempt.student, prog_app.cohort)
-        elif result == RESULT_PASS and prog_app.program_type == "course" and prog_app.course:
-            cv = prog_app.course.course_versions.first()
-            if cv:
-                enroll_student_in_course(attempt.student, cv)
 
 
 # ---------------------------------------------------------------------------

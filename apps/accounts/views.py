@@ -817,6 +817,9 @@ def activate_account(request, uidb64, token):
         user.is_active = True
         user.email_activated_at = timezone.now()
         user.save(update_fields=["is_active", "email_activated_at", "updated_at"])
+    # handle post-activation application state machine
+    from apps.applications.services import handle_user_account_activated
+    handle_user_account_activated(user)
     auth_login(request, user)
     messages.success(request, _("Account activated successfully. Welcome!"))
     return redirect(_dashboard_url_name(user))

@@ -11,6 +11,9 @@ from apps.core.models import TimeStampedModel
 from apps.students.models import StudentProfile
 
 from .constants import (
+    ACTIVE_PROGRAM_APP_STATUSES,
+    DECISION_ACTION_CHOICES,
+    EMAIL_ACTION_CHOICES,
     PROGRAM_APP_STATUS_ACCEPTED,
     PROGRAM_APP_STATUS_ACTIVATED,
     PROGRAM_APP_STATUS_CHOICES,
@@ -19,14 +22,6 @@ from .constants import (
     PROGRAM_TYPE_CHOICES,
     PROGRAM_TYPE_DIPLOMA,
 )
-
-DECISION_ACTION_CHOICES = (
-    ("accept", _("Accepted")),
-    ("reject", _("Rejected")),
-    ("revert", _("Reverted")),
-)
-
-REVERTABLE_ACTIONS = frozenset({"accept", "reject"})
 
 
 class ProgramApplication(TimeStampedModel):
@@ -97,12 +92,12 @@ class ProgramApplication(TimeStampedModel):
             models.UniqueConstraint(
                 fields=["student", "cohort"],
                 name="uq_program_app_diploma",
-                condition=models.Q(program_type="diploma", status__in=("submitted", "under_review", "invited_to_entrance", "accepted", "activated")),
+                condition=models.Q(program_type="diploma", status__in=ACTIVE_PROGRAM_APP_STATUSES),
             ),
             models.UniqueConstraint(
                 fields=["student", "course"],
                 name="uq_program_app_course",
-                condition=models.Q(program_type="course", status__in=("submitted", "under_review", "invited_to_entrance", "accepted", "activated")),
+                condition=models.Q(program_type="course", status__in=ACTIVE_PROGRAM_APP_STATUSES),
             ),
         ]
 
@@ -145,17 +140,6 @@ class ProgramApplication(TimeStampedModel):
         )
 
 
-EMAIL_ACTION_INVITATION = "entrance_exam_invitation"
-EMAIL_ACTION_REJECTION = "rejection"
-EMAIL_ACTION_ACCEPTANCE = "acceptance"
-
-EMAIL_ACTION_CHOICES = (
-    (EMAIL_ACTION_INVITATION, _("Entrance exam invitation")),
-    (EMAIL_ACTION_REJECTION, _("Rejection")),
-    (EMAIL_ACTION_ACCEPTANCE, _("Acceptance")),
-)
-
-
 class ProgramApplicationEmailLog(TimeStampedModel):
     """Tracks emails sent for a program application."""
 
@@ -179,6 +163,13 @@ class ProgramApplicationEmailLog(TimeStampedModel):
         verbose_name = _("program application email log")
         verbose_name_plural = _("program application email logs")
         ordering = ("-created_at",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=["program_application", "action"],
+                name="uq_program_app_email_log_sent",
+                condition=models.Q(status="sent", is_resend=False),
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.program_application} - {self.get_action_display()} — {self.status}"
@@ -191,7 +182,7 @@ class ProgramApplicationDecision(TimeStampedModel):
         ProgramApplication, on_delete=models.CASCADE,
         related_name="decisions",
     )
-    action = models.CharField(max_length=24, choices=DECISION_ACTION_CHOICES)
+    action = models.CharField(max_length=32, choices=DECISION_ACTION_CHOICES)
     old_status = models.CharField(max_length=24)
     new_status = models.CharField(max_length=24)
     actor = models.ForeignKey(
@@ -202,6 +193,7 @@ class ProgramApplicationDecision(TimeStampedModel):
         related_name="program_application_decisions",
     )
     reason = models.TextField(blank=True)
+    metadata = models.JSONField(_("metadata"), default=dict, blank=True)
 
     class Meta:
         verbose_name = _("program application decision")
@@ -218,3 +210,48 @@ class ProgramApplicationDecision(TimeStampedModel):
         if self.pk is not None:
             raise PermissionError("Program application decisions are append-only.")
         super().save(*args, **kwargs)
+
+
+class ProgramApplicationNote(TimeStampedModel):
+    """Append-only admin notes for a ProgramApplication."""
+
+    program_application = models.ForeignKey(
+        ProgramApplication, on_delete=models.CASCADE,
+        related_name="notes",
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="program_application_notes",
+    )
+    note = models.TextField(_("note"))
+    metadata = models.JSONField(_("metadata"), default=dict, blank=True)
+
+    class Meta:
+        verbose_name = _("program application note")
+        verbose_name_plural = _("program application notes")
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return f"Note on {self.program_application} by {self.actor}"
+
+    def delete(self, *args, **kwargs) -> tuple[int, dict[str, int]]:
+        raise PermissionError("Program application notes are append-only.")
+
+    def save(self, *args, **kwargs) -> None:
+        if self.pk is not None:
+            raise PermissionError("Program application notes are append-only.")
+        super().save(*args, **kwargs)
+
+
+# Legacy email action constants (re-exported from constants.py)
+from .constants import (  # noqa: E402, F401, I001
+    EMAIL_ACTION_ACCEPTANCE,
+    EMAIL_ACTION_ENTRANCE_EXAM_INVITATION,
+    EMAIL_ACTION_ENTRANCE_EXAM_INVITATION as EMAIL_ACTION_INVITATION,
+    EMAIL_ACTION_EXAM_RESULT,
+    EMAIL_ACTION_NOTE,
+    EMAIL_ACTION_REJECTION,
+)

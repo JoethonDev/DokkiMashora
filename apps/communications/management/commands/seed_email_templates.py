@@ -8,6 +8,10 @@ from apps.communications.constants import (
     DESIGN_BRANDED,
     TEMPLATE_ACCEPTANCE,
     TEMPLATE_ACTIVATION,
+    TEMPLATE_APPLICATION_PAYMENT_PENDING,
+    TEMPLATE_COURSE_PAYMENT_INSTRUCTIONS,
+    TEMPLATE_DIPLOMA_ENTRANCE_EXAM_SCHEDULE,
+    TEMPLATE_DIPLOMA_INTERVIEW_REQUEST,
     TEMPLATE_ENTRANCE_EXAM_FAIL,
     TEMPLATE_ENTRANCE_EXAM_INVITATION,
     TEMPLATE_ENTRANCE_EXAM_PASS,
@@ -120,6 +124,55 @@ DEFAULT_TEMPLATES = {
             "Thank you,\nDokkiMashora admissions"
         ),
     },
+    TEMPLATE_COURSE_PAYMENT_INSTRUCTIONS: {
+        "name": "Course payment instructions",
+        "subject": "Payment instructions for your course",
+        "body": (
+            "Hello {{ full_name }},\n\n"
+            "Thank you for applying to '{{ course_title }}'.\n\n"
+            "To complete your enrollment, please follow the payment instructions below.\n\n"
+            "Contact us at {{ staff_phone }} if you need assistance.\n\n"
+            "Thank you,\nDokkiMashora admissions"
+        ),
+    },
+    TEMPLATE_DIPLOMA_ENTRANCE_EXAM_SCHEDULE: {
+        "name": "Diploma entrance exam schedule",
+        "subject": "Your entrance exam schedule for {{ diploma_title }}",
+        "body": (
+            "Hello {{ full_name }},\n\n"
+            "Your application for '{{ diploma_title }}' ({{ cohort_name }}) has been received.\n\n"
+            "The entrance exam '{{ exam_title }}' is scheduled.\n"
+            "Exam period: {{ exam_open_at }} to {{ exam_close_at }}.\n\n"
+            "Please log in to your dashboard to take the exam.\n\n"
+            "Good luck!\nDokkiMashora admissions"
+        ),
+    },
+    TEMPLATE_DIPLOMA_INTERVIEW_REQUEST: {
+        "name": "Diploma interview request",
+        "subject": "Interview request for your diploma application",
+        "body": (
+            "Hello {{ full_name }},\n\n"
+            "We would like to invite you to an interview for your application to '{{ diploma_title }}' ({{ cohort_name }}).\n\n"
+            "{% if interview_at %}Interview date: {{ interview_at }}\n{% endif %}"
+            "{% if phone_number %}Contact phone: {{ phone_number }}\n{% endif %}"
+            "This invitation expires on {{ expires_at }}.\n\n"
+            "Please respond before the expiry date.\n\n"
+            "Thank you,\nDokkiMashora admissions"
+        ),
+    },
+    TEMPLATE_APPLICATION_PAYMENT_PENDING: {
+        "name": "Application payment pending",
+        "subject": "Payment pending for your application",
+        "body": (
+            "Hello {{ full_name }},\n\n"
+            "Your application for '{{ program_type }}' is pending payment.\n"
+            "{% if course_title %}Course: {{ course_title }}\n{% endif %}"
+            "{% if diploma_title %}Diploma: {{ diploma_title }}\n{% endif %}"
+            "{% if cohort_name %}Cohort: {{ cohort_name }}\n{% endif %}"
+            "Please contact us at {{ staff_phone }} for payment details.\n\n"
+            "Thank you,\nDokkiMashora admissions"
+        ),
+    },
 }
 
 
@@ -135,6 +188,7 @@ class Command(BaseCommand):
                     "subject": payload["subject"],
                     "body": payload["body"],
                     "is_active": True,
+                    "is_enabled_for_action": True,
                     "design": DESIGN_BRANDED,
                 },
             )

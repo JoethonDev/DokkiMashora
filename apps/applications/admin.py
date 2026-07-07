@@ -2,7 +2,12 @@
 
 from django.contrib import admin
 
-from .models import ProgramApplication, ProgramApplicationDecision, ProgramApplicationEmailLog
+from .models import (
+    ProgramApplication,
+    ProgramApplicationDecision,
+    ProgramApplicationEmailLog,
+    ProgramApplicationNote,
+)
 
 
 @admin.register(ProgramApplication)
@@ -27,5 +32,12 @@ class ProgramApplicationEmailLogAdmin(admin.ModelAdmin):
 class ProgramApplicationDecisionAdmin(admin.ModelAdmin):
     list_display = ("action", "program_application", "actor", "old_status", "new_status", "created_at")
     list_filter = ("action",)
+    search_fields = ("program_application__student__full_name", "actor__email")
+    readonly_fields = ("created_at",)
+
+
+@admin.register(ProgramApplicationNote)
+class ProgramApplicationNoteAdmin(admin.ModelAdmin):
+    list_display = ("program_application", "actor", "created_at")
     search_fields = ("program_application__student__full_name", "actor__email")
     readonly_fields = ("created_at",)

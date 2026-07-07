@@ -11,6 +11,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods
 
@@ -21,9 +22,12 @@ from apps.students.services import get_open_apply_targets
 
 from .constants import (
     PROGRAM_APP_STATUS_ACCEPTED,
+    PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
+    PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
+    PROGRAM_APP_STATUS_INVITED,
+    PROGRAM_APP_STATUS_PAYMENT_PENDING,
     PROGRAM_APP_STATUS_REJECTED,
     PROGRAM_APP_STATUS_SUBMITTED,
-    PROGRAM_APP_STATUS_UNDER_REVIEW,
 )
 from .forms import RegistrationForm
 from .models import ProgramApplication
@@ -31,6 +35,7 @@ from .services import (
     RegistrationData,
     accept_program_application,
     reject_program_application,
+    request_interview_program_application,
     revert_program_application_decision,
     submit_registration,
 )
@@ -127,6 +132,26 @@ def registration_success(request: HttpRequest) -> HttpResponse:
 # ---------------------------------------------------------------------------
 
 
+def _allowed_detail_statuses():
+    return {
+        PROGRAM_APP_STATUS_SUBMITTED,
+        PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
+        PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
+        PROGRAM_APP_STATUS_PAYMENT_PENDING,
+        PROGRAM_APP_STATUS_INVITED,
+        PROGRAM_APP_STATUS_ACCEPTED,
+        PROGRAM_APP_STATUS_REJECTED,
+    }
+
+
+def _accept_allowed(status):
+    return status in {PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED, PROGRAM_APP_STATUS_INTERVIEW_REQUESTED, PROGRAM_APP_STATUS_PAYMENT_PENDING}
+
+
+def _reject_allowed(status):
+    return status in {PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED, PROGRAM_APP_STATUS_INTERVIEW_REQUESTED}
+
+
 @require_http_methods(["GET"])
 @login_required
 def program_application_list(request: HttpRequest) -> HttpResponse:
@@ -178,33 +203,42 @@ def program_application_list(request: HttpRequest) -> HttpResponse:
 @require_http_methods(["GET", "POST"])
 @login_required
 def program_application_detail(request: HttpRequest, application_id: int) -> HttpResponse:
-    """Admin detail/edit view for a ProgramApplication with Accept/Reject actions."""
+    """Admin detail/edit view for a ProgramApplication with actions."""
     if not (is_admin(request.user) or is_moderator(request.user)):
         raise PermissionDenied
     application = get_object_or_404(
         ProgramApplication.objects.select_related(
             "student__user", "reviewed_by", "cohort__diploma", "course"
-        ),
+        ).prefetch_related("entrance_attempts", "notes__actor"),
         pk=application_id,
     )
+
     if request.method == "POST":
         action = request.POST.get("action")
         send_email = request.POST.get("send_email") == "on"
 
-        if action == "accept" and application.status in {PROGRAM_APP_STATUS_SUBMITTED, PROGRAM_APP_STATUS_UNDER_REVIEW}:
+        if action == "accept" and _accept_allowed(application.status):
             notes = (request.POST.get("admin_notes") or "").strip()
-            accept_program_application(application, request.user, notes=notes, send_email=send_email)
-            messages.success(request, _("Application accepted."))
+            try:
+                accept_program_application(application, request.user, notes=notes, send_email=send_email)
+            except ValueError as exc:
+                messages.error(request, str(exc))
+            else:
+                messages.success(request, _("Application accepted."))
             return redirect("applications:program_detail", application_id=application.id)
 
-        if action == "reject" and application.status in {PROGRAM_APP_STATUS_SUBMITTED, PROGRAM_APP_STATUS_UNDER_REVIEW}:
+        if action == "reject" and _reject_allowed(application.status):
             reason = (request.POST.get("rejection_reason") or "").strip()
             if not reason:
                 messages.error(request, _("Rejection reason is required."))
                 return redirect("applications:program_detail", application_id=application.id)
             admin_notes = (request.POST.get("admin_notes") or "").strip()
-            reject_program_application(application, request.user, reason=reason, notes=admin_notes, send_email=send_email)
-            messages.warning(request, _("Application rejected."))
+            try:
+                reject_program_application(application, request.user, reason=reason, notes=admin_notes, send_email=send_email)
+            except ValueError as exc:
+                messages.error(request, str(exc))
+            else:
+                messages.warning(request, _("Application rejected."))
             return redirect("applications:program_detail", application_id=application.id)
 
         if action == "revert" and application.status in {PROGRAM_APP_STATUS_ACCEPTED, PROGRAM_APP_STATUS_REJECTED}:
@@ -220,6 +254,45 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
                 messages.info(request, _("Application reverted."))
                 return redirect("applications:program_detail", application_id=application.id)
 
+        if action == "request_interview" and application.status == PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED:
+            interview_at_str = (request.POST.get("interview_at") or "").strip()
+            phone_number = (request.POST.get("phone_number") or "").strip()
+            expires_at_str = (request.POST.get("expires_at") or "").strip()
+            notes = (request.POST.get("notes") or "").strip()
+            interview_at = None
+            if interview_at_str:
+                try:
+                    dt = timezone.datetime.fromisoformat(interview_at_str)
+                    interview_at = timezone.make_aware(dt) if timezone.is_naive(dt) else dt
+                except (ValueError, TypeError):
+                    messages.error(request, _("Invalid interview date/time format."))
+                    return redirect("applications:program_detail", application_id=application.id)
+            expires_at = None
+            if expires_at_str:
+                try:
+                    dt = timezone.datetime.fromisoformat(expires_at_str)
+                    expires_at = timezone.make_aware(dt) if timezone.is_naive(dt) else dt
+                except (ValueError, TypeError):
+                    messages.error(request, _("Invalid expiry date/time format."))
+                    return redirect("applications:program_detail", application_id=application.id)
+            if not expires_at:
+                messages.error(request, _("Expiry time is required for interview request."))
+                return redirect("applications:program_detail", application_id=application.id)
+            try:
+                request_interview_program_application(
+                    application, request.user,
+                    interview_at=interview_at,
+                    phone_number=phone_number,
+                    expires_at=expires_at,
+                    notes=notes,
+                    send_email=send_email,
+                )
+            except ValueError as exc:
+                messages.error(request, str(exc))
+            else:
+                messages.success(request, _("Interview requested."))
+            return redirect("applications:program_detail", application_id=application.id)
+
         messages.error(request, _("Action not allowed for the current status."))
 
     decisions, decisions_qs = paginate(
@@ -227,10 +300,11 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
         application.decisions.select_related("actor").order_by("-created_at"),
         per_page=15,
     )
+    notes = application.notes.select_related("actor").order_by("-created_at")[:20]
     return render(
         request,
         "applications/admin_program_detail.html",
-        {"application": application, "decisions": decisions, "pagination_qs": decisions_qs},
+        {"application": application, "decisions": decisions, "pagination_qs": decisions_qs, "notes": notes},
     )
 
 

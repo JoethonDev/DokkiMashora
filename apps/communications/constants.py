@@ -14,6 +14,10 @@ TEMPLATE_ACCEPTANCE = "acceptance"
 TEMPLATE_REJECTION = "rejection"
 TEMPLATE_ACTIVATION = "activation"
 TEMPLATE_PAYMENT_NOTIFICATION = "payment_notification"
+TEMPLATE_COURSE_PAYMENT_INSTRUCTIONS = "course_payment_instructions"
+TEMPLATE_DIPLOMA_ENTRANCE_EXAM_SCHEDULE = "diploma_entrance_exam_schedule"
+TEMPLATE_DIPLOMA_INTERVIEW_REQUEST = "diploma_interview_request"
+TEMPLATE_APPLICATION_PAYMENT_PENDING = "application_payment_pending"
 
 TEMPLATE_SLUGS = (
     TEMPLATE_REGISTRATION_RECEIVED,
@@ -25,6 +29,10 @@ TEMPLATE_SLUGS = (
     TEMPLATE_REJECTION,
     TEMPLATE_ACTIVATION,
     TEMPLATE_PAYMENT_NOTIFICATION,
+    TEMPLATE_COURSE_PAYMENT_INSTRUCTIONS,
+    TEMPLATE_DIPLOMA_ENTRANCE_EXAM_SCHEDULE,
+    TEMPLATE_DIPLOMA_INTERVIEW_REQUEST,
+    TEMPLATE_APPLICATION_PAYMENT_PENDING,
 )
 
 EMAIL_STATUS_QUEUED = "queued"
@@ -57,6 +65,10 @@ REQUIRED_VARIABLES_BY_SLUG: dict[str, list[str]] = {
     TEMPLATE_REJECTION: [],
     TEMPLATE_ACTIVATION: [],
     TEMPLATE_PAYMENT_NOTIFICATION: [],
+    TEMPLATE_COURSE_PAYMENT_INSTRUCTIONS: [],
+    TEMPLATE_DIPLOMA_ENTRANCE_EXAM_SCHEDULE: [],
+    TEMPLATE_DIPLOMA_INTERVIEW_REQUEST: [],
+    TEMPLATE_APPLICATION_PAYMENT_PENDING: [],
 }
 
 ALL_VARIABLE_SAMPLES: dict[str, str] = {
@@ -125,6 +137,22 @@ AVAILABLE_VARIABLES_BY_SLUG: dict[str, dict[str, list[str]]] = {
         "required": [],
         "optional": ["full_name", "amount", "currency", "due_at", "reference", "status"],
     },
+    TEMPLATE_COURSE_PAYMENT_INSTRUCTIONS: {
+        "required": [],
+        "optional": ["full_name", "course_title", "staff_phone"],
+    },
+    TEMPLATE_DIPLOMA_ENTRANCE_EXAM_SCHEDULE: {
+        "required": [],
+        "optional": ["full_name", "diploma_title", "cohort_name", "exam_title", "exam_open_at", "exam_close_at"],
+    },
+    TEMPLATE_DIPLOMA_INTERVIEW_REQUEST: {
+        "required": [],
+        "optional": ["full_name", "diploma_title", "cohort_name", "interview_at", "phone_number", "expires_at"],
+    },
+    TEMPLATE_APPLICATION_PAYMENT_PENDING: {
+        "required": [],
+        "optional": ["full_name", "program_type", "course_title", "diploma_title", "cohort_name", "staff_phone"],
+    },
 }
 
 DESIGN_BRANDED = "branded"
@@ -151,6 +179,10 @@ SAMPLE_CONTEXT_BY_SLUG: dict[str, dict[str, str]] = {
     TEMPLATE_REJECTION: {"full_name": "ماري جرجس", "cohort_name": "دفعة ٢٠٢٦", "rejection_reason": "لم يستوفِ متطلبات القبول"},
     TEMPLATE_ACTIVATION: {"full_name": "ماري جرجس", "activation_url": "https://example.com/activate/abc123", "cohort_name": "دفعة ٢٠٢٦", "email": "mary@example.com", "password": "1234567890", "diploma_title": "دبلومة الدراسات اللاهوتية"},
     TEMPLATE_PAYMENT_NOTIFICATION: {"full_name": "ماري جرجس", "amount": "500.00", "currency": "EGP", "due_at": "2026-06-30", "reference": "INV-001", "status": "مدفوع"},
+    TEMPLATE_COURSE_PAYMENT_INSTRUCTIONS: {"full_name": "ماري جرجس", "course_title": "مدخل إلى اللاهوت", "staff_phone": "01234567890"},
+    TEMPLATE_DIPLOMA_ENTRANCE_EXAM_SCHEDULE: {"full_name": "ماري جرجس", "diploma_title": "دبلومة الدراسات اللاهوتية", "cohort_name": "دفعة ٢٠٢٦", "exam_title": "امتحان القبول للدبلومة", "exam_open_at": "١ يونيو ٢٠٢٦", "exam_close_at": "١٥ يونيو ٢٠٢٦"},
+    TEMPLATE_DIPLOMA_INTERVIEW_REQUEST: {"full_name": "ماري جرجس", "diploma_title": "دبلومة الدراسات اللاهوتية", "cohort_name": "دفعة ٢٠٢٦", "interview_at": "2026-07-15T10:00:00+03:00", "phone_number": "01234567890", "expires_at": "2026-07-20T23:59:00+03:00"},
+    TEMPLATE_APPLICATION_PAYMENT_PENDING: {"full_name": "ماري جرجس", "program_type": "دبلومة", "course_title": "", "diploma_title": "دبلومة الدراسات اللاهوتية", "cohort_name": "دفعة ٢٠٢٦", "staff_phone": "01234567890"},
 }
 
 TEMPLATE_SAMPLE_CONTEXT = SAMPLE_CONTEXT_BY_SLUG

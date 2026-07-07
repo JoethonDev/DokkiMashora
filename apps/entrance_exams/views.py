@@ -21,15 +21,14 @@ from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods, require_POST
 
 from apps.academics.models import Cohort
-from apps.academics.services import enroll_student_in_course, enroll_student_in_diploma
 from apps.applications.constants import (
+    EMAIL_ACTION_EXAM_RESULT,
     PROGRAM_APP_STATUS_ACCEPTED,
     PROGRAM_APP_STATUS_ACTIVATED,
     PROGRAM_APP_STATUS_INVITED,
     PROGRAM_APP_STATUS_REJECTED,
 )
 from apps.applications.models import (
-    EMAIL_ACTION_ACCEPTANCE,
     EMAIL_ACTION_INVITATION,
     EMAIL_ACTION_REJECTION,
     ProgramApplication,
@@ -822,13 +821,11 @@ def _send_results(request, exam, student_ids):
         prog_app = attempt.program_application
         is_pass = attempt.result == RESULT_PASS
         slug = TEMPLATE_ENTRANCE_EXAM_PASS if is_pass else TEMPLATE_ENTRANCE_EXAM_FAIL
-        action = EMAIL_ACTION_ACCEPTANCE if is_pass else EMAIL_ACTION_REJECTION
-        new_status = PROGRAM_APP_STATUS_ACCEPTED if is_pass else PROGRAM_APP_STATUS_REJECTED
         if is_pass:
             pass_count += 1
         else:
             fail_count += 1
-        if PAEL.objects.filter(program_application=prog_app, action=action, status="sent").exists():
+        if PAEL.objects.filter(program_application=prog_app, action=EMAIL_ACTION_EXAM_RESULT, status="sent").exists():
             sent_count += 1
             continue
         context = {
@@ -844,21 +841,13 @@ def _send_results(request, exam, student_ids):
             failed_count += 1
             continue
         if record and record.status == "sent":
-            prog_app.status = new_status
-            prog_app.save(update_fields=["status", "updated_at"])
             PAEL.objects.create(
                 program_application=prog_app,
-                action=action, template_slug=slug,
+                action=EMAIL_ACTION_EXAM_RESULT, template_slug=slug,
                 recipient=email_to, sent_by=request.user,
                 sent_at=record.sent_at or timezone.now(),
                 status=record.status or "sent",
             )
-            if is_pass and prog_app.program_type == "diploma" and prog_app.cohort:
-                enroll_student_in_diploma(attempt.student, prog_app.cohort)
-            elif is_pass and prog_app.program_type == "course" and prog_app.course:
-                cv = prog_app.course.course_versions.first()
-                if cv:
-                    enroll_student_in_course(attempt.student, cv)
             sent_count += 1
         else:
             failed_count += 1
@@ -918,14 +907,6 @@ def _resend_emails(request, exam, cohort, log_ids):
         )
         if record and record.status == "sent":
             sent_count += 1
-            if log.action == EMAIL_ACTION_ACCEPTANCE:
-                pa = log.program_application
-                if pa.program_type == "diploma" and pa.cohort:
-                    enroll_student_in_diploma(pa.student, pa.cohort)
-                elif pa.program_type == "course" and pa.course:
-                    cv = pa.course.course_versions.first()
-                    if cv:
-                        enroll_student_in_course(pa.student, cv)
         else:
             failed_count += 1
     msg = _("Resent %(sent)d emails (%(failed)d failed).") % {"sent": sent_count, "failed": failed_count}
