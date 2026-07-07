@@ -47,12 +47,12 @@ from apps.applications.models import ProgramApplication
 from apps.assessments.constants import ATTEMPT_STATUS_SUBMITTED, ATTEMPT_STATUS_UNDER_REVIEW
 from apps.assessments.models import AssessmentAttempt
 from apps.audit.models import AuditEvent
+from apps.audit.services import record_audit_event
 from apps.communications.email_message import EmailMessage as CommEmailMessage
 from apps.core.htmx import is_htmx
 from apps.core.models import LandingAnnouncement
 from apps.core.permissions import ROLE_EXAM_STAFF, ROLE_SENIOR_STAFF, is_admin, role_required
 from apps.core.views import safe_next_url
-from apps.audit.services import record_audit_event
 from apps.entrance_exams.models import EntranceAttempt
 from apps.payments.constants import (
     PAYMENT_STATUS_PAID,
@@ -548,7 +548,7 @@ def admin_download_csv_template(request, kind):
     if kind == "students":
         writer.writerow(["student@example.com", "John Doe", "+201234567890", "29001010100001", "2000-01-01", "male", "Cairo", "Bachelor", "CS", "Company", "Engineer", "St. Mary", "Fr. George", "+201111111111"])
     elif kind == "payments":
-        writer.writerow(["29001010100001", "500.00", "2026-01-15", "INV-001", "student@example.com", "+201234567890", "Tuition fee"])
+        writer.writerow(["29001010100001", "500.00", "2026-01-15", "INV-001", "student@example.com", "+201234567890", _("Tuition fee")])
     return response
 
 

@@ -45,7 +45,7 @@
         <h3 class="text-base font-semibold text-slate-900 dark:text-slate-100">
           {% trans "Question" %} {{ forloop.counter }}
         </h3>
-        {% include "partials/_badge.html" with label=answer.question.points|stringformat:"s"|add:" pts" tone="neutral" %}
+        {% trans "pts" as pts_label %}{% include "partials/_badge.html" with label=answer.question.points|stringformat:"s"|add:" "|add:pts_label tone="neutral" %}
       </div>
       <p class="text-base leading-relaxed text-slate-800 dark:text-slate-200 max-w-prose">{{ answer.question.text }}</p>
 

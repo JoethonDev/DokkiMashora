@@ -14,32 +14,28 @@ from django.utils.translation import gettext as _
 
 from apps.academics.models import Cohort, Course
 from apps.academics.services import enroll_student_in_course
-from apps.accounts.constants import GROUP_STUDENT
-from apps.accounts.constants import USER_STATUS_INACTIVE
+from apps.accounts.constants import GROUP_STUDENT, USER_STATUS_INACTIVE
 from apps.audit.constants import ACTION_APPLICATION_DECISION_REVERTED
 from apps.audit.services import record_audit_event
 from apps.communications.constants import (
     TEMPLATE_ACCEPTANCE,
-    TEMPLATE_ACTIVATION,
     TEMPLATE_REJECTION,
 )
 from apps.communications.services import send_templated_email
 from apps.students.models import StudentProfile
 
 from .constants import (
-    PROGRAM_APP_STATUS_ACCEPTED,
     PROGRAM_APP_STATUS_REJECTED,
     PROGRAM_APP_STATUS_SUBMITTED,
     PROGRAM_TYPE_COURSE,
     PROGRAM_TYPE_DIPLOMA,
 )
-from .models import ProgramApplication, ProgramApplicationDecision, ProgramApplicationEmailLog
+from .models import ProgramApplication, ProgramApplicationDecision
 
 if TYPE_CHECKING:
-    from apps.accounts.models import User as UserModel
+    pass
 
 from apps.accounts.services import send_activation_email
-
 
 User = get_user_model()
 

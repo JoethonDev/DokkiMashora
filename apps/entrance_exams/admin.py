@@ -1,6 +1,13 @@
 from django.contrib import admin
 
-from .models import EntranceAnswer, EntranceAttempt, EntranceChoice, EntranceExam, EntranceQuestion, EntranceSnapshot
+from .models import (
+    EntranceAnswer,
+    EntranceAttempt,
+    EntranceChoice,
+    EntranceExam,
+    EntranceQuestion,
+    EntranceSnapshot,
+)
 
 
 class EntranceQuestionInline(admin.TabularInline):

@@ -9,7 +9,7 @@ def seed_default_announcement(apps, schema_editor):
     LandingAnnouncement.objects.get_or_create(
         title="Registration open",
         defaults={
-            "message": "New cohort registration is open through the official application flow.",
+            "message": "Applications are open through the official program application flow.",
             "is_active": True,
         },
     )

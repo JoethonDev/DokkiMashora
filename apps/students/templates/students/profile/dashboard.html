@@ -21,7 +21,15 @@
         <span class="font-medium text-sm">{{ item.course.title }}</span>
         {% if item.semester %}<span class="text-xs text-slate-500">{{ item.semester.title }}</span>{% endif %}
       </div>
-      <p class="text-xs text-slate-500 mt-1">{{ item.lecture_count }} {% trans "lectures" %}</p>
+      <p class="text-xs text-slate-500 mt-1">{{ item.lecture_count }} {% trans "lectures" %}{% if item.cohort %} &middot; {{ item.cohort.name }}{% endif %}</p>
+      {% if item.lecture_count %}
+      <div class="mt-2 flex items-center gap-2">
+        <div class="flex-1 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+          <div class="h-full bg-brand-500 rounded-full" style="width: {% widthratio item.completed_count item.lecture_count 100 %}%"></div>
+        </div>
+        <span class="text-xs text-slate-500 whitespace-nowrap">{{ item.completed_count }}/{{ item.lecture_count }}</span>
+      </div>
+      {% endif %}
     </a>
     {% endfor %}
   </div>

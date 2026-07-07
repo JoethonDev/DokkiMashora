@@ -30,7 +30,7 @@
             <h3 class="text-base font-semibold text-slate-900 dark:text-slate-100">
               {% trans "Question" %} {{ forloop.counter }}
             </h3>
-            {% include "partials/_badge.html" with label=question.points|stringformat:"s"|add:" pts" tone="neutral" %}
+            {% trans "pts" as pts_label %}{% include "partials/_badge.html" with label=question.points|stringformat:"s"|add:" "|add:pts_label tone="neutral" %}
           </div>
           <p class="text-base leading-relaxed text-slate-800 dark:text-slate-200 max-w-prose">{{ question.text }}</p>
 
@@ -96,7 +96,7 @@
               {% if answer.graded_at %}
                 <p class="mt-2 text-xs text-slate-500 dark:text-slate-400 tabular-nums">
                   {% trans "Graded" %} {% dt answer.graded_at %}
-                  {% if answer.graded_by %} by {{ answer.graded_by.email }}{% endif %}
+                  {% if answer.graded_by %} {% trans "by" %} {{ answer.graded_by.email }}{% endif %}
                 </p>
               {% endif %}
             {% endif %}

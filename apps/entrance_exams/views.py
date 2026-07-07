@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import json
 from decimal import Decimal, InvalidOperation
+from urllib.parse import urlencode
 
 import qrcode
 from django.contrib import messages
@@ -18,7 +19,6 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods, require_POST
-from urllib.parse import urlencode
 
 from apps.academics.models import Cohort
 from apps.academics.services import enroll_student_in_course, enroll_student_in_diploma
@@ -258,7 +258,7 @@ def save_exam_snapshot(request, token):
             save_snapshot(attempt, qid, choice_id=choice_id, written_text=written)
         return JsonResponse({"ok": True})
     except (json.JSONDecodeError, ValueError, TypeError):
-        return JsonResponse({"ok": False, "error": "Invalid data"}, status=400)
+        return JsonResponse({"ok": False, "error": _("Invalid data")}, status=400)
 
 
 @login_required

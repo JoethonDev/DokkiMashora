@@ -32,8 +32,6 @@ from .constants import (
     MATCH_METHOD_NONE,
     MATCH_METHOD_PHONE,
     REQUIRED_CSV_HEADERS,
-)
-from .constants import (
     ROW_STATUS_AMBIGUOUS,
     ROW_STATUS_CREATED,
     ROW_STATUS_FAILED,
@@ -161,9 +159,9 @@ def _parse_row_data(row: dict[str, str], row_number: int) -> dict[str, Any]:
     email = row.get("email", "").strip().lower()
     full_name = row.get("full_name", "").strip()
     if not email:
-        return {"status": ROW_STATUS_FAILED, "error_message": "Empty email"}
+        return {"status": ROW_STATUS_FAILED, "error_message": str(_("Empty email"))}
     if not full_name:
-        return {"status": ROW_STATUS_FAILED, "error_message": "Empty full name"}
+        return {"status": ROW_STATUS_FAILED, "error_message": str(_("Empty full name"))}
     national_id = normalize_national_id(row.get("national_id", ""))
     phone = normalize_phone(row.get("phone", ""))
     return {
@@ -404,8 +402,9 @@ def confirm_upload(upload_id: int, confirmed_by) -> UserUpload:
 
 
 def send_activation_email(user, password: str | None = None) -> None:
-    from .tokens import generate_activation_token
     from apps.applications.services import normalize_phone as application_normalize_phone
+
+    from .tokens import generate_activation_token
 
     uidb64, token = generate_activation_token(user)
     activation_url = settings.SITE_URL + reverse("accounts:activate", kwargs={"uidb64": uidb64, "token": token})

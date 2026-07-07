@@ -16,7 +16,7 @@ from apps.academics.models import (
 class DiplomaForm(forms.ModelForm):
     class Meta:
         model = Diploma
-        fields = ["title", "description", "total_semesters", "is_active"]
+        fields = ["title", "description", "total_semesters", "is_active", "video_tracking_enabled", "video_completion_percent"]
         widgets = {
             "description": forms.Textarea(attrs={"rows": 4}),
         }
@@ -30,6 +30,18 @@ class DiplomaForm(forms.ModelForm):
                     _("Cannot reduce below %(count)s existing semester(s).") % {"count": existing}
                 )
         return total
+
+    def save(self, commit=True):
+        instance = super().save(commit=commit)
+        if commit and self.has_changed():
+            changed = set(self.changed_data)
+            track_fields = changed & {"video_tracking_enabled", "video_completion_percent"}
+            if track_fields:
+                update = {f: getattr(instance, f) for f in track_fields}
+                Course.objects.filter(
+                    semester_courses__semester__diploma=instance
+                ).update(**update)
+        return instance
 
 
 class SemesterForm(forms.ModelForm):
@@ -53,7 +65,7 @@ class SemesterForm(forms.ModelForm):
 class CourseForm(forms.ModelForm):
     class Meta:
         model = Course
-        fields = ["title", "description", "is_standalone", "is_active"]
+        fields = ["title", "description", "is_standalone", "is_active", "video_tracking_enabled", "video_completion_percent"]
         widgets = {
             "description": forms.Textarea(attrs={"rows": 4}),
         }

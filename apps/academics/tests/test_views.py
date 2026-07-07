@@ -42,12 +42,17 @@ class CourseDetailModalIdTests(TestCase):
         self.admin = User.objects.create_superuser(email="modal@test.com", password="pass")
         self.client.force_login(self.admin)
         self.course = Course.objects.create(title="Modal Course", created_by=self.admin)
+        diploma = Diploma.objects.create(title="Modal D", total_semesters=2, created_by=self.admin)
         self.cohort = Cohort.objects.create(
-            diploma=Diploma.objects.create(title="Modal D", total_semesters=2, created_by=self.admin),
+            diploma=diploma,
             name="Modal C", start_date=date(2026, 1, 1), created_by=self.admin,
         )
-        v1 = CourseVersion.objects.create(course=self.course, cohort=self.cohort, label="v1", created_by=self.admin)
-        v2 = CourseVersion.objects.create(course=self.course, cohort=self.cohort, label="v2", created_by=self.admin)
+        self.cohort2 = Cohort.objects.create(
+            diploma=diploma,
+            name="Modal C2", start_date=date(2026, 1, 1), created_by=self.admin,
+        )
+        v1 = CourseVersion.objects.create(course=self.course, cohort=self.cohort, label="", created_by=self.admin)
+        v2 = CourseVersion.objects.create(course=self.course, cohort=self.cohort2, label="", created_by=self.admin)
         self.lec1 = Lecture.objects.create(course_version=v1, order=1, title="L1")
         self.lec2 = Lecture.objects.create(course_version=v1, order=2, title="L2")
 
@@ -86,7 +91,7 @@ class AdminViewTests(TestCase):
             diploma=cls.diploma, name="C1", start_date=date(2026, 1, 1), created_by=cls.admin,
         )
         cls.version = CourseVersion.objects.create(
-            course=cls.course, cohort=cls.cohort, label="v1", created_by=cls.admin,
+            course=cls.course, cohort=cls.cohort, label="", created_by=cls.admin,
         )
         cls.lecture = Lecture.objects.create(
             course_version=cls.version, order=1, title="L1", is_published=True,
@@ -111,6 +116,8 @@ class AdminViewTests(TestCase):
         r = self.client.post(reverse("academics:admin_diploma_create"), {
             "title": "New Diploma",
             "total_semesters": 3,
+            "video_tracking_enabled": False,
+            "video_completion_percent": 80,
         })
         self.assertEqual(r.status_code, 302)
         self.assertTrue(Diploma.objects.filter(title="New Diploma").exists())
@@ -152,6 +159,8 @@ class AdminViewTests(TestCase):
     def test_course_create_post(self):
         r = self.client.post(reverse("academics:admin_course_create"), {
             "title": "New Course",
+            "video_tracking_enabled": False,
+            "video_completion_percent": 80,
         })
         self.assertEqual(r.status_code, 302)
         self.assertTrue(Course.objects.filter(title="New Course").exists())
@@ -159,15 +168,6 @@ class AdminViewTests(TestCase):
     def test_course_edit_get(self):
         r = self.client.get(reverse("academics:admin_course_edit", args=[self.course.id]))
         self.assertEqual(r.status_code, 200)
-
-    def test_attached_course_form_hides_standalone(self):
-        diploma = Diploma.objects.create(title="D2", total_semesters=2, created_by=self.admin)
-        semester = Semester.objects.create(diploma=diploma, order=1, title="S1")
-        course = Course.objects.create(title="Attached", created_by=self.admin)
-        from apps.academics.models import SemesterCourse
-        SemesterCourse.objects.create(course=course, semester=semester, order=1)
-        r = self.client.get(reverse("academics:admin_course_edit", args=[course.id]))
-        self.assertNotContains(r, 'name="is_standalone"')
 
     def test_standalone_course_form_still_shows_standalone(self):
         standalone = Course.objects.create(title="Standalone", created_by=self.admin, is_standalone=True)
@@ -197,12 +197,17 @@ class AdminViewTests(TestCase):
         self.assertEqual(r.status_code, 200)
 
     def test_version_create_post(self):
+        semester = Semester.objects.create(diploma=self.diploma, order=2, title="S2")
+        cohort2 = Cohort.objects.create(
+            diploma=self.diploma, name="C2", start_date=date(2026, 6, 1), created_by=self.admin,
+        )
         r = self.client.post(reverse("academics:admin_version_create", args=[self.course.id]), {
-            "label": "v2",
-            "cohort": self.cohort.id,
+            "label": "",
+            "cohort": cohort2.id,
+            "semester": semester.id,
         })
         self.assertEqual(r.status_code, 302)
-        self.assertTrue(CourseVersion.objects.filter(label="v2").exists())
+        self.assertTrue(CourseVersion.objects.filter(cohort=cohort2).exists())
 
     def test_version_detail(self):
         r = self.client.get(

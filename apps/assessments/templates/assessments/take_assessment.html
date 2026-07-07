@@ -115,7 +115,7 @@
         <legend class="flex items-center gap-3 mb-4 text-sm font-semibold text-slate-900 dark:text-slate-100">
           <span class="inline-flex items-center justify-center h-8 w-8 rounded-full bg-brand-600 text-white text-xs font-bold tabular-nums">{{ forloop.counter }}</span>
           <span>{% trans "Question" %}</span>
-          {% include "partials/_badge.html" with label=question.points|stringformat:"s"|add:" pts" tone="neutral" %}
+          {% trans "pts" as pts_label %}{% include "partials/_badge.html" with label=question.points|stringformat:"s"|add:" "|add:pts_label tone="neutral" %}
         </legend>
         <p class="text-base text-slate-800 dark:text-slate-200 leading-relaxed max-w-prose mb-5">{{ question.text }}</p>
 

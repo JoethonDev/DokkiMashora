@@ -1,21 +1,23 @@
 """Views for academic structure management and student content access."""
 
+import json
 import logging
 import threading
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db.models import Count, Q
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_POST
 
 from apps.academics.audio import transcode_to_hls, validate_audio_file
-from apps.academics.constants import ENROLLMENT_STATUS_CHOICES
+from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE, ENROLLMENT_STATUS_CHOICES
 from apps.academics.forms import (
     CohortForm,
     CourseForm,
@@ -38,8 +40,12 @@ from apps.academics.models import (
 from apps.academics.services import (
     can_access_course,
     can_access_lecture,
+    create_cohort,
+    delete_cohort_delivery,
     get_student_course_versions,
     get_visible_lectures,
+    record_lecture_checkpoint,
+    start_lecture_watch,
 )
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
@@ -53,21 +59,6 @@ from apps.core.permissions import (
 from apps.core.views import safe_next_url
 from apps.storage.services import storage_service
 from apps.students.models import StudentProfile
-
-
-def _auto_create_cohort_versions(course, semester, user):
-    """Create or update a CourseVersion per cohort. Semester goes in defaults so
-    changing semesters updates existing rows instead of violating the unique constraint."""
-    for cohort in semester.diploma.cohorts.all():
-        cv, created = CourseVersion.objects.get_or_create(
-            course=course,
-            cohort=cohort,
-            label="v1",
-            defaults={"semester": semester, "created_by": user, "is_active": True},
-        )
-        if not created and cv.semester_id != semester.id:
-            cv.semester = semester
-            cv.save(update_fields=["semester", "updated_at"])
 
 logger = logging.getLogger(__name__)
 
@@ -314,16 +305,13 @@ def admin_semester_course_delete(request, sc_id):
 def admin_course_list(request):
     q = request.GET.get("q", "")
     is_active_filter = request.GET.get("is_active", "")
-    is_standalone_filter = request.GET.get("is_standalone", "")
-    courses = Course.objects.select_related("created_by").all()
+    courses = Course.objects.select_related("created_by").filter(is_standalone=True)
     if q:
         courses = courses.filter(
             Q(title__icontains=q) | Q(description__icontains=q)
         )
     if is_active_filter:
         courses = courses.filter(is_active=is_active_filter == "1")
-    if is_standalone_filter:
-        courses = courses.filter(is_standalone=is_standalone_filter == "1")
     filters = []
     filters.append({
         "name": "is_active",
@@ -332,15 +320,6 @@ def admin_course_list(request):
         "options": [
             {"value": "1", "label": _("Active"), "selected": is_active_filter == "1"},
             {"value": "0", "label": _("Inactive"), "selected": is_active_filter == "0"},
-        ],
-    })
-    filters.append({
-        "name": "is_standalone",
-        "label": _("Type"),
-        "value": is_standalone_filter,
-        "options": [
-            {"value": "1", "label": _("Standalone"), "selected": is_standalone_filter == "1"},
-            {"value": "0", "label": _("Diploma"), "selected": is_standalone_filter == "0"},
         ],
     })
     page_obj, pagination_qs = paginate(request, courses)
@@ -367,47 +346,21 @@ def admin_course_detail(request, course_id):
 @role_required(*ROLE_EXAM_STAFF)
 def admin_course_create(request):
     next_url = safe_next_url(request)
-    diploma_id = request.GET.get("diploma_id") or request.POST.get("diploma_id")
-    semester_id = request.GET.get("semester_id") or request.POST.get("semester_id")
-    diploma = None
-    if diploma_id:
-        diploma = get_object_or_404(Diploma, id=diploma_id)
     if request.method == "POST":
         form = CourseForm(request.POST)
         if form.is_valid():
             course = form.save(commit=False)
             course.created_by = request.user
+            course.is_standalone = True
             course.save()
-            try:
-                linked_semester = None
-                if semester_id and diploma:
-                    sc, _created = SemesterCourse.objects.get_or_create(course=course, semester_id=semester_id)
-                    linked_semester = sc.semester
-                elif diploma_id and not semester_id:
-                    semester = diploma.semesters.first()
-                    if semester:
-                        SemesterCourse.objects.get_or_create(course=course, semester=semester)
-                        linked_semester = semester
-                if linked_semester:
-                    _auto_create_cohort_versions(course, linked_semester, request.user)
-            except ValidationError as e:
-                messages.error(request, e.message if hasattr(e, 'message') else str(e))
-                return redirect("academics:admin_course_edit", course_id=course.id)
             messages.success(request, _("Course created."))
             return redirect(next_url) if next_url else redirect("academics:admin_course_detail", course_id=course.id)
     else:
-        standalone = request.GET.get("standalone") == "1"
-        initial = {"is_standalone": standalone} if standalone else {}
-        if diploma:
-            semesters = diploma.semesters.all()
-        else:
-            semesters = []
-        form = CourseForm(initial=initial)
-    diplomas = Diploma.objects.all() if not diploma_id else None
+        form = CourseForm()
     return render(
         request,
         "academics/admin_course_form.html",
-        {"form": form, "title": _("Create course"), "next": next_url, "diploma": diploma, "semesters": semesters, "diplomas": diplomas},
+        {"form": form, "title": _("Create course"), "next": next_url, "diploma": None, "semesters": [], "diplomas": None},
     )
 
 
@@ -424,24 +377,10 @@ def admin_diploma_semester_options(request):
 def admin_course_edit(request, course_id):
     course = get_object_or_404(Course, id=course_id)
     next_url = safe_next_url(request)
-    semester_courses = course.semester_courses.select_related("semester__diploma").all()
-    diploma = semester_courses[0].semester.diploma if semester_courses else None
-    semesters = diploma.semesters.all() if diploma else []
     if request.method == "POST":
         form = CourseForm(request.POST, instance=course)
         if form.is_valid():
-            course = form.save()
-            new_semester_id = request.POST.get("semester_id")
-            if new_semester_id and semester_courses:
-                sc = semester_courses[0]
-                if str(sc.semester_id) != new_semester_id:
-                    try:
-                        sc.semester_id = new_semester_id
-                        sc.save()
-                        _auto_create_cohort_versions(course, sc.semester, request.user)
-                    except ValidationError as e:
-                        messages.error(request, e.message if hasattr(e, 'message') else str(e))
-                        return redirect("academics:admin_course_detail", course_id=course.id)
+            form.save()
             messages.success(request, _("Course updated."))
             return redirect(next_url) if next_url else redirect("academics:admin_course_detail", course_id=course.id)
     else:
@@ -449,7 +388,7 @@ def admin_course_edit(request, course_id):
     return render(
         request,
         "academics/admin_course_form.html",
-        {"form": form, "title": _("Edit course"), "course": course, "next": next_url, "semester_courses": semester_courses, "diploma": diploma, "semesters": semesters},
+        {"form": form, "title": _("Edit course"), "course": course, "next": next_url, "semester_courses": [], "diploma": None, "semesters": []},
     )
 
 
@@ -466,10 +405,11 @@ def admin_cohort_create(request, diploma_id):
     if request.method == "POST":
         form = CohortForm(request.POST)
         if form.is_valid():
-            cohort = form.save(commit=False)
-            cohort.diploma = diploma
-            cohort.created_by = request.user
-            cohort.save()
+            create_cohort(
+                diploma=diploma,
+                form_data=form.cleaned_data,
+                actor=request.user,
+            )
             messages.success(request, _("Cohort created."))
             return redirect(next_url) if next_url else redirect("academics:admin_diploma_detail", diploma_id=diploma.id)
     else:
@@ -512,6 +452,21 @@ def admin_cohort_edit(request, diploma_id, cohort_id):
             "breadcrumb_items": _diploma_breadcrumbs(diploma) + [{"label": _("Edit cohort")}],
         },
     )
+
+
+@login_required
+@role_required(*ROLE_EXAM_STAFF)
+@require_POST
+def admin_cohort_delete(request, diploma_id, cohort_id):
+    diploma = get_object_or_404(Diploma, id=diploma_id)
+    cohort = get_object_or_404(Cohort, id=cohort_id, diploma=diploma)
+    next_url = safe_next_url(request)
+    delete_cohort_delivery(cohort=cohort)
+    messages.success(request, _("Cohort deleted."))
+    redirect_url = next_url or reverse("academics:admin_diploma_detail", kwargs={"diploma_id": diploma.id})
+    response = HttpResponse()
+    response["HX-Redirect"] = redirect_url
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -681,18 +636,41 @@ def _process_lecture_audio(request, lecture, files):
 
 @login_required
 def student_course_list(request):
-    """Show the student their enrolled courses."""
+    """Show the student their enrolled courses — diploma and standalone sections."""
     if not is_student(request.user) and not request.user.is_superuser:
         raise PermissionDenied
     try:
         profile = request.user.student_profile
     except StudentProfile.DoesNotExist:
-        return render(request, "academics/student_course_list.html", {"course_versions": []})
+        return render(request, "academics/student_course_list.html", {"diploma_enrollments": [], "course_versions": []})
+
+    # Standalone courses
     course_versions = get_student_course_versions(profile)
+
+    # Diploma enrollments with progress
+    diploma_enrollments = list(
+        DiplomaEnrollment.objects.filter(student=profile, status=ENROLLMENT_STATUS_ACTIVE)
+        .select_related("cohort__diploma")
+    )
+    # Annotate with lecture counts per enrollment
+    diploma_data = []
+    for de in diploma_enrollments:
+        cohort = de.cohort
+        lecture_count = Lecture.objects.filter(
+            course_version__cohort=cohort,
+            is_published=True,
+        ).count()
+        diploma_data.append({
+            "enrollment": de,
+            "diploma": cohort.diploma,
+            "cohort": cohort,
+            "lecture_count": lecture_count,
+        })
+
     return render(
         request,
         "academics/student_course_list.html",
-        {"course_versions": course_versions},
+        {"diploma_data": diploma_data, "course_versions": course_versions},
     )
 
 
@@ -905,7 +883,88 @@ def admin_diploma_enrollment_list(request, diploma_id):
         "pagination_qs": pagination_qs,
         "diploma": diploma,
         "enrollment_type": "diploma",
+        "cohorts": cohorts,
     }
     if is_htmx(request):
         return render(request, "academics/partials/_enrollment_table.html", ctx)
     return render(request, "academics/admin_enrollment_list.html", ctx)
+
+
+@login_required
+@role_required(*ROLE_EXAM_STAFF)
+@require_POST
+def admin_diploma_enrollment_update(request, diploma_id, enrollment_id):
+    """Update a diploma enrollment's status or cohort."""
+    diploma = get_object_or_404(Diploma, id=diploma_id)
+    enrollment = get_object_or_404(DiplomaEnrollment, id=enrollment_id, cohort__diploma=diploma)
+    new_status = request.POST.get("status")
+    new_cohort_id = request.POST.get("cohort_id")
+    if new_status and new_status in dict(ENROLLMENT_STATUS_CHOICES):
+        enrollment.status = new_status
+        if new_status == "active" and not enrollment.activated_at:
+            enrollment.activated_at = timezone.now()
+        enrollment.save(update_fields=["status", "activated_at", "updated_at"])
+    if new_cohort_id:
+        new_cohort = get_object_or_404(Cohort, id=new_cohort_id, diploma=diploma)
+        if new_cohort_id != str(enrollment.cohort_id):
+            enrollment.cohort = new_cohort
+            enrollment.save(update_fields=["cohort", "updated_at"])
+    if is_htmx(request):
+        cohorts = diploma.cohorts.all()
+        enrollment.refresh_from_db()
+        return render(request, "academics/partials/_enrollment_row.html", {
+            "e": enrollment, "diploma": diploma, "cohorts": cohorts, "enrollment_type": "diploma",
+        })
+    return redirect("academics:admin_diploma_enrollment_list", diploma_id=diploma.id)
+
+
+# --- Watch API ----------------------------------------------------------------
+
+
+@require_POST
+@login_required
+def api_watch_start(request, version_id, lecture_id):
+    """POST start watch session. Returns session_id, resume_position, duration, interval, threshold."""
+    try:
+        version = CourseVersion.objects.get(id=version_id)
+        lecture = Lecture.objects.get(id=lecture_id, course_version=version)
+    except (CourseVersion.DoesNotExist, Lecture.DoesNotExist):
+        return JsonResponse({"error": "not_found"}, status=404)
+
+    try:
+        student = StudentProfile.objects.get(user=request.user)
+    except StudentProfile.DoesNotExist:
+        return JsonResponse({"error": "no_student_profile"}, status=400)
+
+    try:
+        result = start_lecture_watch(student=student, lecture=lecture)
+        return JsonResponse(result)
+    except ValueError as e:
+        return JsonResponse({"error": str(e)}, status=403)
+
+
+@require_POST
+@login_required
+def api_watch_checkpoint(request, version_id, lecture_id):
+    """POST checkpoint. Returns progress, status, violation."""
+    try:
+        version = CourseVersion.objects.get(id=version_id)
+        lecture = Lecture.objects.get(id=lecture_id, course_version=version)
+    except (CourseVersion.DoesNotExist, Lecture.DoesNotExist):
+        return JsonResponse({"error": "not_found"}, status=404)
+
+    try:
+        student = StudentProfile.objects.get(user=request.user)
+    except StudentProfile.DoesNotExist:
+        return JsonResponse({"error": "no_student_profile"}, status=400)
+
+    try:
+        payload = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"error": "invalid_json"}, status=400)
+
+    result = record_lecture_checkpoint(student=student, lecture=lecture, payload=payload)
+    http_status = result.pop("status", 200)
+    if not isinstance(http_status, int):
+        http_status = 200
+    return JsonResponse(result, status=http_status)

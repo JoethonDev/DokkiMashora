@@ -16,7 +16,13 @@ from apps.academics.constants import (
     ENROLLMENT_STATUS_EXPIRED,
     ENROLLMENT_STATUS_RESTRICTED,
 )
-from apps.academics.models import Cohort, Course, CourseEnrollment, CourseVersion, DiplomaEnrollment
+from apps.academics.models import (
+    Cohort,
+    Course,
+    CourseEnrollment,
+    CourseVersion,
+    DiplomaEnrollment,
+)
 from apps.applications.models import ProgramApplication
 from apps.assessments.models import AssessmentAttempt, HomeworkSubmission
 from apps.assessments.services import get_student_attempts
@@ -169,6 +175,13 @@ def _get_active_courses(student_profile: StudentProfile) -> list[dict]:
     qs = (
         CourseVersion.objects.annotate(
             lecture_count=Count("lectures", filter=Q(lectures__is_published=True)),
+            completed_count=Count(
+                "lectures__watch_progress",
+                filter=Q(
+                    lectures__watch_progress__student=student_profile,
+                    lectures__watch_progress__status="completed",
+                ),
+            ),
         )
         .filter(
             enrollments__student=student_profile,
@@ -196,6 +209,7 @@ def _get_active_courses(student_profile: StudentProfile) -> list[dict]:
             "cohort": cv.cohort,
             "semester": cv.semester,
             "lecture_count": cv.lecture_count,
+            "completed_count": cv.completed_count,
             "expires_at": enrollments_map[cv.pk].expires_at if cv.pk in enrollments_map else None,
         }
         for cv in qs

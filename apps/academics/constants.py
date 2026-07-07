@@ -43,3 +43,27 @@ SCOPE_CHOICES = (
     (SCOPE_SEMESTER_COHORT, _("Semester within cohort")),
     (SCOPE_COURSE_VERSION, _("Course version")),
 )
+
+WATCH_STATUS_IN_PROGRESS = "in_progress"
+WATCH_STATUS_COMPLETED = "completed"
+WATCH_STATUS_VIOLATED = "violated"
+
+WATCH_STATUS_CHOICES = (
+    (WATCH_STATUS_IN_PROGRESS, _("In progress")),
+    (WATCH_STATUS_COMPLETED, _("Completed")),
+    (WATCH_STATUS_VIOLATED, _("Violated")),
+)
+
+VIOLATION_NONE = "none"
+VIOLATION_SPEED = "speed"
+VIOLATION_FORWARD_SKIP = "forward_skip"
+VIOLATION_INVALID_SEQUENCE = "invalid_sequence"
+VIOLATION_INVALID_POSITION = "invalid_position"
+
+VIOLATION_CHOICES = (
+    (VIOLATION_NONE, _("None")),
+    (VIOLATION_SPEED, _("Speed")),
+    (VIOLATION_FORWARD_SKIP, _("Forward skip")),
+    (VIOLATION_INVALID_SEQUENCE, _("Invalid sequence")),
+    (VIOLATION_INVALID_POSITION, _("Invalid position")),
+)

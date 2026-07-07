@@ -5,6 +5,10 @@
 
 {% block content %}
 <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <a href="{% url 'academics:student_course_list' %}" class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 mb-4">
+    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+    {% trans "Back to My Courses" %}
+  </a>
   <header class="mb-6">
     <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Course" %}</p>
     <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ version.course.title }}</h1>

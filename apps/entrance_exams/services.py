@@ -10,6 +10,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from apps.academics.services import enroll_student_in_course, enroll_student_in_diploma
 from apps.applications.constants import (
     PROGRAM_APP_STATUS_ACCEPTED,
     PROGRAM_APP_STATUS_REJECTED,
@@ -23,7 +24,6 @@ from apps.communications.constants import (
     TEMPLATE_ENTRANCE_EXAM_FAIL,
     TEMPLATE_ENTRANCE_EXAM_PASS,
 )
-from apps.academics.services import enroll_student_in_course, enroll_student_in_diploma
 from apps.communications.services import send_templated_email
 from apps.core.permissions import entrance_staff_scope_filter
 

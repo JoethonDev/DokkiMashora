@@ -98,7 +98,9 @@ class GeneratedCertificate(TimeStampedModel):
     )
     diploma_enrollment = models.ForeignKey(
         "academics.DiplomaEnrollment",
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name="generated_certificates",
         verbose_name=_("diploma enrollment"),
     )

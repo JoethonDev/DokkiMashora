@@ -1,0 +1,33 @@
+{% load i18n %}
+<tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40" id="enrollment-row-{{ e.id }}">
+  <td class="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">{{ e.student.user.full_name|default:e.student.user.email }}</td>
+  <td class="px-4 py-3 text-slate-500 dark:text-slate-400">{{ e.student.user.email }}</td>
+  <td class="px-4 py-3">
+    {% if enrollment_type == "course" %}
+      <span class="text-slate-500 dark:text-slate-400">{{ e.course_version.label }}</span>
+    {% else %}
+      <select name="cohort_id" class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-xs"
+              hx-post="{% url 'academics:admin_diploma_enrollment_update' diploma.id e.id %}"
+              hx-target="#enrollment-row-{{ e.id }}" hx-swap="outerHTML"
+              hx-trigger="change">
+        {% for c in cohorts %}
+          <option value="{{ c.id }}"{% if e.cohort_id == c.id %} selected{% endif %}>{{ c.name }}</option>
+        {% endfor %}
+      </select>
+    {% endif %}
+  </td>
+  <td class="px-4 py-3">
+    <select name="status" class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-xs"
+            hx-post="{% url 'academics:admin_diploma_enrollment_update' diploma.id e.id %}"
+            hx-target="#enrollment-row-{{ e.id }}" hx-swap="outerHTML"
+            hx-trigger="change">
+      <option value="pending"{% if e.status == "pending" %} selected{% endif %}>{% trans "Pending" %}</option>
+      <option value="active"{% if e.status == "active" %} selected{% endif %}>{% trans "Active" %}</option>
+      <option value="expired"{% if e.status == "expired" %} selected{% endif %}>{% trans "Expired" %}</option>
+      <option value="restricted"{% if e.status == "restricted" %} selected{% endif %}>{% trans "Restricted" %}</option>
+      <option value="completed"{% if e.status == "completed" %} selected{% endif %}>{% trans "Completed" %}</option>
+    </select>
+  </td>
+  <td class="px-4 py-3 tabular-nums text-slate-500 dark:text-slate-400">{% include "partials/_blank.html" with value=e.activated_at|date:"DATE_FORMAT" %}</td>
+  <td class="px-4 py-3 tabular-nums text-slate-500 dark:text-slate-400">{% include "partials/_blank.html" with value=e.expires_at|date:"DATE_FORMAT" %}</td>
+</tr>

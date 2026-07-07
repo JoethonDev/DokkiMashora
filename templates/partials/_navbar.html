@@ -42,7 +42,7 @@
                 <a href="{% url 'applications:program_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Program Applications" %}</a>
                 <p class="mt-3 pt-3 border-t dm-border px-4 py-1 text-xs font-bold text-brand-600 dark:text-brand-400 uppercase tracking-wider">{% trans "Academics" %}</p>
                 <a href="{% url 'academics:admin_diploma_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Diplomas" %}</a>
-                <a href="{% url 'academics:admin_course_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Courses" %}</a>
+                <a href="{% url 'academics:admin_course_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Standalone Courses" %}</a>
                 <p class="mt-3 pt-3 border-t dm-border px-4 py-1 text-xs font-bold text-brand-600 dark:text-brand-400 uppercase tracking-wider">{% trans "Evaluation" %}</p>
                 <a href="{% url 'assessments:admin_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Assessments" %}</a>
                 <a href="{% url 'entrance_exams:admin_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Entrance Exams" %}</a>
@@ -72,7 +72,7 @@
           </form>
         {% else %}
           <a href="{% url 'accounts:login' %}" class="hidden sm:inline-block dm-button dm-button-secondary px-3 py-1.5 text-sm">{% trans "Log in" %}</a>
-          <a href="{% url 'applications:register' %}" class="dm-button dm-button-primary px-3 py-1.5 text-sm">{% trans "Register" %}</a>
+          <span class="hidden sm:inline-flex"><a href="{% url 'applications:register' %}" class="dm-button dm-button-primary px-3 py-1.5 text-sm">{% trans "Register" %}</a></span>
         {% endif %}
       </div>
     </div>

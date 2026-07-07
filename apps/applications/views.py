@@ -14,11 +14,10 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods
 
-from apps.academics.models import Cohort, Course, Diploma
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import is_admin, is_moderator
-from apps.students.services import check_apply_eligibility, get_open_apply_targets
+from apps.students.services import get_open_apply_targets
 
 from .constants import (
     PROGRAM_APP_STATUS_ACCEPTED,
@@ -105,7 +104,14 @@ def register(request: HttpRequest) -> HttpResponse:
             messages.success(request, _("Account created! Check your email for the activation link."))
             return redirect("applications:registration_success")
     else:
-        form = RegistrationForm()
+        program_type = request.GET.get("program_type", "")
+        target_id = request.GET.get("target_id", "")
+        initial = {}
+        if program_type == "diploma" and target_id.isdigit():
+            initial = {"apply_program": True, "program_type": "diploma", "diploma": target_id}
+        elif program_type == "course" and target_id.startswith("course_"):
+            initial = {"apply_program": True, "program_type": "course", "program_target": target_id}
+        form = RegistrationForm(initial=initial)
     return render(request, "applications/register.html", {"form": form})
 
 

@@ -1,404 +1,68 @@
 {% extends "base.html" %}
 {% load i18n static ui_tags %}
-
-{% block title %}
-  {% trans "Logos Coptic Family Institute" %} | {{ SITE_NAME_AR }}
-{% endblock title %}
-
+{% block title %}{{ landing_content.hero_title }} | {{ SITE_NAME_AR }}{% endblock %}
 {% block content %}
-{% if landing_announcement %}
-  <section class="dm-landing-announcement -mt-2 md:-mt-0">
-    <div class="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-3 text-sm font-bold sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
-      <p class="{% if LANGUAGE_CODE != 'en' %}text-right{% endif %}">
-        <span class="me-2 inline-block h-2 w-2 rounded-full bg-amber-300"></span>
-        <span>{{ landing_announcement.title }}</span>
-        <span class="font-semibold opacity-90">- {{ landing_announcement.message }}</span>
-      </p>
-      {% if landing_announcement.cta_label and landing_announcement.cta_url %}
-        <a href="{{ landing_announcement.cta_url }}" class="shrink-0 text-amber-100 underline underline-offset-4 hover:text-white">
-          {{ landing_announcement.cta_label }}
-        </a>
-      {% endif %}
-    </div>
-  </section>
-{% endif %}
+{% if landing_announcement %}<section class="dm-landing-announcement"><div class="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-3 text-sm font-bold sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8"><p><span class="me-2 inline-block h-2 w-2 rounded-full bg-amber-300"></span>{{ landing_announcement.title }} — {{ landing_announcement.message }}</p>{% if landing_announcement.cta_label and landing_announcement.cta_url %}<a href="{{ landing_announcement.cta_url }}" class="text-amber-100 underline underline-offset-4">{{ landing_announcement.cta_label }}</a>{% endif %}</div></section>{% endif %}
 
-<section class="dm-landing-hero relative overflow-hidden">
-  <img
-    src="{% static 'img/landing-hero-institute.png' %}"
-    alt="{% trans 'Families and mentors in a warm learning session' %}"
-    class="absolute inset-0 h-full w-full object-cover"
-  >
-  <div class="absolute inset-0 bg-[linear-gradient(90deg,rgba(45,5,5,.94),rgba(92,15,15,.78)_42%,rgba(45,5,5,.22)_100%)]"></div>
-  <div class="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-[#faf7f3] to-transparent dark:from-[#1a1410]"></div>
-
-  <div class="relative mx-auto grid min-h-[calc(100svh-6rem)] max-w-7xl grid-cols-1 content-center gap-8 px-4 pb-20 pt-16 sm:px-6 lg:grid-cols-[1fr_.82fr] lg:px-8">
-    <div class="max-w-3xl {% if LANGUAGE_CODE != 'en' %}text-right{% endif %}">
-      <p class="inline-flex items-center rounded-full border border-amber-200/35 bg-white/10 px-3 py-1.5 text-xs font-black uppercase text-amber-100 backdrop-blur">
-        {% trans "Coptic family learning and guidance" %}
-      </p>
-      <h1 class="mt-6 text-4xl font-black leading-tight text-white sm:text-5xl lg:text-6xl">
-        {% blocktrans %}A calmer path for stronger homes, wiser servants, and prepared families.{% endblocktrans %}
-      </h1>
-      <p class="mt-5 max-w-2xl text-base leading-8 text-amber-50/90 sm:text-lg">
-        {% blocktrans %}Logos Coptic Family Institute connects pastoral care, practical psychology, cohorts, lectures, and applications in one live DokkiMashora experience.{% endblocktrans %}
-      </p>
-      <div class="mt-8 flex flex-col gap-3 sm:flex-row {% if LANGUAGE_CODE != 'en' %}sm:justify-end{% endif %}">
-        {% if user.is_authenticated %}
-          <a href="{{ url_accounts_dashboard }}" class="dm-landing-button dm-landing-button-primary">{% trans "Go to dashboard" %}</a>
-        {% else %}
-          <a href="{{ url_applications_register }}" class="dm-landing-button dm-landing-button-primary">{% trans "Apply for the new cohort" %}</a>
-          <a href="{{ url_accounts_login }}" class="dm-landing-button dm-landing-button-secondary">{% trans "Log in" %}</a>
-        {% endif %}
-        <a href="#programs" class="dm-landing-button dm-landing-button-ghost">{% trans "Explore programs" %}</a>
-      </div>
-    </div>
-
-    <div class="grid grid-cols-2 gap-3 self-end lg:mt-40">
-      <div class="dm-landing-stat">
-        <p class="stat-value text-3xl font-black">{{ landing_stats.active_diplomas }}</p>
-        <p>{% trans "Active diplomas" %}</p>
-      </div>
-      <div class="dm-landing-stat">
-        <p class="stat-value text-3xl font-black">{{ landing_stats.active_cohorts }}</p>
-        <p>{% trans "Open cohorts" %}</p>
-      </div>
-      <div class="dm-landing-stat">
-        <p class="stat-value text-3xl font-black">{{ landing_stats.active_courses }}</p>
-        <p>{% trans "Courses in LMS" %}</p>
-      </div>
-      <div class="dm-landing-stat">
-        <p class="stat-value text-3xl font-black">{{ landing_stats.published_lectures }}</p>
-        <p>{% trans "Published lectures" %}</p>
-      </div>
-    </div>
-  </div>
+<section class="dm-landing-hero relative min-h-[760px] overflow-hidden">
+  <img src="{% if landing_settings.hero_image %}{{ landing_settings.hero_image.url }}{% else %}{% static 'img/landing-family-hero.webp' %}{% endif %}" alt="{% trans 'An Egyptian Coptic Orthodox family learning with a counselor' %}" class="absolute inset-0 h-full w-full object-cover object-center">
+  <div class="absolute inset-0 bg-[linear-gradient(90deg,rgba(45,5,5,.96),rgba(74,12,18,.82)_42%,rgba(45,5,5,.12)_100%)] rtl:bg-[linear-gradient(270deg,rgba(45,5,5,.96),rgba(74,12,18,.82)_42%,rgba(45,5,5,.12)_100%)]"></div>
+  <div class="relative mx-auto flex min-h-[760px] max-w-7xl items-center px-4 py-24 sm:px-6 lg:px-8"><div class="max-w-2xl text-start">
+    <p class="inline-flex rounded-full border border-amber-200/40 bg-black/15 px-4 py-2 text-xs font-black uppercase tracking-widest text-amber-100 backdrop-blur">{{ landing_content.hero_eyebrow }}</p>
+    <h1 class="mt-6 text-4xl font-black leading-[1.08] text-white sm:text-6xl lg:text-7xl">{{ landing_content.hero_title }}</h1>
+    <p class="mt-6 max-w-xl text-lg leading-8 text-amber-50/90">{{ landing_content.hero_body }}</p>
+    <div class="mt-9 flex flex-wrap gap-3"><a href="#programs" class="dm-landing-button dm-landing-button-primary">{{ landing_content.hero_primary }}</a>{% if user.is_authenticated %}<a href="{{ url_student_apply }}" class="dm-landing-button dm-landing-button-secondary">{{ landing_content.apply_now }}</a>{% else %}<a href="{{ url_accounts_login }}" class="dm-landing-button dm-landing-button-secondary">{{ landing_content.hero_secondary }}</a>{% endif %}</div>
+  </div></div>
 </section>
 
-<section id="mission" class="dm-landing-section bg-[#faf7f3] dark:bg-[#1a1410]">
-  <div class="mx-auto grid max-w-7xl grid-cols-1 gap-8 px-4 py-14 sm:px-6 lg:grid-cols-[.85fr_1.15fr] lg:px-8">
-    <div class="{% if LANGUAGE_CODE != 'en' %}text-right{% endif %}">
-      <p class="dm-landing-eyebrow">{% trans "Institute vision" %}</p>
-      <h2 class="mt-3 text-3xl font-black text-[#2d0505] dark:text-white">
-        {% blocktrans %}Practical formation, private guidance, and church-aware care in one place.{% endblocktrans %}
-      </h2>
-      <p class="mt-4 text-sm leading-7 text-stone-700 dark:text-slate-300">
-        {% blocktrans %}Visitors see real academic availability, then continue into the same application and account flows used by students, teachers, and staff.{% endblocktrans %}
-      </p>
-    </div>
+<section class="bg-[#faf7f3] py-16 dark:bg-[#1a1410] sm:py-20"><div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+  <div class="mx-auto max-w-3xl text-center"><p class="dm-landing-eyebrow">{{ landing_content.intro_eyebrow }}</p><h2 class="mt-4 text-3xl font-black text-[#2d0505] dark:text-white sm:text-5xl">{{ landing_content.intro_title }}</h2><p class="mt-5 text-base leading-8 text-stone-600 dark:text-slate-300 sm:text-lg">{{ landing_content.intro_body }}</p></div>
+  <dl class="mt-12 grid grid-cols-2 gap-3 lg:grid-cols-4">{% for label, value in landing_stats %}<div class="rounded-2xl border border-[#e6d7c8] bg-white p-6 text-center shadow-sm dark:border-white/10 dark:bg-white/5"><dd class="text-4xl font-black text-[#8c1d1d] dark:text-amber-200">{{ value }}</dd><dt class="mt-2 text-sm font-bold text-stone-600 dark:text-slate-300">{{ label }}</dt></div>{% endfor %}</dl>
+</div></section>
 
-    <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-      <article class="dm-landing-card">
-        <p class="text-sm font-black text-[#8c1d1d] dark:text-amber-200">{% trans "Prepare" %}</p>
-        <h3 class="mt-3 text-lg font-black">{% trans "Engagement and marriage" %}</h3>
-        <p class="mt-2 text-sm leading-6 text-stone-600 dark:text-slate-300">{% blocktrans %}Expectations, communication, conflict, finance, and daily spiritual routines before pressure rises.{% endblocktrans %}</p>
-      </article>
-      <article class="dm-landing-card">
-        <p class="text-sm font-black text-[#8c1d1d] dark:text-amber-200">{% trans "Support" %}</p>
-        <h3 class="mt-3 text-lg font-black">{% trans "Parenting and behavior" %}</h3>
-        <p class="mt-2 text-sm leading-6 text-stone-600 dark:text-slate-300">{% blocktrans %}Practical tools for children, teens, emotion regulation, discipline, and better conversations at home.{% endblocktrans %}</p>
-      </article>
-      <article class="dm-landing-card">
-        <p class="text-sm font-black text-[#8c1d1d] dark:text-amber-200">{% trans "Guide" %}</p>
-        <h3 class="mt-3 text-lg font-black">{% trans "Servants and counselors" %}</h3>
-        <p class="mt-2 text-sm leading-6 text-stone-600 dark:text-slate-300">{% blocktrans %}A shared language for listening, referral, boundaries, and coordinated family care inside church life.{% endblocktrans %}</p>
-      </article>
-    </div>
+<section class="bg-white py-16 dark:bg-slate-950 sm:py-24"><div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+  <div class="max-w-3xl text-start"><p class="dm-landing-eyebrow">{{ landing_content.benefits_eyebrow }}</p><h2 class="mt-4 text-3xl font-black text-stone-950 dark:text-white sm:text-5xl">{{ landing_content.benefits_title }}</h2><p class="mt-5 text-lg leading-8 text-stone-600 dark:text-slate-300">{{ landing_content.benefits_body }}</p></div>
+  <div class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <article class="dm-landing-card"><span class="text-2xl text-[#8c1d1d] dark:text-amber-200">✦</span><h3 class="mt-4 text-lg font-black">{{ landing_content.benefit_1_title }}</h3><p class="mt-2 text-sm leading-7 text-stone-600 dark:text-slate-300">{{ landing_content.benefit_1_body }}</p></article>
+    <article class="dm-landing-card"><span class="text-2xl text-[#8c1d1d] dark:text-amber-200">✦</span><h3 class="mt-4 text-lg font-black">{{ landing_content.benefit_2_title }}</h3><p class="mt-2 text-sm leading-7 text-stone-600 dark:text-slate-300">{{ landing_content.benefit_2_body }}</p></article>
+    <article class="dm-landing-card"><span class="text-2xl text-[#8c1d1d] dark:text-amber-200">✦</span><h3 class="mt-4 text-lg font-black">{{ landing_content.benefit_3_title }}</h3><p class="mt-2 text-sm leading-7 text-stone-600 dark:text-slate-300">{{ landing_content.benefit_3_body }}</p></article>
+    <article class="dm-landing-card"><span class="text-2xl text-[#8c1d1d] dark:text-amber-200">✦</span><h3 class="mt-4 text-lg font-black">{{ landing_content.benefit_4_title }}</h3><p class="mt-2 text-sm leading-7 text-stone-600 dark:text-slate-300">{{ landing_content.benefit_4_body }}</p></article>
   </div>
-</section>
+</div></section>
 
-<section class="dm-landing-section bg-white dark:bg-slate-950">
-  <div class="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
-    <div class="max-w-3xl {% if LANGUAGE_CODE != 'en' %}text-right{% endif %}">
-      <p class="dm-landing-eyebrow">{% trans "How the journey works" %}</p>
-      <h2 class="mt-3 text-3xl font-black text-stone-950 dark:text-white">
-        {% blocktrans %}From interest to learning, every step is connected to the same system.{% endblocktrans %}
-      </h2>
-    </div>
+<section class="bg-[#faf7f3] py-16 dark:bg-[#1a1410] sm:py-24"><div class="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
+  <img src="{% if landing_settings.parenting_image %}{{ landing_settings.parenting_image.url }}{% else %}{% static 'img/landing-parenting.webp' %}{% endif %}" alt="{% trans 'An Egyptian Coptic Orthodox parent and child learning together' %}" loading="lazy" class="h-[420px] w-full rounded-[2rem] object-cover shadow-2xl shadow-stone-300/40 dark:shadow-none">
+  <div class="text-start"><p class="dm-landing-eyebrow">{{ landing_content.parenting_eyebrow }}</p><h2 class="mt-4 text-3xl font-black text-stone-950 dark:text-white sm:text-5xl">{{ landing_content.parenting_title }}</h2><p class="mt-5 text-lg leading-8 text-stone-600 dark:text-slate-300">{{ landing_content.parenting_body }}</p><a href="#programs" class="mt-7 inline-flex font-black text-[#8c1d1d] hover:underline dark:text-amber-200">{{ landing_content.hero_primary }}</a></div>
+</div></section>
 
-    <div class="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-      <article class="dm-landing-card">
-        <p class="dm-landing-step">01</p>
-        <h3 class="mt-3 text-lg font-black">{% trans "Choose the right path" %}</h3>
-        <p class="mt-2 text-sm leading-6 text-stone-600 dark:text-slate-300">{% blocktrans %}Review diplomas, cohorts, and standalone courses before applying.{% endblocktrans %}</p>
-      </article>
-      <article class="dm-landing-card">
-        <p class="dm-landing-step">02</p>
-        <h3 class="mt-3 text-lg font-black">{% trans "Submit one application" %}</h3>
-        <p class="mt-2 text-sm leading-6 text-stone-600 dark:text-slate-300">{% blocktrans %}The application flow keeps personal details, program choice, and review status in one place.{% endblocktrans %}</p>
-      </article>
-      <article class="dm-landing-card">
-        <p class="dm-landing-step">03</p>
-        <h3 class="mt-3 text-lg font-black">{% trans "Complete review or entrance exam" %}</h3>
-        <p class="mt-2 text-sm leading-6 text-stone-600 dark:text-slate-300">{% blocktrans %}Admins can review, invite, accept, reject, and activate from the LMS workflow.{% endblocktrans %}</p>
-      </article>
-      <article class="dm-landing-card">
-        <p class="dm-landing-step">04</p>
-        <h3 class="mt-3 text-lg font-black">{% trans "Start learning" %}</h3>
-        <p class="mt-2 text-sm leading-6 text-stone-600 dark:text-slate-300">{% blocktrans %}Activated students enter dashboards, lectures, assessments, and certificates from the same account.{% endblocktrans %}</p>
-      </article>
-    </div>
+<section class="bg-white py-16 dark:bg-slate-950 sm:py-24"><div class="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
+  <div class="order-2 text-start lg:order-1"><p class="dm-landing-eyebrow">{{ landing_content.diploma_eyebrow }}</p><h2 class="mt-4 text-3xl font-black text-stone-950 dark:text-white sm:text-5xl">{{ landing_content.diploma_title }}</h2><p class="mt-5 text-lg leading-8 text-stone-600 dark:text-slate-300">{{ landing_content.diploma_body }}</p><a href="#programs" class="mt-7 inline-flex font-black text-[#8c1d1d] hover:underline dark:text-amber-200">{{ landing_content.hero_primary }}</a></div>
+  <img src="{% if landing_settings.diploma_image %}{{ landing_settings.diploma_image.url }}{% else %}{% static 'img/landing-diploma.webp' %}{% endif %}" alt="{% trans 'Egyptian Coptic Orthodox servants learning family counseling skills' %}" loading="lazy" class="order-1 h-[420px] w-full rounded-[2rem] object-cover shadow-2xl shadow-stone-300/40 dark:shadow-none lg:order-2">
+</div></section>
+
+<section id="programs" class="bg-[#faf7f3] py-16 dark:bg-[#1a1410] sm:py-24"><div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+  <div class="max-w-3xl text-start"><p class="dm-landing-eyebrow">{{ landing_content.programs_eyebrow }}</p><h2 class="mt-4 text-3xl font-black text-stone-950 dark:text-white sm:text-5xl">{{ landing_content.programs_title }}</h2><p class="mt-4 text-lg leading-8 text-stone-600 dark:text-slate-300">{{ landing_content.programs_body }}</p></div>
+
+  <div class="mt-14 border-b border-stone-200 pb-5 text-start dark:border-slate-800"><p class="dm-landing-eyebrow">{{ landing_content.diplomas_eyebrow }}</p><h3 class="mt-2 text-2xl font-black text-stone-950 dark:text-white sm:text-3xl">{{ landing_content.diplomas_title }}</h3><p class="mt-2 max-w-3xl text-sm leading-7 text-stone-600 dark:text-slate-300">{{ landing_content.diplomas_body }}</p></div>
+  <div class="mt-7 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+    {% for diploma in active_diplomas %}<article class="group flex flex-col rounded-2xl border border-stone-200 bg-white p-7 text-start transition hover:-translate-y-1 hover:shadow-xl dark:border-slate-800 dark:bg-slate-900">
+      {% if diploma.open_target %}<p class="inline-flex w-fit items-center gap-2 rounded-full bg-emerald-100 px-3 py-1.5 text-xs font-black text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"><span class="h-2 w-2 rounded-full bg-emerald-500"></span>{{ landing_content.status_open }}</p>{% else %}<p class="inline-flex w-fit items-center gap-2 rounded-full bg-stone-200 px-3 py-1.5 text-xs font-black text-stone-600 dark:bg-slate-800 dark:text-slate-300"><span class="h-2 w-2 rounded-full bg-stone-400"></span>{{ landing_content.status_closed }}</p>{% endif %}
+      <h3 class="mt-4 text-xl font-black text-stone-950 dark:text-white">{{ diploma.title }}</h3><p class="mt-3 flex-1 text-sm leading-7 text-stone-600 dark:text-slate-300">{{ diploma.description|default:landing_content.diploma_body|truncatewords:36 }}</p>
+      <div class="mt-5 flex flex-wrap gap-2 text-xs font-bold"><span class="dm-landing-pill">{{ diploma.historical_group_count }} {{ landing_content.success_groups }}</span><span class="dm-landing-pill">{{ diploma.course_count }} {{ landing_content.diploma_courses_label }}</span><span class="dm-landing-pill">{{ diploma.published_lecture_count }} {{ landing_content.stat_4 }}</span></div><p class="mt-5 text-xs leading-6 text-stone-500 dark:text-slate-400">{{ landing_content.entrance_note }}</p>
+      {% if diploma.open_target %}<a href="{% if user.is_authenticated %}{{ url_student_apply }}{% else %}{{ url_applications_register }}{% endif %}?program_type=diploma&target_id={{ diploma.open_target.pk }}" class="dm-landing-button dm-landing-button-solid mt-6 w-full justify-center">{{ landing_content.apply_now }}</a>{% endif %}
+    </article>{% empty %}<p class="text-sm text-stone-500 dark:text-slate-400">{{ landing_content.status_closed }}</p>{% endfor %}
   </div>
-</section>
 
-<section id="programs" class="dm-landing-section bg-white dark:bg-slate-950">
-  <div class="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
-    <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-      <div class="max-w-3xl {% if LANGUAGE_CODE != 'en' %}text-right{% endif %}">
-        <p class="dm-landing-eyebrow">{% trans "Live academic data" %}</p>
-        <h2 class="mt-3 text-3xl font-black text-stone-950 dark:text-white">
-          {% blocktrans %}Current programs, cohorts, and learning material from the LMS.{% endblocktrans %}
-        </h2>
-      </div>
-      {% if not user.is_authenticated %}
-        <a href="{{ url_applications_register }}" class="dm-landing-button dm-landing-button-solid">{% trans "Start application" %}</a>
-      {% endif %}
-    </div>
-
-    <div class="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-3">
-      {% for cohort in featured_cohorts %}
-        <article class="dm-landing-card dm-landing-card-strong">
-          <p class="text-xs font-black uppercase text-[#8c1d1d] dark:text-amber-200">{{ cohort.name }}</p>
-          <h3 class="mt-2 text-xl font-black">{{ cohort.diploma.title }}</h3>
-          <p class="mt-3 text-sm leading-6 text-stone-600 dark:text-slate-300">
-            {% if cohort.diploma.description %}
-              {{ cohort.diploma.description|truncatewords:28 }}
-            {% else %}
-              {% trans "This cohort is configured in the LMS and available for application review." %}
-            {% endif %}
-          </p>
-          <dl class="mt-5 grid grid-cols-3 gap-2 text-center text-xs">
-            <div class="dm-landing-mini">
-              <dt>{% trans "Start" %}</dt>
-              <dd>{% dt cohort.start_date "M Y" %}</dd>
-            </div>
-            <div class="dm-landing-mini">
-              <dt>{% trans "Courses" %}</dt>
-              <dd class="stat-value">{{ cohort.course_count }}</dd>
-            </div>
-            <div class="dm-landing-mini">
-              <dt>{% trans "Lectures" %}</dt>
-              <dd class="stat-value">{{ cohort.lecture_count }}</dd>
-            </div>
-          </dl>
-        </article>
-      {% empty %}
-        <article class="dm-landing-card dm-landing-card-strong">
-          <p class="text-xs font-black uppercase text-[#8c1d1d] dark:text-amber-200">{% trans "Sample track" %}</p>
-          <h3 class="mt-2 text-xl font-black">{% trans "Marriage preparation and family guidance" %}</h3>
-          <p class="mt-3 text-sm leading-6 text-stone-600 dark:text-slate-300">{% blocktrans %}Create diplomas and cohorts in Academics, and they will appear here automatically.{% endblocktrans %}</p>
-        </article>
-      {% endfor %}
-    </div>
-
-    <div class="mt-10 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-      {% for diploma in active_diplomas %}
-        <article class="dm-landing-card">
-          <h3 class="text-base font-black">{{ diploma.title }}</h3>
-          <p class="mt-2 text-sm leading-6 text-stone-600 dark:text-slate-300">
-            {% if diploma.description %}
-              {{ diploma.description|truncatewords:24 }}
-            {% else %}
-              {% trans "Active academic program" %}
-            {% endif %}
-          </p>
-          <div class="mt-4 flex flex-wrap gap-2 text-xs font-bold">
-            <span class="dm-landing-pill">{{ diploma.active_cohort_count }} {% trans "cohorts" %}</span>
-            <span class="dm-landing-pill">{{ diploma.course_count }} {% trans "courses" %}</span>
-            <span class="dm-landing-pill">{{ diploma.published_lecture_count }} {% trans "lectures" %}</span>
-          </div>
-        </article>
-      {% endfor %}
-    </div>
+  <div class="mt-16 border-b border-stone-200 pb-5 text-start dark:border-slate-800"><p class="dm-landing-eyebrow">{{ landing_content.courses_eyebrow }}</p><h3 class="mt-2 text-2xl font-black text-stone-950 dark:text-white sm:text-3xl">{{ landing_content.courses_title }}</h3><p class="mt-2 max-w-3xl text-sm leading-7 text-stone-600 dark:text-slate-300">{{ landing_content.courses_body }}</p></div>
+  <div class="mt-7 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+    {% for course in standalone_courses %}<article class="flex flex-col rounded-2xl border border-stone-200 bg-white p-7 text-start dark:border-slate-800 dark:bg-slate-900">
+      {% if course.open_version %}<p class="inline-flex w-fit items-center gap-2 rounded-full bg-emerald-100 px-3 py-1.5 text-xs font-black text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"><span class="h-2 w-2 rounded-full bg-emerald-500"></span>{{ landing_content.status_open }}</p>{% else %}<p class="inline-flex w-fit items-center gap-2 rounded-full bg-stone-200 px-3 py-1.5 text-xs font-black text-stone-600 dark:bg-slate-800 dark:text-slate-300"><span class="h-2 w-2 rounded-full bg-stone-400"></span>{{ landing_content.status_closed }}</p>{% endif %}
+      <h3 class="mt-4 text-xl font-black">{{ course.title }}</h3><p class="mt-3 flex-1 text-sm leading-7 text-stone-600 dark:text-slate-300">{{ course.description|default:landing_content.courses_body|truncatewords:32 }}</p>
+      {% if course.open_version %}<p class="mt-5 text-xs font-bold text-stone-500 dark:text-slate-400">{{ landing_content.current_edition }}: {{ course.open_version.label }}</p><a href="{% if user.is_authenticated %}{{ url_student_apply }}{% else %}{{ url_applications_register }}{% endif %}?program_type=course&target_id=course_{{ course.pk }}" class="dm-landing-button dm-landing-button-solid mt-5 w-full justify-center">{{ landing_content.apply_now }}</a>{% endif %}
+    </article>{% empty %}<p class="text-sm text-stone-500 dark:text-slate-400">{{ landing_content.status_closed }}</p>{% endfor %}
   </div>
-</section>
+</div></section>
 
-<section class="dm-landing-section bg-[#faf7f3] dark:bg-[#1a1410]">
-  <div class="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
-    <div class="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_1fr]">
-      <div class="{% if LANGUAGE_CODE != 'en' %}text-right{% endif %}">
-        <p class="dm-landing-eyebrow">{% trans "Standalone learning" %}</p>
-        <h2 class="mt-3 text-3xl font-black text-[#2d0505] dark:text-white">
-          {% blocktrans %}Shorter courses can stand beside full diploma tracks.{% endblocktrans %}
-        </h2>
-        <p class="mt-4 text-sm leading-7 text-stone-700 dark:text-slate-300">
-          {% blocktrans %}Standalone courses are useful for focused needs, while diplomas keep semester and cohort structure for deeper formation.{% endblocktrans %}
-        </p>
-      </div>
-      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {% for course in standalone_courses %}
-          <article class="dm-landing-card">
-            <p class="text-xs font-black uppercase text-[#8c1d1d] dark:text-amber-200">{% trans "Standalone course" %}</p>
-            <h3 class="mt-2 text-base font-black">{{ course.title }}</h3>
-            <p class="mt-2 text-sm leading-6 text-stone-600 dark:text-slate-300">
-              {% if course.description %}
-                {{ course.description|truncatewords:18 }}
-              {% else %}
-                {% trans "Focused course available in the LMS." %}
-              {% endif %}
-            </p>
-          </article>
-        {% empty %}
-          <article class="dm-landing-card sm:col-span-2">
-            <p class="text-xs font-black uppercase text-[#8c1d1d] dark:text-amber-200">{% trans "No standalone courses yet" %}</p>
-            <h3 class="mt-2 text-base font-black">{% trans "Create standalone courses from Academics." %}</h3>
-            <p class="mt-2 text-sm leading-6 text-stone-600 dark:text-slate-300">{% blocktrans %}When active standalone courses exist, they will appear here automatically.{% endblocktrans %}</p>
-          </article>
-        {% endfor %}
-      </div>
-    </div>
-  </div>
-</section>
-
-<section class="dm-landing-section bg-white dark:bg-slate-950">
-  <div class="mx-auto grid max-w-7xl grid-cols-1 gap-8 px-4 py-14 sm:px-6 lg:grid-cols-[1.05fr_.95fr] lg:px-8">
-    <div class="{% if LANGUAGE_CODE != 'en' %}text-right{% endif %}">
-      <p class="dm-landing-eyebrow">{% trans "Learning library" %}</p>
-      <h2 class="mt-3 text-3xl font-black text-stone-950 dark:text-white">
-        {% blocktrans %}Published lectures are visible as soon as staff release them.{% endblocktrans %}
-      </h2>
-      <div class="mt-6 grid grid-cols-1 gap-3">
-        {% for lecture in latest_lectures %}
-          <article class="dm-landing-row">
-            <div>
-              <p class="text-xs font-bold text-stone-500 dark:text-slate-400">{{ lecture.course_version.course.title }}</p>
-              <h3 class="mt-1 text-base font-black text-stone-950 dark:text-white">{{ lecture.title }}</h3>
-              <p class="mt-1 text-xs text-stone-500 dark:text-slate-400">
-                {% if lecture.release_at %}
-                  {% trans "Released" %}: {% dt lecture.release_at "j M Y" %}
-                {% else %}
-                  {% trans "Available now" %}
-                {% endif %}
-              </p>
-            </div>
-            <span class="dm-landing-pill">{% trans "Lecture" %}</span>
-          </article>
-        {% empty %}
-          <article class="dm-landing-row">
-            <div>
-              <h3 class="text-base font-black text-stone-950 dark:text-white">{% trans "No published lectures yet" %}</h3>
-              <p class="mt-1 text-sm text-stone-600 dark:text-slate-300">{% trans "Published lectures will appear here automatically." %}</p>
-            </div>
-          </article>
-        {% endfor %}
-      </div>
-    </div>
-
-    <div class="dm-landing-card dm-landing-card-strong">
-      <p class="dm-landing-eyebrow">{% trans "Application pulse" %}</p>
-      <h3 class="mt-3 text-2xl font-black">{% trans "Live review status" %}</h3>
-      <p class="mt-3 text-sm leading-7 text-stone-600 dark:text-slate-300">
-        {% blocktrans %}The public page reflects a real LMS, not a separate brochure. Application counts and content availability come from the same database staff use every day.{% endblocktrans %}
-      </p>
-      <div class="mt-6 space-y-3">
-        {% for item in application_status_counts %}
-          <div class="flex items-center justify-between gap-4 rounded-lg border border-stone-200 bg-white px-4 py-3 text-sm dark:border-slate-800 dark:bg-slate-950">
-            <span class="font-bold text-stone-700 dark:text-slate-200">{{ item.label }}</span>
-            <span class="stat-value font-black text-[#8c1d1d] dark:text-amber-200">{{ item.count }}</span>
-          </div>
-        {% empty %}
-          <div class="rounded-lg border border-stone-200 bg-white px-4 py-3 text-sm dark:border-slate-800 dark:bg-slate-950">
-            {% trans "No applications have been recorded yet." %}
-          </div>
-        {% endfor %}
-      </div>
-    </div>
-  </div>
-</section>
-
-<section id="assessment" class="dm-landing-section border-y border-stone-200 bg-[#f6efe7] dark:border-slate-800 dark:bg-slate-900">
-  <div class="mx-auto grid max-w-7xl grid-cols-1 gap-8 px-4 py-14 sm:px-6 lg:grid-cols-[1fr_1.1fr] lg:px-8">
-    <div class="{% if LANGUAGE_CODE != 'en' %}text-right{% endif %}">
-      <p class="dm-landing-eyebrow">{% trans "Find your priority" %}</p>
-      <h2 class="mt-3 text-3xl font-black text-stone-950 dark:text-white">
-        {% blocktrans %}Choose the door that matches the family need today.{% endblocktrans %}
-      </h2>
-      <p class="mt-4 text-sm leading-7 text-stone-700 dark:text-slate-300">
-        {% blocktrans %}The public page stays simple: visitors understand the institute, review live options, then apply through the official flow.{% endblocktrans %}
-      </p>
-    </div>
-
-    <div x-data="{ choice: 'couple' }" class="dm-landing-card">
-      <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <button type="button" @click="choice = 'couple'" class="dm-landing-segment" :class="choice === 'couple' ? 'is-active' : ''">{% trans "Couples" %}</button>
-        <button type="button" @click="choice = 'parent'" class="dm-landing-segment" :class="choice === 'parent' ? 'is-active' : ''">{% trans "Parents" %}</button>
-        <button type="button" @click="choice = 'servant'" class="dm-landing-segment" :class="choice === 'servant' ? 'is-active' : ''">{% trans "Servants" %}</button>
-      </div>
-      <div class="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-5 text-stone-800 dark:border-amber-300/30 dark:bg-amber-300/10 dark:text-slate-100">
-        <template x-if="choice === 'couple'">
-          <div>
-            <h3 class="font-black">{% trans "Recommended: marriage preparation track" %}</h3>
-            <p class="mt-2 text-sm leading-6">{% blocktrans %}Start with expectations, communication, finance, conflict, and spiritual home routines.{% endblocktrans %}</p>
-          </div>
-        </template>
-        <template x-if="choice === 'parent'">
-          <div>
-            <h3 class="font-black">{% trans "Recommended: behavior and parenting track" %}</h3>
-            <p class="mt-2 text-sm leading-6">{% blocktrans %}Focus on emotion regulation, discipline, social media pressure, and better daily conversations.{% endblocktrans %}</p>
-          </div>
-        </template>
-        <template x-if="choice === 'servant'">
-          <div>
-            <h3 class="font-black">{% trans "Recommended: pastoral family support" %}</h3>
-            <p class="mt-2 text-sm leading-6">{% blocktrans %}Build a shared language for referral, listening, boundaries, and coordinated church care.{% endblocktrans %}</p>
-          </div>
-        </template>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section class="dm-landing-section bg-white dark:bg-slate-950">
-  <div class="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
-    <div class="grid grid-cols-1 gap-8 lg:grid-cols-[.9fr_1.1fr] lg:items-start">
-      <div class="{% if LANGUAGE_CODE != 'en' %}text-right{% endif %}">
-        <p class="dm-landing-eyebrow">{% trans "Built for trust" %}</p>
-        <h2 class="mt-3 text-3xl font-black text-stone-950 dark:text-white">
-          {% blocktrans %}A public page backed by real operations, not disconnected marketing copy.{% endblocktrans %}
-        </h2>
-        <p class="mt-4 text-sm leading-7 text-stone-700 dark:text-slate-300">
-          {% blocktrans %}The landing experience introduces families to the institute while preserving the admin workflows behind applications, cohorts, lessons, assessments, and certificates.{% endblocktrans %}
-        </p>
-      </div>
-      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <article class="dm-landing-card">
-          <h3 class="text-lg font-black">{% trans "Church-aware language" %}</h3>
-          <p class="mt-2 text-sm leading-6 text-stone-600 dark:text-slate-300">{% blocktrans %}The tone stays pastoral, practical, and calm for families and servants.{% endblocktrans %}</p>
-        </article>
-        <article class="dm-landing-card">
-          <h3 class="text-lg font-black">{% trans "Live academic structure" %}</h3>
-          <p class="mt-2 text-sm leading-6 text-stone-600 dark:text-slate-300">{% blocktrans %}Diplomas, cohorts, courses, and lectures are pulled from configured LMS records.{% endblocktrans %}</p>
-        </article>
-        <article class="dm-landing-card">
-          <h3 class="text-lg font-black">{% trans "Clear application path" %}</h3>
-          <p class="mt-2 text-sm leading-6 text-stone-600 dark:text-slate-300">{% blocktrans %}Visitors move from interest to application without a separate manual process.{% endblocktrans %}</p>
-        </article>
-        <article class="dm-landing-card">
-          <h3 class="text-lg font-black">{% trans "Admin-editable announcement" %}</h3>
-          <p class="mt-2 text-sm leading-6 text-stone-600 dark:text-slate-300">{% blocktrans %}The top announcement can be changed, scheduled, linked, or disabled from admin control.{% endblocktrans %}</p>
-        </article>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section class="bg-[#2d0505] text-white">
-  <div class="mx-auto grid max-w-7xl grid-cols-1 gap-6 px-4 py-12 sm:px-6 lg:grid-cols-[1fr_auto] lg:items-center lg:px-8">
-    <div class="{% if LANGUAGE_CODE != 'en' %}text-right{% endif %}">
-      <p class="text-xs font-black uppercase text-amber-200">{% trans "Ready to begin" %}</p>
-      <h2 class="mt-3 text-3xl font-black">{% blocktrans %}One clear path from interest to reviewed application.{% endblocktrans %}</h2>
-      <p class="mt-3 max-w-2xl text-sm leading-7 text-amber-50/85">
-        {% blocktrans with count=landing_stats.applications %}{{ count }} applications have been recorded in the LMS so far.{% endblocktrans %}
-      </p>
-    </div>
-    <div class="flex flex-wrap gap-3">
-      {% if user.is_authenticated %}
-        <a href="{{ url_accounts_dashboard }}" class="dm-landing-button dm-landing-button-primary">{% trans "Go to dashboard" %}</a>
-      {% else %}
-        <a href="{{ url_applications_register }}" class="dm-landing-button dm-landing-button-primary">{% trans "Apply now" %}</a>
-      {% endif %}
-      <a href="#programs" class="dm-landing-button dm-landing-button-ghost">{% trans "Review programs" %}</a>
-    </div>
-  </div>
-</section>
-{% endblock content %}
+<section class="bg-[#2d0505] px-4 py-20 text-center text-white sm:px-6"><blockquote class="mx-auto max-w-4xl text-2xl font-black leading-relaxed sm:text-4xl">“{{ landing_content.quote }}”</blockquote><p class="mt-6 font-bold text-amber-200">{{ landing_content.quote_name }}</p><p class="mt-1 text-sm text-amber-50/70">{{ landing_content.quote_role }}</p></section>
+<section class="bg-[#faf7f3] px-4 py-20 text-center dark:bg-[#1a1410] sm:px-6 sm:py-24"><p class="dm-landing-eyebrow">{{ landing_content.cta_eyebrow }}</p><h2 class="mx-auto mt-4 max-w-3xl text-3xl font-black text-[#2d0505] dark:text-white sm:text-5xl">{{ landing_content.cta_title }}</h2><p class="mx-auto mt-5 max-w-2xl text-lg leading-8 text-stone-600 dark:text-slate-300">{{ landing_content.cta_body }}</p><a href="{% if user.is_authenticated %}{{ url_student_apply }}{% else %}{{ url_applications_register }}{% endif %}" class="dm-landing-button dm-landing-button-solid mt-8">{{ landing_content.cta_label }}</a></section>
+{% endblock %}

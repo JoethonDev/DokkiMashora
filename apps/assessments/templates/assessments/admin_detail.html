@@ -91,7 +91,7 @@
               <div class="flex items-center gap-2 text-sm">
                 <span class="font-semibold text-slate-900 dark:text-slate-100">{% trans "Question" %} {{ question.order }}</span>
                 {% include "partials/_badge.html" with label=question.get_question_type_display tone="neutral" %}
-                {% include "partials/_badge.html" with label=question.points|stringformat:"s"|add:" pts" tone="brand" %}
+                {% trans "pts" as pts_label %}{% include "partials/_badge.html" with label=question.points|stringformat:"s"|add:" "|add:pts_label tone="brand" %}
                 {% if not question.required %}{% include "partials/_badge.html" with label=_("Optional") tone="info" %}{% endif %}
               </div>
               <p class="mt-2 text-base text-slate-800 dark:text-slate-200 leading-relaxed max-w-prose">{{ question.text|linebreaksbr }}</p>

@@ -299,13 +299,13 @@ def parse_row_data(row: dict[str, str], row_number: int) -> dict[str, Any]:
     try:
         amount = Decimal(amount_raw) if amount_raw else None
     except InvalidOperation:
-        return {"status": ROW_STATUS_FAILED, "error_message": f"Invalid amount: {amount_raw}"}
+        return {"status": ROW_STATUS_FAILED, "error_message": str(_("Invalid amount: %(amount)s") % {"amount": amount_raw})}
     paid_at = parse_date(row.get("payment_date", ""))
     if not paid_at and row.get("payment_date", "").strip():
-        return {"status": ROW_STATUS_FAILED, "error_message": f"Invalid date: {row.get('payment_date', '')}"}
+        return {"status": ROW_STATUS_FAILED, "error_message": str(_("Invalid date: %(date)s") % {"date": row.get("payment_date", "")})}
     national_id = normalize_national_id(row.get("national_id", ""))
     if not national_id:
-        return {"status": ROW_STATUS_FAILED, "error_message": "Empty national ID"}
+        return {"status": ROW_STATUS_FAILED, "error_message": str(_("Empty national ID"))}
     email = row.get("email", "").strip().lower()
     phone = normalize_phone(row.get("phone", ""))
     return {

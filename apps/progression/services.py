@@ -277,7 +277,7 @@ def _try_auto_promote(
     ).select_related("semester").order_by("semester__order").last()
 
     if current_progress and current_progress.status == SEMESTER_PROGRESS_LOCKED:
-        result["reason"] = "Locked"
+        result["reason"] = _("Locked")
         return result
 
     current_semester_idx = 0
@@ -289,7 +289,7 @@ def _try_auto_promote(
         current_semester_idx += 1
 
     if current_semester_idx >= len(semesters):
-        result["reason"] = "All semesters completed"
+        result["reason"] = _("All semesters completed")
         return result
 
     current_semester = semesters[current_semester_idx]
@@ -300,7 +300,7 @@ def _try_auto_promote(
             result["promoted"] = True
             result["from_semester"] = current_semester.id
             result["to_semester"] = semesters[current_semester_idx + 1].id if current_semester_idx + 1 < len(semesters) else None
-            result["reason"] = "Would promote"
+            result["reason"] = _("Would promote")
             return result
 
         next_semester = semesters[current_semester_idx + 1] if current_semester_idx + 1 < len(semesters) else None
@@ -318,7 +318,7 @@ def _try_auto_promote(
                 previous_status=SEMESTER_PROGRESS_PASSED,
                 new_status=SEMESTER_PROGRESS_PROMOTED,
                 automatic=True,
-                reason="Auto-promoted based on passing scores.",
+                reason=_("Auto-promoted based on passing scores."),
                 score_snapshot=eval_result.calculated_score,
             )
 
@@ -336,7 +336,7 @@ def _try_auto_promote(
             result["promoted"] = True
             result["from_semester"] = current_semester.id
             result["to_semester"] = next_semester.id if next_semester else None
-            result["reason"] = "Promoted"
+            result["reason"] = _("Promoted")
 
     return result
 

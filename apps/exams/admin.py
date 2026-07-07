@@ -1,7 +1,6 @@
 from django.contrib import admin
 
-from apps.exams.models import Answer, Assignment, Choice, Exam, ExamSnapshot, Question
-from apps.exams.models import EmailLog
+from apps.exams.models import Answer, Assignment, Choice, EmailLog, Exam, ExamSnapshot, Question
 
 
 class QuestionInline(admin.TabularInline):

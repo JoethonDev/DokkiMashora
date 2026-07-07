@@ -9,11 +9,10 @@ from django import forms
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from apps.academics.models import Cohort, Course, Diploma
+from apps.academics.models import Cohort, Course
 from apps.applications.constants import PROGRAM_TYPE_CHOICES
 from apps.applications.services import RegistrationData, find_duplicate, normalize_phone
 from apps.students.constants import EDUCATION_CHOICES, GENDER_CHOICES
-from apps.students.services import check_apply_eligibility
 
 
 class RegistrationForm(forms.Form):

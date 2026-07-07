@@ -12,14 +12,23 @@ from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods
 
 from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE, SCOPE_COURSE_VERSION
-from apps.academics.models import Cohort, Course, CourseEnrollment, CourseVersion, DiplomaEnrollment, ModeratorStudentAssignment, TeacherAssignment
-from apps.core.htmx import is_htmx
-from apps.core.pagination import paginate
+from apps.academics.models import (
+    Cohort,
+    Course,
+    CourseEnrollment,
+    CourseVersion,
+    DiplomaEnrollment,
+    LectureWatchProgress,
+    ModeratorStudentAssignment,
+    TeacherAssignment,
+)
 from apps.assessments.constants import (
     GRADE_VISIBILITY_HIDDEN,
     GRADE_VISIBILITY_RELEASED,
     GRADE_VISIBILITY_UNDER_REVIEW,
 )
+from apps.core.htmx import is_htmx
+from apps.core.pagination import paginate
 from apps.entrance_exams.constants import ATTEMPT_STATUS_GRADED
 
 from .forms import StudentProfileUpdateForm
@@ -199,6 +208,11 @@ def diploma_course_detail(request: HttpRequest, version_id: int) -> HttpResponse
     lectures = list(
         cv.lectures.filter(is_published=True).order_by("order").only("id", "title", "order", "youtube_url", "audio_url", "audio_hls_playlist_key")
     )
+    completed_ids = set(
+        LectureWatchProgress.objects.filter(
+            student=profile, lecture__in=lectures, status="completed"
+        ).values_list("lecture_id", flat=True)
+    )
     teachers = list(
         TeacherAssignment.objects.filter(scope_type=SCOPE_COURSE_VERSION, course_version=cv, active=True)
         .select_related("teacher")
@@ -211,6 +225,7 @@ def diploma_course_detail(request: HttpRequest, version_id: int) -> HttpResponse
         moderator = m.moderator if m else None
     return _render_profile(request, "students/profile/diploma_course_detail.html", {
         "course_version": cv, "lectures": lectures, "teachers": teachers, "moderator": moderator,
+        "completed_lecture_ids": completed_ids,
     })
 
 

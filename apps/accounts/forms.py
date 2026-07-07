@@ -8,9 +8,8 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
-from apps.students.models import StudentProfile
-
 from apps.applications.services import normalize_phone as application_normalize_phone
+from apps.students.models import StudentProfile
 
 from .constants import USER_STATUS_ACTIVE, USER_STATUS_INACTIVE, USER_STATUS_SUSPENDED
 from .models import User

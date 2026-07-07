@@ -43,7 +43,7 @@
         <div class="flex items-center gap-2 mb-4 text-sm">
           <span class="font-semibold text-slate-900 dark:text-slate-100">{% trans "Question" %} {{ forloop.counter }}</span>
           {% include "partials/_badge.html" with label=question.get_question_type_display tone="neutral" %}
-          {% include "partials/_badge.html" with label=question.points|stringformat:"s"|add:" pts" tone="brand" %}
+          {% trans "pts" as pts_label %}{% include "partials/_badge.html" with label=question.points|stringformat:"s"|add:" "|add:pts_label tone="brand" %}
           {% if answer and answer.score is not None %}
             {% include "partials/_badge.html" with label=_("Graded") tone="success" %}
           {% elif answer %}

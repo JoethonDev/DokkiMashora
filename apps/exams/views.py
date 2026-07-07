@@ -18,7 +18,6 @@ from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods, require_POST
 
 from apps.audit.constants import (
-    ACTION_BULK_EMAIL_SENT,
     ACTION_EXAM_CREATED,
     ACTION_EXAM_TOGGLED,
     ACTION_EXAM_UPDATED,
@@ -29,9 +28,9 @@ from apps.audit.constants import (
 )
 from apps.audit.services import record_audit_event
 from apps.communications.constants import (
-    TEMPLATE_EXAM_INVITATION,
-    TEMPLATE_ENTRANCE_EXAM_PASS,
     TEMPLATE_ENTRANCE_EXAM_FAIL,
+    TEMPLATE_ENTRANCE_EXAM_PASS,
+    TEMPLATE_EXAM_INVITATION,
 )
 from apps.communications.services import send_templated_email
 from apps.core.htmx import is_htmx
@@ -588,7 +587,7 @@ def save_exam_snapshot(request, exam_id):
             save_snapshot(assignment, qid, choice_id=choice_id, essay_text=essay)
         return JsonResponse({"ok": True})
     except (json.JSONDecodeError, ValueError, TypeError):
-        return JsonResponse({"ok": False, "error": "Invalid data"}, status=400)
+        return JsonResponse({"ok": False, "error": _("Invalid data")}, status=400)
 
 
 @login_required

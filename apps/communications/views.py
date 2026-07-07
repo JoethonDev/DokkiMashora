@@ -267,7 +267,7 @@ def admin_template_edit(request, slug):
             except ValidationError as e:
                 for field, errors in e.message_dict.items():
                     for err in errors:
-                        messages.error(request, f"{field}: {err}")
+                        messages.error(request, _("%(field)s: %(error)s") % {"field": field, "error": err})
     avail = AVAILABLE_VARIABLES_BY_SLUG.get(slug, {})
     all_vars = avail.get("optional", []) + avail.get("required", [])
     return render(request, "communications/admin_template_form.html", {
@@ -367,7 +367,7 @@ def admin_template_create(request):
             except ValidationError as e:
                 for field, errors in e.message_dict.items():
                     for err in errors:
-                        messages.error(request, f"{field}: {err}")
+                        messages.error(request, _("%(field)s: %(error)s") % {"field": field, "error": err})
     return render(request, "communications/admin_template_create.html", {
         "available_slugs": available,
         "all_slugs": TEMPLATE_SLUGS,

@@ -78,7 +78,7 @@ def download_payment_csv_template(request):
     response["Content-Disposition"] = 'attachment; filename="payment_template.csv"'
     writer = csv.writer(response)
     writer.writerow(headers)
-    writer.writerow(["29001010100001", "500.00", "2026-01-15", "INV-001", "student@example.com", "+201234567890", "Tuition fee", "", "", "diploma", "42"])
+    writer.writerow(["29001010100001", "500.00", "2026-01-15", "INV-001", "student@example.com", "+201234567890", _("Tuition fee"), "", "", "diploma", "42"])
     return response
 
 

@@ -1,7 +1,10 @@
 """Academic structure models for the LMS."""
 
+import re
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -21,6 +24,10 @@ from .constants import (
     SCOPE_SEMESTER_COHORT,
     SCOPE_STANDALONE_COURSE,
     SCOPE_WHOLE_DIPLOMA,
+    VIOLATION_CHOICES,
+    VIOLATION_NONE,
+    WATCH_STATUS_CHOICES,
+    WATCH_STATUS_IN_PROGRESS,
 )
 
 
@@ -31,6 +38,12 @@ class Diploma(TimeStampedModel):
     description = models.TextField(_("description"), blank=True)
     total_semesters = models.PositiveIntegerField(_("total semesters"), default=2)
     is_active = models.BooleanField(_("active"), default=True)
+    video_tracking_enabled = models.BooleanField(_("video tracking enabled"), default=False)
+    video_completion_percent = models.PositiveSmallIntegerField(
+        _("video completion percent"),
+        default=80,
+        validators=[MinValueValidator(1), MaxValueValidator(100)],
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
@@ -77,6 +90,12 @@ class Course(TimeStampedModel):
     description = models.TextField(_("description"), blank=True)
     is_standalone = models.BooleanField(_("standalone"), default=False)
     is_active = models.BooleanField(_("active"), default=True)
+    video_tracking_enabled = models.BooleanField(_("video tracking enabled"), default=False)
+    video_completion_percent = models.PositiveSmallIntegerField(
+        _("video completion percent"),
+        default=80,
+        validators=[MinValueValidator(1), MaxValueValidator(100)],
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
@@ -122,8 +141,17 @@ class SemesterCourse(TimeStampedModel):
     class Meta:
         verbose_name = _("semester course")
         verbose_name_plural = _("semester courses")
-        unique_together = (("semester", "course"),)
         ordering = ("semester", "order")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["semester", "course"],
+                name="uq_semester_course",
+            ),
+            models.UniqueConstraint(
+                fields=["course"],
+                name="uq_diploma_course_owner",
+            ),
+        ]
 
     def clean(self):
         if self.course_id and self.course.is_standalone:
@@ -163,24 +191,6 @@ class Cohort(TimeStampedModel):
         unique_together = (("diploma", "name"),)
         ordering = ("-start_date",)
 
-    def save(self, *args, **kwargs):
-        is_new = self.pk is None
-        super().save(*args, **kwargs)
-        if is_new:
-            semesters = self.diploma.semesters.filter(is_active=True).order_by("order")
-            for semester in semesters:
-                for sc in semester.semester_courses.select_related("course"):
-                    CourseVersion.objects.get_or_create(
-                        course=sc.course,
-                        cohort=self,
-                        semester=semester,
-                        defaults={
-                            "label": "v1",
-                            "is_active": True,
-                            "created_by": self.created_by,
-                        },
-                    )
-
     def __str__(self):
         return f"{self.diploma.title} - {self.name}"
 
@@ -210,7 +220,7 @@ class CourseVersion(TimeStampedModel):
         null=True,
         blank=True,
     )
-    label = models.CharField(_("label"), max_length=120, default="v1")
+    label = models.CharField(_("label"), max_length=120, default="v1", blank=True)
     access_duration_days = models.PositiveIntegerField(
         _("access duration (days)"),
         null=True,
@@ -228,8 +238,19 @@ class CourseVersion(TimeStampedModel):
     class Meta:
         verbose_name = _("course version")
         verbose_name_plural = _("course versions")
-        unique_together = (("course", "cohort", "label"),)
         ordering = ("course", "cohort", "label")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["course", "cohort"],
+                condition=models.Q(cohort__isnull=False),
+                name="uq_diploma_course_cohort_version",
+            ),
+            models.UniqueConstraint(
+                fields=["course", "label"],
+                condition=models.Q(cohort__isnull=True),
+                name="uq_standalone_course_version_label",
+            ),
+        ]
 
     def __str__(self):
         cohort_label = self.cohort.name if self.cohort else _("standalone")
@@ -249,6 +270,15 @@ class Lecture(TimeStampedModel):
     title = models.CharField(_("title"), max_length=255)
     description = models.TextField(_("description"), blank=True)
     youtube_url = models.URLField(_("YouTube URL"), blank=True)
+    youtube_video_id = models.CharField(
+        _("YouTube video ID"), max_length=11, blank=True, db_index=True,
+    )
+    youtube_duration_seconds = models.PositiveIntegerField(
+        _("YouTube duration (seconds)"), null=True, blank=True,
+    )
+    youtube_metadata_fetched_at = models.DateTimeField(
+        _("YouTube metadata fetched at"), null=True, blank=True,
+    )
     audio_url = models.URLField(_("audio URL"), blank=True)
     audio_storage_key = models.CharField(_("audio storage key"), max_length=500, blank=True)
     audio_original_filename = models.CharField(_("original filename"), max_length=500, blank=True)
@@ -280,6 +310,21 @@ class Lecture(TimeStampedModel):
 
     def __str__(self):
         return f"{self.course_version} - {self.order}. {self.title}"
+
+    _YT_VIDEO_ID_RE = re.compile(
+        r"(?:youtube\.com/(?:watch\?.*?v=|embed/|shorts/)|youtu\.be/)([A-Za-z0-9_-]{11})"
+    )
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        update_fields = kwargs.get("update_fields")
+        if not update_fields and self.youtube_url and not self.youtube_video_id:
+            m = self._YT_VIDEO_ID_RE.search(self.youtube_url)
+            video_id = m.group(1) if m else ""
+            if video_id:
+                self.youtube_video_id = video_id
+                self.youtube_metadata_fetched_at = timezone.now()
+                self.save(update_fields=["youtube_video_id", "youtube_metadata_fetched_at"])
 
     @property
     def is_released(self):
@@ -385,7 +430,7 @@ class TeacherAssignment(TimeStampedModel):
     )
     course = models.ForeignKey(
         Course,
-        on_delete=models.PROTECT,
+        on_delete=models.SET_NULL,
         null=True, blank=True,
         related_name="teacher_assignments",
         verbose_name=_("course"),
@@ -406,14 +451,14 @@ class TeacherAssignment(TimeStampedModel):
     )
     semester = models.ForeignKey(
         Semester,
-        on_delete=models.PROTECT,
+        on_delete=models.SET_NULL,
         null=True, blank=True,
         related_name="teacher_assignments",
         verbose_name=_("semester"),
     )
     cohort = models.ForeignKey(
         Cohort,
-        on_delete=models.PROTECT,
+        on_delete=models.SET_NULL,
         null=True, blank=True,
         related_name="teacher_assignments_new",
         verbose_name=_("cohort"),
@@ -517,7 +562,8 @@ class ModeratorStudentAssignment(TimeStampedModel):
     )
     cohort = models.ForeignKey(
         Cohort,
-        on_delete=models.PROTECT,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
         related_name="moderator_assignments",
         verbose_name=_("cohort"),
     )
@@ -645,7 +691,8 @@ class ModeratorAssignment(TimeStampedModel):
         verbose_name=_("course version"),
     )
     cohort = models.ForeignKey(
-        Cohort, on_delete=models.PROTECT, related_name="moderator_version_assignments", verbose_name=_("cohort")
+        Cohort, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="moderator_version_assignments", verbose_name=_("cohort")
     )
     cluster = models.ForeignKey(
         StudentCluster,
@@ -690,3 +737,108 @@ class ModeratorAssignment(TimeStampedModel):
     def save(self, *args, **kwargs):
         self.clean()
         super().save(*args, **kwargs)
+
+
+class LectureWatchProgress(TimeStampedModel):
+    """Server-validated video watch progress for a student on a lecture."""
+
+    student = models.ForeignKey(
+        StudentProfile,
+        on_delete=models.CASCADE,
+        related_name="lecture_watch_progress",
+        verbose_name=_("student"),
+    )
+    lecture = models.ForeignKey(
+        Lecture,
+        on_delete=models.CASCADE,
+        related_name="watch_progress",
+        verbose_name=_("lecture"),
+    )
+    diploma_enrollment = models.ForeignKey(
+        DiplomaEnrollment,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="watch_progress",
+        verbose_name=_("diploma enrollment"),
+    )
+    course_enrollment = models.ForeignKey(
+        CourseEnrollment,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="watch_progress",
+        verbose_name=_("course enrollment"),
+    )
+    validated_contiguous_seconds = models.DecimalField(
+        _("validated contiguous seconds"),
+        max_digits=10,
+        decimal_places=3,
+        default=0,
+    )
+    resume_position_seconds = models.DecimalField(
+        _("resume position seconds"),
+        max_digits=10,
+        decimal_places=3,
+        default=0,
+    )
+    active_session_id = models.UUIDField(
+        _("active session ID"), null=True, blank=True,
+    )
+    last_sequence = models.PositiveIntegerField(_("last sequence"), default=0)
+    last_position_seconds = models.DecimalField(
+        _("last position seconds"),
+        max_digits=10,
+        decimal_places=3,
+        default=0,
+    )
+    last_player_state = models.CharField(_("last player state"), max_length=16, blank=True)
+    last_checkpoint_at = models.DateTimeField(_("last checkpoint at"), null=True, blank=True)
+    status = models.CharField(
+        _("status"),
+        max_length=20,
+        choices=WATCH_STATUS_CHOICES,
+        default=WATCH_STATUS_IN_PROGRESS,
+        db_index=True,
+    )
+    violation_reason = models.CharField(
+        _("violation reason"),
+        max_length=24,
+        choices=VIOLATION_CHOICES,
+        default=VIOLATION_NONE,
+    )
+    completed_at = models.DateTimeField(_("completed at"), null=True, blank=True)
+
+    class Meta:
+        verbose_name = _("lecture watch progress")
+        verbose_name_plural = _("lecture watch progress")
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(diploma_enrollment__isnull=False, course_enrollment__isnull=True)
+                    | models.Q(diploma_enrollment__isnull=True, course_enrollment__isnull=False)
+                ),
+                name="lwp_exactly_one_enrollment",
+            ),
+            models.UniqueConstraint(
+                fields=["student", "lecture", "diploma_enrollment"],
+                condition=models.Q(diploma_enrollment__isnull=False),
+                name="uq_lwp_student_lecture_diploma",
+            ),
+            models.UniqueConstraint(
+                fields=["student", "lecture", "course_enrollment"],
+                condition=models.Q(course_enrollment__isnull=False),
+                name="uq_lwp_student_lecture_course",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(validated_contiguous_seconds__gte=0),
+                name="lwp_validated_non_negative",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["student", "lecture"]),
+            models.Index(fields=["active_session_id"]),
+        ]
+
+    def __str__(self):
+        return f"{self.student} - {self.lecture} ({self.status})"

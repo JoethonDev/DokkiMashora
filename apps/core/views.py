@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.conf import settings
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Q
 from django.http import (
@@ -11,16 +12,18 @@ from django.http import (
     HttpResponseBadRequest,
     HttpResponseRedirect,
 )
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods
 
-from apps.academics.models import Cohort, Course, Diploma, Lecture
-from apps.core.models import LandingAnnouncement
+from apps.academics.models import Cohort, Course, CourseVersion, Diploma, Lecture
+from apps.core.forms import LandingPageSettingsForm
+from apps.core.models import LandingAnnouncement, LandingPageSettings
 from apps.core.permissions import ROLE_SENIOR_STAFF, role_required
+from apps.students.services import get_open_apply_targets
 
 
 def safe_next_url(request, default=""):
@@ -32,24 +35,22 @@ def safe_next_url(request, default=""):
 
 def landing(request: HttpRequest) -> HttpResponse:
     """Public landing page."""
-    featured_cohorts = (
-        Cohort.objects.filter(is_active=True, diploma__is_active=True)
-        .select_related("diploma")
-        .annotate(
-            course_count=Count("course_versions__course", filter=Q(course_versions__is_active=True), distinct=True),
-            lecture_count=Count(
-                "course_versions__lectures",
-                filter=Q(course_versions__lectures__is_published=True),
-                distinct=True,
-            ),
-            # application_count=Count("applications", distinct=True),
-        )
-        .order_by("start_date", "name")[:3]
-    )
-    active_diplomas = (
+    open_diploma_targets = get_open_apply_targets("diploma", page_size=1000)["items"]
+    open_course_targets = get_open_apply_targets("course", page_size=1000)["items"]
+    open_diploma_by_id = {}
+    for target in open_diploma_targets:
+        open_diploma_by_id.setdefault(target.diploma_id, target)
+    open_course_ids = {course.pk for course in open_course_targets}
+    open_versions = {}
+    for version in CourseVersion.objects.filter(
+        course_id__in=open_course_ids, cohort__isnull=True, is_active=True
+    ).order_by("course_id", "-created_at"):
+        open_versions.setdefault(version.course_id, version)
+
+    active_diplomas = list(
         Diploma.objects.filter(is_active=True)
         .annotate(
-            active_cohort_count=Count("cohorts", filter=Q(cohorts__is_active=True), distinct=True),
+            historical_group_count=Count("cohorts", distinct=True),
             course_count=Count("semesters__semester_courses__course", distinct=True),
             published_lecture_count=Count(
                 "cohorts__course_versions__lectures",
@@ -59,29 +60,64 @@ def landing(request: HttpRequest) -> HttpResponse:
         )
         .order_by("title")[:6]
     )
-    standalone_courses = Course.objects.filter(is_active=True, is_standalone=True).order_by("title")[:4]
-    latest_lectures = (
-        Lecture.objects.filter(is_published=True)
-        .select_related("course_version__course", "course_version__cohort", "course_version__semester")
-        .order_by("-release_at", "-created_at")[:4]
-    )
+    for diploma in active_diplomas:
+        diploma.open_target = open_diploma_by_id.get(diploma.pk)
+    standalone_courses = list(Course.objects.filter(is_active=True, is_standalone=True).order_by("title")[:6])
+    for course in standalone_courses:
+        course.open_version = open_versions.get(course.pk)
+    settings_page = LandingPageSettings.load()
+    landing_content = settings_page.localized_content(request.LANGUAGE_CODE)
+    announcement = LandingAnnouncement.current()
+    if announcement and announcement.title == "Registration open":
+        announcement.title = landing_content["announcement_title"]
+        announcement.message = landing_content["announcement_body"]
+    live_stats = {
+        "active_diplomas": Diploma.objects.filter(is_active=True).count(),
+        "learning_groups": Cohort.objects.filter(diploma__is_active=True).count(),
+        "standalone_courses": Course.objects.filter(is_active=True, is_standalone=True).count(),
+        "published_lectures": Lecture.objects.filter(is_published=True).count(),
+    }
     context = {
         "url_accounts_dashboard": reverse("accounts:dashboard"),
         "url_accounts_login": reverse("accounts:login"),
         "url_applications_register": reverse("applications:register"),
-        "landing_announcement": LandingAnnouncement.current(),
-        "featured_cohorts": featured_cohorts,
+        "landing_announcement": announcement,
         "active_diplomas": active_diplomas,
         "standalone_courses": standalone_courses,
-        "latest_lectures": latest_lectures,
-        "landing_stats": {
-            "active_diplomas": Diploma.objects.filter(is_active=True).count(),
-            "active_cohorts": Cohort.objects.filter(is_active=True, diploma__is_active=True).count(),
-            "active_courses": Course.objects.filter(is_active=True).count(),
-            "published_lectures": Lecture.objects.filter(is_published=True).count(),
-        },
+        "url_student_apply": reverse("students:apply"),
+        "landing_settings": settings_page,
+        "landing_content": landing_content,
+        "landing_stats": zip(
+            [landing_content[f"stat_{number}"] for number in range(1, 5)],
+            list(live_stats.values())
+            if settings_page.show_live_stats
+            else [
+                settings_page.stat_value_1,
+                settings_page.stat_value_2,
+                settings_page.stat_value_3,
+                settings_page.stat_value_4,
+            ],
+            strict=True,
+        ),
     }
     return render(request, "core/landing.html", context)
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_http_methods(["GET", "POST"])
+def landing_settings(request: HttpRequest) -> HttpResponse:
+    settings_page = LandingPageSettings.load()
+    if request.method == "POST" and request.POST.get("action") == "reset":
+        settings_page.reset_to_defaults()
+        messages.success(request, _("Landing page restored to the default preset."))
+        return redirect("core:landing_settings")
+    form = LandingPageSettingsForm(request.POST or None, request.FILES or None, instance=settings_page)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, _("Landing page updated."))
+        return redirect("core:landing_settings")
+    return render(request, "core/admin_landing_settings.html", {"form": form})
 
 
 @login_required
@@ -241,7 +277,10 @@ def design_showcase(request: HttpRequest) -> HttpResponse:
             {
                 "id": "coptic-institute-landing",
                 "name": {"en": "Coptic Family Institute", "ar": "معهد الأسرة القبطي"},
-                "note": {"en": "Crimson/gold public recruitment page", "ar": "صفحة عامة قرمزية وذهبية للتقديم"},
+                "note": {
+                    "en": "Crimson/gold public recruitment page",
+                    "ar": "صفحة عامة قرمزية وذهبية للتقديم",
+                },
                 "role": {"en": "Public visitors", "ar": "زوار الموقع"},
                 "shell": "reading",
                 "density": "Medium",
@@ -270,10 +309,26 @@ def design_showcase(request: HttpRequest) -> HttpResponse:
                     "ar": "عرض هادئ مع أولويات واضحة وإجراءات سريعة.",
                 },
                 "stats": [
-                    {"label": {"en": "Pending applications", "ar": "الطلبات المعلقة"}, "value": "18", "note": {"en": "Need review today", "ar": "تحتاج مراجعة اليوم"}},
-                    {"label": {"en": "Active courses", "ar": "المقررات النشطة"}, "value": "42", "note": {"en": "Published and visible", "ar": "منشورة ومرئية"}},
-                    {"label": {"en": "Open exams", "ar": "الاختبارات المفتوحة"}, "value": "6", "note": {"en": "Running this week", "ar": "تعمل هذا الأسبوع"}},
-                    {"label": {"en": "Certificates", "ar": "الشهادات"}, "value": "124", "note": {"en": "Completed records", "ar": "السجلات المكتملة"}},
+                    {
+                        "label": {"en": "Pending applications", "ar": "الطلبات المعلقة"},
+                        "value": "18",
+                        "note": {"en": "Need review today", "ar": "تحتاج مراجعة اليوم"},
+                    },
+                    {
+                        "label": {"en": "Active courses", "ar": "المقررات النشطة"},
+                        "value": "42",
+                        "note": {"en": "Published and visible", "ar": "منشورة ومرئية"},
+                    },
+                    {
+                        "label": {"en": "Open exams", "ar": "الاختبارات المفتوحة"},
+                        "value": "6",
+                        "note": {"en": "Running this week", "ar": "تعمل هذا الأسبوع"},
+                    },
+                    {
+                        "label": {"en": "Certificates", "ar": "الشهادات"},
+                        "value": "124",
+                        "note": {"en": "Completed records", "ar": "السجلات المكتملة"},
+                    },
                 ],
                 "actions": [
                     {"label": {"en": "Applications", "ar": "الطلبات"}},
@@ -282,9 +337,18 @@ def design_showcase(request: HttpRequest) -> HttpResponse:
                     {"label": {"en": "Designs", "ar": "التصاميم"}},
                 ],
                 "activity": [
-                    {"title": {"en": "New registration received", "ar": "تم استلام تسجيل جديد"}, "meta": {"en": "2 minutes ago", "ar": "منذ دقيقتين"}},
-                    {"title": {"en": "Exam schedule updated", "ar": "تم تحديث جدول الاختبارات"}, "meta": {"en": "15 minutes ago", "ar": "منذ 15 دقيقة"}},
-                    {"title": {"en": "Course content published", "ar": "تم نشر محتوى مقرر"}, "meta": {"en": "Today", "ar": "اليوم"}},
+                    {
+                        "title": {"en": "New registration received", "ar": "تم استلام تسجيل جديد"},
+                        "meta": {"en": "2 minutes ago", "ar": "منذ دقيقتين"},
+                    },
+                    {
+                        "title": {"en": "Exam schedule updated", "ar": "تم تحديث جدول الاختبارات"},
+                        "meta": {"en": "15 minutes ago", "ar": "منذ 15 دقيقة"},
+                    },
+                    {
+                        "title": {"en": "Course content published", "ar": "تم نشر محتوى مقرر"},
+                        "meta": {"en": "Today", "ar": "اليوم"},
+                    },
                 ],
             },
             {
@@ -297,17 +361,41 @@ def design_showcase(request: HttpRequest) -> HttpResponse:
                     "ar": "واجهة قائمة وتفاصيل للمراجعة السريعة دون عمق تنقل كبير.",
                 },
                 "queue": [
-                    {"name": {"en": "Ahmed Ali", "ar": "أحمد علي"}, "status": {"en": "Pending", "ar": "معلق"}, "note": {"en": "ID document missing", "ar": "مستند الهوية غير موجود"}},
-                    {"name": {"en": "Mona Hassan", "ar": "منى حسن"}, "status": {"en": "Needs check", "ar": "بحاجة إلى مراجعة"}, "note": {"en": "Payment proof attached", "ar": "إثبات الدفع مرفق"}},
-                    {"name": {"en": "Omar Nabil", "ar": "عمر نبيل"}, "status": {"en": "Waiting", "ar": "بانتظار"}, "note": {"en": "Interview slot requested", "ar": "تم طلب موعد مقابلة"}},
+                    {
+                        "name": {"en": "Ahmed Ali", "ar": "أحمد علي"},
+                        "status": {"en": "Pending", "ar": "معلق"},
+                        "note": {"en": "ID document missing", "ar": "مستند الهوية غير موجود"},
+                    },
+                    {
+                        "name": {"en": "Mona Hassan", "ar": "منى حسن"},
+                        "status": {"en": "Needs check", "ar": "بحاجة إلى مراجعة"},
+                        "note": {"en": "Payment proof attached", "ar": "إثبات الدفع مرفق"},
+                    },
+                    {
+                        "name": {"en": "Omar Nabil", "ar": "عمر نبيل"},
+                        "status": {"en": "Waiting", "ar": "بانتظار"},
+                        "note": {"en": "Interview slot requested", "ar": "تم طلب موعد مقابلة"},
+                    },
                 ],
                 "detail": {
                     "title": {"en": "Selected application", "ar": "الطلب المحدد"},
                     "fields": [
-                        {"label": {"en": "Applicant", "ar": "المتقدم"}, "value": {"en": "Ahmed Ali", "ar": "أحمد علي"}},
-                        {"label": {"en": "Program", "ar": "البرنامج"}, "value": {"en": "Grade 10 Track", "ar": "مسار الصف العاشر"}},
-                        {"label": {"en": "Status", "ar": "الحالة"}, "value": {"en": "Pending review", "ar": "بانتظار المراجعة"}},
-                        {"label": {"en": "Next action", "ar": "الإجراء التالي"}, "value": {"en": "Approve or request update", "ar": "اعتماد أو طلب تعديل"}},
+                        {
+                            "label": {"en": "Applicant", "ar": "المتقدم"},
+                            "value": {"en": "Ahmed Ali", "ar": "أحمد علي"},
+                        },
+                        {
+                            "label": {"en": "Program", "ar": "البرنامج"},
+                            "value": {"en": "Grade 10 Track", "ar": "مسار الصف العاشر"},
+                        },
+                        {
+                            "label": {"en": "Status", "ar": "الحالة"},
+                            "value": {"en": "Pending review", "ar": "بانتظار المراجعة"},
+                        },
+                        {
+                            "label": {"en": "Next action", "ar": "الإجراء التالي"},
+                            "value": {"en": "Approve or request update", "ar": "اعتماد أو طلب تعديل"},
+                        },
                     ],
                 },
             },
@@ -321,9 +409,21 @@ def design_showcase(request: HttpRequest) -> HttpResponse:
                     "ar": "بطاقات مقررات بسيطة مع لوحة تقدم واضحة والدرس التالي.",
                 },
                 "courses": [
-                    {"name": {"en": "Mathematics", "ar": "الرياضيات"}, "progress": "68%", "note": {"en": "Next: Fractions", "ar": "التالي: الكسور"}},
-                    {"name": {"en": "Science", "ar": "العلوم"}, "progress": "41%", "note": {"en": "Next: Lab notes", "ar": "التالي: ملاحظات المختبر"}},
-                    {"name": {"en": "English", "ar": "اللغة الإنجليزية"}, "progress": "85%", "note": {"en": "Next: Revision", "ar": "التالي: مراجعة"}},
+                    {
+                        "name": {"en": "Mathematics", "ar": "الرياضيات"},
+                        "progress": "68%",
+                        "note": {"en": "Next: Fractions", "ar": "التالي: الكسور"},
+                    },
+                    {
+                        "name": {"en": "Science", "ar": "العلوم"},
+                        "progress": "41%",
+                        "note": {"en": "Next: Lab notes", "ar": "التالي: ملاحظات المختبر"},
+                    },
+                    {
+                        "name": {"en": "English", "ar": "اللغة الإنجليزية"},
+                        "progress": "85%",
+                        "note": {"en": "Next: Revision", "ar": "التالي: مراجعة"},
+                    },
                 ],
                 "lesson": {
                     "title": {"en": "Current lesson", "ar": "الدرس الحالي"},
@@ -344,9 +444,21 @@ def design_showcase(request: HttpRequest) -> HttpResponse:
                     "ar": "معاينة اختبار هادئة مع وقت وتقدم وعناوين قصيرة للمهام.",
                 },
                 "schedule": [
-                    {"name": {"en": "Entrance exam", "ar": "اختبار القبول"}, "time": {"en": "Today 10:00", "ar": "اليوم 10:00"}, "status": {"en": "Open", "ar": "مفتوح"}},
-                    {"name": {"en": "Midterm review", "ar": "مراجعة منتصف الفصل"}, "time": {"en": "Fri 13:30", "ar": "الجمعة 13:30"}, "status": {"en": "Scheduled", "ar": "مجدول"}},
-                    {"name": {"en": "Quiz practice", "ar": "تدريب قصير"}, "time": {"en": "Self-paced", "ar": "حسب التقدم"}, "status": {"en": "Available", "ar": "متاح"}},
+                    {
+                        "name": {"en": "Entrance exam", "ar": "اختبار القبول"},
+                        "time": {"en": "Today 10:00", "ar": "اليوم 10:00"},
+                        "status": {"en": "Open", "ar": "مفتوح"},
+                    },
+                    {
+                        "name": {"en": "Midterm review", "ar": "مراجعة منتصف الفصل"},
+                        "time": {"en": "Fri 13:30", "ar": "الجمعة 13:30"},
+                        "status": {"en": "Scheduled", "ar": "مجدول"},
+                    },
+                    {
+                        "name": {"en": "Quiz practice", "ar": "تدريب قصير"},
+                        "time": {"en": "Self-paced", "ar": "حسب التقدم"},
+                        "status": {"en": "Available", "ar": "متاح"},
+                    },
                 ],
                 "runner": {
                     "timer": "01:25:10",
@@ -364,14 +476,29 @@ def design_showcase(request: HttpRequest) -> HttpResponse:
                     "ar": "إعدادات وبيانات شخصية واضحة دون ازدحام بصري.",
                 },
                 "fields": [
-                    {"label": {"en": "Full name", "ar": "الاسم الكامل"}, "value": {"en": "Maha Hassan", "ar": "ماها حسن"}},
-                    {"label": {"en": "Email", "ar": "البريد الإلكتروني"}, "value": {"en": "maha@example.com", "ar": "maha@example.com"}},
+                    {
+                        "label": {"en": "Full name", "ar": "الاسم الكامل"},
+                        "value": {"en": "Maha Hassan", "ar": "ماها حسن"},
+                    },
+                    {
+                        "label": {"en": "Email", "ar": "البريد الإلكتروني"},
+                        "value": {"en": "maha@example.com", "ar": "maha@example.com"},
+                    },
                     {"label": {"en": "Role", "ar": "الدور"}, "value": {"en": "Teacher", "ar": "معلمة"}},
-                    {"label": {"en": "Language", "ar": "اللغة"}, "value": {"en": "Arabic / English", "ar": "العربية / الإنجليزية"}},
+                    {
+                        "label": {"en": "Language", "ar": "اللغة"},
+                        "value": {"en": "Arabic / English", "ar": "العربية / الإنجليزية"},
+                    },
                 ],
                 "preferences": [
-                    {"label": {"en": "Notifications", "ar": "الإشعارات"}, "value": {"en": "Enabled", "ar": "مفعلة"}},
-                    {"label": {"en": "Dark mode", "ar": "الوضع الداكن"}, "value": {"en": "Optional", "ar": "اختياري"}},
+                    {
+                        "label": {"en": "Notifications", "ar": "الإشعارات"},
+                        "value": {"en": "Enabled", "ar": "مفعلة"},
+                    },
+                    {
+                        "label": {"en": "Dark mode", "ar": "الوضع الداكن"},
+                        "value": {"en": "Optional", "ar": "اختياري"},
+                    },
                 ],
             },
         ],

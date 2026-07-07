@@ -1,4 +1,3 @@
-from decimal import Decimal
 import uuid
 
 from django.conf import settings
@@ -73,7 +72,9 @@ class EntranceExam(TimeStampedModel):
     )
     cohort = models.ForeignKey(
         "academics.Cohort",
-        on_delete=models.PROTECT,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name="entrance_exams",
         verbose_name=_("cohort"),
     )

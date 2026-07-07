@@ -4,7 +4,7 @@
 {% block profile_subtitle %}<p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{% trans "Submit a new program application." %}</p>{% endblock %}
 {% block profile_content %}
 <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 max-w-2xl"
-      x-data="{ programType: '{{ selected_program_type|default:'diploma' }}' }"
+      x-data="{ programType: '{{ selected_program_type|default:'diploma' }}', targetId: '{{ selected_target_id|default:'' }}' }"
       x-init="$watch('programType',(val,old)=>{if(old!==undefined){const sel=val==='diploma'?document.querySelector('#id_diploma'):document.querySelector('#id_program_target');if(sel)htmx.trigger(sel,'refresh')}})">
   {% if not cohorts and not courses %}
     <p class="text-sm text-slate-600 dark:text-slate-300">{% trans "There are no eligible programs available right now." %}</p>
@@ -30,6 +30,7 @@
       <label for="id_diploma" class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">{% trans "Diploma" %}</label>
       <select name="target_id" id="id_diploma" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
               hx-get="{% url 'applications:program_targets' %}?kind=diploma" hx-trigger="load, refresh" hx-swap="innerHTML"
+              hx-on::after-settle="if(targetId){$el.value=targetId}"
               :disabled="programType !== 'diploma'">
         <option value="">{% trans "— Select —" %}</option>
       </select>
@@ -41,6 +42,7 @@
       <div class="space-y-2">
         <select name="target_id" id="id_program_target" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
                 hx-get="{% url 'applications:program_targets' %}?kind=course" hx-trigger="load, refresh" hx-swap="innerHTML"
+                hx-on::after-settle="if(targetId){$el.value=targetId}"
                 :disabled="programType !== 'course'">
           <option value="">{% trans "— Select —" %}</option>
         </select>

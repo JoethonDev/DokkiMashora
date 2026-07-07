@@ -2,7 +2,7 @@
 
 from django.contrib import admin
 
-from .models import LandingAnnouncement
+from .models import LandingAnnouncement, LandingPageSettings
 
 
 @admin.register(LandingAnnouncement)
@@ -10,3 +10,9 @@ class LandingAnnouncementAdmin(admin.ModelAdmin):
     list_display = ("title", "is_active", "starts_at", "ends_at", "updated_at")
     list_filter = ("is_active",)
     search_fields = ("title", "message")
+
+
+@admin.register(LandingPageSettings)
+class LandingPageSettingsAdmin(admin.ModelAdmin):
+    def has_add_permission(self, request):
+        return not LandingPageSettings.objects.exists()

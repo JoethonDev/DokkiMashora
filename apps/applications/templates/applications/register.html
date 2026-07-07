@@ -88,7 +88,7 @@
             <option value="">{% trans "Select diploma type first" %}</option>
           </select>
           <div id="diploma-loader" class="text-xs text-slate-500 dark:text-slate-400">{% trans "Loading diplomas..." %}</div>
-          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{% trans "The system will automatically assign the active cohort." %}</p>
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{% trans "The system will automatically assign the currently available intake." %}</p>
         </div>
 
         {# ── Course select (HTMX loaded when course type selected) ── #}
@@ -120,6 +120,35 @@
 (function() {
   var form = document.getElementById('registration-form');
   if (!form) return;
+  var initialTarget = '{{ form.diploma.value|default:form.program_target.value|escapejs }}';
+  document.body.addEventListener('htmx:afterSwap', function(event) {
+    if (initialTarget && (event.detail.target.id === 'id_diploma' || event.detail.target.id === 'id_program_target')) {
+      event.detail.target.value = initialTarget;
+    }
+  });
+
+{% trans "Full name is required." as err_full_name %}
+{% trans "Date of birth is required." as err_dob %}
+{% trans "Gender is required." as err_gender %}
+{% trans "Address is required." as err_address %}
+{% trans "Mobile number is required." as err_phone %}
+{% trans "Email is required." as err_email %}
+{% trans "Education level is required." as err_education %}
+{% trans "Specialization is required." as err_specialization %}
+{% trans "Employer is required." as err_employer %}
+{% trans "Current job is required." as err_job %}
+{% trans "Church is required." as err_church %}
+{% trans "Priest name is required." as err_priest_name %}
+{% trans "Priest contact is required." as err_priest_contact %}
+{% trans "National ID is required." as err_national_id %}
+{% trans "Enter a valid email address." as err_valid_email %}
+{% trans "Enter a valid mobile number." as err_valid_phone %}
+{% trans "Date of birth must be in the past." as err_dob_past %}
+{% trans "Enter a valid National ID." as err_valid_nid %}
+{% trans "Please select a program type." as err_program_type %}
+{% trans "Please select a diploma." as err_diploma %}
+{% trans "Please select a course." as err_course %}
+{% trans "Invalid course selection." as err_invalid_course %}
 
   var ERR_CLASS = 'border-rose-500 dark:border-rose-400';
   var INPUTS = 'input:not([type=hidden]):not([type=checkbox]):not([type=radio]), select, textarea';
@@ -162,20 +191,20 @@
     clearAll();
     var ok = true;
     var fields = [
-      ['full_name',    'Full name is required.'],
-      ['date_of_birth','Date of birth is required.'],
-      ['gender',       'Gender is required.'],
-      ['address',      'Address is required.'],
-      ['phone',        'Mobile number is required.'],
-      ['email',        'Email is required.'],
-      ['education',    'Education level is required.'],
-      ['specialization','Specialization is required.'],
-      ['employer',     'Employer is required.'],
-      ['current_job',  'Current job is required.'],
-      ['church',       'Church is required.'],
-      ['priest_name',  'Priest name is required.'],
-      ['priest_contact','Priest contact is required.'],
-      ['national_id',  'National ID is required.'],
+      ['full_name',    '{{ err_full_name|escapejs }}'],
+      ['date_of_birth','{{ err_dob|escapejs }}'],
+      ['gender',       '{{ err_gender|escapejs }}'],
+      ['address',      '{{ err_address|escapejs }}'],
+      ['phone',        '{{ err_phone|escapejs }}'],
+      ['email',        '{{ err_email|escapejs }}'],
+      ['education',    '{{ err_education|escapejs }}'],
+      ['specialization','{{ err_specialization|escapejs }}'],
+      ['employer',     '{{ err_employer|escapejs }}'],
+      ['current_job',  '{{ err_job|escapejs }}'],
+      ['church',       '{{ err_church|escapejs }}'],
+      ['priest_name',  '{{ err_priest_name|escapejs }}'],
+      ['priest_contact','{{ err_priest_contact|escapejs }}'],
+      ['national_id',  '{{ err_national_id|escapejs }}'],
     ];
 
     fields.forEach(function(f) {
@@ -183,29 +212,29 @@
     });
 
     var email = val('email');
-    if (email && !isEmail(email)) { err('email', 'Enter a valid email address.'); ok = false; }
+    if (email && !isEmail(email)) { err('email', '{{ err_valid_email|escapejs }}'); ok = false; }
 
     var phone = val('phone');
-    if (phone && phone.replace(/\D/g, '').length < 7) { err('phone', 'Enter a valid mobile number.'); ok = false; }
+    if (phone && phone.replace(/\D/g, '').length < 7) { err('phone', '{{ err_valid_phone|escapejs }}'); ok = false; }
 
     var dob = val('date_of_birth');
-    if (dob && new Date(dob) >= new Date()) { err('date_of_birth', 'Date of birth must be in the past.'); ok = false; }
+    if (dob && new Date(dob) >= new Date()) { err('date_of_birth', '{{ err_dob_past|escapejs }}'); ok = false; }
 
-    if (val('national_id').length < 3) { err('national_id', 'Enter a valid National ID.'); ok = false; }
+    if (val('national_id').length < 3) { err('national_id', '{{ err_valid_nid|escapejs }}'); ok = false; }
 
     var apply = form.querySelector('[name="apply_program"]');
     if (apply && apply.checked) {
       var typeEl = form.querySelector('[name="program_type"]:checked');
-      if (!typeEl) { err('program_type', 'Please select a program type.'); ok = false; }
+      if (!typeEl) { err('program_type', '{{ err_program_type|escapejs }}'); ok = false; }
 
       if (typeEl && typeEl.value === 'diploma') {
-        if (!val('diploma')) { err('diploma', 'Please select a diploma.'); ok = false; }
+        if (!val('diploma')) { err('diploma', '{{ err_diploma|escapejs }}'); ok = false; }
       }
 
       if (typeEl && typeEl.value === 'course') {
         var target = val('program_target');
-        if (!target) { err('program_target', 'Please select a course.'); ok = false; }
-        else if (!target.startsWith('course_')) { err('program_target', 'Invalid course selection.'); ok = false; }
+        if (!target) { err('program_target', '{{ err_course|escapejs }}'); ok = false; }
+        else if (!target.startsWith('course_')) { err('program_target', '{{ err_invalid_course|escapejs }}'); ok = false; }
       }
     }
 

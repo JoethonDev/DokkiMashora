@@ -38,7 +38,7 @@
         {% endif %}
       </dd>
       <dt class="text-slate-500 dark:text-slate-400">{% trans "Account active" %}</dt>
-      <dd class="text-slate-900 dark:text-slate-100">{{ user_obj.is_active|yesno:"Yes,No" }}</dd>
+      <dd class="text-slate-900 dark:text-slate-100">{{ user_obj.is_active|yesno:_("Yes,No") }}</dd>
       <dt class="text-slate-500 dark:text-slate-400">{% trans "Groups" %}</dt>
       <dd class="text-slate-900 dark:text-slate-100">{{ user_obj.groups.all|join:", "|default:"—" }}</dd>
       <dt class="text-slate-500 dark:text-slate-400">{% trans "Last login" %}</dt>

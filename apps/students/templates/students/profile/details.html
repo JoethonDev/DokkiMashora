@@ -10,7 +10,7 @@
     <dt class="text-slate-500 dark:text-slate-400">{% trans "Account status" %}</dt>
     <dd class="text-slate-900 dark:text-slate-100">{{ user.get_status_display }}</dd>
     <dt class="text-slate-500 dark:text-slate-400">{% trans "Active" %}</dt>
-    <dd class="text-slate-900 dark:text-slate-100">{{ user.is_active|yesno:"Yes,No" }}</dd>
+    <dd class="text-slate-900 dark:text-slate-100">{{ user.is_active|yesno:_("Yes,No") }}</dd>
   </dl>
 </div>
 

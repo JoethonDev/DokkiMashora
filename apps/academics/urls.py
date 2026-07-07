@@ -13,6 +13,7 @@ urlpatterns = [
     path("manage/diplomas/<int:diploma_id>/", views.admin_diploma_detail, name="admin_diploma_detail"),
     path("manage/diplomas/<int:diploma_id>/edit/", views.admin_diploma_edit, name="admin_diploma_edit"),
     path("manage/diplomas/<int:diploma_id>/enrollments/", views.admin_diploma_enrollment_list, name="admin_diploma_enrollment_list"),
+    path("manage/diplomas/<int:diploma_id>/enrollments/<int:enrollment_id>/update/", views.admin_diploma_enrollment_update, name="admin_diploma_enrollment_update"),
     # Admin: semesters
     path(
         "manage/diplomas/<int:diploma_id>/semesters/create/",
@@ -44,6 +45,11 @@ urlpatterns = [
         "manage/diplomas/<int:diploma_id>/cohorts/<int:cohort_id>/edit/",
         views.admin_cohort_edit,
         name="admin_cohort_edit",
+    ),
+    path(
+        "manage/diplomas/<int:diploma_id>/cohorts/<int:cohort_id>/delete/",
+        views.admin_cohort_delete,
+        name="admin_cohort_delete",
     ),
     # Admin: courses
     path("manage/courses/", views.admin_course_list, name="admin_course_list"),
@@ -106,5 +112,16 @@ urlpatterns = [
         "my-courses/<int:version_id>/lectures/<int:lecture_id>/audio-download/",
         views.student_lecture_audio_download,
         name="student_lecture_audio_download",
+    ),
+    # Watch API
+    path(
+        "my-courses/<int:version_id>/lectures/<int:lecture_id>/watch/start/",
+        views.api_watch_start,
+        name="api_watch_start",
+    ),
+    path(
+        "my-courses/<int:version_id>/lectures/<int:lecture_id>/watch/checkpoint/",
+        views.api_watch_checkpoint,
+        name="api_watch_checkpoint",
     ),
 ]

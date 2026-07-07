@@ -206,7 +206,9 @@ class PromotionDecision(TimeStampedModel):
     )
     diploma_enrollment = models.ForeignKey(
         "academics.DiplomaEnrollment",
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name="promotion_decisions",
         verbose_name=_("diploma enrollment"),
     )

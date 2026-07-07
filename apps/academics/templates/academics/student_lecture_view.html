@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n ui_tags %}
+{% load i18n ui_tags static %}
 
 {% block title %}{{ lecture.title }} - {{ block.super }}{% endblock %}
 
@@ -14,6 +14,17 @@
   </div>
 {% endif %}
 <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  {% if is_preview %}
+    <a href="{% url 'academics:admin_version_detail' version.course.id version.id %}" class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 mb-4">
+      <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+      {% trans "Back to version" %}
+    </a>
+  {% else %}
+    <a href="{% url 'academics:student_course_detail' version.id %}" class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 mb-4">
+      <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+      {% trans "Back to" %} {{ version.course.title }}
+    </a>
+  {% endif %}
   <header class="mb-6">
     <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Lecture" %}</p>
     <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ lecture.title }}</h1>
@@ -26,12 +37,36 @@
     </div>
   {% endif %}
 
-  {% if lecture.youtube_url %}
+  {% if lecture.youtube_url and lecture.youtube_video_id %}
     <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 mb-6">
       <h2 class="text-lg font-semibold mb-3">{% trans "Video" %}</h2>
-      <div class="aspect-video w-full">
-        <iframe class="w-full h-full rounded-lg" src="{{ lecture.youtube_url|youtube_embed }}" frameborder="0" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"></iframe>
-      </div>
+      {% if not is_preview and lecture.course_version.course.video_tracking_enabled %}
+        <div class="aspect-video w-full"
+             data-youtube-progress="{{ lecture.youtube_video_id }}"
+             data-watch-start-url="{% url 'academics:api_watch_start' version.id lecture.id %}"
+             data-watch-checkpoint-url="{% url 'academics:api_watch_checkpoint' version.id lecture.id %}"
+             data-duration="{{ lecture.youtube_duration_seconds|default:'0' }}">
+          <div class="yt-iframe w-full h-full rounded-lg"></div>
+        </div>
+        <div class="mt-4">
+          <div class="flex items-center justify-between text-sm text-slate-600 dark:text-slate-300 mb-1">
+            <span class="yt-status">{% trans "Watching" %}</span>
+            <span class="yt-progress-text">0%</span>
+          </div>
+          <div class="w-full h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+            <div class="yt-progress-bar h-full bg-brand-500 rounded-full transition-[width] duration-500 ease-out" style="width: 0%"></div>
+          </div>
+          <p class="yt-violation hidden mt-2 text-sm text-rose-600 dark:text-rose-400"></p>
+        </div>
+      {% else %}
+        <div class="aspect-video w-full">
+          <iframe class="w-full h-full rounded-lg"
+                  src="https://www.youtube.com/embed/{{ lecture.youtube_video_id }}?rel=0&modestbranding=1"
+                  frameborder="0" allowfullscreen
+                  referrerpolicy="strict-origin-when-cross-origin"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"></iframe>
+        </div>
+      {% endif %}
     </div>
   {% endif %}
 
@@ -57,4 +92,7 @@
     {% endif %}
   </div>
 </div>
+{% if lecture.youtube_url and lecture.youtube_video_id %}
+<script src="{% static 'js/youtube-progress.js' %}"></script>
+{% endif %}
 {% endblock %}
