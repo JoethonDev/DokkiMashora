@@ -73,7 +73,7 @@ def upload_list(request):
 @login_required
 @role_required(*ROLE_PAYMENT_STAFF)
 def download_payment_csv_template(request):
-    headers = ["national_id", "amount", "payment_date", "external_reference", "email", "phone", "notes", "diploma_enrollment_id", "course_enrollment_id", "target_type", "target_ref"]
+    headers = ["national_id", "amount", "payment_date", "external_reference", "email", "phone", "notes", "application_id", "diploma_enrollment_id", "course_enrollment_id", "target_type", "target_ref"]
     response = HttpResponse(content_type="text/csv")
     response["Content-Disposition"] = 'attachment; filename="payment_template.csv"'
     writer = csv.writer(response)

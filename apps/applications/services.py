@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from typing import TYPE_CHECKING
 
@@ -12,8 +12,9 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
-from apps.academics.models import Cohort, Course
-from apps.academics.services import enroll_student_in_course
+from apps.academics.constants import ENROLLMENT_STATUS_PENDING
+from apps.academics.models import Cohort, Course, CourseEnrollment
+from apps.academics.services import activate_course_enrollment
 from apps.accounts.constants import GROUP_STUDENT, USER_STATUS_INACTIVE
 from apps.audit.constants import ACTION_APPLICATION_DECISION_REVERTED
 from apps.audit.services import record_audit_event
@@ -31,6 +32,7 @@ from apps.students.models import StudentProfile
 from .constants import (
     DECISION_ACTION_ACCEPT,
     DECISION_ACTION_ACCOUNT_ACTIVATED,
+    DECISION_ACTION_ACTIVATE,
     DECISION_ACTION_ENTRANCE_SUBMITTED,
     DECISION_ACTION_INVITED_TO_ENTRANCE,
     DECISION_ACTION_PAYMENT_PENDING,
@@ -39,6 +41,7 @@ from .constants import (
     DECISION_ACTION_REVERT,
     PROGRAM_APP_STATUS_ACCEPTED,
     PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED,
+    PROGRAM_APP_STATUS_ACTIVATED,
     PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
     PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
     PROGRAM_APP_STATUS_INVITED,
@@ -457,11 +460,6 @@ def accept_program_application(application, actor, notes: str = "", send_email: 
         target_id=str(application.pk),
         metadata={"student_id": application.student_id, "send_email": send_email},
     )
-    # ponytail: course enrollment still created here, will move to Phase 3
-    if application.program_type == "course" and application.course:
-        cv = application.course.versions.last()
-        if cv:
-            enroll_student_in_course(application.student, cv)
     if send_email:
         transaction.on_commit(lambda: _send_program_app_acceptance_email(application))
 
@@ -608,6 +606,220 @@ def handle_user_account_activated(user, actor=None) -> None:
     for application in applications:
         mark_application_account_activated(application, actor=actor)
         send_post_activation_application_email(application, actor=actor)
+
+
+# ---------------------------------------------------------------------------
+# Activation Gate — Phase 3
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ActivationCheck:
+    ready: bool
+    reasons: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ActivationResult:
+    activated: bool
+    enrollment: object | None = None
+    reasons: list[str] = field(default_factory=list)
+
+
+def has_application_paid_record(application) -> bool:
+    """Check if a paid, non-deleted PaymentRecord exists for this application."""
+    from apps.payments.constants import PAYMENT_STATUS_PAID
+    from apps.payments.models import PaymentRecord
+    return PaymentRecord.objects.filter(
+        application=application,
+        status=PAYMENT_STATUS_PAID,
+        deleted_at__isnull=True,
+    ).exists()
+
+
+def can_activate_application(application) -> ActivationCheck:
+    """Determine whether an application is ready for activation.
+
+    This is a read-only check — no mutations.
+    """
+    reasons: list[str] = []
+
+    if not application.student.user.email_activated_at:
+        reasons.append("account_not_activated")
+
+    if application.program_type == PROGRAM_TYPE_COURSE:
+        if application.status != PROGRAM_APP_STATUS_ACCEPTED:
+            reasons.append("not_accepted")
+        if not application.course:
+            reasons.append("no_course_target")
+        if not has_application_paid_record(application):
+            reasons.append("not_paid")
+        return ActivationCheck(ready=len(reasons) == 0, reasons=reasons)
+
+    # Diploma
+    if application.status not in (PROGRAM_APP_STATUS_ACCEPTED,):
+        reasons.append("not_accepted")
+    if not application.cohort:
+        reasons.append("no_cohort_target")
+    if not has_application_paid_record(application):
+        reasons.append("not_paid")
+    # Phase 3: document requirement not yet implemented
+    reasons.append("documents_required")
+
+    return ActivationCheck(ready=False, reasons=reasons)
+
+
+@transaction.atomic
+def activate_application_if_ready(application, actor=None) -> ActivationResult:
+    """Check readiness and create/activate enrollment if all gates pass.
+
+    Must be the only path that creates enrollment from an application.
+    Idempotent: if already activated, return existing enrollment.
+    """
+    # Lock the application row first, then check state
+    locked = ProgramApplication.objects.select_for_update().get(pk=application.pk)
+
+    # Guard: already activated (re-check under lock for concurrency safety)
+    if locked.status == PROGRAM_APP_STATUS_ACTIVATED:
+        existing = _find_existing_enrollment(locked)
+        return ActivationResult(
+            activated=True,
+            enrollment=existing,
+            reasons=["already_activated"],
+        )
+
+    check = can_activate_application(locked)
+    if not check.ready:
+        return ActivationResult(activated=False, reasons=check.reasons)
+
+    if locked.program_type == PROGRAM_TYPE_COURSE:
+        cv = locked.course.versions.filter(is_active=True).order_by("-created_at").first()
+        if not cv:
+            return ActivationResult(activated=False, reasons=["no_active_course_version"])
+        enrollment, created = CourseEnrollment.objects.get_or_create(
+            student=locked.student,
+            course_version=cv,
+            defaults={"status": ENROLLMENT_STATUS_PENDING},
+        )
+        activate_course_enrollment(enrollment)
+        enrollment_type = "course"
+        enrollment_id = enrollment.pk
+    else:
+        return ActivationResult(activated=False, reasons=["documents_required"])
+
+    # Update application status
+    old_status = locked.status
+    locked.status = PROGRAM_APP_STATUS_ACTIVATED
+    locked.save(update_fields=["status", "updated_at"])
+
+    # Record decision
+    _record_decision(
+        locked,
+        DECISION_ACTION_ACTIVATE,
+        old_status,
+        PROGRAM_APP_STATUS_ACTIVATED,
+        actor,
+        metadata={
+            "payment_record_id": _find_paid_record_id(locked),
+            "enrollment_id": enrollment_id,
+            "enrollment_type": enrollment_type,
+            "activated_by": actor.email if actor else "",
+        },
+    )
+
+    # Record audit event
+    record_audit_event(
+        actor=actor,
+        action="application.activated",
+        target_type="program_application",
+        target_id=str(locked.pk),
+        metadata={
+            "student_id": locked.student_id,
+            "enrollment_id": enrollment_id,
+            "enrollment_type": enrollment_type,
+        },
+    )
+
+    return ActivationResult(
+        activated=True,
+        enrollment=enrollment,
+        reasons=[],
+    )
+
+
+def _find_existing_enrollment(application):
+    """Find the enrollment previously created for this activated application."""
+    from apps.academics.models import CourseEnrollment
+    if application.program_type == PROGRAM_TYPE_COURSE and application.course:
+        return CourseEnrollment.objects.filter(
+            student=application.student,
+            course_version__course=application.course,
+        ).first()
+    return None
+
+
+def _find_paid_record_id(application):
+    """Return the id of the paid PaymentRecord for this application, or None."""
+    from apps.payments.constants import PAYMENT_STATUS_PAID
+    from apps.payments.models import PaymentRecord
+    record = PaymentRecord.objects.filter(
+        application=application,
+        status=PAYMENT_STATUS_PAID,
+        deleted_at__isnull=True,
+    ).first()
+    return record.pk if record else None
+
+
+@transaction.atomic
+def mark_application_paid(
+    application,
+    actor,
+    *,
+    amount=0,
+    paid_at=None,
+    external_reference="",
+    notes="",
+) -> object:
+    """Create a paid PaymentRecord linked to the application and attempt activation.
+
+    Returns the PaymentRecord.
+    """
+    from decimal import Decimal
+
+    from apps.payments.constants import CURRENCY_EGP, PAYMENT_STATUS_PAID
+    from apps.payments.models import PaymentRecord
+
+    if paid_at is None:
+        paid_at = timezone.now()
+
+    record = PaymentRecord.objects.create(
+        student=application.student,
+        application=application,
+        amount=Decimal(str(amount)) if amount else Decimal("0"),
+        currency=CURRENCY_EGP,
+        status=PAYMENT_STATUS_PAID,
+        paid_at=paid_at,
+        external_reference=external_reference,
+        notes=notes,
+        imported_by=actor,
+        target_type=application.program_type,
+        target_snapshot=_build_application_snapshot(application),
+    )
+
+    # Attempt activation — idempotent, may not be ready
+    activate_application_if_ready(application, actor=actor)
+
+    return record
+
+
+def _build_application_snapshot(application) -> dict:
+    snapshot = {}
+    if application.cohort:
+        snapshot["cohort_name"] = application.cohort.name or ""
+        if application.cohort.diploma:
+            snapshot["diploma_title"] = application.cohort.diploma.title or ""
+    if application.course:
+        snapshot["course_title"] = application.course.title or ""
+    return snapshot
 
 
 # ---------------------------------------------------------------------------

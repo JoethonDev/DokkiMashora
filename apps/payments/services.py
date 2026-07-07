@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
+import logging
 import re
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
@@ -13,6 +14,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.academics.models import CourseEnrollment, DiplomaEnrollment
+from apps.applications.services import activate_application_if_ready
 from apps.students.models import StudentProfile
 
 from .constants import (
@@ -37,6 +39,8 @@ from .constants import (
     UPLOAD_STATUS_PREVIEWED,
 )
 from .models import PaymentRecord, PaymentUpload, PaymentUploadRow
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_national_id(value: str) -> str:
@@ -162,15 +166,19 @@ def match_student(row: dict[str, str]) -> tuple[StudentProfile | None, str, str]
     return match, method, ""
 
 
-def _lookup_application(data: dict, student: StudentProfile):
+def _lookup_application(data: dict, student: StudentProfile) -> tuple:
+    """Return (application, error)."""
     app_id = data.get("application_id", "").strip()
     if not app_id:
-        return None
+        return None, ""
     try:
         from apps.applications.models import ProgramApplication
-        return ProgramApplication.objects.filter(id=int(app_id), student=student).first()
+        app = ProgramApplication.objects.filter(id=int(app_id), student=student).first()
+        if app:
+            return app, ""
+        return None, "application_id does not match this student"
     except (ValueError, TypeError):
-        return None
+        return None, "invalid application_id"
 
 
 def _lookup_diploma_enrollment(data: dict, student: StudentProfile) -> DiplomaEnrollment | None:
@@ -222,7 +230,15 @@ def preview_upload(upload_id: int) -> PaymentUpload:
             row.matched_student = student
             row.match_method = method
             row.status = ROW_STATUS_MATCHED
-            row.matched_application = _lookup_application(data, student)
+            app, app_error = _lookup_application(data, student)
+            if app_error:
+                row.status = ROW_STATUS_FAILED
+                row.error_message = app_error
+                errors.append(f"Row {row.row_number}: {app_error}")
+                row.save(update_fields=["status", "error_message"])
+                failed += 1
+                continue
+            row.matched_application = app
             row.matched_diploma_enrollment = _lookup_diploma_enrollment(data, student)
             row.matched_course_enrollment = _lookup_course_enrollment(data, student)
             matched += 1
@@ -310,6 +326,14 @@ def confirm_upload(upload_id: int, confirmed_by) -> PaymentUpload:
 
     if errors:
         raise ValueError(_("Import failed for {count} row(s)").format(count=len(errors)))
+
+    # Attempt activation for application-linked rows
+    for row in upload.rows.filter(status__in=[ROW_STATUS_CREATED, ROW_STATUS_UPDATED]):
+        if row.matched_application:
+            try:
+                activate_application_if_ready(row.matched_application, actor=confirmed_by)
+            except Exception as e:
+                logger.warning("Activation failed for application %s: %s", row.matched_application.pk, e)
 
     upload.created_rows = created
     upload.updated_rows = updated

@@ -10,6 +10,13 @@
     <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Program Application" %} #{{ application.id }}</p>
     <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ application.student.full_name }}</h1>
     <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ application.get_status_display }} &middot; {% trans "Submitted" %} <span class="tabular-nums">{% dt application.created_at %}</span></p>
+    <p class="mt-1 text-sm">
+      {% if is_paid %}
+        <span class="text-emerald-600 dark:text-emerald-400 font-medium">{% trans "Paid" %}</span>
+      {% else %}
+        <span class="text-amber-600 dark:text-amber-400 font-medium">{% trans "Not paid" %}</span>
+      {% endif %}
+    </p>
   </header>
 
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -128,6 +135,30 @@
         <p class="text-sm text-slate-500 dark:text-slate-400">{% trans "This application is awaiting further steps." %}</p>
 
       {% elif application.status == "accepted" or application.status == "rejected" %}
+        {# Mark paid (accepted, not paid) #}
+        {% if application.status == "accepted" and not is_paid %}
+          <form method="post" class="space-y-3">
+            {% csrf_token %}
+            <h3 class="font-semibold text-sm">{% trans "Record Payment" %}</h3>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Amount" %}</label>
+              <input type="number" name="amount" step="0.01" min="0" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900 dark:text-slate-100">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "External reference" %}</label>
+              <input type="text" name="external_reference" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900 dark:text-slate-100">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Notes" %}</label>
+              <textarea name="notes" rows="2" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900 dark:text-slate-100"></textarea>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              {% include "partials/_button.html" with label=_("Mark Paid") size="sm" variant="primary" attrs='name="action" value="mark_paid"' %}
+            </div>
+          </form>
+          <hr class="my-4 border-slate-200 dark:border-slate-700">
+        {% endif %}
+
         {# Revert #}
         <form method="post" class="space-y-3">
           {% csrf_token %}

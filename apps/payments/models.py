@@ -243,6 +243,7 @@ class PaymentRecord(TimeStampedModel):
         indexes = [
             models.Index(fields=["student", "status"]),
             models.Index(fields=["external_reference", "status"]),
+            models.Index(fields=["application", "status", "deleted_at"]),
         ]
         constraints = [
             models.UniqueConstraint(

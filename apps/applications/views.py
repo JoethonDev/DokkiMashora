@@ -24,16 +24,16 @@ from .constants import (
     PROGRAM_APP_STATUS_ACCEPTED,
     PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
     PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
-    PROGRAM_APP_STATUS_INVITED,
     PROGRAM_APP_STATUS_PAYMENT_PENDING,
     PROGRAM_APP_STATUS_REJECTED,
-    PROGRAM_APP_STATUS_SUBMITTED,
 )
 from .forms import RegistrationForm
 from .models import ProgramApplication
 from .services import (
     RegistrationData,
     accept_program_application,
+    has_application_paid_record,
+    mark_application_paid,
     reject_program_application,
     request_interview_program_application,
     revert_program_application_decision,
@@ -130,18 +130,6 @@ def registration_success(request: HttpRequest) -> HttpResponse:
 # ---------------------------------------------------------------------------
 # Program Application admin
 # ---------------------------------------------------------------------------
-
-
-def _allowed_detail_statuses():
-    return {
-        PROGRAM_APP_STATUS_SUBMITTED,
-        PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
-        PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
-        PROGRAM_APP_STATUS_PAYMENT_PENDING,
-        PROGRAM_APP_STATUS_INVITED,
-        PROGRAM_APP_STATUS_ACCEPTED,
-        PROGRAM_APP_STATUS_REJECTED,
-    }
 
 
 def _accept_allowed(status):
@@ -254,6 +242,21 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
                 messages.info(request, _("Application reverted."))
                 return redirect("applications:program_detail", application_id=application.id)
 
+        if action == "mark_paid" and is_admin(request.user):
+            try:
+                mark_application_paid(
+                    application,
+                    request.user,
+                    amount=request.POST.get("amount", 0),
+                    external_reference=request.POST.get("external_reference", ""),
+                    notes=request.POST.get("notes", ""),
+                )
+            except ValueError as exc:
+                messages.error(request, str(exc))
+            else:
+                messages.success(request, _("Payment recorded and activation attempted."))
+            return redirect("applications:program_detail", application_id=application.id)
+
         if action == "request_interview" and application.status == PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED:
             interview_at_str = (request.POST.get("interview_at") or "").strip()
             phone_number = (request.POST.get("phone_number") or "").strip()
@@ -301,10 +304,17 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
         per_page=15,
     )
     notes = application.notes.select_related("actor").order_by("-created_at")[:20]
+    is_paid = has_application_paid_record(application)
     return render(
         request,
         "applications/admin_program_detail.html",
-        {"application": application, "decisions": decisions, "pagination_qs": decisions_qs, "notes": notes},
+        {
+            "application": application,
+            "decisions": decisions,
+            "pagination_qs": decisions_qs,
+            "notes": notes,
+            "is_paid": is_paid,
+        },
     )
 
 
