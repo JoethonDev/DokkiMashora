@@ -120,6 +120,7 @@ STUDENTS: list[dict[str, Any]] = [
         "full_name": "Active Student",
         "phone": "+201100000001",
         "national_id": "29901011234567",
+        "country_code": "EG",
         "gender": GENDER_MALE,
         "dob": date(1998, 3, 15),
         "address": "Cairo, Egypt",
@@ -136,6 +137,7 @@ STUDENTS: list[dict[str, Any]] = [
         "full_name": "Expired Student",
         "phone": "+201100000002",
         "national_id": "29901021234567",
+        "country_code": "EG",
         "gender": GENDER_MALE,
         "dob": date(1995, 7, 22),
         "address": "Alexandria, Egypt",
@@ -152,6 +154,7 @@ STUDENTS: list[dict[str, Any]] = [
         "full_name": "Restricted Student",
         "phone": "+201100000003",
         "national_id": "29901031234567",
+        "country_code": "EG",
         "gender": GENDER_FEMALE,
         "dob": date(2000, 1, 10),
         "address": "Giza, Egypt",
@@ -168,6 +171,7 @@ STUDENTS: list[dict[str, Any]] = [
         "full_name": "Pending Student",
         "phone": "+201100000004",
         "national_id": "29901041234567",
+        "country_code": "EG",
         "gender": GENDER_MALE,
         "dob": date(1999, 11, 5),
         "address": "Luxor, Egypt",
@@ -184,6 +188,7 @@ STUDENTS: list[dict[str, Any]] = [
         "full_name": "No Access Student",
         "phone": "+201100000005",
         "national_id": "29901051234567",
+        "country_code": "EG",
         "gender": GENDER_FEMALE,
         "dob": date(1997, 5, 30),
         "address": "Asyut, Egypt",
@@ -194,6 +199,23 @@ STUDENTS: list[dict[str, Any]] = [
         "church": "St. Macarius Coptic Orthodox",
         "priest_name": "Fr. Athanasius Iskandar",
         "priest_contact": "+201100000095",
+    },
+    {
+        "email": "student.saudi@dokkimashora.test",
+        "full_name": "Saudi Student",
+        "phone": "+966500000001",
+        "national_id": "AB123456",
+        "country_code": "SA",
+        "gender": GENDER_MALE,
+        "dob": date(1996, 8, 20),
+        "address": "Riyadh, Saudi Arabia",
+        "education": "bachelor",
+        "specialization": "Islamic Studies",
+        "employer": "",
+        "current_job": "Student",
+        "church": "",
+        "priest_name": "",
+        "priest_contact": "",
     },
 ]
 
@@ -328,6 +350,9 @@ class Command(BaseCommand):
         if user.is_active != is_active:
             user.is_active = is_active
             update_fields.append("is_active")
+        if role == ROLE_STUDENT and not user.country_code:
+            user.country_code = "EG"
+            update_fields.append("country_code")
         user.save(update_fields=update_fields)
         user.groups.clear()
         user.groups.add(self._group(role))
@@ -346,6 +371,7 @@ class Command(BaseCommand):
                 "address": data["address"],
                 "phone": data["phone"],
                 "national_id": data["national_id"],
+                "country_code": data.get("country_code", "EG"),
                 "education": data["education"],
                 "specialization": data["specialization"],
                 "employer": data["employer"],

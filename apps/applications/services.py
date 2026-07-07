@@ -22,6 +22,10 @@ from apps.communications.constants import (
     TEMPLATE_REJECTION,
 )
 from apps.communications.services import send_templated_email
+from apps.students.identity import (
+    COUNTRY_EG,
+    normalize_identity_number,
+)
 from apps.students.models import StudentProfile
 
 from .constants import (
@@ -79,6 +83,7 @@ class RegistrationData:
     priest_name: str
     priest_contact: str
     age: int
+    country_code: str = COUNTRY_EG
     program_type: str | None = None
     cohort_id: int | None = None
     course_id: int | None = None
@@ -101,8 +106,26 @@ def normalize_phone(raw: str) -> str:
 
 
 def find_duplicate(data: RegistrationData) -> str | None:
-    """Return the field name that conflicts, or None when the data is fresh."""
-    if StudentProfile.objects.filter(national_id=data.national_id).exists():
+    """Return the field name that conflicts, or None when the data is fresh.
+
+    Checks in order: identity number (normalized first, then raw for
+    backward compatibility with unnormalized old rows), email, phone.
+    """
+    normalized_id = normalize_identity_number(data.country_code, data.national_id)
+    if normalized_id:
+        if StudentProfile.objects.filter(national_id=normalized_id).exists():
+            return "national_id"
+        if User.objects.filter(national_id=normalized_id).exists():
+            return "national_id"
+        if data.national_id != normalized_id and (
+            StudentProfile.objects.filter(national_id=data.national_id).exists()
+            or User.objects.filter(national_id=data.national_id).exists()
+        ):
+            return "national_id"
+    elif data.national_id and (
+        StudentProfile.objects.filter(national_id=data.national_id).exists()
+        or User.objects.filter(national_id=data.national_id).exists()
+    ):
         return "national_id"
     if User.objects.filter(email__iexact=data.email).exists():
         return "email"
@@ -128,12 +151,14 @@ def submit_registration(
         raise ValueError(duplicate_on)
 
     user_password = normalize_phone(data.phone)
+    normalized_id = normalize_identity_number(data.country_code, data.national_id)
     user = User.objects.create_user(
         email=data.email,
         password=user_password,
         full_name=data.full_name,
         phone=data.phone,
-        national_id=data.national_id,
+        country_code=data.country_code,
+        national_id=normalized_id,
     )
     user.is_active = False
     user.status = USER_STATUS_INACTIVE
@@ -147,7 +172,8 @@ def submit_registration(
         gender=data.gender,
         address=data.address,
         phone=data.phone,
-        national_id=data.national_id,
+        country_code=data.country_code,
+        national_id=normalized_id,
         education=data.education,
         specialization=data.specialization,
         employer=data.employer,

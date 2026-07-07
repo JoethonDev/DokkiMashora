@@ -44,12 +44,19 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
         blank=True,
         db_index=True,
     )
+    country_code = models.CharField(
+        _("country code"),
+        max_length=2,
+        default="EG",
+        blank=True,
+        help_text=_("ISO two-letter country code."),
+    )
     national_id = models.CharField(
         _("national ID"),
         max_length=32,
         blank=True,
         db_index=True,
-        help_text=_("Stored for matching across applications."),
+        help_text=_("Stored identity number (National ID or Passport ID)."),
     )
     status = models.CharField(
         _("status"),
@@ -76,6 +83,13 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
         indexes = [
             models.Index(fields=("email",)),
             models.Index(fields=("status",)),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["national_id"],
+                condition=~models.Q(national_id=""),
+                name="uq_user_national_id_nonempty",
+            ),
         ]
 
     # --- Django protocol ----------------------------------------------------

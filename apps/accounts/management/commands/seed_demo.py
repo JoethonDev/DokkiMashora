@@ -104,6 +104,7 @@ class Command(BaseCommand):
             defaults={
                 "full_name": student_user.full_name,
                 "national_id": "29801011234567",
+                "country_code": "EG",
                 "phone": "+201000000000",
                 "gender": "male",
                 "date_of_birth": date(1998, 1, 1),

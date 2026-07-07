@@ -9,6 +9,12 @@ from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
 from apps.applications.services import normalize_phone as application_normalize_phone
+from apps.students.identity import (
+    COUNTRY_CHOICES,
+    identity_label,
+    normalize_country_code,
+    validate_identity_number,
+)
 from apps.students.models import StudentProfile
 
 from .constants import USER_STATUS_ACTIVE, USER_STATUS_INACTIVE, USER_STATUS_SUSPENDED
@@ -69,6 +75,11 @@ class UserEditForm(forms.ModelForm):
     full_name = forms.CharField(label=_("Full name"), max_length=150, required=False)
     full_name_ar = forms.CharField(label=_("Full name (Arabic)"), max_length=150, required=False)
     phone = forms.CharField(label=_("Phone number"), max_length=32, required=False)
+    country_code = forms.ChoiceField(
+        label=_("Country"),
+        choices=[],
+        required=False,
+    )
     national_id = forms.CharField(label=_("National ID"), max_length=32, required=False)
     status = forms.ChoiceField(label=_("Status"), choices=User._meta.get_field("status").choices)
     is_active = forms.BooleanField(label=_("Account active"), required=False)
@@ -86,10 +97,11 @@ class UserEditForm(forms.ModelForm):
 
     class Meta:
         model = User
-        fields = ("email", "full_name", "full_name_ar", "phone", "national_id", "status", "is_active")
+        fields = ("email", "full_name", "full_name_ar", "phone", "country_code", "national_id", "status", "is_active")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["country_code"].choices = [("", _("Select country"))] + COUNTRY_CHOICES
         profile = getattr(self.instance, "student_profile", None)
         if profile is not None:
             self.fields["full_name"].initial = profile.full_name
@@ -127,18 +139,31 @@ class UserEditForm(forms.ModelForm):
         return phone
 
     def clean_national_id(self):
-        national_id = (self.cleaned_data.get("national_id") or "").strip()
-        if not national_id:
-            raise ValidationError(_("National ID is required."))
+        raw_id = (self.cleaned_data.get("national_id") or "").strip()
         profile = getattr(self.instance, "student_profile", None)
-        profile_pk = profile.pk if profile is not None else None
-        qs = User.objects.exclude(pk=self.instance.pk).filter(national_id=national_id)
-        if qs.exists():
-            raise ValidationError(_("This national ID is already in use."))
-        profile_qs = StudentProfile.objects.exclude(pk=profile_pk).filter(national_id=national_id)
-        if profile_qs.exists():
-            raise ValidationError(_("This national ID is already in use."))
-        return national_id
+        cc_raw = self.cleaned_data.get("country_code", "")
+        country_code = normalize_country_code(cc_raw or self.instance.country_code or "")
+
+        if profile is not None:
+            label = identity_label(country_code)
+            if not raw_id:
+                raise ValidationError(
+                    _("%(label)s is required.") % {"label": label}
+                )
+            try:
+                normalized_id = validate_identity_number(country_code, raw_id)
+            except ValidationError as exc:
+                raise ValidationError(str(exc)) from exc
+
+            profile_pk = profile.pk if profile is not None else None
+            qs = User.objects.exclude(pk=self.instance.pk).filter(national_id=normalized_id)
+            if qs.exists():
+                raise ValidationError(_("This identity number is already in use."))
+            profile_qs = StudentProfile.objects.exclude(pk=profile_pk).filter(national_id=normalized_id)
+            if profile_qs.exists():
+                raise ValidationError(_("This identity number is already in use."))
+            return normalized_id
+        return raw_id
 
     def clean_email(self):
         email = (self.cleaned_data.get("email") or "").strip().lower()
@@ -153,6 +178,15 @@ class UserEditForm(forms.ModelForm):
             validate_password(password, user=self.instance)
         return password
 
+    def clean_country_code(self):
+        cc = self.cleaned_data.get("country_code", "")
+        profile = getattr(self.instance, "student_profile", None)
+        if not cc and profile is not None:
+            raise ValidationError(_("Country is required for student users."))
+        if cc:
+            return normalize_country_code(cc)
+        return cc
+
     def save(self, commit: bool = True):
         user = super().save(commit=False)
         profile = getattr(user, "student_profile", None)
@@ -161,6 +195,7 @@ class UserEditForm(forms.ModelForm):
         user.full_name = data.get("full_name", "")
         user.full_name_ar = data.get("full_name_ar", "")
         user.phone = data.get("phone", "")
+        user.country_code = data.get("country_code", user.country_code)
         user.national_id = data.get("national_id", "")
         requested_status = data.get("status", user.status)
         requested_active = bool(data.get("is_active"))
@@ -183,6 +218,7 @@ class UserEditForm(forms.ModelForm):
                 profile.gender = data.get("gender", profile.gender)
                 profile.address = data.get("address", profile.address)
                 profile.phone = data.get("phone", profile.phone)
+                profile.country_code = data.get("country_code", profile.country_code)
                 profile.national_id = data.get("national_id", profile.national_id)
                 profile.education = data.get("education", profile.education)
                 profile.specialization = data.get("specialization", profile.specialization)

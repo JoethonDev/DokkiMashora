@@ -6,6 +6,7 @@ from datetime import date
 from typing import Any
 
 from django import forms
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -13,6 +14,12 @@ from apps.academics.models import Cohort, Course
 from apps.applications.constants import PROGRAM_TYPE_CHOICES
 from apps.applications.services import RegistrationData, find_duplicate, normalize_phone
 from apps.students.constants import EDUCATION_CHOICES, GENDER_CHOICES
+from apps.students.identity import (
+    COUNTRY_CHOICES,
+    identity_label,
+    normalize_country_code,
+    validate_identity_number,
+)
 
 
 class RegistrationForm(forms.Form):
@@ -28,13 +35,18 @@ class RegistrationForm(forms.Form):
     phone = forms.CharField(label=_("Mobile number"), max_length=32)
     email = forms.EmailField(label=_("Email"))
     education = forms.ChoiceField(label=_("Education level"), choices=EDUCATION_CHOICES)
+    country_code = forms.ChoiceField(
+        label=_("Country"),
+        choices=COUNTRY_CHOICES,
+        initial="EG",
+    )
+    national_id = forms.CharField(label=_("National ID"), max_length=32)
     specialization = forms.CharField(label=_("Specialization"), max_length=120)
     employer = forms.CharField(label=_("Employer"), max_length=120)
     current_job = forms.CharField(label=_("Current job"), max_length=120)
     church = forms.CharField(label=_("Church"), max_length=120)
     priest_name = forms.CharField(label=_("Priest name"), max_length=120)
     priest_contact = forms.CharField(label=_("Priest contact"), max_length=120)
-    national_id = forms.CharField(label=_("National ID"), max_length=32)
 
     # Optional program selection
     apply_program = forms.BooleanField(
@@ -61,6 +73,8 @@ class RegistrationForm(forms.Form):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._load_program_choices()
+        cc_raw = (self.data.get("country_code") if self.data else None) or self.initial.get("country_code") or "EG"
+        self.fields["national_id"].label = identity_label(normalize_country_code(cc_raw))
 
     def _load_program_choices(self) -> None:
         self.fields["program_type"].choices = PROGRAM_TYPE_CHOICES
@@ -86,11 +100,23 @@ class RegistrationForm(forms.Form):
             raise forms.ValidationError(_("Enter a valid mobile number."))
         return value
 
+    def clean_country_code(self) -> str:
+        cc = self.cleaned_data.get("country_code", "")
+        return normalize_country_code(cc)
+
     def clean_national_id(self) -> str:
-        value = self.cleaned_data["national_id"].strip()
+        value = self.cleaned_data.get("national_id", "").strip()
+        cc_raw = self.cleaned_data.get("country_code", "")
+        country_code = normalize_country_code(cc_raw or "EG")
+        label = identity_label(country_code)
         if not value:
-            raise forms.ValidationError(_("National ID is required."))
-        return value
+            raise forms.ValidationError(
+                _("%(label)s is required.") % {"label": label}
+            )
+        try:
+            return validate_identity_number(country_code, value)
+        except ValidationError as exc:
+            raise forms.ValidationError(str(exc)) from exc
 
     def clean(self):
         cleaned = super().clean()
@@ -111,6 +137,9 @@ class RegistrationForm(forms.Form):
             "priest_contact",
         )
         if all(cleaned.get(field) for field in required):
+            country_code = normalize_country_code(
+                cleaned.get("country_code", "") or "EG"
+            )
             data = RegistrationData(
                 email=cleaned["email"],
                 full_name=cleaned["full_name"],
@@ -119,6 +148,7 @@ class RegistrationForm(forms.Form):
                 address=cleaned["address"],
                 phone=cleaned["phone"],
                 national_id=cleaned["national_id"],
+                country_code=country_code,
                 education=cleaned["education"],
                 specialization=cleaned.get("specialization", ""),
                 employer=cleaned.get("employer", ""),

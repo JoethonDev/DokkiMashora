@@ -40,7 +40,29 @@ from .models import PaymentRecord, PaymentUpload, PaymentUploadRow
 
 
 def normalize_national_id(value: str) -> str:
+    """Normalize identity value for CSV matching.
+
+    Tries EG-style normalization first (strip all spaces, keep digits-only
+    result).  If the result contains letters, also try passport-style
+    normalization (uppercase, no spaces).  The caller checks both a direct
+    query and falls back to passport normalization because CSV rows may
+    not include a country code.
+    """
     return re.sub(r"\s+", "", value).strip()
+
+
+def normalize_national_id_for_matching(value: str) -> list[str]:
+    """Return one or two normalized variants to try when matching.
+
+    The first variant is always the raw stripped value (covers EG 14-digit
+    case).  If the value contains letters, a second uppercased variant is
+    appended to cover passport IDs that may have been stored uppercased.
+    """
+    stripped = normalize_national_id(value)
+    variants = [stripped]
+    if any(c.isalpha() for c in stripped):
+        variants.append(stripped.upper())
+    return variants
 
 
 def normalize_phone(value: str) -> str:
@@ -78,20 +100,28 @@ def validate_csv_content(content: bytes) -> list[dict[str, str]]:
 
 
 def match_student(row: dict[str, str]) -> tuple[StudentProfile | None, str, str]:
-    national_id = normalize_national_id(row.get("national_id", ""))
+    identity_variants = normalize_national_id_for_matching(row.get("national_id", ""))
     email = row.get("email", "").strip().lower()
     phone = normalize_phone(row.get("phone", ""))
     candidates: dict[int, StudentProfile] = {}
     sources: dict[int, str] = {}
 
-    if national_id:
-        qs = StudentProfile.objects.filter(national_id=national_id)
+    if identity_variants:
+        qs = StudentProfile.objects.filter(national_id=identity_variants[0])
         if qs.count() == 1:
             s = qs.first()
             candidates[s.id] = s
             sources[s.id] = "national_id"
         elif qs.count() > 1:
-            return None, MATCH_METHOD_AMBIGUOUS, f"Multiple students match national ID {national_id}"
+            return None, MATCH_METHOD_AMBIGUOUS, f"Multiple students match national ID {identity_variants[0]}"
+        elif len(identity_variants) > 1:
+            qs = StudentProfile.objects.filter(national_id=identity_variants[1])
+            if qs.count() == 1:
+                s = qs.first()
+                candidates[s.id] = s
+                sources[s.id] = "national_id"
+            elif qs.count() > 1:
+                return None, MATCH_METHOD_AMBIGUOUS, f"Multiple students match national ID {identity_variants[0]}"
 
     if email:
         qs = StudentProfile.objects.filter(user__email__iexact=email)
@@ -390,7 +420,7 @@ def mark_enrollment_paid(
         }
     else:
         raise ValueError(_("Invalid enrollment type: {t}").format(t=enrollment_type))
-    app = student.applications.order_by("-created_at").first()
+    app = student.program_applications.order_by("-created_at").first()
     if app:
         kwargs["application"] = app
     return PaymentRecord.objects.create(**kwargs)

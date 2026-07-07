@@ -9,7 +9,7 @@ from typing import Any
 
 from django.conf import settings
 from django.contrib.auth.models import Group
-from django.db import transaction
+from django.db import models, transaction
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -51,7 +51,21 @@ REQUIRED_PROFILE_FIELDS = ["date_of_birth", "gender", "address", "education"]
 
 
 def normalize_national_id(value: str) -> str:
+    """Normalize for CSV matching: strip all spaces."""
     return re.sub(r"\s+", "", value).strip()
+
+
+def normalize_national_id_for_matching(value: str) -> list[str]:
+    """Return normalized variants to try when matching against stored values.
+
+    Returns at least the stripped value.  If the value contains letters, an
+    uppercased variant is also returned to handle passport-style IDs.
+    """
+    stripped = normalize_national_id(value)
+    variants = [stripped]
+    if any(c.isalpha() for c in stripped):
+        variants.append(stripped.upper())
+    return variants
 
 
 def normalize_phone(value: str) -> str:
@@ -113,7 +127,11 @@ def match_user(row: dict[str, str]) -> tuple[User | None, str, str]:
                 return None, MATCH_METHOD_AMBIGUOUS, f"Email {email} belongs to a staff account; cannot modify"
 
     if national_id:
-        qs = User.objects.filter(national_id=national_id)
+        identity_variants = normalize_national_id_for_matching(national_id)
+        q = models.Q(national_id=identity_variants[0])
+        for v in identity_variants[1:]:
+            q |= models.Q(national_id=v)
+        qs = User.objects.filter(q)
         if qs.count() > 1:
             return None, MATCH_METHOD_AMBIGUOUS, f"Multiple users match national ID {national_id}"
         if qs.count() == 1:

@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% load i18n %}
+{% extends "base.html" %}{% load i18n %}{% load identity_tags %}
 {% block title %}{{ user_obj.full_name|default:user_obj.email }} - {{ block.super }}{% endblock %}
 {% block content %}
 <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
@@ -25,7 +25,7 @@
       <dd class="text-slate-900 dark:text-slate-100">{{ user_obj.full_name_ar|default:"&mdash;" }}</dd>
       <dt class="text-slate-500 dark:text-slate-400">{% trans "Phone" %}</dt>
       <dd class="text-slate-900 dark:text-slate-100">{{ user_obj.phone|default:"&mdash;" }}</dd>
-      <dt class="text-slate-500 dark:text-slate-400">{% trans "National ID" %}</dt>
+      <dt class="text-slate-500 dark:text-slate-400">{% identity_label_for user_obj.country_code|default:"EG" %}</dt>
       <dd class="text-slate-900 dark:text-slate-100">{{ user_obj.national_id|default:"&mdash;" }}</dd>
       <dt class="text-slate-500 dark:text-slate-400">{% trans "Role" %}</dt>
       <dd class="text-slate-900 dark:text-slate-100">{{ user_obj.primary_role }}</dd>
@@ -64,7 +64,7 @@
       <dd class="text-slate-900 dark:text-slate-100">{{ student_profile.address|default:"—" }}</dd>
       <dt class="text-slate-500 dark:text-slate-400">{% trans "Phone" %}</dt>
       <dd class="text-slate-900 dark:text-slate-100">{{ student_profile.phone|default:"—" }}</dd>
-      <dt class="text-slate-500 dark:text-slate-400">{% trans "National ID" %}</dt>
+      <dt class="text-slate-500 dark:text-slate-400">{% identity_label_for user_obj.country_code|default:"EG" %}</dt>
       <dd class="text-slate-900 dark:text-slate-100">{{ student_profile.national_id|default:"—" }}</dd>
       <dt class="text-slate-500 dark:text-slate-400">{% trans "Education" %}</dt>
       <dd class="text-slate-900 dark:text-slate-100">{{ student_profile.get_education_display|default:"—" }}</dd>

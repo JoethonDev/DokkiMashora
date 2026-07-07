@@ -17,11 +17,11 @@ class UserAdmin(DjangoUserAdmin):
     model = User
     list_display = ("email", "full_name", "phone", "status", "is_staff", "is_active", "date_joined")
     list_filter = ("status", "is_staff", "is_superuser", "is_active", "groups")
-    search_fields = ("email", "full_name", "full_name_ar", "phone", "national_id")
+    search_fields = ("email", "full_name", "full_name_ar", "phone", "national_id", "country_code")
     ordering = ("-date_joined",)
     fieldsets = (
         (None, {"fields": ("email", "password")}),
-        (_("Personal info"), {"fields": ("full_name", "full_name_ar", "phone", "national_id")}),
+        (_("Personal info"), {"fields": ("full_name", "full_name_ar", "country_code", "phone", "national_id")}),
         (_("Status"), {"fields": ("status", "is_active")}),
         (
             _("Permissions"),

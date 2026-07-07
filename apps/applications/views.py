@@ -87,6 +87,7 @@ def register(request: HttpRequest) -> HttpResponse:
                     address=form.cleaned_data["address"],
                     phone=form.cleaned_data["phone"],
                     national_id=form.cleaned_data["national_id"],
+                    country_code=form.cleaned_data.get("country_code", "EG"),
                     education=form.cleaned_data["education"],
                     specialization=form.cleaned_data.get("specialization", ""),
                     employer=form.cleaned_data.get("employer", ""),

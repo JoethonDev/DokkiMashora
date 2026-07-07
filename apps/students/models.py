@@ -26,6 +26,12 @@ class StudentProfile(TimeStampedModel):
     gender = models.CharField(_("gender"), max_length=8, choices=GENDER_CHOICES)
     address = models.CharField(_("address"), max_length=255)
     phone = models.CharField(_("mobile number"), max_length=32, unique=True, db_index=True)
+    country_code = models.CharField(
+        _("country code"),
+        max_length=2,
+        default="EG",
+        help_text=_("ISO two-letter country code."),
+    )
     national_id = models.CharField(_("national ID"), max_length=32, unique=True, db_index=True)
     education = models.CharField(
         _("education level"),

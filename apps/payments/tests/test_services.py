@@ -32,6 +32,7 @@ from ..services import (
     confirm_upload,
     create_upload,
     match_student,
+    normalize_national_id_for_matching,
     parse_row_data,
     preview_upload,
     validate_csv_content,
@@ -121,6 +122,76 @@ class MatchStudentTests(TestCase):
         self.assertEqual(student, self.profile1)
         self.assertEqual(method, MATCH_METHOD_NATIONAL_ID)
         self.assertEqual(error, "")
+
+    def test_match_by_passport_id_lowercase_csv_vs_uppercase_stored(self) -> None:
+        """Passport ID stored as AB123456, CSV has ab123456 -> match."""
+        self.profile2.national_id = "XY999999"
+        self.profile2.save(update_fields=["national_id"])
+        student, method, error = match_student({
+            "national_id": "xy999999", "email": "", "phone": "",
+        })
+        self.assertEqual(student, self.profile2)
+        self.assertEqual(method, MATCH_METHOD_NATIONAL_ID)
+
+    def test_match_by_passport_id_with_spaces(self) -> None:
+        """CSV has spaces, stored is uppercase without spaces -> match."""
+        self.profile2.national_id = "XY999999"
+        self.profile2.save(update_fields=["national_id"])
+        student, method, error = match_student({
+            "national_id": " xy 999 999 ", "email": "", "phone": "",
+        })
+        self.assertEqual(student, self.profile2)
+        self.assertEqual(method, MATCH_METHOD_NATIONAL_ID)
+
+    def test_match_by_eg_national_id_with_spaces(self) -> None:
+        """CSV has spaces, stored is 14 digits -> match."""
+        student, method, error = match_student({
+            "national_id": " 1234 5678 9012 34 ", "email": "", "phone": "",
+        })
+        self.assertEqual(student, self.profile1)
+        self.assertEqual(method, MATCH_METHOD_NATIONAL_ID)
+
+    def test_no_match_for_unknown_passport_id(self) -> None:
+        student, method, error = match_student({
+            "national_id": "ZZ000000", "email": "", "phone": "",
+        })
+        self.assertIsNone(student)
+        self.assertEqual(method, MATCH_METHOD_NONE)
+
+    def test_match_by_passport_prefers_first_variant_avoids_ambiguity(self) -> None:
+        """P1-3: when both lowercase and uppercase rows exist, first variant wins."""
+        self.profile2.national_id = "ab123456"
+        self.profile2.save(update_fields=["national_id"])
+        profile3 = StudentProfile.objects.create(
+            user=User.objects.create_user(email="s3@example.com", password="x"),
+            full_name="Student Three",
+            national_id="AB123456",
+            date_of_birth=date(2000, 1, 1),
+        )
+        student, method, error = match_student({
+            "national_id": "ab123456", "email": "", "phone": "",
+        })
+        self.assertEqual(student, self.profile2)
+        self.assertEqual(method, MATCH_METHOD_NATIONAL_ID)
+        profile3.delete()
+
+
+class NormalizeNationalIdForMatchingTests(TestCase):
+    def test_returns_stripped_value(self) -> None:
+        result = normalize_national_id_for_matching("  123  456  ")
+        self.assertEqual(result, ["123456"])
+
+    def test_returns_uppercase_variant_when_contains_letters(self) -> None:
+        result = normalize_national_id_for_matching("ab123")
+        self.assertEqual(result, ["ab123", "AB123"])
+
+    def test_digits_only_returns_single_variant(self) -> None:
+        result = normalize_national_id_for_matching("12345678901234")
+        self.assertEqual(result, ["12345678901234"])
+
+    def test_empty_returns_single_empty(self) -> None:
+        result = normalize_national_id_for_matching("")
+        self.assertEqual(result, [""])
 
 
 class ParseRowDataTests(TestCase):

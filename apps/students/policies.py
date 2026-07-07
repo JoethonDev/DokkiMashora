@@ -52,6 +52,7 @@ def get_field_label(field_name: str) -> str:
         "full_name": _("Full name"),
         "email": _("Email"),
         "phone": _("Phone number"),
+        "country_code": _("Country"),
         "national_id": _("National ID"),
         "date_of_birth": _("Date of birth"),
         "gender": _("Gender"),

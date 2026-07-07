@@ -22,6 +22,7 @@ class RegistrationFormTests(TestCase):
             "phone": "01000000000",
             "email": "new@example.com",
             "education": "bachelor",
+            "country_code": "EG",
             "specialization": "General",
             "employer": "Self",
             "current_job": "Student",
@@ -61,7 +62,7 @@ class RegistrationFormTests(TestCase):
     def test_form_rejects_duplicate_email(self) -> None:
         self.client.post(self._post_url(), self._data())
         form = RegistrationForm(
-            data=self._data(phone="01111111111", national_id="999", full_name="Different")
+            data=self._data(phone="01111111111", national_id="29901019999999", full_name="Different")
         )
         self.assertFalse(form.is_valid())
         self.assertIn("email", form.errors)
@@ -69,7 +70,7 @@ class RegistrationFormTests(TestCase):
     def test_form_rejects_duplicate_phone(self) -> None:
         self.client.post(self._post_url(), self._data())
         form = RegistrationForm(
-            data=self._data(email="other@example.com", national_id="999", full_name="Different")
+            data=self._data(email="other@example.com", national_id="29901019999999", full_name="Different")
         )
         self.assertFalse(form.is_valid())
         self.assertIn("phone", form.errors)
@@ -77,7 +78,7 @@ class RegistrationFormTests(TestCase):
     def test_form_rejects_duplicate_national_id(self) -> None:
         self.client.post(self._post_url(), self._data())
         form = RegistrationForm(
-            data=self._data(email="other@example.com", phone="01111111111", full_name="Different")
+            data=self._data(email="other@example.com", phone="01111111111", full_name="Different", national_id="29001010100011")
         )
         self.assertFalse(form.is_valid())
         self.assertIn("national_id", form.errors)
@@ -100,6 +101,7 @@ class RegistrationViewTests(TestCase):
             "phone": "01000000000",
             "email": "new@example.com",
             "education": "bachelor",
+            "country_code": "EG",
             "specialization": "General",
             "employer": "Self",
             "current_job": "Student",

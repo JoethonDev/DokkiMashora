@@ -111,6 +111,7 @@ def _identity_summary(profile: StudentProfile, user: User) -> dict:
         "full_name": profile.full_name,
         "email": user.email,
         "phone": profile.phone,
+        "country_code": profile.country_code,
         "national_id": profile.national_id,
         "date_of_birth": profile.date_of_birth,
         "age": profile.age,
