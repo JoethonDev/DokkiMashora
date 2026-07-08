@@ -9,8 +9,8 @@ from django.utils import timezone
 from apps.academics.constants import (
     ENROLLMENT_STATUS_ACTIVE,
     ENROLLMENT_STATUS_PENDING,
+    SCOPE_DIPLOMA_COHORT,
 )
-from apps.academics.constants import SCOPE_DIPLOMA_COHORT
 from apps.academics.models import (
     Cohort,
     Course,
@@ -18,6 +18,8 @@ from apps.academics.models import (
     CourseVersion,
     Diploma,
     DiplomaEnrollment,
+    DiplomaLecture,
+    DiplomaLectureWatchProgress,
     Lecture,
     ModeratorStudentAssignment,
     Semester,
@@ -310,3 +312,141 @@ class StaffAssignmentTests(TestCase):
         self.assertFalse(assignment.active)
         self.assertEqual(assignment.revoke_reason, "rotated")
         self.assertIsNotNone(assignment.revoked_at)
+
+
+class DiplomaLectureTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(email="admin@test.com", password="x")
+        self.diploma = Diploma.objects.create(title="D", total_semesters=2, created_by=self.admin)
+        self.cohort = Cohort.objects.create(
+            diploma=self.diploma, name="C1", start_date=date(2026, 1, 1), created_by=self.admin,
+        )
+        self.semester = Semester.objects.create(diploma=self.diploma, order=1, title="S1")
+
+    def test_diploma_lecture_creation(self):
+        dl = DiplomaLecture.objects.create(
+            cohort=self.cohort, semester=self.semester, order=1, title="L1", is_published=True,
+        )
+        self.assertEqual(dl.cohort, self.cohort)
+        self.assertEqual(dl.semester, self.semester)
+        self.assertEqual(dl.order, 1)
+        self.assertEqual(dl.title, "L1")
+        self.assertTrue(dl.is_published)
+
+    def test_diploma_lecture_str(self):
+        dl = DiplomaLecture.objects.create(
+            cohort=self.cohort, semester=self.semester, order=1, title="L1",
+        )
+        self.assertIn(str(self.cohort), str(dl))
+        self.assertIn(str(self.semester), str(dl))
+        self.assertIn("1. L1", str(dl))
+
+    def test_diploma_lecture_clean_matching_diploma(self):
+        dl = DiplomaLecture(
+            cohort=self.cohort, semester=self.semester, order=1, title="L1",
+        )
+        dl.clean()
+
+    def test_diploma_lecture_clean_mismatched_diploma(self):
+        d2 = Diploma.objects.create(title="D2", total_semesters=1, created_by=self.admin)
+        s2 = Semester.objects.create(diploma=d2, order=1, title="S2")
+        dl = DiplomaLecture(
+            cohort=self.cohort, semester=s2, order=1, title="L1",
+        )
+        from django.core.exceptions import ValidationError
+        with self.assertRaises(ValidationError):
+            dl.clean()
+
+    def test_diploma_lecture_unique_order(self):
+        DiplomaLecture.objects.create(
+            cohort=self.cohort, semester=self.semester, order=1, title="L1",
+        )
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                DiplomaLecture.objects.create(
+                    cohort=self.cohort, semester=self.semester, order=1, title="L2",
+                )
+
+    def test_diploma_lecture_is_released_published_no_release_at(self):
+        dl = DiplomaLecture(
+            cohort=self.cohort, semester=self.semester, order=1, title="L1", is_published=True,
+        )
+        self.assertTrue(dl.is_released)
+
+    def test_diploma_lecture_is_released_not_published(self):
+        dl = DiplomaLecture(
+            cohort=self.cohort, semester=self.semester, order=1, title="L1", is_published=False,
+        )
+        self.assertFalse(dl.is_released)
+
+    def test_diploma_lecture_is_released_future_release_at(self):
+        dl = DiplomaLecture(
+            cohort=self.cohort, semester=self.semester, order=1, title="L1",
+            is_published=True, release_at=timezone.now() + timedelta(days=1),
+        )
+        self.assertFalse(dl.is_released)
+
+    def test_diploma_lecture_is_released_past_release_at(self):
+        dl = DiplomaLecture(
+            cohort=self.cohort, semester=self.semester, order=1, title="L1",
+            is_published=True, release_at=timezone.now() - timedelta(hours=1),
+        )
+        self.assertTrue(dl.is_released)
+
+    def test_diploma_lecture_youtube_id_extraction(self):
+        dl = DiplomaLecture.objects.create(
+            cohort=self.cohort, semester=self.semester, order=1, title="L1",
+            youtube_url="https://www.youtube.com/watch?v=abc123def45",
+        )
+        dl.refresh_from_db()
+        self.assertEqual(dl.youtube_video_id, "abc123def45")
+
+
+class DiplomaLectureWatchProgressTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(email="admin@test.com", password="x")
+        self.user = User.objects.create_user(email="s@test.com", password="x")
+        self.profile = StudentProfile.objects.create(
+            user=self.user, full_name="S", date_of_birth=date(2000, 1, 1),
+            gender=GENDER_MALE, address="C", phone="01000000001", national_id="29001010100001",
+            education=EDUCATION_BACHELOR,
+        )
+        self.diploma = Diploma.objects.create(title="D", total_semesters=2, created_by=self.admin)
+        self.cohort = Cohort.objects.create(
+            diploma=self.diploma, name="C1", start_date=date(2026, 1, 1), created_by=self.admin,
+        )
+        self.semester = Semester.objects.create(diploma=self.diploma, order=1, title="S1")
+        self.diploma_lecture = DiplomaLecture.objects.create(
+            cohort=self.cohort, semester=self.semester, order=1, title="L1",
+        )
+        self.de = DiplomaEnrollment.objects.create(student=self.profile, cohort=self.cohort, status=ENROLLMENT_STATUS_ACTIVE)
+
+    def test_diploma_lecture_watch_progress_creation(self):
+        lwp = DiplomaLectureWatchProgress.objects.create(
+            student=self.profile, lecture=self.diploma_lecture,
+            diploma_enrollment=self.de,
+        )
+        self.assertEqual(lwp.student, self.profile)
+        self.assertEqual(lwp.lecture, self.diploma_lecture)
+        self.assertEqual(lwp.diploma_enrollment, self.de)
+
+    def test_diploma_lecture_watch_progress_unique_student_lecture_enrollment(self):
+        DiplomaLectureWatchProgress.objects.create(
+            student=self.profile, lecture=self.diploma_lecture,
+            diploma_enrollment=self.de,
+        )
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                DiplomaLectureWatchProgress.objects.create(
+                    student=self.profile, lecture=self.diploma_lecture,
+                    diploma_enrollment=self.de,
+                )
+
+    def test_diploma_lecture_watch_progress_validated_non_negative(self):
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                DiplomaLectureWatchProgress.objects.create(
+                    student=self.profile, lecture=self.diploma_lecture,
+                    diploma_enrollment=self.de,
+                    validated_contiguous_seconds=-1,
+                )

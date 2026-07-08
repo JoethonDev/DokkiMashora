@@ -48,6 +48,9 @@ from .services import (
     submit_registration,
 )
 
+from apps.intake_forms.selectors import get_application_intake_state  # noqa: E402
+from apps.intake_forms.services import request_intake_form_for_application  # noqa: E402
+
 PUBLIC_REGISTRATION_SESSION_KEY = "registration_email"
 
 
@@ -286,6 +289,15 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
                         messages.error(request, err)
             return redirect("applications:program_detail", application_id=application.id)
 
+        if action == "request_intake" and is_admin(request.user):
+            try:
+                request_intake_form_for_application(application, request.user, send_email=True)
+            except ValueError as exc:
+                messages.error(request, str(exc))
+            else:
+                messages.success(request, _("Intake request sent."))
+            return redirect("applications:program_detail", application_id=application.id)
+
         if action == "request_interview" and application.status == PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED:
             interview_at_str = (request.POST.get("interview_at") or "").strip()
             phone_number = (request.POST.get("phone_number") or "").strip()
@@ -342,6 +354,9 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
     if is_admin(request.user) and application.status == PROGRAM_APP_STATUS_ACCEPTED and application.program_type == "diploma":
         request_doc_form = AdminDocumentRequestForm()
 
+    # Intake form state
+    intake_state = get_application_intake_state(application)
+
     return render(
         request,
         "applications/admin_program_detail.html",
@@ -354,6 +369,7 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
             "doc_request": doc_request,
             "doc_upload": doc_upload,
             "request_doc_form": request_doc_form,
+            "intake_state": intake_state,
         },
     )
 

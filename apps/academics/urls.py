@@ -95,6 +95,27 @@ urlpatterns = [
         views.admin_lecture_preview,
         name="admin_lecture_preview",
     ),
+    # Admin: diploma lectures (Phase 6 direct-lecture topology)
+    path(
+        "manage/diplomas/<int:diploma_id>/cohorts/<int:cohort_id>/semesters/<int:semester_id>/lectures/create/",
+        views.admin_diploma_lecture_create,
+        name="admin_diploma_lecture_create",
+    ),
+    path(
+        "manage/diplomas/<int:diploma_id>/cohorts/<int:cohort_id>/semesters/<int:semester_id>/lectures/<int:lecture_id>/edit/",
+        views.admin_diploma_lecture_edit,
+        name="admin_diploma_lecture_edit",
+    ),
+    path(
+        "manage/diplomas/<int:diploma_id>/cohorts/<int:cohort_id>/semesters/<int:semester_id>/lectures/<int:lecture_id>/delete/",
+        views.admin_diploma_lecture_delete,
+        name="admin_diploma_lecture_delete",
+    ),
+    path(
+        "manage/diplomas/<int:diploma_id>/cohorts/<int:cohort_id>/semesters/<int:semester_id>/lectures/<int:lecture_id>/preview/",
+        views.admin_diploma_lecture_preview,
+        name="admin_diploma_lecture_preview",
+    ),
     # Student: content access
     path("my-courses/", views.student_course_list, name="student_course_list"),
     path("my-courses/<int:version_id>/", views.student_course_detail, name="student_course_detail"),
@@ -123,5 +144,36 @@ urlpatterns = [
         "my-courses/<int:version_id>/lectures/<int:lecture_id>/watch/checkpoint/",
         views.api_watch_checkpoint,
         name="api_watch_checkpoint",
+    ),
+    # Student: diploma content (Phase 6)
+    path(
+        "my-diplomas/<int:enrollment_id>/",
+        views.student_diploma_detail,
+        name="student_diploma_detail",
+    ),
+    path(
+        "my-diplomas/<int:enrollment_id>/semesters/<int:semester_id>/lectures/<int:lecture_id>/",
+        views.student_diploma_lecture_view,
+        name="student_diploma_lecture_view",
+    ),
+    path(
+        "my-diplomas/<int:enrollment_id>/semesters/<int:semester_id>/lectures/<int:lecture_id>/audio/<path:file_path>",
+        views.student_diploma_lecture_audio,
+        name="student_diploma_lecture_audio",
+    ),
+    path(
+        "my-diplomas/<int:enrollment_id>/semesters/<int:semester_id>/lectures/<int:lecture_id>/audio-download/",
+        views.student_diploma_lecture_audio_download,
+        name="student_diploma_lecture_audio_download",
+    ),
+    path(
+        "my-diplomas/<int:enrollment_id>/semesters/<int:semester_id>/lectures/<int:lecture_id>/watch/start/",
+        views.api_diploma_watch_start,
+        name="api_diploma_watch_start",
+    ),
+    path(
+        "my-diplomas/<int:enrollment_id>/semesters/<int:semester_id>/lectures/<int:lecture_id>/watch/checkpoint/",
+        views.api_diploma_watch_checkpoint,
+        name="api_diploma_watch_checkpoint",
     ),
 ]

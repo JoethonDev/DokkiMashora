@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
@@ -24,6 +25,7 @@ from apps.communications.constants import (
     TEMPLATE_REJECTION,
 )
 from apps.communications.services import send_templated_email
+from apps.intake_forms.selectors import has_required_intake_response  # noqa: E402
 from apps.payments.constants import CURRENCY_EGP, PAYMENT_STATUS_PAID
 from apps.payments.models import PaymentRecord
 from apps.students.identity import (
@@ -88,6 +90,8 @@ COUNTRY_CODES = {
     "218": "LY",
     "249": "SD",
 }
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -467,6 +471,15 @@ def accept_program_application(application, actor, notes: str = "", send_email: 
     if send_email:
         transaction.on_commit(lambda: _send_program_app_acceptance_email(application))
 
+    # Trigger intake request for course applications that are already paid
+    # ponytail: inline import required — circular dependency with intake_forms/services.py
+    if application.program_type == PROGRAM_TYPE_COURSE and has_application_paid_record(application):
+        from apps.intake_forms.services import ensure_required_intake_request
+        try:
+            ensure_required_intake_request(application, actor=actor)
+        except Exception:
+            pass
+
 
 @transaction.atomic
 def reject_program_application(application, actor, reason: str, notes: str = "", send_email: bool = False) -> None:
@@ -648,6 +661,7 @@ def can_activate_application(application) -> ActivationCheck:
     """Determine whether an application is ready for activation.
 
     This is a read-only check — no mutations.
+    Phase 5: required intake form check added.
     """
     reasons: list[str] = []
 
@@ -661,6 +675,9 @@ def can_activate_application(application) -> ActivationCheck:
             reasons.append("no_course_target")
         if not has_application_paid_record(application):
             reasons.append("not_paid")
+        # Phase 5: required intake check
+        if not _has_required_intake_check(application):
+            reasons.append("intake_form_required")
         return ActivationCheck(ready=len(reasons) == 0, reasons=reasons)
 
     # Diploma
@@ -670,8 +687,16 @@ def can_activate_application(application) -> ActivationCheck:
         reasons.append("no_cohort_target")
     if not has_application_paid_record(application):
         reasons.append("not_paid")
+    # Phase 5: required intake check
+    if not _has_required_intake_check(application):
+        reasons.append("intake_form_required")
 
     return ActivationCheck(ready=len(reasons) == 0, reasons=reasons)
+
+
+def _has_required_intake_check(application) -> bool:
+    """Check if required intake form is satisfied. True if no form or response exists."""
+    return has_required_intake_response(application)
 
 
 @transaction.atomic
@@ -817,7 +842,15 @@ def mark_application_paid(
     )
 
     # Attempt activation — idempotent, may not be ready
-    activate_application_if_ready(application, actor=actor)
+    result = activate_application_if_ready(application, actor=actor)
+    # Trigger intake request if activation blocked by missing intake
+    # ponytail: inline import required — circular dependency with intake_forms/services.py
+    if not result.activated and "intake_form_required" in result.reasons:
+        from apps.intake_forms.services import ensure_required_intake_request
+        try:
+            ensure_required_intake_request(application, actor=actor)
+        except Exception:
+            pass
 
     return record
 

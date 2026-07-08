@@ -45,6 +45,18 @@
               {% endif %}
             {% endwith %}
           {% endif %}
+          {% if app.status == "survey_requested" %}
+            {% with intake_requests=app.intake_requests.all %}
+              {% with latest=intake_requests|first %}
+                {% if latest and latest.status == "requested" %}
+                  <p class="text-xs text-amber-600 mt-2">{% trans "Intake form required — link sent to your email" %}</p>
+                {% endif %}
+              {% endwith %}
+            {% endwith %}
+          {% endif %}
+          {% if app.status == "survey_submitted" %}
+            <p class="text-xs text-emerald-600 mt-2">{% trans "Intake form submitted" %}</p>
+          {% endif %}
         </div>
       {% endfor %}
     </div>

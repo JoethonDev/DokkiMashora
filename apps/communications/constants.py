@@ -19,6 +19,7 @@ TEMPLATE_DIPLOMA_ENTRANCE_EXAM_SCHEDULE = "diploma_entrance_exam_schedule"
 TEMPLATE_DIPLOMA_INTERVIEW_REQUEST = "diploma_interview_request"
 TEMPLATE_DIPLOMA_DOCUMENT_UPLOAD_REQUEST = "diploma_document_upload_request"
 TEMPLATE_APPLICATION_PAYMENT_PENDING = "application_payment_pending"
+TEMPLATE_APPLICATION_SURVEY_REQUEST = "application_survey_request"
 
 TEMPLATE_SLUGS = (
     TEMPLATE_REGISTRATION_RECEIVED,
@@ -35,6 +36,7 @@ TEMPLATE_SLUGS = (
     TEMPLATE_DIPLOMA_INTERVIEW_REQUEST,
     TEMPLATE_DIPLOMA_DOCUMENT_UPLOAD_REQUEST,
     TEMPLATE_APPLICATION_PAYMENT_PENDING,
+    TEMPLATE_APPLICATION_SURVEY_REQUEST,
 )
 
 EMAIL_STATUS_QUEUED = "queued"
@@ -161,6 +163,10 @@ AVAILABLE_VARIABLES_BY_SLUG: dict[str, dict[str, list[str]]] = {
         "required": [],
         "optional": ["full_name", "program_type", "course_title", "diploma_title", "cohort_name", "staff_phone"],
     },
+    TEMPLATE_APPLICATION_SURVEY_REQUEST: {
+        "required": ["full_name", "program_title", "form_title", "form_url", "expires_at", "staff_phone"],
+        "optional": [],
+    },
 }
 
 DESIGN_BRANDED = "branded"
@@ -192,6 +198,7 @@ SAMPLE_CONTEXT_BY_SLUG: dict[str, dict[str, str]] = {
     TEMPLATE_DIPLOMA_INTERVIEW_REQUEST: {"full_name": "ماري جرجس", "diploma_title": "دبلومة الدراسات اللاهوتية", "cohort_name": "دفعة ٢٠٢٦", "interview_at": "2026-07-15T10:00:00+03:00", "phone_number": "01234567890", "expires_at": "2026-07-20T23:59:00+03:00"},
     TEMPLATE_APPLICATION_PAYMENT_PENDING: {"full_name": "ماري جرجس", "program_type": "دبلومة", "course_title": "", "diploma_title": "دبلومة الدراسات اللاهوتية", "cohort_name": "دفعة ٢٠٢٦", "staff_phone": "01234567890"},
     TEMPLATE_DIPLOMA_DOCUMENT_UPLOAD_REQUEST: {"full_name": "ماري جرجس", "diploma_title": "دبلومة الدراسات اللاهوتية", "cohort_name": "دفعة ٢٠٢٦", "upload_url": "https://example.com/documents/upload/abc123", "expires_at": "2026-07-20T23:59:00+03:00", "staff_phone": "01234567890"},
+    TEMPLATE_APPLICATION_SURVEY_REQUEST: {"full_name": "ماري جرجس", "program_title": "دبلومة الدراسات اللاهوتية", "form_title": "استبيان القبول", "form_url": "https://example.com/intake/forms/fill/abc123", "expires_at": "2026-07-20T23:59:00+03:00", "staff_phone": "01234567890"},
 }
 
 TEMPLATE_SAMPLE_CONTEXT = SAMPLE_CONTEXT_BY_SLUG

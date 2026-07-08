@@ -16,6 +16,7 @@ from django.utils.translation import gettext as _
 from PIL import Image, ImageOps
 
 from apps.communications.services import send_templated_email
+from apps.intake_forms.services import ensure_required_intake_request
 from apps.storage.services import FileValidationError, storage_service
 
 from .constants import (
@@ -30,6 +31,7 @@ from .constants import (
     PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED,
     PROGRAM_TYPE_DIPLOMA,
 )
+from .services import activate_application_if_ready
 from .models import (
     ApplicationDocumentRequest,
     ApplicationDocumentUpload,
@@ -388,8 +390,13 @@ def submit_application_documents(
             raise
 
     # Try to activate (outside the transaction since it succeeds independently)
-    from .services import activate_application_if_ready
-    activate_application_if_ready(locked_app, actor=actor)
+    result = activate_application_if_ready(locked_app, actor=actor)
+    # Trigger intake request if activation blocked by missing intake
+    if not result.activated and "intake_form_required" in result.reasons:
+        try:
+            ensure_required_intake_request(locked_app, actor=actor)
+        except Exception:
+            pass
 
     return upload
 

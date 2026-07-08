@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Intake Forms" %} - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl sm:text-3xl font-bold tracking-tight font-display">{% trans "Intake Forms" %}</h1>
+    <a href="{% url 'intake_forms:admin_intake_form_create' %}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm bg-brand-600 text-white hover:bg-brand-700 shadow-sm">+ {% trans "New" %}</a>
+  </div>
+  {% if forms %}
+    <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+      <table class="min-w-[640px] w-full divide-y divide-slate-200 dark:divide-slate-800 text-sm">
+        <thead class="bg-slate-50 dark:bg-slate-800/50">
+          <tr class="text-slate-600 dark:text-slate-300">
+            <th class="px-4 py-2.5 text-start font-medium">{% trans "Title" %}</th>
+            <th class="px-4 py-2.5 text-start font-medium">{% trans "Target" %}</th>
+            <th class="px-4 py-2.5 text-start font-medium">{% trans "Required" %}</th>
+            <th class="px-4 py-2.5 text-start font-medium">{% trans "Active" %}</th>
+            <th class="px-4 py-2.5 text-start font-medium">{% trans "Fields" %}</th>
+            <th class="px-4 py-2.5 text-start font-medium">{% trans "Responses" %}</th>
+            <th class="px-4 py-2.5 text-start font-medium">{% trans "Actions" %}</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+          {% for f in forms %}
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+              <td class="px-4 py-3 font-medium">{{ f.title }}</td>
+              <td class="px-4 py-3 text-slate-600 dark:text-slate-300">
+                {% if f.course_version %}
+                  {% trans "Course" %}: {{ f.course_version.course.title }} ({{ f.course_version.label }})
+                {% elif f.cohort %}
+                  {% trans "Diploma" %}: {{ f.cohort.diploma.title }} — {{ f.cohort.name }}
+                {% endif %}
+              </td>
+              <td class="px-4 py-3">{% if f.is_required %}{% include "partials/_badge.html" with label=_("Required") tone="warning" %}{% else %}{% include "partials/_badge.html" with label=_("Optional") tone="neutral" %}{% endif %}</td>
+              <td class="px-4 py-3">{% if f.is_active %}{% include "partials/_badge.html" with label=_("Active") tone="success" %}{% else %}{% include "partials/_badge.html" with label=_("Inactive") tone="danger" %}{% endif %}</td>
+              <td class="px-4 py-3 tabular-nums">{{ f.fields.count }}</td>
+              <td class="px-4 py-3 tabular-nums">{{ f.responses.count }}</td>
+              <td class="px-4 py-3"><a href="{% url 'intake_forms:admin_intake_form_detail' f.pk %}" class="text-brand-600 dark:text-brand-400 hover:underline font-semibold">{% trans "Manage" %}</a></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    {% include "partials/_empty_state.html" with title=_("No intake forms yet") subtitle=_("Create the first intake form") %}
+  {% endif %}
+</div>
+{% endblock %}

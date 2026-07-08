@@ -8,6 +8,7 @@ from apps.academics.models import (
     Course,
     CourseVersion,
     Diploma,
+    DiplomaLecture,
     Lecture,
     Semester,
 )
@@ -107,6 +108,29 @@ class LectureForm(forms.ModelForm):
 
     class Meta:
         model = Lecture
+        fields = [
+            "order",
+            "title",
+            "description",
+            "youtube_url",
+            "audio_url",
+            "release_at",
+            "is_published",
+        ]
+        widgets = {
+            "description": forms.Textarea(attrs={"rows": 3}),
+            "release_at": forms.DateTimeInput(
+                attrs={"type": "datetime-local"},
+                format="%Y-%m-%dT%H:%M",
+            ),
+        }
+
+
+class DiplomaLectureForm(forms.ModelForm):
+    audio_file = forms.FileField(required=False, label=_("Audio file (upload)"))
+
+    class Meta:
+        model = DiplomaLecture
         fields = [
             "order",
             "title",

@@ -9,6 +9,7 @@ from apps.communications.constants import (
     TEMPLATE_ACCEPTANCE,
     TEMPLATE_ACTIVATION,
     TEMPLATE_APPLICATION_PAYMENT_PENDING,
+    TEMPLATE_APPLICATION_SURVEY_REQUEST,
     TEMPLATE_COURSE_PAYMENT_INSTRUCTIONS,
     TEMPLATE_DIPLOMA_DOCUMENT_UPLOAD_REQUEST,
     TEMPLATE_DIPLOMA_ENTRANCE_EXAM_SCHEDULE,
@@ -186,6 +187,20 @@ DEFAULT_TEMPLATES = {
             "Please upload:\n"
             "- A personal photo (persona image)\n"
             "- Your documents (one PDF or multiple images)\n\n"
+            "Contact us at {{ staff_phone }} if you need assistance.\n\n"
+            "Thank you,\nDokkiMashora admissions"
+        ),
+    },
+    TEMPLATE_APPLICATION_SURVEY_REQUEST: {
+        "name": "Application survey request",
+        "subject": "Intake form required for your application",
+        "body": (
+            "Hello {{ full_name }},\n\n"
+            "Your application for '{{ program_title }}' requires you to complete an intake form.\n\n"
+            "Form: {{ form_title }}\n"
+            "Link: {{ form_url }}\n"
+            "This link expires on {{ expires_at }}.\n\n"
+            "Please complete the form before the expiry date.\n\n"
             "Contact us at {{ staff_phone }} if you need assistance.\n\n"
             "Thank you,\nDokkiMashora admissions"
         ),

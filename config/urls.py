@@ -39,6 +39,7 @@ urlpatterns += i18n_patterns(
     path("payments/", include("apps.payments.urls")),
     path("communications/", include("apps.communications.urls")),
     path("audit/", include("apps.audit.urls")),
+    path("intake/", include("apps.intake_forms.urls")),
     path("profile/", include("apps.students.urls")),
     prefix_default_language=False,
 )

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{{ diploma.title }} - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <a href="{% url 'academics:student_course_list' %}" class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 mb-4">
+    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+    {% trans "Back to My Courses" %}
+  </a>
+  <header class="mb-6">
+    <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Diploma" %}</p>
+    <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ diploma.title }}</h1>
+    <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{{ cohort.name }}</p>
+  </header>
+  {% for semester_data in semester_lectures %}
+    <h2 class="text-lg font-semibold mb-3 mt-6">{{ semester_data.semester.title }}</h2>
+    {% if semester_data.lectures %}
+      <div class="space-y-3">
+        {% for lecture in semester_data.lectures %}
+          <a href="{% url 'academics:student_diploma_lecture_view' enrollment.id semester_data.semester.id lecture.id %}" class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 hover:border-brand-500 transition flex items-center gap-3">
+            <span class="text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded tabular-nums">{{ lecture.order }}</span>
+            <span class="font-medium">{{ lecture.title }}</span>
+          </a>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="text-sm text-slate-500 dark:text-slate-400">{% trans "No lectures available yet." %}</p>
+    {% endif %}
+  {% empty %}
+    {% include "partials/_empty_state.html" with title=_("No semesters available") %}
+  {% endfor %}
+</div>
+{% endblock %}

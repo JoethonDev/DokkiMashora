@@ -23,6 +23,7 @@ from apps.academics.forms import (
     CourseForm,
     CourseVersionForm,
     DiplomaForm,
+    DiplomaLectureForm,
     LectureForm,
     SemesterForm,
 )
@@ -33,18 +34,23 @@ from apps.academics.models import (
     CourseVersion,
     Diploma,
     DiplomaEnrollment,
+    DiplomaLecture,
     Lecture,
     Semester,
     SemesterCourse,
 )
 from apps.academics.services import (
     can_access_course,
+    can_access_diploma_lecture,
     can_access_lecture,
     create_cohort,
     delete_cohort_delivery,
     get_student_course_versions,
+    get_visible_diploma_lectures,
     get_visible_lectures,
+    record_diploma_lecture_checkpoint,
     record_lecture_checkpoint,
+    start_diploma_lecture_watch,
     start_lecture_watch,
 )
 from apps.core.htmx import is_htmx
@@ -57,6 +63,7 @@ from apps.core.permissions import (
     role_required,
 )
 from apps.core.views import safe_next_url
+from apps.intake_forms.models import IntakeForm
 from apps.storage.services import storage_service
 from apps.students.models import StudentProfile
 
@@ -114,18 +121,24 @@ def admin_diploma_detail(request, diploma_id):
     diploma = get_object_or_404(Diploma, id=diploma_id)
     semesters = diploma.semesters.all()
     cohorts = diploma.cohorts.all()
-    sc_qs = SemesterCourse.objects.filter(semester__diploma=diploma).select_related("course", "semester")
-    cv_qs = CourseVersion.objects.filter(semester__diploma=diploma).select_related("course", "semester", "cohort").annotate(lecture_count=Count("lectures"))
-    cv_by_course_semester = {}
-    for cv in cv_qs:
-        cv_by_course_semester.setdefault((cv.course_id, cv.semester_id), []).append(cv)
-    semester_data = []
+    # Annotate each cohort with diploma lecture count
+    cohorts = cohorts.annotate(diploma_lecture_count=Count("lectures", distinct=True))
+    # Batch-count lectures per (cohort, semester) in one query
+    lecture_counts = (
+        DiplomaLecture.objects
+        .filter(cohort__in=cohorts, semester__in=semesters)
+        .values("cohort_id", "semester_id")
+        .annotate(count=Count("id"))
+    )
+    count_lookup = {(item["cohort_id"], item["semester_id"]): item["count"] for item in lecture_counts}
+    # Build semester + cohort lecture data
+    semester_cohort_data = []
     for semester in semesters:
-        courses = []
-        for sc in [s for s in sc_qs if s.semester_id == semester.id]:
-            key = (sc.course_id, sc.semester_id)
-            courses.append({"course": sc.course, "sc_id": sc.id, "versions": cv_by_course_semester.get(key, [])})
-        semester_data.append({"semester": semester, "courses": courses})
+        cohort_lectures = []
+        for cohort in cohorts:
+            l_count = count_lookup.get((cohort.id, semester.id), 0)
+            cohort_lectures.append({"cohort": cohort, "lecture_count": l_count})
+        semester_cohort_data.append({"semester": semester, "cohort_lectures": cohort_lectures})
     return render(
         request,
         "academics/admin_diploma_detail.html",
@@ -133,7 +146,7 @@ def admin_diploma_detail(request, diploma_id):
             "diploma": diploma,
             "semesters": semesters,
             "cohorts": cohorts,
-            "semester_data": semester_data,
+            "semester_cohort_data": semester_cohort_data,
             "breadcrumb_items": _diploma_breadcrumbs(diploma),
         },
     )
@@ -503,10 +516,13 @@ def admin_version_detail(request, course_id, version_id):
     course = get_object_or_404(Course, id=course_id)
     version = get_object_or_404(CourseVersion, id=version_id, course=course)
     lectures = version.lectures.all()
+    intake_forms = IntakeForm.objects.filter(course_version=version).annotate(
+        responses_count=Count("responses"),
+    )
     return render(
         request,
         "academics/admin_version_detail.html",
-        {"course": course, "version": version, "lectures": lectures},
+        {"course": course, "version": version, "lectures": lectures, "intake_forms": intake_forms},
     )
 
 
@@ -596,10 +612,11 @@ def admin_version_delete(request, course_id, version_id):
     return response
 
 
-def _process_lecture_audio(request, lecture, files):
+def _process_lecture_audio(request, lecture, files, key_prefix=None):
     audio_file = files.get("audio_file")
     if not audio_file:
         return
+    prefix = key_prefix or f"lectures/{lecture.id}/audio"
     try:
         data = audio_file.read()
         filename = str(audio_file)
@@ -607,7 +624,7 @@ def _process_lecture_audio(request, lecture, files):
         validate_audio_file(filename, content_type)
         result = storage_service.upload_file(
             data,
-            key_prefix=f"lectures/{lecture.id}/audio",
+            key_prefix=prefix,
             content_type=content_type,
             max_size=200 * 1024 * 1024,
             allowed_types=[".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac"],
@@ -656,8 +673,8 @@ def student_course_list(request):
     diploma_data = []
     for de in diploma_enrollments:
         cohort = de.cohort
-        lecture_count = Lecture.objects.filter(
-            course_version__cohort=cohort,
+        lecture_count = DiplomaLecture.objects.filter(
+            cohort=cohort,
             is_published=True,
         ).count()
         diploma_data.append({
@@ -774,6 +791,97 @@ def admin_lecture_preview(request, course_id, version_id, lecture_id):
         request,
         "academics/student_lecture_view.html",
         {"version": version, "lecture": lecture, "is_preview": True},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Admin: Diploma lecture management (Phase 6 direct-lecture topology)
+# ---------------------------------------------------------------------------
+
+
+@login_required
+@role_required(*ROLE_EXAM_STAFF)
+def admin_diploma_lecture_create(request, diploma_id, cohort_id, semester_id):
+    diploma = get_object_or_404(Diploma, id=diploma_id)
+    cohort = get_object_or_404(Cohort, id=cohort_id, diploma=diploma)
+    semester = get_object_or_404(Semester, id=semester_id, diploma=diploma)
+    next_url = safe_next_url(request)
+    if request.method == "POST":
+        form = DiplomaLectureForm(request.POST, request.FILES)
+        if form.is_valid():
+            lecture = form.save(commit=False)
+            lecture.cohort = cohort
+            lecture.semester = semester
+            lecture.save()
+            _process_lecture_audio(request, lecture, request.FILES, key_prefix=f"diploma-lectures/{lecture.id}/audio")
+            messages.success(request, _("Diploma lecture created."))
+            return redirect(next_url) if next_url else redirect("academics:admin_diploma_detail", diploma_id=diploma.id)
+    else:
+        initial = {"order": DiplomaLecture.objects.filter(cohort=cohort, semester=semester).count() + 1}
+        form = DiplomaLectureForm(initial=initial)
+    return render(
+        request,
+        "academics/admin_lecture_form.html",
+        {"form": form, "title": _("Create diploma lecture"), "diploma": diploma, "cohort": cohort, "semester": semester, "next": next_url},
+    )
+
+
+@login_required
+@role_required(*ROLE_EXAM_STAFF)
+def admin_diploma_lecture_edit(request, diploma_id, cohort_id, semester_id, lecture_id):
+    diploma = get_object_or_404(Diploma, id=diploma_id)
+    cohort = get_object_or_404(Cohort, id=cohort_id, diploma=diploma)
+    semester = get_object_or_404(Semester, id=semester_id, diploma=diploma)
+    lecture = get_object_or_404(DiplomaLecture, id=lecture_id, cohort=cohort, semester=semester)
+    next_url = safe_next_url(request)
+    if request.method == "POST":
+        form = DiplomaLectureForm(request.POST, request.FILES, instance=lecture)
+        if form.is_valid():
+            form.save()
+            _process_lecture_audio(request, lecture, request.FILES, key_prefix=f"diploma-lectures/{lecture.id}/audio")
+            messages.success(request, _("Diploma lecture updated."))
+            return redirect(next_url) if next_url else redirect("academics:admin_diploma_detail", diploma_id=diploma.id)
+    else:
+        form = DiplomaLectureForm(instance=lecture)
+    return render(
+        request,
+        "academics/admin_lecture_form.html",
+        {"form": form, "title": _("Edit diploma lecture"), "diploma": diploma, "cohort": cohort, "semester": semester, "lecture": lecture, "next": next_url},
+    )
+
+
+@login_required
+@role_required(*ROLE_EXAM_STAFF)
+@require_POST
+def admin_diploma_lecture_delete(request, diploma_id, cohort_id, semester_id, lecture_id):
+    diploma = get_object_or_404(Diploma, id=diploma_id)
+    cohort = get_object_or_404(Cohort, id=cohort_id, diploma=diploma)
+    semester = get_object_or_404(Semester, id=semester_id, diploma=diploma)
+    lecture = get_object_or_404(DiplomaLecture, id=lecture_id, cohort=cohort, semester=semester)
+    next_url = safe_next_url(request)
+    lecture.delete()
+    messages.success(request, _("Diploma lecture deleted."))
+    return redirect(next_url) if next_url else redirect("academics:admin_diploma_detail", diploma_id=diploma.id)
+
+
+@login_required
+@role_required(*ROLE_EXAM_STAFF)
+def admin_diploma_lecture_preview(request, diploma_id, cohort_id, semester_id, lecture_id):
+    diploma = get_object_or_404(Diploma, id=diploma_id)
+    cohort = get_object_or_404(Cohort, id=cohort_id, diploma=diploma)
+    semester = get_object_or_404(Semester, id=semester_id, diploma=diploma)
+    lecture = get_object_or_404(DiplomaLecture, id=lecture_id, cohort=cohort, semester=semester)
+    return render(
+        request,
+        "academics/student_lecture_view.html",
+        {
+            "lecture": lecture,
+            "version": None,
+            "is_preview": True,
+            "diploma": diploma,
+            "cohort": cohort,
+            "semester": semester,
+        },
     )
 
 
@@ -964,6 +1072,222 @@ def api_watch_checkpoint(request, version_id, lecture_id):
         return JsonResponse({"error": "invalid_json"}, status=400)
 
     result = record_lecture_checkpoint(student=student, lecture=lecture, payload=payload)
+    http_status = result.pop("status", 200)
+    if not isinstance(http_status, int):
+        http_status = 200
+    return JsonResponse(result, status=http_status)
+
+
+# --- Student: Diploma content views (Phase 6) ---------------------------------
+
+
+@login_required
+def student_diploma_detail(request, enrollment_id):
+    """Show a student the semesters and lectures for their diploma enrollment."""
+    if not is_student(request.user) and not request.user.is_superuser:
+        raise PermissionDenied
+    try:
+        profile = request.user.student_profile
+    except StudentProfile.DoesNotExist:
+        raise Http404 from None
+
+    enrollment = get_object_or_404(DiplomaEnrollment, id=enrollment_id)
+    if enrollment.student != profile and not request.user.is_superuser:
+        raise PermissionDenied
+    if enrollment.status != ENROLLMENT_STATUS_ACTIVE:
+        raise PermissionDenied(_("Enrollment is not active."))
+    if enrollment.expires_at and timezone.now() >= enrollment.expires_at:
+        raise PermissionDenied(_("Enrollment has expired."))
+
+    diploma = enrollment.cohort.diploma
+    cohort = enrollment.cohort
+    semesters = Semester.objects.filter(diploma=diploma, is_active=True).order_by("order")
+
+    semester_lectures = []
+    for semester in semesters:
+        lectures = get_visible_diploma_lectures(profile, enrollment, semester=semester)
+        semester_lectures.append({
+            "semester": semester,
+            "lectures": lectures,
+        })
+
+    return render(request, "academics/student_diploma_detail.html", {
+        "enrollment": enrollment,
+        "diploma": diploma,
+        "cohort": cohort,
+        "semester_lectures": semester_lectures,
+    })
+
+
+@login_required
+def student_diploma_lecture_view(request, enrollment_id, semester_id, lecture_id):
+    """Show a student a single diploma lecture."""
+    if not is_student(request.user) and not request.user.is_superuser:
+        raise PermissionDenied
+    try:
+        profile = request.user.student_profile
+    except StudentProfile.DoesNotExist:
+        raise Http404 from None
+
+    enrollment = get_object_or_404(DiplomaEnrollment, id=enrollment_id)
+    if enrollment.student != profile and not request.user.is_superuser:
+        raise PermissionDenied
+    if enrollment.status != ENROLLMENT_STATUS_ACTIVE:
+        raise PermissionDenied(_("Enrollment is not active."))
+    if enrollment.expires_at and timezone.now() >= enrollment.expires_at:
+        raise PermissionDenied(_("Enrollment has expired."))
+
+    semester = get_object_or_404(Semester, id=semester_id, diploma=enrollment.cohort.diploma)
+    lecture = get_object_or_404(DiplomaLecture, id=lecture_id, cohort=enrollment.cohort, semester=semester)
+
+    if not can_access_diploma_lecture(profile, enrollment, lecture):
+        raise PermissionDenied(_("This lecture is not available yet."))
+
+    diploma = enrollment.cohort.diploma
+    return render(request, "academics/student_lecture_view.html", {
+        "lecture": lecture,
+        "enrollment": enrollment,
+        "semester": semester,
+        "diploma": diploma,
+        "version": None,
+    })
+
+
+@login_required
+def student_diploma_lecture_audio(request, enrollment_id, semester_id, lecture_id, file_path=""):
+    """Serve diploma lecture audio file with permission check."""
+    if not is_student(request.user) and not request.user.is_superuser:
+        raise PermissionDenied
+    try:
+        profile = request.user.student_profile
+    except StudentProfile.DoesNotExist:
+        raise Http404 from None
+
+    enrollment = get_object_or_404(DiplomaEnrollment, id=enrollment_id)
+    if enrollment.student != profile and not request.user.is_superuser:
+        raise PermissionDenied
+    if enrollment.status != ENROLLMENT_STATUS_ACTIVE:
+        raise PermissionDenied(_("Enrollment is not active."))
+    if enrollment.expires_at and timezone.now() >= enrollment.expires_at:
+        raise PermissionDenied(_("Enrollment has expired."))
+
+    lecture = get_object_or_404(DiplomaLecture, id=lecture_id, cohort=enrollment.cohort)
+    if not can_access_diploma_lecture(profile, enrollment, lecture):
+        raise PermissionDenied(_("This lecture is not available yet."))
+
+    storage_key = f"diploma-lectures/{lecture.id}/audio/{file_path}"
+    try:
+        file_data = storage_service.download_file(storage_key)
+    except Exception:
+        raise Http404 from None
+    content_type = (
+        "application/vnd.apple.mpegurl"
+        if file_path.endswith(".m3u8")
+        else "video/MP2T" if file_path.endswith(".ts")
+        else "audio/mpeg"
+    )
+    return HttpResponse(file_data, content_type=content_type)
+
+
+@login_required
+def student_diploma_lecture_audio_download(request, enrollment_id, semester_id, lecture_id):
+    """Serve original uploaded audio file for a diploma lecture."""
+    if not is_student(request.user) and not request.user.is_superuser:
+        raise PermissionDenied
+    try:
+        profile = request.user.student_profile
+    except StudentProfile.DoesNotExist:
+        raise Http404 from None
+
+    enrollment = get_object_or_404(DiplomaEnrollment, id=enrollment_id)
+    if enrollment.student != profile and not request.user.is_superuser:
+        raise PermissionDenied
+    if enrollment.status != ENROLLMENT_STATUS_ACTIVE:
+        raise PermissionDenied(_("Enrollment is not active."))
+    if enrollment.expires_at and timezone.now() >= enrollment.expires_at:
+        raise PermissionDenied(_("Enrollment has expired."))
+
+    lecture = get_object_or_404(DiplomaLecture, id=lecture_id, cohort=enrollment.cohort)
+    if not can_access_diploma_lecture(profile, enrollment, lecture):
+        raise PermissionDenied(_("This lecture is not available yet."))
+    if not lecture.audio_storage_key:
+        raise Http404
+    url = storage_service.get_protected_download_url(
+        lecture.audio_storage_key,
+        user=request.user,
+        permission_fn=lambda u: can_access_diploma_lecture(profile, enrollment, lecture),
+    )
+    return redirect(url)
+
+
+@require_POST
+@login_required
+def api_diploma_watch_start(request, enrollment_id, semester_id, lecture_id):
+    """POST start watch session for a diploma lecture."""
+    try:
+        enrollment = DiplomaEnrollment.objects.get(id=enrollment_id)
+    except DiplomaEnrollment.DoesNotExist:
+        return JsonResponse({"error": "not_found"}, status=404)
+
+    try:
+        student = StudentProfile.objects.get(user=request.user)
+    except StudentProfile.DoesNotExist:
+        return JsonResponse({"error": "no_student_profile"}, status=400)
+
+    if enrollment.student_id != student.id and not request.user.is_superuser:
+        return JsonResponse({"error": "forbidden"}, status=403)
+    if enrollment.status != ENROLLMENT_STATUS_ACTIVE:
+        return JsonResponse({"error": "enrollment_not_active"}, status=403)
+    if enrollment.expires_at and timezone.now() >= enrollment.expires_at:
+        return JsonResponse({"error": "enrollment_expired"}, status=403)
+
+    try:
+        lecture = DiplomaLecture.objects.get(id=lecture_id, cohort=enrollment.cohort_id, semester_id=semester_id)
+    except DiplomaLecture.DoesNotExist:
+        return JsonResponse({"error": "not_found"}, status=404)
+
+    if not can_access_diploma_lecture(student, enrollment, lecture):
+        return JsonResponse({"error": "lecture_not_available"}, status=403)
+
+    try:
+        result = start_diploma_lecture_watch(student=student, enrollment=enrollment, lecture=lecture)
+        return JsonResponse(result)
+    except ValueError as e:
+        return JsonResponse({"error": str(e)}, status=403)
+
+
+@require_POST
+@login_required
+def api_diploma_watch_checkpoint(request, enrollment_id, semester_id, lecture_id):
+    """POST checkpoint for a diploma lecture."""
+    try:
+        enrollment = DiplomaEnrollment.objects.get(id=enrollment_id)
+    except DiplomaEnrollment.DoesNotExist:
+        return JsonResponse({"error": "not_found"}, status=404)
+
+    try:
+        student = StudentProfile.objects.get(user=request.user)
+    except StudentProfile.DoesNotExist:
+        return JsonResponse({"error": "no_student_profile"}, status=400)
+
+    if enrollment.student_id != student.id and not request.user.is_superuser:
+        return JsonResponse({"error": "forbidden"}, status=403)
+    if enrollment.status != ENROLLMENT_STATUS_ACTIVE:
+        return JsonResponse({"error": "enrollment_not_active"}, status=403)
+    if enrollment.expires_at and timezone.now() >= enrollment.expires_at:
+        return JsonResponse({"error": "enrollment_expired"}, status=403)
+
+    try:
+        lecture = DiplomaLecture.objects.get(id=lecture_id, cohort=enrollment.cohort_id, semester_id=semester_id)
+    except DiplomaLecture.DoesNotExist:
+        return JsonResponse({"error": "not_found"}, status=404)
+
+    try:
+        payload = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"error": "invalid_json"}, status=400)
+
+    result = record_diploma_lecture_checkpoint(student=student, enrollment=enrollment, lecture=lecture, payload=payload)
     http_status = result.pop("status", 200)
     if not isinstance(http_status, int):
         http_status = 200

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Intake Responses" %} - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <a href="{% if target_type == 'course_version' %}{% url 'academics:admin_version_detail' target.course_id target.pk %}{% else %}{% url 'academics:admin_diploma_detail' target.diploma_id %}{% endif %}" class="text-sm text-brand-600 dark:text-brand-400 hover:underline">&larr; {% trans "Back" %}</a>
+  <h1 class="mt-4 mb-6 text-2xl sm:text-3xl font-bold tracking-tight font-display">
+    {% trans "Intake Responses" %}:
+    {% if target_type == "course_version" %}
+      {{ target.course.title }} ({{ target.label }})
+    {% else %}
+      {{ target.name }}
+    {% endif %}
+  </h1>
+
+  {% if responses %}
+    <div class="space-y-4">
+      {% for item in responses %}
+        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <p class="font-medium">{{ item.student_name }}</p>
+              <p class="text-xs text-slate-400">{{ item.student_email }} &middot; {% trans "App" %} #{{ item.application_id }}</p>
+            </div>
+            <p class="text-xs text-slate-400 tabular-nums">{{ item.submitted_at|date:"DATETIME_FORMAT" }}</p>
+          </div>
+          <div class="space-y-1">
+            {% for a in item.answers %}
+              <p class="text-sm"><strong>{{ a.field.label }}:</strong> {{ a.value }}</p>
+            {% endfor %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    {% include "partials/_empty_state.html" with title=_("No responses for this target") %}
+  {% endif %}
+</div>
+{% endblock %}

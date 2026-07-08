@@ -842,3 +842,176 @@ class LectureWatchProgress(TimeStampedModel):
 
     def __str__(self):
         return f"{self.student} - {self.lecture} ({self.status})"
+
+
+class DiplomaLecture(TimeStampedModel):
+    """A lecture within a diploma cohort-semester (Phase 6 direct-lecture topology)."""
+
+    cohort = models.ForeignKey(
+        Cohort,
+        on_delete=models.CASCADE,
+        related_name="lectures",
+        verbose_name=_("cohort"),
+    )
+    semester = models.ForeignKey(
+        Semester,
+        on_delete=models.CASCADE,
+        related_name="diploma_lectures",
+        verbose_name=_("semester"),
+    )
+    order = models.PositiveIntegerField(_("order"), db_index=True)
+    title = models.CharField(_("title"), max_length=255)
+    description = models.TextField(_("description"), blank=True)
+    youtube_url = models.URLField(_("YouTube URL"), blank=True)
+    youtube_video_id = models.CharField(
+        _("YouTube video ID"), max_length=11, blank=True, db_index=True,
+    )
+    youtube_duration_seconds = models.PositiveIntegerField(
+        _("YouTube duration (seconds)"), null=True, blank=True,
+    )
+    youtube_metadata_fetched_at = models.DateTimeField(
+        _("YouTube metadata fetched at"), null=True, blank=True,
+    )
+    audio_url = models.URLField(_("audio URL"), blank=True)
+    audio_storage_key = models.CharField(_("audio storage key"), max_length=500, blank=True)
+    audio_original_filename = models.CharField(_("original filename"), max_length=500, blank=True)
+    audio_content_type = models.CharField(_("content type"), max_length=100, blank=True)
+    audio_byte_size = models.PositiveIntegerField(_("file size (bytes)"), null=True, blank=True)
+    audio_checksum = models.CharField(_("checksum"), max_length=64, blank=True)
+    audio_hls_playlist_key = models.CharField(_("HLS playlist key"), max_length=500, blank=True)
+    audio_hls_segment_prefix = models.CharField(_("HLS segment prefix"), max_length=500, blank=True)
+    audio_processing_status = models.CharField(
+        _("processing status"),
+        max_length=20,
+        choices=AUDIO_PROCESSING_STATUS_CHOICES,
+        default=AUDIO_PROCESSING_PENDING,
+    )
+    audio_processing_error = models.TextField(_("processing error"), blank=True)
+    release_at = models.DateTimeField(
+        _("release at"),
+        null=True,
+        blank=True,
+        help_text=_("When the lecture becomes visible to students. Leave blank for immediate availability."),
+    )
+    is_published = models.BooleanField(_("published"), default=False)
+
+    class Meta:
+        verbose_name = _("diploma lecture")
+        verbose_name_plural = _("diploma lectures")
+        unique_together = (("cohort", "semester", "order"),)
+        ordering = ("cohort", "semester", "order")
+        indexes = [
+            models.Index(fields=["cohort", "semester", "is_published", "release_at"]),
+            models.Index(fields=["youtube_video_id"]),
+        ]
+
+    def __str__(self):
+        return f"{self.cohort} - {self.semester} - {self.order}. {self.title}"
+
+    _YT_VIDEO_ID_RE = re.compile(
+        r"(?:youtube\.com/(?:watch\?.*?v=|embed/|shorts/)|youtu\.be/)([A-Za-z0-9_-]{11})"
+    )
+
+    def clean(self):
+        if self.semester_id and self.cohort_id and self.semester.diploma != self.cohort.diploma:
+            raise ValidationError(_("Semester and cohort must belong to the same diploma."))
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+        update_fields = kwargs.get("update_fields")
+        if not update_fields and self.youtube_url and not self.youtube_video_id:
+            m = self._YT_VIDEO_ID_RE.search(self.youtube_url)
+            video_id = m.group(1) if m else ""
+            if video_id:
+                self.youtube_video_id = video_id
+                self.youtube_metadata_fetched_at = timezone.now()
+                self.save(update_fields=["youtube_video_id", "youtube_metadata_fetched_at"])
+
+    @property
+    def is_released(self):
+        """True if the lecture is visible based on its release schedule."""
+        if not self.is_published:
+            return False
+        if self.release_at is None:
+            return True
+        return timezone.now() >= self.release_at
+
+
+class DiplomaLectureWatchProgress(TimeStampedModel):
+    """Server-validated video watch progress for a student on a diploma lecture."""
+
+    student = models.ForeignKey(
+        StudentProfile,
+        on_delete=models.CASCADE,
+        related_name="diploma_lecture_watch_progress",
+        verbose_name=_("student"),
+    )
+    lecture = models.ForeignKey(
+        DiplomaLecture,
+        on_delete=models.CASCADE,
+        related_name="watch_progress",
+        verbose_name=_("diploma lecture"),
+    )
+    diploma_enrollment = models.ForeignKey(
+        DiplomaEnrollment,
+        on_delete=models.CASCADE,
+        related_name="diploma_lecture_watch_progress",
+        verbose_name=_("diploma enrollment"),
+    )
+    validated_contiguous_seconds = models.DecimalField(
+        _("validated contiguous seconds"),
+        max_digits=10,
+        decimal_places=3,
+        default=0,
+    )
+    resume_position_seconds = models.DecimalField(
+        _("resume position seconds"),
+        max_digits=10,
+        decimal_places=3,
+        default=0,
+    )
+    active_session_id = models.UUIDField(
+        _("active session ID"), null=True, blank=True,
+    )
+    last_sequence = models.PositiveIntegerField(_("last sequence"), default=0)
+    last_position_seconds = models.DecimalField(
+        _("last position seconds"),
+        max_digits=10,
+        decimal_places=3,
+        default=0,
+    )
+    last_player_state = models.CharField(_("last player state"), max_length=16, blank=True)
+    last_checkpoint_at = models.DateTimeField(_("last checkpoint at"), null=True, blank=True)
+    status = models.CharField(
+        _("status"),
+        max_length=20,
+        choices=WATCH_STATUS_CHOICES,
+        default=WATCH_STATUS_IN_PROGRESS,
+        db_index=True,
+    )
+    violation_reason = models.CharField(
+        _("violation reason"),
+        max_length=24,
+        choices=VIOLATION_CHOICES,
+        default=VIOLATION_NONE,
+    )
+    completed_at = models.DateTimeField(_("completed at"), null=True, blank=True)
+
+    class Meta:
+        verbose_name = _("diploma lecture watch progress")
+        verbose_name_plural = _("diploma lecture watch progress")
+        unique_together = (("student", "lecture", "diploma_enrollment"),)
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(validated_contiguous_seconds__gte=0),
+                name="dlwp_validated_non_negative",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["student", "lecture"]),
+            models.Index(fields=["active_session_id"]),
+        ]
+
+    def __str__(self):
+        return f"{self.student} - {self.lecture} ({self.status})"

@@ -1,14 +1,18 @@
 {% extends "base.html" %}
 {% load i18n %}
 
-{% block title %}{{ title }} - {{ version.label }}{% endblock %}
+{% block title %}{{ title }} - {% if version %}{{ version.label }}{% elif cohort %}{{ cohort.name }}{% endif %}{% endblock %}
 
 {% block content %}
 <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
   <header class="mb-6">
     <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Lecture" %}</p>
     <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ title }}</h1>
+    {% if version %}
     <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{{ version.course.title }} - {{ version.label }}</p>
+    {% elif diploma and cohort and semester %}
+    <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{{ diploma.title }} - {{ cohort.name }} - {{ semester.title }}</p>
+    {% endif %}
   </header>
   <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
     <form method="post" enctype="multipart/form-data" novalidate>
@@ -20,9 +24,23 @@
       {% for field in form %}{% include "partials/_field.html" %}{% endfor %}
       <div class="mt-6 flex gap-3">
         {% include "partials/_button.html" with label=_("Save") variant="primary" loading_label=_("Saving...") %}
-        <a href="{% if next %}{{ next }}{% else %}{% url 'academics:admin_version_detail' course.id version.id %}{% endif %}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Cancel" %}</a>
+        {% if version %}
+        <a href="{% if next %}{{ next }}{% else %}{% url 'academics:admin_version_detail' version.course.id version.id %}{% endif %}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Cancel" %}</a>
+        {% else %}
+        <a href="{% if next %}{{ next }}{% else %}{% url 'academics:admin_diploma_detail' diploma.id %}{% endif %}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Cancel" %}</a>
+        {% endif %}
       </div>
     </form>
+    {% if lecture and lecture.youtube_video_id %}
+    <div class="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
+      <details>
+        <summary class="cursor-pointer text-sm font-semibold text-brand-600 dark:text-brand-400">{% trans "Preview lecture" %}</summary>
+        <div class="mt-3">
+          <a href="{% url 'academics:admin_diploma_lecture_preview' diploma.id cohort.id semester.id lecture.id %}" target="_blank" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm bg-brand-600 text-white hover:bg-brand-700 shadow-sm">{% trans "Open preview" %}</a>
+        </div>
+      </details>
+    </div>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

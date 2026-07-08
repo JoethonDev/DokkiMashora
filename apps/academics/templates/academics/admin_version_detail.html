@@ -27,6 +27,24 @@
       </div>
     </div>
   </header>
+  {% if intake_forms %}
+    <div class="mb-6 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+      <h2 class="font-semibold mb-3">{% trans "Intake Forms" %}</h2>
+      <div class="space-y-2">
+        {% for f in intake_forms %}
+          <div class="flex items-center justify-between text-sm">
+            <div>
+              <span class="font-medium">{{ f.title }}</span>
+              {% if f.is_required %}{% include "partials/_badge.html" with label=_("Required") tone="warning" %}{% else %}{% include "partials/_badge.html" with label=_("Optional") tone="neutral" %}{% endif %}
+              <span class="text-xs text-slate-400 ms-2">{{ f.responses_count }} {% trans "responses" %}</span>
+            </div>
+            <a href="{% url 'intake_forms:admin_version_intake_responses' version.id %}" class="text-xs text-brand-600 dark:text-brand-400 hover:underline font-semibold">{% trans "View Responses" %}</a>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
   {% if lectures %}
     <div class="space-y-3">
       {% for lecture in lectures %}

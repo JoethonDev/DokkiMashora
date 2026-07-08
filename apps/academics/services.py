@@ -34,6 +34,8 @@ from apps.academics.models import (
     CourseEnrollment,
     CourseVersion,
     DiplomaEnrollment,
+    DiplomaLecture,
+    DiplomaLectureWatchProgress,
     Lecture,
     LectureWatchProgress,
     ModeratorStudentAssignment,
@@ -362,8 +364,8 @@ def ensure_cohort_course_versions(*, cohort, actor):
                 )
 
 
-def create_cohort(*, diploma, form_data, actor):
-    """Create a cohort and auto-create course versions for all courses."""
+def create_cohort_with_defaults(*, diploma, form_data, actor):
+    """Create a cohort without creating CourseVersion rows."""
     with transaction.atomic():
         cohort = Cohort.objects.create(
             diploma=diploma,
@@ -373,8 +375,12 @@ def create_cohort(*, diploma, form_data, actor):
             is_active=form_data.get("is_active", True),
             created_by=actor,
         )
-        ensure_cohort_course_versions(cohort=cohort, actor=actor)
     return cohort
+
+
+def create_cohort(*, diploma, form_data, actor):
+    """Create a cohort. Delegates to create_cohort_with_defaults — no CourseVersion rows created."""
+    return create_cohort_with_defaults(diploma=diploma, form_data=form_data, actor=actor)
 
 
 def _create_blank_label_versions_for_course(course, semester, actor):
@@ -661,6 +667,219 @@ def record_lecture_checkpoint(*, student, lecture, payload, now=None):
         lwp.resume_position_seconds = position
 
         # Progress based on actual position, not validated seconds
+        progress_pct = min(position / Decimal(str(duration)) * 100, Decimal("100"))
+        completed = False
+        if progress_pct >= threshold and lwp.status != WATCH_STATUS_COMPLETED:
+            lwp.status = WATCH_STATUS_COMPLETED
+            lwp.completed_at = now
+            completed = True
+
+        lwp.save()
+
+    return {
+        "progress": float(progress_pct),
+        "status": lwp.status,
+        "violation": lwp.violation_reason,
+        "resume_position": float(lwp.resume_position_seconds),
+        "completed": completed,
+    }
+
+
+def get_visible_diploma_lectures(student_profile, enrollment, semester=None):
+    """Return visible (published & released) diploma lectures for an enrollment."""
+    if enrollment.status != ENROLLMENT_STATUS_ACTIVE:
+        return DiplomaLecture.objects.none()
+    if enrollment.expires_at and timezone.now() >= enrollment.expires_at:
+        return DiplomaLecture.objects.none()
+    qs = DiplomaLecture.objects.filter(
+        cohort=enrollment.cohort,
+        is_published=True,
+    ).filter(
+        Q(release_at__isnull=True) | Q(release_at__lte=timezone.now()),
+    )
+    if semester is not None:
+        qs = qs.filter(semester=semester)
+    return qs.order_by("order").select_related("semester")
+
+
+def can_access_diploma_lecture(student_profile, enrollment, lecture) -> bool:
+    """Check whether the student can view a specific diploma lecture."""
+    if enrollment.status != ENROLLMENT_STATUS_ACTIVE:
+        return False
+    if enrollment.expires_at and timezone.now() >= enrollment.expires_at:
+        return False
+    if lecture.cohort_id != enrollment.cohort_id:
+        return False
+    return lecture.is_released
+
+
+def start_diploma_lecture_watch(*, student, enrollment, lecture):
+    """Start or resume a watch session for a diploma lecture."""
+    if not lecture.cohort.diploma.video_tracking_enabled:
+        raise ValueError(_("Video tracking is disabled for this diploma."))
+
+    duration = lecture.youtube_duration_seconds
+    if not duration and lecture.youtube_url:
+        try:
+            populate_youtube_metadata(lecture=lecture)
+        except Exception:
+            pass
+        duration = lecture.youtube_duration_seconds or 0
+
+    threshold = Decimal(str(lecture.cohort.diploma.video_completion_percent or 80))
+
+    with transaction.atomic():
+        lwp = (
+            DiplomaLectureWatchProgress.objects
+            .select_for_update()
+            .filter(student=student, lecture=lecture)
+            .first()
+        )
+        if lwp is None:
+            lwp = DiplomaLectureWatchProgress(
+                student=student,
+                lecture=lecture,
+                diploma_enrollment=enrollment,
+            )
+        if lwp.status == WATCH_STATUS_COMPLETED:
+            return {
+                "session_id": str(lwp.active_session_id),
+                "resume_position": float(lwp.resume_position_seconds),
+                "duration": duration,
+                "interval": DEFAULT_CHECKPOINT_INTERVAL_SECONDS,
+                "threshold": float(threshold),
+                "completed": True,
+            }
+        resume_pos = lwp.resume_position_seconds
+        lwp.status = WATCH_STATUS_IN_PROGRESS
+        lwp.violation_reason = VIOLATION_NONE
+        lwp.last_sequence = 0
+        lwp.last_position_seconds = Decimal("0")
+        lwp.validated_contiguous_seconds = Decimal("0")
+        lwp.last_checkpoint_at = None
+        session_id = uuid.uuid4()
+        lwp.active_session_id = session_id
+        lwp.save()
+
+    return {
+        "session_id": str(session_id),
+        "resume_position": float(resume_pos),
+        "duration": duration,
+        "interval": DEFAULT_CHECKPOINT_INTERVAL_SECONDS,
+        "threshold": float(threshold),
+        "completed": False,
+    }
+
+
+def record_diploma_lecture_checkpoint(*, student, enrollment, lecture, payload, now=None):
+    """Record a heartbeat checkpoint for a diploma lecture."""
+    if now is None:
+        now = timezone.now()
+
+    session_id_str = payload.get("session_id", "")
+    sequence = payload.get("sequence", 0)
+    position = Decimal(str(payload.get("position", 0)))
+    player_state = payload.get("player_state", "")
+    rate = Decimal(str(payload.get("rate", 1)))
+
+    if not session_id_str:
+        return {"error": "missing_session_id", "status": 400}
+
+    try:
+        session_id = uuid.UUID(session_id_str)
+    except ValueError:
+        return {"error": "invalid_session_id", "status": 400}
+
+    duration = lecture.youtube_duration_seconds or Decimal(str(payload.get("duration", 0)))
+    if not duration:
+        duration = Decimal("1")
+
+    threshold = Decimal(str(lecture.cohort.diploma.video_completion_percent or 80))
+
+    with transaction.atomic():
+        lwp = (
+            DiplomaLectureWatchProgress.objects
+            .select_for_update()
+            .filter(student=student, lecture=lecture, active_session_id=session_id)
+            .first()
+        )
+        if lwp is None:
+            return {"error": "unknown_session", "status": 404}
+        if lwp.status == WATCH_STATUS_COMPLETED:
+            return {
+                "progress": 100.0,
+                "status": WATCH_STATUS_COMPLETED,
+                "violation": VIOLATION_NONE,
+                "resume_position": float(lwp.resume_position_seconds),
+            }
+
+        # Sequence validation
+        expected_seq = lwp.last_sequence + 1
+        if sequence != expected_seq:
+            lwp.status = WATCH_STATUS_VIOLATED
+            lwp.violation_reason = VIOLATION_INVALID_SEQUENCE
+            lwp.save(update_fields=["status", "violation_reason"])
+            return {
+                "error": "out_of_order",
+                "status": 409,
+                "violation": VIOLATION_INVALID_SEQUENCE,
+                "progress": float(min(position / duration * 100, 100)),
+            }
+
+        # Time movement validation
+        elapsed = Decimal("0")
+        if lwp.last_checkpoint_at:
+            diff = (now - lwp.last_checkpoint_at).total_seconds()
+            elapsed = Decimal(str(diff))
+
+        # Speed check
+        if rate > Decimal("1.5"):
+            lwp.status = WATCH_STATUS_VIOLATED
+            lwp.violation_reason = VIOLATION_SPEED
+            lwp.save(update_fields=["status", "violation_reason"])
+            return {
+                "error": "speed_violation",
+                "status": 409,
+                "violation": VIOLATION_SPEED,
+                "progress": float(min(position / duration * 100, 100)),
+            }
+
+        allowed_jitter = Decimal(str(DEFAULT_CHECKPOINT_INTERVAL_SECONDS + 2))
+        if elapsed < Decimal("1") and lwp.last_sequence > 0:
+            lwp.status = WATCH_STATUS_VIOLATED
+            lwp.violation_reason = VIOLATION_INVALID_POSITION
+            lwp.save(update_fields=["status", "violation_reason"])
+            return {
+                "error": "too_fast",
+                "status": 409,
+                "violation": VIOLATION_INVALID_POSITION,
+                "progress": float(min(position / duration * 100, 100)),
+            }
+
+        # Forward skip detection
+        position_delta = position - lwp.last_position_seconds
+        if position_delta > allowed_jitter and lwp.last_sequence > 0 and position > lwp.last_position_seconds:
+            lwp.status = WATCH_STATUS_VIOLATED
+            lwp.violation_reason = VIOLATION_FORWARD_SKIP
+            lwp.save(update_fields=["status", "violation_reason"])
+            return {
+                "error": "forward_skip",
+                "status": 409,
+                "violation": VIOLATION_FORWARD_SKIP,
+                "progress": float(min(position / duration * 100, 100)),
+            }
+
+        # Advance validated seconds
+        if position > lwp.last_position_seconds and position <= Decimal(str(duration)):
+            advance = min(position - lwp.last_position_seconds, elapsed + Decimal("2"))
+            lwp.validated_contiguous_seconds += advance
+
+        lwp.last_sequence = sequence
+        lwp.last_position_seconds = position
+        lwp.last_player_state = player_state
+        lwp.last_checkpoint_at = now
+        lwp.resume_position_seconds = position
+
         progress_pct = min(position / Decimal(str(duration)) * 100, Decimal("100"))
         completed = False
         if progress_pct >= threshold and lwp.status != WATCH_STATUS_COMPLETED:

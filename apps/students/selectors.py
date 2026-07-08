@@ -29,6 +29,7 @@ from apps.assessments.services import get_student_attempts
 from apps.certificates.models import GeneratedCertificate
 from apps.communications.email_message import EmailMessage
 from apps.entrance_exams.models import EntranceAttempt
+from apps.intake_forms.models import IntakeFormRequest
 from apps.payments.selectors import get_enrollment_payment_status, get_student_payment_summary
 from apps.progression.constants import CERTIFICATE_STATUS_AVAILABLE
 from apps.progression.models import (
@@ -55,6 +56,7 @@ ALL_SECTIONS = [
 _SECTION_LOADERS: dict[str, tuple] = {
     "identity": ("identity", lambda p, u: _identity_summary(p, u)),
     "applications": ("applications", lambda p, u: _get_applications(p)),
+    "intake_requests": ("intake_requests", lambda p, u: _get_intake_requests(p)),
     "diploma_enrollments": ("diploma_enrollments", lambda p, u: _get_diploma_enrollments(p)),
     "course_enrollments": ("course_enrollments", lambda p, u: _get_course_enrollments(p)),
     "active_courses": ("active_courses", lambda p, u: _get_active_courses(p)),
@@ -137,6 +139,19 @@ def _get_applications(student_profile: StudentProfile) -> list[ProgramApplicatio
         ProgramApplication.objects.filter(student=student_profile)
         .select_related("reviewed_by", "cohort__diploma", "course")
         .order_by("-created_at")
+    )
+
+
+# ---------------------------------------------------------------------------
+# Intake Requests
+# ---------------------------------------------------------------------------
+
+
+def _get_intake_requests(student_profile: StudentProfile) -> list[IntakeFormRequest]:
+    return list(
+        IntakeFormRequest.objects.filter(program_application__student=student_profile)
+        .select_related("program_application", "form")
+        .order_by("-requested_at")
     )
 
 

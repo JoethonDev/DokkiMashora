@@ -11,6 +11,7 @@ from apps.academics.models import (
     Course,
     CourseVersion,
     Diploma,
+    DiplomaLecture,
     Lecture,
     Semester,
     SemesterCourse,
@@ -111,5 +112,23 @@ class Command(BaseCommand):
                         release_at=now - timedelta(days=(4 - i) * 7),
                     )
                 self.stdout.write(f"  Created {version} with 4 lectures")
+
+        # ponytail: 2 DiplomaLectures per semester, add more if sample content needs variety
+        now = timezone.now()
+        for sem, sem_name in [(sem1, "First"), (sem2, "Second")]:
+            for i in range(1, 3):
+                dl, dl_created = DiplomaLecture.objects.get_or_create(
+                    cohort=cohort,
+                    semester=sem,
+                    order=i,
+                    defaults={
+                        "title": f"Diploma Lecture {i}: {sem_name} Semester - Part {i}",
+                        "description": f"Description for diploma lecture {i} of {sem_name} semester.",
+                        "is_published": True,
+                        "release_at": now - timedelta(days=(2 - i) * 7),
+                    },
+                )
+                if dl_created:
+                    self.stdout.write(f"  Created DiplomaLecture {dl.order}: {dl.title}")
 
         self.stdout.write(self.style.SUCCESS("Academic structure seeded successfully."))

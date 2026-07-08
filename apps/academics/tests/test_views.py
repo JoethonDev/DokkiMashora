@@ -4,18 +4,25 @@ from datetime import date
 
 from django.contrib.auth.models import Group
 from django.test import TestCase
-from django.utils import translation
 from django.urls import reverse
+from django.utils import translation
 
+from apps.academics.constants import ENROLLMENT_STATUS_EXPIRED
 from apps.academics.models import (
     Cohort,
     Course,
     CourseVersion,
     Diploma,
+    DiplomaLecture,
     Lecture,
     Semester,
 )
-from apps.academics.services import activate_course_enrollment, enroll_student_in_course
+from apps.academics.services import (
+    activate_course_enrollment,
+    activate_diploma_enrollment,
+    enroll_student_in_course,
+    enroll_student_in_diploma,
+)
 from apps.accounts.constants import GROUP_STUDENT
 from apps.accounts.models import User
 from apps.students.constants import EDUCATION_BACHELOR, GENDER_MALE
@@ -377,3 +384,263 @@ class StudentNoProfileTests(TestCase):
             r = self.client.get(reverse("academics:student_course_list"))
         self.assertEqual(r.status_code, 200)
         self.assertContains(r, "No courses yet")
+
+
+class DiplomaAdminLectureTests(TestCase):
+    """Test admin CRUD views for diploma lectures."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.admin = User.objects.create_superuser(email="admin@test.com", password="pass")
+        cls.diploma = Diploma.objects.create(
+            title="D", total_semesters=2, created_by=cls.admin,
+        )
+        cls.semester = Semester.objects.create(
+            diploma=cls.diploma, order=1, title="S1",
+        )
+        cls.cohort = Cohort.objects.create(
+            diploma=cls.diploma, name="C1", start_date=date(2026, 1, 1),
+            created_by=cls.admin,
+        )
+        cls.lecture = DiplomaLecture.objects.create(
+            cohort=cls.cohort, semester=cls.semester, order=1,
+            title="DL1", is_published=True,
+        )
+
+    def setUp(self):
+        self.client.force_login(self.admin)
+
+    def test_admin_diploma_lecture_create_get(self):
+        r = self.client.get(
+            reverse("academics:admin_diploma_lecture_create",
+                    args=[self.diploma.id, self.cohort.id, self.semester.id]),
+        )
+        self.assertEqual(r.status_code, 200)
+
+    def test_admin_diploma_lecture_create_post(self):
+        r = self.client.post(
+            reverse("academics:admin_diploma_lecture_create",
+                    args=[self.diploma.id, self.cohort.id, self.semester.id]),
+            {"order": 2, "title": "DL2", "is_published": True},
+        )
+        self.assertEqual(r.status_code, 302)
+        self.assertTrue(DiplomaLecture.objects.filter(title="DL2").exists())
+
+    def test_admin_diploma_lecture_edit_get(self):
+        r = self.client.get(
+            reverse("academics:admin_diploma_lecture_edit",
+                    args=[self.diploma.id, self.cohort.id, self.semester.id, self.lecture.id]),
+        )
+        self.assertEqual(r.status_code, 200)
+
+    def test_admin_diploma_lecture_edit_post(self):
+        r = self.client.post(
+            reverse("academics:admin_diploma_lecture_edit",
+                    args=[self.diploma.id, self.cohort.id, self.semester.id, self.lecture.id]),
+            {"order": 1, "title": "Updated DL1", "is_published": True},
+        )
+        self.assertEqual(r.status_code, 302)
+        self.lecture.refresh_from_db()
+        self.assertEqual(self.lecture.title, "Updated DL1")
+
+    def test_admin_diploma_lecture_delete_post(self):
+        r = self.client.post(
+            reverse("academics:admin_diploma_lecture_delete",
+                    args=[self.diploma.id, self.cohort.id, self.semester.id, self.lecture.id]),
+        )
+        self.assertEqual(r.status_code, 302)
+        self.assertFalse(DiplomaLecture.objects.filter(id=self.lecture.id).exists())
+
+    def test_admin_diploma_lecture_preview(self):
+        r = self.client.get(
+            reverse("academics:admin_diploma_lecture_preview",
+                    args=[self.diploma.id, self.cohort.id, self.semester.id, self.lecture.id]),
+        )
+        self.assertEqual(r.status_code, 200)
+
+    def test_admin_diploma_lecture_create_forbidden_for_student(self):
+        self.client.logout()
+        student_user = User.objects.create_user(email="stud@test.com", password="pass")
+        student_user.groups.add(Group.objects.get(name=GROUP_STUDENT))
+        self.client.force_login(student_user)
+        r = self.client.get(
+            reverse("academics:admin_diploma_lecture_create",
+                    args=[self.diploma.id, self.cohort.id, self.semester.id]),
+        )
+        self.assertEqual(r.status_code, 403)
+
+
+class DiplomaStudentViewTests(TestCase):
+    """Test student diploma content views and standalone regression."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.admin = User.objects.create_superuser(email="admin@test.com", password="pass")
+        cls.diploma = Diploma.objects.create(
+            title="D", total_semesters=2, created_by=cls.admin,
+        )
+        cls.semester = Semester.objects.create(
+            diploma=cls.diploma, order=1, title="S1",
+        )
+        cls.cohort = Cohort.objects.create(
+            diploma=cls.diploma, name="C1", start_date=date(2026, 1, 1),
+            end_date=date(2026, 12, 31), created_by=cls.admin,
+        )
+        cls.lecture = DiplomaLecture.objects.create(
+            cohort=cls.cohort, semester=cls.semester, order=1,
+            title="DL1", is_published=True,
+        )
+        cls.course = Course.objects.create(title="Standalone", created_by=cls.admin)
+        cls.version = CourseVersion.objects.create(
+            course=cls.course, label="v1", access_duration_days=30,
+            created_by=cls.admin,
+        )
+        cls.standalone_lecture = Lecture.objects.create(
+            course_version=cls.version, order=1, title="SL1", is_published=True,
+        )
+
+    def setUp(self):
+        self.user = User.objects.create_user(email="stud@test.com", password="pass")
+        self.user.groups.add(Group.objects.get(name=GROUP_STUDENT))
+        self.profile = _create_student_profile(self.user)
+        self.client.force_login(self.user)
+
+    def _enroll_active(self):
+        de = enroll_student_in_diploma(self.profile, self.cohort)
+        activate_diploma_enrollment(de)
+        return de
+
+    def test_student_diploma_detail_renders(self):
+        de = self._enroll_active()
+        r = self.client.get(
+            reverse("academics:student_diploma_detail", args=[de.id]),
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, "DL1")
+
+    def test_student_diploma_detail_no_enrollment(self):
+        r = self.client.get(
+            reverse("academics:student_diploma_detail", args=[999]),
+        )
+        self.assertEqual(r.status_code, 404)
+
+    def test_student_diploma_detail_expired_enrollment(self):
+        de = self._enroll_active()
+        de.status = ENROLLMENT_STATUS_EXPIRED
+        de.save(update_fields=["status"])
+        r = self.client.get(
+            reverse("academics:student_diploma_detail", args=[de.id]),
+        )
+        self.assertEqual(r.status_code, 403)
+
+    def test_student_diploma_lecture_view(self):
+        de = self._enroll_active()
+        r = self.client.get(
+            reverse("academics:student_diploma_lecture_view",
+                    args=[de.id, self.semester.id, self.lecture.id]),
+        )
+        self.assertEqual(r.status_code, 200)
+
+    def test_student_diploma_lecture_view_not_published(self):
+        de = self._enroll_active()
+        self.lecture.is_published = False
+        self.lecture.save(update_fields=["is_published"])
+        r = self.client.get(
+            reverse("academics:student_diploma_lecture_view",
+                    args=[de.id, self.semester.id, self.lecture.id]),
+        )
+        self.assertEqual(r.status_code, 403)
+
+    def test_student_diploma_lecture_view_wrong_cohort(self):
+        de = self._enroll_active()
+        other_cohort = Cohort.objects.create(
+            diploma=self.diploma, name="C2", start_date=date(2027, 1, 1),
+            created_by=self.admin,
+        )
+        other_lecture = DiplomaLecture.objects.create(
+            cohort=other_cohort, semester=self.semester, order=1,
+            title="Other", is_published=True,
+        )
+        r = self.client.get(
+            reverse("academics:student_diploma_lecture_view",
+                    args=[de.id, self.semester.id, other_lecture.id]),
+        )
+        self.assertEqual(r.status_code, 404)
+
+    def test_student_diploma_lecture_audio_access(self):
+        from unittest.mock import patch
+        de = self._enroll_active()
+        with patch("apps.academics.views.storage_service.download_file", return_value=b"audio"):
+            r = self.client.get(
+                reverse("academics:student_diploma_lecture_audio",
+                        args=[de.id, self.semester.id, self.lecture.id, "file.mp3"]),
+            )
+        self.assertEqual(r.status_code, 200)
+
+    def test_standalone_course_detail_still_works(self):
+        ce = enroll_student_in_course(self.profile, self.version)
+        activate_course_enrollment(ce)
+        r = self.client.get(
+            reverse("academics:student_course_detail", args=[self.version.id]),
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, "SL1")
+
+    def test_standalone_lecture_view_still_works(self):
+        ce = enroll_student_in_course(self.profile, self.version)
+        activate_course_enrollment(ce)
+        r = self.client.get(
+            reverse("academics:student_lecture_view",
+                    args=[self.version.id, self.standalone_lecture.id]),
+        )
+        self.assertEqual(r.status_code, 200)
+
+    def test_student_course_list_shows_diploma_section(self):
+        self._enroll_active()
+        ce = enroll_student_in_course(self.profile, self.version)
+        activate_course_enrollment(ce)
+        r = self.client.get(reverse("academics:student_course_list"))
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, "Standalone")
+        self.assertContains(r, self.diploma.title)
+
+    def test_watch_api_start_expired_enrollment_returns_403(self):
+        self.diploma.video_tracking_enabled = True
+        self.diploma.save(update_fields=["video_tracking_enabled"])
+        de = self._enroll_active()
+        de.status = ENROLLMENT_STATUS_EXPIRED
+        de.save(update_fields=["status"])
+        r = self.client.post(
+            reverse("academics:api_diploma_watch_start",
+                    args=[de.id, self.semester.id, self.lecture.id]),
+            content_type="application/json",
+        )
+        self.assertEqual(r.status_code, 403)
+        self.assertIn("enrollment_not_active", r.json().get("error", ""))
+
+    def test_watch_api_checkpoint_expired_enrollment_returns_403(self):
+        de = self._enroll_active()
+        de.status = ENROLLMENT_STATUS_EXPIRED
+        de.save(update_fields=["status"])
+        r = self.client.post(
+            reverse("academics:api_diploma_watch_checkpoint",
+                    args=[de.id, self.semester.id, self.lecture.id]),
+            content_type="application/json",
+            data='{"session_id":"00000000-0000-0000-0000-000000000000","sequence":1,"position":10,"player_state":"playing","rate":1}',
+        )
+        self.assertEqual(r.status_code, 403)
+        self.assertIn("enrollment_not_active", r.json().get("error", ""))
+
+    def test_watch_api_start_unreleased_lecture_returns_403(self):
+        self.diploma.video_tracking_enabled = True
+        self.diploma.save(update_fields=["video_tracking_enabled"])
+        self.lecture.is_published = False
+        self.lecture.save(update_fields=["is_published"])
+        de = self._enroll_active()
+        r = self.client.post(
+            reverse("academics:api_diploma_watch_start",
+                    args=[de.id, self.semester.id, self.lecture.id]),
+            content_type="application/json",
+        )
+        self.assertEqual(r.status_code, 403)
+        self.assertIn("lecture_not_available", r.json().get("error", ""))

@@ -134,6 +134,31 @@
         {# No active admin actions for these statuses #}
         <p class="text-sm text-slate-500 dark:text-slate-400">{% trans "This application is awaiting further steps." %}</p>
 
+      {% elif application.status == "survey_requested" or application.status == "survey_submitted" %}
+        {# Intake form state #}
+        {% if intake_state.required_form %}
+          <div class="mt-4 p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+            <h4 class="text-sm font-semibold mb-2">{% trans "Intake Form" %}</h4>
+            <dl class="text-xs space-y-1">
+              <dt class="text-slate-500 dark:text-slate-400">{% trans "Form" %}</dt>
+              <dd class="text-slate-900 dark:text-slate-100">{{ intake_state.required_form.title }}</dd>
+              <dt class="text-slate-500 dark:text-slate-400">{% trans "Submitted" %}</dt>
+              <dd class="text-slate-900 dark:text-slate-100">{{ intake_state.has_response|yesno:_("Yes,No") }}</dd>
+              {% if intake_state.latest_request %}
+                <dt class="text-slate-500 dark:text-slate-400">{% trans "Expires" %}</dt>
+                <dd class="text-slate-900 dark:text-slate-100 tabular-nums">{% dt intake_state.latest_request.expires_at %}</dd>
+              {% endif %}
+            </dl>
+            {% if is_admin and not intake_state.has_response %}
+              <form method="post" class="mt-3">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="request_intake">
+                {% include "partials/_button.html" with label=_("Send Intake Request") size="sm" variant="primary" %}
+              </form>
+            {% endif %}
+          </div>
+        {% endif %}
+
       {% elif application.status == "accepted" or application.status == "documents_requested" or application.status == "documents_submitted" or application.status == "rejected" %}
         {# Mark paid (accepted, not paid) #}
         {% if application.status == "accepted" and not is_paid %}

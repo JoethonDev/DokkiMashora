@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Intake Form" %} - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  {% if submitted %}
+    <div class="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 p-6 text-center">
+      <h1 class="text-xl font-bold text-emerald-700 dark:text-emerald-300">{% trans "Form Already Submitted" %}</h1>
+      <p class="mt-2 text-sm text-emerald-600 dark:text-emerald-400">{% trans "You have already submitted this intake form." %}</p>
+      <a href="{% url 'students:application_history' %}" class="inline-block mt-4 text-sm text-brand-600 hover:underline">{% trans "Back to applications" %}</a>
+    </div>
+  {% elif expired %}
+    <div class="rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-900/20 p-6 text-center">
+      <h1 class="text-xl font-bold text-rose-700 dark:text-rose-300">{% trans "Link Expired" %}</h1>
+      <p class="mt-2 text-sm text-rose-600 dark:text-rose-400">{% trans "This intake form link has expired." %}</p>
+      <a href="{% url 'students:application_history' %}" class="inline-block mt-4 text-sm text-brand-600 hover:underline">{% trans "Back to applications" %}</a>
+    </div>
+  {% else %}
+    <h1 class="text-2xl sm:text-3xl font-bold tracking-tight font-display mb-2">{{ form_instance.title }}</h1>
+    {% if form_instance.description %}
+      <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">{{ form_instance.description }}</p>
+    {% endif %}
+
+    <form method="post" class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-5">
+      {% csrf_token %}
+      {{ form.as_p }}
+
+      <div class="pt-4">
+        <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-6 py-2.5 text-sm bg-brand-600 text-white hover:bg-brand-700 shadow-sm">{% trans "Submit" %}</button>
+      </div>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}

@@ -79,6 +79,8 @@ DECISION_ACTION_REVERT = "revert"
 DECISION_ACTION_NOTE = "note"
 DECISION_ACTION_REQUEST_DOCUMENTS = "request_documents"
 DECISION_ACTION_SUBMIT_DOCUMENTS = "submit_documents"
+DECISION_ACTION_REQUEST_SURVEY = "request_survey"
+DECISION_ACTION_SUBMIT_SURVEY = "submit_survey"
 DECISION_ACTION_ACTIVATE = "activate"
 
 DECISION_ACTION_CHOICES = (
@@ -93,6 +95,8 @@ DECISION_ACTION_CHOICES = (
     (DECISION_ACTION_NOTE, _("Note")),
     (DECISION_ACTION_REQUEST_DOCUMENTS, _("Documents Requested")),
     (DECISION_ACTION_SUBMIT_DOCUMENTS, _("Documents Submitted")),
+    (DECISION_ACTION_REQUEST_SURVEY, _("Survey Requested")),
+    (DECISION_ACTION_SUBMIT_SURVEY, _("Survey Submitted")),
     (DECISION_ACTION_ACTIVATE, _("Activated")),
 )
 
@@ -122,6 +126,7 @@ EMAIL_ACTION_DIPLOMA_DOCUMENT_UPLOAD_REQUEST = "diploma_document_upload_request"
 EMAIL_ACTION_NOTE = "note"
 EMAIL_ACTION_EXAM_RESULT = "entrance_exam_result"
 EMAIL_ACTION_APPLICATION_PAYMENT_PENDING = "application_payment_pending"
+EMAIL_ACTION_APPLICATION_SURVEY_REQUEST = "application_survey_request"
 
 EMAIL_ACTION_CHOICES = (
     (EMAIL_ACTION_ENTRANCE_EXAM_INVITATION, _("Entrance exam invitation")),
@@ -132,6 +137,7 @@ EMAIL_ACTION_CHOICES = (
     (EMAIL_ACTION_DIPLOMA_INTERVIEW_REQUEST, _("Diploma interview request")),
     (EMAIL_ACTION_DIPLOMA_DOCUMENT_UPLOAD_REQUEST, _("Diploma document upload request")),
     (EMAIL_ACTION_APPLICATION_PAYMENT_PENDING, _("Application payment pending")),
+    (EMAIL_ACTION_APPLICATION_SURVEY_REQUEST, _("Application survey request")),
     (EMAIL_ACTION_NOTE, _("Note")),
     (EMAIL_ACTION_EXAM_RESULT, _("Entrance exam result")),
 )
