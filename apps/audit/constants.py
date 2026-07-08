@@ -35,6 +35,9 @@ ACTION_PAYMENT_RECORD_UPDATED = "payment.record_updated"
 ACTION_PAYMENT_RECORD_DELETED = "payment.record_deleted"
 ACTION_USER_IMPORT_PREVIEWED = "user_import.previewed"
 ACTION_USER_IMPORT_CONFIRMED = "user_import.confirmed"
+ACTION_EXAM_ACCESS_OVERRIDE_CREATED = "exam_access_override.created"
+ACTION_EXAM_ACCESS_OVERRIDE_CANCELLED = "exam_access_override.cancelled"
+ACTION_EXAM_ACCESS_OVERRIDE_USED = "exam_access_override.used"
 
 AUDIT_ACTION_CHOICES = (
     (ACTION_APPLICATION_STATUS_CHANGE, _("Application status change")),
@@ -70,4 +73,7 @@ AUDIT_ACTION_CHOICES = (
     (ACTION_PAYMENT_RECORD_DELETED, _("Payment record deleted")),
     (ACTION_USER_IMPORT_PREVIEWED, _("User import previewed")),
     (ACTION_USER_IMPORT_CONFIRMED, _("User import confirmed")),
+    (ACTION_EXAM_ACCESS_OVERRIDE_CREATED, _("Exam access override created")),
+    (ACTION_EXAM_ACCESS_OVERRIDE_CANCELLED, _("Exam access override cancelled")),
+    (ACTION_EXAM_ACCESS_OVERRIDE_USED, _("Exam access override used")),
 )

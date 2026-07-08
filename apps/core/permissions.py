@@ -20,6 +20,8 @@ from apps.academics.models import (
 from apps.accounts.constants import (
     GROUP_ADMIN,
     GROUP_MODERATOR,
+    GROUP_REVIEWER,
+    GROUP_SECRETARY,
     GROUP_STUDENT,
     GROUP_SUPER_ADMIN,
     GROUP_TEACHER,
@@ -57,6 +59,8 @@ def _user_in_any_group(user, group_names: tuple[str, ...]) -> bool:
 
 ROLE_EXAM_STAFF = (GROUP_SUPER_ADMIN, GROUP_ADMIN, GROUP_MODERATOR, GROUP_TEACHER)
 ROLE_SENIOR_STAFF = (GROUP_SUPER_ADMIN, GROUP_ADMIN)
+ROLE_REVIEW_STAFF = (GROUP_SUPER_ADMIN, GROUP_ADMIN, GROUP_REVIEWER)
+ROLE_ATTENDANCE_STAFF = (GROUP_SUPER_ADMIN, GROUP_ADMIN, GROUP_SECRETARY)
 
 
 def is_super_admin(user) -> bool:
@@ -76,6 +80,22 @@ def is_moderator(user) -> bool:
         user
         and user.is_authenticated
         and _user_in_any_group(user, (GROUP_SUPER_ADMIN, GROUP_ADMIN, GROUP_MODERATOR))
+    )
+
+
+def is_reviewer(user) -> bool:
+    return bool(
+        user
+        and user.is_authenticated
+        and _user_in_any_group(user, ROLE_REVIEW_STAFF)
+    )
+
+
+def is_secretary(user) -> bool:
+    return bool(
+        user
+        and user.is_authenticated
+        and _user_in_any_group(user, ROLE_ATTENDANCE_STAFF)
     )
 
 

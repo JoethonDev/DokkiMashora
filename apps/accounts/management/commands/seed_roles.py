@@ -14,6 +14,8 @@ from apps.accounts.constants import (
     ALL_ROLE_GROUPS,
     GROUP_ADMIN,
     GROUP_MODERATOR,
+    GROUP_REVIEWER,
+    GROUP_SECRETARY,
     GROUP_STUDENT,
     GROUP_TEACHER,
 )
@@ -40,6 +42,8 @@ class Command(BaseCommand):
             ("admin@dokkimashora.test", "Admin User", GROUP_ADMIN),
             ("moderator@dokkimashora.test", "Moderator User", GROUP_MODERATOR),
             ("teacher@dokkimashora.test", "Teacher User", GROUP_TEACHER),
+            ("reviewer@dokkimashora.test", "Reviewer User", GROUP_REVIEWER),
+            ("secretary@dokkimashora.test", "Secretary User", GROUP_SECRETARY),
             ("student@dokkimashora.test", "Student User", GROUP_STUDENT),
         )
         for email, full_name, group_name in demo_users:

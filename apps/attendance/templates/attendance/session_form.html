@@ -1,0 +1,48 @@
+{% extends "base.html" %}{% load i18n %} {% block title %}{% trans "Create Attendance Session" %} - {{ block.super }}{% endblock %} {% block content %}
+<section class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  {% include "partials/_breadcrumb.html" with items=breadcrumb_items %}
+  <header class="mb-6">
+    <h1 class="text-2xl sm:text-3xl font-bold tracking-tight font-display">{% trans "Create Attendance Session" %}</h1>
+  </header>
+
+  <form method="post" class="dm-panel p-6 rounded-xl space-y-4">
+    {% csrf_token %}
+    <div>
+      <label class="block text-sm font-medium dm-text mb-1" for="title">{% trans "Title" %}</label>
+      <input type="text" name="title" id="title" maxlength="255" class="dm-input w-full rounded-lg px-3 py-2 text-sm shadow-sm">
+    </div>
+    <div>
+      <label class="block text-sm font-medium dm-text mb-1" for="cohort_id">{% trans "Cohort" %}</label>
+      <select name="cohort_id" id="cohort_id" class="dm-input w-full rounded-lg px-3 py-2 text-sm shadow-sm">
+        <option value="">{% trans "— Select cohort —" %}</option>
+        {% for c in cohorts %}<option value="{{ c.id }}">{{ c }} ({{ c.diploma }})</option>{% endfor %}
+      </select>
+      <p class="mt-1 text-xs dm-muted">{% trans "Select a cohort or course version (not both)." %}</p>
+    </div>
+    <div>
+      <label class="block text-sm font-medium dm-text mb-1" for="course_version_id">{% trans "Course Version" %}</label>
+      <select name="course_version_id" id="course_version_id" class="dm-input w-full rounded-lg px-3 py-2 text-sm shadow-sm">
+        <option value="">{% trans "— Select course version —" %}</option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-sm font-medium dm-text mb-1" for="semester_id">{% trans "Semester" %}</label>
+      <select name="semester_id" id="semester_id" class="dm-input w-full rounded-lg px-3 py-2 text-sm shadow-sm">
+        <option value="">{% trans "— Optional —" %}</option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-sm font-medium dm-text mb-1" for="open_at">{% trans "Open At" %} <span class="text-rose-600">*</span></label>
+      <input type="datetime-local" name="open_at" id="open_at" required class="dm-input w-full rounded-lg px-3 py-2 text-sm shadow-sm">
+    </div>
+    <div>
+      <label class="block text-sm font-medium dm-text mb-1" for="close_at">{% trans "Close At" %} <span class="text-rose-600">*</span></label>
+      <input type="datetime-local" name="close_at" id="close_at" required class="dm-input w-full rounded-lg px-3 py-2 text-sm shadow-sm">
+    </div>
+    <div class="flex items-center gap-3 pt-2">
+      <button type="submit" class="dm-button dm-button-primary px-4 py-2 text-sm">{% trans "Create Session" %}</button>
+      <a href="{% url 'attendance:attendance_session_list' %}" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Cancel" %}</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

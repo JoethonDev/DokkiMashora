@@ -110,37 +110,79 @@
 
   <form id="assessment-form" method="post" action="{% url 'assessments:submit' assessment.id %}">
     {% csrf_token %}
-    {% for question in questions %}
-      <fieldset class="mb-8 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5" id="q-{{ question.id }}">
-        <legend class="flex items-center gap-3 mb-4 text-sm font-semibold text-slate-900 dark:text-slate-100">
-          <span class="inline-flex items-center justify-center h-8 w-8 rounded-full bg-brand-600 text-white text-xs font-bold tabular-nums">{{ forloop.counter }}</span>
-          <span>{% trans "Question" %}</span>
-          {% trans "pts" as pts_label %}{% include "partials/_badge.html" with label=question.points|stringformat:"s"|add:" "|add:pts_label tone="neutral" %}
-        </legend>
-        <p class="text-base text-slate-800 dark:text-slate-200 leading-relaxed max-w-prose mb-5">{{ question.text }}</p>
+    {% if is_diploma_random %}
+      <div id="diploma-assessment" x-data="diplomaAutosave({{ assessment.id }})">
+      {% regroup snapshot_questions by section as section_groups %}
+      {% for group in section_groups %}
+        <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100 mb-4 mt-8">{{ group.grouper.lecture.title }}</h3>
+        {% for sq in group.list %}
+          <fieldset class="mb-8 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5" id="sq-{{ sq.order }}">
+            <legend class="flex items-center gap-3 mb-4 text-sm font-semibold text-slate-900 dark:text-slate-100">
+              <span class="inline-flex items-center justify-center h-8 w-8 rounded-full bg-brand-600 text-white text-xs font-bold tabular-nums">{{ forloop.parentloop.counter }}.{{ forloop.counter }}</span>
+              <span>{% trans "Question" %}</span>
+              {% trans "pts" as pts_label %}{% include "partials/_badge.html" with label=sq.points|stringformat:"s"|add:" "|add:pts_label tone="neutral" %}
+            </legend>
+            <p class="text-base text-slate-800 dark:text-slate-200 leading-relaxed max-w-prose mb-5">{{ sq.text_snapshot }}</p>
 
-        {% if question.question_type == "mcq" %}
-          <div class="space-y-2" role="radiogroup" aria-label="{% trans 'Answer choices' %}">
-            {% for choice in question.choices.all %}
-              <label class="flex items-center gap-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 cursor-pointer transition-all hover:bg-brand-50 dark:hover:bg-brand-950/20 has-[:checked]:bg-brand-50 dark:has-[:checked]:bg-brand-950/20 has-[:checked]:ring-2 has-[:checked]:ring-brand-500/50">
-                <input type="radio"
-                       name="question_{{ question.id }}"
-                       value="{{ choice.id }}"
-                       class="h-4 w-4 shrink-0 text-brand-600 border-slate-300 dark:border-slate-600 focus:ring-brand-500"
-                       {% if question.required %}required{% endif %}>
-                <span class="text-slate-700 dark:text-slate-200 text-sm leading-relaxed">{{ choice.text }}</span>
-              </label>
-            {% endfor %}
-          </div>
-        {% elif question.question_type == "written" %}
-          <textarea name="question_{{ question.id }}"
-                    rows="6"
-                    {% if question.required %}required{% endif %}
-                    class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-base text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 transition-all resize-y"
-                    placeholder="{% trans 'Write your answer here...' %}"></textarea>
-        {% endif %}
-      </fieldset>
-    {% endfor %}
+            {% if sq.question_type == "mcq" %}
+              <div class="space-y-2" role="radiogroup" aria-label="{% trans 'Answer choices' %}">
+                {% for choice in sq.choices.all %}
+                  <label class="flex items-center gap-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 cursor-pointer transition-all hover:bg-brand-50 dark:hover:bg-brand-950/20 has-[:checked]:bg-brand-50 dark:has-[:checked]:bg-brand-950/20 has-[:checked]:ring-2 has-[:checked]:ring-brand-500/50">
+                    <input type="radio"
+                           name="q_{{ sq.order }}"
+                           value="{{ choice.id }}"
+                           class="h-4 w-4 shrink-0 text-brand-600 border-slate-300 dark:border-slate-600 focus:ring-brand-500"
+                           {% if sq.required %}required{% endif %}
+                           x-on:change="onAnswer()">
+                    <span class="text-slate-700 dark:text-slate-200 text-sm leading-relaxed">{{ choice.text_snapshot }}</span>
+                  </label>
+                {% endfor %}
+              </div>
+            {% elif sq.question_type == "written" %}
+              <textarea name="q_{{ sq.order }}"
+                        rows="6"
+                        {% if sq.required %}required{% endif %}
+                        x-on:change="onAnswer()"
+                        class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-base text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 transition-all resize-y"
+                        placeholder="{% trans 'Write your answer here...' %}"></textarea>
+            {% endif %}
+          </fieldset>
+        {% endfor %}
+      {% endfor %}
+      </div>
+    {% else %}
+      {% for question in questions %}
+        <fieldset class="mb-8 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5" id="q-{{ question.id }}">
+          <legend class="flex items-center gap-3 mb-4 text-sm font-semibold text-slate-900 dark:text-slate-100">
+            <span class="inline-flex items-center justify-center h-8 w-8 rounded-full bg-brand-600 text-white text-xs font-bold tabular-nums">{{ forloop.counter }}</span>
+            <span>{% trans "Question" %}</span>
+            {% trans "pts" as pts_label %}{% include "partials/_badge.html" with label=question.points|stringformat:"s"|add:" "|add:pts_label tone="neutral" %}
+          </legend>
+          <p class="text-base text-slate-800 dark:text-slate-200 leading-relaxed max-w-prose mb-5">{{ question.text }}</p>
+
+          {% if question.question_type == "mcq" %}
+            <div class="space-y-2" role="radiogroup" aria-label="{% trans 'Answer choices' %}">
+              {% for choice in question.choices.all %}
+                <label class="flex items-center gap-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 cursor-pointer transition-all hover:bg-brand-50 dark:hover:bg-brand-950/20 has-[:checked]:bg-brand-50 dark:has-[:checked]:bg-brand-950/20 has-[:checked]:ring-2 has-[:checked]:ring-brand-500/50">
+                  <input type="radio"
+                         name="question_{{ question.id }}"
+                         value="{{ choice.id }}"
+                         class="h-4 w-4 shrink-0 text-brand-600 border-slate-300 dark:border-slate-600 focus:ring-brand-500"
+                         {% if question.required %}required{% endif %}>
+                  <span class="text-slate-700 dark:text-slate-200 text-sm leading-relaxed">{{ choice.text }}</span>
+                </label>
+              {% endfor %}
+            </div>
+          {% elif question.question_type == "written" %}
+            <textarea name="question_{{ question.id }}"
+                      rows="6"
+                      {% if question.required %}required{% endif %}
+                      class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-base text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 transition-all resize-y"
+                      placeholder="{% trans 'Write your answer here...' %}"></textarea>
+          {% endif %}
+        </fieldset>
+      {% endfor %}
+    {% endif %}
 
     <div class="text-center py-8">
       {% if not is_preview %}
@@ -207,5 +249,36 @@ function assessmentTimer(remainingSeconds, assessmentId) {
     }
   };
 }
+
+{% if is_diploma_random %}
+function diplomaAutosave(assessmentId) {
+  return {
+    dirty: false,
+    onAnswer() {
+      this.dirty = true;
+    },
+    init() {
+      setInterval(() => {
+        if (!this.dirty) return;
+        this.dirty = false;
+        const form = document.getElementById('assessment-form');
+        if (!form) return;
+        const data = new FormData(form);
+        const answers = {};
+        for (const [key, value] of data.entries()) {
+          if (key.startsWith('q_')) {
+            answers[key] = value;
+          }
+        }
+        fetch('{% url "assessments:api_diploma_autosave" assessment.id %}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': data.get('csrfmiddlewaretoken') },
+          body: JSON.stringify({ answers }),
+        }).catch(() => {});
+      }, 30000);
+    },
+  };
+}
+{% endif %}
 </script>
 {% endblock %}

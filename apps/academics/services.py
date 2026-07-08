@@ -43,6 +43,12 @@ from apps.academics.models import (
     TeacherAssignment,
 )
 from apps.accounts.models import User
+from apps.progression.constants import (
+    COMPONENT_TYPE_ATTENDANCE,
+    COMPONENT_TYPE_HOMEWORK_ASSESSMENT,
+    COMPONENT_TYPE_SEMESTER_EXAM,
+)
+from apps.progression.models import SemesterGradeComponent
 
 
 def activate_diploma_enrollment(enrollment: DiplomaEnrollment) -> DiplomaEnrollment:
@@ -375,6 +381,49 @@ def create_cohort_with_defaults(*, diploma, form_data, actor):
             is_active=form_data.get("is_active", True),
             created_by=actor,
         )
+
+        semesters = diploma.semesters.filter(is_active=True).order_by("order")
+
+        defaults_by_type = {
+            COMPONENT_TYPE_SEMESTER_EXAM: {
+                "name": _("Semester Exam"),
+                "weight_percent": 40,
+                "required_min_percent": 50,
+                "required_to_pass": True,
+                "order": 1,
+            },
+            COMPONENT_TYPE_ATTENDANCE: {
+                "name": _("Attendance"),
+                "weight_percent": 10,
+                "required_min_percent": 80,
+                "required_to_pass": True,
+                "order": 2,
+            },
+            COMPONENT_TYPE_HOMEWORK_ASSESSMENT: {
+                "name": _("Homework/Assessment"),
+                "weight_percent": 50,
+                "required_min_percent": 50,
+                "required_to_pass": True,
+                "order": 3,
+            },
+        }
+
+        components = []
+        for semester in semesters:
+            for ctype, defaults in defaults_by_type.items():
+                components.append(SemesterGradeComponent(
+                    cohort=cohort,
+                    semester=semester,
+                    component_type=ctype,
+                    name=defaults["name"],
+                    weight_percent=defaults["weight_percent"],
+                    required_min_percent=defaults["required_min_percent"],
+                    required_to_pass=defaults["required_to_pass"],
+                    order=defaults["order"],
+                    active=True,
+                ))
+        SemesterGradeComponent.objects.bulk_create(components)
+
     return cohort
 
 

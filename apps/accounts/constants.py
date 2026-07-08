@@ -10,6 +10,8 @@ GROUP_ADMIN = "Admin"
 GROUP_MODERATOR = "Moderator"
 GROUP_TEACHER = "Teacher"
 GROUP_STUDENT = "Student"
+GROUP_REVIEWER = "Reviewer"
+GROUP_SECRETARY = "Secretary"
 
 ALL_ROLE_GROUPS = (
     GROUP_SUPER_ADMIN,
@@ -17,6 +19,8 @@ ALL_ROLE_GROUPS = (
     GROUP_MODERATOR,
     GROUP_TEACHER,
     GROUP_STUDENT,
+    GROUP_REVIEWER,
+    GROUP_SECRETARY,
 )
 
 STAFF_ROLE_GROUPS = (
@@ -24,6 +28,8 @@ STAFF_ROLE_GROUPS = (
     GROUP_ADMIN,
     GROUP_MODERATOR,
     GROUP_TEACHER,
+    GROUP_REVIEWER,
+    GROUP_SECRETARY,
 )
 
 # Mapping from group name to a stable slug used in code checks and tests.
@@ -33,6 +39,8 @@ ROLE_SLUGS = {
     GROUP_MODERATOR: "moderator",
     GROUP_TEACHER: "teacher",
     GROUP_STUDENT: "student",
+    GROUP_REVIEWER: "reviewer",
+    GROUP_SECRETARY: "secretary",
 }
 
 # User status choices.

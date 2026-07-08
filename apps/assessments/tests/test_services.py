@@ -27,24 +27,36 @@ from apps.assessments.constants import (
     HOMEWORK_STATUS_UNDER_REVIEW,
     QUESTION_TYPE_MCQ,
     QUESTION_TYPE_WRITTEN,
+    SNAPSHOT_QUESTION_SOURCE_BANK,
+    SNAPSHOT_QUESTION_SOURCE_MANUAL,
 )
 from apps.assessments.models import (
     Assessment,
     AssessmentAnswer,
     AssessmentAttempt,
+    AssessmentAttemptSnapshotAnswer,
     AssessmentChoice,
+    AssessmentLectureSection,
     AssessmentQuestion,
+    AssessmentSectionManualQuestion,
+    DiplomaLecture,
+    DiplomaLectureChoice,
+    DiplomaLectureQuestion,
     HomeworkSubmission,
+    Semester,
 )
 from apps.assessments.services import (
     AssessmentAnswerData,
     autosave_attempt,
     check_assessment_access,
+    diploma_autosave_attempt,
+    generate_diploma_assessment_snapshot,
     get_grading_queue,
     get_homework_pending_grading,
     get_pending_grading,
     get_student_assessments,
     get_student_attempts,
+    grade_diploma_snapshot_answer,
     grade_homework,
     grade_written_answer,
     has_active_enrollment,
@@ -52,6 +64,7 @@ from apps.assessments.services import (
     release_grades,
     start_assessment,
     submit_assessment,
+    submit_diploma_assessment,
     submit_homework,
 )
 from apps.storage.services import FileValidationError, UploadResult
@@ -1132,3 +1145,310 @@ class AutosaveAttemptTests(TestCase):
         answer = AssessmentAnswer.objects.get(attempt=self.attempt, question=self.mcq_q)
         self.assertEqual(answer.selected_choice_id, other_choice.id)
         self.assertEqual(answer.score, Decimal("10.00"))
+
+
+class DiplomaSnapshotGenerationTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(email="admin@test.com", password="x")
+        self.student = User.objects.create_user(email="student@test.com", password="x")
+        self.now = timezone.now()
+        self.diploma = Diploma.objects.create(title="D", total_semesters=2, created_by=self.admin)
+        self.cohort = Cohort.objects.create(diploma=self.diploma, name="C1", start_date=date(2026, 1, 1), created_by=self.admin)
+        self.semester = Semester.objects.create(diploma=self.diploma, title="Sem1", order=1)
+        self.lecture = DiplomaLecture.objects.create(cohort=self.cohort, semester=self.semester, order=1, title="L1")
+        self.assessment = Assessment.objects.create(
+            title="Diploma Quiz",
+            assessment_type=ASSESSMENT_TYPE_QUIZ,
+            semester=self.semester, cohort=self.cohort,
+            open_at=self.now - timezone.timedelta(days=1),
+            close_at=self.now + timezone.timedelta(days=7),
+            passing_score=Decimal("50.00"), total_points=Decimal("30.00"),
+            is_active=True, created_by=self.admin,
+        )
+        self.section = AssessmentLectureSection.objects.create(
+            assessment=self.assessment, lecture=self.lecture, order=1, mcq_count=2, max_grade=Decimal("30.00"),
+        )
+        self.mq = AssessmentSectionManualQuestion.objects.create(
+            section=self.section, text="Written?", points=Decimal("10.00"), order=1, required=True,
+        )
+        self.bank_q1 = DiplomaLectureQuestion.objects.create(
+            lecture=self.lecture, text="MCQ1", question_type=QUESTION_TYPE_MCQ, points=Decimal("10.00"), active=True, created_by=self.admin,
+        )
+        DiplomaLectureChoice.objects.create(question=self.bank_q1, text="A", is_correct=True, order=1)
+        DiplomaLectureChoice.objects.create(question=self.bank_q1, text="B", is_correct=False, order=2)
+        self.bank_q2 = DiplomaLectureQuestion.objects.create(
+            lecture=self.lecture, text="MCQ2", question_type=QUESTION_TYPE_MCQ, points=Decimal("10.00"), active=True, created_by=self.admin,
+        )
+        DiplomaLectureChoice.objects.create(question=self.bank_q2, text="C", is_correct=True, order=1)
+        DiplomaLectureChoice.objects.create(question=self.bank_q2, text="D", is_correct=False, order=2)
+        self.attempt = AssessmentAttempt.objects.create(
+            assessment=self.assessment, student=self.student,
+            attempt_number=1, status=ATTEMPT_STATUS_IN_PROGRESS, started_at=self.now,
+        )
+
+    def test_generates_correct_number_of_questions(self):
+        generate_diploma_assessment_snapshot(self.attempt)
+        self.assertEqual(self.attempt.snapshot_questions.count(), 3)  # 1 manual + 2 MCQ
+        manual_qs = self.attempt.snapshot_questions.filter(source_type=SNAPSHOT_QUESTION_SOURCE_MANUAL)
+        self.assertEqual(manual_qs.count(), 1)
+        bank_qs = self.attempt.snapshot_questions.filter(source_type=SNAPSHOT_QUESTION_SOURCE_BANK)
+        self.assertEqual(bank_qs.count(), 2)
+
+    def test_generates_choices_for_bank_questions(self):
+        generate_diploma_assessment_snapshot(self.attempt)
+        for sq in self.attempt.snapshot_questions.filter(source_type=SNAPSHOT_QUESTION_SOURCE_BANK):
+            self.assertEqual(sq.choices.count(), 2)
+            self.assertTrue(sq.choices.filter(is_correct_snapshot=True).exists())
+
+    def test_idempotent_second_call_does_nothing(self):
+        generate_diploma_assessment_snapshot(self.attempt)
+        count = self.attempt.snapshot_questions.count()
+        generate_diploma_assessment_snapshot(self.attempt)
+        self.assertEqual(self.attempt.snapshot_questions.count(), count)
+
+    def test_insufficient_mcqs_raises_error(self):
+        self.bank_q2.delete()
+        with self.assertRaises(ValueError, msg="needs 2 MCQs"):
+            generate_diploma_assessment_snapshot(self.attempt)
+
+    def test_snapshot_text_matches_source(self):
+        generate_diploma_assessment_snapshot(self.attempt)
+        manual_sq = self.attempt.snapshot_questions.get(source_type=SNAPSHOT_QUESTION_SOURCE_MANUAL)
+        self.assertEqual(manual_sq.text_snapshot, self.mq.text)
+        bank_texts = self.attempt.snapshot_questions.filter(
+            source_type=SNAPSHOT_QUESTION_SOURCE_BANK,
+        ).values_list("text_snapshot", flat=True)
+        self.assertIn(self.bank_q1.text, list(bank_texts))
+
+    def test_snapshot_answers_created(self):
+        generate_diploma_assessment_snapshot(self.attempt)
+        for sq in self.attempt.snapshot_questions.all():
+            answer = AssessmentAttemptSnapshotAnswer.objects.filter(attempt_question=sq).first()
+            self.assertIsNotNone(answer)
+            self.assertIsNone(answer.score)
+
+    def test_no_sections_raises(self):
+        self.section.delete()
+        with self.assertRaises(ValueError, msg="no lecture sections"):
+            generate_diploma_assessment_snapshot(self.attempt)
+
+
+class DiplomaSubmitAssessmentTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(email="admin@test.com", password="x")
+        self.student = User.objects.create_user(email="student@test.com", password="x")
+        self.now = timezone.now()
+        self.diploma = Diploma.objects.create(title="D", total_semesters=2, created_by=self.admin)
+        self.cohort = Cohort.objects.create(diploma=self.diploma, name="C1", start_date=date(2026, 1, 1), created_by=self.admin)
+        self.semester = Semester.objects.create(diploma=self.diploma, title="Sem1", order=1)
+        self.lecture = DiplomaLecture.objects.create(cohort=self.cohort, semester=self.semester, order=1, title="L1")
+        self.assessment = Assessment.objects.create(
+            title="Diploma Quiz", assessment_type=ASSESSMENT_TYPE_QUIZ,
+            semester=self.semester, cohort=self.cohort,
+            open_at=self.now - timezone.timedelta(days=1),
+            close_at=self.now + timezone.timedelta(days=7),
+            passing_score=Decimal("50.00"), total_points=Decimal("20.00"),
+            is_active=True, created_by=self.admin,
+        )
+        self.section = AssessmentLectureSection.objects.create(
+            assessment=self.assessment, lecture=self.lecture, order=1, mcq_count=1, max_grade=Decimal("20.00"),
+        )
+        self.bank_q = DiplomaLectureQuestion.objects.create(
+            lecture=self.lecture, text="MCQ", question_type=QUESTION_TYPE_MCQ, points=Decimal("10.00"), active=True, created_by=self.admin,
+        )
+        DiplomaLectureChoice.objects.create(question=self.bank_q, text="Right", is_correct=True, order=1)
+        DiplomaLectureChoice.objects.create(question=self.bank_q, text="Wrong", is_correct=False, order=2)
+        self.written_mq = AssessmentSectionManualQuestion.objects.create(
+            section=self.section, text="Essay", points=Decimal("10.00"), order=1, required=False,
+        )
+        self.attempt = AssessmentAttempt.objects.create(
+            assessment=self.assessment, student=self.student,
+            attempt_number=1, status=ATTEMPT_STATUS_IN_PROGRESS, started_at=self.now,
+        )
+        generate_diploma_assessment_snapshot(self.attempt)
+        self.snapshot_questions = list(self.attempt.snapshot_questions.order_by("order"))
+        # Manual question first (order 1), then MCQ (order 2)
+        self.written_sq = self.snapshot_questions[0]
+        self.mcq_sq = self.snapshot_questions[1]
+        # Snapshot choice IDs differ from bank choice IDs
+        self.correct_snapshot_choice = self.mcq_sq.choices.get(is_correct_snapshot=True)
+        self.wrong_snapshot_choice = self.mcq_sq.choices.get(is_correct_snapshot=False)
+
+    def test_submit_mcq_correct(self):
+        submit_diploma_assessment(self.attempt, {f"q_{self.mcq_sq.order}": str(self.correct_snapshot_choice.pk)})
+        self.attempt.refresh_from_db()
+        self.assertEqual(self.attempt.status, ATTEMPT_STATUS_GRADED)
+        self.assertEqual(self.attempt.score_points, Decimal("10.00"))
+
+    def test_submit_mcq_wrong(self):
+        submit_diploma_assessment(self.attempt, {f"q_{self.mcq_sq.order}": str(self.wrong_snapshot_choice.pk)})
+        self.attempt.refresh_from_db()
+        self.assertEqual(self.attempt.score_points, Decimal("0.00"))
+
+    def test_submit_with_written_sets_under_review(self):
+        submit_diploma_assessment(self.attempt, {
+            f"q_{self.mcq_sq.order}": str(self.correct_snapshot_choice.pk),
+            f"q_{self.written_sq.order}": "My essay",
+        })
+        self.attempt.refresh_from_db()
+        self.assertEqual(self.attempt.status, ATTEMPT_STATUS_UNDER_REVIEW)
+        self.assertEqual(self.attempt.score_points, Decimal("10.00"))
+
+    def test_submit_invalid_choice_raises(self):
+        with self.assertRaises(ValueError):
+            submit_diploma_assessment(self.attempt, {f"q_{self.mcq_sq.order}": "999"})
+
+    def test_submit_not_in_progress_raises(self):
+        self.attempt.status = ATTEMPT_STATUS_SUBMITTED
+        self.attempt.save(update_fields=["status"])
+        with self.assertRaises(ValueError):
+            submit_diploma_assessment(self.attempt, {})
+
+    def test_course_assessment_submit_unaffected(self):
+        """Verify course assessment submit still works with existing code path."""
+        course = Course.objects.create(title="C1", created_by=self.admin)
+        cv = CourseVersion.objects.create(course=course, label="v1", created_by=self.admin)
+        course_assessment = Assessment.objects.create(
+            title="Course Quiz", assessment_type=ASSESSMENT_TYPE_QUIZ,
+            course_version=cv,
+            open_at=self.now - timezone.timedelta(days=1),
+            close_at=self.now + timezone.timedelta(days=7),
+            passing_score=Decimal("50.00"), total_points=Decimal("10.00"),
+            is_active=True, created_by=self.admin,
+        )
+        q = AssessmentQuestion.objects.create(
+            assessment=course_assessment, text="Q", question_type=QUESTION_TYPE_MCQ, points=Decimal("10.00"), order=1,
+        )
+        c = AssessmentChoice.objects.create(question=q, text="Right", is_correct=True, order=1)
+        attempt = AssessmentAttempt.objects.create(
+            assessment=course_assessment, student=self.student,
+            attempt_number=1, status=ATTEMPT_STATUS_IN_PROGRESS, started_at=self.now,
+        )
+        submit_assessment(attempt, [AssessmentAnswerData(question_id=q.id, selected_choice_id=c.id)])
+        attempt.refresh_from_db()
+        self.assertEqual(attempt.status, ATTEMPT_STATUS_SUBMITTED)
+        self.assertEqual(attempt.score_points, Decimal("10.00"))
+
+
+class DiplomaAutosaveTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(email="admin@test.com", password="x")
+        self.student = User.objects.create_user(email="student@test.com", password="x")
+        self.now = timezone.now()
+        self.diploma = Diploma.objects.create(title="D", total_semesters=2, created_by=self.admin)
+        self.cohort = Cohort.objects.create(diploma=self.diploma, name="C1", start_date=date(2026, 1, 1), created_by=self.admin)
+        self.semester = Semester.objects.create(diploma=self.diploma, title="Sem1", order=1)
+        self.lecture = DiplomaLecture.objects.create(cohort=self.cohort, semester=self.semester, order=1, title="L1")
+        self.assessment = Assessment.objects.create(
+            title="Diploma Quiz", assessment_type=ASSESSMENT_TYPE_QUIZ,
+            semester=self.semester, cohort=self.cohort,
+            open_at=self.now - timezone.timedelta(days=1),
+            close_at=self.now + timezone.timedelta(days=7),
+            passing_score=Decimal("50.00"), total_points=Decimal("20.00"),
+            is_active=True, created_by=self.admin,
+        )
+        self.section = AssessmentLectureSection.objects.create(
+            assessment=self.assessment, lecture=self.lecture, order=1, mcq_count=1, max_grade=Decimal("20.00"),
+        )
+        self.bank_q = DiplomaLectureQuestion.objects.create(
+            lecture=self.lecture, text="MCQ", question_type=QUESTION_TYPE_MCQ, points=Decimal("10.00"), active=True, created_by=self.admin,
+        )
+        DiplomaLectureChoice.objects.create(question=self.bank_q, text="A", is_correct=True, order=1)
+        self.written_mq = AssessmentSectionManualQuestion.objects.create(
+            section=self.section, text="Essay", points=Decimal("10.00"), order=1, required=False,
+        )
+        self.attempt = AssessmentAttempt.objects.create(
+            assessment=self.assessment, student=self.student,
+            attempt_number=1, status=ATTEMPT_STATUS_IN_PROGRESS, started_at=self.now,
+        )
+        generate_diploma_assessment_snapshot(self.attempt)
+        self.snapshot_questions = list(self.attempt.snapshot_questions.order_by("order"))
+        self.written_sq = self.snapshot_questions[0]
+        self.mcq_sq = self.snapshot_questions[1]
+        self.snapshot_choice = self.mcq_sq.choices.first()
+
+    def test_autosave_stores_mcq(self):
+        diploma_autosave_attempt(self.attempt, {f"q_{self.mcq_sq.order}": str(self.snapshot_choice.pk)})
+        answer = AssessmentAttemptSnapshotAnswer.objects.get(attempt_question=self.mcq_sq)
+        self.assertEqual(answer.selected_choice_id, self.snapshot_choice.pk)
+
+    def test_autosave_stores_written(self):
+        diploma_autosave_attempt(self.attempt, {f"q_{self.written_sq.order}": "Draft"})
+        answer = AssessmentAttemptSnapshotAnswer.objects.get(attempt_question=self.written_sq)
+        self.assertEqual(answer.written_text, "Draft")
+
+    def test_autosave_does_not_score(self):
+        diploma_autosave_attempt(self.attempt, {f"q_{self.mcq_sq.order}": str(self.snapshot_choice.pk)})
+        answer = AssessmentAttemptSnapshotAnswer.objects.get(attempt_question=self.mcq_sq)
+        self.assertIsNone(answer.score)
+
+    def test_autosave_does_not_change_status(self):
+        diploma_autosave_attempt(self.attempt, {f"q_{self.mcq_sq.order}": str(self.snapshot_choice.pk)})
+        self.attempt.refresh_from_db()
+        self.assertEqual(self.attempt.status, ATTEMPT_STATUS_IN_PROGRESS)
+
+
+class DiplomaGradingTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(email="admin@test.com", password="x")
+        self.grader = User.objects.create_user(email="grader@test.com", password="x")
+        self.student = User.objects.create_user(email="student@test.com", password="x")
+        self.now = timezone.now()
+        self.diploma = Diploma.objects.create(title="D", total_semesters=2, created_by=self.admin)
+        self.cohort = Cohort.objects.create(diploma=self.diploma, name="C1", start_date=date(2026, 1, 1), created_by=self.admin)
+        self.semester = Semester.objects.create(diploma=self.diploma, title="Sem1", order=1)
+        self.lecture = DiplomaLecture.objects.create(cohort=self.cohort, semester=self.semester, order=1, title="L1")
+        self.assessment = Assessment.objects.create(
+            title="Diploma Quiz", assessment_type=ASSESSMENT_TYPE_QUIZ,
+            semester=self.semester, cohort=self.cohort,
+            open_at=self.now - timezone.timedelta(days=1),
+            close_at=self.now + timezone.timedelta(days=7),
+            passing_score=Decimal("50.00"), total_points=Decimal("20.00"),
+            is_active=True, created_by=self.admin,
+        )
+        self.section = AssessmentLectureSection.objects.create(
+            assessment=self.assessment, lecture=self.lecture, order=1, mcq_count=0, max_grade=Decimal("20.00"),
+        )
+        self.written_mq = AssessmentSectionManualQuestion.objects.create(
+            section=self.section, text="Essay", points=Decimal("20.00"), order=1, required=True,
+        )
+        self.attempt = AssessmentAttempt.objects.create(
+            assessment=self.assessment, student=self.student,
+            attempt_number=1, status=ATTEMPT_STATUS_UNDER_REVIEW, started_at=self.now,
+        )
+        generate_diploma_assessment_snapshot(self.attempt)
+        self.written_sq = self.attempt.snapshot_questions.first()
+        self.answer, _ = AssessmentAttemptSnapshotAnswer.objects.get_or_create(attempt_question=self.written_sq)
+
+    def test_grade_snapshot_written_success(self):
+        result = grade_diploma_snapshot_answer(self.answer.pk, Decimal("15.00"), "Good", self.grader)
+        self.assertEqual(result.score, Decimal("15.00"))
+        self.assertEqual(result.feedback, "Good")
+
+    def test_grade_exceeds_points_raises(self):
+        with self.assertRaises(ValueError, msg="cannot exceed"):
+            grade_diploma_snapshot_answer(self.answer.pk, Decimal("25.00"), "Too high", self.grader)
+
+    def test_negative_score_raises(self):
+        with self.assertRaises(ValueError, msg="cannot be negative"):
+            grade_diploma_snapshot_answer(self.answer.pk, Decimal("-1.00"), "Negative", self.grader)
+
+    def test_all_questions_graded_sets_attempt_graded(self):
+        grade_diploma_snapshot_answer(self.answer.pk, Decimal("15.00"), "Good", self.grader)
+        self.attempt.refresh_from_db()
+        self.assertEqual(self.attempt.status, ATTEMPT_STATUS_GRADED)
+        self.assertIsNotNone(self.attempt.graded_at)
+        self.assertIn(self.attempt.is_pass, (True, False))
+
+    def test_override_requires_reason(self):
+        grade_diploma_snapshot_answer(self.answer.pk, Decimal("15.00"), "Good", self.grader)
+        with self.assertRaises(ValueError, msg="override reason is required"):
+            grade_diploma_snapshot_answer(self.answer.pk, Decimal("18.00"), "Updated", self.grader)
+
+    def test_override_with_reason(self):
+        grade_diploma_snapshot_answer(self.answer.pk, Decimal("15.00"), "Good", self.grader)
+        result = grade_diploma_snapshot_answer(
+            self.answer.pk, Decimal("18.00"), "Updated", self.grader, override_reason="Re-evaluated",
+        )
+        self.assertEqual(result.score, Decimal("18.00"))
+        self.assertEqual(result.score_override_reason, "Re-evaluated")

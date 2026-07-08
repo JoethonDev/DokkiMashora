@@ -1,0 +1,138 @@
+{% extends "base.html" %}{% load i18n %}{% load ui_tags %}
+{% block title %}{{ assessment.title }} - {% trans "Exceptional Access" %}{% endblock %}
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <nav class="mb-6 text-sm text-slate-500 dark:text-slate-400" aria-label="{% trans "breadcrumb" %}">
+    <ol class="flex flex-wrap items-center gap-1">
+      <li class="flex items-center gap-1"><a href="{% url 'assessments:admin_list' %}" class="hover:text-brand-600 dark:hover:text-brand-400">{% trans "Assessments" %}</a><span class="text-slate-300 dark:text-slate-600">/</span></li>
+      <li class="flex items-center gap-1"><a href="{% url 'assessments:admin_detail' assessment.id %}" class="hover:text-brand-600 dark:hover:text-brand-400">{{ assessment.title }}</a><span class="text-slate-300 dark:text-slate-600">/</span></li>
+      <li class="flex items-center gap-1"><span class="text-slate-700 dark:text-slate-200 font-medium">{% trans "Exceptional Access" %}</span></li>
+    </ol>
+  </nav>
+
+  <h1 class="text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ assessment.title }}</h1>
+  <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ assessment.get_assessment_type_display }}</p>
+
+  <div class="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+    {# Current overrides table #}
+    <div>
+      <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">{% trans "Current Overrides" %}</h2>
+      <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+        <table class="min-w-[480px] w-full divide-y divide-slate-200 dark:divide-slate-800 text-sm">
+          <thead class="bg-slate-50 dark:bg-slate-800/50">
+            <tr class="text-slate-600 dark:text-slate-300">
+              <th class="px-4 py-2.5 text-start font-medium">{% trans "Student" %}</th>
+              <th class="px-4 py-2.5 text-start font-medium">{% trans "Code" %}</th>
+              <th class="px-4 py-2.5 text-start font-medium">{% trans "Open" %}</th>
+              <th class="px-4 py-2.5 text-start font-medium">{% trans "Close" %}</th>
+              <th class="px-4 py-2.5 text-start font-medium">{% trans "Status" %}</th>
+              <th class="px-4 py-2.5 text-start font-medium">{% trans "Created By" %}</th>
+              <th class="px-4 py-2.5 text-start font-medium">{% trans "Actions" %}</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+            {% for override in overrides %}
+              <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                <td class="px-4 py-3 text-slate-900 dark:text-slate-100">{{ override.diploma_enrollment.student.user.student_profile.full_name }}</td>
+                <td class="px-4 py-3 font-mono text-slate-900 dark:text-slate-100">{{ override.exam_code.code_number|default:"—" }}</td>
+                <td class="px-4 py-3 text-xs tabular-nums text-slate-700 dark:text-slate-200">{% dt override.open_at %}</td>
+                <td class="px-4 py-3 text-xs tabular-nums text-slate-700 dark:text-slate-200">{% dt override.close_at %}</td>
+                <td class="px-4 py-3">
+                  {% if override.status == "active" %}{% include "partials/_badge.html" with label=_("Active") tone="success" %}
+                  {% elif override.status == "used" %}{% include "partials/_badge.html" with label=_("Used") tone="info" %}
+                  {% elif override.status == "cancelled" %}{% include "partials/_badge.html" with label=_("Cancelled") tone="neutral" %}
+                  {% elif override.status == "expired" %}{% include "partials/_badge.html" with label=_("Expired") tone="danger" %}
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-slate-600 dark:text-slate-300 text-xs">{{ override.created_by.get_full_name|default:override.created_by.email }}</td>
+                <td class="px-4 py-3">
+                  {% if override.status == "active" %}
+                    <form method="post" action="{% url 'assessments:admin_cancel_exceptional_access' assessment.id override.id %}" class="inline" onsubmit="return confirm('{% trans "Cancel this override?" %}')">
+                      {% csrf_token %}
+                      <input type="hidden" name="reason" value="{% trans "Cancelled by admin" %}">
+                      {% include "partials/_button.html" with label=_("Cancel") variant="danger" size="sm" %}
+                    </form>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="7" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400">{% trans "No overrides yet." %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {# Create new overrides #}
+    <div>
+      <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">{% trans "Create Overrides" %}</h2>
+      <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+        <form method="post" action="{% url 'assessments:admin_exceptional_access' assessment.id %}">
+          {% csrf_token %}
+          <div class="overflow-x-auto mb-4">
+            <table class="min-w-[320px] w-full divide-y divide-slate-200 dark:divide-slate-800 text-sm">
+              <thead class="bg-slate-50 dark:bg-slate-800/50">
+                <tr class="text-slate-600 dark:text-slate-300">
+                  <th class="px-4 py-2.5 text-start font-medium">
+                    <input type="checkbox" onclick="document.querySelectorAll('.enrollment-checkbox').forEach(c => c.checked = this.checked)" class="rounded border-slate-300 dark:border-slate-700">
+                  </th>
+                  <th class="px-4 py-2.5 text-start font-medium">{% trans "Student" %}</th>
+                  <th class="px-4 py-2.5 text-start font-medium">{% trans "Override" %}</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+                {% for enrollment in enrollments %}
+                  {% with has_override=overrides_active|default:False %}
+                  <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                    <td class="px-4 py-3">
+                      <input type="checkbox" name="enrollments" value="{{ enrollment.id }}" class="enrollment-checkbox rounded border-slate-300 dark:border-slate-700">
+                    </td>
+                    <td class="px-4 py-3 text-slate-900 dark:text-slate-100">{{ enrollment.student.user.student_profile.full_name }}</td>
+                    <td class="px-4 py-3">
+                      {# Check if this enrollment already has an active override #}
+                      {% for o in overrides %}
+                        {% if o.diploma_enrollment_id == enrollment.id and o.status == "active" %}
+                          {% include "partials/_badge.html" with label=_("Active") tone="success" %}
+                        {% endif %}
+                      {% endfor %}
+                    </td>
+                  </tr>
+                  {% endwith %}
+                {% empty %}
+                  <tr>
+                    <td colspan="3" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400">{% trans "No active enrollments found." %}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="id_open_at">{% trans "Open at" %}</label>
+              <input type="datetime-local" name="open_at" id="id_open_at" required class="block w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm px-3 py-2 text-slate-900 dark:text-slate-100">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="id_close_at">{% trans "Close at" %}</label>
+              <input type="datetime-local" name="close_at" id="id_close_at" required class="block w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm px-3 py-2 text-slate-900 dark:text-slate-100">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="id_reason">{% trans "Reason" %}</label>
+              <textarea name="reason" id="id_reason" rows="3" required class="block w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm px-3 py-2 text-slate-900 dark:text-slate-100"></textarea>
+            </div>
+            <div class="flex items-center gap-2">
+              <input type="checkbox" name="force_online" id="id_force_online" class="rounded border-slate-300 dark:border-slate-700">
+              <label class="text-sm font-medium text-slate-700 dark:text-slate-200" for="id_force_online">{% trans "Force online delivery mode" %}</label>
+            </div>
+            <div>
+              <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-md text-sm font-semibold transition px-4 py-2 bg-brand-600 text-white hover:bg-brand-700">{% trans "Create Overrides" %}</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

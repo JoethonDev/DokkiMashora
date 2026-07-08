@@ -76,7 +76,29 @@
 </div>
 {% endif %}
 
-{% if not semester_progress and not completions and not eligibilities and not promotion_decisions %}
+{% if grade_items %}
+<h2 class="text-base font-semibold mb-3">{% trans "Grades" %}</h2>
+<div class="space-y-3 mb-6">
+  {% regroup grade_items by component.semester as semester_grades %}
+  {% for semester_group in semester_grades %}
+  <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+    <h3 class="text-sm font-medium text-slate-600 dark:text-slate-400 mb-2">{{ semester_group.grouper.title }}</h3>
+    <div class="space-y-1.5">
+      {% for item in semester_group.list %}
+      <div class="flex items-center justify-between text-xs">
+        <span class="text-slate-700 dark:text-slate-300">{{ item.component.name }}</span>
+        <span class="tabular-nums {% if item.score_percent is not None and item.score_percent < item.component.required_min_percent %}text-red-600 dark:text-red-400{% else %}text-slate-700 dark:text-slate-300{% endif %}">
+          {{ item.score_percent|default:"--" }}%
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if not semester_progress and not completions and not eligibilities and not promotion_decisions and not grade_items %}
 <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 text-sm text-slate-500 dark:text-slate-400">
   <p>{% trans "No academic progress records yet." %}</p>
 </div>

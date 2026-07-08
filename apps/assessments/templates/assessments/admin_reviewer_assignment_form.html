@@ -1,0 +1,59 @@
+{% extends "base.html" %}{% load i18n %}{% load ui_tags %}
+{% block title %}{% trans "Create Reviewer Assignment" %} - {{ block.super }}{% endblock %}
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <nav class="mb-6 text-sm text-slate-500 dark:text-slate-400" aria-label="{% trans "breadcrumb" %}">
+    <ol class="flex flex-wrap items-center gap-1">
+      <li class="flex items-center gap-1"><a href="{% url 'assessments:admin_reviewer_assignment_list' %}" class="hover:text-brand-600 dark:hover:text-brand-400">{% trans "Reviewer Assignments" %}</a><span class="text-slate-300 dark:text-slate-600">/</span></li>
+      <li class="flex items-center gap-1"><span class="text-slate-700 dark:text-slate-200 font-medium">{% trans "Create" %}</span></li>
+    </ol>
+  </nav>
+
+  <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
+    <h1 class="text-2xl sm:text-3xl font-bold tracking-tight font-display">{% trans "Create Reviewer Assignment" %}</h1>
+    <form method="post" class="mt-6 space-y-5">
+      {% csrf_token %}
+      <div>
+        <label for="reviewer" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{% trans "Reviewer" %} <span class="text-rose-600">*</span></label>
+        <select id="reviewer" name="reviewer" required class="block w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100">
+          <option value="">{% trans "Select reviewer…" %}</option>
+          {% for u in reviewers %}
+            <option value="{{ u.id }}">{{ u }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="cohort" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{% trans "Cohort" %} <span class="text-rose-600">*</span></label>
+        <select id="cohort" name="cohort" required class="block w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100">
+          <option value="">{% trans "Select cohort…" %}</option>
+          {% for c in cohorts %}
+            <option value="{{ c.id }}">{{ c.title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="semester" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{% trans "Semester" %} <span class="text-rose-600">*</span></label>
+        <select id="semester" name="semester" required class="block w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100">
+          <option value="">{% trans "Select semester…" %}</option>
+          {% for s in semesters %}
+            <option value="{{ s.id }}">{{ s.title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="section" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{% trans "Section (optional)" %}</label>
+        <select id="section" name="section" class="block w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100">
+          <option value="">{% trans "All sections" %}</option>
+          {% for s in sections %}
+            <option value="{{ s.id }}">{{ s.lecture.title }} ({{ s.assessment.title }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="flex gap-2 pt-4">
+        {% include "partials/_button.html" with label=_("Save") variant="primary" %}
+        <a href="{% url 'assessments:admin_reviewer_assignment_list' %}" class="inline-flex items-center rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">{% trans "Cancel" %}</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

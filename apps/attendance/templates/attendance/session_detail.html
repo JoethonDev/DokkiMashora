@@ -1,0 +1,61 @@
+{% extends "base.html" %}{% load i18n %} {% block title %}{% trans "Session Details" %} - {{ block.super }}{% endblock %} {% block content %}
+<section class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  {% include "partials/_breadcrumb.html" with items=breadcrumb_items %}
+  <header class="flex flex-wrap items-center justify-between gap-4 mb-6">
+    <div>
+      <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Attendance" %}</p>
+      <h1 class="text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ session.title|default:_("Attendance Session") }}</h1>
+    </div>
+    <div class="flex items-center gap-2">
+      {% if is_admin and session.status == "scheduled" %}
+      <form method="post" action="{% url 'attendance:attendance_session_open' session.id %}">
+        {% csrf_token %}<button type="submit" class="dm-button dm-button-primary px-4 py-2 text-sm">{% trans "Open Session" %}</button>
+      </form>
+      {% endif %}
+      {% if is_admin and session.status == "open" %}
+      <form method="post" action="{% url 'attendance:attendance_session_close' session.id %}">
+        {% csrf_token %}<button type="submit" class="dm-button bg-rose-600 text-white hover:bg-rose-700 px-4 py-2 text-sm rounded-lg">{% trans "Close Session" %}</button>
+      </form>
+      {% endif %}
+      <a href="{% url 'attendance:attendance_session_records' session.id %}" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Records" %}</a>
+    </div>
+  </header>
+
+  <div class="dm-panel p-6 rounded-xl mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+    <div><span class="block dm-muted text-xs">{% trans "Date" %}</span><span class="font-medium">{{ session.date|date:"SHORT_DATE_FORMAT" }}</span></div>
+    <div><span class="block dm-muted text-xs">{% trans "Status" %}</span><span>{% include "partials/_badge.html" with label=session.get_status_display tone=session.status %}</span></div>
+    <div><span class="block dm-muted text-xs">{% trans "Target" %}</span><span class="font-medium">{{ session.cohort|default:session.course_version|default:"—" }}</span></div>
+    <div><span class="block dm-muted text-xs">{% trans "Semester" %}</span><span class="font-medium">{{ session.semester|default:"—" }}</span></div>
+    <div><span class="block dm-muted text-xs">{% trans "Open At" %}</span><span class="font-medium">{{ session.open_at|date:"SHORT_DATETIME_FORMAT"|default:"—" }}</span></div>
+    <div><span class="block dm-muted text-xs">{% trans "Close At" %}</span><span class="font-medium">{{ session.close_at|date:"SHORT_DATETIME_FORMAT"|default:"—" }}</span></div>
+    <div><span class="block dm-muted text-xs">{% trans "Opened By" %}</span><span class="font-medium">{{ session.opened_by.get_full_name|default:session.opened_by.username|default:"—" }}</span></div>
+    <div><span class="block dm-muted text-xs">{% trans "Closed By" %}</span><span class="font-medium">{{ session.closed_by.get_full_name|default:session.closed_by.username|default:"—" }}</span></div>
+  </div>
+
+  <h2 class="text-lg font-bold font-display mb-3">{% trans "Attendance Records" %} ({{ records|length }})</h2>
+  <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+    <table class="min-w-[640px] w-full divide-y divide-slate-200 dark:divide-slate-800 text-sm">
+      <thead class="bg-slate-50 dark:bg-slate-800/50">
+        <tr class="text-slate-600 dark:text-slate-300">
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Student" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Status" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Scanned At" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Scanned By" %}</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+        {% for record in records %}
+        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+          <td class="px-4 py-3 font-medium">{{ record.student }}</td>
+          <td class="px-4 py-3">{% include "partials/_badge.html" with label=record.get_status_display tone=record.status %}</td>
+          <td class="px-4 py-3 dm-muted">{{ record.scanned_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+          <td class="px-4 py-3 dm-muted">{{ record.scanned_by.get_full_name|default:record.scanned_by.username }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" class="px-4 py-8 text-center dm-muted">{% trans "No records yet." %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

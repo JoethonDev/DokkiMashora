@@ -63,6 +63,28 @@
   </div>
   {% endfor %}
 
+  {% if grade_items %}
+  <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 mt-4">
+    <h2 class="font-semibold mb-3">{% trans "Grades" %}</h2>
+    {% regroup grade_items by component.semester as semester_grades %}
+    {% for semester_group in semester_grades %}
+    <div class="mb-3 last:mb-0">
+      <h3 class="text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">{{ semester_group.grouper.title }}</h3>
+      <div class="space-y-1">
+        {% for item in semester_group.list %}
+        <div class="flex items-center justify-between text-xs">
+          <span class="text-slate-700 dark:text-slate-300">{{ item.component.name }}</span>
+          <span class="tabular-nums {% if item.score_percent is not None and item.score_percent < item.component.required_min_percent %}text-red-600 dark:text-red-400{% else %}text-slate-700 dark:text-slate-300{% endif %}">
+            {{ item.score_percent|default:"--" }}%
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   {% if decisions %}
   <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 mt-4">
     <h2 class="font-semibold mb-2">{% trans "Decision History" %} <span class="sr-only">{% trans "Decision History" %}</span></h2>

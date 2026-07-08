@@ -1,0 +1,54 @@
+{% extends "base.html" %}{% load i18n %}{% load ui_tags %}
+{% block title %}{% trans "Grade Components" %} - {{ block.super }}{% endblock %}
+{% block content %}
+<section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <header class="mb-6 flex items-center justify-between">
+    <div>
+      <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Admin" %}</p>
+      <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{% trans "Grade Components" %}</h1>
+      <p class="text-sm text-slate-500">{{ cohort }} — {{ semester }}</p>
+    </div>
+    <a href="{% url 'progression:admin_component_create' cohort.id semester.id %}" class="inline-flex items-center gap-1 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700">{% trans "Add Component" %}</a>
+  </header>
+  <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+    <table class="min-w-[640px] w-full divide-y divide-slate-200 dark:divide-slate-800 text-sm">
+      <thead class="bg-slate-50 dark:bg-slate-800/50">
+        <tr class="text-slate-600 dark:text-slate-300">
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Order" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Name" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Type" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Weight" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Min %" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Required" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Active" %}</th>
+          <th class="px-4 py-2.5 text-end font-medium">{% trans "Actions" %}</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+        {% for c in components %}
+        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+          <td class="px-4 py-3">{{ c.order }}</td>
+          <td class="px-4 py-3 font-medium">{{ c.name }}</td>
+          <td class="px-4 py-3">{{ c.get_component_type_display }}</td>
+          <td class="px-4 py-3">{{ c.weight_percent }}%</td>
+          <td class="px-4 py-3">{{ c.required_min_percent }}%</td>
+          <td class="px-4 py-3">{% if c.required_to_pass %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</td>
+          <td class="px-4 py-3">{% if c.active %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</td>
+          <td class="px-4 py-3 text-end">
+            <a href="{% url 'progression:admin_component_edit' c.id %}" class="text-brand-600 hover:text-brand-700 text-xs font-medium">{% trans "Edit" %}</a>
+            {% if c.active %}
+            <form method="post" action="{% url 'progression:admin_component_delete' c.id %}" class="inline">
+              {% csrf_token %}
+              <button type="submit" class="text-red-600 hover:text-red-700 text-xs font-medium ml-2">{% trans "Deactivate" %}</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">{% trans "No components defined for this cohort/semester." %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

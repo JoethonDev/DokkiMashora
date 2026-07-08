@@ -1,0 +1,82 @@
+{% extends "base.html" %}{% load i18n %}{% load ui_tags %}
+{% block title %}{{ assessment.title }} - {% trans "Roster" %}{% endblock %}
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <nav class="mb-6 text-sm text-slate-500 dark:text-slate-400" aria-label="{% trans "breadcrumb" %}">
+    <ol class="flex flex-wrap items-center gap-1">
+      <li class="flex items-center gap-1"><a href="{% url 'assessments:admin_list' %}" class="hover:text-brand-600 dark:hover:text-brand-400">{% trans "Assessments" %}</a><span class="text-slate-300 dark:text-slate-600">/</span></li>
+      <li class="flex items-center gap-1"><a href="{% url 'assessments:admin_detail' assessment.id %}" class="hover:text-brand-600 dark:hover:text-brand-400">{{ assessment.title }}</a><span class="text-slate-300 dark:text-slate-600">/</span></li>
+      <li class="flex items-center gap-1"><span class="text-slate-700 dark:text-slate-200 font-medium">{% trans "Roster" %}</span></li>
+    </ol>
+  </nav>
+
+  <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+    <h1 class="text-2xl sm:text-3xl font-bold tracking-tight font-display">{% trans "Exam Codes" %}</h1>
+    <div class="flex flex-wrap gap-2">
+      {% url 'assessments:admin_exceptional_access' assessment.id as exceptional_url %}
+      {% include "partials/_button.html" with href=exceptional_url label=_("Exceptional Access") variant="secondary" size="sm" %}
+      <form method="post" action="{% url 'assessments:admin_generate_codes' assessment.id %}" class="inline">
+        {% csrf_token %}
+        {% include "partials/_button.html" with label=_("Generate Codes") variant="primary" size="sm" %}
+      </form>
+      {% url 'assessments:admin_export_offline_codes' assessment.id as export_url %}
+      {% include "partials/_button.html" with href=export_url label=_("Export Offline Codes") variant="secondary" size="sm" %}
+    </div>
+  </div>
+
+  <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+    <table class="min-w-[640px] w-full divide-y divide-slate-200 dark:divide-slate-800 text-sm">
+      <thead class="bg-slate-50 dark:bg-slate-800/50">
+        <tr class="text-slate-600 dark:text-slate-300">
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Code" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Student" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Delivery Mode" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Printed" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Actions" %}</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+        {% for code in codes %}
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+            <td class="px-4 py-3 font-mono font-semibold text-slate-900 dark:text-slate-100">{{ code.code_number }}</td>
+            <td class="px-4 py-3 text-slate-900 dark:text-slate-100">{{ code.diploma_enrollment.student.user.student_profile.full_name }}</td>
+            <td class="px-4 py-3">
+              {% if code.delivery_mode == "offline" %}
+                {% include "partials/_badge.html" with label=_("Offline") tone="warning" %}
+              {% else %}
+                {% include "partials/_badge.html" with label=_("Online") tone="info" %}
+              {% endif %}
+            </td>
+            <td class="px-4 py-3">
+              {% if code.printed_at %}
+                {% include "partials/_badge.html" with label=_("Yes") tone="success" %}
+              {% else %}
+                {% include "partials/_badge.html" with label=_("No") tone="neutral" %}
+              {% endif %}
+            </td>
+            <td class="px-4 py-3">
+              <div class="flex gap-2">
+                <form method="post" action="{% url 'assessments:admin_toggle_delivery_mode' assessment.id code.id %}" class="inline">
+                  {% csrf_token %}
+                  {% if code.delivery_mode == "offline" %}
+                    {% include "partials/_button.html" with label=_("Set Online") variant="ghost" size="sm" %}
+                  {% else %}
+                    {% include "partials/_button.html" with label=_("Set Offline") variant="ghost" size="sm" %}
+                  {% endif %}
+                </form>
+                {% if code.delivery_mode == "offline" %}
+                  <a href="{% url 'assessments:admin_offline_grade_entry' assessment.id %}?code={{ code.code_number }}" class="inline-flex items-center justify-center gap-2 rounded-md text-sm font-semibold transition px-3 py-1.5 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Grade" %}</a>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="5" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400">{% trans "No exam codes yet. Generate codes to build the roster." %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

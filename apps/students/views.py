@@ -295,7 +295,7 @@ def progression_history(request: HttpRequest) -> HttpResponse:
     """Show academic lifecycle -- semesters, promotions, completions."""
     profile = _get_profile_or_404(request.user)
     data = get_dashboard_data(profile, sections=[
-        "semester_progress", "promotion_decisions", "completions", "eligibilities",
+        "semester_progress", "promotion_decisions", "completions", "eligibilities", "grade_items",
     ])
     return _render_profile(request, "students/profile/progression.html", data)
 

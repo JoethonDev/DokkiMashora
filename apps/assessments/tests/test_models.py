@@ -1,5 +1,6 @@
 """Tests for the assessments app models."""
 
+from datetime import date
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
@@ -22,8 +23,11 @@ from apps.assessments.models import (
     AssessmentAttempt,
     AssessmentChoice,
     AssessmentQuestion,
+    DiplomaLectureChoice,
+    DiplomaLectureQuestion,
     HomeworkSubmission,
 )
+from apps.academics.models import Cohort, Diploma, DiplomaLecture, Semester
 
 
 class AssessmentTests(TestCase):
@@ -313,3 +317,34 @@ class HomeworkSubmissionTests(TestCase):
 
     def test_default_status_uploaded(self):
         self.assertEqual(self.submission.status, HOMEWORK_STATUS_UPLOADED)
+
+
+class DiplomaLectureChoiceTests(TestCase):
+    """P2-1: DiplomaLectureChoice.clean() handles deleted question FK gracefully."""
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser(email="dlc@test.com", password="x")
+        self.diploma = Diploma.objects.create(title="DLC D", total_semesters=2, created_by=self.admin)
+        self.semester = Semester.objects.create(diploma=self.diploma, order=1, title="S1")
+        self.cohort = Cohort.objects.create(diploma=self.diploma, name="DLC C", start_date=date(2026, 1, 1), created_by=self.admin)
+        self.lecture = DiplomaLecture.objects.create(cohort=self.cohort, semester=self.semester, order=1, title="DL")
+        self.question = DiplomaLectureQuestion.objects.create(
+            lecture=self.lecture, text="Q", points=Decimal("1.00"),
+            question_type=QUESTION_TYPE_MCQ, active=True, created_by=self.admin,
+        )
+
+    def test_clean_with_deleted_question_fk(self):
+        qid = self.question.pk
+        self.question.delete()
+        choice = DiplomaLectureChoice(question_id=qid, text="A", is_correct=True, order=1)
+        with self.assertRaises(ValidationError) as ctx:
+            choice.clean()
+        self.assertIn("does not exist", str(ctx.exception))
+
+    def test_clean_rejects_non_mcq_question(self):
+        self.question.question_type = QUESTION_TYPE_WRITTEN
+        self.question.save()
+        choice = DiplomaLectureChoice(question=self.question, text="A", is_correct=True, order=1)
+        with self.assertRaises(ValidationError) as ctx:
+            choice.clean()
+        self.assertIn("MCQ", str(ctx.exception))

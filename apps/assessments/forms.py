@@ -7,9 +7,74 @@ from types import SimpleNamespace
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
-from apps.academics.models import Cohort, Course, Diploma, Semester
+from apps.academics.models import Cohort, Course, Diploma, DiplomaLecture, Semester
+from apps.assessments.constants import QUESTION_TYPE_MCQ, QUESTION_TYPE_WRITTEN
 
-from .models import Assessment, AssessmentQuestion
+from .models import (
+    Assessment,
+    AssessmentLectureSection,
+    AssessmentQuestion,
+    AssessmentSectionManualQuestion,
+    DiplomaLectureQuestion,
+)
+
+
+class AssessmentLectureSectionForm(forms.ModelForm):
+    class Meta:
+        model = AssessmentLectureSection
+        fields = ["lecture", "order", "mcq_count", "max_grade"]
+
+    def __init__(self, *args, assessment=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if assessment:
+            self._assessment = assessment
+            self.fields["lecture"].queryset = DiplomaLecture.objects.filter(
+                cohort=assessment.cohort, semester=assessment.semester,
+            )
+        else:
+            self.fields["lecture"].queryset = DiplomaLecture.objects.none()
+
+    def clean_max_grade(self):
+        val = self.cleaned_data["max_grade"]
+        if val <= 0:
+            raise forms.ValidationError(_("Max grade must be positive."))
+        return val
+
+    def clean_mcq_count(self):
+        val = self.cleaned_data["mcq_count"]
+        if val < 0:
+            raise forms.ValidationError(_("MCQ count cannot be negative."))
+        return val
+
+    def clean(self):
+        cleaned = super().clean()
+        assessment = getattr(self, "_assessment", None) or (self.instance.assessment_id and self.instance.assessment)
+        if assessment and assessment.course_version_id:
+            self.add_error(None, _("Lecture sections are only for diploma-scoped assessments."))
+            return cleaned
+        lecture = cleaned.get("lecture")
+        mcq_count = cleaned.get("mcq_count")
+        if lecture and mcq_count and mcq_count > 0:
+            available = DiplomaLectureQuestion.objects.filter(
+                lecture=lecture, active=True, question_type=QUESTION_TYPE_MCQ,
+            ).count()
+            if mcq_count > available:
+                self.add_error("mcq_count", _(
+                    "Only %(available)d active MCQ(s) available in this lecture's bank."
+                ) % {"available": available})
+        return cleaned
+
+
+class AssessmentSectionManualQuestionForm(forms.ModelForm):
+    question_type = forms.CharField(widget=forms.HiddenInput(), initial=QUESTION_TYPE_WRITTEN)
+
+    class Meta:
+        model = AssessmentSectionManualQuestion
+        fields = ["text", "question_type", "points", "order", "required", "rubric"]
+        widgets = {
+            "text": forms.Textarea(attrs={"rows": 3}),
+            "rubric": forms.Textarea(attrs={"rows": 2}),
+        }
 
 SCOPE_COURSE = "course"
 SCOPE_DIPLOMA = "diploma"
@@ -160,3 +225,12 @@ def _choices_for_template(parsed_choices, question):
         )
         for index, choice_data in enumerate(parsed_choices, start=1)
     ]
+
+
+class DiplomaLectureQuestionForm(forms.ModelForm):
+    class Meta:
+        model = DiplomaLectureQuestion
+        fields = ["text", "question_type", "points", "active"]
+        widgets = {
+            "text": forms.Textarea(attrs={"rows": 3}),
+        }

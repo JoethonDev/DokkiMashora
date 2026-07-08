@@ -1,0 +1,59 @@
+{% extends "base.html" %}{% load i18n %} {% block title %}{% trans "Attendance Sessions" %} - {{ block.super }}{% endblock %} {% block content %}
+<section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  {% include "partials/_breadcrumb.html" with items=breadcrumb_items %}
+  <header class="flex flex-wrap items-center justify-between gap-4 mb-6">
+    <div>
+      <h1 class="text-2xl sm:text-3xl font-bold tracking-tight font-display">{% trans "Attendance Sessions" %}</h1>
+    </div>
+    <a href="{% url 'attendance:attendance_session_create' %}" class="dm-button dm-button-primary px-4 py-2 text-sm">{% trans "Create Session" %}</a>
+  </header>
+
+  <form method="get" class="flex flex-wrap items-end gap-3 mb-6 dm-panel p-4 rounded-xl">
+    <div>
+      <label class="block text-sm font-medium dm-text mb-1" for="cohort_id">{% trans "Cohort" %}</label>
+      <select name="cohort_id" id="cohort_id" class="dm-input rounded-lg px-3 py-2 text-sm shadow-sm">
+        <option value="">{% trans "All" %}</option>
+        {% for c in cohorts %}<option value="{{ c.id }}" {% if selected_cohort_id == c.id %}selected{% endif %}>{{ c }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-sm font-medium dm-text mb-1" for="date_from">{% trans "From" %}</label>
+      <input type="date" name="date_from" id="date_from" value="{{ date_from }}" class="dm-input rounded-lg px-3 py-2 text-sm shadow-sm">
+    </div>
+    <div>
+      <label class="block text-sm font-medium dm-text mb-1" for="date_to">{% trans "To" %}</label>
+      <input type="date" name="date_to" id="date_to" value="{{ date_to }}" class="dm-input rounded-lg px-3 py-2 text-sm shadow-sm">
+    </div>
+    <button type="submit" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Filter" %}</button>
+  </form>
+
+  <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+    <table class="min-w-[640px] w-full divide-y divide-slate-200 dark:divide-slate-800 text-sm">
+      <thead class="bg-slate-50 dark:bg-slate-800/50">
+        <tr class="text-slate-600 dark:text-slate-300">
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Date" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Title" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Target" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Status" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Created By" %}</th>
+          <th class="px-4 py-2.5 text-start font-medium">{% trans "Actions" %}</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+        {% for session in sessions %}
+        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+          <td class="px-4 py-3">{{ session.date|date:"SHORT_DATE_FORMAT" }}</td>
+          <td class="px-4 py-3 font-medium">{{ session.title|default:"—" }}</td>
+          <td class="px-4 py-3">{{ session.cohort|default:session.course_version|default:"—" }}</td>
+          <td class="px-4 py-3">{% include "partials/_badge.html" with label=session.get_status_display tone=session.status %}</td>
+          <td class="px-4 py-3 dm-muted">{{ session.created_by.get_full_name|default:session.created_by.username }}</td>
+          <td class="px-4 py-3"><a href="{% url 'attendance:attendance_session_detail' session.id %}" class="text-brand-600 hover:text-brand-700 dark:hover:text-brand-300 font-medium">{% trans "View" %}</a></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="px-4 py-8 text-center dm-muted">{% trans "No sessions found." %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

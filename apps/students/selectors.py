@@ -36,6 +36,7 @@ from apps.progression.models import (
     FinalExamEligibility,
     PromotionDecision,
     StudentDiplomaCompletion,
+    StudentGradeItem,
     StudentSemesterProgress,
 )
 from apps.students.services import check_apply_eligibility
@@ -50,7 +51,7 @@ ALL_SECTIONS = [
     "active_courses", "expired_courses", "exam_assignments",
     "assessment_attempts", "homework_submissions", "semester_progress",
     "promotion_decisions", "completions", "certificates", "eligibilities", "apply",
-    "payments", "notifications",
+    "payments", "notifications", "grade_items",
 ]
 
 _SECTION_LOADERS: dict[str, tuple] = {
@@ -69,6 +70,7 @@ _SECTION_LOADERS: dict[str, tuple] = {
     "completions": ("completions", lambda p, u: _get_completions(p)),
     "certificates": ("certificates", lambda p, u: _get_certificates(p)),
     "eligibilities": ("eligibilities", lambda p, u: _get_eligibilities(p)),
+    "grade_items": ("grade_items", lambda p, u: _get_grade_items(p)),
     "payments": ("payments", lambda p, u: _get_payments(p)),
     "notifications": ("notifications", lambda p, u: _get_notifications(p)),
     "apply": ("apply", lambda p, u: _apply_eligibility(p)),
@@ -359,6 +361,20 @@ def _get_eligibilities(student_profile: StudentProfile) -> list[FinalExamEligibi
     return list(
         FinalExamEligibility.objects.filter(student=student_profile)
         .select_related("diploma_enrollment__cohort__diploma", "final_assessment")
+    )
+
+
+# ---------------------------------------------------------------------------
+# Grade items
+# ---------------------------------------------------------------------------
+
+
+def _get_grade_items(student_profile: StudentProfile) -> list[StudentGradeItem]:
+    return list(
+        StudentGradeItem.objects.filter(
+            student=student_profile,
+            visible_to_student=True,
+        ).select_related("component__semester", "component__cohort", "diploma_enrollment").order_by("component__semester__order")
     )
 
 
