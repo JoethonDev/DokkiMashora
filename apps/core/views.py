@@ -559,7 +559,6 @@ def bad_request(request: HttpRequest, exception=None) -> HttpResponse:
     return render(request, "core/errors/400.html", status=400)
 
 
-@require_http_methods(["GET", "HEAD"])
 def permission_denied(request: HttpRequest, exception=None) -> HttpResponse:
     return render(request, "core/errors/403.html", status=403)
 

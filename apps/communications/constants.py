@@ -17,6 +17,7 @@ TEMPLATE_PAYMENT_NOTIFICATION = "payment_notification"
 TEMPLATE_COURSE_PAYMENT_INSTRUCTIONS = "course_payment_instructions"
 TEMPLATE_DIPLOMA_ENTRANCE_EXAM_SCHEDULE = "diploma_entrance_exam_schedule"
 TEMPLATE_DIPLOMA_INTERVIEW_REQUEST = "diploma_interview_request"
+TEMPLATE_DIPLOMA_DOCUMENT_UPLOAD_REQUEST = "diploma_document_upload_request"
 TEMPLATE_APPLICATION_PAYMENT_PENDING = "application_payment_pending"
 
 TEMPLATE_SLUGS = (
@@ -32,6 +33,7 @@ TEMPLATE_SLUGS = (
     TEMPLATE_COURSE_PAYMENT_INSTRUCTIONS,
     TEMPLATE_DIPLOMA_ENTRANCE_EXAM_SCHEDULE,
     TEMPLATE_DIPLOMA_INTERVIEW_REQUEST,
+    TEMPLATE_DIPLOMA_DOCUMENT_UPLOAD_REQUEST,
     TEMPLATE_APPLICATION_PAYMENT_PENDING,
 )
 
@@ -98,6 +100,8 @@ ALL_VARIABLE_SAMPLES: dict[str, str] = {
     "due_at": "2026-06-30",
     "reference": "INV-001",
     "status": "مدفوع",
+    "upload_url": "https://example.com/documents/upload/abc123",
+    "staff_phone": "01234567890",
 }
 
 AVAILABLE_VARIABLES_BY_SLUG: dict[str, dict[str, list[str]]] = {
@@ -145,6 +149,10 @@ AVAILABLE_VARIABLES_BY_SLUG: dict[str, dict[str, list[str]]] = {
         "required": [],
         "optional": ["full_name", "diploma_title", "cohort_name", "exam_title", "exam_open_at", "exam_close_at"],
     },
+    TEMPLATE_DIPLOMA_DOCUMENT_UPLOAD_REQUEST: {
+        "required": ["full_name", "diploma_title", "cohort_name", "upload_url", "expires_at", "staff_phone"],
+        "optional": [],
+    },
     TEMPLATE_DIPLOMA_INTERVIEW_REQUEST: {
         "required": [],
         "optional": ["full_name", "diploma_title", "cohort_name", "interview_at", "phone_number", "expires_at"],
@@ -183,6 +191,7 @@ SAMPLE_CONTEXT_BY_SLUG: dict[str, dict[str, str]] = {
     TEMPLATE_DIPLOMA_ENTRANCE_EXAM_SCHEDULE: {"full_name": "ماري جرجس", "diploma_title": "دبلومة الدراسات اللاهوتية", "cohort_name": "دفعة ٢٠٢٦", "exam_title": "امتحان القبول للدبلومة", "exam_open_at": "١ يونيو ٢٠٢٦", "exam_close_at": "١٥ يونيو ٢٠٢٦"},
     TEMPLATE_DIPLOMA_INTERVIEW_REQUEST: {"full_name": "ماري جرجس", "diploma_title": "دبلومة الدراسات اللاهوتية", "cohort_name": "دفعة ٢٠٢٦", "interview_at": "2026-07-15T10:00:00+03:00", "phone_number": "01234567890", "expires_at": "2026-07-20T23:59:00+03:00"},
     TEMPLATE_APPLICATION_PAYMENT_PENDING: {"full_name": "ماري جرجس", "program_type": "دبلومة", "course_title": "", "diploma_title": "دبلومة الدراسات اللاهوتية", "cohort_name": "دفعة ٢٠٢٦", "staff_phone": "01234567890"},
+    TEMPLATE_DIPLOMA_DOCUMENT_UPLOAD_REQUEST: {"full_name": "ماري جرجس", "diploma_title": "دبلومة الدراسات اللاهوتية", "cohort_name": "دفعة ٢٠٢٦", "upload_url": "https://example.com/documents/upload/abc123", "expires_at": "2026-07-20T23:59:00+03:00", "staff_phone": "01234567890"},
 }
 
 TEMPLATE_SAMPLE_CONTEXT = SAMPLE_CONTEXT_BY_SLUG

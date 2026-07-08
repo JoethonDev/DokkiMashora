@@ -10,6 +10,7 @@ from apps.communications.constants import (
     TEMPLATE_ACTIVATION,
     TEMPLATE_APPLICATION_PAYMENT_PENDING,
     TEMPLATE_COURSE_PAYMENT_INSTRUCTIONS,
+    TEMPLATE_DIPLOMA_DOCUMENT_UPLOAD_REQUEST,
     TEMPLATE_DIPLOMA_ENTRANCE_EXAM_SCHEDULE,
     TEMPLATE_DIPLOMA_INTERVIEW_REQUEST,
     TEMPLATE_ENTRANCE_EXAM_FAIL,
@@ -170,6 +171,22 @@ DEFAULT_TEMPLATES = {
             "{% if diploma_title %}Diploma: {{ diploma_title }}\n{% endif %}"
             "{% if cohort_name %}Cohort: {{ cohort_name }}\n{% endif %}"
             "Please contact us at {{ staff_phone }} for payment details.\n\n"
+            "Thank you,\nDokkiMashora admissions"
+        ),
+    },
+    TEMPLATE_DIPLOMA_DOCUMENT_UPLOAD_REQUEST: {
+        "name": "Diploma document upload request",
+        "subject": "Document upload required for your diploma application",
+        "body": (
+            "Hello {{ full_name }},\n\n"
+            "Your application for '{{ diploma_title }}' ({{ cohort_name }}) has been accepted. "
+            "To proceed with enrollment, please upload the required documents.\n\n"
+            "Upload link: {{ upload_url }}\n"
+            "This link expires on {{ expires_at }}.\n\n"
+            "Please upload:\n"
+            "- A personal photo (persona image)\n"
+            "- Your documents (one PDF or multiple images)\n\n"
+            "Contact us at {{ staff_phone }} if you need assistance.\n\n"
             "Thank you,\nDokkiMashora admissions"
         ),
     },

@@ -137,7 +137,7 @@ def edit_profile(request: HttpRequest) -> HttpResponse:
 def application_history(request: HttpRequest) -> HttpResponse:
     """Show all applications submitted by the student."""
     profile = _get_profile_or_404(request.user)
-    applications = profile.program_applications.select_related("reviewed_by", "cohort__diploma", "course").order_by("-created_at")
+    applications = profile.program_applications.select_related("reviewed_by", "cohort__diploma", "course").prefetch_related("document_requests__upload").order_by("-created_at")
     page_obj, pagination_qs = paginate(request, applications, per_page=15)
     data = get_dashboard_data(profile, sections=["apply"])
     data.update({"applications": page_obj, "pagination_qs": pagination_qs})

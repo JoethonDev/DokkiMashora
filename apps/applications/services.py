@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from django.contrib.auth import get_user_model
@@ -13,8 +14,8 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from apps.academics.constants import ENROLLMENT_STATUS_PENDING
-from apps.academics.models import Cohort, Course, CourseEnrollment
-from apps.academics.services import activate_course_enrollment
+from apps.academics.models import Cohort, Course, CourseEnrollment, DiplomaEnrollment
+from apps.academics.services import activate_course_enrollment, activate_diploma_enrollment
 from apps.accounts.constants import GROUP_STUDENT, USER_STATUS_INACTIVE
 from apps.audit.constants import ACTION_APPLICATION_DECISION_REVERTED
 from apps.audit.services import record_audit_event
@@ -23,6 +24,8 @@ from apps.communications.constants import (
     TEMPLATE_REJECTION,
 )
 from apps.communications.services import send_templated_email
+from apps.payments.constants import CURRENCY_EGP, PAYMENT_STATUS_PAID
+from apps.payments.models import PaymentRecord
 from apps.students.identity import (
     COUNTRY_EG,
     normalize_identity_number,
@@ -42,6 +45,7 @@ from .constants import (
     PROGRAM_APP_STATUS_ACCEPTED,
     PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED,
     PROGRAM_APP_STATUS_ACTIVATED,
+    PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED,
     PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
     PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
     PROGRAM_APP_STATUS_INVITED,
@@ -625,10 +629,14 @@ class ActivationResult:
     reasons: list[str] = field(default_factory=list)
 
 
+def has_application_documents_submitted(application) -> bool:
+    """Check if a complete document upload exists for this application."""
+    from .documents import has_application_documents_submitted as _check
+    return _check(application)
+
+
 def has_application_paid_record(application) -> bool:
     """Check if a paid, non-deleted PaymentRecord exists for this application."""
-    from apps.payments.constants import PAYMENT_STATUS_PAID
-    from apps.payments.models import PaymentRecord
     return PaymentRecord.objects.filter(
         application=application,
         status=PAYMENT_STATUS_PAID,
@@ -656,16 +664,14 @@ def can_activate_application(application) -> ActivationCheck:
         return ActivationCheck(ready=len(reasons) == 0, reasons=reasons)
 
     # Diploma
-    if application.status not in (PROGRAM_APP_STATUS_ACCEPTED,):
-        reasons.append("not_accepted")
+    if application.status not in (PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED, PROGRAM_APP_STATUS_ACTIVATED):
+        reasons.append("not_accepted_or_documents_not_submitted")
     if not application.cohort:
         reasons.append("no_cohort_target")
     if not has_application_paid_record(application):
         reasons.append("not_paid")
-    # Phase 3: document requirement not yet implemented
-    reasons.append("documents_required")
 
-    return ActivationCheck(ready=False, reasons=reasons)
+    return ActivationCheck(ready=len(reasons) == 0, reasons=reasons)
 
 
 @transaction.atomic
@@ -704,7 +710,15 @@ def activate_application_if_ready(application, actor=None) -> ActivationResult:
         enrollment_type = "course"
         enrollment_id = enrollment.pk
     else:
-        return ActivationResult(activated=False, reasons=["documents_required"])
+        # Diploma enrollment
+        enrollment, created = DiplomaEnrollment.objects.get_or_create(
+            student=locked.student,
+            cohort=locked.cohort,
+            defaults={"status": ENROLLMENT_STATUS_PENDING},
+        )
+        activate_diploma_enrollment(enrollment)
+        enrollment_type = "diploma"
+        enrollment_id = enrollment.pk
 
     # Update application status
     old_status = locked.status
@@ -748,19 +762,21 @@ def activate_application_if_ready(application, actor=None) -> ActivationResult:
 
 def _find_existing_enrollment(application):
     """Find the enrollment previously created for this activated application."""
-    from apps.academics.models import CourseEnrollment
     if application.program_type == PROGRAM_TYPE_COURSE and application.course:
         return CourseEnrollment.objects.filter(
             student=application.student,
             course_version__course=application.course,
+        ).first()
+    if application.program_type == PROGRAM_TYPE_DIPLOMA and application.cohort:
+        return DiplomaEnrollment.objects.filter(
+            student=application.student,
+            cohort=application.cohort,
         ).first()
     return None
 
 
 def _find_paid_record_id(application):
     """Return the id of the paid PaymentRecord for this application, or None."""
-    from apps.payments.constants import PAYMENT_STATUS_PAID
-    from apps.payments.models import PaymentRecord
     record = PaymentRecord.objects.filter(
         application=application,
         status=PAYMENT_STATUS_PAID,
@@ -783,11 +799,6 @@ def mark_application_paid(
 
     Returns the PaymentRecord.
     """
-    from decimal import Decimal
-
-    from apps.payments.constants import CURRENCY_EGP, PAYMENT_STATUS_PAID
-    from apps.payments.models import PaymentRecord
-
     if paid_at is None:
         paid_at = timezone.now()
 

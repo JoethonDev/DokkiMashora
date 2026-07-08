@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+import os
 from datetime import date
 from typing import Any
 
 from django import forms
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.academics.models import Cohort, Course
 from apps.applications.constants import PROGRAM_TYPE_CHOICES
+from apps.applications.documents import ATTACHMENT_ALLOWED_EXTENSIONS
 from apps.applications.services import RegistrationData, find_duplicate, normalize_phone
 from apps.students.constants import EDUCATION_CHOICES, GENDER_CHOICES
 from apps.students.identity import (
@@ -218,3 +221,79 @@ class RegistrationForm(forms.Form):
                 result["program_type"] = "course"
                 result["course_id"] = int(program_target.split("_", 1)[1])
         return result
+
+
+class AdminDocumentRequestForm(forms.Form):
+    """Admin form to request documents for an accepted diploma application."""
+
+    expires_at = forms.DateTimeField(
+        label=_("Expiry date/time"),
+        required=True,
+        widget=forms.DateTimeInput(attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"),
+    )
+    notes = forms.CharField(
+        label=_("Notes"),
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 3}),
+    )
+    send_email = forms.BooleanField(
+        label=_("Send email notification"),
+        required=False,
+        initial=True,
+    )
+
+    def clean_expires_at(self) -> Any:
+        value = self.cleaned_data["expires_at"]
+        if timezone.is_naive(value):
+            value = timezone.make_aware(value)
+        if value <= timezone.now():
+            raise forms.ValidationError(_("Expiry time must be in the future."))
+        return value
+
+
+class MultipleFileInput(forms.ClearableFileInput):
+    allow_multiple_selected = True
+
+
+class StudentDocumentUploadForm(forms.Form):
+    """Student upload form for persona image and attachments."""
+
+    persona_image = forms.ImageField(
+        label=_("Personal photo"),
+        required=True,
+    )
+    attachments = forms.FileField(
+        label=_("Documents (one PDF or multiple images)"),
+        required=True,
+        widget=MultipleFileInput,
+    )
+
+    def clean_attachments(self) -> Any:
+        files = self.files.getlist("attachments") if self.files else []
+        if not files:
+            raise forms.ValidationError(_("At least one attachment file is required."))
+        allowed = ATTACHMENT_ALLOWED_EXTENSIONS
+        has_pdf = False
+        has_image = False
+        for f in files:
+            ext = _get_ext(f.name)
+            if ext not in allowed:
+                raise forms.ValidationError(
+                    _("File type '%(ext)s' is not allowed for attachments.") % {"ext": ext}
+                )
+            if ext == ".pdf":
+                has_pdf = True
+            else:
+                has_image = True
+            if has_pdf and has_image:
+                raise forms.ValidationError(_("Cannot mix PDF and image files in attachments."))
+        max_count = settings.APPLICATION_DOCUMENT_MAX_ATTACHMENT_FILES
+        if len(files) > max_count:
+            raise forms.ValidationError(
+                _("Maximum %(max)d attachment files allowed.") % {"max": max_count}
+            )
+        return files
+
+
+def _get_ext(name: str) -> str:
+    return os.path.splitext(name)[1].lower()

@@ -77,6 +77,8 @@ DECISION_ACTION_ACCEPT = "accept"
 DECISION_ACTION_REJECT = "reject"
 DECISION_ACTION_REVERT = "revert"
 DECISION_ACTION_NOTE = "note"
+DECISION_ACTION_REQUEST_DOCUMENTS = "request_documents"
+DECISION_ACTION_SUBMIT_DOCUMENTS = "submit_documents"
 DECISION_ACTION_ACTIVATE = "activate"
 
 DECISION_ACTION_CHOICES = (
@@ -89,10 +91,25 @@ DECISION_ACTION_CHOICES = (
     (DECISION_ACTION_REJECT, _("Rejected")),
     (DECISION_ACTION_REVERT, _("Reverted")),
     (DECISION_ACTION_NOTE, _("Note")),
+    (DECISION_ACTION_REQUEST_DOCUMENTS, _("Documents Requested")),
+    (DECISION_ACTION_SUBMIT_DOCUMENTS, _("Documents Submitted")),
     (DECISION_ACTION_ACTIVATE, _("Activated")),
 )
 
 REVERTABLE_ACTIONS = frozenset({DECISION_ACTION_ACCEPT, DECISION_ACTION_REJECT})
+
+# Document request statuses
+DOCUMENT_REQUEST_STATUS_REQUESTED = "requested"
+DOCUMENT_REQUEST_STATUS_SUBMITTED = "submitted"
+DOCUMENT_REQUEST_STATUS_EXPIRED = "expired"
+DOCUMENT_REQUEST_STATUS_CANCELLED = "cancelled"
+
+DOCUMENT_REQUEST_STATUS_CHOICES = (
+    (DOCUMENT_REQUEST_STATUS_REQUESTED, _("Requested")),
+    (DOCUMENT_REQUEST_STATUS_SUBMITTED, _("Submitted")),
+    (DOCUMENT_REQUEST_STATUS_EXPIRED, _("Expired")),
+    (DOCUMENT_REQUEST_STATUS_CANCELLED, _("Cancelled")),
+)
 
 # Email action constants
 EMAIL_ACTION_ENTRANCE_EXAM_INVITATION = "entrance_exam_invitation"
@@ -101,6 +118,7 @@ EMAIL_ACTION_ACCEPTANCE = "acceptance"
 EMAIL_ACTION_COURSE_PAYMENT_INSTRUCTIONS = "course_payment_instructions"
 EMAIL_ACTION_DIPLOMA_ENTRANCE_EXAM_SCHEDULE = "diploma_entrance_exam_schedule"
 EMAIL_ACTION_DIPLOMA_INTERVIEW_REQUEST = "diploma_interview_request"
+EMAIL_ACTION_DIPLOMA_DOCUMENT_UPLOAD_REQUEST = "diploma_document_upload_request"
 EMAIL_ACTION_NOTE = "note"
 EMAIL_ACTION_EXAM_RESULT = "entrance_exam_result"
 EMAIL_ACTION_APPLICATION_PAYMENT_PENDING = "application_payment_pending"
@@ -112,6 +130,7 @@ EMAIL_ACTION_CHOICES = (
     (EMAIL_ACTION_COURSE_PAYMENT_INSTRUCTIONS, _("Course payment instructions")),
     (EMAIL_ACTION_DIPLOMA_ENTRANCE_EXAM_SCHEDULE, _("Diploma entrance exam schedule")),
     (EMAIL_ACTION_DIPLOMA_INTERVIEW_REQUEST, _("Diploma interview request")),
+    (EMAIL_ACTION_DIPLOMA_DOCUMENT_UPLOAD_REQUEST, _("Diploma document upload request")),
     (EMAIL_ACTION_APPLICATION_PAYMENT_PENDING, _("Application payment pending")),
     (EMAIL_ACTION_NOTE, _("Note")),
     (EMAIL_ACTION_EXAM_RESULT, _("Entrance exam result")),

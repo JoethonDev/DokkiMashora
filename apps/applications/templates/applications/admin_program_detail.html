@@ -134,7 +134,7 @@
         {# No active admin actions for these statuses #}
         <p class="text-sm text-slate-500 dark:text-slate-400">{% trans "This application is awaiting further steps." %}</p>
 
-      {% elif application.status == "accepted" or application.status == "rejected" %}
+      {% elif application.status == "accepted" or application.status == "documents_requested" or application.status == "documents_submitted" or application.status == "rejected" %}
         {# Mark paid (accepted, not paid) #}
         {% if application.status == "accepted" and not is_paid %}
           <form method="post" class="space-y-3">
@@ -157,6 +157,57 @@
             </div>
           </form>
           <hr class="my-4 border-slate-200 dark:border-slate-700">
+        {% endif %}
+
+        {# Request documents (accepted diploma, admin only) #}
+        {% if application.status == "accepted" and application.program_type == "diploma" and request_doc_form %}
+          <form method="post" class="space-y-3">
+            {% csrf_token %}
+            <h3 class="font-semibold text-sm">{% trans "Request Documents" %}</h3>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Expiry date/time" %}<span class="text-red-500">*</span></label>
+              <input type="datetime-local" name="expires_at" required class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900 dark:text-slate-100">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Notes" %}</label>
+              <textarea name="notes" rows="2" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900 dark:text-slate-100"></textarea>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              {% include "partials/_button.html" with label=_("Request Documents") size="sm" variant="primary" attrs='name="action" value="request_documents"' %}
+            </div>
+            <div class="flex items-center gap-2">
+              <input type="checkbox" name="send_email" id="send_email_docs" checked class="rounded border-slate-300 dark:border-slate-700 text-brand-600 focus:ring-brand-500">
+              <label for="send_email_docs" class="text-sm text-slate-700 dark:text-slate-200">{% trans "Send email notification" %}</label>
+            </div>
+          </form>
+          <hr class="my-4 border-slate-200 dark:border-slate-700">
+        {% endif %}
+
+        {# Document request status #}
+        {% if doc_request %}
+          <div class="mt-4 p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+            <h4 class="text-sm font-semibold mb-2">{% trans "Document Status" %}</h4>
+            <dl class="text-xs space-y-1">
+              <dt class="text-slate-500 dark:text-slate-400">{% trans "Status" %}</dt>
+              <dd class="text-slate-900 dark:text-slate-100">{{ doc_request.get_status_display }}</dd>
+              <dt class="text-slate-500 dark:text-slate-400">{% trans "Expires" %}</dt>
+              <dd class="text-slate-900 dark:text-slate-100 tabular-nums">{% dt doc_request.expires_at %}</dd>
+              {% if doc_request.submitted_at %}
+                <dt class="text-slate-500 dark:text-slate-400">{% trans "Submitted" %}</dt>
+                <dd class="text-slate-900 dark:text-slate-100 tabular-nums">{% dt doc_request.submitted_at %}</dd>
+              {% endif %}
+              {% if doc_upload %}
+                <dt class="text-slate-500 dark:text-slate-400">{% trans "Persona Image" %}</dt>
+                <dd class="text-slate-900 dark:text-slate-100">
+                  <a href="{% url 'applications:download_persona' doc_upload.pk %}" class="text-brand-600 dark:text-brand-400 hover:underline">{% trans "Download" %}</a>
+                </dd>
+                <dt class="text-slate-500 dark:text-slate-400">{% trans "Attachments PDF" %}</dt>
+                <dd class="text-slate-900 dark:text-slate-100">
+                  <a href="{% url 'applications:download_attachments' doc_upload.pk %}" class="text-brand-600 dark:text-brand-400 hover:underline">{% trans "Download" %}</a>
+                </dd>
+              {% endif %}
+            </dl>
+          </div>
         {% endif %}
 
         {# Revert #}

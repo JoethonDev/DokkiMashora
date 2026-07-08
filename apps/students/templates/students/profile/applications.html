@@ -26,6 +26,25 @@
           {% if app.rejection_reason %}
             <p class="text-xs text-rose-600 mt-2">{{ app.rejection_reason }}</p>
           {% endif %}
+          {% if app.status == "documents_requested" %}
+            {% with doc_requests=app.document_requests.all %}
+              {% with latest=doc_requests|first %}
+                {% if latest %}
+                  <p class="text-xs text-amber-600 mt-2">{% trans "Documents requested — expires" %} <span class="tabular-nums">{{ latest.expires_at|date:"j M Y, H:i" }}</span></p>
+                {% endif %}
+              {% endwith %}
+            {% endwith %}
+          {% endif %}
+          {% if app.status == "documents_submitted" %}
+            {% with upload=app.submitted_document_upload %}
+              {% if upload %}
+                <div class="flex gap-3 mt-2 text-xs">
+                  <a href="{% url 'applications:download_persona' upload.pk %}" class="text-brand-600 dark:text-brand-400 hover:underline">{% trans "Download photo" %}</a>
+                  <a href="{% url 'applications:download_attachments' upload.pk %}" class="text-brand-600 dark:text-brand-400 hover:underline">{% trans "Download documents" %}</a>
+                </div>
+              {% endif %}
+            {% endwith %}
+          {% endif %}
         </div>
       {% endfor %}
     </div>

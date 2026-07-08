@@ -18,6 +18,7 @@ from django.views.decorators.http import require_http_methods
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import is_admin, is_moderator
+from apps.storage.services import StorageError, storage_service
 from apps.students.services import get_open_apply_targets
 
 from .constants import (
@@ -27,8 +28,15 @@ from .constants import (
     PROGRAM_APP_STATUS_PAYMENT_PENDING,
     PROGRAM_APP_STATUS_REJECTED,
 )
-from .forms import RegistrationForm
-from .models import ProgramApplication
+from .documents import (
+    get_application_document_upload,
+    get_document_request_by_token,
+    get_latest_document_request,
+    request_documents_program_application,
+    submit_application_documents,
+)
+from .forms import AdminDocumentRequestForm, RegistrationForm, StudentDocumentUploadForm
+from .models import ApplicationDocumentUpload, ProgramApplication
 from .services import (
     RegistrationData,
     accept_program_application,
@@ -257,6 +265,27 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
                 messages.success(request, _("Payment recorded and activation attempted."))
             return redirect("applications:program_detail", application_id=application.id)
 
+        if action == "request_documents" and is_admin(request.user) and application.status == PROGRAM_APP_STATUS_ACCEPTED and application.program_type == "diploma":
+            form = AdminDocumentRequestForm(request.POST)
+            if form.is_valid():
+                try:
+                    request_documents_program_application(
+                        application,
+                        request.user,
+                        expires_at=form.cleaned_data["expires_at"],
+                        notes=form.cleaned_data.get("notes", ""),
+                        send_email=form.cleaned_data.get("send_email", True),
+                    )
+                except ValueError as exc:
+                    messages.error(request, str(exc))
+                else:
+                    messages.success(request, _("Documents requested."))
+            else:
+                for _field, errs in form.errors.items():
+                    for err in errs:
+                        messages.error(request, err)
+            return redirect("applications:program_detail", application_id=application.id)
+
         if action == "request_interview" and application.status == PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED:
             interview_at_str = (request.POST.get("interview_at") or "").strip()
             phone_number = (request.POST.get("phone_number") or "").strip()
@@ -303,8 +332,16 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
         application.decisions.select_related("actor").order_by("-created_at"),
         per_page=15,
     )
-    notes = application.notes.select_related("actor").order_by("-created_at")[:20]
+    notes = application.notes.all()[:20]
     is_paid = has_application_paid_record(application)
+
+    # Document request state
+    doc_request = get_latest_document_request(application)
+    doc_upload = get_application_document_upload(application)
+    request_doc_form = None
+    if is_admin(request.user) and application.status == PROGRAM_APP_STATUS_ACCEPTED and application.program_type == "diploma":
+        request_doc_form = AdminDocumentRequestForm()
+
     return render(
         request,
         "applications/admin_program_detail.html",
@@ -314,8 +351,132 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
             "pagination_qs": decisions_qs,
             "notes": notes,
             "is_paid": is_paid,
+            "doc_request": doc_request,
+            "doc_upload": doc_upload,
+            "request_doc_form": request_doc_form,
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Document upload (student)
+# ---------------------------------------------------------------------------
+
+
+@require_http_methods(["GET", "POST"])
+@login_required
+def document_upload(request: HttpRequest, token: str) -> HttpResponse:
+    """Student document upload via expiring token link."""
+    doc_request = get_document_request_by_token(token)
+    if not doc_request:
+        messages.error(request, _("Invalid or expired document upload link."))
+        return redirect("students:application_history")
+
+    application = doc_request.program_application
+
+    # Verify ownership
+    if doc_request.program_application.student.user != request.user:
+        messages.error(request, _("This document upload link is not for your account."))
+        return redirect("students:application_history")
+
+    if doc_request.status == "submitted":
+        messages.info(request, _("Documents have already been submitted for this request."))
+        return render(request, "applications/document_upload.html", {"submitted": True, "doc_request": doc_request, "application": application})
+
+    if doc_request.expires_at <= timezone.now():
+        messages.error(request, _("This document upload link has expired."))
+        return render(request, "applications/document_upload.html", {"expired": True, "doc_request": doc_request, "application": application})
+
+    if request.method == "POST":
+        form = StudentDocumentUploadForm(request.POST, request.FILES)
+        if form.is_valid():
+            try:
+                submit_application_documents(
+                    doc_request,
+                    request.user,
+                    persona_file=request.FILES["persona_image"],
+                    attachment_files=request.FILES.getlist("attachments"),
+                )
+                messages.success(request, _("Documents submitted successfully."))
+                return redirect("students:application_history")
+            except (ValueError, StorageError) as exc:
+                messages.error(request, str(exc))
+        else:
+            for _field, errs in form.errors.items():
+                for err in errs:
+                    messages.error(request, err)
+    else:
+        form = StudentDocumentUploadForm()
+
+    return render(request, "applications/document_upload.html", {
+        "form": form,
+        "doc_request": doc_request,
+        "application": application,
+    })
+
+
+# ---------------------------------------------------------------------------
+# Protected document downloads
+# ---------------------------------------------------------------------------
+
+
+@login_required
+@require_http_methods(["GET"])
+def download_persona_image(request: HttpRequest, upload_id: int) -> HttpResponse:
+    """Protected download for persona image. Student owner or admin can access."""
+    upload = get_object_or_404(
+        ApplicationDocumentUpload.objects.select_related("request__program_application__student__user"),
+        pk=upload_id,
+    )
+    application = upload.request.program_application
+    user = request.user
+
+    if not _can_download_document(user, application):
+        raise PermissionDenied
+
+    try:
+        url = storage_service.get_protected_download_url(
+            upload.persona_image_storage_key,
+            user=user,
+            permission_fn=lambda u: _can_download_document(u, application),
+        )
+        return redirect(url)
+    except StorageError as exc:
+        messages.error(request, str(exc))
+        return redirect("students:application_history")
+
+
+@login_required
+@require_http_methods(["GET"])
+def download_attachments_pdf(request: HttpRequest, upload_id: int) -> HttpResponse:
+    """Protected download for attachments PDF. Student owner or admin can access."""
+    upload = get_object_or_404(
+        ApplicationDocumentUpload.objects.select_related("request__program_application__student__user"),
+        pk=upload_id,
+    )
+    application = upload.request.program_application
+    user = request.user
+
+    if not _can_download_document(user, application):
+        raise PermissionDenied
+
+    try:
+        url = storage_service.get_protected_download_url(
+            upload.attachments_pdf_storage_key,
+            user=user,
+            permission_fn=lambda u: _can_download_document(u, application),
+        )
+        return redirect(url)
+    except StorageError as exc:
+        messages.error(request, str(exc))
+        return redirect("students:application_history")
+
+
+def _can_download_document(user, application) -> bool:
+    """Check if user can download documents for this application."""
+    if is_admin(user):
+        return True
+    return hasattr(user, "student_profile") and user.student_profile == application.student
 
 
 # ---------------------------------------------------------------------------

@@ -42,6 +42,10 @@ _ALLOWED_MIME_TYPES_BY_EXTENSION = {
     ".docx": {
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     },
+    ".jpg": {"image/jpeg"},
+    ".jpeg": {"image/jpeg"},
+    ".png": {"image/png"},
+    ".webp": {"image/webp"},
 }
 
 
