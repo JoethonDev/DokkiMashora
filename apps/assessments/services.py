@@ -23,7 +23,7 @@ from apps.audit.constants import (
     ACTION_EXAM_ACCESS_OVERRIDE_USED,
 )
 from apps.audit.services import record_audit_event
-from apps.core.permissions import assessment_staff_scope_filter, is_admin
+from apps.core.permissions import assessment_staff_scope_filter, is_admin, validate_score
 from apps.storage.services import storage_service
 
 from .constants import (
@@ -117,6 +117,21 @@ def has_active_enrollment(student, assessment: Assessment) -> bool:
     return True
 
 
+def check_delivery_mode(student, assessment: Assessment) -> None:
+    """Raise ValueError if this is an offline semester exam for the student."""
+    if assessment.assessment_type != ASSESSMENT_TYPE_SEMESTER_EXAM:
+        return
+    if assessment.cohort_id is None:
+        return
+    code = SemesterExamCode.objects.filter(
+        assessment=assessment,
+        diploma_enrollment__student__user=student,
+        active=True,
+    ).first()
+    if code and code.delivery_mode == DELIVERY_MODE_OFFLINE:
+        raise ValueError(_("This exam is offline-only and cannot be taken online."))
+
+
 def check_assessment_access(student, assessment: Assessment) -> None:
     """Raise ValueError if the student cannot access the assessment."""
     now = timezone.now()
@@ -124,6 +139,8 @@ def check_assessment_access(student, assessment: Assessment) -> None:
         raise ValueError(_("Assessment is not active."))
     if not has_active_enrollment(student, assessment):
         raise ValueError(_("You do not have an active enrollment for this course."))
+
+    check_delivery_mode(student, assessment)
 
     is_semester_exam = (
         assessment.assessment_type == ASSESSMENT_TYPE_SEMESTER_EXAM
@@ -683,6 +700,7 @@ def _update_diploma_attempt_grade(attempt: AssessmentAttempt) -> None:
 
 
 def grade_homework(submission_id: int, score: Decimal, feedback: str, grader) -> HomeworkSubmission:
+    validate_score(score, max_score=None)
     submission = HomeworkSubmission.objects.select_related("assessment").get(id=submission_id)
     submission.score = score
     submission.feedback = feedback
@@ -924,8 +942,7 @@ def set_exam_code_delivery_mode(code_id: int, mode: str) -> SemesterExamCode:
 
 def enter_offline_section_grade(exam_code_id: int, section_id: int, score: Decimal, grader) -> OfflineSectionGrade:
     section = AssessmentLectureSection.objects.get(pk=section_id)
-    if score > section.max_grade:
-        raise ValueError(_("Score cannot exceed section max grade of %(max)s.") % {"max": section.max_grade})
+    validate_score(score, max_score=section.max_grade)
     grade, created = OfflineSectionGrade.objects.update_or_create(
         exam_code_id=exam_code_id, section_id=section_id,
         defaults={"score": score, "graded_by": grader},
@@ -989,8 +1006,7 @@ def get_reviewer_ungraded_count(assignment) -> int:
 def reviewer_grade_section(exam_code_id: int, section_id: int, score: Decimal, grader) -> OfflineSectionGrade:
     """Enter or update an offline section grade as a reviewer."""
     section = AssessmentLectureSection.objects.get(pk=section_id)
-    if score > section.max_grade:
-        raise ValueError(_("Score cannot exceed section max grade of %(max)s.") % {"max": section.max_grade})
+    validate_score(score, max_score=section.max_grade)
     grade, created = OfflineSectionGrade.objects.update_or_create(
         exam_code_id=exam_code_id, section_id=section_id,
         defaults={"score": score, "graded_by": grader},
@@ -999,8 +1015,12 @@ def reviewer_grade_section(exam_code_id: int, section_id: int, score: Decimal, g
 
 
 def can_reviewer_grade_code(assignment, exam_code) -> bool:
-    """Check that the exam code belongs to an enrollment in the reviewer's assigned cohort/semester."""
+    """Check that the exam code belongs to the reviewer's assigned cohort, semester, and section."""
     if assignment.cohort_id != exam_code.diploma_enrollment.cohort_id:
+        return False
+    if assignment.semester_id != exam_code.assessment.semester_id:
+        return False
+    if assignment.section_id and assignment.section.assessment_id != exam_code.assessment_id:
         return False
     return True
 

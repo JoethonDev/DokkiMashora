@@ -8,8 +8,10 @@
       <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{% trans "Assessment Management" %}</h1>
     </div>
     <div class="flex flex-wrap gap-2">
+      {% if is_admin_user %}
       {% url 'assessments:admin_create' as create_url %}
       {% include "partials/_button.html" with href=create_url|add:"?next="|add:request.path label=_("Create Assessment") variant="primary" %}
+      {% endif %}
       {% url 'assessments:admin_grade_list' as grade_url %}
       {% include "partials/_button.html" with href=grade_url label=_("Grading Queue") variant="secondary" %}
     </div>

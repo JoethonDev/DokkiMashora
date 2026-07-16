@@ -1,9 +1,12 @@
 """Views for academic structure management and student content access."""
 
+import base64
+import io as _io
 import json
 import logging
 import threading
 
+import qrcode
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
@@ -53,12 +56,15 @@ from apps.academics.services import (
     start_diploma_lecture_watch,
     start_lecture_watch,
 )
+from apps.attendance.models import AttendanceCode
+from apps.attendance.services import build_attendance_qr_payload
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import (
     ROLE_EXAM_STAFF,
     can_manage_course_version,
     enrollment_scope_filter,
+    is_admin,
     is_student,
     role_required,
 )
@@ -704,10 +710,30 @@ def student_course_detail(request, version_id):
     if not can_access_course(profile, version):
         raise PermissionDenied(_("You do not have access to this course."))
     lectures = get_visible_lectures(profile, version)
+    course_enrollment = CourseEnrollment.objects.filter(
+        student=profile, course_version=version, status__in=["active", "pending"]
+    ).first()
+    course_attendance_code = None
+    course_attendance_qr = ""
+    if course_enrollment:
+        course_attendance_code = AttendanceCode.objects.filter(
+            course_enrollment=course_enrollment, active=True
+        ).first()
+        if course_attendance_code:
+            payload = build_attendance_qr_payload(course_attendance_code)
+            img = qrcode.make(payload, box_size=6)
+            buf = _io.BytesIO()
+            img.save(buf, format="PNG")
+            course_attendance_qr = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
     return render(
         request,
         "academics/student_course_detail.html",
-        {"version": version, "lectures": lectures},
+        {
+            "version": version,
+            "lectures": lectures,
+            "course_attendance_code": course_attendance_code,
+            "course_attendance_qr": course_attendance_qr,
+        },
     )
 
 
@@ -800,8 +826,24 @@ def admin_lecture_preview(request, course_id, version_id, lecture_id):
 
 
 @login_required
-@role_required(*ROLE_EXAM_STAFF)
+def admin_diploma_lecture_list(request, diploma_id, cohort_id, semester_id):
+    if not is_admin(request.user) and not request.user.is_superuser:
+        raise PermissionDenied
+    diploma = get_object_or_404(Diploma, id=diploma_id)
+    cohort = get_object_or_404(Cohort, id=cohort_id, diploma=diploma)
+    semester = get_object_or_404(Semester, id=semester_id, diploma=diploma)
+    lectures = DiplomaLecture.objects.filter(cohort=cohort, semester=semester).order_by("order")
+    return render(
+        request,
+        "academics/admin_diploma_lecture_list.html",
+        {"diploma": diploma, "cohort": cohort, "semester": semester, "lectures": lectures},
+    )
+
+
+@login_required
 def admin_diploma_lecture_create(request, diploma_id, cohort_id, semester_id):
+    if not is_admin(request.user) and not request.user.is_superuser:
+        raise PermissionDenied
     diploma = get_object_or_404(Diploma, id=diploma_id)
     cohort = get_object_or_404(Cohort, id=cohort_id, diploma=diploma)
     semester = get_object_or_404(Semester, id=semester_id, diploma=diploma)
@@ -827,8 +869,9 @@ def admin_diploma_lecture_create(request, diploma_id, cohort_id, semester_id):
 
 
 @login_required
-@role_required(*ROLE_EXAM_STAFF)
 def admin_diploma_lecture_edit(request, diploma_id, cohort_id, semester_id, lecture_id):
+    if not is_admin(request.user) and not request.user.is_superuser:
+        raise PermissionDenied
     diploma = get_object_or_404(Diploma, id=diploma_id)
     cohort = get_object_or_404(Cohort, id=cohort_id, diploma=diploma)
     semester = get_object_or_404(Semester, id=semester_id, diploma=diploma)
@@ -851,9 +894,10 @@ def admin_diploma_lecture_edit(request, diploma_id, cohort_id, semester_id, lect
 
 
 @login_required
-@role_required(*ROLE_EXAM_STAFF)
 @require_POST
 def admin_diploma_lecture_delete(request, diploma_id, cohort_id, semester_id, lecture_id):
+    if not is_admin(request.user) and not request.user.is_superuser:
+        raise PermissionDenied
     diploma = get_object_or_404(Diploma, id=diploma_id)
     cohort = get_object_or_404(Cohort, id=cohort_id, diploma=diploma)
     semester = get_object_or_404(Semester, id=semester_id, diploma=diploma)
@@ -865,8 +909,9 @@ def admin_diploma_lecture_delete(request, diploma_id, cohort_id, semester_id, le
 
 
 @login_required
-@role_required(*ROLE_EXAM_STAFF)
 def admin_diploma_lecture_preview(request, diploma_id, cohort_id, semester_id, lecture_id):
+    if not is_admin(request.user) and not request.user.is_superuser:
+        raise PermissionDenied
     diploma = get_object_or_404(Diploma, id=diploma_id)
     cohort = get_object_or_404(Cohort, id=cohort_id, diploma=diploma)
     semester = get_object_or_404(Semester, id=semester_id, diploma=diploma)
@@ -1111,11 +1156,24 @@ def student_diploma_detail(request, enrollment_id):
             "lectures": lectures,
         })
 
+    attendance_code = AttendanceCode.objects.filter(
+        diploma_enrollment=enrollment, active=True
+    ).first()
+    attendance_qr = ""
+    if attendance_code:
+        payload = build_attendance_qr_payload(attendance_code)
+        img = qrcode.make(payload, box_size=6)
+        buf = _io.BytesIO()
+        img.save(buf, format="PNG")
+        attendance_qr = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+
     return render(request, "academics/student_diploma_detail.html", {
         "enrollment": enrollment,
         "diploma": diploma,
         "cohort": cohort,
         "semester_lectures": semester_lectures,
+        "attendance_code": attendance_code,
+        "attendance_qr": attendance_qr,
     })
 
 

@@ -73,7 +73,8 @@ class IntakeFormSubmitForm(forms.Form):
                     widget=forms.DateInput(attrs={"type": "date"}),
                 )
             elif field.field_type == FIELD_TYPE_CHOICE:
-                choices = [(o, o) for o in field.options]
+                # ponytail: normalize option values to strings to avoid type mismatch on submission
+                choices = [(str(o), str(o)) for o in field.options]
                 self.fields[key] = forms.ChoiceField(
                     required=field.required, label=field.label,
                     choices=choices, help_text=field.help_text,

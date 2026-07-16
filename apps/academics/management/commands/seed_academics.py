@@ -9,12 +9,9 @@ from django.utils import timezone
 from apps.academics.models import (
     Cohort,
     Course,
-    CourseVersion,
     Diploma,
     DiplomaLecture,
-    Lecture,
     Semester,
-    SemesterCourse,
 )
 
 User = get_user_model()
@@ -70,11 +67,6 @@ class Command(BaseCommand):
             defaults={"description": "History of the Christian church from Pentecost to today.", "created_by": admin},
         )
 
-        SemesterCourse.objects.get_or_create(semester=sem1, course=old_testament, defaults={"order": 1})
-        SemesterCourse.objects.get_or_create(semester=sem1, course=new_testament, defaults={"order": 2})
-        SemesterCourse.objects.get_or_create(semester=sem2, course=theology, defaults={"order": 1})
-        SemesterCourse.objects.get_or_create(semester=sem2, course=church_history, defaults={"order": 2})
-
         cohort, created = Cohort.objects.get_or_create(
             diploma=diploma,
             name="2026 Spring",
@@ -89,29 +81,8 @@ class Command(BaseCommand):
         else:
             self.stdout.write(self.style.WARNING("Cohort already exists."))
 
-        for course in [old_testament, new_testament, theology, church_history]:
-            version, v_created = CourseVersion.objects.get_or_create(
-                course=course,
-                cohort=cohort,
-                label="v1",
-                defaults={
-                    "semester": sem1 if course in (old_testament, new_testament) else sem2,
-                    "access_duration_days": 180,
-                    "created_by": admin,
-                },
-            )
-            if v_created:
-                now = timezone.now()
-                for i in range(1, 5):
-                    Lecture.objects.create(
-                        course_version=version,
-                        order=i,
-                        title=f"Lecture {i}: {course.title} - Part {i}",
-                        description=f"Description for lecture {i} of {course.title}.",
-                        is_published=True,
-                        release_at=now - timedelta(days=(4 - i) * 7),
-                    )
-                self.stdout.write(f"  Created {version} with 4 lectures")
+        # ponytail: diploma content uses DiplomaLecture only; CourseVersion+Lecture is for standalone courses.
+        # Diploma lectures are created below.
 
         # ponytail: 2 DiplomaLectures per semester, add more if sample content needs variety
         now = timezone.now()

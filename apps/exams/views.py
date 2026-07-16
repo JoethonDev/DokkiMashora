@@ -35,7 +35,7 @@ from apps.communications.constants import (
 from apps.communications.services import send_templated_email
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
-from apps.core.permissions import ROLE_EXAM_STAFF, can_grade_attempt, role_required
+from apps.core.permissions import ROLE_EXAM_STAFF, ROLE_GRADING_STAFF, can_grade_attempt, role_required
 from apps.exams.constants import (
     ASSIGNMENT_STATUS_ASSIGNED,
     ASSIGNMENT_STATUS_COMPLETED,
@@ -324,7 +324,7 @@ def admin_grade_list(request):
 
 
 @login_required
-@role_required(*ROLE_EXAM_STAFF)
+@role_required(*ROLE_GRADING_STAFF)
 def admin_grade_assignment(request, assignment_id):
     assignment = get_object_or_404(
         Assignment.objects.select_related("exam", "student"),

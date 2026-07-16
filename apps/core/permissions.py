@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import datetime
+from decimal import Decimal
 from functools import wraps
 
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db.models import F, Q
+from django.utils.translation import gettext_lazy as _
 
 from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE, SCOPE_COURSE_VERSION, SCOPE_DIPLOMA_COHORT
 from apps.academics.models import (
@@ -49,6 +51,21 @@ def safe_date_str(value: str | None) -> str | None:
         return None
 
 
+def validate_score(value, max_score=None):
+    """Convert and validate a score. Returns Decimal or raises ValueError."""
+    try:
+        score = Decimal(str(value))
+    except Exception as exc:
+        raise ValueError(_("Invalid score value.")) from exc
+    if not score.is_finite():
+        raise ValueError(_("Score must be a finite number."))
+    if score < 0:
+        raise ValueError(_("Score cannot be negative."))
+    if max_score is not None and score > Decimal(str(max_score)):
+        raise ValueError(_("Score cannot exceed %(max)s.") % {"max": max_score})
+    return score
+
+
 def _user_in_any_group(user, group_names: tuple[str, ...]) -> bool:
     if not user or not user.is_authenticated:
         return False
@@ -57,10 +74,11 @@ def _user_in_any_group(user, group_names: tuple[str, ...]) -> bool:
     return user.groups.filter(name__in=group_names).exists()
 
 
-ROLE_EXAM_STAFF = (GROUP_SUPER_ADMIN, GROUP_ADMIN, GROUP_MODERATOR, GROUP_TEACHER)
+ROLE_EXAM_STAFF = (GROUP_SUPER_ADMIN, GROUP_ADMIN)
 ROLE_SENIOR_STAFF = (GROUP_SUPER_ADMIN, GROUP_ADMIN)
 ROLE_REVIEW_STAFF = (GROUP_SUPER_ADMIN, GROUP_ADMIN, GROUP_REVIEWER)
 ROLE_ATTENDANCE_STAFF = (GROUP_SUPER_ADMIN, GROUP_ADMIN, GROUP_SECRETARY)
+ROLE_GRADING_STAFF = (GROUP_SUPER_ADMIN, GROUP_ADMIN, GROUP_MODERATOR)
 
 
 def is_super_admin(user) -> bool:
@@ -240,28 +258,6 @@ def assessment_staff_scope_filter(user, prefix: str = "") -> Q:
             )
         )
     return teacher_filter | moderator_filter | mod_filter
-
-
-def entrance_staff_scope_filter(user) -> Q:
-    if not user or not user.is_authenticated:
-        return Q(pk__isnull=True)
-    if is_admin(user):
-        return Q()
-    teacher_cohorts = TeacherAssignment.objects.filter(
-        teacher=user, scope_type=SCOPE_DIPLOMA_COHORT, active=True,
-    ).values("cohort_id")
-    mod_cohorts = ModeratorAssignment.objects.filter(
-        moderator=user, active=True,
-    ).values("cohort_id")
-    return (
-        Q(exam__cohort_id__in=teacher_cohorts)
-        | Q(exam__cohort_id__in=mod_cohorts)
-        | (
-            Q(student__moderator_assignments__moderator=user)
-            & Q(student__moderator_assignments__active=True)
-            & Q(exam__cohort_id=F("student__moderator_assignments__cohort_id"))
-        )
-    )
 
 
 def _student_profile(student):

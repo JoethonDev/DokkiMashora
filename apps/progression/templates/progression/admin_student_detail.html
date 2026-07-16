@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% load i18n %}{% load ui_tags %}
+{% extends "base.html" %}{% load i18n %}{% load ui_tags %}{% load identity_tags %}
 {% block title %}{{ student }} - {% trans "Progress" %} - {{ block.super }}{% endblock %}
 {% block content %}
 <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
@@ -11,7 +11,7 @@
       <dt class="text-slate-500 dark:text-slate-400">{% trans "Email" %}</dt><dd class="text-slate-900 dark:text-slate-100">{{ student.user.email }}</dd>
       <dt class="text-slate-500 dark:text-slate-400">{% trans "Account status" %}</dt><dd class="text-slate-900 dark:text-slate-100">{{ student.user.get_status_display }}</dd>
       <dt class="text-slate-500 dark:text-slate-400">{% trans "Phone" %}</dt><dd class="text-slate-900 dark:text-slate-100">{{ student.phone }}</dd>
-      <dt class="text-slate-500 dark:text-slate-400">{% trans "National ID" %}</dt><dd class="text-slate-900 dark:text-slate-100">{{ student.national_id }}</dd>
+      <dt class="text-slate-500 dark:text-slate-400">{% identity_label_for student.country_code %}</dt><dd class="text-slate-900 dark:text-slate-100">{{ student.national_id }}</dd>
       <dt class="text-slate-500 dark:text-slate-400">{% trans "Education" %}</dt><dd class="text-slate-900 dark:text-slate-100">{{ student.get_education_display }}</dd>
       <dt class="text-slate-500 dark:text-slate-400">{% trans "Address" %}</dt><dd class="text-slate-900 dark:text-slate-100">{{ student.address }}</dd>
     </dl>
@@ -56,8 +56,13 @@
               {% if item.component.semester_id == prog.semester.id %}
               <div class="flex items-center justify-between text-xs">
                 <span>{{ item.component.name }}</span>
-                <span class="tabular-nums {% if item.score_percent is not None and item.score_percent < item.component.required_min_percent %}text-red-600 dark:text-red-400{% else %}text-slate-700 dark:text-slate-300{% endif %}">
-                  {{ item.score_percent|default:"--" }}%
+                <span class="flex items-center gap-2">
+                  <span class="tabular-nums {% if item.score_percent is not None and item.score_percent < item.component.required_min_percent %}text-red-600 dark:text-red-400{% else %}text-slate-700 dark:text-slate-300{% endif %}">
+                    {{ item.score_percent|default:"--" }}%
+                  </span>
+                  {% if item.component.component_type == "custom_activity" %}
+                  <a href="{% url 'progression:admin_custom_activity_grade' prog.diploma_enrollment_id item.component.id %}" class="text-brand-600 dark:text-brand-400 hover:underline">{% trans "Grade" %}</a>
+                  {% endif %}
                 </span>
               </div>
               {% endif %}
@@ -68,6 +73,7 @@
 
           {% with enrollment_id=prog.diploma_enrollment_id cohort_id=prog.cohort_id semester_id=prog.semester_id %}
           <div class="mt-3 flex flex-wrap gap-1.5 border-t border-slate-100 dark:border-slate-800 pt-3">
+            {% if is_admin_user %}
             <a href="{% url 'progression:admin_component_list' cohort_id semester_id %}" class="text-xs bg-sky-100 dark:bg-sky-900 text-sky-700 dark:text-sky-300 rounded px-2 py-0.5 hover:bg-sky-200 dark:hover:bg-sky-800 transition-colors">{% trans "Components" %}</a>
             <a href="{% url 'progression:admin_semester_evaluation' enrollment_id semester_id %}" class="text-xs bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded px-2 py-0.5 hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors">{% trans "Evaluate" %}</a>
             <form method="post" action="{% url 'progression:admin_grade_sync' enrollment_id semester_id %}" class="inline">
@@ -80,6 +86,7 @@
               <button type="submit" class="text-xs bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300 rounded px-2 py-0.5 hover:bg-emerald-200 dark:hover:bg-emerald-800 transition-colors">{% trans "Confirm Pass" %}</button>
             </form>
             <a href="{% url 'progression:admin_create_rejoin_plan' enrollment_id %}" class="text-xs bg-rose-100 dark:bg-rose-900 text-rose-700 dark:text-rose-300 rounded px-2 py-0.5 hover:bg-rose-200 dark:hover:bg-rose-800 transition-colors">{% trans "Rejoin Plan" %}</a>
+            {% endif %}
           </div>
           {% endwith %}
         </div>
@@ -87,6 +94,7 @@
         <p class="text-slate-500">{% trans "No progress records." %}</p>
       {% endfor %}
     </div>
+    {% if is_admin_user %}
     <div class="space-y-4">
       {% for enrollment in enrollments %}
       <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
@@ -218,7 +226,11 @@
           </details>
         </div>
       </div>
+      {% endfor %}
+      {% endif %}
+    </div>
 
+    <div class="space-y-4">
       {% if completion %}
       <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
         <h3 class="font-semibold mb-2">{% trans "Diploma Completion" %}</h3>
@@ -238,7 +250,7 @@
       {% endif %}
 
       <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
-        <h3 class="font-semibold mb-3">{% trans "Certificate" %} <span class="sr-only">{% trans "Certificate" %}</span></h3>
+        <h3 class="font-semibold mb-3">{% trans "Certificate" %}</h3>
         {% for cert in certificates %}
           <div class="flex items-center justify-between text-sm mb-2">
             <div>
@@ -252,13 +264,14 @@
         {% empty %}
           <p class="text-xs text-slate-400 mb-2">{% trans "No certificates generated." %}</p>
         {% endfor %}
+        {% if is_admin_user and enrollments %}
         <form method="post" action="{% url 'certificates:admin_generate_certificate' student.id %}" class="mb-2">
           {% csrf_token %}
-          <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}">
+          <input type="hidden" name="enrollment_id" value="{{ enrollments.0.id }}">
           <button type="submit" class="w-full text-xs bg-brand-600 text-white rounded py-1">{% trans "Generate Certificate" %}</button>
         </form>
+        {% endif %}
       </div>
-      {% endfor %}
 
       {% if eligibility %}
         <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">

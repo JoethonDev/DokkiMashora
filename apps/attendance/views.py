@@ -10,17 +10,26 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_POST
 
+from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE
 from apps.academics.models import Cohort, CourseVersion, Semester
 from apps.core.permissions import (
     GROUP_ADMIN,
     GROUP_SUPER_ADMIN,
     ROLE_ATTENDANCE_STAFF,
+    is_admin,
     role_required,
+    safe_date_str,
     safe_int,
 )
 
-from .constants import SESSION_STATUS_OPEN, SESSION_STATUS_SCHEDULED
-from .models import AttendanceSession
+from .constants import (
+    ATTENDANCE_STATUS_EXCUSED,
+    ATTENDANCE_STATUS_LATE,
+    ATTENDANCE_STATUS_PRESENT,
+    SESSION_STATUS_OPEN,
+    SESSION_STATUS_SCHEDULED,
+)
+from .models import AttendanceRecord, AttendanceSession
 from .services import (
     close_attendance_session,
     get_attendance_summary,
@@ -45,8 +54,8 @@ def attendance_session_list(request):
     )
 
     cohort_id = safe_int(request.GET.get("cohort_id"))
-    date_from = request.GET.get("date_from", "")
-    date_to = request.GET.get("date_to", "")
+    date_from = safe_date_str(request.GET.get("date_from"))
+    date_to = safe_date_str(request.GET.get("date_to"))
 
     if cohort_id:
         sessions = sessions.filter(cohort_id=cohort_id)
@@ -64,6 +73,7 @@ def attendance_session_list(request):
         "date_from": date_from,
         "date_to": date_to,
         "breadcrumb_items": [{"label": _("Attendance Sessions")}],
+        "is_admin_user": is_admin(request.user),
     }
     return render(request, "attendance/session_list.html", ctx)
 
@@ -88,8 +98,16 @@ def attendance_session_create(request):
             messages.error(request, _("Open and close times are required."))
             return redirect("attendance:attendance_session_create")
 
-        open_at = timezone.make_aware(datetime.fromisoformat(open_at_str))
-        close_at = timezone.make_aware(datetime.fromisoformat(close_at_str))
+        try:
+            open_at = datetime.fromisoformat(open_at_str)
+            close_at = datetime.fromisoformat(close_at_str)
+            if timezone.is_naive(open_at):
+                open_at = timezone.make_aware(open_at)
+            if timezone.is_naive(close_at):
+                close_at = timezone.make_aware(close_at)
+        except (ValueError, TypeError):
+            messages.error(request, _("Invalid date/time format."))
+            return redirect("attendance:attendance_session_create")
 
         if cohort_id:
             target = get_object_or_404(Cohort, id=cohort_id)
@@ -102,6 +120,9 @@ def attendance_session_create(request):
         semester = None
         if semester_id:
             semester = get_object_or_404(Semester, id=semester_id)
+            if cohort_id and semester.diploma_id != target.diploma_id:
+                messages.error(request, _("Semester does not belong to the selected cohort's diploma."))
+                return redirect("attendance:attendance_session_create")
 
         try:
             session = open_attendance_session(
@@ -146,7 +167,7 @@ def attendance_session_detail(request, session_id):
     ctx = {
         "session": session,
         "records": records,
-        "is_admin": request.user.groups.filter(name__in=ADMIN_ONLY).exists(),
+        "is_admin": is_admin(request.user),
         "breadcrumb_items": [
             {"label": _("Attendance Sessions"), "href": reverse("attendance:attendance_session_list")},
             {"label": str(session)},
@@ -249,13 +270,13 @@ def attendance_scan(request):
 
         session = get_object_or_404(AttendanceSession, id=session_id)
 
-        # Parse payload: "attendance:{display_code}:{raw_token}"
+        # Parse payload: "attendance:{signed_pk}" (signed_pk is TimestampSigner "pk:timestamp:signature")
         parts = payload.split(":")
-        if len(parts) != 3 or parts[0] != "attendance":
+        if len(parts) < 3 or parts[0] != "attendance":
             messages.error(request, _("Invalid QR payload format."))
             return redirect("attendance:attendance_scan")
 
-        raw_token = parts[2]
+        raw_token = ":".join(parts[1:])
 
         try:
             record, already_exists = scan_attendance_token(
@@ -300,7 +321,7 @@ def my_attendance(request):
         return redirect("core:home")
 
     enrollments = student_profile.diploma_enrollments.filter(
-        status="active",
+        status=ENROLLMENT_STATUS_ACTIVE,
     ).select_related("cohort__diploma")
 
     summaries = []
@@ -314,6 +335,31 @@ def my_attendance(request):
                 summary["enrollment"] = enrollment
                 summary["semester"] = semester
                 summaries.append(summary)
+
+    course_enrollments = student_profile.course_enrollments.filter(
+        status=ENROLLMENT_STATUS_ACTIVE,
+    ).select_related("course_version__course")
+    for ce in course_enrollments:
+        sessions = AttendanceSession.objects.filter(
+            course_version=ce.course_version,
+        )
+        total = sessions.count()
+        records = AttendanceRecord.objects.filter(
+            session__in=sessions, course_enrollment=ce,
+        )
+        present = records.filter(status=ATTENDANCE_STATUS_PRESENT).count()
+        late = records.filter(status=ATTENDANCE_STATUS_LATE).count()
+        if total > 0:
+            summaries.append({
+                "enrollment": ce,
+                "course_title": str(ce.course_version.course.title),
+                "total_sessions": total,
+                "present_count": present,
+                "late_count": late,
+                "excused_count": records.filter(status=ATTENDANCE_STATUS_EXCUSED).count(),
+                "total_attended": present + late,
+                "attendance_percent": round(((present + late) / total) * 100, 2),
+            })
 
     ctx = {
         "summaries": summaries,

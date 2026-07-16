@@ -475,7 +475,7 @@ class EnrollmentLinkingTests(TestCase):
         )
         from apps.accounts.constants import GROUP_ADMIN, GROUP_STUDENT
         from apps.accounts.models import User as UserModel
-        from apps.applications.models import Application
+        from apps.applications.models import ProgramApplication
 
         self.student_group, _ = Group.objects.get_or_create(name=GROUP_STUDENT)
         admin_group, _ = Group.objects.get_or_create(name=GROUP_ADMIN)
@@ -509,8 +509,8 @@ class EnrollmentLinkingTests(TestCase):
         self.course_enrollment = CourseEnrollment.objects.create(
             student=self.student, course_version=course_version,
         )
-        self.application = Application.objects.create(
-            student=self.student, cohort=cohort,
+        self.application = ProgramApplication.objects.create(
+            student=self.student, program_type="diploma", cohort=cohort,
         )
 
     def _create_previewed_upload(self, raw_data: dict) -> PaymentUpload:

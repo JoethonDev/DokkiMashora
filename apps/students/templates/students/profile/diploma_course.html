@@ -10,16 +10,22 @@
         {% if item.label %}
         <p class="text-xs text-slate-500 mb-0.5">{{ item.label }}</p>
         {% endif %}
-        <p class="text-sm font-medium truncate">{{ item.course_title }}</p>
+        <p class="text-sm font-medium truncate">{{ item.course_title|default:item.label }}</p>
         <div class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
           <span>{% trans "Joined" %}: {{ item.joined_at|date:"j M Y" }}</span>
           {% if item.expires_at %}
           <span>{% trans "Until" %}: {{ item.expires_at|date:"j M Y" }}</span>
           {% endif %}
+          {% if item.lecture_count is not None %}
           <span>{{ item.lecture_count }} {% trans "lectures" %}</span>
+          {% endif %}
         </div>
       </div>
+      {% if item.type == "diploma" %}
+      <a href="{% url 'academics:student_diploma_detail' item.enrollment_id %}" class="shrink-0 ml-3 inline-flex items-center rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700 transition">{% trans "View" %}</a>
+      {% else %}
       <a href="{% url 'students:diploma_course_detail' item.cv_id %}" class="shrink-0 ml-3 inline-flex items-center rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700 transition">{% trans "View" %}</a>
+      {% endif %}
     </div>
   </div>
   {% endfor %}

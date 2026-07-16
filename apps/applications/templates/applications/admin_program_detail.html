@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% load i18n %}
 {% load ui_tags %}
+{% load identity_tags %}
 
 {% block title %}{% trans "Program Application" %} {{ application.id }} | {{ SITE_NAME_AR }}{% endblock title %}
 {% block content %}
@@ -25,7 +26,7 @@
       <dl class="grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-x-4 gap-y-2.5 text-sm min-w-0">
         <dt class="text-slate-500 dark:text-slate-400">{% trans "Email" %}</dt><dd class="text-slate-900 dark:text-slate-100 break-all">{{ application.student.user.email }}</dd>
         <dt class="text-slate-500 dark:text-slate-400">{% trans "Phone" %}</dt><dd class="text-slate-900 dark:text-slate-100 break-all">{{ application.student.phone }}</dd>
-        <dt class="text-slate-500 dark:text-slate-400">{% trans "National ID" %}</dt><dd class="text-slate-900 dark:text-slate-100 break-words">{{ application.student.national_id }}</dd>
+        <dt class="text-slate-500 dark:text-slate-400">{% identity_label_for application.student.country_code %}</dt><dd class="text-slate-900 dark:text-slate-100 break-words">{{ application.student.national_id }}</dd>
         <dt class="text-slate-500 dark:text-slate-400">{% trans "Program type" %}</dt><dd class="text-slate-900 dark:text-slate-100 break-words">{{ application.get_program_type_display }}</dd>
         <dt class="text-slate-500 dark:text-slate-400">{% trans "Program" %}</dt>
         <dd class="text-slate-900 dark:text-slate-100 break-words">
@@ -160,8 +161,8 @@
         {% endif %}
 
       {% elif application.status == "accepted" or application.status == "documents_requested" or application.status == "documents_submitted" or application.status == "rejected" %}
-        {# Mark paid (accepted, not paid) #}
-        {% if application.status == "accepted" and not is_paid %}
+        {# Mark paid (not rejected, not paid) #}
+        {% if application.status != "rejected" and not is_paid %}
           <form method="post" class="space-y-3">
             {% csrf_token %}
             <h3 class="font-semibold text-sm">{% trans "Record Payment" %}</h3>
@@ -184,8 +185,8 @@
           <hr class="my-4 border-slate-200 dark:border-slate-700">
         {% endif %}
 
-        {# Request documents (accepted diploma, admin only) #}
-        {% if application.status == "accepted" and application.program_type == "diploma" and request_doc_form %}
+        {# Request documents (accepted/documents_requested diploma, admin only) #}
+        {% if request_doc_form %}
           <form method="post" class="space-y-3">
             {% csrf_token %}
             <h3 class="font-semibold text-sm">{% trans "Request Documents" %}</h3>

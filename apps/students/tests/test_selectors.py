@@ -24,7 +24,7 @@ from apps.academics.models import (
     Semester,
 )
 from apps.accounts.models import User
-from apps.applications.models import Application, ProgramApplication
+from apps.applications.models import ProgramApplication
 from apps.assessments.constants import ASSESSMENT_TYPE_QUIZ
 from apps.assessments.models import Assessment, AssessmentAttempt
 from apps.certificates.models import GeneratedCertificate
@@ -84,7 +84,7 @@ class GetDashboardDataStructureTests(TestCase):
             "homework_submissions", "semester_progress",
             "promotion_decisions", "completions",
             "certificates", "eligibilities",
-            "payments", "notifications", "reapply",
+            "payments", "notifications", "apply", "grade_items",
         }
         self.assertEqual(set(data.keys()), expected_keys)
 
@@ -113,13 +113,12 @@ class GetDashboardDataApplicationsTests(TestCase):
         self.user, self.profile = _create_student()
 
     def test_returns_applications_ordered_by_created_at_desc(self) -> None:
-        root = Application.objects.create(student=self.profile)
         pa1 = ProgramApplication.objects.create(
-            student=self.profile, root_application=root, program_type="diploma",
+            student=self.profile, program_type="diploma",
         )
         ProgramApplication.objects.filter(pk=pa1.pk).update(created_at=timezone.now() - timedelta(hours=1))
         pa2 = ProgramApplication.objects.create(
-            student=self.profile, root_application=root, program_type="diploma",
+            student=self.profile, program_type="diploma",
         )
         data = get_dashboard_data(self.profile)
         self.assertEqual(len(data["applications"]), 2)
@@ -219,16 +218,14 @@ class GetDashboardDataExamAssignmentsTests(TestCase):
     def setUp(self) -> None:
         self.admin = User.objects.create_superuser(email="admin@test.com", password="x")
         self.user, self.profile = _create_student()
-        self.root = Application.objects.create(student=self.profile)
         _, self.cohort = _create_diploma_cohort(self.admin)
         self.prog_app = ProgramApplication.objects.create(
-            student=self.profile, root_application=self.root,
-            cohort=self.cohort, program_type="diploma",
+            student=self.profile, cohort=self.cohort, program_type="diploma",
         )
         self.entrance_exam = EntranceExam.objects.create(
             title="Entrance Exam",
             diploma=self.cohort.diploma, cohort=self.cohort,
-            duration_minutes=60, passing_score=50,
+            duration_minutes=60, pass_percentage=50,
             is_active=True,
             open_at=timezone.now(), close_at=timezone.now() + timedelta(hours=2),
             created_by=self.admin,
@@ -360,18 +357,16 @@ class GetDashboardDataExamScopingTests(TestCase):
     def setUp(self) -> None:
         self.admin = User.objects.create_superuser(email="admin@test.com", password="x")
         self.user, self.profile = _create_student()
-        self.root = Application.objects.create(student=self.profile)
         _, self.cohort = _create_diploma_cohort(self.admin)
         self.prog_app = ProgramApplication.objects.create(
-            student=self.profile, root_application=self.root,
-            cohort=self.cohort, program_type="diploma",
+            student=self.profile, cohort=self.cohort, program_type="diploma",
         )
         self.entrance_exam = EntranceExam.objects.create(
             title="Entrance Exam",
             diploma=self.cohort.diploma,
             cohort=self.cohort,
             duration_minutes=60,
-            passing_score=50,
+            pass_percentage=50,
             is_active=True,
             open_at=timezone.now(),
             close_at=timezone.now() + timedelta(hours=2),
@@ -394,10 +389,8 @@ class GetDashboardDataExamScopingTests(TestCase):
             address="Giza", phone="01111111111", national_id="29001010100022",
             education=EDUCATION_BACHELOR,
         )
-        other_root = Application.objects.create(student=other_profile)
         other_prog_app = ProgramApplication.objects.create(
-            student=other_profile, root_application=other_root,
-            cohort=self.cohort, program_type="diploma",
+            student=other_profile, cohort=self.cohort, program_type="diploma",
         )
         EntranceAttempt.objects.create(
             exam=self.entrance_exam, student=other_profile,
@@ -463,7 +456,7 @@ class GetDashboardDataQueryCountTests(TestCase):
             status=ENROLLMENT_STATUS_ACTIVE,
             activated_at=now, expires_at=now + timedelta(days=30),
         )
-        Application.objects.create(student=self.profile)
+        ProgramApplication.objects.create(student=self.profile, program_type="diploma")
         DiplomaEnrollment.objects.create(
             student=self.profile, cohort=self.cohort, status=ENROLLMENT_STATUS_ACTIVE,
         )

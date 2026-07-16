@@ -106,7 +106,7 @@ MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
 
 REQUIRED_CSV_HEADERS = ["email", "full_name"]
 OPTIONAL_CSV_HEADERS = [
-    "phone", "national_id", "date_of_birth", "gender", "address",
+    "country_code", "phone", "national_id", "date_of_birth", "gender", "address",
     "education", "specialization", "employer", "current_job",
     "church", "priest_name", "priest_contact",
 ]

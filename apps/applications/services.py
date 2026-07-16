@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import logging
+import secrets
 from dataclasses import dataclass, field
 from datetime import date
-from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from django.contrib.auth import get_user_model
@@ -18,6 +18,7 @@ from apps.academics.constants import ENROLLMENT_STATUS_PENDING
 from apps.academics.models import Cohort, Course, CourseEnrollment, DiplomaEnrollment
 from apps.academics.services import activate_course_enrollment, activate_diploma_enrollment
 from apps.accounts.constants import GROUP_STUDENT, USER_STATUS_INACTIVE
+from apps.attendance.services import get_or_create_attendance_code_for_enrollment
 from apps.audit.constants import ACTION_APPLICATION_DECISION_REVERTED
 from apps.audit.services import record_audit_event
 from apps.communications.constants import (
@@ -25,6 +26,7 @@ from apps.communications.constants import (
     TEMPLATE_REJECTION,
 )
 from apps.communications.services import send_templated_email
+from apps.core.permissions import validate_score
 from apps.intake_forms.selectors import has_required_intake_response  # noqa: E402
 from apps.payments.constants import CURRENCY_EGP, PAYMENT_STATUS_PAID
 from apps.payments.models import PaymentRecord
@@ -47,13 +49,17 @@ from .constants import (
     PROGRAM_APP_STATUS_ACCEPTED,
     PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED,
     PROGRAM_APP_STATUS_ACTIVATED,
+    PROGRAM_APP_STATUS_DOCUMENTS_REQUESTED,
     PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED,
     PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
     PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
     PROGRAM_APP_STATUS_INVITED,
     PROGRAM_APP_STATUS_PAYMENT_PENDING,
+    PROGRAM_APP_STATUS_READY_FOR_ACTIVATION,
     PROGRAM_APP_STATUS_REJECTED,
     PROGRAM_APP_STATUS_SUBMITTED,
+    PROGRAM_APP_STATUS_SURVEY_REQUESTED,
+    PROGRAM_APP_STATUS_SURVEY_SUBMITTED,
     PROGRAM_TYPE_COURSE,
     PROGRAM_TYPE_DIPLOMA,
 )
@@ -180,7 +186,7 @@ def submit_registration(
     if duplicate_on:
         raise ValueError(duplicate_on)
 
-    user_password = normalize_phone(data.phone)
+    user_password = normalize_phone(data.phone) or secrets.token_urlsafe(8)
     normalized_id = normalize_identity_number(data.country_code, data.national_id)
     user = User.objects.create_user(
         email=data.email,
@@ -445,6 +451,37 @@ def invite_to_entrance_exam(application, actor) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Intake request helper
+# ---------------------------------------------------------------------------
+
+
+def _attempt_intake_request_safe(application, actor=None) -> str | None:
+    """Create intake request if needed. Returns None on success/expected skip,
+    or an error reason string if an unexpected failure occurred.
+
+    Unexpected failures are also logged and recorded as system notes so
+    admins can see why activation remains blocked.
+    """
+    from apps.intake_forms.services import ensure_required_intake_request
+
+    try:
+        ensure_required_intake_request(application, actor=actor)
+    except ValueError as exc:
+        logger.warning("Intake request not created for app %s: %s", application.pk, exc)
+    except Exception as exc:
+        logger.exception("Intake request error for app %s: %s", application.pk, exc)
+        reason = _("Intake request creation failed: {error}").format(error=exc)
+        record_program_application_note(
+            application,
+            actor=None,
+            note=reason,
+            metadata={"intake_request_error": str(exc)},
+        )
+        return reason
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Decision services
 # ---------------------------------------------------------------------------
 
@@ -472,13 +509,8 @@ def accept_program_application(application, actor, notes: str = "", send_email: 
         transaction.on_commit(lambda: _send_program_app_acceptance_email(application))
 
     # Trigger intake request for course applications that are already paid
-    # ponytail: inline import required — circular dependency with intake_forms/services.py
     if application.program_type == PROGRAM_TYPE_COURSE and has_application_paid_record(application):
-        from apps.intake_forms.services import ensure_required_intake_request
-        try:
-            ensure_required_intake_request(application, actor=actor)
-        except Exception:
-            pass
+        _attempt_intake_request_safe(application, actor=actor)
 
 
 @transaction.atomic
@@ -590,13 +622,12 @@ def revert_program_application_decision(application, actor, reason: str = "") ->
 
 
 def record_program_application_note(application, actor, note: str, metadata: dict | None = None) -> ProgramApplicationNote:
-    if not actor:
-        raise ValueError(_("Actor is required for application notes."))
+    # ponytail: actor may be None for automated system notes (e.g. entrance snapshot finalization).
     return ProgramApplicationNote.objects.create(
         program_application=application,
         actor=actor,
         note=note,
-        metadata=metadata or {},
+        metadata={"system": actor is None, **(metadata or {})},
     )
 
 
@@ -683,6 +714,8 @@ def can_activate_application(application) -> ActivationCheck:
     # Diploma
     if application.status not in (PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED, PROGRAM_APP_STATUS_ACTIVATED):
         reasons.append("not_accepted_or_documents_not_submitted")
+    if application.status == PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED and not application.submitted_document_upload:
+        reasons.append("documents_not_uploaded")
     if not application.cohort:
         reasons.append("no_cohort_target")
     if not has_application_paid_record(application):
@@ -723,9 +756,12 @@ def activate_application_if_ready(application, actor=None) -> ActivationResult:
         return ActivationResult(activated=False, reasons=check.reasons)
 
     if locked.program_type == PROGRAM_TYPE_COURSE:
-        cv = locked.course.versions.filter(is_active=True).order_by("-created_at").first()
-        if not cv:
+        active_versions = list(locked.course.versions.filter(is_active=True))
+        if not active_versions:
             return ActivationResult(activated=False, reasons=["no_active_course_version"])
+        if len(active_versions) > 1:
+            return ActivationResult(activated=False, reasons=["multiple_active_course_versions"])
+        cv = active_versions[0]
         enrollment, created = CourseEnrollment.objects.get_or_create(
             student=locked.student,
             course_version=cv,
@@ -744,6 +780,9 @@ def activate_application_if_ready(application, actor=None) -> ActivationResult:
         activate_diploma_enrollment(enrollment)
         enrollment_type = "diploma"
         enrollment_id = enrollment.pk
+
+    # Generate attendance code for the new enrollment
+    get_or_create_attendance_code_for_enrollment(enrollment, actor=actor)
 
     # Update application status
     old_status = locked.status
@@ -810,6 +849,16 @@ def _find_paid_record_id(application):
     return record.pk if record else None
 
 
+LEGAL_PAYMENT_STATUSES = {
+    PROGRAM_APP_STATUS_ACCEPTED,
+    PROGRAM_APP_STATUS_DOCUMENTS_REQUESTED,
+    PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED,
+    PROGRAM_APP_STATUS_SURVEY_REQUESTED,
+    PROGRAM_APP_STATUS_SURVEY_SUBMITTED,
+    PROGRAM_APP_STATUS_READY_FOR_ACTIVATION,
+}
+
+
 @transaction.atomic
 def mark_application_paid(
     application,
@@ -824,33 +873,44 @@ def mark_application_paid(
 
     Returns the PaymentRecord.
     """
+    locked = ProgramApplication.objects.select_for_update().get(pk=application.pk)
+    if locked.status == PROGRAM_APP_STATUS_REJECTED:
+        raise ValueError(_("Cannot record payment for a rejected application."))
+    if locked.status == PROGRAM_APP_STATUS_ACTIVATED:
+        raise ValueError(_("Application is already activated."))
+    if locked.status not in LEGAL_PAYMENT_STATUSES:
+        raise ValueError(_("Cannot record payment in current application status."))
+    # Guard: duplicate payment (exclude soft-deleted records)
+    if PaymentRecord.objects.filter(
+        student=locked.student, application=locked, status=PAYMENT_STATUS_PAID, deleted_at__isnull=True
+    ).exists():
+        raise ValueError(_("Payment already recorded for this application."))
+
     if paid_at is None:
         paid_at = timezone.now()
 
+    # Validate amount
+    amount_dec = validate_score(amount or 0)
+
     record = PaymentRecord.objects.create(
-        student=application.student,
-        application=application,
-        amount=Decimal(str(amount)) if amount else Decimal("0"),
+        student=locked.student,
+        application=locked,
+        amount=amount_dec,
         currency=CURRENCY_EGP,
         status=PAYMENT_STATUS_PAID,
         paid_at=paid_at,
         external_reference=external_reference,
         notes=notes,
         imported_by=actor,
-        target_type=application.program_type,
-        target_snapshot=_build_application_snapshot(application),
+        target_type=locked.program_type,
+        target_snapshot=_build_application_snapshot(locked),
     )
 
     # Attempt activation — idempotent, may not be ready
     result = activate_application_if_ready(application, actor=actor)
     # Trigger intake request if activation blocked by missing intake
-    # ponytail: inline import required — circular dependency with intake_forms/services.py
     if not result.activated and "intake_form_required" in result.reasons:
-        from apps.intake_forms.services import ensure_required_intake_request
-        try:
-            ensure_required_intake_request(application, actor=actor)
-        except Exception:
-            pass
+        _attempt_intake_request_safe(application, actor=actor)
 
     return record
 

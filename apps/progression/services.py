@@ -9,7 +9,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE
+from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE, ENROLLMENT_STATUS_RESTRICTED
 from apps.academics.models import Cohort, Diploma, DiplomaEnrollment, Semester
 from apps.academics.services import enroll_student_in_diploma
 from apps.assessments.constants import (
@@ -24,6 +24,7 @@ from apps.assessments.constants import (
 )
 from apps.assessments.models import Assessment, AssessmentAttempt
 from apps.attendance.services import get_attendance_summary
+from apps.core.permissions import validate_score
 from apps.students.models import StudentProfile
 
 from .constants import (
@@ -123,7 +124,7 @@ def get_semester_assessments(semester: Semester):
         semester=semester,
         is_active=True,
         assessment_type__in=ASSESSMENT_TYPES_FOR_SCORING,
-    ).prefetch_related("attempts")
+    )
 
 
 def aggregate_semester_scores(student_profile: StudentProfile, semester: Semester, *, pass_percent: Decimal | None = None) -> SemesterScoreResult:
@@ -1229,16 +1230,26 @@ def sync_homework_assessment_grade_item(diploma_enrollment, semester, actor=None
 
 
 def set_custom_activity_grade(component, diploma_enrollment, *, score, max_score, actor, notes="") -> StudentGradeItem:
+    if component.component_type != "custom_activity":
+        raise ValueError(_("Component is not a custom activity."))
+    score_dec = validate_score(score)
+    max_score_dec = Decimal(str(max_score))
+    if max_score_dec <= 0:
+        raise ValueError(_("max_score must be a positive number."))
+    if score_dec > max_score_dec:
+        raise ValueError(_("Score must be between 0 and max_score."))
+    if component.cohort_id != diploma_enrollment.cohort_id:
+        raise ValueError(_("Component does not belong to the same cohort as the enrollment."))
     now = timezone.now()
-    score_percent = (Decimal(str(score)) / Decimal(str(max_score))) * Decimal("100")
+    score_percent = (score_dec / max_score_dec) * Decimal("100")
 
-    item, _ = StudentGradeItem.objects.update_or_create(
+    item, _created = StudentGradeItem.objects.update_or_create(
         component=component,
         diploma_enrollment=diploma_enrollment,
         defaults={
             "student": diploma_enrollment.student,
-            "manual_score": Decimal(str(score)),
-            "max_score": Decimal(str(max_score)),
+            "manual_score": score_dec,
+            "max_score": max_score_dec,
             "score_percent": score_percent,
             "graded_by": actor,
             "graded_at": now,
@@ -1406,13 +1417,19 @@ def get_progression_dashboard_data(diploma_id: int | None = None, cohort_id: int
     return qs
 
 
-def get_student_progress_detail(student_profile: StudentProfile):
+def get_student_progress_detail(student_profile: StudentProfile, cohort_ids: list[int] | None = None):
+    base_filter = {"student": student_profile}
+    if cohort_ids is not None:
+        base_filter["diploma_enrollment__cohort_id__in"] = cohort_ids
     semesters = StudentSemesterProgress.objects.filter(
-        student=student_profile,
+        **base_filter,
     ).select_related("semester", "diploma_enrollment__cohort__diploma").order_by("semester__order")
 
-    completions = StudentDiplomaCompletion.objects.filter(student=student_profile)
-    eligibilities = FinalExamEligibility.objects.filter(student=student_profile)
+    base_filter2 = {"student": student_profile}
+    if cohort_ids is not None:
+        base_filter2["diploma_enrollment__cohort_id__in"] = cohort_ids
+    completions = StudentDiplomaCompletion.objects.filter(**base_filter2)
+    eligibilities = FinalExamEligibility.objects.filter(**base_filter2)
     decisions = PromotionDecision.objects.filter(student=student_profile).order_by("-decided_at")[:20]
 
     return {
@@ -1475,7 +1492,16 @@ def activate_rejoin_plan(plan, *, actor) -> SemesterRejoinPlan:
     if plan.status != REJOIN_STATUS_PLANNED:
         raise ValueError(_("Only planned rejoin plans can be activated."))
 
+    if plan.from_enrollment.cohort_id == plan.target_cohort_id:
+        raise ValueError(_("Source and target cohort are the same. Rejoin requires a different cohort."))
+
     with transaction.atomic():
+        # Deactivate the source enrollment so the student has only one active path.
+        source = plan.from_enrollment
+        if source.status == ENROLLMENT_STATUS_ACTIVE:
+            source.status = ENROLLMENT_STATUS_RESTRICTED
+            source.save(update_fields=["status", "updated_at"])
+
         new_enrollment = enroll_student_in_diploma(plan.student, plan.target_cohort)
         plan.to_enrollment = new_enrollment
         plan.status = REJOIN_STATUS_ACTIVE

@@ -177,6 +177,10 @@ def submit_intake_form_response(
     else:
         raise ValueError(_("Invalid request or form."))
 
+    # ponytail: service-level ownership guard — actor must match the application's student user
+    if application.student.user_id != actor.pk:
+        raise PermissionError(_("You do not own this application."))
+
     if IntakeFormResponse.objects.filter(form=form, program_application=application).exists():
         raise ValueError(_("A response for this form already exists."))
 

@@ -27,7 +27,6 @@ from apps.academics.models import (
     Diploma,
     Lecture,
     ModeratorAssignment,
-    ModeratorStudentAssignment,
     StudentCluster,
     StudentClusterMembership,
     TeacherAssignment,
@@ -51,7 +50,7 @@ from apps.audit.services import record_audit_event
 from apps.communications.email_message import EmailMessage as CommEmailMessage
 from apps.core.htmx import is_htmx
 from apps.core.models import LandingAnnouncement
-from apps.core.permissions import ROLE_EXAM_STAFF, ROLE_SENIOR_STAFF, is_admin, role_required
+from apps.core.permissions import ROLE_EXAM_STAFF, ROLE_SENIOR_STAFF, role_required
 from apps.core.views import safe_next_url
 from apps.entrance_exams.models import EntranceAttempt
 from apps.payments.constants import (
@@ -67,6 +66,8 @@ from apps.students.models import StudentProfile
 from .constants import (
     GROUP_ADMIN,
     GROUP_MODERATOR,
+    GROUP_REVIEWER,
+    GROUP_SECRETARY,
     GROUP_STUDENT,
     GROUP_SUPER_ADMIN,
     GROUP_TEACHER,
@@ -119,6 +120,7 @@ def dashboard_router(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@role_required(GROUP_SUPER_ADMIN, GROUP_ADMIN)
 def admin_dashboard(request: HttpRequest) -> HttpResponse:
     context = _admin_dashboard_data()
     context["user_role"] = request.user.primary_role or _("Super Admin")
@@ -139,26 +141,20 @@ def admin_settings(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@role_required(GROUP_MODERATOR)
 def moderator_dashboard(request: HttpRequest) -> HttpResponse:
     context = _dashboard_context(request.user)
-    now = timezone.now()
-    context["pending_applications_count"] = ProgramApplication.objects.filter(
-        status__in=[PROGRAM_APP_STATUS_SUBMITTED, PROGRAM_APP_STATUS_UNDER_REVIEW]
-    ).count()
-    context["cohorts_starting_soon"] = (
-        Cohort.objects.filter(is_active=True, start_date__gte=now.date())
-        .order_by("start_date")[:5]
-    )
-    context["user_count"] = User.objects.filter(is_active=True).count()
     return render(request, "accounts/dashboards/moderator.html", context)
 
 
 @login_required
+@role_required(GROUP_TEACHER)
 def teacher_dashboard(request: HttpRequest) -> HttpResponse:
     return render(request, "accounts/dashboards/teacher.html", _dashboard_context(request.user))
 
 
 @login_required
+@role_required(GROUP_STUDENT)
 def student_dashboard(request: HttpRequest) -> HttpResponse:
     return render(request, "accounts/dashboards/student.html", _dashboard_context(request.user))
 
@@ -352,46 +348,10 @@ def _admin_dashboard_data() -> dict:
 @login_required
 @role_required(*ROLE_EXAM_STAFF)
 def admin_student_list(request):
-    current_user = request.user
     q = request.GET.get("q", "")
     status_filter = request.GET.get("status", "")
 
-    if is_admin(current_user):
-        users = User.objects.filter(groups__name=GROUP_STUDENT)
-    elif current_user.primary_role == GROUP_TEACHER:
-        assignments = TeacherAssignment.objects.filter(teacher=current_user, active=True)
-        cohort_ids = list(assignments.filter(
-            scope_type=SCOPE_DIPLOMA_COHORT
-        ).values_list("cohort_id", flat=True))
-        cv_ids = list(assignments.filter(
-            scope_type=SCOPE_COURSE_VERSION
-        ).values_list("course_version_id", flat=True))
-        users = User.objects.filter(groups__name=GROUP_STUDENT)
-        filters = Q()
-        if cohort_ids:
-            filters |= Q(student_profile__diploma_enrollments__cohort_id__in=cohort_ids)
-        if cv_ids:
-            filters |= Q(student_profile__course_enrollments__course_version_id__in=cv_ids)
-        users = users.filter(filters) if filters else User.objects.none()
-    elif current_user.primary_role == GROUP_MODERATOR:
-        manual_ids = ModeratorStudentAssignment.objects.filter(
-            moderator=current_user, active=True
-        ).values_list("student__user_id", flat=True)
-        cluster_ids = StudentClusterMembership.objects.filter(
-            cluster__moderator_assignments__moderator=current_user,
-            cluster__moderator_assignments__active=True,
-        ).values_list("student__user_id", flat=True)
-        cohort_ids = list(ModeratorAssignment.objects.filter(
-            moderator=current_user, active=True
-        ).exclude(cohort__isnull=True).values_list("cohort_id", flat=True))
-        cohort_student_ids = list(User.objects.filter(
-            groups__name=GROUP_STUDENT,
-            student_profile__diploma_enrollments__cohort_id__in=cohort_ids
-        ).values_list("id", flat=True)) if cohort_ids else []
-        student_user_ids = set(list(manual_ids) + list(cluster_ids) + cohort_student_ids)
-        users = User.objects.filter(id__in=student_user_ids, groups__name=GROUP_STUDENT)
-    else:
-        users = User.objects.none()
+    users = User.objects.filter(groups__name=GROUP_STUDENT)
 
     users = users.prefetch_related("groups").distinct()
 
@@ -733,7 +693,9 @@ def admin_moderator_assignment_create(request, user_id):
 def admin_moderator_assignment_delete(request, user_id, assignment_id):
     assignment = get_object_or_404(ModeratorAssignment, id=assignment_id, moderator_id=user_id)
     assignment.active = False
-    assignment.save()
+    assignment.revoked_by = request.user
+    assignment.revoked_at = timezone.now()
+    assignment.save(update_fields=["active", "revoked_by", "revoked_at", "updated_at"])
     messages.success(request, _("Moderator assignment revoked."))
     return redirect("accounts:admin_staff_assignments", user_id=user_id)
 
@@ -795,6 +757,10 @@ def _dashboard_url_name(user: User) -> str:
         return "accounts:dashboard_moderator"
     if role == GROUP_TEACHER:
         return "accounts:dashboard_teacher"
+    if role == GROUP_REVIEWER:
+        return "assessments:reviewer_dashboard"
+    if role == GROUP_SECRETARY:
+        return "attendance:attendance_session_list"
     if role == GROUP_STUDENT:
         return "accounts:dashboard_student"
     return "core:landing"

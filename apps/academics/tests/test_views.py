@@ -306,7 +306,7 @@ class StudentCourseViewTests(TestCase):
     def test_student_course_list_empty(self):
         r = self.client.get(reverse("academics:student_course_list"))
         self.assertEqual(r.status_code, 200)
-        self.assertNotContains(r, "C1")
+        self.assertEqual(list(r.context["course_versions"]), [])
 
     def test_student_course_list_with_enrollment(self):
         ce = enroll_student_in_course(self.profile, self.version)

@@ -18,6 +18,8 @@ env = environ.Env(
     DJANGO_ALLOWED_HOSTS=(list, ["localhost", "127.0.0.1"]),
     DJANGO_CSRF_TRUSTED_ORIGINS=(list, ["http://localhost:8000", "http://127.0.0.1:8000"]),
     DATABASE_URL=(str, f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
+    CACHE_URL=(str, ""),
+    CELERY_BROKER_URL=(str, "redis://localhost:6379/0"),
     EMAIL_BACKEND=(str, "django.core.mail.backends.console.EmailBackend"),
     EMAIL_HOST=(str, ""),
     EMAIL_PORT=(int, 587),
@@ -132,6 +134,23 @@ TEMPLATES = [
 
 # --- Database ----------------------------------------------------------------
 DATABASES = {"default": env.db()}
+
+# --- Cache and background jobs ----------------------------------------------
+CACHE_URL = env("CACHE_URL")
+if CACHE_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": CACHE_URL,
+        }
+    }
+
+CELERY_BROKER_URL = env("CELERY_BROKER_URL")
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_TASK_IGNORE_RESULT = True
+CELERY_TASK_SERIALIZER = "json"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TIMEZONE = "Africa/Cairo"
 
 # --- Custom user -------------------------------------------------------------
 AUTH_USER_MODEL = "accounts.User"

@@ -9,7 +9,8 @@ from typing import Any
 
 from django.conf import settings
 from django.contrib.auth.models import Group
-from django.db import models, transaction
+from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -18,6 +19,7 @@ from apps.audit.constants import ACTION_USER_IMPORT_CONFIRMED, ACTION_USER_IMPOR
 from apps.audit.models import AuditEvent
 from apps.communications.constants import TEMPLATE_ACTIVATION
 from apps.communications.services import send_templated_email
+from apps.students.identity import normalize_identity_number, validate_identity_number
 from apps.students.models import StudentProfile
 
 from .constants import (
@@ -48,24 +50,6 @@ from .constants import (
 from .models import User, UserUpload, UserUploadRow
 
 REQUIRED_PROFILE_FIELDS = ["date_of_birth", "gender", "address", "education"]
-
-
-def normalize_national_id(value: str) -> str:
-    """Normalize for CSV matching: strip all spaces."""
-    return re.sub(r"\s+", "", value).strip()
-
-
-def normalize_national_id_for_matching(value: str) -> list[str]:
-    """Return normalized variants to try when matching against stored values.
-
-    Returns at least the stripped value.  If the value contains letters, an
-    uppercased variant is also returned to handle passport-style IDs.
-    """
-    stripped = normalize_national_id(value)
-    variants = [stripped]
-    if any(c.isalpha() for c in stripped):
-        variants.append(stripped.upper())
-    return variants
 
 
 def normalize_phone(value: str) -> str:
@@ -104,7 +88,9 @@ def validate_csv_content(content: bytes) -> list[dict[str, str]]:
 
 def match_user(row: dict[str, str]) -> tuple[User | None, str, str]:
     email = row.get("email", "").strip().lower()
-    national_id = normalize_national_id(row.get("national_id", ""))
+    country_code = _get_country_code(row)
+    raw_national_id = row.get("national_id", "")
+    national_id = normalize_identity_number(country_code, raw_national_id) if raw_national_id else ""
     phone = normalize_phone(row.get("phone", ""))
     candidates: dict[int, User] = {}
     sources: dict[int, str] = {}
@@ -127,11 +113,7 @@ def match_user(row: dict[str, str]) -> tuple[User | None, str, str]:
                 return None, MATCH_METHOD_AMBIGUOUS, f"Email {email} belongs to a staff account; cannot modify"
 
     if national_id:
-        identity_variants = normalize_national_id_for_matching(national_id)
-        q = models.Q(national_id=identity_variants[0])
-        for v in identity_variants[1:]:
-            q |= models.Q(national_id=v)
-        qs = User.objects.filter(q)
+        qs = User.objects.filter(national_id=national_id)
         if qs.count() > 1:
             return None, MATCH_METHOD_AMBIGUOUS, f"Multiple users match national ID {national_id}"
         if qs.count() == 1:
@@ -173,6 +155,10 @@ def match_user(row: dict[str, str]) -> tuple[User | None, str, str]:
     return match, method, ""
 
 
+def _get_country_code(row: dict[str, str]) -> str:
+    return (row.get("country_code", "") or "").strip().upper() or "EG"
+
+
 def _parse_row_data(row: dict[str, str], row_number: int) -> dict[str, Any]:
     email = row.get("email", "").strip().lower()
     full_name = row.get("full_name", "").strip()
@@ -180,7 +166,14 @@ def _parse_row_data(row: dict[str, str], row_number: int) -> dict[str, Any]:
         return {"status": ROW_STATUS_FAILED, "error_message": str(_("Empty email"))}
     if not full_name:
         return {"status": ROW_STATUS_FAILED, "error_message": str(_("Empty full name"))}
-    national_id = normalize_national_id(row.get("national_id", ""))
+    country_code = _get_country_code(row)
+    raw_national_id = row.get("national_id", "")
+    national_id = normalize_identity_number(country_code, raw_national_id) if raw_national_id else ""
+    if raw_national_id:
+        try:
+            validate_identity_number(country_code, raw_national_id)
+        except ValidationError as e:
+            return {"status": ROW_STATUS_FAILED, "error_message": str(e)}
     phone = normalize_phone(row.get("phone", ""))
     return {
         "raw_data": row,
@@ -324,10 +317,13 @@ def preview_upload(upload_id: int) -> UserUpload:
 
 
 def _build_student_profile_data(row_raw: dict[str, str]) -> dict[str, Any]:
+    country_code = _get_country_code(row_raw)
+    raw_national_id = row_raw.get("national_id", "")
     profile_fields = {
         "full_name": row_raw.get("full_name", ""),
         "phone": normalize_phone(row_raw.get("phone", "")),
-        "national_id": normalize_national_id(row_raw.get("national_id", "")),
+        "national_id": normalize_identity_number(country_code, raw_national_id) if raw_national_id else "",
+        "country_code": country_code,
         "date_of_birth": None,
         "gender": row_raw.get("gender", ""),
         "address": row_raw.get("address", ""),
@@ -364,7 +360,7 @@ def confirm_upload(upload_id: int, confirmed_by) -> UserUpload:
                 user = row.matched_user
                 user.full_name = data.get("full_name", user.full_name)
                 user.phone = normalize_phone(data.get("phone", user.phone))
-                user.national_id = normalize_national_id(data.get("national_id", user.national_id))
+                user.national_id = row.normalized_national_id or user.national_id
                 full_clean_needed = not (user.full_name and user.email)
                 if full_clean_needed:
                     user.full_name = user.full_name or user.email

@@ -38,7 +38,6 @@ from apps.academics.models import (
     Lecture,
     ModeratorStudentAssignment,
     Semester,
-    SemesterCourse,
     TeacherAssignment,
 )
 from apps.applications.constants import (
@@ -244,16 +243,16 @@ class Command(BaseCommand):
                 student_users[s["email"]] = (user, s)
 
             diploma, sem1, sem2, course, cohort_a, cohort_b = self._ensure_academics(super_admin)
-            ver_a, ver_b, ver_standalone = self._ensure_course_versions(super_admin, course, cohort_a, cohort_b, sem1)
-            self._ensure_lectures(ver_a, ver_b)
+            ver_standalone = self._ensure_standalone_course_version(super_admin, course, sem1)
+            self._ensure_lectures(ver_standalone)
 
             profiles: dict[str, StudentProfile] = {}
             for email, (user, data) in student_users.items():
                 profiles[email] = self._ensure_profile(user, data)
 
             apps_map = self._ensure_applications(profiles, super_admin, cohort_a, cohort_b, course)
-            self._ensure_enrollments(profiles, cohort_a, ver_a, ver_b)
-            assessments = self._ensure_assessments(teacher, ver_a, cohort_a, sem1)
+            self._ensure_enrollments(profiles, cohort_a, ver_standalone)
+            assessments = self._ensure_assessments(teacher, ver_standalone, cohort_a, sem1)
             attempt_for_audit = self._ensure_attempts(assessments, student_users, profiles)
             self._ensure_entrance_exam(diploma, cohort_a, profiles, super_admin)
             self._ensure_teacher_moderator(super_admin, teacher, moderator, cohort_a, profiles)
@@ -262,7 +261,7 @@ class Command(BaseCommand):
             cert_for_audit = self._ensure_certificates(super_admin, profiles, cohort_a, diploma)
             self._ensure_audit(super_admin, profiles, attempt_for_audit, payment_for_audit, cert_for_audit)
 
-        self._print_summary(profiles, diploma, cohort_a, cohort_b, course, ver_a, ver_b, assessments)
+        self._print_summary(profiles, diploma, cohort_a, cohort_b, course, ver_standalone, assessments)
         if self.warnings:
             self.stdout.write(self.style.WARNING("\nWarnings / Skipped:"))
             for w in self.warnings:
@@ -409,11 +408,6 @@ class Command(BaseCommand):
         )
         self._report("Course: E2E Foundations Course", created)
 
-        _obj, created = SemesterCourse.objects.update_or_create(
-            semester=sem1, course=course,
-            defaults={"order": 1},
-        )
-
         cohort_a, created = Cohort.objects.update_or_create(
             diploma=diploma, name="E2E Cohort A 2026",
             defaults={
@@ -438,35 +432,7 @@ class Command(BaseCommand):
 
         return diploma, sem1, sem2, course, cohort_a, cohort_b
 
-    def _ensure_course_versions(self, admin, course, cohort_a, cohort_b, sem1):
-        # Cohort A and B are bound to the diploma. The standalone version
-        # has no cohort and is queried via cohort__isnull=True (the
-        # unique_together allows multiple NULL cohorts in some DBs).
-        ver_a, created = CourseVersion.objects.update_or_create(
-            course=course, cohort=cohort_a, label="v1",
-            defaults={
-                "semester": sem1,
-                "access_duration_days": 180,
-                "is_active": True,
-                "created_by": admin,
-            },
-        )
-        self._report("CourseVersion A (Cohort A, v1)", created)
-
-        ver_b, created = CourseVersion.objects.update_or_create(
-            course=course, cohort=cohort_b, label="v1",
-            defaults={
-                "semester": sem1,
-                "access_duration_days": 180,
-                "is_active": True,
-                "created_by": admin,
-            },
-        )
-        self._report("CourseVersion B (Cohort B, v1)", created)
-
-        # Look up the standalone version explicitly to avoid relying on
-        # the unique_together with NULL cohort (which some databases
-        # allow multiple of).
+    def _ensure_standalone_course_version(self, admin, course, sem1):
         ver_standalone = (
             CourseVersion.objects
             .filter(course=course, cohort__isnull=True, label="standalone")
@@ -482,7 +448,7 @@ class Command(BaseCommand):
                 is_active=True,
                 created_by=admin,
             )
-            self._report("CourseVersion standalone", created)
+            self._report("CourseVersion standalone", True)
         else:
             ver_standalone.semester = sem1
             ver_standalone.access_duration_days = 90
@@ -490,14 +456,12 @@ class Command(BaseCommand):
             ver_standalone.created_by = admin
             ver_standalone.save()
             self._report("CourseVersion standalone", False)
+        return ver_standalone
 
-        return ver_a, ver_b, ver_standalone
-
-    def _ensure_lectures(self, ver_a, ver_b):
+    def _ensure_lectures(self, ver):
         now = timezone.now()
-
         _obj, created = Lecture.objects.update_or_create(
-            course_version=ver_a, order=1,
+            course_version=ver, order=1,
             defaults={
                 "title": "E2E Lecture 1 - Published Released",
                 "description": "First published and released lecture for E2E testing.",
@@ -506,10 +470,9 @@ class Command(BaseCommand):
                 "is_published": True,
             },
         )
-        self._report("Lecture: Published Released (Ver A)", created)
-
+        self._report("Lecture: Published Released", created)
         _obj, created = Lecture.objects.update_or_create(
-            course_version=ver_a, order=2,
+            course_version=ver, order=2,
             defaults={
                 "title": "E2E Lecture 2 - Future Release",
                 "description": "Lecture scheduled for future release.",
@@ -518,29 +481,16 @@ class Command(BaseCommand):
                 "is_published": True,
             },
         )
-        self._report("Lecture: Future Release (Ver A)", created)
-
+        self._report("Lecture: Future Release", created)
         _obj, created = Lecture.objects.update_or_create(
-            course_version=ver_a, order=3,
+            course_version=ver, order=3,
             defaults={
                 "title": "E2E Lecture 3 - Unpublished",
                 "description": "Unpublished lecture for draft testing.",
                 "is_published": False,
             },
         )
-        self._report("Lecture: Unpublished (Ver A)", created)
-
-        _obj, created = Lecture.objects.update_or_create(
-            course_version=ver_b, order=1,
-            defaults={
-                "title": "E2E Lecture B1 - Published Released",
-                "description": "Published released lecture for Cohort B.",
-                "youtube_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-                "release_at": now - timedelta(days=10),
-                "is_published": True,
-            },
-        )
-        self._report("Lecture: Published Released (Ver B)", created)
+        self._report("Lecture: Unpublished", created)
 
     def _ensure_applications(self, profiles, admin, cohort_a, cohort_b, course):
         """Create program applications for the demo students."""
@@ -599,10 +549,10 @@ class Command(BaseCommand):
 
         return apps_map
 
-    def _ensure_enrollments(self, profiles, cohort_a, ver_a, ver_b):
+    def _ensure_enrollments(self, profiles, cohort_a, ver_standalone):
         now = timezone.now()
 
-        # active student: active diploma + active course.
+        # active student: active diploma + active course (standalone).
         p = profiles["student.active@dokkimashora.test"]
         _obj, created = DiplomaEnrollment.objects.update_or_create(
             student=p, cohort=cohort_a,
@@ -615,14 +565,14 @@ class Command(BaseCommand):
         self._report("DiplomaEnrollment: active student", created)
 
         _obj, created = CourseEnrollment.objects.update_or_create(
-            student=p, course_version=ver_a,
+            student=p, course_version=ver_standalone,
             defaults={
                 "status": ENROLLMENT_STATUS_ACTIVE,
                 "activated_at": now,
                 "expires_at": now + timedelta(days=180),
             },
         )
-        self._report("CourseEnrollment: active student (Ver A)", created)
+        self._report("CourseEnrollment: active student (standalone)", created)
 
         # expired student: diploma still active (admin lifetime),
         # CourseEnrollment is expired.
@@ -638,14 +588,14 @@ class Command(BaseCommand):
         self._report("DiplomaEnrollment: expired student", created)
 
         _obj, created = CourseEnrollment.objects.update_or_create(
-            student=p, course_version=ver_a,
+            student=p, course_version=ver_standalone,
             defaults={
                 "status": ENROLLMENT_STATUS_EXPIRED,
                 "activated_at": now - timedelta(days=200),
                 "expires_at": now - timedelta(days=20),
             },
         )
-        self._report("CourseEnrollment: expired student (Ver A)", created)
+        self._report("CourseEnrollment: expired student (standalone)", created)
 
         # restricted student: restricted diploma enrollment.
         p = profiles["student.restricted@dokkimashora.test"]
@@ -1139,7 +1089,7 @@ class Command(BaseCommand):
         else:
             self._report("Audit: certificate.generated (already exists)", False)
 
-    def _print_summary(self, profiles, diploma, cohort_a, cohort_b, course, ver_a, ver_b, assessments):
+    def _print_summary(self, profiles, diploma, cohort_a, cohort_b, course, ver_standalone, assessments):
         creds = [
             ("Super Admin", "superadmin@dokkimashora.test"),
             ("Admin", "admin@dokkimashora.test"),
@@ -1188,8 +1138,7 @@ class Command(BaseCommand):
         out.append(f"- Cohort A: `{cohort_a.pk}`")
         out.append(f"- Cohort B: `{cohort_b.pk}`")
         out.append(f"- Course: `{course.pk}`")
-        out.append(f"- Version A: `{ver_a.pk}`")
-        out.append(f"- Version B: `{ver_b.pk}`")
+        out.append(f"- Standalone Version: `{ver_standalone.pk}`")
         for name, a in assessments.items():
             out.append(f"- Assessment ({name}): `{a.pk}`")
 

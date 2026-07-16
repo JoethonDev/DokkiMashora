@@ -543,7 +543,7 @@ class DiplomaLectureBankTests(TestCase):
 
     def test_anonymous_redirected_to_login(self):
         response = self.client.get(self.list_url)
-        self.assertRedirects(response, "/accounts/login/?next=" + self.list_url)
+        self.assertRedirects(response, "/en/accounts/login/?next=" + self.list_url)
 
     def test_list_shows_questions(self):
         self.client.force_login(self.admin)
@@ -812,11 +812,11 @@ class DiplomaSectionManagementTests(TestCase):
 
     def test_anonymous_redirected_to_login_on_section_create(self):
         response = self.client.get(self.create_url)
-        self.assertRedirects(response, "/accounts/login/?next=" + self.create_url)
+        self.assertRedirects(response, "/en/accounts/login/?next=" + self.create_url)
 
     def test_anonymous_redirected_to_login_on_section_edit(self):
         section = AssessmentLectureSection.objects.create(
             assessment=self.diploma_assessment, lecture=self.lecture, order=1, mcq_count=3, max_grade=Decimal("50.00"),
         )
         response = self.client.get(self._edit_url(section.id))
-        self.assertRedirects(response, "/accounts/login/?next=" + self._edit_url(section.id))
+        self.assertRedirects(response, "/en/accounts/login/?next=" + self._edit_url(section.id))

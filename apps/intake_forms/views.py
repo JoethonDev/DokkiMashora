@@ -11,6 +11,7 @@ from django.views.decorators.http import require_http_methods
 
 from apps.academics.models import Cohort, CourseVersion
 from apps.applications.models import ProgramApplication
+from apps.core.pagination import paginate
 from apps.core.permissions import is_admin
 
 from .constants import FIELD_TYPE_BOOLEAN, INTAKE_REQUEST_STATUS_EXPIRED, INTAKE_REQUEST_STATUS_SUBMITTED
@@ -40,10 +41,11 @@ def _get_profile_or_404(user):
 def admin_intake_form_list(request: HttpRequest) -> HttpResponse:
     if not is_admin(request.user):
         raise PermissionDenied
-    forms = IntakeForm.objects.select_related(
+    forms_qs = IntakeForm.objects.select_related(
         "course_version__course", "cohort__diploma", "created_by",
     ).order_by("-created_at")
-    return render(request, "intake_forms/admin_form_list.html", {"forms": forms})
+    page_obj, _qs = paginate(request, forms_qs)
+    return render(request, "intake_forms/admin_form_list.html", {"forms": page_obj})
 
 
 @require_http_methods(["GET", "POST"])

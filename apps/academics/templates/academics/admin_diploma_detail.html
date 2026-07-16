@@ -59,8 +59,8 @@
                     <span class="text-xs text-slate-500">{{ cl.lecture_count }} {% trans "lectures" %}</span>
                   </div>
                   <div class="mt-2 flex gap-2">
-                    <a href="{% url 'academics:admin_diploma_lecture_create' diploma.id cl.cohort.id scd.semester.id %}?next={{ request.path|urlencode }}" class="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300">{% trans "Add Lecture" %}</a>
-                    <a href="{% url 'academics:admin_diploma_lecture_create' diploma.id cl.cohort.id scd.semester.id %}?next={{ request.path|urlencode }}" class="text-xs text-slate-500 hover:text-brand-600">{% trans "Manage" %}</a>
+                    <a href="{% url 'academics:admin_diploma_lecture_list' diploma.id cl.cohort.id scd.semester.id %}" class="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300">{% trans "Manage" %}</a>
+                    <a href="{% url 'academics:admin_diploma_lecture_create' diploma.id cl.cohort.id scd.semester.id %}?next={{ request.path|urlencode }}" class="text-xs text-slate-500 hover:text-brand-600">{% trans "Add Lecture" %}</a>
                   </div>
                 </div>
               {% endfor %}
@@ -109,7 +109,7 @@
                   <div class="flex gap-2">
                     <a href="{% url 'academics:admin_cohort_edit' diploma.id cohort.id %}?next={{ request.path|urlencode }}" class="text-slate-600 dark:text-slate-300 hover:text-brand-600 text-sm font-semibold">{% trans "Edit" %}</a>
                     {% for semester in semesters %}
-                      <a href="{% url 'academics:admin_diploma_lecture_create' diploma.id cohort.id semester.id %}?next={{ request.path|urlencode }}" class="text-xs text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 font-semibold">{% blocktrans with s=semester.title %}Lectures ({{ s }}){% endblocktrans %}</a>
+                      <a href="{% url 'academics:admin_diploma_lecture_list' diploma.id cohort.id semester.id %}" class="text-xs text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 font-semibold">{% blocktrans with s=semester.title %}Lectures ({{ s }}){% endblocktrans %}</a>
                     {% endfor %}
                   </div>
                 </td>

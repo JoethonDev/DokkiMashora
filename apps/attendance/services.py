@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import secrets
 
+from django.core.signing import TimestampSigner
 from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -10,6 +11,8 @@ from django.utils.translation import gettext as _
 from apps.academics.models import CourseEnrollment, DiplomaEnrollment
 
 from .constants import (
+    ATTENDANCE_STATUS_EXCUSED,
+    ATTENDANCE_STATUS_LATE,
     ATTENDANCE_STATUS_PRESENT,
     SESSION_STATUS_CLOSED,
     SESSION_STATUS_OPEN,
@@ -17,11 +20,15 @@ from .constants import (
 )
 from .models import AttendanceCode, AttendanceRecord, AttendanceSession
 
+_salt = "attendance-qr"
+_signer = TimestampSigner(salt=_salt)
+_QR_MAX_AGE_SECONDS = 90 * 24 * 3600  # 90 days
+
 
 def get_or_create_attendance_code_for_enrollment(
     enrollment: DiplomaEnrollment | CourseEnrollment,
     actor=None,
-) -> tuple[AttendanceCode, str]:
+) -> AttendanceCode:
     if isinstance(enrollment, DiplomaEnrollment):
         existing = AttendanceCode.objects.filter(
             diploma_enrollment=enrollment, active=True
@@ -32,7 +39,7 @@ def get_or_create_attendance_code_for_enrollment(
         ).first()
 
     if existing:
-        return existing, ""
+        return existing
 
     token = secrets.token_urlsafe(32)
     token_hash = hashlib.sha256(token.encode()).hexdigest()
@@ -46,11 +53,11 @@ def get_or_create_attendance_code_for_enrollment(
         created_by=actor,
     )
 
-    return code, token
+    return code
 
 
-def build_attendance_qr_payload(attendance_code: AttendanceCode, raw_token: str) -> str:
-    return f"attendance:{attendance_code.display_code}:{raw_token}"
+def build_attendance_qr_payload(attendance_code: AttendanceCode) -> str:
+    return f"attendance:{_signer.sign(str(attendance_code.pk))}"
 
 
 @transaction.atomic
@@ -124,33 +131,43 @@ def scan_attendance_token(
 ) -> tuple[AttendanceRecord, bool]:
     now = now or timezone.now()
 
-    if session.status != SESSION_STATUS_OPEN:
+    # Lock session row to prevent TOCTOU between status check and record creation
+    locked_session = AttendanceSession.objects.select_for_update().get(pk=session.pk)
+
+    if locked_session.status != SESSION_STATUS_OPEN:
         raise ValueError(_("Attendance session is not open."))
-    if not (session.open_at <= now <= session.close_at):
+    if not (locked_session.open_at <= now <= locked_session.close_at):
         raise ValueError(_("Scanning is outside the session time window."))
 
-    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+    # raw_token is the signed payload — unsign to get the pk (with expiry)
     try:
-        code = AttendanceCode.objects.get(token_hash=token_hash, active=True)
+        pk = int(_signer.unsign(raw_token, max_age=_QR_MAX_AGE_SECONDS))
+    except Exception:
+        raise ValueError(_("Invalid or tampered attendance token.")) from None
+    try:
+        code = AttendanceCode.objects.get(pk=pk, active=True)
     except AttendanceCode.DoesNotExist:
         raise ValueError(_("Invalid attendance token.")) from None
 
     enrollment = code.diploma_enrollment or code.course_enrollment
-    session_target = session.cohort or session.course_version
+    if enrollment is None:
+        raise ValueError(_("Attendance code is not linked to an enrollment."))
 
     if isinstance(enrollment, DiplomaEnrollment):
-        if enrollment.cohort_id != getattr(session_target, "id", None):
+        if not session.cohort_id:
+            raise ValueError(_("Session is not for a diploma cohort."))
+        if enrollment.cohort_id != session.cohort_id:
             raise ValueError(_("Attendance code does not match this session."))
         record_kwargs = {"diploma_enrollment": enrollment, "course_enrollment": None}
     else:
-        if enrollment.course_version_id != getattr(session_target, "id", None):
+        if not session.course_version_id:
+            raise ValueError(_("Session is not for a course."))
+        if enrollment.course_version_id != session.course_version_id:
             raise ValueError(_("Attendance code does not match this session."))
         record_kwargs = {"diploma_enrollment": None, "course_enrollment": enrollment}
 
-    AttendanceSession.objects.select_for_update().get(pk=session.pk)
-
     record, created = AttendanceRecord.objects.get_or_create(
-        session=session,
+        session=locked_session,
         defaults={
             "student": code.student,
             "scanned_by": scanned_by,
@@ -175,9 +192,9 @@ def get_attendance_summary(diploma_enrollment, semester) -> dict:
         diploma_enrollment=diploma_enrollment,
     )
 
-    present_count = records.filter(status="present").count()
-    late_count = records.filter(status="late").count()
-    excused_count = records.filter(status="excused").count()
+    present_count = records.filter(status=ATTENDANCE_STATUS_PRESENT).count()
+    late_count = records.filter(status=ATTENDANCE_STATUS_LATE).count()
+    excused_count = records.filter(status=ATTENDANCE_STATUS_EXCUSED).count()
     total_attended = present_count + late_count
     attendance_percent = (
         round((total_attended / total_sessions) * 100, 2) if total_sessions > 0 else 0.0

@@ -118,8 +118,11 @@ class ProgramApplication(TimeStampedModel):
     def submitted_document_upload(self) -> ApplicationDocumentUpload | None:
         # ponytail: requires prefetch_related("document_requests__upload") — N+1 if called without it
         for req in self.document_requests.all():
-            if req.status == DOCUMENT_REQUEST_STATUS_SUBMITTED and hasattr(req, "upload_id") and req.upload_id:
-                return req.upload
+            if req.status == DOCUMENT_REQUEST_STATUS_SUBMITTED:
+                try:
+                    return req.upload
+                except ApplicationDocumentUpload.DoesNotExist:
+                    continue
         return None
 
     def accept(self, reviewer, notes: str = "") -> None:

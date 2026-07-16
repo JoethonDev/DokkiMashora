@@ -97,6 +97,11 @@ urlpatterns = [
     ),
     # Admin: diploma lectures (Phase 6 direct-lecture topology)
     path(
+        "manage/diplomas/<int:diploma_id>/cohorts/<int:cohort_id>/semesters/<int:semester_id>/lectures/",
+        views.admin_diploma_lecture_list,
+        name="admin_diploma_lecture_list",
+    ),
+    path(
         "manage/diplomas/<int:diploma_id>/cohorts/<int:cohort_id>/semesters/<int:semester_id>/lectures/create/",
         views.admin_diploma_lecture_create,
         name="admin_diploma_lecture_create",

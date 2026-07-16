@@ -2,13 +2,21 @@
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.exceptions import ObjectDoesNotExist, PermissionDenied, ValidationError
+from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_POST
 
-from apps.academics.models import Cohort, Diploma, DiplomaEnrollment, Semester
+from apps.academics.models import (
+    Cohort,
+    Diploma,
+    DiplomaEnrollment,
+    ModeratorAssignment,
+    ModeratorStudentAssignment,
+    Semester,
+)
 from apps.audit.constants import (
     ACTION_DEMOTION,
     ACTION_LOCK,
@@ -19,9 +27,10 @@ from apps.audit.constants import (
 from apps.audit.services import record_audit_event
 from apps.certificates.models import GeneratedCertificate
 from apps.core.permissions import (
-    ROLE_EXAM_STAFF,
+    ROLE_GRADING_STAFF,
     ROLE_SENIOR_STAFF,
     can_view_student_progress,
+    is_admin,
     role_required,
     safe_int,
 )
@@ -109,7 +118,7 @@ def admin_dashboard(request):
 
 
 @login_required
-@role_required(*ROLE_EXAM_STAFF)
+@role_required(*ROLE_GRADING_STAFF)
 def admin_student_detail(request, student_id):
     student = _get_student_or_404(student_id)
     if not can_view_student_progress(request.user, student):
@@ -117,12 +126,39 @@ def admin_student_detail(request, student_id):
     enrollments = DiplomaEnrollment.objects.filter(student=student).select_related(
         "cohort__diploma",
     )
-    progress_detail = get_student_progress_detail(student)
-    eligibility = FinalExamEligibility.objects.filter(student=student).first()
-    completion = StudentDiplomaCompletion.objects.filter(student=student).first()
+    if not is_admin(request.user):
+        mod_cohorts_qs = ModeratorAssignment.objects.filter(
+            moderator=request.user, active=True,
+        ).values("cohort_id")
+        mod_students = ModeratorStudentAssignment.objects.filter(
+            moderator=request.user, active=True,
+        ).values("student_id")
+        enrollments = enrollments.filter(
+            Q(cohort_id__in=mod_cohorts_qs)
+            | Q(student_id__in=mod_students)
+        )
+        mod_wide = ModeratorAssignment.objects.filter(
+            moderator=request.user, active=True, cohort__isnull=True,
+        ).exists()
+        if not mod_wide and not mod_cohorts_qs and not mod_students:
+            enrollments = DiplomaEnrollment.objects.none()
+    allowed_cohort_ids = list(enrollments.values_list("cohort_id", flat=True).distinct())
+    cohort_filter = {"diploma_enrollment__cohort_id__in": allowed_cohort_ids} if not is_admin(request.user) and allowed_cohort_ids else {}
+    progress_detail = get_student_progress_detail(student, cohort_ids=allowed_cohort_ids if not is_admin(request.user) else None)
+    eligibility_qs = FinalExamEligibility.objects.filter(student=student)
+    if cohort_filter:
+        eligibility_qs = eligibility_qs.filter(**cohort_filter)
+    eligibility = eligibility_qs.first()
+    completion_qs = StudentDiplomaCompletion.objects.filter(student=student)
+    if cohort_filter:
+        completion_qs = completion_qs.filter(**cohort_filter)
+    completion = completion_qs.first()
     certificates = GeneratedCertificate.objects.filter(student=student).select_related(
         "diploma_enrollment__cohort__diploma",
-    ).order_by("-generated_at")
+    )
+    if cohort_filter:
+        certificates = certificates.filter(**cohort_filter)
+    certificates = certificates.order_by("-generated_at")
 
     semesters = Semester.objects.all().order_by("diploma", "order")
 
@@ -137,14 +173,19 @@ def admin_student_detail(request, student_id):
         active=True,
     ).select_related("semester")
 
-    grade_items = StudentGradeItem.objects.filter(
-        student=student,
-    ).select_related("component__semester", "component__cohort", "diploma_enrollment")
+    grade_items = StudentGradeItem.objects.filter(student=student)
+    if cohort_filter:
+        grade_items = grade_items.filter(component__cohort_id__in=allowed_cohort_ids)
+    grade_items = grade_items.select_related("component__semester", "component__cohort", "diploma_enrollment")
 
-    rejoin_plans = SemesterRejoinPlan.objects.filter(student=student).order_by("-created_at")
+    rejoin_plans = SemesterRejoinPlan.objects.filter(student=student)
+    if cohort_filter:
+        rejoin_plans = rejoin_plans.filter(from_enrollment__cohort_id__in=allowed_cohort_ids)
+    rejoin_plans = rejoin_plans.order_by("-created_at")
 
     ctx = {
         "student": student,
+        "is_admin_user": is_admin(request.user),
         "enrollments": enrollments,
         "progress_semesters": progress_detail["semesters"],
         "requirement_summaries": requirement_summaries,
@@ -157,7 +198,7 @@ def admin_student_detail(request, student_id):
         "grade_items": grade_items,
         "rejoin_plans": rejoin_plans,
         "breadcrumb_items": [
-            {"label": _("Progression Dashboard"), "href": reverse("progression:admin_dashboard")},
+            ({"label": _("Assessments"), "href": reverse("assessments:admin_list")} if not is_admin(request.user) else {"label": _("Progression Dashboard"), "href": reverse("progression:admin_dashboard")}),
             {"label": str(student)},
         ],
     }
@@ -408,6 +449,9 @@ def admin_clear_retake(request, student_id):
             },
         )
         messages.success(request, _("Retake cleared."))
+    except ObjectDoesNotExist:
+        messages.error(request, _("No progress record found for this semester."))
+        return redirect("progression:admin_student_detail", student_id=student.id)
     except ValueError as exc:
         messages.error(request, str(exc))
 
@@ -606,10 +650,12 @@ def admin_component_delete(request, component_id):
 
 
 @login_required
-@role_required(*ROLE_SENIOR_STAFF)
+@role_required(*ROLE_GRADING_STAFF)
 def admin_custom_activity_grade(request, enrollment_id, component_id):
     enrollment = get_object_or_404(DiplomaEnrollment, id=enrollment_id)
     component = get_object_or_404(SemesterGradeComponent, id=component_id)
+    if not is_admin(request.user) and not can_view_student_progress(request.user, enrollment.student, enrollment.cohort):
+        raise PermissionDenied
     grade_item = StudentGradeItem.objects.filter(
         component=component, diploma_enrollment=enrollment,
     ).first()

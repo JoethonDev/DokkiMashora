@@ -24,7 +24,7 @@
         </p>
       </div>
       <div class="flex flex-wrap gap-2">
-        {% if attempt.status == "graded" %}
+        {% if attempt.status == "graded" and is_admin_user %}
           <form method="post" action="{% url 'assessments:admin_release_grades' attempt.id %}">{% csrf_token %}
             {% include "partials/_button.html" with label=_("Release to student") variant="success" size="sm" %}
           </form>

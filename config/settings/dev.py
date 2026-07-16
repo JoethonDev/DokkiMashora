@@ -20,4 +20,4 @@ INTERNAL_IPS = ["127.0.0.1", "localhost"]
 #     pass
 
 # In dev we always use the console email backend unless overridden.
-# EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"

@@ -164,18 +164,13 @@ def diploma_course(request: HttpRequest) -> HttpResponse:
     data = get_dashboard_data(profile, sections=["diploma_enrollments", "course_enrollments"])
     items = []
     for de in (data.get("diploma_enrollments") or []):
-        cohort = de.cohort
-        for cv in cohort.course_versions.select_related("course").prefetch_related("lectures"):
-            lecture_count = cv.lectures.filter(is_published=True).count()
-            items.append({
-                "type": "diploma",
-                "label": cohort.diploma.title,
-                "course_title": cv.course.title,
-                "cv_id": cv.id,
-                "joined_at": de.activated_at or de.created_at,
-                "expires_at": de.expires_at,
-                "lecture_count": lecture_count,
-            })
+        items.append({
+            "type": "diploma",
+            "label": de.cohort.diploma.title,
+            "enrollment_id": de.id,
+            "joined_at": de.activated_at or de.created_at,
+            "expires_at": de.expires_at,
+        })
 
     for ce in (data.get("course_enrollments") or []):
         cv = ce.course_version
@@ -195,14 +190,24 @@ def diploma_course(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def diploma_course_detail(request: HttpRequest, version_id: int) -> HttpResponse:
-    """Show course content, teacher, and moderator within the profile."""
+    """Show course content, teacher, and moderator within the profile.
+
+    Diploma course versions are redirected to the new DiplomaLecture flow.
+    Only standalone (non-diploma) course versions are served here.
+    """
     profile = _get_profile_or_404(request.user)
     cv = get_object_or_404(CourseVersion.objects.select_related("course", "cohort"), id=version_id, is_active=True)
-    has_access = CourseEnrollment.objects.filter(student=profile, course_version=cv, status=ENROLLMENT_STATUS_ACTIVE).exists()
-    if not has_access:
-        has_access = DiplomaEnrollment.objects.filter(
+
+    # Redirect diploma course versions to the new DiplomaLecture detail page.
+    if cv.cohort_id and cv.cohort.diploma_id:
+        enrollment = DiplomaEnrollment.objects.filter(
             student=profile, cohort=cv.cohort, status=ENROLLMENT_STATUS_ACTIVE
-        ).exists()
+        ).first()
+        if enrollment:
+            return redirect("academics:student_diploma_detail", enrollment_id=enrollment.id)
+        raise PermissionDenied
+
+    has_access = CourseEnrollment.objects.filter(student=profile, course_version=cv, status=ENROLLMENT_STATUS_ACTIVE).exists()
     if not has_access:
         raise PermissionDenied
     lectures = list(

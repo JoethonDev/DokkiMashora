@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% load i18n %} {% block title %}{% trans "Scan Attendance" %} - {{ block.super }}{% endblock %} {% block content %}
+{% extends "base.html" %}{% load static i18n %} {% block title %}{% trans "Scan Attendance" %} - {{ block.super }}{% endblock %} {% block content %}
 <section class="max-w-xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
   {% include "partials/_breadcrumb.html" with items=breadcrumb_items %}
   <header class="mb-6">
@@ -23,8 +23,10 @@
     <div>
       <label class="block text-sm font-medium dm-text mb-1" for="qr_payload">{% trans "QR Payload" %}</label>
       <input type="text" name="qr_payload" id="qr_payload" required placeholder="attendance:CODE:TOKEN" class="dm-input w-full rounded-lg px-3 py-2 text-sm shadow-sm font-mono" autofocus>
-      <p class="mt-1 text-xs dm-muted">{% trans "Paste the scanned QR code payload or type it manually." %}</p>
+      <p class="mt-1 text-xs dm-muted">{% trans "Scan a QR code or type the payload manually." %}</p>
     </div>
+    <div id="qr-scanner" class="w-full aspect-video rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800"></div>
+    <button type="button" id="start-scanner" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Open Camera" %}</button>
     <button type="submit" class="dm-button dm-button-primary px-4 py-2 text-sm" {% if not open_sessions %}disabled{% endif %}>{% trans "Record Attendance" %}</button>
   </form>
 
@@ -41,4 +43,43 @@
   </div>
   {% endif %}
 </section>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/html5-qrcode.min.js' %}"></script>
+<script>
+(function() {
+  var scanner = null;
+  var el = document.getElementById('qr-scanner');
+  var input = document.getElementById('qr_payload');
+  var btn = document.getElementById('start-scanner');
+
+  function onScan(decodedText) {
+    if (scanner) { scanner.stop().catch(function(){}); scanner.clear(); scanner = null; }
+    input.value = decodedText;
+    btn.textContent = '{% trans "Open Camera" %}';
+  }
+
+  btn.addEventListener('click', function() {
+    if (scanner) {
+      scanner.stop().catch(function(){}); scanner.clear(); scanner = null;
+      btn.textContent = '{% trans "Open Camera" %}';
+      return;
+    }
+    if (typeof Html5Qrcode === 'undefined') return;
+    scanner = new Html5Qrcode('qr-scanner');
+    scanner.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 250, height: 250 } },
+      onScan,
+      function(){}
+    ).then(function() {
+      btn.textContent = '{% trans "Stop Camera" %}';
+    }).catch(function(err) {
+      console.warn(err);
+      scanner = null;
+    });
+  });
+})();
+</script>
 {% endblock %}

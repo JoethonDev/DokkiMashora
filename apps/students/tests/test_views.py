@@ -11,12 +11,11 @@ from django.utils.translation import override as translation_override
 from apps.academics.models import Cohort, Diploma, DiplomaEnrollment
 from apps.accounts.models import User
 from apps.applications.constants import (
-    APP_STATUS_PENDING,
     PROGRAM_APP_STATUS_ACTIVATED,
     PROGRAM_APP_STATUS_REJECTED,
     PROGRAM_APP_STATUS_SUBMITTED,
 )
-from apps.applications.models import Application, ProgramApplication
+from apps.applications.models import ProgramApplication
 from apps.students.constants import EDUCATION_BACHELOR, GENDER_MALE
 from apps.students.models import StudentProfile
 
@@ -50,7 +49,7 @@ class AnonymousAccessTests(TestCase):
             "students:assessment_history", "students:homework_list",
             "students:progression_history", "students:certificate_list",
             "students:payment_status", "students:notification_history",
-            "students:reapply",
+            "students:apply",
         ]
         for name in names:
             url = reverse(name)
@@ -105,8 +104,8 @@ class AuthenticatedAccessTests(TestCase):
     def test_notification_history_accessible(self) -> None:
         self.assertEqual(self.client.get(reverse("students:notification_history")).status_code, 200)
 
-    def test_reapply_accessible(self) -> None:
-        self.assertEqual(self.client.get(reverse("students:reapply")).status_code, 200)
+    def test_apply_accessible(self) -> None:
+        self.assertEqual(self.client.get(reverse("students:apply")).status_code, 200)
 
 
 class DashboardViewTests(TestCase):
@@ -188,9 +187,8 @@ class ApplicationHistoryViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_shows_application_when_exists(self) -> None:
-        root = Application.objects.create(student=self.profile, status=APP_STATUS_PENDING)
         ProgramApplication.objects.create(
-            student=self.profile, root_application=root,
+            student=self.profile,
             status=PROGRAM_APP_STATUS_SUBMITTED, program_type="diploma",
         )
         with translation_override("en"):
@@ -217,7 +215,7 @@ class EnrollmentHistoryViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
 
-class ReapplyViewTests(TestCase):
+class ApplyViewTests(TestCase):
     def setUp(self) -> None:
         self.user, self.profile = _create_student()
         self.client.force_login(self.user)
@@ -230,13 +228,13 @@ class ReapplyViewTests(TestCase):
 
     def test_get_shows_eligibility(self) -> None:
         with translation_override("en"):
-            response = self.client.get(reverse("students:reapply"))
+            response = self.client.get(reverse("students:apply"))
         self.assertEqual(response.status_code, 200)
 
     def test_post_when_no_existing_application_creates_new(self) -> None:
         with translation_override("en"):
             response = self.client.post(
-                reverse("students:reapply"),
+                reverse("students:apply"),
                 {"program_type": "diploma", "target_id": self.cohort.pk},
             )
             self.assertRedirects(response, reverse("students:application_history"))
@@ -246,14 +244,13 @@ class ReapplyViewTests(TestCase):
         self.assertEqual(apps[0].cohort, self.cohort)
 
     def test_post_when_rejected_creates_fresh_record(self) -> None:
-        root = Application.objects.create(student=self.profile, status=APP_STATUS_PENDING)
         ProgramApplication.objects.create(
-            student=self.profile, root_application=root,
+            student=self.profile,
             status=PROGRAM_APP_STATUS_REJECTED, program_type="diploma",
         )
         with translation_override("en"):
             response = self.client.post(
-                reverse("students:reapply"),
+                reverse("students:apply"),
                 {"program_type": "diploma", "target_id": self.cohort.pk},
             )
             self.assertRedirects(response, reverse("students:application_history"))
@@ -263,36 +260,36 @@ class ReapplyViewTests(TestCase):
         self.assertEqual(len(submitted_apps), 1)
 
     def test_post_when_pending_blocks_and_shows_error(self) -> None:
-        root = Application.objects.create(student=self.profile, status=APP_STATUS_PENDING)
         ProgramApplication.objects.create(
-            student=self.profile, root_application=root,
+            student=self.profile,
             status=PROGRAM_APP_STATUS_SUBMITTED, program_type="diploma",
             cohort=self.cohort,
         )
         with translation_override("en"):
             response = self.client.post(
-                reverse("students:reapply"),
+                reverse("students:apply"),
                 {"program_type": "diploma", "target_id": self.cohort.pk},
             )
-            self.assertRedirects(response, reverse("students:reapply"))
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, "pending")
 
-    def test_post_does_not_overwrite_existing_activated(self) -> None:
+    def test_post_blocked_when_activated_for_same_diploma(self) -> None:
         other_cohort = Cohort.objects.create(
             diploma=self.diploma, name="C2026",
             start_date=date(2026, 9, 1), created_by=self.admin,
         )
-        root = Application.objects.create(student=self.profile, status=APP_STATUS_PENDING)
         existing = ProgramApplication.objects.create(
-            student=self.profile, root_application=root,
+            student=self.profile,
             status=PROGRAM_APP_STATUS_ACTIVATED, program_type="diploma",
             cohort=self.cohort,
         )
         with translation_override("en"):
             response = self.client.post(
-                reverse("students:reapply"),
+                reverse("students:apply"),
                 {"program_type": "diploma", "target_id": other_cohort.pk},
             )
-            self.assertRedirects(response, reverse("students:application_history"))
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, "pending")
         existing.refresh_from_db()
         self.assertEqual(existing.status, PROGRAM_APP_STATUS_ACTIVATED)
 

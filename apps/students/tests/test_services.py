@@ -15,12 +15,12 @@ from apps.applications.constants import (
     PROGRAM_APP_STATUS_SUBMITTED,
     PROGRAM_APP_STATUS_UNDER_REVIEW,
 )
-from apps.applications.models import Application, ProgramApplication
+from apps.applications.models import ProgramApplication
 from apps.students.constants import EDUCATION_BACHELOR, GENDER_MALE
 from apps.students.models import StudentProfile
 from apps.students.services import (
-    check_reapply_eligibility,
-    submit_reapply_application,
+    check_apply_eligibility,
+    submit_apply_application,
     update_profile,
 )
 
@@ -69,76 +69,89 @@ class UpdateProfileTests(TestCase):
         self.assertEqual(self.profile.address, old_address)
 
 
-class CheckReapplyEligibilityTests(TestCase):
+class CheckApplyEligibilityTests(TestCase):
     def setUp(self) -> None:
         self.profile = _create_profile()
-        self.root = Application.objects.create(student=self.profile)
+        self.admin = User.objects.create_superuser(email="admin@test.com", password="x")
+        self.diploma = Diploma.objects.create(title="Test Diploma", created_by=self.admin)
+        self.cohort = Cohort.objects.create(
+            diploma=self.diploma, name="C2025",
+            start_date=date(2025, 9, 1), created_by=self.admin,
+        )
 
     def test_allowed_when_no_existing_application(self) -> None:
-        result = check_reapply_eligibility(self.profile)
+        result = check_apply_eligibility(self.profile, cohort=self.cohort)
         self.assertTrue(result["allowed"])
         self.assertIsNone(result["reason"])
 
     def test_blocked_when_pending(self) -> None:
         ProgramApplication.objects.create(
-            student=self.profile, root_application=self.root,
+            student=self.profile,
             status=PROGRAM_APP_STATUS_SUBMITTED, program_type="diploma",
+            cohort=self.cohort,
         )
-        result = check_reapply_eligibility(self.profile)
+        result = check_apply_eligibility(self.profile, cohort=self.cohort)
         self.assertFalse(result["allowed"])
         self.assertIsNotNone(result["reason"])
 
     def test_blocked_when_under_review(self) -> None:
         ProgramApplication.objects.create(
-            student=self.profile, root_application=self.root,
+            student=self.profile,
             status=PROGRAM_APP_STATUS_UNDER_REVIEW, program_type="diploma",
+            cohort=self.cohort,
         )
-        result = check_reapply_eligibility(self.profile)
+        result = check_apply_eligibility(self.profile, cohort=self.cohort)
         self.assertFalse(result["allowed"])
         self.assertIsNotNone(result["reason"])
 
     def test_blocked_when_any_application_is_pending(self) -> None:
         """A rejected app + a pending app should still block."""
         ProgramApplication.objects.create(
-            student=self.profile, root_application=self.root,
+            student=self.profile,
             status=PROGRAM_APP_STATUS_REJECTED, program_type="diploma",
+            cohort=self.cohort,
         )
         ProgramApplication.objects.create(
-            student=self.profile, root_application=self.root,
+            student=self.profile,
             status=PROGRAM_APP_STATUS_SUBMITTED, program_type="diploma",
+            cohort=self.cohort,
         )
-        result = check_reapply_eligibility(self.profile)
+        result = check_apply_eligibility(self.profile, cohort=self.cohort)
         self.assertFalse(result["allowed"])
 
-    def test_allowed_when_activated(self) -> None:
+    def test_blocked_when_activated(self) -> None:
         ProgramApplication.objects.create(
-            student=self.profile, root_application=self.root,
+            student=self.profile,
             status=PROGRAM_APP_STATUS_ACTIVATED, program_type="diploma",
+            cohort=self.cohort,
         )
-        result = check_reapply_eligibility(self.profile)
-        self.assertTrue(result["allowed"])
+        result = check_apply_eligibility(self.profile, cohort=self.cohort)
+        self.assertFalse(result["allowed"])
+        self.assertEqual(result["reason_code"], "pending_application")
 
     def test_allowed_when_rejected(self) -> None:
         ProgramApplication.objects.create(
-            student=self.profile, root_application=self.root,
+            student=self.profile,
             status=PROGRAM_APP_STATUS_REJECTED, program_type="diploma",
+            cohort=self.cohort,
         )
-        result = check_reapply_eligibility(self.profile)
+        result = check_apply_eligibility(self.profile, cohort=self.cohort)
         self.assertTrue(result["allowed"])
 
-    def test_allowed_when_accepted(self) -> None:
+    def test_blocked_when_accepted(self) -> None:
         ProgramApplication.objects.create(
-            student=self.profile, root_application=self.root,
+            student=self.profile,
             status=PROGRAM_APP_STATUS_ACCEPTED, program_type="diploma",
+            cohort=self.cohort,
         )
-        result = check_reapply_eligibility(self.profile)
-        self.assertTrue(result["allowed"])
+        result = check_apply_eligibility(self.profile, cohort=self.cohort)
+        self.assertFalse(result["allowed"])
+        self.assertEqual(result["reason_code"], "pending_application")
 
 
-class SubmitReapplyApplicationTests(TestCase):
+class SubmitApplyApplicationTests(TestCase):
     def setUp(self) -> None:
         self.profile = _create_profile()
-        self.root = Application.objects.create(student=self.profile)
         self.admin = User.objects.create_superuser(email="admin@test.com", password="x")
         self.diploma = Diploma.objects.create(title="Test Diploma", created_by=self.admin)
         self.cohort = Cohort.objects.create(
@@ -147,54 +160,54 @@ class SubmitReapplyApplicationTests(TestCase):
         )
 
     def test_creates_new_application_when_no_existing(self) -> None:
-        app = submit_reapply_application(self.profile, cohort=self.cohort)
+        app = submit_apply_application(self.profile, cohort=self.cohort)
         self.assertEqual(app.student, self.profile)
         self.assertEqual(app.status, PROGRAM_APP_STATUS_SUBMITTED)
         self.assertIsNotNone(app.pk)
 
     def test_creates_new_program_application_even_when_rejected_exists(self) -> None:
         existing = ProgramApplication.objects.create(
-            student=self.profile, root_application=self.root,
+            student=self.profile,
             status=PROGRAM_APP_STATUS_REJECTED, program_type="diploma",
         )
-        app = submit_reapply_application(self.profile, cohort=self.cohort)
+        app = submit_apply_application(self.profile, cohort=self.cohort)
         self.assertNotEqual(app.pk, existing.pk)
         self.assertEqual(ProgramApplication.objects.filter(student=self.profile).count(), 2)
 
     def test_creates_new_program_application_even_when_activated_exists(self) -> None:
         existing = ProgramApplication.objects.create(
-            student=self.profile, root_application=self.root,
+            student=self.profile,
             status=PROGRAM_APP_STATUS_ACTIVATED, program_type="diploma",
         )
-        app = submit_reapply_application(self.profile, cohort=self.cohort)
+        app = submit_apply_application(self.profile, cohort=self.cohort)
         self.assertNotEqual(app.pk, existing.pk)
         self.assertEqual(ProgramApplication.objects.filter(student=self.profile).count(), 2)
 
     def test_raises_value_error_when_pending_exists(self) -> None:
         ProgramApplication.objects.create(
-            student=self.profile, root_application=self.root,
+            student=self.profile,
             status=PROGRAM_APP_STATUS_SUBMITTED, program_type="diploma",
             cohort=self.cohort,
         )
         with self.assertRaises(ValueError):
-            submit_reapply_application(self.profile, cohort=self.cohort)
+            submit_apply_application(self.profile, cohort=self.cohort)
 
     def test_raises_value_error_when_under_review_exists(self) -> None:
         ProgramApplication.objects.create(
-            student=self.profile, root_application=self.root,
+            student=self.profile,
             status=PROGRAM_APP_STATUS_UNDER_REVIEW, program_type="diploma",
             cohort=self.cohort,
         )
         with self.assertRaises(ValueError):
-            submit_reapply_application(self.profile, cohort=self.cohort)
+            submit_apply_application(self.profile, cohort=self.cohort)
 
     def test_does_not_overwrite_existing_record(self) -> None:
         existing = ProgramApplication.objects.create(
-            student=self.profile, root_application=self.root,
+            student=self.profile,
             status=PROGRAM_APP_STATUS_REJECTED, program_type="diploma",
         )
         created_at_before = existing.created_at
-        submit_reapply_application(self.profile, cohort=self.cohort)
+        submit_apply_application(self.profile, cohort=self.cohort)
         existing.refresh_from_db()
         self.assertEqual(existing.created_at, created_at_before)
         self.assertEqual(existing.status, PROGRAM_APP_STATUS_REJECTED)

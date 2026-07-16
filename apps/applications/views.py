@@ -17,12 +17,15 @@ from django.views.decorators.http import require_http_methods
 
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
-from apps.core.permissions import is_admin, is_moderator
+from apps.core.permissions import is_admin
+from apps.intake_forms.selectors import get_application_intake_state  # noqa: E402
+from apps.intake_forms.services import request_intake_form_for_application  # noqa: E402
 from apps.storage.services import StorageError, storage_service
 from apps.students.services import get_open_apply_targets
 
 from .constants import (
     PROGRAM_APP_STATUS_ACCEPTED,
+    PROGRAM_APP_STATUS_DOCUMENTS_REQUESTED,
     PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
     PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
     PROGRAM_APP_STATUS_PAYMENT_PENDING,
@@ -47,9 +50,6 @@ from .services import (
     revert_program_application_decision,
     submit_registration,
 )
-
-from apps.intake_forms.selectors import get_application_intake_state  # noqa: E402
-from apps.intake_forms.services import request_intake_form_for_application  # noqa: E402
 
 PUBLIC_REGISTRATION_SESSION_KEY = "registration_email"
 
@@ -155,7 +155,7 @@ def _reject_allowed(status):
 @login_required
 def program_application_list(request: HttpRequest) -> HttpResponse:
     """Admin list of program applications, with status filter."""
-    if not (is_admin(request.user) or is_moderator(request.user)):
+    if not is_admin(request.user):
         raise PermissionDenied
     status_filter = request.GET.get("status", "")
     program_type_filter = request.GET.get("program_type", "")
@@ -203,7 +203,7 @@ def program_application_list(request: HttpRequest) -> HttpResponse:
 @login_required
 def program_application_detail(request: HttpRequest, application_id: int) -> HttpResponse:
     """Admin detail/edit view for a ProgramApplication with actions."""
-    if not (is_admin(request.user) or is_moderator(request.user)):
+    if not is_admin(request.user):
         raise PermissionDenied
     application = get_object_or_404(
         ProgramApplication.objects.select_related(
@@ -268,7 +268,7 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
                 messages.success(request, _("Payment recorded and activation attempted."))
             return redirect("applications:program_detail", application_id=application.id)
 
-        if action == "request_documents" and is_admin(request.user) and application.status == PROGRAM_APP_STATUS_ACCEPTED and application.program_type == "diploma":
+        if action == "request_documents" and is_admin(request.user) and application.status in (PROGRAM_APP_STATUS_ACCEPTED, PROGRAM_APP_STATUS_DOCUMENTS_REQUESTED) and application.program_type == "diploma":
             form = AdminDocumentRequestForm(request.POST)
             if form.is_valid():
                 try:
@@ -351,7 +351,7 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
     doc_request = get_latest_document_request(application)
     doc_upload = get_application_document_upload(application)
     request_doc_form = None
-    if is_admin(request.user) and application.status == PROGRAM_APP_STATUS_ACCEPTED and application.program_type == "diploma":
+    if is_admin(request.user) and application.status in (PROGRAM_APP_STATUS_ACCEPTED, PROGRAM_APP_STATUS_DOCUMENTS_REQUESTED) and application.program_type == "diploma":
         request_doc_form = AdminDocumentRequestForm()
 
     # Intake form state

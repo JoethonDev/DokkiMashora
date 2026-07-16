@@ -22,7 +22,7 @@ from apps.communications.constants import (
     TEMPLATE_ENTRANCE_EXAM_PASS,
 )
 from apps.communications.services import send_templated_email
-from apps.core.permissions import entrance_staff_scope_filter
+from apps.core.permissions import validate_score
 
 from .constants import (
     ATTEMPT_STATUS_ASSIGNED,
@@ -145,6 +145,7 @@ def grade_answer(
     feedback: str,
     grader: User,
 ) -> EntranceAnswer:
+    validate_score(score)
     answer.score = score
     answer.feedback = feedback
     answer.graded_at = timezone.now()
@@ -263,15 +264,12 @@ def get_student_attempts(student: StudentProfile) -> list[EntranceAttempt]:
     )
 
 
-def get_pending_grading(user=None) -> list[EntranceAttempt]:
-    qs = (
+def get_pending_grading() -> list[EntranceAttempt]:
+    return list(
         EntranceAttempt.objects.filter(status=ATTEMPT_STATUS_COMPLETED)
         .select_related("exam", "student__user")
         .order_by("submitted_at")
     )
-    if user is not None:
-        qs = qs.filter(entrance_staff_scope_filter(user)).distinct()
-    return list(qs)
 
 
 def get_active_exams_for_cohort(cohort_id: int) -> list[EntranceExam]:

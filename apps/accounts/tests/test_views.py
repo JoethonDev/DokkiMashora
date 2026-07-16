@@ -25,11 +25,11 @@ class LoginTests(TestCase):
         # without using the i18n URL prefix in tests.
         self.client.cookies["django_language"] = "en"
 
-    def test_login_page_renders_in_arabic_by_default(self) -> None:
+    def test_login_page_renders_in_english_by_default(self) -> None:
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'lang="ar"')
-        self.assertContains(response, 'dir="rtl"')
+        self.assertContains(response, 'lang="en"')
+        self.assertContains(response, 'dir="ltr"')
 
     def test_login_page_renders_in_english(self) -> None:
         # English is reached via the /en/ URL prefix because the default
@@ -126,8 +126,8 @@ class AdminDashboardQueryCountTests(TestCase):
         from datetime import date
 
         from apps.academics.models import Diploma
-        from apps.applications.constants import APP_STATUS_PENDING
-        from apps.applications.models import Application
+        from apps.applications.constants import PROGRAM_APP_STATUS_SUBMITTED
+        from apps.applications.models import ProgramApplication
         from apps.exams.constants import ASSIGNMENT_STATUS_COMPLETED
         from apps.exams.models import Assignment, Exam
         from apps.students.models import StudentProfile
@@ -147,7 +147,7 @@ class AdminDashboardQueryCountTests(TestCase):
         )
         self.admin2 = User.objects.create_user(email="stu2@test.com", password="x")
         Assignment.objects.create(exam=exam, student=self.admin2, status=ASSIGNMENT_STATUS_COMPLETED)
-        Application.objects.create(student=profile, status=APP_STATUS_PENDING)
+        ProgramApplication.objects.create(student=profile, status=PROGRAM_APP_STATUS_SUBMITTED, program_type="diploma")
 
     def test_admin_dashboard_query_count_bounded(self) -> None:
         from django.db import connection

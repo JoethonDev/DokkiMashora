@@ -21,7 +21,7 @@
             <a href="{% url 'students:dashboard' %}" class="hover:text-brand-700 dark:hover:text-brand-300 dm-brand-text">{% trans "My Profile" %}</a>
             <a href="{% url 'academics:student_course_list' %}" class="hover:text-brand-700 dark:hover:text-brand-300 dm-brand-text">{% trans "My Courses" %}</a>
           {% endif %}
-          {% if CAN_VIEW_STAFF_NAV %}
+          {% if CAN_VIEW_ADMIN_NAV %}
             <div x-data="{ open: false }" class="relative">
               <button @click="open = !open" @click.away="open = false" class="hover:text-brand-700 dark:hover:text-brand-300 dm-brand-text flex items-center gap-1" aria-haspopup="true">
                 {% trans "Manage" %}
@@ -45,13 +45,42 @@
                 <a href="{% url 'academics:admin_course_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Standalone Courses" %}</a>
                 <p class="mt-3 pt-3 border-t dm-border px-4 py-1 text-xs font-bold text-brand-600 dark:text-brand-400 uppercase tracking-wider">{% trans "Evaluation" %}</p>
                 <a href="{% url 'assessments:admin_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Assessments" %}</a>
+                <a href="{% url 'assessments:admin_reviewer_assignment_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Reviewer Assignments" %}</a>
                 <a href="{% url 'entrance_exams:admin_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Entrance Exams" %}</a>
+                <p class="mt-3 pt-3 border-t dm-border px-4 py-1 text-xs font-bold text-brand-600 dark:text-brand-400 uppercase tracking-wider">{% trans "Progression &amp; Attendance" %}</p>
+                <a href="{% url 'progression:admin_dashboard' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Progression Dashboard" %}</a>
+                <a href="{% url 'progression:admin_rejoin_plan_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Rejoin Plans" %}</a>
+                <a href="{% url 'attendance:attendance_session_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Attendance Sessions" %}</a>
+                <a href="{% url 'attendance:attendance_scan' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Scan Attendance" %}</a>
+                <p class="mt-3 pt-3 border-t dm-border px-4 py-1 text-xs font-bold text-brand-600 dark:text-brand-400 uppercase tracking-wider">{% trans "Intake Forms" %}</p>
+                <a href="{% url 'intake_forms:admin_intake_form_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Intake Form Builder" %}</a>
                 <p class="mt-3 pt-3 border-t dm-border px-4 py-1 text-xs font-bold text-brand-600 dark:text-brand-400 uppercase tracking-wider">{% trans "Finance &amp; Comms" %}</p>
                 <a href="{% url 'payments:upload_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Payment Uploads" %}</a>
                 <a href="{% url 'communications:admin_template_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Email Templates" %}</a>
                 <a href="{% url 'entrance_exams:admin_email_log_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Email Log" %}</a>
               </div>
             </div>
+          {% elif CAN_VIEW_MODERATOR_NAV %}
+            <div x-data="{ open: false }" class="relative">
+              <button @click="open = !open" @click.away="open = false" class="hover:text-brand-700 dark:hover:text-brand-300 dm-brand-text flex items-center gap-1" aria-haspopup="true">
+                {% trans "Manage" %}
+                <svg class="h-3.5 w-3.5" :class="open ? 'rotate-180' : ''" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+              </button>
+              <div x-show="open" x-cloak
+                   x-transition:enter="transition ease-out duration-200"
+                   x-transition:enter-start="opacity-0 -translate-y-2"
+                   x-transition:enter-end="opacity-100 translate-y-0"
+                   x-transition:leave="transition ease-in duration-150"
+                   x-transition:leave-start="opacity-100 translate-y-0"
+                   x-transition:leave-end="opacity-0 -translate-y-2"
+                   class="absolute top-full start-0 mt-1 w-56 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg py-2 text-sm z-50" @click="open = false">
+                <p class="px-4 py-1 text-xs font-bold text-brand-600 dark:text-brand-400 uppercase tracking-wider">{% trans "Evaluation" %}</p>
+                <a href="{% url 'assessments:admin_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Assessments" %}</a>
+              </div>
+            </div>
+          {% elif CAN_VIEW_SECRETARY_NAV %}
+            <a href="{% url 'attendance:attendance_session_list' %}" class="hover:text-brand-700 dark:hover:text-brand-300 dm-brand-text">{% trans "Sessions" %}</a>
+            <a href="{% url 'attendance:attendance_scan' %}" class="hover:text-brand-700 dark:hover:text-brand-300 dm-brand-text">{% trans "Scan" %}</a>
           {% endif %}
           {% if CAN_VIEW_DESIGN_SHOWCASE %}
             <a href="{% url 'core:design_showcase' %}" class="hover:text-brand-700 dark:hover:text-brand-300 dm-brand-text">{% trans "Designs" %}</a>

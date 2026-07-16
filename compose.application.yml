@@ -1,0 +1,40 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dokkimashora-app:${APP_IMAGE_TAG:-local}
+    restart: unless-stopped
+    env_file:
+      - ${APP_ENV_FILE:-.env.docker}
+    environment:
+      PORT: 8000
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      CACHE_URL: redis://redis:6379/1
+      CELERY_BROKER_URL: redis://redis:6379/0
+      DJANGO_SETTINGS_MODULE: config.settings.prod
+      GUNICORN_WORKERS: 3
+      GUNICORN_THREADS: 2
+    volumes:
+      - ${APP_SOURCE:-.}:/app:ro
+      - static_data:/app/staticfiles
+      - media_data:/app/media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    cpus: 1.50
+    mem_limit: 2g
+    networks: [app]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

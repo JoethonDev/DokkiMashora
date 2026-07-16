@@ -15,6 +15,8 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.academics.models import CourseEnrollment, DiplomaEnrollment
 from apps.applications.services import activate_application_if_ready
+from apps.core.permissions import validate_score
+from apps.students.identity import normalize_identity_number
 from apps.students.models import StudentProfile
 
 from .constants import (
@@ -43,29 +45,22 @@ from .models import PaymentRecord, PaymentUpload, PaymentUploadRow
 logger = logging.getLogger(__name__)
 
 
+# ponytail: delegate to country-aware normalize_identity_number, default EG for CSV imports
 def normalize_national_id(value: str) -> str:
-    """Normalize identity value for CSV matching.
-
-    Tries EG-style normalization first (strip all spaces, keep digits-only
-    result).  If the result contains letters, also try passport-style
-    normalization (uppercase, no spaces).  The caller checks both a direct
-    query and falls back to passport normalization because CSV rows may
-    not include a country code.
-    """
-    return re.sub(r"\s+", "", value).strip()
+    """Normalize identity value for CSV matching (EG default)."""
+    return normalize_identity_number("EG", value)
 
 
 def normalize_national_id_for_matching(value: str) -> list[str]:
-    """Return one or two normalized variants to try when matching.
+    """Return normalized variants to try when matching.
 
-    The first variant is always the raw stripped value (covers EG 14-digit
-    case).  If the value contains letters, a second uppercased variant is
-    appended to cover passport IDs that may have been stored uppercased.
+    Uses country-aware normalize_identity_number (default EG).
+    For passport IDs, an uppercased variant is also returned.
     """
     stripped = normalize_national_id(value)
     variants = [stripped]
     if any(c.isalpha() for c in stripped):
-        variants.append(stripped.upper())
+        variants.append(normalize_identity_number("EG", stripped.upper()))
     return variants
 
 
@@ -416,9 +411,11 @@ def mark_enrollment_paid(
     Snapshots the target enrollment name so financial history survives
     target deletion.
     """
+    paid_amount = validate_score(amount)
+
     kwargs: dict = {
         "student": student,
-        "amount": Decimal(str(amount)) if amount else Decimal("0"),
+        "amount": paid_amount,
         "currency": CURRENCY_EGP,
         "status": PAYMENT_STATUS_PAID,
         "paid_at": timezone.now(),
@@ -427,7 +424,7 @@ def mark_enrollment_paid(
         "target_type": enrollment_type,
     }
     if enrollment_type == "diploma":
-        enrollment = DiplomaEnrollment.objects.get(pk=enrollment_id, student=student)
+        enrollment = DiplomaEnrollment.objects.select_for_update().get(pk=enrollment_id, student=student)
         kwargs["diploma_enrollment"] = enrollment
         kwargs["target_ref"] = str(enrollment.id)
         kwargs["target_snapshot"] = {
@@ -435,7 +432,7 @@ def mark_enrollment_paid(
             "diploma_title": enrollment.cohort.diploma.title if enrollment.cohort and enrollment.cohort.diploma else "",
         }
     elif enrollment_type == "course":
-        enrollment = CourseEnrollment.objects.get(pk=enrollment_id, student=student)
+        enrollment = CourseEnrollment.objects.select_for_update().get(pk=enrollment_id, student=student)
         kwargs["course_enrollment"] = enrollment
         kwargs["target_ref"] = str(enrollment.id)
         kwargs["target_snapshot"] = {
@@ -444,9 +441,14 @@ def mark_enrollment_paid(
         }
     else:
         raise ValueError(_("Invalid enrollment type: {t}").format(t=enrollment_type))
-    app = student.program_applications.order_by("-created_at").first()
-    if app:
-        kwargs["application"] = app
+    # Guard: duplicate payment (exclude soft-deleted records)
+    dup_filter = {"student": student, "status": PAYMENT_STATUS_PAID, "deleted_at__isnull": True}
+    if enrollment_type == "diploma":
+        dup_filter["diploma_enrollment_id"] = enrollment_id
+    else:
+        dup_filter["course_enrollment_id"] = enrollment_id
+    if PaymentRecord.objects.filter(**dup_filter).exists():
+        raise ValueError(_("Payment already recorded for this enrollment."))
     return PaymentRecord.objects.create(**kwargs)
 
 

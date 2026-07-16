@@ -8,7 +8,7 @@ from django.db import IntegrityError
 from django.utils import timezone
 
 from apps.academics.models import Cohort, Diploma
-from apps.applications.models import Application, ProgramApplication
+from apps.applications.models import ProgramApplication
 from apps.entrance_exams.constants import (
     ATTEMPT_STATUS_ASSIGNED,
     QUESTION_TYPE_MCQ,
@@ -70,8 +70,8 @@ def exam(cohort, admin_user):
         diploma=cohort.diploma,
         cohort=cohort,
         duration_minutes=30,
-        passing_score=Decimal("50.00"),
-        total_points=Decimal("100.00"),
+        pass_percentage=Decimal("50.00"),
+        total_score=Decimal("100.00"),
         is_active=True,
         open_at=now - timezone.timedelta(days=1),
         close_at=now + timezone.timedelta(days=30),
@@ -83,7 +83,7 @@ def exam(cohort, admin_user):
 def mcq_question(exam):
     q = EntranceQuestion.objects.create(
         exam=exam, question_type=QUESTION_TYPE_MCQ,
-        text="Sample MCQ", points=Decimal("10.00"), order=1,
+        text="Sample MCQ", order=1,
     )
     EntranceChoice.objects.create(question=q, text="Wrong", score=Decimal("0.00"), order=1)
     EntranceChoice.objects.create(question=q, text="Correct", score=Decimal("10.00"), order=2)
@@ -94,15 +94,14 @@ def mcq_question(exam):
 def written_question(exam):
     return EntranceQuestion.objects.create(
         exam=exam, question_type=QUESTION_TYPE_WRITTEN,
-        text="Sample Written", points=Decimal("20.00"), order=2,
+        text="Sample Written", order=2,
     )
 
 
 @pytest.fixture
 def prog_app(exam, student_profile):
-    root = Application.objects.create(student=student_profile)
     return ProgramApplication.objects.create(
-        student=student_profile, root_application=root, program_type="diploma",
+        student=student_profile, program_type="diploma",
         cohort=exam.cohort,
     )
 
@@ -126,7 +125,7 @@ class TestEntranceExamModel:
         with pytest.raises(IntegrityError):
             EntranceExam.objects.create(
                 title="Duplicate", diploma=cohort.diploma, cohort=cohort,
-                duration_minutes=30, passing_score=Decimal("50.00"),
+                duration_minutes=30, pass_percentage=Decimal("50.00"),
                 is_active=True,
                 open_at=now, close_at=now + timezone.timedelta(days=30),
                 created_by=admin_user,
@@ -152,7 +151,7 @@ class TestEntranceQuestionModel:
         with pytest.raises(IntegrityError):
             EntranceQuestion.objects.create(
                 exam=exam, question_type=QUESTION_TYPE_MCQ,
-                text="Duplicate order", points=Decimal("5.00"), order=1,
+                text="Duplicate order", order=1,
             )
 
     def test_unique_choice_order_per_question(self, mcq_question):

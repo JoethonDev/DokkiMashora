@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
@@ -59,6 +59,7 @@ from apps.assessments.services import (
     can_reviewer_grade_code,
     cancel_semester_exam_access_override,
     check_assessment_access,
+    check_delivery_mode,
     create_semester_exam_access_overrides,
     diploma_autosave_attempt,
     enter_offline_section_grade,
@@ -101,6 +102,7 @@ from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import (
     ROLE_EXAM_STAFF,
+    ROLE_GRADING_STAFF,
     ROLE_REVIEW_STAFF,
     ROLE_SENIOR_STAFF,
     assessment_scope_filter,
@@ -109,6 +111,7 @@ from apps.core.permissions import (
     is_moderator,
     is_reviewer,
     role_required,
+    validate_score,
 )
 from apps.core.views import safe_next_url
 from apps.storage.services import FileValidationError, StorageError, storage_service
@@ -190,6 +193,11 @@ def start_assessment_view(request, assessment_id):
 @login_required
 def take_assessment(request, assessment_id):
     assessment = get_object_or_404(Assessment, id=assessment_id, is_active=True)
+    try:
+        check_delivery_mode(request.user, assessment)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect("assessments:student_list")
     if assessment.assessment_type == ASSESSMENT_TYPE_HOMEWORK:
         now = timezone.now()
         if not has_active_enrollment(request.user, assessment):
@@ -274,6 +282,11 @@ def submit_assessment_view(request, assessment_id):
     if request.method != "POST":
         return redirect("assessments:take", assessment_id=assessment_id)
     assessment = get_object_or_404(Assessment, id=assessment_id, is_active=True)
+    try:
+        check_delivery_mode(request.user, assessment)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect("assessments:student_list")
     if assessment.assessment_type == ASSESSMENT_TYPE_HOMEWORK:
         messages.error(request, _("Homework assessments must be submitted through the upload form."))
         return redirect("assessments:take", assessment_id=assessment_id)
@@ -469,7 +482,7 @@ def _parse_answers(request, assessment):
 
 
 @login_required
-@role_required(*ROLE_EXAM_STAFF)
+@role_required(*ROLE_GRADING_STAFF)
 def admin_list(request):
     q = request.GET.get("q", "")
     type_filter = request.GET.get("type", "")
@@ -492,7 +505,7 @@ def admin_list(request):
             ],
         })
     page_obj, pagination_qs = paginate(request, assessments)
-    ctx = {"page_obj": page_obj, "pagination_qs": pagination_qs, "search_value": q, "filters": filters}
+    ctx = {"page_obj": page_obj, "pagination_qs": pagination_qs, "search_value": q, "filters": filters, "is_admin_user": is_admin(request.user)}
     if is_htmx(request):
         return render(request, "assessments/partials/_assessment_list_table.html", ctx)
     return render(request, "assessments/admin_list.html", ctx)
@@ -845,7 +858,7 @@ def admin_homework_grade_list(request):
 
 
 @login_required
-@role_required(*ROLE_EXAM_STAFF)
+@role_required(*ROLE_GRADING_STAFF)
 def admin_homework_grade_detail(request, submission_id):
     submission = get_object_or_404(
         HomeworkSubmission.objects.select_related("assessment", "student", "attempt"),
@@ -859,7 +872,11 @@ def admin_homework_grade_detail(request, submission_id):
         permission_fn=lambda u: can_grade_attempt(u, submission),
     )
     if request.method == "POST":
-        score = Decimal(str(request.POST.get("score", 0)))
+        try:
+            score = validate_score(request.POST.get("score", 0))
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return redirect("assessments:admin_homework_grade_detail", submission_id=submission_id)
         feedback = request.POST.get("feedback", "")
         try:
             grade_homework(submission.id, score, feedback, request.user)
@@ -882,7 +899,7 @@ def admin_homework_grade_detail(request, submission_id):
 
 
 @login_required
-@role_required(*ROLE_EXAM_STAFF)
+@role_required(*ROLE_GRADING_STAFF)
 def admin_grade_detail(request, attempt_id):
     attempt = get_object_or_404(
         AssessmentAttempt.objects.select_related("assessment", "student"),
@@ -892,6 +909,7 @@ def admin_grade_detail(request, attempt_id):
         raise PermissionDenied
     assessment = attempt.assessment
     is_diploma = bool(assessment.course_version_id is None and assessment.semester_id and assessment.cohort_id)
+    ctx_base = {"attempt": attempt, "is_admin_user": is_admin(request.user)}
 
     if is_diploma:
         snapshot_questions = attempt.snapshot_questions.order_by("order").prefetch_related("choices")
@@ -911,7 +929,10 @@ def admin_grade_detail(request, attempt_id):
                     feedback_key = f"feedback_sq_{sq.order}"
                     reason_key = f"override_reason_sq_{sq.order}"
                     if score_key in request.POST:
-                        score = Decimal(str(request.POST[score_key]))
+                        try:
+                            score = Decimal(str(request.POST[score_key]))
+                        except (ValueError, InvalidOperation):
+                            continue
                         feedback = request.POST.get(feedback_key, "")
                         override_reason = request.POST.get(reason_key, "")
                         try:
@@ -934,7 +955,7 @@ def admin_grade_detail(request, attempt_id):
         return render(
             request,
             "assessments/admin_grade_detail.html",
-            {"attempt": attempt, "snapshot_pairs": snapshot_pairs, "is_diploma_random": True},
+            {**ctx_base, "snapshot_pairs": snapshot_pairs, "is_diploma_random": True},
         )
 
     questions = assessment.questions.prefetch_related("choices").all()
@@ -949,7 +970,10 @@ def admin_grade_detail(request, attempt_id):
                 feedback_key = f"feedback_{q.id}"
                 reason_key = f"override_reason_{q.id}"
                 if score_key in request.POST:
-                    score = Decimal(str(request.POST[score_key]))
+                    try:
+                        score = Decimal(str(request.POST[score_key]))
+                    except (ValueError, InvalidOperation):
+                        continue
                     feedback = request.POST.get(feedback_key, "")
                     override_reason = request.POST.get(reason_key, "")
                     try:
@@ -972,7 +996,7 @@ def admin_grade_detail(request, attempt_id):
     return render(
         request,
         "assessments/admin_grade_detail.html",
-        {"attempt": attempt, "question_answer_pairs": question_answer_pairs},
+        {**ctx_base, "question_answer_pairs": question_answer_pairs},
     )
 
 
@@ -1049,7 +1073,7 @@ def admin_hide_all_grades(request, assessment_id):
 
 
 @login_required
-@role_required(*ROLE_EXAM_STAFF)
+@role_required(*ROLE_GRADING_STAFF)
 @require_POST
 def admin_grade_answer(request, answer_id):
     answer = get_object_or_404(
@@ -1058,7 +1082,11 @@ def admin_grade_answer(request, answer_id):
     )
     if not can_grade_attempt(request.user, answer.attempt):
         raise PermissionDenied
-    score = Decimal(str(request.POST.get("score", 0)))
+    try:
+        score = validate_score(request.POST.get("score", 0))
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect("assessments:admin_grade_detail", attempt_id=answer.attempt_id)
     feedback = request.POST.get("feedback", "")
     override_reason = request.POST.get("override_reason", "")
     try:
@@ -1085,7 +1113,7 @@ def admin_grade_answer(request, answer_id):
 
 
 @login_required
-@role_required(*ROLE_EXAM_STAFF)
+@role_required(*ROLE_GRADING_STAFF)
 @require_POST
 def admin_grade_homework_submission(request, submission_id):
     submission = get_object_or_404(
@@ -1094,7 +1122,11 @@ def admin_grade_homework_submission(request, submission_id):
     )
     if not can_grade_attempt(request.user, submission):
         raise PermissionDenied
-    score = Decimal(str(request.POST.get("score", 0)))
+    try:
+        score = validate_score(request.POST.get("score", 0))
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect("assessments:admin_grade_detail", attempt_id=submission.attempt_id)
     feedback = request.POST.get("feedback", "")
     try:
         grade_homework(submission.id, score, feedback, request.user)
@@ -1445,7 +1477,11 @@ def admin_offline_grade_entry(request, assessment_id):
 @require_POST
 def admin_offline_grade_section(request, assessment_id, code_id, section_id):
     get_object_or_404(Assessment, id=assessment_id)
-    score = Decimal(str(request.POST.get("score", 0)))
+    try:
+        score = validate_score(request.POST.get("score", 0))
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect("assessments:admin_offline_grade_entry", assessment_id=assessment_id)
     try:
         enter_offline_section_grade(code_id, section_id, score, request.user)
         messages.success(request, _("Grade saved."))
@@ -1505,7 +1541,7 @@ def reviewer_section_grading(request, assignment_id):
                 messages.error(request, _("Exam code does not belong to your assigned cohort."))
             else:
                 try:
-                    score = Decimal(score_raw)
+                    score = validate_score(score_raw)
                     reviewer_grade_section(code.id, section.id, score, request.user)
                     messages.success(request, _("Grade saved for code %(code)s.") % {"code": code.code_number})
                     return redirect("assessments:reviewer_section_grading", assignment_id=assignment_id)

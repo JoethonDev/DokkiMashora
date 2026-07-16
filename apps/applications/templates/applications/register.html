@@ -140,21 +140,23 @@
 {% trans "Church is required." as err_church %}
 {% trans "Priest name is required." as err_priest_name %}
 {% trans "Priest contact is required." as err_priest_contact %}
-{% trans "National ID is required." as err_national_id %}
+{% trans "is required." as err_required %}
+{% trans "Enter a valid " as err_valid_prefix %}
 {% trans "Enter a valid email address." as err_valid_email %}
+{% trans "Enter a valid National ID." as err_valid_nid %}
 {% trans "Enter a valid mobile number." as err_valid_phone %}
 {% trans "Date of birth must be in the past." as err_dob_past %}
-{% trans "Enter a valid National ID." as err_valid_nid %}
 {% trans "Please select a program type." as err_program_type %}
 {% trans "Please select a diploma." as err_diploma %}
 {% trans "Please select a course." as err_course %}
 {% trans "Invalid course selection." as err_invalid_course %}
 
-  var ERR_CLASS = 'border-rose-500 dark:border-rose-400';
+  var ID_LABEL = '{{ form.national_id.label|escapejs }}';
+  var ERR_CLASSES = ['border-rose-500', 'dark:border-rose-400'];
   var INPUTS = 'input:not([type=hidden]):not([type=checkbox]):not([type=radio]), select, textarea';
 
-  function mark(el) { el.classList.add(ERR_CLASS); }
-  function unmark(el) { el.classList.remove(ERR_CLASS); }
+  function mark(el) { el.classList.add(...ERR_CLASSES); }
+  function unmark(el) { el.classList.remove(...ERR_CLASSES); }
 
   function err(name, msg) {
     clearErr(name);
@@ -177,7 +179,7 @@
 
   function clearAll() {
     form.querySelectorAll('[id^="ce-"]').forEach(function(el) { el.remove(); });
-    form.querySelectorAll('.' + ERR_CLASS.replace(/ /g, '.')).forEach(unmark);
+    form.querySelectorAll('.border-rose-500').forEach(unmark);
   }
 
   function val(name) {
@@ -204,7 +206,7 @@
       ['church',       '{{ err_church|escapejs }}'],
       ['priest_name',  '{{ err_priest_name|escapejs }}'],
       ['priest_contact','{{ err_priest_contact|escapejs }}'],
-      ['national_id',  '{{ err_national_id|escapejs }}'],
+      ['national_id',  ID_LABEL + ' {{ err_required|escapejs }}'],
     ];
 
     fields.forEach(function(f) {
@@ -220,7 +222,7 @@
     var dob = val('date_of_birth');
     if (dob && new Date(dob) >= new Date()) { err('date_of_birth', '{{ err_dob_past|escapejs }}'); ok = false; }
 
-    if (val('national_id').length < 3) { err('national_id', '{{ err_valid_nid|escapejs }}'); ok = false; }
+    if (val('national_id').length < 3) { err('national_id', '{{ err_valid_prefix|escapejs }}' + ID_LABEL); ok = false; }
 
     var apply = form.querySelector('[name="apply_program"]');
     if (apply && apply.checked) {

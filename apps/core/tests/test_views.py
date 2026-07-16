@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import re
-
 from django.conf import settings
 from django.contrib.auth.models import Group
 from django.test import Client, TestCase
@@ -38,7 +36,7 @@ class LandingPageTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'lang="en"')
         self.assertContains(response, 'dir="ltr"')
-        self.assertContains(response, "DokkiMashora")
+        self.assertContains(response, "Home")
 
     def test_landing_page_does_not_require_login(self) -> None:
         response = self.client.get(reverse("core:landing"))
@@ -76,9 +74,9 @@ class LandingPageTests(TestCase):
             response = self.client.get(reverse("core:landing"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "كيف تسير الرحلة")
-        self.assertContains(response, "مكتبة التعلم")
-        self.assertContains(response, "مصمم للثقة")
+        self.assertContains(response, "متجذر في الإيمان")
+        self.assertContains(response, "قابل للتطبيق")
+        self.assertContains(response, "مسؤول نفسيًا")
 
     def test_landing_page_exposes_ui_theme_switcher(self) -> None:
         with translation.override("en"):
@@ -98,12 +96,8 @@ class LandingPageTests(TestCase):
         self.assertIn("ar", codes)
         self.assertIn("en", codes)
 
-    def test_footer_shows_cairo_time(self) -> None:
-        response = self.client.get(reverse("core:landing"))
-        self.assertEqual(response.status_code, 200)
-        # Footer should at least contain the timezone abbreviation (EET/EEST/UTC).
-        self.assertTrue(bool(re.search(r"\b(UTC|EET|EEST)\b", response.content.decode("utf-8"))))
-        # `now` returned by Django is timezone-aware.
+    def test_timezone_is_aware(self) -> None:
+        """Django timezone support is enabled."""
         self.assertIsNotNone(timezone.now().tzinfo)
 
 
@@ -134,7 +128,7 @@ class NavigationVisibilityTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "Register now")
         self.assertNotContains(response, "Log in")
-        self.assertContains(response, "Go to dashboard")
+        self.assertContains(response, "Dashboard")
 
     def test_student_nav_does_not_show_admin_links(self) -> None:
         student = User.objects.create_user(email="student-links@example.com", password="pass")
@@ -145,7 +139,7 @@ class NavigationVisibilityTests(TestCase):
 
         self.assertContains(response, "My Profile")
         self.assertContains(response, "My Courses")
-        self.assertNotContains(response, "Applications")
+        self.assertNotContains(response, "Manage")
         self.assertNotContains(response, "Assessments")
 
     def test_admin_nav_does_not_show_student_only_links(self) -> None:
@@ -207,10 +201,10 @@ class RoleMatrixNavTests(TestCase):
             self.assertIn(response.status_code, (200, 302, 404),
                           f"{url} returned {response.status_code} for student")
 
-    def test_teacher_gets_200_on_exam_pages(self) -> None:
+    def test_teacher_gets_403_on_exam_pages(self) -> None:
         self._login(GROUP_TEACHER)
         response = self.client.get("/en/exams/manage/")
-        self.assertIn(response.status_code, (200, 302))
+        self.assertEqual(response.status_code, 403)
 
     def test_moderator_gets_200_on_payment_pages(self) -> None:
         self._login(GROUP_MODERATOR)
@@ -220,7 +214,7 @@ class RoleMatrixNavTests(TestCase):
     def test_admin_gets_200_on_admin_pages(self) -> None:
         self._login(GROUP_ADMIN)
         for url_name in ["payments:upload_list", "progression:admin_dashboard",
-                         "applications:admin_list", "certificates:admin_certificate_list"]:
+                         "applications:program_list", "certificates:admin_certificate_list"]:
             response = self.client.get(reverse(url_name))
             self.assertIn(response.status_code, (200, 302),
                           f"{url_name} returned {response.status_code} for admin")
@@ -228,14 +222,14 @@ class RoleMatrixNavTests(TestCase):
     def test_super_admin_gets_200_on_all_admin_pages(self) -> None:
         self._login(GROUP_SUPER_ADMIN)
         for url_name in ["audit:list", "communications:bulk_email_create",
-                         "applications:admin_list", "certificates:admin_certificate_list"]:
+                         "applications:program_list", "certificates:admin_certificate_list"]:
             response = self.client.get(reverse(url_name))
             self.assertIn(response.status_code, (200, 302),
                           f"{url_name} returned {response.status_code} for super admin")
 
     def test_student_cannot_access_admin_pages(self) -> None:
         self._login(GROUP_STUDENT)
-        for url_name in ["applications:admin_list", "payments:upload_list",
+        for url_name in ["applications:program_list", "payments:upload_list",
                          "progression:admin_dashboard", "audit:list"]:
             response = self.client.get(reverse(url_name))
             self.assertIn(response.status_code, (302, 403),

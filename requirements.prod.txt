@@ -1,0 +1,15 @@
+# Application runtime only. requirements.txt adds local/test tooling.
+Django==5.1.4
+django-environ==0.13.0
+dj-database-url==2.3.0
+python-dotenv==1.0.1
+psycopg[binary]==3.3.4
+celery[redis]==5.6.3
+whitenoise==6.12.0
+gunicorn==23.0.0
+django-storages[boto3]==1.14.6
+boto3==1.35.54
+google-genai==2.0.1
+qrcode[pil]==8.0
+xhtml2pdf==0.2.17
+requests==2.32.3

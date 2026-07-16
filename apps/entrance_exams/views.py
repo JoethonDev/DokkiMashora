@@ -45,7 +45,7 @@ from apps.communications.constants import (
 from apps.communications.services import send_templated_email
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
-from apps.core.permissions import can_grade_attempt, is_admin, is_moderator
+from apps.core.permissions import is_admin
 from apps.students.models import StudentProfile
 
 from .constants import (
@@ -64,7 +64,6 @@ from .services import (
     assign_attempt,
     finalize_all_pending_for_exam,
     get_pending_grading,
-    get_student_attempts,
     grade_answer,
     save_snapshot,
     start_attempt,
@@ -131,35 +130,9 @@ def exam_qr_code(request, token):
 @login_required
 def student_list(request):
     """Show the student's entrance exam attempts and available exams."""
-    if not (is_admin(request.user) or is_moderator(request.user)):
-        return redirect("students:exam_results")
-    profile = _get_profile(request.user)
-    attempts = get_student_attempts(profile)
-    active_exam_ids = {a.exam_id for a in attempts}
-    prog_apps = ProgramApplication.objects.filter(
-        student=profile, cohort__isnull=False,
-    ).select_related("cohort")
-    cohort_ids = set()
-    for pa in prog_apps:
-        if pa.cohort_id:
-            cohort_ids.add(pa.cohort_id)
-    available = []
-    if cohort_ids:
-        now = timezone.now()
-        available = list(
-            EntranceExam.objects.filter(
-                cohort_id__in=cohort_ids,
-                is_active=True,
-                open_at__lte=now,
-                close_at__gte=now,
-            ).exclude(
-                id__in=active_exam_ids,
-            ).select_related("cohort")
-        )
-    return render(request, "entrance_exams/student_list.html", {
-        "attempts": attempts,
-        "available_exams": available,
-    })
+    if is_admin(request.user):
+        return redirect("entrance_exams:admin_list")
+    return redirect("students:exam_results")
 
 
 @login_required
@@ -282,9 +255,9 @@ def exam_results(request, token):
 @login_required
 def admin_list(request):
     """List all entrance exams for admin."""
-    if not (is_admin(request.user) or is_moderator(request.user)):
+    if not is_admin(request.user):
         raise PermissionDenied
-    exams = EntranceExam.objects.all().select_related("diploma", "cohort", "created_by")
+    exams = EntranceExam.objects.select_related("diploma", "cohort", "created_by")
     page_obj, pagination_qs = paginate(request, exams)
     return render(request, "entrance_exams/admin_list.html", {"page_obj": page_obj, "pagination_qs": pagination_qs})
 
@@ -292,7 +265,7 @@ def admin_list(request):
 @login_required
 def admin_cohorts_for_diploma(request):
     """Return cohort <option>s filtered by diploma (HTMX)."""
-    if not (is_admin(request.user) or is_moderator(request.user)):
+    if not is_admin(request.user):
         raise PermissionDenied
     diploma_id = request.GET.get("diploma", "")
     if diploma_id:
@@ -305,7 +278,7 @@ def admin_cohorts_for_diploma(request):
 @login_required
 def admin_detail(request, exam_id):
     """Show entrance exam detail including questions and attempts."""
-    if not (is_admin(request.user) or is_moderator(request.user)):
+    if not is_admin(request.user):
         raise PermissionDenied
     exam = get_object_or_404(
         EntranceExam.objects.prefetch_related(
@@ -319,7 +292,7 @@ def admin_detail(request, exam_id):
 @login_required
 def admin_preview(request, exam_id):
     """Render the student-facing take page for admin preview (no attempt)."""
-    if not (is_admin(request.user) or is_moderator(request.user)):
+    if not is_admin(request.user):
         raise PermissionDenied
     exam = get_object_or_404(
         EntranceExam.objects.prefetch_related("questions__choices"),
@@ -402,7 +375,7 @@ def admin_toggle_active(request, exam_id):
 @require_POST
 def admin_finalize_pending(request, exam_id):
     """Finalize all in-progress attempts for an exam using saved snapshots."""
-    if not (is_admin(request.user) or is_moderator(request.user)):
+    if not is_admin(request.user):
         raise PermissionDenied
     exam = get_object_or_404(EntranceExam, id=exam_id)
     count = finalize_all_pending_for_exam(exam)
@@ -416,9 +389,9 @@ def admin_finalize_pending(request, exam_id):
 @login_required
 def admin_grade_list(request):
     """List completed entrance attempts ready for grading."""
-    if not (is_admin(request.user) or is_moderator(request.user)):
+    if not is_admin(request.user):
         raise PermissionDenied
-    pending = get_pending_grading(request.user)
+    pending = get_pending_grading()
     page_obj, pagination_qs = paginate(request, pending)
     return render(request, "entrance_exams/admin_grade_list.html", {
         "page_obj": page_obj,
@@ -429,14 +402,12 @@ def admin_grade_list(request):
 @login_required
 def admin_grade_attempt(request, attempt_id):
     """Grade a specific entrance attempt."""
-    if not (is_admin(request.user) or is_moderator(request.user)):
+    if not is_admin(request.user):
         raise PermissionDenied
     attempt = get_object_or_404(
         EntranceAttempt.objects.select_related("exam", "student__user"),
         id=attempt_id,
     )
-    if not can_grade_attempt(request.user, attempt):
-        raise PermissionDenied
     questions = attempt.exam.questions.prefetch_related("choices").all()
     answers = {a.question_id: a for a in attempt.answers.all()}
     if request.method == "POST":
@@ -448,7 +419,11 @@ def admin_grade_attempt(request, attempt_id):
                 score_key = f"score_{q.id}"
                 feedback_key = f"feedback_{q.id}"
                 if score_key in request.POST:
-                    score = Decimal(str(request.POST[score_key]))
+                    try:
+                        score = Decimal(str(request.POST[score_key]))
+                    except Exception:
+                        messages.error(request, _("Invalid score value for question %(q)s.") % {"q": q.order})
+                        continue
                     feedback = request.POST.get(feedback_key, "")
                     grade_answer(answer, score, feedback, request.user)
         messages.success(request, _("Grades saved."))
@@ -781,12 +756,15 @@ def _send_invitations(request, exam, cohort, student_ids):
         except Exception:
             failed_count += 1
             continue
-        PAEL.objects.create(
+        PAEL.objects.get_or_create(
             program_application=prog_app,
-            action=action, template_slug=slug,
-            recipient=email_to, sent_by=request.user,
-            sent_at=record.sent_at or timezone.now(),
-            status=record.status or "failed",
+            action=action,
+            defaults={
+                "template_slug": slug,
+                "recipient": email_to, "sent_by": request.user,
+                "sent_at": record.sent_at or timezone.now(),
+                "status": record.status or "failed",
+            },
         )
         if record and record.status == "sent":
             sent_count += 1
@@ -975,9 +953,9 @@ def admin_cohort_email(request, exam_id):
     if ha:
         history_qs = history_qs.filter(action=ha)
 
-    inv_page, _ = paginate(request, invitation_qs, per_page=20)
-    res_page, _ = paginate(request, results_qs, per_page=20)
-    hist_page, _ = paginate(request, history_qs, per_page=25)
+    inv_page, _unused = paginate(request, invitation_qs, per_page=20)
+    res_page, _unused = paginate(request, results_qs, per_page=20)
+    hist_page, _unused = paginate(request, history_qs, per_page=25)
 
     def _make_pq(**extra):
         return urlencode({"tab": tab, **extra})
