@@ -1,0 +1,5 @@
+{% load i18n %}
+<option value="">{% trans "— Optional —" %}</option>
+{% for semester in semesters %}
+<option value="{{ semester.id }}">{{ semester.title }}</option>
+{% endfor %}

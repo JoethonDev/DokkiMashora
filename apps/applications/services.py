@@ -249,6 +249,9 @@ def submit_program_application(
     course: Course | None = None,
 ) -> ProgramApplication:
     """Create a new program application for an existing student."""
+    if program_type == PROGRAM_TYPE_COURSE:
+        if course is None or not course.is_active or not course.versions.filter(is_active=True).exists():
+            raise ValueError(_("This course has no active version available for enrollment."))
     _check_duplicate_program_application(profile, program_type, cohort=cohort, course=course)
 
     return ProgramApplication.objects.create(
@@ -490,7 +493,7 @@ def _attempt_intake_request_safe(application, actor=None) -> str | None:
 def accept_program_application(application, actor, notes: str = "", send_email: bool = False) -> None:
     """Accept from entrance_submitted or interview_requested (diploma) or payment_pending (course)."""
     if application.program_type == PROGRAM_TYPE_COURSE:
-        allowed = {PROGRAM_APP_STATUS_PAYMENT_PENDING}
+        allowed = {PROGRAM_APP_STATUS_SUBMITTED, PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED, PROGRAM_APP_STATUS_PAYMENT_PENDING}
     else:
         allowed = {PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED, PROGRAM_APP_STATUS_INTERVIEW_REQUESTED}
     if application.status not in allowed:
@@ -515,10 +518,12 @@ def accept_program_application(application, actor, notes: str = "", send_email: 
 
 @transaction.atomic
 def reject_program_application(application, actor, reason: str, notes: str = "", send_email: bool = False) -> None:
-    """Reject from entrance_submitted or interview_requested."""
+    """Reject from entrance_submitted or interview_requested (diploma) or submitted/account_activated/payment_pending (course)."""
     if not reason.strip():
         raise ValueError(_("Rejection reason is required."))
     allowed = {PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED, PROGRAM_APP_STATUS_INTERVIEW_REQUESTED}
+    if application.program_type == PROGRAM_TYPE_COURSE:
+        allowed |= {PROGRAM_APP_STATUS_SUBMITTED, PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED, PROGRAM_APP_STATUS_PAYMENT_PENDING}
     if application.status not in allowed:
         raise ValueError(_("Application cannot be rejected from current status."))
     old_status = application.status
@@ -757,12 +762,9 @@ def activate_application_if_ready(application, actor=None) -> ActivationResult:
         return ActivationResult(activated=False, reasons=check.reasons)
 
     if locked.program_type == PROGRAM_TYPE_COURSE:
-        active_versions = list(locked.course.versions.filter(is_active=True))
-        if not active_versions:
+        cv = locked.course.versions.filter(is_active=True).order_by("-created_at", "-id").first()
+        if cv is None:
             return ActivationResult(activated=False, reasons=["no_active_course_version"])
-        if len(active_versions) > 1:
-            return ActivationResult(activated=False, reasons=["multiple_active_course_versions"])
-        cv = active_versions[0]
         enrollment, created = CourseEnrollment.objects.get_or_create(
             student=locked.student,
             course_version=cv,

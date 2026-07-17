@@ -15,34 +15,28 @@
     <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{{ cohort.name }}</p>
   </header>
 
+  <div class="grid gap-4 sm:grid-cols-2">
+    {% for semester_data in semester_lectures %}
+      <a href="{% url 'academics:student_diploma_semester_detail' enrollment.id semester_data.semester.id %}" class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 hover:border-brand-500 transition block">
+        <p class="text-xs font-semibold uppercase tracking-wide text-brand-600 dark:text-brand-400">{% trans "Semester" %}</p>
+        <h2 class="mt-1 text-lg font-semibold">{{ semester_data.semester.title }}</h2>
+        {% if semester_data.semester == diploma_access.current_semester %}<p class="mt-2 text-sm text-brand-600 dark:text-brand-400">{% trans "Current semester" %}</p>{% else %}<p class="mt-2 text-sm text-slate-500 dark:text-slate-400">{% trans "Completed" %}</p>{% endif %}
+        <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">{{ semester_data.lectures|length }} {% trans "lectures" %}</p>
+        {% for lecture in semester_data.lectures|slice:":1" %}<p class="mt-1 text-sm font-medium">{{ lecture.title }}</p>{% endfor %}
+      </a>
+    {% empty %}
+      {% include "partials/_empty_state.html" with title=_("No semesters available") %}
+    {% endfor %}
+  </div>
+
   {% if attendance_code %}
-  <div class="mb-6 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 flex items-center gap-4">
-    <img src="{{ attendance_qr }}" alt="{% trans 'Attendance QR Code' %}" class="rounded-lg" width="120" height="120" loading="lazy">
-    <div>
-      <p class="font-semibold text-sm">{% trans "Attendance QR Code" %}</p>
-      <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">{% trans "Show this code to the secretary to record your attendance." %}</p>
-      <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">{% trans "Code:" %} <span class="font-mono font-semibold text-slate-800 dark:text-slate-200">{{ attendance_code.display_code }}</span></p>
-      <a href="{% url 'attendance:my_attendance' %}" class="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline mt-2 inline-block">{% trans "View my attendance records" %}</a>
-    </div>
+  <div class="mt-8 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 sm:p-8 text-center">
+    <p class="font-semibold">{% trans "Attendance QR Code" %}</p>
+    <img src="{{ attendance_qr }}" alt="{% trans 'Attendance QR Code' %}" class="rounded-lg w-full max-w-[360px] mx-auto mt-4" loading="lazy">
+    <p class="text-xs text-slate-500 dark:text-slate-400 mt-4">{% trans "Show this code to the secretary to record your attendance." %}</p>
+    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">{% trans "Code:" %} <span class="font-mono font-semibold text-slate-800 dark:text-slate-200">{{ attendance_code.display_code }}</span></p>
+    <a href="{% url 'attendance:my_attendance' %}" class="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline mt-2 inline-block">{% trans "View my attendance records" %}</a>
   </div>
   {% endif %}
-
-  {% for semester_data in semester_lectures %}
-    <h2 class="text-lg font-semibold mb-3 mt-6">{{ semester_data.semester.title }}</h2>
-    {% if semester_data.lectures %}
-      <div class="space-y-3">
-        {% for lecture in semester_data.lectures %}
-          <a href="{% url 'academics:student_diploma_lecture_view' enrollment.id semester_data.semester.id lecture.id %}" class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 hover:border-brand-500 transition flex items-center gap-3">
-            <span class="text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded tabular-nums">{{ lecture.order }}</span>
-            <span class="font-medium">{{ lecture.title }}</span>
-          </a>
-        {% endfor %}
-      </div>
-    {% else %}
-      <p class="text-sm text-slate-500 dark:text-slate-400">{% trans "No lectures available yet." %}</p>
-    {% endif %}
-  {% empty %}
-    {% include "partials/_empty_state.html" with title=_("No semesters available") %}
-  {% endfor %}
 </div>
 {% endblock %}

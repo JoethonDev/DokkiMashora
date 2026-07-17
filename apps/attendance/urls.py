@@ -5,6 +5,7 @@ from apps.attendance import views
 app_name = "attendance"
 
 urlpatterns = [
+    path("semester-options/", views.semester_options_by_cohort, name="semester_options_by_cohort"),
     path("sessions/", views.attendance_session_list, name="attendance_session_list"),
     path("sessions/create/", views.attendance_session_create, name="attendance_session_create"),
     path("sessions/<int:session_id>/", views.attendance_session_detail, name="attendance_session_detail"),

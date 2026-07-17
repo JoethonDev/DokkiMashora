@@ -40,7 +40,6 @@ from apps.academics.models import (
     DiplomaLecture,
     Lecture,
     Semester,
-    SemesterCourse,
 )
 from apps.academics.services import (
     can_access_course,
@@ -49,6 +48,7 @@ from apps.academics.services import (
     create_cohort,
     delete_cohort_delivery,
     get_student_course_versions,
+    get_student_diploma_access,
     get_visible_diploma_lectures,
     get_visible_lectures,
     record_diploma_lecture_checkpoint,
@@ -210,6 +210,20 @@ def admin_diploma_edit(request, diploma_id):
     )
 
 
+@login_required
+@role_required(*ROLE_EXAM_STAFF)
+@require_POST
+def admin_diploma_delete(request, diploma_id):
+    diploma = get_object_or_404(Diploma, id=diploma_id)
+    next_url = safe_next_url(request)
+    diploma.delete()
+    messages.success(request, _("Diploma deleted."))
+    redirect_url = next_url or reverse("academics:admin_diploma_list")
+    response = HttpResponse()
+    response["HX-Redirect"] = redirect_url
+    return response
+
+
 # ---------------------------------------------------------------------------
 # Admin: Semester management
 # ---------------------------------------------------------------------------
@@ -296,24 +310,6 @@ def admin_semester_delete(request, diploma_id, semester_id):
     return response
 
 
-@login_required
-@role_required(*ROLE_EXAM_STAFF)
-@require_POST
-def admin_semester_course_delete(request, sc_id):
-    sc = get_object_or_404(SemesterCourse, id=sc_id)
-    diploma_id = sc.semester.diploma_id
-    next_url = safe_next_url(request)
-    CourseVersion.objects.filter(
-        course=sc.course, semester=sc.semester,
-    ).delete()
-    sc.delete()
-    messages.success(request, _("Course removed from semester."))
-    redirect_url = next_url or reverse("academics:admin_diploma_detail", kwargs={"diploma_id": diploma_id})
-    response = HttpResponse()
-    response["HX-Redirect"] = redirect_url
-    return response
-
-
 # ---------------------------------------------------------------------------
 # Admin: Course management
 # ---------------------------------------------------------------------------
@@ -324,7 +320,7 @@ def admin_semester_course_delete(request, sc_id):
 def admin_course_list(request):
     q = request.GET.get("q", "")
     is_active_filter = request.GET.get("is_active", "")
-    courses = Course.objects.select_related("created_by").filter(is_standalone=True)
+    courses = Course.objects.select_related("created_by").all()
     if q:
         courses = courses.filter(
             Q(title__icontains=q) | Q(description__icontains=q)
@@ -353,11 +349,10 @@ def admin_course_list(request):
 def admin_course_detail(request, course_id):
     course = get_object_or_404(Course, id=course_id)
     versions = course.versions.select_related("cohort", "semester").prefetch_related("lectures").all()
-    semester_courses = course.semester_courses.select_related("semester__diploma").all()
     return render(
         request,
         "academics/admin_course_detail.html",
-        {"course": course, "versions": versions, "semester_courses": semester_courses},
+        {"course": course, "versions": versions},
     )
 
 
@@ -370,7 +365,6 @@ def admin_course_create(request):
         if form.is_valid():
             course = form.save(commit=False)
             course.created_by = request.user
-            course.is_standalone = True
             course.save()
             messages.success(request, _("Course created."))
             return redirect(next_url) if next_url else redirect("academics:admin_course_detail", course_id=course.id)
@@ -409,6 +403,20 @@ def admin_course_edit(request, course_id):
         "academics/admin_course_form.html",
         {"form": form, "title": _("Edit course"), "course": course, "next": next_url, "semester_courses": [], "diploma": None, "semesters": []},
     )
+
+
+@login_required
+@role_required(*ROLE_EXAM_STAFF)
+@require_POST
+def admin_course_delete(request, course_id):
+    course = get_object_or_404(Course, id=course_id)
+    next_url = safe_next_url(request)
+    course.delete()
+    messages.success(request, _("Course deleted."))
+    redirect_url = next_url or reverse("academics:admin_course_list")
+    response = HttpResponse()
+    response["HX-Redirect"] = redirect_url
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -618,6 +626,18 @@ def admin_version_delete(request, course_id, version_id):
     return response
 
 
+@login_required
+@role_required(*ROLE_EXAM_STAFF)
+@require_POST
+def admin_version_toggle_active(request, course_id, version_id):
+    course = get_object_or_404(Course, id=course_id)
+    version = get_object_or_404(CourseVersion, id=version_id, course=course)
+    version.is_active = not version.is_active
+    version.save(update_fields=["is_active", "updated_at"])
+    messages.success(request, _("Course version status updated."))
+    return redirect("academics:admin_course_detail", course_id=course.id)
+
+
 def _process_lecture_audio(request, lecture, files, key_prefix=None):
     audio_file = files.get("audio_file")
     if not audio_file:
@@ -659,7 +679,7 @@ def _process_lecture_audio(request, lecture, files, key_prefix=None):
 
 @login_required
 def student_course_list(request):
-    """Show the student their enrolled courses — diploma and standalone sections."""
+    """Show the student their enrolled courses and diploma enrollments."""
     if not is_student(request.user) and not request.user.is_superuser:
         raise PermissionDenied
     try:
@@ -667,7 +687,7 @@ def student_course_list(request):
     except StudentProfile.DoesNotExist:
         return render(request, "academics/student_course_list.html", {"diploma_enrollments": [], "course_versions": []})
 
-    # Standalone courses
+    # Course versions
     course_versions = get_student_course_versions(profile)
 
     # Diploma enrollments with progress
@@ -706,7 +726,7 @@ def student_course_detail(request, version_id):
         profile = request.user.student_profile
     except StudentProfile.DoesNotExist:
         raise Http404 from None
-    version = get_object_or_404(CourseVersion, id=version_id, is_active=True)
+    version = get_object_or_404(CourseVersion, id=version_id)
     if not can_access_course(profile, version):
         raise PermissionDenied(_("You do not have access to this course."))
     lectures = get_visible_lectures(profile, version)
@@ -746,7 +766,7 @@ def student_lecture_view(request, version_id, lecture_id):
         profile = request.user.student_profile
     except StudentProfile.DoesNotExist:
         raise Http404 from None
-    version = get_object_or_404(CourseVersion, id=version_id, is_active=True)
+    version = get_object_or_404(CourseVersion, id=version_id)
     lecture = get_object_or_404(Lecture, id=lecture_id, course_version=version)
     if not can_access_lecture(profile, lecture):
         raise PermissionDenied(_("This lecture is not available yet."))
@@ -766,7 +786,7 @@ def student_lecture_audio(request, version_id, lecture_id, file_path=""):
         profile = request.user.student_profile
     except StudentProfile.DoesNotExist:
         raise Http404 from None
-    version = get_object_or_404(CourseVersion, id=version_id, is_active=True)
+    version = get_object_or_404(CourseVersion, id=version_id)
     lecture = get_object_or_404(Lecture, id=lecture_id, course_version=version)
     if not can_access_lecture(profile, lecture):
         raise PermissionDenied(_("This lecture is not available yet."))
@@ -793,7 +813,7 @@ def student_lecture_audio_download(request, version_id, lecture_id):
         profile = request.user.student_profile
     except StudentProfile.DoesNotExist:
         raise Http404 from None
-    version = get_object_or_404(CourseVersion, id=version_id, is_active=True)
+    version = get_object_or_404(CourseVersion, id=version_id)
     lecture = get_object_or_404(Lecture, id=lecture_id, course_version=version)
     if not can_access_lecture(profile, lecture):
         raise PermissionDenied(_("This lecture is not available yet."))
@@ -980,10 +1000,38 @@ def admin_course_enrollment_list(request, course_id):
         "pagination_qs": pagination_qs,
         "course": course,
         "enrollment_type": "course",
+        "versions": versions,
     }
     if is_htmx(request):
         return render(request, "academics/partials/_enrollment_table.html", ctx)
     return render(request, "academics/admin_enrollment_list.html", ctx)
+
+
+@login_required
+@role_required(*ROLE_EXAM_STAFF)
+@require_POST
+def admin_course_enrollment_migrate(request, course_id, enrollment_id):
+    course = get_object_or_404(Course, id=course_id)
+    enrollment = get_object_or_404(
+        CourseEnrollment,
+        id=enrollment_id,
+        course_version__course=course,
+    )
+    target = get_object_or_404(
+        CourseVersion,
+        id=request.POST.get("version_id"),
+        course=course,
+        is_active=True,
+    )
+    if target.id != enrollment.course_version_id and CourseEnrollment.objects.filter(
+        student=enrollment.student, course_version=target,
+    ).exists():
+        messages.error(request, _("The student already has an enrollment for that version."))
+    else:
+        enrollment.course_version = target
+        enrollment.save(update_fields=["course_version", "updated_at"])
+        messages.success(request, _("Student migrated to the selected course version."))
+    return redirect("academics:admin_course_enrollment_list", course_id=course.id)
 
 
 @login_required
@@ -1146,10 +1194,10 @@ def student_diploma_detail(request, enrollment_id):
 
     diploma = enrollment.cohort.diploma
     cohort = enrollment.cohort
-    semesters = Semester.objects.filter(diploma=diploma, is_active=True).order_by("order")
+    access = get_student_diploma_access(enrollment)
 
     semester_lectures = []
-    for semester in semesters:
+    for semester in access["visible_semesters"]:
         lectures = get_visible_diploma_lectures(profile, enrollment, semester=semester)
         semester_lectures.append({
             "semester": semester,
@@ -1172,8 +1220,38 @@ def student_diploma_detail(request, enrollment_id):
         "diploma": diploma,
         "cohort": cohort,
         "semester_lectures": semester_lectures,
+        "diploma_access": access,
         "attendance_code": attendance_code,
         "attendance_qr": attendance_qr,
+    })
+
+
+@login_required
+def student_diploma_semester_detail(request, enrollment_id, semester_id):
+    if not is_student(request.user) and not request.user.is_superuser:
+        raise PermissionDenied
+    try:
+        profile = request.user.student_profile
+    except StudentProfile.DoesNotExist:
+        raise Http404 from None
+    enrollment = get_object_or_404(DiplomaEnrollment, id=enrollment_id)
+    if enrollment.student != profile and not request.user.is_superuser:
+        raise PermissionDenied
+    if enrollment.status != ENROLLMENT_STATUS_ACTIVE:
+        raise PermissionDenied(_("Enrollment is not active."))
+    if enrollment.expires_at and timezone.now() >= enrollment.expires_at:
+        raise PermissionDenied(_("Enrollment has expired."))
+    semester = get_object_or_404(Semester, id=semester_id, diploma=enrollment.cohort.diploma)
+    access = get_student_diploma_access(enrollment)
+    if semester.id not in {item.id for item in access["visible_semesters"]}:
+        raise PermissionDenied(_("This semester is not available yet."))
+    return render(request, "academics/student_diploma_semester_detail.html", {
+        "enrollment": enrollment,
+        "diploma": enrollment.cohort.diploma,
+        "cohort": enrollment.cohort,
+        "semester": semester,
+        "lectures": get_visible_diploma_lectures(profile, enrollment, semester=semester),
+        "access": access,
     })
 
 

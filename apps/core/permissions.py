@@ -138,8 +138,7 @@ def is_teacher_of_cohort(user, cohort) -> bool:
         teacher=user,
         active=True,
     ).filter(
-        Q(scope_type=SCOPE_DIPLOMA_COHORT, cohort=cohort)
-        | Q(scope_type=SCOPE_COURSE_VERSION, course_version__cohort=cohort)
+        scope_type=SCOPE_DIPLOMA_COHORT, cohort=cohort,
     ).exists()
 
 
@@ -220,16 +219,12 @@ def assessment_staff_scope_filter(user, prefix: str = "") -> Q:
     ).values("course_version_id")
     teacher_filter = (
         Q(**{f"{filter_prefix}assessment__cohort_id__in": teacher_cohorts})
-        | Q(**{f"{filter_prefix}assessment__course_version__cohort_id__in": teacher_cohorts})
         | Q(**{f"{filter_prefix}assessment__course_version_id__in": teacher_cv_ids})
     )
     moderator_filter = (
         Q(**{f"{filter_prefix}student__student_profile__moderator_assignments__moderator": user})
         & Q(**{f"{filter_prefix}student__student_profile__moderator_assignments__active": True})
-        & (
-            Q(**{f"{filter_prefix}assessment__cohort_id": F(f"{filter_prefix}student__student_profile__moderator_assignments__cohort_id")})
-            | Q(**{f"{filter_prefix}assessment__course_version__cohort_id": F(f"{filter_prefix}student__student_profile__moderator_assignments__cohort_id")})
-        )
+        & Q(**{f"{filter_prefix}assessment__cohort_id": F(f"{filter_prefix}student__student_profile__moderator_assignments__cohort_id")})
     )
     mod_wide_cohorts = list(ModeratorAssignment.objects.filter(
         moderator=user, active=True, cluster__isnull=True,
@@ -246,16 +241,12 @@ def assessment_staff_scope_filter(user, prefix: str = "") -> Q:
     mod_filter = Q()
     if mod_wide_cohorts:
         mod_filter |= Q(**{f"{filter_prefix}assessment__cohort_id__in": mod_wide_cohorts})
-        mod_filter |= Q(**{f"{filter_prefix}assessment__course_version__cohort_id__in": mod_wide_cohorts})
     if mod_wide_cvs:
         mod_filter |= Q(**{f"{filter_prefix}assessment__course_version_id__in": mod_wide_cvs})
     if mod_cluster_students:
         mod_filter |= (
             Q(**{f"{filter_prefix}student__student_profile_id__in": mod_cluster_students})
-            & (
-                Q(**{f"{filter_prefix}assessment__cohort_id__in": mod_cluster_cohorts})
-                | Q(**{f"{filter_prefix}assessment__course_version__cohort_id__in": mod_cluster_cohorts})
-            )
+            & Q(**{f"{filter_prefix}assessment__cohort_id__in": mod_cluster_cohorts})
         )
     return teacher_filter | moderator_filter | mod_filter
 
@@ -285,9 +276,6 @@ def _cohort_for_staff_object(obj):
         return None
     if assessment.cohort_id:
         return assessment.cohort
-    course_version = assessment.course_version
-    if course_version and course_version.cohort_id:
-        return course_version.cohort
     return None
 
 
@@ -311,10 +299,8 @@ def assessment_scope_filter(user) -> Q:
     ).values("course_version_id")
     return (
         Q(cohort_id__in=teacher_cohorts)
-        | Q(course_version__cohort_id__in=teacher_cohorts)
         | Q(course_version_id__in=teacher_cvs)
         | Q(cohort_id__in=mod_cohorts)
-        | Q(course_version__cohort_id__in=mod_cohorts)
         | Q(course_version_id__in=mod_cvs)
     )
 
@@ -339,9 +325,7 @@ def enrollment_scope_filter(user, enrollment_model: str = "course") -> Q:
     ).values("course_version_id")
     if enrollment_model == "course":
         return (
-            Q(course_version__cohort_id__in=teacher_cohorts)
-            | Q(course_version_id__in=teacher_cvs)
-            | Q(course_version__cohort_id__in=mod_cohorts)
+            Q(course_version_id__in=teacher_cvs)
             | Q(course_version_id__in=mod_cvs)
         )
     return (
@@ -358,10 +342,6 @@ def can_manage_course_version(user, course_version) -> bool:
         return True
     if TeacherAssignment.objects.filter(
         teacher=user, scope_type=SCOPE_COURSE_VERSION, course_version=course_version, active=True,
-    ).exists():
-        return True
-    if course_version.cohort_id and TeacherAssignment.objects.filter(
-        teacher=user, scope_type=SCOPE_DIPLOMA_COHORT, cohort_id=course_version.cohort_id, active=True,
     ).exists():
         return True
     if ModeratorAssignment.objects.filter(

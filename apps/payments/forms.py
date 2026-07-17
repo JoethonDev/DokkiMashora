@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
 from .constants import MAX_FILE_SIZE_BYTES
+from .models import PaymentRecord
 
 
 class PaymentUploadForm(forms.Form):
@@ -28,3 +29,20 @@ class PaymentUploadForm(forms.Form):
         if file.size == 0:
             raise ValidationError(_("Uploaded file is empty"))
         return file
+
+
+class PaymentRecordEditForm(forms.ModelForm):
+    class Meta:
+        model = PaymentRecord
+        fields = ["amount", "currency", "status", "paid_at", "due_at", "external_reference", "notes"]
+        widgets = {
+            "paid_at": forms.DateTimeInput(attrs={"type": "datetime-local"}),
+            "due_at": forms.DateTimeInput(attrs={"type": "datetime-local"}),
+            "notes": forms.Textarea(attrs={"rows": 3}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        input_class = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+        for field in self.fields.values():
+            field.widget.attrs["class"] = input_class

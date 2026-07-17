@@ -28,7 +28,6 @@ AUDIO_PROCESSING_STATUS_CHOICES = (
     (AUDIO_PROCESSING_FAILED, _("Failed")),
 )
 
-SCOPE_STANDALONE_COURSE = "standalone_course"
 SCOPE_WHOLE_DIPLOMA = "whole_diploma"
 SCOPE_DIPLOMA_SEMESTER = "diploma_semester"
 SCOPE_DIPLOMA_COHORT = "diploma_cohort"
@@ -36,7 +35,6 @@ SCOPE_SEMESTER_COHORT = "semester_cohort"
 SCOPE_COURSE_VERSION = "course_version"
 
 SCOPE_CHOICES = (
-    (SCOPE_STANDALONE_COURSE, _("Standalone course")),
     (SCOPE_WHOLE_DIPLOMA, _("Whole diploma")),
     (SCOPE_DIPLOMA_SEMESTER, _("Diploma semester")),
     (SCOPE_DIPLOMA_COHORT, _("Diploma cohort")),

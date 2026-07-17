@@ -15,6 +15,7 @@ from apps.audit.constants import (
     ACTION_PAYMENT_RECORD_DELETED,
     ACTION_PAYMENT_UPLOAD_CONFIRMED,
     ACTION_PAYMENT_UPLOAD_PREVIEWED,
+    ACTION_PAYMENT_RECORD_UPDATED,
 )
 from apps.audit.services import record_audit_event
 from apps.communications.constants import TEMPLATE_PAYMENT_NOTIFICATION
@@ -24,7 +25,7 @@ from apps.core.permissions import role_required, safe_date_str
 from apps.students.models import StudentProfile
 
 from .constants import PAYMENT_STATUS_CHOICES, UPLOAD_STATUS_CHOICES, UPLOAD_STATUS_PREVIEWED
-from .forms import PaymentUploadForm
+from .forms import PaymentRecordEditForm, PaymentUploadForm
 from .models import PaymentRecord, PaymentUpload
 from .selectors import (
     get_payment_record_queryset,
@@ -214,11 +215,52 @@ def payment_record_list(request):
 def payment_record_detail(request, record_id):
     record = get_object_or_404(
         PaymentRecord.objects.select_related(
-            "student__user", "upload_row__upload", "application", "imported_by"
+            "student__user", "upload_row__upload", "application__cohort__diploma",
+            "application__course", "imported_by",
+            "diploma_enrollment__cohort__diploma",
+            "course_enrollment__course_version__course",
         ),
         id=record_id,
     )
     return render(request, "payments/admin_record_detail.html", {"record": record})
+
+
+@login_required
+@role_required(*ROLE_PAYMENT_STAFF)
+def payment_record_edit(request, record_id):
+    record = get_object_or_404(
+        PaymentRecord.objects.select_related("student__user"),
+        id=record_id,
+        deleted_at__isnull=True,
+    )
+    form = PaymentRecordEditForm(request.POST or None, instance=record)
+    if request.method == "POST" and form.is_valid():
+        old_values = {
+            "amount": str(record.amount),
+            "status": record.status,
+            "paid_at": record.paid_at.isoformat() if record.paid_at else None,
+            "external_reference": record.external_reference,
+        }
+        form.save()
+        record_audit_event(
+            actor=request.user,
+            action=ACTION_PAYMENT_RECORD_UPDATED,
+            target_type="PaymentRecord",
+            target_id=str(record.id),
+            metadata={
+                "student_id": record.student_id,
+                "before": old_values,
+                "after": {
+                    "amount": str(record.amount),
+                    "status": record.status,
+                    "paid_at": record.paid_at.isoformat() if record.paid_at else None,
+                    "external_reference": record.external_reference,
+                },
+            },
+        )
+        messages.success(request, _("Payment record updated."))
+        return redirect("payments:record_detail", record_id=record.id)
+    return render(request, "payments/admin_record_edit.html", {"form": form, "record": record})
 
 
 @require_POST

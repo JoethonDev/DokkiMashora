@@ -116,6 +116,12 @@ def check_apply_eligibility(
             return {"allowed": True, "reason_code": None, "reason": None}
         if not isinstance(course, Course):
             course = Course.objects.get(pk=course)
+        if not course.is_active or not course.versions.filter(is_active=True).exists():
+            return {
+                "allowed": False,
+                "reason_code": "no_active_version",
+                "reason": _("This course is not currently accepting applications."),
+            }
 
         # Completed enrollment for any version of same course
         from apps.academics.models import CourseEnrollment
@@ -174,9 +180,6 @@ def get_open_apply_targets(
         Cohort.objects.filter(
             is_active=True,
             end_date__gte=today,
-            entrance_exams__is_active=True,
-            entrance_exams__open_at__lte=now,
-            entrance_exams__close_at__gte=now,
         )
         .select_related("diploma")
         .order_by("-start_date")
@@ -192,14 +195,12 @@ def get_open_apply_targets(
     if program_type == PROGRAM_TYPE_COURSE:
         course_versions = (
             CourseVersion.objects.filter(is_active=True, course__is_active=True)
-            .select_related("course", "cohort", "semester")
-            .order_by("course__title", "-created_at", "label")
+            .select_related("course")
+            .order_by("course__title", "-created_at", "-id")
         )
         courses = []
         seen_course_ids: set[int] = set()
         for version in course_versions:
-            if not _is_open_course_version(version, now, today):
-                continue
             course = version.course
             if course.pk in seen_course_ids:
                 continue
@@ -212,24 +213,6 @@ def get_open_apply_targets(
         return {"items": list(page_obj.object_list), "has_more": page_obj.has_next(), "next_page": page_obj.next_page_number() if page_obj.has_next() else None}
 
     return {"items": [], "has_more": False, "next_page": None}
-
-
-def _is_open_course_version(version, now, today) -> bool:
-    if not version.is_active or not version.course.is_active:
-        return False
-    if version.semester is not None and not version.semester.is_active:
-        return False
-    if version.cohort is None:
-        return bool(version.course.is_standalone)
-    if not version.cohort.is_active:
-        return False
-    if version.cohort.end_date is not None and version.cohort.end_date < today:
-        return False
-    return version.cohort.entrance_exams.filter(
-        is_active=True,
-        open_at__lte=now,
-        close_at__gte=now,
-    ).exists()
 
 
 def submit_apply_application(profile: StudentProfile, cohort=None, course=None) -> ProgramApplication:

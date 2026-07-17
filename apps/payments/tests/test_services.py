@@ -504,7 +504,7 @@ class EnrollmentLinkingTests(TestCase):
             title="Test Course", created_by=self.admin,
         )
         course_version = CourseVersion.objects.create(
-            course=course, cohort=cohort, created_by=self.admin,
+            course=course, created_by=self.admin,
         )
         self.course_enrollment = CourseEnrollment.objects.create(
             student=self.student, course_version=course_version,
@@ -776,7 +776,7 @@ class EnrollmentPaymentStatusSelectorTests(TestCase):
         )
         course = Course.objects.create(title="EP Course", created_by=self.user)
         course_version = CourseVersion.objects.create(
-            course=course, cohort=cohort, created_by=self.user,
+            course=course, created_by=self.user,
         )
         self.course_enrollment = CourseEnrollment.objects.create(
             student=self.student, course_version=course_version,
@@ -784,7 +784,7 @@ class EnrollmentPaymentStatusSelectorTests(TestCase):
         # A second course that should be unpaid
         course2 = Course.objects.create(title="EP Course 2", created_by=self.user)
         cv2 = CourseVersion.objects.create(
-            course=course2, cohort=cohort, created_by=self.user,
+            course=course2, created_by=self.user,
         )
         self.course_enrollment_unpaid = CourseEnrollment.objects.create(
             student=self.student, course_version=cv2,
@@ -866,7 +866,7 @@ class EnrollmentPaymentServiceTests(TestCase):
         )
         course = Course.objects.create(title="EP Svc Course", created_by=self.admin)
         course_version = CourseVersion.objects.create(
-            course=course, cohort=cohort, created_by=self.admin,
+            course=course, created_by=self.admin,
         )
         self.course_enrollment = CourseEnrollment.objects.create(
             student=self.student, course_version=course_version,
@@ -1049,7 +1049,7 @@ class PaymentTargetDeletionTests(TestCase):
         )
         course = Course.objects.create(title="PTD Course", created_by=self.admin)
         course_version = CourseVersion.objects.create(
-            course=course, cohort=cohort, created_by=self.admin,
+            course=course, created_by=self.admin,
         )
         self.enrollment = CourseEnrollment.objects.create(
             student=self.student, course_version=course_version,

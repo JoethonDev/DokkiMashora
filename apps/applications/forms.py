@@ -184,8 +184,6 @@ class RegistrationForm(forms.Form):
                         cohort = Cohort.objects.filter(
                             pk=diploma, is_active=True,
                             entrance_exams__is_active=True,
-                            entrance_exams__open_at__lte=timezone.now(),
-                            entrance_exams__close_at__gte=timezone.now(),
                         ).select_related("diploma").first()
                         if not cohort:
                             self.add_error("diploma", _("No active cohort with an entrance exam found for this diploma."))

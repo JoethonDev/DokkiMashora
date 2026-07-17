@@ -58,8 +58,8 @@ class CourseDetailModalIdTests(TestCase):
             diploma=diploma,
             name="Modal C2", start_date=date(2026, 1, 1), created_by=self.admin,
         )
-        v1 = CourseVersion.objects.create(course=self.course, cohort=self.cohort, label="", created_by=self.admin)
-        v2 = CourseVersion.objects.create(course=self.course, cohort=self.cohort2, label="", created_by=self.admin)
+        v1 = CourseVersion.objects.create(course=self.course, label="v1", created_by=self.admin)
+        v2 = CourseVersion.objects.create(course=self.course, label="v2", created_by=self.admin)
         self.lec1 = Lecture.objects.create(course_version=v1, order=1, title="L1")
         self.lec2 = Lecture.objects.create(course_version=v1, order=2, title="L2")
 
@@ -98,7 +98,7 @@ class AdminViewTests(TestCase):
             diploma=cls.diploma, name="C1", start_date=date(2026, 1, 1), created_by=cls.admin,
         )
         cls.version = CourseVersion.objects.create(
-            course=cls.course, cohort=cls.cohort, label="", created_by=cls.admin,
+            course=cls.course, label="v1", created_by=cls.admin,
         )
         cls.lecture = Lecture.objects.create(
             course_version=cls.version, order=1, title="L1", is_published=True,
@@ -214,7 +214,7 @@ class AdminViewTests(TestCase):
             "semester": semester.id,
         })
         self.assertEqual(r.status_code, 302)
-        self.assertTrue(CourseVersion.objects.filter(cohort=cohort2).exists())
+        self.assertTrue(CourseVersion.objects.filter(course=self.course).exists())
 
     def test_version_detail(self):
         r = self.client.get(

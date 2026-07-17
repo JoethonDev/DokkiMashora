@@ -9,7 +9,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE
-from apps.academics.models import Cohort, Course, CourseEnrollment, CourseVersion, Diploma
+from apps.academics.models import Cohort, Course, CourseEnrollment, CourseVersion, Diploma, Semester
 from apps.academics.services import assign_moderator_to_students, assign_teacher_to_cohort
 from apps.accounts.constants import GROUP_ADMIN, GROUP_MODERATOR, GROUP_TEACHER
 from apps.accounts.models import User
@@ -97,11 +97,14 @@ class HasActiveEnrollmentTests(TestCase):
     def test_no_active_enrollment_returns_false(self):
         self.assertFalse(has_active_enrollment(self.student, self.assessment))
 
-    def test_with_cohort_checks_diploma_enrollment(self):
+    def test_diploma_scoped_checks_diploma_enrollment(self):
         diploma = Diploma.objects.create(title="D", total_semesters=2, created_by=self.admin)
         cohort = Cohort.objects.create(diploma=diploma, name="C1", start_date=date(2026, 1, 1), created_by=self.admin)
-        self.cv.cohort = cohort
-        self.cv.save(update_fields=["cohort"])
+        semester = Semester.objects.create(diploma=diploma, order=1, title="Sem 1")
+        self.assessment.course_version = None
+        self.assessment.cohort = cohort
+        self.assessment.semester = semester
+        self.assessment.save()
         self.assertFalse(has_active_enrollment(self.student, self.assessment))
 
 
@@ -492,7 +495,6 @@ class QueryTests(TestCase):
         self.course = Course.objects.create(title="Queue Course", created_by=self.admin)
         self.course_version = CourseVersion.objects.create(
             course=self.course,
-            cohort=self.cohort,
             label="v1",
             created_by=self.admin,
         )

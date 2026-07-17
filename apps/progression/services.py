@@ -36,6 +36,7 @@ from .constants import (
     DIPLOMA_COMPLETION_GRADUATED,
     DIPLOMA_COMPLETION_REQUIREMENTS_MET,
     PROMOTION_DECISION_AUTO_PROMOTE,
+    PROMOTION_DECISION_ACADEMIC_YEAR_PROMOTE,
     PROMOTION_DECISION_COMPLETE,
     PROMOTION_DECISION_CONFIRM_PASS,
     PROMOTION_DECISION_DEMOTE,
@@ -576,6 +577,43 @@ def manual_promote(
             )
 
     return progress
+
+
+def promote_academic_year(
+    student_profile,
+    enrollment,
+    from_semester,
+    to_semester,
+    *,
+    actor=None,
+    reason="",
+):
+    if not reason:
+        raise ValueError(_("Reason is required for academic-year promotion."))
+    if from_semester.diploma_id != enrollment.cohort.diploma_id or to_semester.diploma_id != from_semester.diploma_id:
+        raise ValueError(_("Semesters must belong to the enrollment diploma."))
+    with transaction.atomic():
+        PromotionDecision.objects.create(
+            student=student_profile,
+            diploma_enrollment=enrollment,
+            from_semester=from_semester,
+            to_semester=to_semester,
+            decision_type=PROMOTION_DECISION_ACADEMIC_YEAR_PROMOTE,
+            previous_status=SEMESTER_PROGRESS_PASSED,
+            new_status=SEMESTER_PROGRESS_PROMOTED,
+            automatic=False,
+            reason=reason,
+            decided_by=actor,
+        )
+        return StudentSemesterProgress.objects.get_or_create(
+            diploma_enrollment=enrollment,
+            semester=to_semester,
+            defaults={
+                "student": student_profile,
+                "cohort": enrollment.cohort,
+                "status": SEMESTER_PROGRESS_IN_PROGRESS,
+            },
+        )[0]
 
 
 # ---------------------------------------------------------------------------

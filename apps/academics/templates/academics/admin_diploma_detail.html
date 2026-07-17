@@ -15,7 +15,14 @@
     <div class="flex flex-wrap gap-2">
       {% url 'academics:admin_diploma_enrollment_list' diploma.id as enroll_url %}
       {% include "partials/_button.html" with href=enroll_url label=_("Enrollments") variant="ghost" size="sm" %}
-      <a href="{% url 'academics:admin_diploma_edit' diploma.id %}?next={{ request.path|urlencode }}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Edit" %}</a>
+       <a href="{% url 'academics:admin_diploma_edit' diploma.id %}?next={{ request.path|urlencode }}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Edit" %}</a>
+       <div x-data="{ confirmId: null }" @modal-confirm.window="if($event.detail.id===confirmId) document.getElementById($event.detail.id+'-form').requestSubmit()">
+         <form id="delete-diploma-form" method="post" action="{% url 'academics:admin_diploma_delete' diploma.id %}" hx-post="{% url 'academics:admin_diploma_delete' diploma.id %}" hx-target="body" class="inline">
+           {% csrf_token %}<input type="hidden" name="next" value="{% url 'academics:admin_diploma_list' %}">
+           <button type="button" @click.stop="confirmId='delete-diploma'; $dispatch('open-modal', {id:'delete-diploma'})" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm bg-red-600 text-white hover:bg-red-700">{% trans "Delete" %}</button>
+         </form>
+         {% include "partials/_modal.html" with modal_id="delete-diploma" title=_("Confirm Delete") body=_("Delete this diploma and all its semesters, cohorts, and lectures?") confirm_label=_("Delete") %}
+       </div>
     </div>
   </header>
 

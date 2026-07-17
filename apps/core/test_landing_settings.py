@@ -49,7 +49,7 @@ def test_landing_separates_open_programs_and_links_to_apply(client):
         close_at=now + timedelta(days=1),
         created_by=creator,
     )
-    course = Course.objects.create(title="Positive Parenting Course", is_standalone=True, created_by=creator)
+    course = Course.objects.create(title="Positive Parenting Course", created_by=creator)
     CourseVersion.objects.create(course=course, label="2026", created_by=creator)
     CourseVersion.objects.create(course=course, label="2027 draft", is_active=False, created_by=creator)
 
@@ -58,7 +58,7 @@ def test_landing_separates_open_programs_and_links_to_apply(client):
 
     assert response.status_code == 200
     assert "Professional diplomas" in content
-    assert "Standalone courses" in content
+    assert "Courses" in content
     assert f"target_id={cohort.pk}" in content
     assert f"target_id=course_{course.pk}" in content
     assert "Latest active edition: 2026" in content

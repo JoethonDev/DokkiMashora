@@ -8,10 +8,11 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_http_methods, require_POST
 
 from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE
 from apps.academics.models import Cohort, CourseVersion, Semester
+from apps.academics.services import get_student_diploma_access
 from apps.core.permissions import (
     GROUP_ADMIN,
     GROUP_SUPER_ADMIN,
@@ -39,6 +40,18 @@ from .services import (
 )
 
 ADMIN_ONLY = (GROUP_SUPER_ADMIN, GROUP_ADMIN)
+
+
+@require_http_methods(["GET"])
+@login_required
+@role_required(*ROLE_ATTENDANCE_STAFF)
+def semester_options_by_cohort(request):
+    cohort_id = request.GET.get("cohort_id")
+    semesters = Semester.objects.none()
+    if cohort_id:
+        cohort = get_object_or_404(Cohort, id=cohort_id)
+        semesters = Semester.objects.filter(diploma=cohort.diploma, is_active=True).order_by("order")
+    return render(request, "attendance/partials/_semester_options.html", {"semesters": semesters})
 
 
 # ---------------------------------------------------------------------------
@@ -338,10 +351,7 @@ def my_attendance(request):
 
     summaries = []
     for enrollment in enrollments:
-        semesters = Semester.objects.filter(
-            diploma=enrollment.cohort.diploma,
-        ).order_by("order")
-        for semester in semesters:
+        for semester in get_student_diploma_access(enrollment)["visible_semesters"]:
             summary = get_attendance_summary(enrollment, semester)
             if summary["total_sessions"] > 0:
                 summary["enrollment"] = enrollment

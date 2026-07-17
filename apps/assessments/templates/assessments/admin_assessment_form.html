@@ -41,7 +41,7 @@
         {% include "assessments/partials/_scope_fields.html" %}
       </div>
       {% for field in form %}
-      {% if field.name != 'scope_type' and field.name != 'standalone_course' and field.name != 'diploma' and field.name != 'semester' and field.name != 'cohort' and field.name != 'course_version' %}
+      {% if field.name != 'scope_type' and field.name != 'course' and field.name != 'diploma' and field.name != 'semester' and field.name != 'cohort' and field.name != 'course_version' %}
       <div {% if field.name == 'max_upload_files' or field.name == 'allow_late_submission' %}x-show="assessmentType === 'homework'" x-cloak{% endif %}>
         {% include "partials/_field.html" %}
       </div>

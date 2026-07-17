@@ -90,7 +90,14 @@ def get_payment_record_queryset(
     date_from: str | None = None,
     date_to: str | None = None,
 ) -> QuerySet[PaymentRecord]:
-    qs = PaymentRecord.objects.select_related("student__user", "upload_row").filter(deleted_at__isnull=True)
+    qs = PaymentRecord.objects.select_related(
+        "student__user",
+        "upload_row",
+        "application__cohort__diploma",
+        "application__course",
+        "diploma_enrollment__cohort__diploma",
+        "course_enrollment__course_version__course",
+    ).filter(deleted_at__isnull=True)
     if status:
         qs = qs.filter(status=status)
     if student_q:

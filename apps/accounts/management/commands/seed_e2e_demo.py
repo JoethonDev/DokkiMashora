@@ -243,16 +243,16 @@ class Command(BaseCommand):
                 student_users[s["email"]] = (user, s)
 
             diploma, sem1, sem2, course, cohort_a, cohort_b = self._ensure_academics(super_admin)
-            ver_standalone = self._ensure_standalone_course_version(super_admin, course, sem1)
-            self._ensure_lectures(ver_standalone)
+            course_version = self._ensure_course_version(super_admin, course, sem1)
+            self._ensure_lectures(course_version)
 
             profiles: dict[str, StudentProfile] = {}
             for email, (user, data) in student_users.items():
                 profiles[email] = self._ensure_profile(user, data)
 
             apps_map = self._ensure_applications(profiles, super_admin, cohort_a, cohort_b, course)
-            self._ensure_enrollments(profiles, cohort_a, ver_standalone)
-            assessments = self._ensure_assessments(teacher, ver_standalone, cohort_a, sem1)
+            self._ensure_enrollments(profiles, cohort_a, course_version)
+            assessments = self._ensure_assessments(teacher, course_version, cohort_a, sem1)
             attempt_for_audit = self._ensure_attempts(assessments, student_users, profiles)
             self._ensure_entrance_exam(diploma, cohort_a, profiles, super_admin)
             self._ensure_teacher_moderator(super_admin, teacher, moderator, cohort_a, profiles)
@@ -261,7 +261,7 @@ class Command(BaseCommand):
             cert_for_audit = self._ensure_certificates(super_admin, profiles, cohort_a, diploma)
             self._ensure_audit(super_admin, profiles, attempt_for_audit, payment_for_audit, cert_for_audit)
 
-        self._print_summary(profiles, diploma, cohort_a, cohort_b, course, ver_standalone, assessments)
+        self._print_summary(profiles, diploma, cohort_a, cohort_b, course, course_version, assessments)
         if self.warnings:
             self.stdout.write(self.style.WARNING("\nWarnings / Skipped:"))
             for w in self.warnings:
@@ -404,7 +404,7 @@ class Command(BaseCommand):
 
         course, created = Course.objects.update_or_create(
             title="E2E Foundations Course",
-            defaults={"is_standalone": True, "is_active": True, "created_by": admin},
+            defaults={"is_active": True, "created_by": admin},
         )
         self._report("Course: E2E Foundations Course", created)
 
@@ -432,31 +432,31 @@ class Command(BaseCommand):
 
         return diploma, sem1, sem2, course, cohort_a, cohort_b
 
-    def _ensure_standalone_course_version(self, admin, course, sem1):
-        ver_standalone = (
+    def _ensure_course_version(self, admin, course, sem1):
+        course_version = (
             CourseVersion.objects
-            .filter(course=course, cohort__isnull=True, label="standalone")
+            .filter(course=course, cohort__isnull=True, label="course")
             .first()
         )
-        if ver_standalone is None:
-            ver_standalone = CourseVersion.objects.create(
+        if course_version is None:
+            course_version = CourseVersion.objects.create(
                 course=course,
                 cohort=None,
-                label="standalone",
+                label="course",
                 semester=sem1,
                 access_duration_days=90,
                 is_active=True,
                 created_by=admin,
             )
-            self._report("CourseVersion standalone", True)
+            self._report("CourseVersion", True)
         else:
-            ver_standalone.semester = sem1
-            ver_standalone.access_duration_days = 90
-            ver_standalone.is_active = True
-            ver_standalone.created_by = admin
-            ver_standalone.save()
-            self._report("CourseVersion standalone", False)
-        return ver_standalone
+            course_version.semester = sem1
+            course_version.access_duration_days = 90
+            course_version.is_active = True
+            course_version.created_by = admin
+            course_version.save()
+            self._report("CourseVersion", False)
+        return course_version
 
     def _ensure_lectures(self, ver):
         now = timezone.now()
@@ -549,10 +549,10 @@ class Command(BaseCommand):
 
         return apps_map
 
-    def _ensure_enrollments(self, profiles, cohort_a, ver_standalone):
+    def _ensure_enrollments(self, profiles, cohort_a, course_version):
         now = timezone.now()
 
-        # active student: active diploma + active course (standalone).
+        # active student: active diploma + active course.
         p = profiles["student.active@dokkimashora.test"]
         _obj, created = DiplomaEnrollment.objects.update_or_create(
             student=p, cohort=cohort_a,
@@ -565,14 +565,14 @@ class Command(BaseCommand):
         self._report("DiplomaEnrollment: active student", created)
 
         _obj, created = CourseEnrollment.objects.update_or_create(
-            student=p, course_version=ver_standalone,
+            student=p, course_version=course_version,
             defaults={
                 "status": ENROLLMENT_STATUS_ACTIVE,
                 "activated_at": now,
                 "expires_at": now + timedelta(days=180),
             },
         )
-        self._report("CourseEnrollment: active student (standalone)", created)
+        self._report("CourseEnrollment: active student", created)
 
         # expired student: diploma still active (admin lifetime),
         # CourseEnrollment is expired.
@@ -588,14 +588,14 @@ class Command(BaseCommand):
         self._report("DiplomaEnrollment: expired student", created)
 
         _obj, created = CourseEnrollment.objects.update_or_create(
-            student=p, course_version=ver_standalone,
+            student=p, course_version=course_version,
             defaults={
                 "status": ENROLLMENT_STATUS_EXPIRED,
                 "activated_at": now - timedelta(days=200),
                 "expires_at": now - timedelta(days=20),
             },
         )
-        self._report("CourseEnrollment: expired student (standalone)", created)
+        self._report("CourseEnrollment: expired student", created)
 
         # restricted student: restricted diploma enrollment.
         p = profiles["student.restricted@dokkimashora.test"]
@@ -1089,7 +1089,7 @@ class Command(BaseCommand):
         else:
             self._report("Audit: certificate.generated (already exists)", False)
 
-    def _print_summary(self, profiles, diploma, cohort_a, cohort_b, course, ver_standalone, assessments):
+    def _print_summary(self, profiles, diploma, cohort_a, cohort_b, course, course_version, assessments):
         creds = [
             ("Super Admin", "superadmin@dokkimashora.test"),
             ("Admin", "admin@dokkimashora.test"),
@@ -1138,7 +1138,7 @@ class Command(BaseCommand):
         out.append(f"- Cohort A: `{cohort_a.pk}`")
         out.append(f"- Cohort B: `{cohort_b.pk}`")
         out.append(f"- Course: `{course.pk}`")
-        out.append(f"- Standalone Version: `{ver_standalone.pk}`")
+        out.append(f"- Course Version: `{course_version.pk}`")
         for name, a in assessments.items():
             out.append(f"- Assessment ({name}): `{a.pk}`")
 

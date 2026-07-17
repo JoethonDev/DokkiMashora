@@ -9,7 +9,6 @@
     <div>
       <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Course version" %}</p>
       <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ version.course.title }} - {{ version.label }}</h1>
-      {% if version.cohort %}<p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{{ version.cohort.name }}</p>{% endif %}
     </div>
     <div class="dm-action-row">
       {% url 'academics:admin_lecture_create' course.id version.id as add_lec_url %}

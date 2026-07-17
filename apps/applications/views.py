@@ -25,11 +25,14 @@ from apps.students.services import get_open_apply_targets
 
 from .constants import (
     PROGRAM_APP_STATUS_ACCEPTED,
+    PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED,
     PROGRAM_APP_STATUS_DOCUMENTS_REQUESTED,
     PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
     PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
     PROGRAM_APP_STATUS_PAYMENT_PENDING,
     PROGRAM_APP_STATUS_REJECTED,
+    PROGRAM_APP_STATUS_SUBMITTED,
+    PROGRAM_TYPE_COURSE,
 )
 from .documents import (
     get_application_document_upload,
@@ -145,12 +148,18 @@ def registration_success(request: HttpRequest) -> HttpResponse:
 # ---------------------------------------------------------------------------
 
 
-def _accept_allowed(status):
-    return status in {PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED, PROGRAM_APP_STATUS_INTERVIEW_REQUESTED, PROGRAM_APP_STATUS_PAYMENT_PENDING}
+def _accept_allowed(status, program_type=None):
+    base = {PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED, PROGRAM_APP_STATUS_INTERVIEW_REQUESTED, PROGRAM_APP_STATUS_PAYMENT_PENDING}
+    if program_type == PROGRAM_TYPE_COURSE:
+        base |= {PROGRAM_APP_STATUS_SUBMITTED, PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED}
+    return status in base
 
 
-def _reject_allowed(status):
-    return status in {PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED, PROGRAM_APP_STATUS_INTERVIEW_REQUESTED}
+def _reject_allowed(status, program_type=None):
+    base = {PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED, PROGRAM_APP_STATUS_INTERVIEW_REQUESTED}
+    if program_type == PROGRAM_TYPE_COURSE:
+        base |= {PROGRAM_APP_STATUS_SUBMITTED, PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED, PROGRAM_APP_STATUS_PAYMENT_PENDING}
+    return status in base
 
 
 @require_http_methods(["GET"])
@@ -218,7 +227,7 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
         action = request.POST.get("action")
         send_email = request.POST.get("send_email") == "on"
 
-        if action == "accept" and _accept_allowed(application.status):
+        if action == "accept" and _accept_allowed(application.status, application.program_type):
             notes = (request.POST.get("admin_notes") or "").strip()
             try:
                 accept_program_application(application, request.user, notes=notes, send_email=send_email)
@@ -228,7 +237,7 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
                 messages.success(request, _("Application accepted."))
             return redirect("applications:program_detail", application_id=application.id)
 
-        if action == "reject" and _reject_allowed(application.status):
+        if action == "reject" and _reject_allowed(application.status, application.program_type):
             reason = (request.POST.get("rejection_reason") or "").strip()
             if not reason:
                 messages.error(request, _("Rejection reason is required."))
@@ -509,17 +518,6 @@ def _can_download_document(user, application) -> bool:
     if is_admin(user):
         return True
     return hasattr(user, "student_profile") and user.student_profile == application.student
-
-
-# ---------------------------------------------------------------------------
-# Dashboard apply (authenticated student apply flow)
-# ---------------------------------------------------------------------------
-
-
-@login_required
-@require_http_methods(["GET", "POST"])
-def dashboard_apply(request: HttpRequest) -> HttpResponse:
-    return redirect("students:apply")
 
 
 def _get_profile_or_404(user):

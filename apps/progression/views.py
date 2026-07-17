@@ -61,6 +61,7 @@ from .services import (
     get_student_progress_detail,
     lock_student,
     manual_promote,
+    promote_academic_year,
     mark_completed,
     mark_graduated,
     override_student_progress,
@@ -261,6 +262,25 @@ def admin_promote(request, student_id):
     except ValueError as exc:
         messages.error(request, str(exc))
 
+    return redirect("progression:admin_student_detail", student_id=student.id)
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_POST
+def admin_promote_academic_year(request, student_id):
+    student = _get_student_or_404(student_id)
+    enrollment = get_object_or_404(DiplomaEnrollment, id=request.POST.get("enrollment_id"), student=student)
+    from_semester = get_object_or_404(Semester, id=request.POST.get("from_semester_id"))
+    to_semester = get_object_or_404(Semester, id=request.POST.get("to_semester_id"))
+    try:
+        promote_academic_year(
+            student, enrollment, from_semester, to_semester,
+            actor=request.user, reason=request.POST.get("reason", ""),
+        )
+        messages.success(request, _("Student promoted to the next academic year."))
+    except ValueError as exc:
+        messages.error(request, str(exc))
     return redirect("progression:admin_student_detail", student_id=student.id)
 
 

@@ -12,7 +12,6 @@ from apps.academics.models import (
     Lecture,
     ModeratorStudentAssignment,
     Semester,
-    SemesterCourse,
     TeacherAssignment,
 )
 
@@ -33,15 +32,9 @@ class SemesterAdmin(admin.ModelAdmin):
 
 @admin.register(Course)
 class CourseAdmin(admin.ModelAdmin):
-    list_display = ("title", "is_standalone", "is_active", "created_by")
-    list_filter = ("is_standalone", "is_active")
+    list_display = ("title", "is_active", "created_by")
+    list_filter = ("is_active",)
     search_fields = ("title", "description")
-
-
-@admin.register(SemesterCourse)
-class SemesterCourseAdmin(admin.ModelAdmin):
-    list_display = ("semester", "course", "order")
-    list_filter = ("semester__diploma",)
 
 
 @admin.register(Cohort)
@@ -53,8 +46,8 @@ class CohortAdmin(admin.ModelAdmin):
 
 @admin.register(CourseVersion)
 class CourseVersionAdmin(admin.ModelAdmin):
-    list_display = ("course", "cohort", "semester", "label", "access_duration_days", "is_active")
-    list_filter = ("is_active", "course", "cohort")
+    list_display = ("course", "label", "access_duration_days", "is_active")
+    list_filter = ("is_active", "course")
     search_fields = ("label",)
 
 

@@ -575,12 +575,17 @@ def admin_preview(request, assessment_id):
 def admin_scope_fields(request):
     scope_type = request.GET.get("scope_type", "")
     data = {"scope_type": scope_type}
+    diploma_val = request.GET.get("diploma", "")
     if scope_type == "diploma":
-        data["diploma"] = request.GET.get("diploma", "")
+        data["diploma"] = diploma_val
         data["semester"] = request.GET.get("semester", "")
         data["cohort"] = request.GET.get("cohort", "")
     form = AssessmentForm(data)
-    return render(request, "assessments/partials/_scope_fields.html", {"form": form})
+    return render(request, "assessments/partials/_scope_fields.html", {
+        "form": form,
+        "semester_options": Semester.objects.filter(is_active=True).select_related("diploma"),
+        "cohort_options": Cohort.objects.filter(is_active=True).select_related("diploma"),
+    })
 
 
 @login_required
@@ -607,7 +612,13 @@ def admin_create(request):
     return render(
         request,
         "assessments/admin_assessment_form.html",
-        {"form": form, "title": _("Create assessment"), "next": next_url},
+        {
+            "form": form,
+            "title": _("Create assessment"),
+            "next": next_url,
+            "semester_options": Semester.objects.filter(is_active=True).select_related("diploma"),
+            "cohort_options": Cohort.objects.filter(is_active=True).select_related("diploma"),
+        },
     )
 
 
@@ -634,7 +645,14 @@ def admin_edit(request, assessment_id):
     return render(
         request,
         "assessments/admin_assessment_form.html",
-        {"form": form, "title": _("Edit assessment"), "assessment": assessment, "next": next_url},
+        {
+            "form": form,
+            "title": _("Edit assessment"),
+            "assessment": assessment,
+            "next": next_url,
+            "semester_options": Semester.objects.filter(is_active=True).select_related("diploma"),
+            "cohort_options": Cohort.objects.filter(is_active=True).select_related("diploma"),
+        },
     )
 
 

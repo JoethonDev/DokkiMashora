@@ -96,12 +96,6 @@ def has_active_enrollment(student, assessment: Assessment) -> bool:
     """Check student has active enrollment for the assessment's scope."""
     cv = assessment.course_version
     if cv:
-        if cv.cohort:
-            return DiplomaEnrollment.objects.filter(
-                student__user=student,
-                cohort=cv.cohort,
-                status=ENROLLMENT_STATUS_ACTIVE,
-            ).exists()
         return CourseEnrollment.objects.filter(
             student__user=student,
             course_version=cv,
@@ -139,6 +133,19 @@ def check_assessment_access(student, assessment: Assessment) -> None:
         raise ValueError(_("Assessment is not active."))
     if not has_active_enrollment(student, assessment):
         raise ValueError(_("You do not have an active enrollment for this course."))
+
+    if assessment.cohort_id and assessment.semester_id:
+        from apps.academics.services import get_student_diploma_access
+
+        enrollment = DiplomaEnrollment.objects.filter(
+            student__user=student,
+            cohort_id=assessment.cohort_id,
+            status=ENROLLMENT_STATUS_ACTIVE,
+        ).first()
+        if not enrollment or assessment.semester_id not in {
+            semester.id for semester in get_student_diploma_access(enrollment)["visible_semesters"]
+        }:
+            raise ValueError(_("This semester is not available yet."))
 
     check_delivery_mode(student, assessment)
 
@@ -794,10 +801,12 @@ def hide_all_released(assessment: Assessment) -> int:
 def get_student_assessments(student):
     """Return assessments visible to the student (enrolled + open or active override)."""
     now = timezone.now()
+    enrolled_cohort_ids = DiplomaEnrollment.objects.filter(
+        student__user=student, status=ENROLLMENT_STATUS_ACTIVE,
+    ).values_list("cohort_id", flat=True)
     base_qs = Assessment.objects.filter(is_active=True).filter(
-        Q(course_version__isnull=True)
-        | Q(course_version__cohort__enrollments__student__user=student, course_version__cohort__enrollments__status=ENROLLMENT_STATUS_ACTIVE)
-        | Q(course_version__enrollments__student__user=student, course_version__enrollments__status=ENROLLMENT_STATUS_ACTIVE)
+        Q(course_version__enrollments__student__user=student, course_version__enrollments__status=ENROLLMENT_STATUS_ACTIVE)
+        | Q(cohort_id__in=list(enrolled_cohort_ids), course_version__isnull=True)
     )
     open_assessments = list(
         base_qs.filter(open_at__lte=now)
@@ -834,7 +843,7 @@ def get_student_attempts(student):
 def get_pending_grading(user=None):
     qs = AssessmentAttempt.objects.filter(
         status=ATTEMPT_STATUS_UNDER_REVIEW,
-    ).select_related("assessment", "assessment__cohort", "assessment__course_version__cohort", "student")
+    ).select_related("assessment", "assessment__cohort", "student")
     if user is not None:
         qs = qs.filter(assessment_staff_scope_filter(user)).distinct()
     return qs
@@ -843,7 +852,7 @@ def get_pending_grading(user=None):
 def get_homework_pending_grading(user=None):
     qs = HomeworkSubmission.objects.filter(
         status__in=[HOMEWORK_STATUS_UPLOADED, HOMEWORK_STATUS_UNDER_REVIEW],
-    ).select_related("assessment", "assessment__cohort", "assessment__course_version__cohort", "student", "attempt")
+    ).select_related("assessment", "assessment__cohort", "student", "attempt")
     if user is not None:
         qs = qs.filter(assessment_staff_scope_filter(user)).distinct()
     return qs

@@ -28,7 +28,7 @@ from .constants import (
 
 
 class ProgramApplication(TimeStampedModel):
-    """A program request for a diploma cohort or standalone course."""
+    """A program request for a diploma cohort or course."""
 
     student = models.ForeignKey(
         StudentProfile,

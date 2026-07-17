@@ -334,7 +334,7 @@ class ModeratorCrossScopeTests(TestCase):
         StudentClusterMembership.objects.create(student=self.student_a.student_profile, cluster=cluster_a, assigned_by=self.admin)
         StudentClusterMembership.objects.create(student=self.student_b.student_profile, cluster=cluster_b, assigned_by=self.admin)
         course = Course.objects.create(title="Mod Course", created_by=self.admin)
-        course_version = CourseVersion.objects.create(course=course, cohort=cohort, label="v1", created_by=self.admin)
+        course_version = CourseVersion.objects.create(course=course, label="v1", created_by=self.admin)
         self.assessment = Assessment.objects.create(
             title="Mod Quiz", assessment_type=ASSESSMENT_TYPE_QUIZ,
             course_version=course_version,

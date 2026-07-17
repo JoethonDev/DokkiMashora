@@ -81,7 +81,7 @@ class Command(BaseCommand):
         else:
             self.stdout.write(self.style.WARNING("Cohort already exists."))
 
-        # ponytail: diploma content uses DiplomaLecture only; CourseVersion+Lecture is for standalone courses.
+        # ponytail: diploma content uses DiplomaLecture only; CourseVersion+Lecture is course content.
         # Diploma lectures are created below.
 
         # ponytail: 2 DiplomaLectures per semester, add more if sample content needs variety

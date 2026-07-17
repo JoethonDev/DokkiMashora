@@ -128,6 +128,22 @@
           </details>
 
           <details class="text-sm">
+            <summary class="cursor-pointer font-medium text-brand-600">{% trans "Promote academic year" %}</summary>
+            <form method="post" action="{% url 'progression:admin_promote_academic_year' student.id %}" class="mt-2 space-y-1">
+              {% csrf_token %}
+              <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}">
+              <select name="from_semester_id" class="w-full text-sm border rounded p-1">
+                {% for sem in semesters %}<option value="{{ sem.id }}">{% trans "From" %}: {{ sem.title }}</option>{% endfor %}
+              </select>
+              <select name="to_semester_id" class="w-full text-sm border rounded p-1">
+                {% for sem in semesters %}<option value="{{ sem.id }}">{% trans "To" %}: {{ sem.title }}</option>{% endfor %}
+              </select>
+              <input type="text" name="reason" placeholder="{% trans 'Reason' %}" required class="w-full text-xs border rounded p-1">
+              <button type="submit" class="w-full text-xs bg-indigo-600 text-white rounded py-1">{% trans "Promote academic year" %}</button>
+            </form>
+          </details>
+
+          <details class="text-sm">
             <summary class="cursor-pointer font-medium text-brand-600">{% trans "Demote" %}</summary>
             <form method="post" action="{% url 'progression:admin_demote' student.id %}" class="mt-2 space-y-1">
               {% csrf_token %}

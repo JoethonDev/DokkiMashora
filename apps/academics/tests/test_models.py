@@ -23,7 +23,6 @@ from apps.academics.models import (
     Lecture,
     ModeratorStudentAssignment,
     Semester,
-    SemesterCourse,
     TeacherAssignment,
 )
 from apps.academics.services import (
@@ -80,30 +79,6 @@ class CourseTests(TestCase):
     def test_default_not_standalone(self):
         self.assertFalse(self.course.is_standalone)
 
-
-class SemesterCourseTests(TestCase):
-    def setUp(self):
-        self.admin = User.objects.create_superuser(email="admin@test.com", password="x")
-        self.diploma = Diploma.objects.create(title="D", total_semesters=2, created_by=self.admin)
-        self.semester = Semester.objects.create(diploma=self.diploma, order=1, title="S1")
-        self.course = Course.objects.create(title="C1", created_by=self.admin)
-        self.sc = SemesterCourse.objects.create(semester=self.semester, course=self.course, order=1)
-
-    def test_str(self):
-        self.assertIn(self.semester.title, str(self.sc))
-        self.assertIn(self.course.title, str(self.sc))
-
-    def test_standalone_course_cannot_link_to_semester(self):
-        standalone = Course.objects.create(title="Standalone", created_by=self.admin, is_standalone=True)
-        from django.core.exceptions import ValidationError
-        with self.assertRaises(ValidationError):
-            SemesterCourse.objects.create(semester=self.semester, course=standalone, order=1)
-
-    def test_cannot_mark_attached_course_standalone(self):
-        from django.core.exceptions import ValidationError
-        self.course.is_standalone = True
-        with self.assertRaises(ValidationError):
-            self.course.clean()
 
 
 class CohortTests(TestCase):

@@ -79,6 +79,31 @@ class DiplomaProgressionRule(TimeStampedModel):
             )
 
 
+class CohortAcademicYear(TimeStampedModel):
+    """A configured academic-year boundary for a cohort."""
+
+    cohort = models.ForeignKey(
+        Cohort, on_delete=models.CASCADE, related_name="academic_years",
+        verbose_name=_("cohort"),
+    )
+    year_number = models.PositiveIntegerField(verbose_name=_("year number"))
+    start_date = models.DateField(verbose_name=_("start date"))
+    end_date = models.DateField(verbose_name=_("end date"))
+    semesters_per_year = models.PositiveIntegerField(default=2, verbose_name=_("semesters per year"))
+
+    class Meta:
+        ordering = ("cohort", "year_number")
+        constraints = [
+            models.UniqueConstraint(fields=("cohort", "year_number"), name="uq_cohort_academic_year"),
+        ]
+
+    def clean(self):
+        if self.end_date < self.start_date:
+            raise ValidationError(_("Academic year end date must be after its start date."))
+        if self.semesters_per_year < 1:
+            raise ValidationError(_("Semesters per year must be positive."))
+
+
 class SemesterProgressionRule(TimeStampedModel):
     diploma_rule = models.ForeignKey(
         DiplomaProgressionRule,

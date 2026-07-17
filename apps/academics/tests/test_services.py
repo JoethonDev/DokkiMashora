@@ -424,7 +424,6 @@ class DiplomaAccessPolicyTests(TestCase):
             actor=self.admin,
         )
         self.assertTrue(Cohort.objects.filter(id=new_cohort.id).exists())
-        self.assertEqual(CourseVersion.objects.filter(cohort=new_cohort).count(), 0)
 
     def test_get_visible_diploma_lectures(self):
         lectures = get_visible_diploma_lectures(self.profile, self.de)

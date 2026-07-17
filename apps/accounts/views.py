@@ -231,9 +231,9 @@ def _admin_dashboard_data() -> dict:
     # 9) Single query: active diplomas count
     active_diploma_count = Diploma.objects.filter(is_active=True).count()
 
-    # 10) Single query: standalone courses + unpublished lectures + course counts
+    # 10) Single query: courses + unpublished lectures + course counts
     course_stats = Course.objects.aggregate(
-        standalone_count=Count("id", filter=Q(is_active=True, is_standalone=True)),
+        course_count=Count("id", filter=Q(is_active=True)),
     )
     unpublished_lecture_count = Lecture.objects.filter(is_published=False).count()
 
@@ -326,7 +326,7 @@ def _admin_dashboard_data() -> dict:
         "unmatched_upload_count": unmatched_upload_count,
         "pending_uploads": pending_uploads,
         "active_diploma_count": active_diploma_count,
-        "standalone_course_count": course_stats.get("standalone_count", 0),
+        "course_count": course_stats.get("course_count", 0),
         "unpublished_lecture_count": unpublished_lecture_count,
         "cohorts_starting_soon": cohorts_starting_soon,
         "assessment_ungraded": assessment_ungraded,

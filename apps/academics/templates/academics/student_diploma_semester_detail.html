@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{{ semester.title }} - {{ block.super }}{% endblock %}
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  <a href="{% url 'academics:student_diploma_detail' enrollment.id %}" class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 dark:text-brand-400 hover:underline mb-4">&larr; {% trans "Back to diploma" %}</a>
+  <header class="mb-6">
+    <p class="text-xs font-semibold uppercase tracking-wide text-brand-600 dark:text-brand-400">{% trans "Semester" %}</p>
+    <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ semester.title }}</h1>
+    <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{{ diploma.title }} · {{ cohort.name }}</p>
+  </header>
+  {% if lectures %}
+    <div class="space-y-3">
+      {% for lecture in lectures %}
+        <a href="{% url 'academics:student_diploma_lecture_view' enrollment.id semester.id lecture.id %}" class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 hover:border-brand-500 transition flex items-center gap-3">
+          <span class="text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded tabular-nums">{{ lecture.order }}</span>
+          <span class="font-medium">{{ lecture.title }}</span>
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    {% include "partials/_empty_state.html" with title=_("No lectures available") subtitle=_("Lectures will appear here when they are released") %}
+  {% endif %}
+</div>
+{% endblock %}

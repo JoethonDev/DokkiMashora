@@ -17,7 +17,6 @@ from apps.academics.constants import (
     SCOPE_DIPLOMA_COHORT,
     SCOPE_DIPLOMA_SEMESTER,
     SCOPE_SEMESTER_COHORT,
-    SCOPE_STANDALONE_COURSE,
     SCOPE_WHOLE_DIPLOMA,
     VIOLATION_FORWARD_SKIP,
     VIOLATION_INVALID_POSITION,
@@ -39,7 +38,6 @@ from apps.academics.models import (
     Lecture,
     LectureWatchProgress,
     ModeratorStudentAssignment,
-    SemesterCourse,
     TeacherAssignment,
 )
 from apps.accounts.models import User
@@ -47,8 +45,14 @@ from apps.progression.constants import (
     COMPONENT_TYPE_ATTENDANCE,
     COMPONENT_TYPE_HOMEWORK_ASSESSMENT,
     COMPONENT_TYPE_SEMESTER_EXAM,
+    SEMESTER_PROGRESS_COMPLETED,
+    SEMESTER_PROGRESS_IN_PROGRESS,
+    SEMESTER_PROGRESS_NOT_STARTED,
+    SEMESTER_PROGRESS_PASSED,
+    SEMESTER_PROGRESS_PASSED_CONFIRMED,
+    SEMESTER_PROGRESS_PROMOTED,
 )
-from apps.progression.models import SemesterGradeComponent
+from apps.progression.models import SemesterGradeComponent, StudentSemesterProgress
 
 
 def activate_diploma_enrollment(enrollment: DiplomaEnrollment) -> DiplomaEnrollment:
@@ -90,12 +94,11 @@ def expire_stale_enrollments():
 
 
 def get_student_course_versions(student_profile):
-    """Return course versions the student is enrolled in (active only)."""
+    """Return the versions the student is enrolled in, including archived ones."""
     return CourseVersion.objects.filter(
         enrollments__student=student_profile,
         enrollments__status=ENROLLMENT_STATUS_ACTIVE,
-        is_active=True,
-    ).select_related("course", "cohort", "semester")
+    ).select_related("course")
 
 
 def get_visible_lectures(student_profile, course_version):
@@ -111,6 +114,66 @@ def get_visible_lectures(student_profile, course_version):
     )
 
 
+def get_student_diploma_access(enrollment):
+    """Return only the completed and currently unlocked diploma semesters."""
+    semesters = list(
+        enrollment.cohort.diploma.semesters.filter(is_active=True).order_by("order")
+    )
+    progress = {
+        item.semester_id: item
+        for item in StudentSemesterProgress.objects.filter(diploma_enrollment=enrollment)
+    }
+    completed_statuses = {
+        SEMESTER_PROGRESS_COMPLETED,
+        SEMESTER_PROGRESS_PASSED,
+        SEMESTER_PROGRESS_PASSED_CONFIRMED,
+        SEMESTER_PROGRESS_PROMOTED,
+    }
+    visible = []
+    current = None
+    blockers = []
+    for semester in semesters:
+        item = progress.get(semester.id)
+        if item and item.status in completed_statuses:
+            visible.append(semester)
+            continue
+        if current is None:
+            if visible and _academic_year_promotion_pending(enrollment, visible[-1], semester):
+                blockers.append("academic_year_promotion_pending")
+                break
+            current = semester
+            visible.append(semester)
+            if item and item.status not in {SEMESTER_PROGRESS_NOT_STARTED, SEMESTER_PROGRESS_IN_PROGRESS}:
+                blockers.append(item.status)
+        break
+    return {
+        "completed_semesters": visible[:-1] if current else visible,
+        "current_semester": current,
+        "visible_semesters": visible,
+        "hidden_semesters": semesters[len(visible):],
+        "blockers": blockers,
+    }
+
+
+def _academic_year_promotion_pending(enrollment, previous_semester, next_semester):
+    from apps.progression.models import CohortAcademicYear, PromotionDecision
+    from apps.progression.constants import PROMOTION_DECISION_ACADEMIC_YEAR_PROMOTE
+
+    periods = list(CohortAcademicYear.objects.filter(cohort=enrollment.cohort).order_by("year_number"))
+    if not periods:
+        return False
+    previous_year = ((previous_semester.order - 1) // periods[0].semesters_per_year) + 1
+    next_year = ((next_semester.order - 1) // periods[0].semesters_per_year) + 1
+    if previous_year == next_year:
+        return False
+    return not PromotionDecision.objects.filter(
+        diploma_enrollment=enrollment,
+        from_semester=previous_semester,
+        to_semester=next_semester,
+        decision_type=PROMOTION_DECISION_ACADEMIC_YEAR_PROMOTE,
+    ).exists()
+
+
 def can_access_course(student_profile, course_version) -> bool:
     """Check whether the student has an active, non-expired enrollment."""
     enrollment = _get_course_enrollment(student_profile, course_version)
@@ -120,16 +183,6 @@ def can_access_course(student_profile, course_version) -> bool:
         if enrollment.is_access_expired:
             return False
         return True
-    # Fall back to diploma enrollment when the course version belongs to a cohort
-    if course_version.cohort_id:
-        now = timezone.now()
-        return DiplomaEnrollment.objects.filter(
-            student=student_profile,
-            cohort_id=course_version.cohort_id,
-            status=ENROLLMENT_STATUS_ACTIVE,
-        ).filter(
-            Q(expires_at__isnull=True) | Q(expires_at__gt=now),
-        ).exists()
     return False
 
 
@@ -230,8 +283,7 @@ def assign_teacher(teacher, scope_type, actor, **scope_ids) -> TeacherAssignment
     """Create a teacher assignment for the given scope.
 
     Keyword scope_ids must match the scope_type:
-      standalone_course → course_id
-      whole_diploma     → diploma_id
+       whole_diploma     → diploma_id
       diploma_semester  → semester_id
       diploma_cohort    → cohort_id
       semester_cohort   → semester_id + cohort_id
@@ -266,10 +318,8 @@ def teacher_course_versions(user) -> list[CourseVersion]:
     qs = TeacherAssignment.objects.filter(teacher=user, active=True)
     versions = CourseVersion.objects.none()
     for a in qs:
-        if a.scope_type == SCOPE_STANDALONE_COURSE:
-            versions = versions | CourseVersion.objects.filter(course=a.course)
-        elif a.scope_type == SCOPE_WHOLE_DIPLOMA:
-            versions = versions | CourseVersion.objects.filter(course__semester_courses__semester__diploma=a.diploma)
+        if a.scope_type == SCOPE_WHOLE_DIPLOMA:
+            versions = versions | CourseVersion.objects.filter(cohort__diploma=a.diploma)
         elif a.scope_type == SCOPE_DIPLOMA_SEMESTER:
             versions = versions | CourseVersion.objects.filter(semester=a.semester)
         elif a.scope_type == SCOPE_DIPLOMA_COHORT:
@@ -286,12 +336,7 @@ def teacher_students(user) -> list:
     qs = TeacherAssignment.objects.filter(teacher=user, active=True)
     student_ids = set()
     for a in qs:
-        if a.scope_type == SCOPE_STANDALONE_COURSE:
-            ids = CourseEnrollment.objects.filter(
-                course_version__course=a.course
-            ).values_list("student__user_id", flat=True)
-            student_ids.update(ids)
-        elif a.scope_type == SCOPE_WHOLE_DIPLOMA:
+        if a.scope_type == SCOPE_WHOLE_DIPLOMA:
             ids = DiplomaEnrollment.objects.filter(
                 cohort__diploma=a.diploma
             ).values_list("student__user_id", flat=True)
@@ -315,59 +360,6 @@ def teacher_students(user) -> list:
 
 
 # --- Diploma course/cohort management services -------------------------------
-
-def create_diploma_course(*, semester, title, description="", is_active=True, actor):
-    """Create a diploma course: link to semester, create blank-label versions for all cohorts."""
-    with transaction.atomic():
-        course = Course.objects.create(
-            title=title,
-            description=description,
-            is_standalone=False,
-            is_active=is_active,
-            created_by=actor,
-        )
-        SemesterCourse.objects.create(semester=semester, course=course, order=1)
-        _create_blank_label_versions_for_course(course, semester, actor)
-    return course
-
-
-def move_diploma_course(*, course, target_semester, actor):
-    """Move a diploma course to a different semester within the same diploma."""
-    if course.is_standalone:
-        raise ValueError(_("Cannot move a standalone course."))
-    sc = course.semester_courses.select_related("semester__diploma").first()
-    if not sc:
-        raise ValueError(_("Course is not linked to any semester."))
-    target_diploma = target_semester.diploma
-    if sc.semester.diploma_id != target_diploma.id:
-        raise ValueError(_("Cannot move a course across diplomas."))
-
-    with transaction.atomic():
-        sc.semester = target_semester
-        sc.save(update_fields=["semester", "updated_at"])
-        # Update all cohort versions to point to new semester
-        for cv in course.versions.select_for_update().filter(cohort__isnull=False):
-            cv.semester = target_semester
-            cv.save(update_fields=["semester", "updated_at"])
-    return course
-
-
-def ensure_cohort_course_versions(*, cohort, actor):
-    """Create blank-label CourseVersions for every course in the cohort's diploma semesters."""
-    with transaction.atomic():
-        semesters = cohort.diploma.semesters.filter(is_active=True).order_by("order")
-        for semester in semesters:
-            for sc in semester.semester_courses.select_related("course"):
-                CourseVersion.objects.get_or_create(
-                    course=sc.course,
-                    cohort=cohort,
-                    defaults={
-                        "label": "",
-                        "semester": semester,
-                        "is_active": True,
-                        "created_by": actor,
-                    },
-                )
 
 
 def create_cohort_with_defaults(*, diploma, form_data, actor):
@@ -432,37 +424,12 @@ def create_cohort(*, diploma, form_data, actor):
     return create_cohort_with_defaults(diploma=diploma, form_data=form_data, actor=actor)
 
 
-def _create_blank_label_versions_for_course(course, semester, actor):
-    """Create blank-label versions for a new course in all active cohorts of the semester's diploma."""
-    for cohort in Cohort.objects.filter(diploma=semester.diploma, is_active=True):
-        CourseVersion.objects.get_or_create(
-            course=course,
-            cohort=cohort,
-            defaults={
-                "label": "",
-                "semester": semester,
-                "is_active": True,
-                "created_by": actor,
-            },
-        )
-
-
 # --- Deletion services -------------------------------------------------------
 
 def delete_diploma_course(*, course):
     """Hard-delete a diploma course and all owned academic content."""
-    if course.is_standalone:
-        raise ValueError(_("Use standalone course deletion for this course."))
     with transaction.atomic():
         course.delete()
-
-
-def delete_semester_with_courses(*, semester):
-    """Hard-delete a semester and all courses it owns."""
-    with transaction.atomic():
-        for sc in semester.semester_courses.select_related("course"):
-            sc.course.delete()
-        semester.delete()
 
 
 def delete_cohort_delivery(*, cohort):
@@ -546,12 +513,7 @@ def start_lecture_watch(*, student, lecture):
 
     version = lecture.course_version
     enrollment = _get_course_enrollment(student, version)
-    diploma_enrollment = None
-    if enrollment is None and version.cohort_id:
-        diploma_enrollment = DiplomaEnrollment.objects.filter(
-            student=student, cohort=version.cohort, status=ENROLLMENT_STATUS_ACTIVE,
-        ).first()
-    if enrollment is None and diploma_enrollment is None:
+    if enrollment is None:
         raise ValueError(_("No active enrollment."))
 
     threshold = version.course.video_completion_percent or 80
@@ -568,7 +530,6 @@ def start_lecture_watch(*, student, lecture):
             lwp = LectureWatchProgress(
                 student=student,
                 lecture=lecture,
-                diploma_enrollment=diploma_enrollment,
                 course_enrollment=enrollment,
             )
         # Preserve completed
@@ -740,6 +701,9 @@ def get_visible_diploma_lectures(student_profile, enrollment, semester=None):
         return DiplomaLecture.objects.none()
     if enrollment.expires_at and timezone.now() >= enrollment.expires_at:
         return DiplomaLecture.objects.none()
+    access = get_student_diploma_access(enrollment)
+    if semester is not None and semester.id not in {item.id for item in access["visible_semesters"]}:
+        return DiplomaLecture.objects.none()
     qs = DiplomaLecture.objects.filter(
         cohort=enrollment.cohort,
         is_published=True,
@@ -758,6 +722,10 @@ def can_access_diploma_lecture(student_profile, enrollment, lecture) -> bool:
     if enrollment.expires_at and timezone.now() >= enrollment.expires_at:
         return False
     if lecture.cohort_id != enrollment.cohort_id:
+        return False
+    if lecture.semester_id not in {
+        item.id for item in get_student_diploma_access(enrollment)["visible_semesters"]
+    }:
         return False
     return lecture.is_released
 

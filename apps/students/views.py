@@ -193,7 +193,7 @@ def diploma_course_detail(request: HttpRequest, version_id: int) -> HttpResponse
     """Show course content, teacher, and moderator within the profile.
 
     Diploma course versions are redirected to the new DiplomaLecture flow.
-    Only standalone (non-diploma) course versions are served here.
+    Course-version content is served here.
     """
     profile = _get_profile_or_404(request.user)
     cv = get_object_or_404(CourseVersion.objects.select_related("course", "cohort"), id=version_id, is_active=True)

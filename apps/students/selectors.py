@@ -178,7 +178,7 @@ def _get_diploma_enrollments(student_profile: StudentProfile) -> list[DiplomaEnr
 def _get_course_enrollments(student_profile: StudentProfile) -> list[CourseEnrollment]:
     return list(
         CourseEnrollment.objects.filter(student=student_profile)
-        .select_related("course_version__course", "course_version__cohort", "course_version__semester")
+        .select_related("course_version__course")
         .order_by("-created_at")
     )
 
@@ -209,9 +209,9 @@ def _get_active_courses(student_profile: StudentProfile) -> list[dict]:
         .filter(
             Q(enrollments__expires_at__isnull=True) | Q(enrollments__expires_at__gt=now),
         )
-        .select_related("course", "cohort", "semester")
+        .select_related("course")
         .distinct()
-        .order_by("semester__order", "course__title")
+        .order_by("course__title")
     )
     enrollments_map = {
         e.course_version_id: e
@@ -224,8 +224,6 @@ def _get_active_courses(student_profile: StudentProfile) -> list[dict]:
         {
             "course_version": cv,
             "course": cv.course,
-            "cohort": cv.cohort,
-            "semester": cv.semester,
             "lecture_count": cv.lecture_count,
             "completed_count": cv.completed_count,
             "expires_at": enrollments_map[cv.pk].expires_at if cv.pk in enrollments_map else None,
@@ -243,7 +241,7 @@ def _get_expired_courses(student_profile: StudentProfile) -> list[dict]:
     qs = (
         CourseEnrollment.objects.filter(student=student_profile)
         .filter(Q(status=ENROLLMENT_STATUS_EXPIRED) | Q(status=ENROLLMENT_STATUS_RESTRICTED))
-        .select_related("course_version__course", "course_version__cohort", "course_version__semester")
+        .select_related("course_version__course")
         .order_by("-created_at")
     )
     return [
@@ -251,8 +249,6 @@ def _get_expired_courses(student_profile: StudentProfile) -> list[dict]:
             "enrollment": e,
             "course_version": e.course_version,
             "course": e.course_version.course,
-            "cohort": e.course_version.cohort,
-            "semester": e.course_version.semester,
             "status": e.status,
         }
         for e in qs
@@ -281,7 +277,6 @@ def _get_assessment_attempts(user: User) -> list[AssessmentAttempt]:
     return list(
         get_student_attempts(user).select_related(
             "assessment__course_version__course",
-            "assessment__semester",
             "graded_by",
         )[:50]
     )
@@ -419,7 +414,7 @@ def _apply_eligibility(student_profile: StudentProfile) -> dict:
         return {"allowed": True, "reason_code": None, "reason": None}
     if any(
         check_apply_eligibility(student_profile, course=course)["allowed"]
-        for course in Course.objects.filter(is_active=True, is_standalone=True).order_by("title")
+        for course in Course.objects.filter(is_active=True).order_by("title")
     ):
         return {"allowed": True, "reason_code": None, "reason": None}
     return {"allowed": False, "reason_code": None, "reason": None}

@@ -20,25 +20,29 @@
     </div>
     <div x-show="targetType === 'diploma'">
       <label class="block text-sm font-medium dm-text mb-1" for="cohort_id">{% trans "Cohort" %}</label>
-      <select name="cohort_id" id="cohort_id" class="dm-input w-full rounded-lg px-3 py-2 text-sm shadow-sm">
+      <select name="cohort_id" id="cohort_id" :disabled="targetType !== 'diploma'"
+              hx-get="{% url 'attendance:semester_options_by_cohort' %}"
+              hx-trigger="change"
+              hx-target="#semester_options"
+              hx-swap="innerHTML"
+              class="dm-input w-full rounded-lg px-3 py-2 text-sm shadow-sm">
         <option value="">{% trans "— Select cohort —" %}</option>
         {% for c in cohorts %}<option value="{{ c.id }}">{{ c }} ({{ c.diploma }})</option>{% endfor %}
       </select>
-      <p class="mt-1 text-xs dm-muted">{% trans "Select a cohort or course version (not both)." %}</p>
     </div>
     <div x-show="targetType === 'course'" x-cloak>
       <label class="block text-sm font-medium dm-text mb-1" for="course_version_id">{% trans "Course Version" %}</label>
-      <select name="course_version_id" id="course_version_id" class="dm-input w-full rounded-lg px-3 py-2 text-sm shadow-sm">
+       <select name="course_version_id" id="course_version_id" :disabled="targetType !== 'course'" class="dm-input w-full rounded-lg px-3 py-2 text-sm shadow-sm">
          <option value="">{% trans "— Select course version —" %}</option>
          {% for cv in course_versions %}<option value="{{ cv.id }}">{{ cv.course.title }}{% if cv.label %} — {{ cv.label }}{% endif %}</option>{% endfor %}
        </select>
     </div>
     <div x-show="targetType === 'diploma'" x-cloak>
       <label class="block text-sm font-medium dm-text mb-1" for="semester_id">{% trans "Semester" %}</label>
-      <select name="semester_id" id="semester_id" class="dm-input w-full rounded-lg px-3 py-2 text-sm shadow-sm">
+       <select name="semester_id" id="semester_id" :disabled="targetType !== 'diploma'" class="dm-input w-full rounded-lg px-3 py-2 text-sm shadow-sm">
          <option value="">{% trans "— Optional —" %}</option>
-         {% for semester in semesters %}<option value="{{ semester.id }}">{{ semester.diploma }} — {{ semester.title }}</option>{% endfor %}
-      </select>
+       </select>
+       <div id="semester_options" class="hidden"></div>
     </div>
     <div>
       <label class="block text-sm font-medium dm-text mb-1" for="open_at">{% trans "Open At" %} <span class="text-rose-600">*</span></label>

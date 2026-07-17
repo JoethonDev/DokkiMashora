@@ -6,12 +6,12 @@
 
 {% block content %}
 <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
-  {% include "partials/_page.html" with title=_("Application Email Log") %}
+  {% include "partials/_page.html" with max="6xl" title=_("Application Email Log") %}
 
   <form method="get" class="mb-5 flex flex-wrap items-end gap-3">
-    <div><label class="block mb-1 text-xs font-medium">{% trans "Action" %}</label><select name="action" class="rounded-lg border px-3 py-2 text-sm"><option value="">{% trans "All actions" %}</option>{% for value, label in action_choices %}<option value="{{ value }}" {% if current_action == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
-    <div><label class="block mb-1 text-xs font-medium">{% trans "Status" %}</label><select name="status" class="rounded-lg border px-3 py-2 text-sm"><option value="">{% trans "All statuses" %}</option>{% for value, label in status_choices %}<option value="{{ value }}" {% if current_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
-    <div><label class="block mb-1 text-xs font-medium">{% trans "Student or recipient" %}</label><input name="q" value="{{ search_value }}" class="rounded-lg border px-3 py-2 text-sm"></div>
+    <div><label class="block mb-1 text-xs font-medium text-slate-700 dark:text-slate-200">{% trans "Action" %}</label><select name="action" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"><option value="">{% trans "All actions" %}</option>{% for value, label in action_choices %}<option value="{{ value }}" {% if current_action == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+    <div><label class="block mb-1 text-xs font-medium text-slate-700 dark:text-slate-200">{% trans "Status" %}</label><select name="status" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"><option value="">{% trans "All statuses" %}</option>{% for value, label in status_choices %}<option value="{{ value }}" {% if current_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+    <div><label class="block mb-1 text-xs font-medium text-slate-700 dark:text-slate-200">{% trans "Student or recipient" %}</label><input name="q" value="{{ search_value }}" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"></div>
     <button class="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white" type="submit">{% trans "Filter" %}</button>
   </form>
 
@@ -55,7 +55,7 @@
           </tr>
         {% empty %}
           <tr>
-            <td colspan="7" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
+     <td colspan="7" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
               {% trans "No email logs yet." %}
             </td>
           </tr>

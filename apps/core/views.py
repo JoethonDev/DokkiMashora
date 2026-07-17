@@ -51,7 +51,6 @@ def landing(request: HttpRequest) -> HttpResponse:
         Diploma.objects.filter(is_active=True)
         .annotate(
             historical_group_count=Count("cohorts", distinct=True),
-            course_count=Count("semesters__semester_courses__course", distinct=True),
             published_lecture_count=Count(
                 "cohorts__course_versions__lectures",
                 filter=Q(cohorts__course_versions__lectures__is_published=True),
@@ -62,8 +61,8 @@ def landing(request: HttpRequest) -> HttpResponse:
     )
     for diploma in active_diplomas:
         diploma.open_target = open_diploma_by_id.get(diploma.pk)
-    standalone_courses = list(Course.objects.filter(is_active=True, is_standalone=True).order_by("title")[:6])
-    for course in standalone_courses:
+    courses = list(Course.objects.filter(is_active=True).order_by("title")[:6])
+    for course in courses:
         course.open_version = open_versions.get(course.pk)
     settings_page = LandingPageSettings.load()
     landing_content = settings_page.localized_content(request.LANGUAGE_CODE)
@@ -74,7 +73,7 @@ def landing(request: HttpRequest) -> HttpResponse:
     live_stats = {
         "active_diplomas": Diploma.objects.filter(is_active=True).count(),
         "learning_groups": Cohort.objects.filter(diploma__is_active=True).count(),
-        "standalone_courses": Course.objects.filter(is_active=True, is_standalone=True).count(),
+        "courses": Course.objects.filter(is_active=True).count(),
         "published_lectures": Lecture.objects.filter(is_published=True).count(),
     }
     context = {
@@ -83,7 +82,7 @@ def landing(request: HttpRequest) -> HttpResponse:
         "url_applications_register": reverse("applications:register"),
         "landing_announcement": announcement,
         "active_diplomas": active_diplomas,
-        "standalone_courses": standalone_courses,
+        "courses": courses,
         "url_student_apply": reverse("students:apply"),
         "landing_settings": settings_page,
         "landing_content": landing_content,

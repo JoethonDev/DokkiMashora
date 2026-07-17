@@ -32,19 +32,6 @@ class DiplomaForm(forms.ModelForm):
                 )
         return total
 
-    def save(self, commit=True):
-        instance = super().save(commit=commit)
-        if commit and self.has_changed():
-            changed = set(self.changed_data)
-            track_fields = changed & {"video_tracking_enabled", "video_completion_percent"}
-            if track_fields:
-                update = {f: getattr(instance, f) for f in track_fields}
-                Course.objects.filter(
-                    semester_courses__semester__diploma=instance
-                ).update(**update)
-        return instance
-
-
 class SemesterForm(forms.ModelForm):
     class Meta:
         model = Semester
@@ -66,20 +53,17 @@ class SemesterForm(forms.ModelForm):
 class CourseForm(forms.ModelForm):
     class Meta:
         model = Course
-        fields = ["title", "description", "is_standalone", "is_active", "video_tracking_enabled", "video_completion_percent"]
+        fields = ["title", "description", "is_active", "video_tracking_enabled", "video_completion_percent"]
         widgets = {
             "description": forms.Textarea(attrs={"rows": 4}),
         }
 
-    def clean(self):
-        cleaned = super().clean()
-        standalone = cleaned.get("is_standalone")
-        if standalone and self.instance and self.instance.pk:
-            if self.instance.semester_courses.exists():
-                raise forms.ValidationError(
-                    _("This course is linked to a semester. Unlink it first before marking as standalone.")
-                )
-        return cleaned
+    def save(self, commit=True):
+        course = super().save(commit=False)
+        if commit:
+            course.save()
+            self.save_m2m()
+        return course
 
 
 class CohortForm(forms.ModelForm):
@@ -96,8 +80,6 @@ class CourseVersionForm(forms.ModelForm):
     class Meta:
         model = CourseVersion
         fields = [
-            "cohort",
-            "semester",
             "label",
             "access_duration_days",
             "is_active",

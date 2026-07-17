@@ -22,7 +22,6 @@ from .constants import (
     SCOPE_DIPLOMA_COHORT,
     SCOPE_DIPLOMA_SEMESTER,
     SCOPE_SEMESTER_COHORT,
-    SCOPE_STANDALONE_COURSE,
     SCOPE_WHOLE_DIPLOMA,
     VIOLATION_CHOICES,
     VIOLATION_NONE,
@@ -84,11 +83,10 @@ class Semester(TimeStampedModel):
 
 
 class Course(TimeStampedModel):
-    """A course definition that can be part of a semester or standalone."""
+    """A course definition."""
 
     title = models.CharField(_("title"), max_length=255)
     description = models.TextField(_("description"), blank=True)
-    is_standalone = models.BooleanField(_("standalone"), default=False)
     is_active = models.BooleanField(_("active"), default=True)
     video_tracking_enabled = models.BooleanField(_("video tracking enabled"), default=False)
     video_completion_percent = models.PositiveSmallIntegerField(
@@ -108,61 +106,8 @@ class Course(TimeStampedModel):
         verbose_name_plural = _("courses")
         ordering = ("title",)
 
-    @property
-    def is_attached_to_diploma(self):
-        return self.pk and self.semester_courses.exists()
-
-    def clean(self):
-        if self.is_standalone and self.pk:
-            if self.semester_courses.exists():
-                raise ValidationError(_("Standalone course cannot be linked to a semester."))
-
     def __str__(self):
         return self.title
-
-
-class SemesterCourse(TimeStampedModel):
-    """Links a course to a semester with an ordering."""
-
-    semester = models.ForeignKey(
-        Semester,
-        on_delete=models.CASCADE,
-        related_name="semester_courses",
-        verbose_name=_("semester"),
-    )
-    course = models.ForeignKey(
-        Course,
-        on_delete=models.CASCADE,
-        related_name="semester_courses",
-        verbose_name=_("course"),
-    )
-    order = models.PositiveIntegerField(_("order"), default=1)
-
-    class Meta:
-        verbose_name = _("semester course")
-        verbose_name_plural = _("semester courses")
-        ordering = ("semester", "order")
-        constraints = [
-            models.UniqueConstraint(
-                fields=["semester", "course"],
-                name="uq_semester_course",
-            ),
-            models.UniqueConstraint(
-                fields=["course"],
-                name="uq_diploma_course_owner",
-            ),
-        ]
-
-    def clean(self):
-        if self.course_id and self.course.is_standalone:
-            raise ValidationError(_("Standalone course cannot be linked to a semester."))
-
-    def save(self, *args, **kwargs):
-        self.clean()
-        super().save(*args, **kwargs)
-
-    def __str__(self):
-        return f"{self.semester} - {self.course}"
 
 
 class Cohort(TimeStampedModel):
@@ -196,29 +141,13 @@ class Cohort(TimeStampedModel):
 
 
 class CourseVersion(TimeStampedModel):
-    """A version of a course delivered to a cohort (or standalone)."""
+    """A version of a course."""
 
     course = models.ForeignKey(
         Course,
         on_delete=models.CASCADE,
         related_name="versions",
         verbose_name=_("course"),
-    )
-    cohort = models.ForeignKey(
-        Cohort,
-        on_delete=models.CASCADE,
-        related_name="course_versions",
-        verbose_name=_("cohort"),
-        null=True,
-        blank=True,
-    )
-    semester = models.ForeignKey(
-        Semester,
-        on_delete=models.CASCADE,
-        related_name="course_versions",
-        verbose_name=_("semester"),
-        null=True,
-        blank=True,
     )
     label = models.CharField(_("label"), max_length=120, default="v1", blank=True)
     access_duration_days = models.PositiveIntegerField(
@@ -238,23 +167,17 @@ class CourseVersion(TimeStampedModel):
     class Meta:
         verbose_name = _("course version")
         verbose_name_plural = _("course versions")
-        ordering = ("course", "cohort", "label")
+        ordering = ("course", "label")
         constraints = [
             models.UniqueConstraint(
-                fields=["course", "cohort"],
-                condition=models.Q(cohort__isnull=False),
-                name="uq_diploma_course_cohort_version",
-            ),
-            models.UniqueConstraint(
                 fields=["course", "label"],
-                condition=models.Q(cohort__isnull=True),
-                name="uq_standalone_course_version_label",
+                name="uq_course_version_label",
             ),
         ]
 
     def __str__(self):
-        cohort_label = self.cohort.name if self.cohort else _("standalone")
-        return f"{self.course.title} - {cohort_label} - {self.label}"
+        return f"{self.course.title} - {self.label}"
+
 
 
 class Lecture(TimeStampedModel):
@@ -500,14 +423,7 @@ class TeacherAssignment(TimeStampedModel):
         return f"{self.teacher} - {self.get_scope_type_display()}"
 
     def clean(self):
-        if self.scope_type == SCOPE_STANDALONE_COURSE:
-            if not self.course_id:
-                raise ValidationError(_("Standalone course scope requires a course."))
-            if not Course.objects.filter(id=self.course_id, is_standalone=True).exists():
-                raise ValidationError(_("Course must be standalone."))
-            if self.diploma_id or self.semester_id or self.cohort_id:
-                raise ValidationError(_("Standalone course scope must not have diploma/semester/cohort."))
-        elif self.scope_type == SCOPE_WHOLE_DIPLOMA:
+        if self.scope_type == SCOPE_WHOLE_DIPLOMA:
             if not self.diploma_id:
                 raise ValidationError(_("Whole diploma scope requires a diploma."))
             if self.course_id or self.semester_id or self.cohort_id:
@@ -731,8 +647,8 @@ class ModeratorAssignment(TimeStampedModel):
     def clean(self):
         if self.cluster_id and self.cluster.cohort_id != self.cohort_id:
             raise ValidationError(_("Cluster must belong to the same cohort as the assignment."))
-        if self.course_version_id and self.cohort_id and self.course_version.cohort_id != self.cohort_id:
-            raise ValidationError(_("Course version must belong to the same cohort as the assignment."))
+        if self.course_version_id and self.cohort_id and self.course_version.course_id != self.cohort.diploma_id:
+            raise ValidationError(_("Course version must belong to the same diploma as the assignment."))
 
     def save(self, *args, **kwargs):
         self.clean()

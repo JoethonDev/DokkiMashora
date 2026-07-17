@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% load i18n %}{% load ui_tags %}
 {% block title %}{% trans "Email Templates" %} - {{ block.super }}{% endblock %}
 {% block content %}
-<section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+<section class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
   {% include "partials/_page.html" with title=_("Email Template Management") %}
 
   <div class="mt-6 flex flex-wrap gap-3 mb-6">
@@ -43,7 +43,7 @@
             </td>
           </tr>
         {% empty %}
-          <tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">{% trans "No templates found." %}</td></tr>
+           <tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">{% trans "No templates found." %}</td></tr>
         {% endfor %}
       </tbody>
     </table>

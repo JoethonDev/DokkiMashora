@@ -238,10 +238,18 @@
              hx-get="?tab=history&ha=acceptance{% if hq %}&hq={{ hq }}{% endif %}"
              hx-target="#history-content" hx-select="#history-content" hx-push-url="true"
              class="px-2 py-1 rounded {% if ha == 'acceptance' %}bg-green-100 text-green-700 font-medium{% else %}text-slate-600 hover:text-slate-800{% endif %}">{% trans "Acceptance" %}</a>
-          <a href="?tab=history&ha=rejection{% if hq %}&hq={{ hq }}{% endif %}"
+           <a href="?tab=history&ha=rejection{% if hq %}&hq={{ hq }}{% endif %}"
              hx-get="?tab=history&ha=rejection{% if hq %}&hq={{ hq }}{% endif %}"
              hx-target="#history-content" hx-select="#history-content" hx-push-url="true"
-             class="px-2 py-1 rounded {% if ha == 'rejection' %}bg-red-100 text-red-700 font-medium{% else %}text-slate-600 hover:text-slate-800{% endif %}">{% trans "Rejection" %}</a>
+              class="px-2 py-1 rounded {% if ha == 'rejection' %}bg-red-100 text-red-700 font-medium{% else %}text-slate-600 hover:text-slate-800{% endif %}">{% trans "Rejection" %}</a>
+           <a href="?tab=history&ha=diploma_entrance_exam_schedule{% if hq %}&hq={{ hq }}{% endif %}"
+              hx-get="?tab=history&ha=diploma_entrance_exam_schedule{% if hq %}&hq={{ hq }}{% endif %}"
+              hx-target="#history-content" hx-select="#history-content" hx-push-url="true"
+              class="px-2 py-1 rounded {% if ha == 'diploma_entrance_exam_schedule' %}bg-blue-100 text-blue-700 font-medium{% else %}text-slate-600 hover:text-slate-800{% endif %}">{% trans "Exam schedule" %}</a>
+           <a href="?tab=history&ha=entrance_exam_result{% if hq %}&hq={{ hq }}{% endif %}"
+              hx-get="?tab=history&ha=entrance_exam_result{% if hq %}&hq={{ hq }}{% endif %}"
+              hx-target="#history-content" hx-select="#history-content" hx-push-url="true"
+              class="px-2 py-1 rounded {% if ha == 'entrance_exam_result' %}bg-purple-100 text-purple-700 font-medium{% else %}text-slate-600 hover:text-slate-800{% endif %}">{% trans "Exam result" %}</a>
         </div>
         <form method="post">
           {% csrf_token %}
@@ -267,13 +275,7 @@
                     </td>
                     <td class="px-3 py-2 text-slate-900 dark:text-slate-100">{{ log.program_application.student.full_name }}</td>
                     <td class="px-3 py-2">
-                      {% if log.action == "entrance_exam_invitation" %}
-                        {% include "partials/_badge.html" with label=_("Invitation") tone="info" %}
-                      {% elif log.action == "acceptance" %}
-                        {% include "partials/_badge.html" with label=_("Acceptance") tone="success" %}
-                      {% elif log.action == "rejection" %}
-                        {% include "partials/_badge.html" with label=_("Rejection") tone="danger" %}
-                      {% endif %}
+                      {% include "partials/_badge.html" with label=log.get_action_display tone="info" %}
                     </td>
                     <td class="px-3 py-2">
                       {% if log.status == "sent" %}

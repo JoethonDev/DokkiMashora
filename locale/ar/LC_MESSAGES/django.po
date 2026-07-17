@@ -128,30 +128,26 @@ msgstr "قيد المعالجة"
 msgid "Failed"
 msgstr "راسب"
 
-#: .\apps\academics\constants.py:39 .\apps\assessments\forms.py:27
-msgid "Standalone course"
-msgstr "كورس مستقل"
-
 #: .\apps\academics\constants.py:40
 msgid "Whole diploma"
 msgstr "دبلومة"
 
 #: .\apps\academics\constants.py:41
 msgid "Diploma semester"
-msgstr "الدبلومة لا تحتوي على فصول دراسية."
+msgstr "فصل دراسي ضمن الدبلومة"
 
 #: .\apps\academics\constants.py:42
 msgid "Diploma cohort"
-msgstr "دبلومة (مجموعة)"
+msgstr "دفعة الدبلومة"
 
 #: .\apps\academics\constants.py:43
 msgid "Semester within cohort"
-msgstr "إجراءات الفصل الدراسي"
+msgstr "الفصل الدراسي ضمن الدفعة"
 
 #: .\apps\academics\constants.py:44
 #: .\apps\academics\templates\academics\admin_version_detail.html:10
 msgid "Course version"
-msgstr "إصدارات المواد"
+msgstr "إصدار الدورة"
 
 #: .\apps\academics\constants.py:52 .\apps\assessments\constants.py:45
 #: .\apps\assessments\templates\assessments\admin_detail.html:161
@@ -183,11 +179,11 @@ msgstr "تخطي للأمام"
 
 #: .\apps\academics\constants.py:67
 msgid "Invalid sequence"
-msgstr "آخر تسلسل"
+msgstr "تسلسل غير صالح"
 
 #: .\apps\academics\constants.py:68
 msgid "Invalid position"
-msgstr "اختيار دبلومة غير صالح."
+msgstr "موضع غير صالح"
 
 #: .\apps\academics\forms.py:30
 #, python-format
@@ -198,12 +194,6 @@ msgstr "لا يمكن التخفيض عن %(count)s فصل دراسي موجود
 #, python-format
 msgid "Order cannot exceed diploma total of %(max)s semesters."
 msgstr "الترتيب لا يمكن أن يتجاوز إجمالي الدبلومة البالغ %(max)s فصلًا دراسيًا."
-
-#: .\apps\academics\forms.py:67
-msgid ""
-"This course is linked to a semester. Unlink it first before marking as "
-"standalone."
-msgstr "هذا المقرر مرتبط بفصل دراسي. افصله أولاً قبل تعيينه كمستقل."
 
 #: .\apps\academics\forms.py:94
 msgid "Audio file (upload)"
@@ -284,10 +274,6 @@ msgstr "فصل دراسي"
 msgid "semesters"
 msgstr "فصول دراسية"
 
-#: .\apps\academics\models.py:91 .\apps\academics\models.py:256
-msgid "standalone"
-msgstr "مستقل"
-
 #: .\apps\academics\models.py:107 .\apps\academics\models.py:137
 #: .\apps\academics\models.py:205 .\apps\academics\models.py:436
 #: .\apps\applications\models.py:62
@@ -298,10 +284,6 @@ msgstr "مقرر"
 #: .\apps\academics\templates\academics\admin_diploma_detail.html:47
 msgid "courses"
 msgstr "مقررات"
-
-#: .\apps\academics\models.py:118 .\apps\academics\models.py:158
-msgid "Standalone course cannot be linked to a semester."
-msgstr "لا يمكن ربط المقرر المستقل بفصل دراسي."
 
 #: .\apps\academics\models.py:142
 msgid "semester course"
@@ -350,9 +332,8 @@ msgid ""
 "Number of days the student can access this course after activation. Leave "
 "blank for unlimited."
 msgstr ""
-"عدد الأيام التي يمكن للطالب الوصول فيها إلى هذا المقرر بعد التفعيل. اتركه "
-"فارغًا للوصول غير المحدود.عدد الأيام التي يمكن للطالب الوصول فيها لهذا المقرر "
-"بعد التفعيل. اتركه فارغاً لغير محدود."
+"عدد الأيام التي يمكن للطالب الوصول خلالها إلى هذه الدورة بعد التفعيل. اترك "
+"الحقل فارغًا للسماح بالوصول دون حد زمني."
 
 #: .\apps\academics\models.py:239 .\apps\academics\models.py:267
 #: .\apps\academics\models.py:387 .\apps\academics\models.py:443
@@ -370,11 +351,11 @@ msgstr "رابط يوتيوب"
 
 #: .\apps\academics\models.py:274
 msgid "YouTube video ID"
-msgstr "يوتيوب"
+msgstr "معرّف فيديو YouTube"
 
 #: .\apps\academics\models.py:277
 msgid "YouTube duration (seconds)"
-msgstr "مدة الوصول (أيام)"
+msgstr "مدة فيديو YouTube (بالثواني)"
 
 #: .\apps\academics\models.py:280
 msgid "YouTube metadata fetched at"
@@ -477,7 +458,7 @@ msgstr "الحالة"
 
 #: .\apps\academics\models.py:361 .\apps\academics\models.py:396
 msgid "activated at"
-msgstr "نشط"
+msgstr "تاريخ التفعيل"
 
 #: .\apps\academics\models.py:362 .\apps\academics\models.py:397
 msgid "expires at"
@@ -539,18 +520,6 @@ msgstr "تعيين معلم لمجموعة"
 msgid "teacher assignments"
 msgstr "تعيينات المعلمين للمجموعات"
 
-#: .\apps\academics\models.py:505
-msgid "Standalone course scope requires a course."
-msgstr "لا يمكن ربط المقرر المستقل بفصل دراسي."
-
-#: .\apps\academics\models.py:507
-msgid "Course must be standalone."
-msgstr "يجب أن يكون المقرر مستقلاً."
-
-#: .\apps\academics\models.py:509
-msgid "Standalone course scope must not have diploma/semester/cohort."
-msgstr "لا يمكن ربط المقرر المستقل بفصل دراسي."
-
 #: .\apps\academics\models.py:512
 msgid "Whole diploma scope requires a diploma."
 msgstr "يتطلب نطاق الدبلومة الكاملة دبلومة."
@@ -561,7 +530,7 @@ msgstr "يجب ألا يحتوي نطاق الدبلومة الكاملة على
 
 #: .\apps\academics\models.py:517
 msgid "Diploma semester scope requires a semester."
-msgstr "الدبلومة لا تحتوي على فصول دراسية."
+msgstr "يتطلب نطاق فصل الدبلومة اختيار فصل دراسي."
 
 #: .\apps\academics\models.py:519
 msgid "Diploma semester scope must not have course/cohort."
@@ -573,7 +542,7 @@ msgstr "يتطلب نطاق دفعة الدبلومة دفعة."
 
 #: .\apps\academics\models.py:524
 msgid "Diploma cohort scope must not have course/semester."
-msgstr "الدبلومة لا تحتوي على فصول دراسية."
+msgstr "يجب ألا يتضمن نطاق دفعة الدبلومة دورة أو فصلًا دراسيًا."
 
 #: .\apps\academics\models.py:527
 msgid "Semester-within-cohort scope requires both semester and cohort."
@@ -585,7 +554,7 @@ msgstr "يجب ألا يحتوي نطاق الفصل داخل الدفعة عل�
 
 #: .\apps\academics\models.py:532
 msgid "Course version scope requires a course version."
-msgstr "تم إنشاء إصدار المقرر."
+msgstr "يتطلب نطاق إصدار الدورة اختيار إصدار دورة."
 
 #: .\apps\academics\models.py:534
 msgid "Course version scope must not have course/diploma/semester/cohort."
@@ -593,11 +562,11 @@ msgstr "يجب ألا يحتوي نطاق إصدار المقرر على مقر�
 
 #: .\apps\academics\models.py:539
 msgid "Teacher already has an active assignment for this course version."
-msgstr "لديك بالفعل طلب معلق أو نشط لهذا المقرر."
+msgstr "لدى المعلم بالفعل تكليف نشط بهذا الإصدار من الدورة."
 
 #: .\apps\academics\models.py:541
 msgid "Unknown scope type."
-msgstr "سؤال غير معروف."
+msgstr "نوع نطاق غير معروف."
 
 #: .\apps\academics\models.py:555 .\apps\academics\models.py:685
 msgid "moderator"
@@ -613,15 +582,15 @@ msgstr "تعيينات المشرفين للطلاب"
 
 #: .\apps\academics\models.py:620
 msgid "student cluster"
-msgstr "إجابة الطالب"
+msgstr "مجموعة الطلاب"
 
 #: .\apps\academics\models.py:621
 msgid "student clusters"
-msgstr "ملفك الشخصي"
+msgstr "مجموعات الطلاب"
 
 #: .\apps\academics\models.py:632 .\apps\academics\models.py:702
 msgid "cluster"
-msgstr "الماجستير"
+msgstr "المجموعة"
 
 #: .\apps\academics\models.py:646
 msgid "student cluster membership"
@@ -637,7 +606,7 @@ msgstr "يمكن أن ينتمي الطالب إلى مجموعة واحدة ف�
 
 #: .\apps\academics\models.py:667
 msgid "Student is not enrolled in the cluster's cohort."
-msgstr "الطلاب المسجلون في هذه الدبلومة، مجمّعون حسب الدفعة."
+msgstr "الطالب غير مسجل في دفعة المجموعة."
 
 #: .\apps\academics\models.py:713
 msgid "moderator assignment"
@@ -653,7 +622,7 @@ msgstr "يجب أن ينتمي الفصل لنفس دبلوم القاعدة."
 
 #: .\apps\academics\models.py:735
 msgid "Course version must belong to the same cohort as the assignment."
-msgstr "يجب أن ينتمي الفصل لنفس دبلوم القاعدة."
+msgstr "يجب أن ينتمي إصدار الدورة إلى الدفعة نفسها التي ينتمي إليها التكليف."
 
 #: .\apps\academics\models.py:774
 msgid "validated contiguous seconds"
@@ -661,11 +630,11 @@ msgstr "اختيار مقرر غير صالح."
 
 #: .\apps\academics\models.py:780
 msgid "resume position seconds"
-msgstr "قرارات الترقية"
+msgstr "موضع الاستئناف بالثواني"
 
 #: .\apps\academics\models.py:786
 msgid "active session ID"
-msgstr "لا توجد قاعدة تقدم نشطة."
+msgstr "معرّف الجلسة النشطة"
 
 #: .\apps\academics\models.py:788 .\apps\certificates\models.py:27
 msgid "last sequence"
@@ -673,7 +642,7 @@ msgstr "آخر تسلسل"
 
 #: .\apps\academics\models.py:790
 msgid "last position seconds"
-msgstr "قرارات الترقية"
+msgstr "آخر موضع بالثواني"
 
 #: .\apps\academics\models.py:795
 msgid "last player state"
@@ -696,10 +665,6 @@ msgstr "أكتمل في"
 msgid "lecture watch progress"
 msgstr "تقدم مشاهدة المحاضرة"
 
-#: .\apps\academics\services.py:331
-msgid "Cannot move a standalone course."
-msgstr "لا يمكن نقل مقرر مستقل."
-
 #: .\apps\academics\services.py:334
 msgid "Course is not linked to any semester."
 msgstr "المقرر غير مرتبط بأي فصل دراسي."
@@ -708,13 +673,9 @@ msgstr "المقرر غير مرتبط بأي فصل دراسي."
 msgid "Cannot move a course across diplomas."
 msgstr "لا يمكن نقل مقرر بين دبلومات مختلفة."
 
-#: .\apps\academics\services.py:402
-msgid "Use standalone course deletion for this course."
-msgstr "استخدم حذف المقرر المستقل لهذا المقرر."
-
 #: .\apps\academics\services.py:490
 msgid "Video tracking is disabled for this course."
-msgstr "استخدم حذف المقرر المستقل لهذا المقرر."
+msgstr "تتبع الفيديو غير مفعّل لهذه الدورة."
 
 #: .\apps\academics\services.py:494
 msgid "Lecture has no video duration metadata."
@@ -722,7 +683,7 @@ msgstr "المحاضرة لا تحتوي على بيانات وصفية لمدة
 
 #: .\apps\academics\services.py:502
 msgid "No active enrollment."
-msgstr "لا توجد تسجيلات بعد."
+msgstr "لا يوجد تسجيل نشط."
 
 #: .\apps\academics\templates\academics\admin_course_detail.html:10
 #: .\apps\academics\templates\academics\admin_course_form.html:7
@@ -736,12 +697,12 @@ msgstr "لا توجد تسجيلات بعد."
 #: .\apps\students\templates\students\profile\apply.html:41
 #: .\apps\students\templates\students\profile\payments.html:29
 msgid "Course"
-msgstr "المقرر"
+msgstr "الدورة"
 
 #: .\apps\academics\templates\academics\admin_course_detail.html:16
-#, fuzzy, python-format
+#, python-format
 msgid "%(diploma)s — %(semester)s"
-msgstr "الدبلومة لا تحتوي على فصول دراسية."
+msgstr "%(diploma)s — %(semester)s"
 
 #: .\apps\academics\templates\academics\admin_course_detail.html:23
 #: .\apps\academics\templates\academics\admin_diploma_detail.html:17
@@ -825,7 +786,7 @@ msgstr "محاضرة"
 #: .\templates\partials\_mobile_nav.html:22
 #: .\templates\partials\_navbar.html:27
 msgid "Manage"
-msgstr "إدارة الامتحانات"
+msgstr "إدارة"
 
 #: .\apps\academics\templates\academics\admin_course_detail.html:58
 #: .\apps\academics\templates\academics\admin_course_detail.html:60
@@ -851,7 +812,7 @@ msgstr "حذف"
 #: .\apps\academics\templates\academics\admin_version_detail.html:25
 #: .\apps\academics\templates\academics\admin_version_detail.html:57
 msgid "Confirm Delete"
-msgstr "تم التأكيد"
+msgstr "تأكيد الحذف"
 
 #: .\apps\academics\templates\academics\admin_course_detail.html:60
 #: .\apps\academics\templates\academics\admin_version_detail.html:25
@@ -861,7 +822,7 @@ msgstr "حذف هذا الإصدار وكل محاضراته؟"
 #: .\apps\academics\templates\academics\admin_course_detail.html:82
 #: .\apps\academics\templates\academics\admin_version_detail.html:57
 msgid "Delete this lecture?"
-msgstr "حذف هذا السؤال؟"
+msgstr "حذف هذه المحاضرة؟"
 
 #: .\apps\academics\templates\academics\admin_course_detail.html:89
 #: .\apps\academics\templates\academics\admin_version_detail.html:41
@@ -878,23 +839,13 @@ msgstr "مسودة"
 
 #: .\apps\academics\templates\academics\admin_course_detail.html:102
 msgid "No lectures in this version yet."
-msgstr "لا توجد أسئلة بعد."
+msgstr "لا توجد محاضرات في هذا الإصدار بعد."
 
 #: .\apps\academics\templates\academics\admin_course_form.html:3
 #: .\apps\academics\templates\academics\admin_course_list.html:4
 #: .\apps\academics\templates\academics\admin_course_list.html:11
 msgid "Courses"
-msgstr "المقرر"
-
-#: .\apps\academics\templates\academics\admin_course_form.html:19
-#, python-format
-msgid ""
-"This course is attached to <strong>%(diploma)s</strong> &mdash; "
-"<strong>%(semester)s</strong>. Select a different semester below to change "
-"the attachment."
-msgstr ""
-"هذا المقرر مرتبط بـ <strong>%(diploma)s</strong> &mdash; "
-"<strong>%(semester)s</strong>. اختر فصلًا دراسيًا مختلفًا أدناه لتغيير الارتباط."
+msgstr "الدورات"
 
 #: .\apps\academics\templates\academics\admin_course_form.html:34
 #: .\apps\academics\templates\academics\admin_diploma_detail.html:11
@@ -912,21 +863,6 @@ msgstr ""
 #: .\templates\accounts\dashboards\admin.html:119
 msgid "Diploma"
 msgstr "دبلومة"
-
-#: .\apps\academics\templates\academics\admin_course_form.html:36
-msgid "Select diploma"
-msgstr "الدبلومات النشطة"
-
-#: .\apps\academics\templates\academics\admin_course_form.html:43
-msgid "Link to semester"
-msgstr "إلى الفصل"
-
-#: .\apps\academics\templates\academics\admin_course_form.html:45
-#: .\apps\academics\templates\academics\admin_course_form.html:56
-#: .\apps\academics\templates\academics\admin_course_form.html:63
-#: .\apps\academics\templates\academics\partials\_semester_options.html:2
-msgid "Select semester"
-msgstr "إلى الفصل"
 
 #: .\apps\academics\templates\academics\admin_course_form.html:53
 #: .\apps\academics\templates\academics\admin_diploma_detail.html:37
@@ -971,7 +907,7 @@ msgstr "حفظ"
 #: .\apps\exams\templates\exams\partials\question_form.html:78
 #: .\apps\exams\templates\exams\take_exam.html:12
 msgid "Saving..."
-msgstr "جاري حفظ الدرجات..."
+msgstr "جارٍ الحفظ..."
 
 #: .\apps\academics\templates\academics\admin_course_form.html:71
 #: .\apps\academics\templates\academics\admin_diploma_form.html:25
@@ -1025,11 +961,7 @@ msgstr "المديرون"
 #: .\apps\academics\templates\academics\admin_course_list.html:14
 #: .\apps\academics\views.py:363
 msgid "Create course"
-msgstr "إنشاء محاضرة"
-
-#: .\apps\academics\templates\academics\admin_course_list.html:15
-msgid "Create standalone course"
-msgstr "كورس مستقل"
+msgstr "إنشاء دورة"
 
 #: .\apps\academics\templates\academics\admin_diploma_detail.html:24
 #: .\apps\academics\templates\academics\partials\_diploma_list_table.html:2
@@ -1041,15 +973,15 @@ msgstr "فصول دراسية"
 #: .\apps\academics\templates\academics\admin_diploma_detail.html:106
 #: .\apps\academics\templates\academics\partials\_diploma_list_table.html:2
 msgid "Cohorts"
-msgstr "مجموعة"
+msgstr "الدفعات"
 
 #: .\apps\academics\templates\academics\admin_diploma_detail.html:35
 msgid "Semesters & Content"
-msgstr "إجراءات الفصل الدراسي"
+msgstr "الفصول الدراسية والمحتوى"
 
 #: .\apps\academics\templates\academics\admin_diploma_detail.html:52
 msgid "Delete this semester?"
-msgstr "حذف هذا السؤال؟"
+msgstr "حذف هذا الفصل الدراسي؟"
 
 #: .\apps\academics\templates\academics\admin_diploma_detail.html:67
 #: .\apps\academics\templates\academics\admin_diploma_detail.html:69
@@ -1065,7 +997,7 @@ msgstr "تم التأكيد"
 
 #: .\apps\academics\templates\academics\admin_diploma_detail.html:69
 msgid "Remove this course from the semester?"
-msgstr "مطلوب إعادة الفصل الدراسي."
+msgstr "إزالة هذه الدورة من الفصل الدراسي؟"
 
 #: .\apps\academics\templates\academics\admin_diploma_detail.html:94
 msgid "No courses in this semester."
@@ -1073,7 +1005,7 @@ msgstr "لا توجد مقررات في هذا الفصل الدراسي."
 
 #: .\apps\academics\templates\academics\admin_diploma_detail.html:100
 msgid "No semesters yet"
-msgstr "لا توجد تقييمات بعد"
+msgstr "لا توجد فصول دراسية بعد"
 
 #: .\apps\academics\templates\academics\admin_diploma_detail.html:100
 msgid "Add the first semester"
@@ -1081,7 +1013,7 @@ msgstr "إضافة فصل دراسي"
 
 #: .\apps\academics\templates\academics\admin_diploma_detail.html:107
 msgid "Add cohort"
-msgstr "تعديل المجموعة"
+msgstr "إضافة دفعة"
 
 #: .\apps\academics\templates\academics\admin_diploma_detail.html:114
 #: .\apps\accounts\templates\accounts\admin_import_detail.html:50
@@ -1098,11 +1030,11 @@ msgstr "الاسم"
 #: .\apps\exams\templates\exams\student_list.html:35
 #: .\apps\exams\templates\exams\student_list.html:46
 msgid "Start"
-msgstr "بدء الامتحان"
+msgstr "البداية"
 
 #: .\apps\academics\templates\academics\admin_diploma_detail.html:116
 msgid "End"
-msgstr "مكتسبة"
+msgstr "النهاية"
 
 #: .\apps\academics\templates\academics\admin_diploma_detail.html:118
 #: .\apps\academics\templates\academics\partials\_course_list_table.html:2
@@ -1125,11 +1057,11 @@ msgstr "مكتسبة"
 #: .\templates\accounts\partials\_user_list_table.html:11
 #: .\templates\core\design_showcase.html:177
 msgid "Actions"
-msgstr "الطلبات"
+msgstr "الإجراءات"
 
 #: .\apps\academics\templates\academics\admin_diploma_detail.html:137
 msgid "No cohorts yet"
-msgstr "مجموعات"
+msgstr "لا توجد دفعات بعد"
 
 #: .\apps\academics\templates\academics\admin_diploma_detail.html:137
 msgid "Create the first cohort"
@@ -1147,19 +1079,19 @@ msgstr "دبلومات"
 
 #: .\apps\academics\templates\academics\admin_diploma_list.html:12
 msgid "Manage academic programs"
-msgstr "برنامج أكاديمي نشط"
+msgstr "إدارة البرامج الأكاديمية"
 
 #: .\apps\academics\templates\academics\admin_diploma_list.html:15
 #: .\apps\academics\templates\academics\partials\_diploma_list_table.html:2
 #: .\apps\academics\views.py:161
 msgid "Create diploma"
-msgstr "الدبلومات النشطة"
+msgstr "إنشاء دبلومة"
 
 #: .\apps\academics\templates\academics\admin_enrollment_list.html:10
 #: .\apps\academics\templates\academics\admin_enrollment_list.html:12
-#, fuzzy, python-format
+#, python-format
 msgid "%(title)s — Enrollments"
-msgstr "تسجيلات الدبلوم"
+msgstr "%(title)s — التسجيلات"
 
 #: .\apps\academics\templates\academics\admin_enrollment_list.html:17
 msgid "Students enrolled in each version of this course"
@@ -1171,19 +1103,19 @@ msgstr "الطلاب المسجلون في هذه الدبلومة، مجمّع�
 
 #: .\apps\academics\templates\academics\admin_enrollment_list.html:25
 msgid "Back to Course"
-msgstr "العودة للرئيسية"
+msgstr "العودة إلى الدورة"
 
 #: .\apps\academics\templates\academics\admin_enrollment_list.html:27
 msgid "Back to Diploma"
-msgstr "العودة للرئيسية"
+msgstr "العودة إلى الدبلومة"
 
 #: .\apps\academics\templates\academics\admin_version_detail.html:16
 msgid "Add lecture"
-msgstr "تعديل المحاضرة"
+msgstr "إضافة محاضرة"
 
 #: .\apps\academics\templates\academics\admin_version_detail.html:23
 msgid "Delete version"
-msgstr "حذف هذا السؤال؟"
+msgstr "حذف الإصدار"
 
 #: .\apps\academics\templates\academics\admin_version_detail.html:63
 #: .\apps\academics\templates\academics\student_lecture_view.html:11
@@ -1197,7 +1129,7 @@ msgstr "حذف هذا السؤال؟"
 #: .\apps\entrance_exams\templates\entrance_exams\admin_detail.html:18
 #: .\apps\entrance_exams\templates\entrance_exams\take_exam.html:12
 msgid "Preview"
-msgstr "تمت المعاينة"
+msgstr "معاينة"
 
 #: .\apps\academics\templates\academics\admin_version_detail.html:70
 msgid "No lectures yet"
@@ -1205,7 +1137,7 @@ msgstr "لا توجد محاضرات منشورة بعد"
 
 #: .\apps\academics\templates\academics\admin_version_detail.html:70
 msgid "Add the first lecture"
-msgstr "تعديل المحاضرة"
+msgstr "إضافة أول محاضرة"
 
 #: .\apps\academics\templates\academics\partials\_course_list_table.html:2
 #: .\apps\academics\templates\academics\partials\_diploma_list_table.html:2
@@ -1217,7 +1149,7 @@ msgstr "العنوان"
 
 #: .\apps\academics\templates\academics\partials\_course_list_table.html:2
 msgid "Versions"
-msgstr "الصلاحيات"
+msgstr "الإصدارات"
 
 #: .\apps\academics\templates\academics\partials\_course_list_table.html:2
 #: .\apps\academics\templates\academics\partials\_diploma_list_table.html:2
@@ -1308,7 +1240,7 @@ msgstr "البريد الإلكتروني"
 #: .\apps\academics\templates\academics\partials\_enrollment_table.html:9
 #: .\apps\academics\views.py:817
 msgid "Version"
-msgstr "إضافة إصدار"
+msgstr "الإصدار"
 
 #: .\apps\academics\templates\academics\partials\_enrollment_table.html:11
 #: .\apps\academics\views.py:873
@@ -1319,7 +1251,7 @@ msgstr "إضافة إصدار"
 #: .\apps\entrance_exams\templates\entrance_exams\admin_list.html:1
 #: .\templates\accounts\dashboards\admin.html:118
 msgid "Cohort"
-msgstr "مجموعة"
+msgstr "دفعة"
 
 #: .\apps\academics\templates\academics\partials\_enrollment_table.html:13
 #: .\apps\academics\views.py:97 .\apps\academics\views.py:318
@@ -1386,16 +1318,16 @@ msgstr "ينتهي"
 
 #: .\apps\academics\templates\academics\partials\_enrollment_table.html:43
 msgid "No enrollments found."
-msgstr "لا توجد تسجيلات بعد."
+msgstr "لم يتم العثور على تسجيلات."
 
 #: .\apps\academics\templates\academics\student_course_detail.html:10
 msgid "Back to My Courses"
-msgstr "العودة للرئيسية"
+msgstr "العودة إلى دوراتي"
 
 #: .\apps\academics\templates\academics\student_course_detail.html:27
 #: .\apps\students\templates\students\profile\diploma_course_detail.html:41
 msgid "No lectures available"
-msgstr "لا توجد شهادات متاحة."
+msgstr "لا توجد محاضرات متاحة."
 
 #: .\apps\academics\templates\academics\student_course_detail.html:27
 #: .\apps\students\templates\students\profile\diploma_course_detail.html:41
@@ -1407,23 +1339,19 @@ msgstr "ستظهر المحاضرات هنا عند إصدارها."
 #: .\templates\partials\_mobile_nav.html:19
 #: .\templates\partials\_navbar.html:22
 msgid "My Courses"
-msgstr "المقرر"
+msgstr "دوراتي"
 
 #: .\apps\academics\templates\academics\student_course_list.html:14
 msgid "My Diplomas"
-msgstr "دبلومات"
+msgstr "دبلوماتي"
 
 #: .\apps\academics\templates\academics\student_course_list.html:22
 msgid "Enrolled"
-msgstr "التسجيلات"
-
-#: .\apps\academics\templates\academics\student_course_list.html:30
-msgid "My Standalone Courses"
-msgstr "كورس مستقل"
+msgstr "مسجل"
 
 #: .\apps\academics\templates\academics\student_course_list.html:37
 msgid "View lectures"
-msgstr "عرض المقررات"
+msgstr "عرض المحاضرات"
 
 #: .\apps\academics\templates\academics\student_course_list.html:42
 msgid "You have not been enrolled in any course"
@@ -1432,16 +1360,16 @@ msgstr "لم يتم تسجيلك في أي مقرر."
 #: .\apps\academics\templates\academics\student_lecture_view.html:12
 msgid ""
 "This is how the lecture appears to a student. No submission is recorded."
-msgstr "هذه هي طريقة ظهور الامتحان للطالب. لا يتم تسجيل أي تقديم."
+msgstr "هكذا تظهر المحاضرة للطالب. لا يتم تسجيل أي إرسال."
 
 #: .\apps\academics\templates\academics\student_lecture_view.html:20
 #: .\apps\academics\templates\academics\student_lecture_view.html:89
 msgid "Back to version"
-msgstr "العودة للامتحانات"
+msgstr "العودة إلى الإصدار"
 
 #: .\apps\academics\templates\academics\student_lecture_view.html:25
 msgid "Back to"
-msgstr "العودة للرئيسية"
+msgstr "العودة إلى"
 
 #: .\apps\academics\templates\academics\student_lecture_view.html:42
 msgid "Video"
@@ -1449,15 +1377,15 @@ msgstr "فيديو"
 
 #: .\apps\academics\templates\academics\student_lecture_view.html:53
 msgid "Watching"
-msgstr "تطابق"
+msgstr "قيد المشاهدة"
 
 #: .\apps\academics\templates\academics\student_lecture_view.html:75
 msgid "Audio (HLS)"
-msgstr "رابط الصوت"
+msgstr "صوت (HLS)"
 
 #: .\apps\academics\templates\academics\student_lecture_view.html:82
 msgid "Audio"
-msgstr "التدقيق"
+msgstr "صوت"
 
 #: .\apps\academics\templates\academics\student_lecture_view.html:91
 msgid "Back to lectures"
@@ -1465,19 +1393,19 @@ msgstr "العودة إلى القائمة"
 
 #: .\apps\academics\views.py:152
 msgid "Diploma created."
-msgstr "تم إنشاء القالب."
+msgstr "تم إنشاء الدبلومة."
 
 #: .\apps\academics\views.py:163
 msgid "New diploma"
-msgstr "دبلومة"
+msgstr "دبلومة جديدة"
 
 #: .\apps\academics\views.py:177
 msgid "Diploma updated."
-msgstr "تم تحديث القالب."
+msgstr "تم تحديث الدبلومة."
 
 #: .\apps\academics\views.py:186
 msgid "Edit diploma"
-msgstr "دبلومة"
+msgstr "تعديل الدبلومة"
 
 #: .\apps\academics\views.py:207
 #, python-format
@@ -1546,7 +1474,7 @@ msgstr "تعديل المجموعة"
 
 #: .\apps\academics\views.py:465
 msgid "Cohort deleted."
-msgstr "تم إنشاء المجموعة."
+msgstr "تم حذف الدفعة."
 
 #: .\apps\academics\views.py:489
 msgid "Course version created."
@@ -1654,7 +1582,7 @@ msgstr "غامض"
 #: .\apps\payments\constants.py:31
 #: .\apps\payments\templates\payments\admin_upload_detail.html:19
 msgid "Created"
-msgstr "تاريخ الإنشاء"
+msgstr "تم الإنشاء"
 
 #: .\apps\accounts\constants.py:78
 #: .\apps\accounts\templates\accounts\admin_import_detail.html:21
@@ -1711,7 +1639,7 @@ msgstr "رقم الهاتف"
 
 #: .\apps\accounts\forms.py:75 .\templates\accounts\admin_user_detail.html:40
 msgid "Account active"
-msgstr "الحسابات"
+msgstr "الحساب نشط"
 
 #: .\apps\accounts\forms.py:76 .\apps\applications\forms.py:24
 #: .\apps\students\policies.py:56
@@ -1742,7 +1670,7 @@ msgstr "التعليم"
 #: .\apps\students\policies.py:60
 #: .\templates\accounts\admin_user_detail.html:71
 msgid "Specialization"
-msgstr "الطلبات"
+msgstr "التخصص"
 
 #: .\apps\accounts\forms.py:81 .\apps\applications\forms.py:33
 #: .\apps\students\policies.py:61
@@ -1754,7 +1682,7 @@ msgstr "جهة العمل"
 #: .\apps\students\policies.py:62
 #: .\templates\accounts\admin_user_detail.html:75
 msgid "Current job"
-msgstr "الوقت الحالي:"
+msgstr "الوظيفة الحالية"
 
 #: .\apps\accounts\forms.py:83 .\apps\applications\forms.py:35
 #: .\apps\students\policies.py:63
@@ -1799,11 +1727,11 @@ msgstr "الرقم القومي مطلوب."
 
 #: .\apps\accounts\forms.py:138 .\apps\accounts\forms.py:141
 msgid "This national ID is already in use."
-msgstr "رقم الهاتف هذا مستخدم بالفعل."
+msgstr "الرقم القومي هذا مستخدم بالفعل."
 
 #: .\apps\accounts\forms.py:148
 msgid "This email is already in use."
-msgstr "رقم الهاتف هذا مستخدم بالفعل."
+msgstr "البريد الإلكتروني هذا مستخدم بالفعل."
 
 #: .\apps\accounts\forms.py:201 .\apps\payments\forms.py:12
 msgid "CSV file"
@@ -1811,7 +1739,7 @@ msgstr "ملف CSV"
 
 #: .\apps\accounts\forms.py:202
 msgid "Upload a CSV file with columns: email, full_name"
-msgstr "رفع ملف CSV بالأعمدة: national_id, amount, payment_date"
+msgstr "ارفع ملف CSV بالأعمدة: email, full_name"
 
 #: .\apps\accounts\forms.py:209 .\apps\payments\forms.py:20
 msgid "No file provided"
@@ -1879,7 +1807,7 @@ msgstr "تاريخ الانضمام"
 
 #: .\apps\accounts\models.py:65
 msgid "email activated at"
-msgstr "نشط"
+msgstr "تاريخ تفعيل البريد الإلكتروني"
 
 #: .\apps\accounts\models.py:73
 msgid "user"
@@ -1969,7 +1897,7 @@ msgstr "طريقة المطابقة"
 
 #: .\apps\accounts\models.py:188
 msgid "matched user"
-msgstr "الصفوف المتطابقة"
+msgstr "المستخدم المطابق"
 
 #: .\apps\accounts\models.py:191 .\apps\audit\models.py:23
 msgid "action"
@@ -1977,7 +1905,7 @@ msgstr "الإجراء"
 
 #: .\apps\accounts\models.py:194
 msgid "create or update"
-msgstr "تم تحديث الفصل الدراسي."
+msgstr "إنشاء أو تحديث"
 
 #: .\apps\accounts\models.py:196 .\apps\payments\models.py:134
 msgid "error message"
@@ -2023,7 +1951,7 @@ msgstr "فشل الاستيراد لـ {count} صف(وف)"
 
 #: .\apps\accounts\templates\accounts\_cluster_members.html:13
 msgid "Remove this student?"
-msgstr "إسناد الامتحان"
+msgstr "إزالة هذا الطالب؟"
 
 #: .\apps\accounts\templates\accounts\_cluster_members.html:18
 msgid "No members."
@@ -2087,7 +2015,7 @@ msgstr "خطأ"
 
 #: .\apps\accounts\templates\accounts\admin_import_form.html:2
 msgid "Import Students"
-msgstr "الطلاب"
+msgstr "استيراد الطلاب"
 
 #: .\apps\accounts\templates\accounts\admin_import_form.html:6
 msgid "Import Students from CSV"
@@ -2101,12 +2029,12 @@ msgstr "رفع ومعاينة"
 #: .\apps\accounts\templates\accounts\admin_import_form.html:17
 #: .\apps\payments\templates\payments\admin_upload_form.html:16
 msgid "Download CSV template"
-msgstr "تنزيل الشهادة"
+msgstr "تنزيل نموذج CSV"
 
 #: .\apps\accounts\templates\accounts\admin_import_form.html:20
 #: .\apps\payments\templates\payments\admin_upload_form.html:18
 msgid "Required columns:"
-msgstr "الأعمدة المطلوبة مفقودة: {columns}"
+msgstr "الأعمدة المطلوبة:"
 
 #: .\apps\accounts\templates\accounts\admin_import_form.html:21
 #: .\apps\payments\templates\payments\admin_upload_form.html:18
@@ -2127,18 +2055,18 @@ msgstr "الإعدادات"
 
 #: .\apps\accounts\templates\accounts\admin_settings.html:4
 msgid "Settings &amp; AI Configuration"
-msgstr "الاتصالات"
+msgstr "الإعدادات وإعداد الذكاء الاصطناعي"
 
 #: .\apps\accounts\templates\accounts\admin_settings.html:7
 #: .\templates\accounts\dashboards\admin.html:139
 msgid "AI Configuration"
-msgstr "الاتصالات"
+msgstr "إعداد الذكاء الاصطناعي"
 
 #: .\apps\accounts\templates\accounts\admin_settings.html:13
 #: .\apps\communications\templates\communications\admin_template_list.html:19
 #: .\templates\accounts\dashboards\admin.html:142
 msgid "Enabled"
-msgstr "جهاز لوحي"
+msgstr "مفعّل"
 
 #: .\apps\accounts\templates\accounts\admin_settings.html:15
 #: .\templates\accounts\dashboards\admin.html:142
@@ -2158,7 +2086,7 @@ msgstr "اسم النموذج"
 #: .\apps\accounts\templates\accounts\admin_settings.html:28
 #: .\templates\accounts\dashboards\admin.html:146
 msgid "Timeout"
-msgstr "الطابع الزمني"
+msgstr "مهلة الانتظار"
 
 #: .\apps\accounts\templates\accounts\admin_settings.html:29
 #: .\templates\accounts\dashboards\admin.html:146
@@ -2169,7 +2097,7 @@ msgstr "ثانية"
 msgid ""
 "AI configuration is managed via server environment variables (.env). Changes "
 "require a server restart."
-msgstr ""
+msgstr "تُدار إعدادات الذكاء الاصطناعي من خلال متغيرات البيئة في الخادم (.env). وتتطلب التغييرات إعادة تشغيل الخادم."
 
 #: .\apps\accounts\templates\accounts\admin_staff_assignments.html:2
 #: .\apps\exams\templates\exams\admin_detail.html:1
@@ -2192,13 +2120,13 @@ msgstr "رجوع"
 
 #: .\apps\accounts\templates\accounts\admin_staff_assignments.html:24
 msgid "Teacher Assignments"
-msgstr "تعيينات المعلمين للمجموعات"
+msgstr "تكليفات المعلمين"
 
 #: .\apps\accounts\templates\accounts\admin_staff_assignments.html:29
 #: .\apps\accounts\templates\accounts\admin_staff_assignments.html:95
 #: .\apps\accounts\templates\accounts\admin_staff_assignments.html:146
 msgid "Course Version"
-msgstr "إصدارات المواد"
+msgstr "إصدار الدورة"
 
 #: .\apps\accounts\templates\accounts\admin_staff_assignments.html:31
 #: .\apps\accounts\templates\accounts\admin_staff_assignments.html:97
@@ -2220,12 +2148,12 @@ msgstr "النطاق"
 
 #: .\apps\accounts\templates\accounts\admin_staff_assignments.html:48
 msgid "Course / Version"
-msgstr "إصدارات المواد"
+msgstr "الدورة / الإصدار"
 
 #: .\apps\accounts\templates\accounts\admin_staff_assignments.html:67
 #: .\apps\accounts\templates\accounts\admin_staff_assignments.html:168
 msgid "Revoke this assignment?"
-msgstr "إسناد الامتحان"
+msgstr "إلغاء هذا التكليف؟"
 
 #: .\apps\accounts\templates\accounts\admin_staff_assignments.html:69
 #: .\apps\accounts\templates\accounts\admin_staff_assignments.html:170
@@ -2241,7 +2169,7 @@ msgstr "ملغي"
 
 #: .\apps\accounts\templates\accounts\admin_staff_assignments.html:81
 msgid "No teacher assignments."
-msgstr "تعيينات المعلمين للمجموعات"
+msgstr "لا توجد تكليفات للمعلمين."
 
 #: .\apps\accounts\templates\accounts\admin_staff_assignments.html:90
 msgid "Moderator Assignments"
@@ -2249,16 +2177,16 @@ msgstr "تعيينات المشرفين للطلاب"
 
 #: .\apps\accounts\templates\accounts\admin_staff_assignments.html:106
 msgid "Entire cohort"
-msgstr "تعديل المجموعة"
+msgstr "دفعة كاملة"
 
 #: .\apps\accounts\templates\accounts\admin_staff_assignments.html:107
 msgid "Specific cluster"
-msgstr "عداد الشهادة"
+msgstr "مجموعة محددة"
 
 #: .\apps\accounts\templates\accounts\admin_staff_assignments.html:120
 #: .\apps\accounts\templates\accounts\admin_staff_assignments.html:148
 msgid "Cluster"
-msgstr "الماجستير"
+msgstr "المجموعة"
 
 #: .\apps\accounts\templates\accounts\admin_staff_assignments.html:131
 msgid "Add Moderator Assignment"
@@ -2266,27 +2194,27 @@ msgstr "تعيين مشرف لطالب"
 
 #: .\apps\accounts\templates\accounts\admin_staff_assignments.html:182
 msgid "No moderator assignments."
-msgstr "تعيينات المشرفين للطلاب"
+msgstr "لا توجد تكليفات للمشرفين."
 
 #: .\apps\accounts\templates\accounts\admin_staff_assignments.html:191
 msgid "Student Clusters"
-msgstr "إجابة الطالب"
+msgstr "مجموعات الطلاب"
 
 #: .\apps\accounts\templates\accounts\admin_staff_assignments.html:201
 msgid "Cluster name"
-msgstr "اسم الأب الكاهن"
+msgstr "اسم المجموعة"
 
 #: .\apps\accounts\templates\accounts\admin_staff_assignments.html:202
 msgid "Create Cluster"
-msgstr "إنشاء فصل دراسي"
+msgstr "إنشاء مجموعة"
 
 #: .\apps\accounts\templates\accounts\admin_staff_assignments.html:223
 msgid "Add Selected"
-msgstr "إضافة فصل دراسي"
+msgstr "إضافة المحددين"
 
 #: .\apps\accounts\templates\accounts\admin_staff_assignments.html:228
 msgid "No clusters yet."
-msgstr "لا توجد أسئلة بعد."
+msgstr "لا توجد مجموعات بعد."
 
 #: .\apps\accounts\views.py:108 .\apps\students\views.py:115
 msgid "Profile updated."
@@ -2307,7 +2235,7 @@ msgstr "تم تحديث المستخدم."
 
 #: .\apps\accounts\views.py:551 .\apps\payments\views.py:81
 msgid "Tuition fee"
-msgstr "المستوى التعليمي"
+msgstr "الرسوم الدراسية"
 
 #: .\apps\accounts\views.py:578
 msgid "File parsed. Review matches below."
@@ -2327,9 +2255,9 @@ msgid "Upload is not in preview state."
 msgstr "التحميل ليس في حالة معاينة."
 
 #: .\apps\accounts\views.py:608
-#, fuzzy, python-format
+#, python-format
 msgid "Import completed: %(created)d created, %(updated)d updated."
-msgstr "اكتمل الاستيراد: %(created)d منشأ، %(updated)d محدث، %(failed)d فاشل."
+msgstr "اكتمل الاستيراد: تم إنشاء %(created)d وتحديث %(updated)d."
 
 #: .\apps\accounts\views.py:663
 msgid "Target user is not a Teacher."
@@ -2337,15 +2265,15 @@ msgstr "المستخدم المستهدف ليس معلمًا."
 
 #: .\apps\accounts\views.py:667 .\apps\accounts\views.py:707
 msgid "Course version is required."
-msgstr "تم إنشاء إصدار المقرر."
+msgstr "إصدار الدورة مطلوب."
 
 #: .\apps\accounts\views.py:677
 msgid "Teacher assignment created."
-msgstr "تم إنشاء التقييم."
+msgstr "تم إنشاء تكليف المعلم."
 
 #: .\apps\accounts\views.py:690
 msgid "Teacher assignment revoked."
-msgstr "تعيين معلم لمجموعة"
+msgstr "تم إلغاء تكليف المعلم."
 
 #: .\apps\accounts\views.py:700
 msgid "Target user is not a Moderator."
@@ -2353,31 +2281,31 @@ msgstr "المستخدم المستهدف ليس مشرفًا."
 
 #: .\apps\accounts\views.py:710
 msgid "Cohort is required for cohort-wide assignment."
-msgstr "لا يمكن ربط المقرر المستقل بفصل دراسي."
+msgstr "الدفعة مطلوبة للتكليف على مستوى الدفعة."
 
 #: .\apps\accounts\views.py:713
 msgid "Cluster is required for cluster-specific assignment."
-msgstr "لا يمكن ربط المقرر المستقل بفصل دراسي."
+msgstr "المجموعة مطلوبة للتكليف الخاص بمجموعة."
 
 #: .\apps\accounts\views.py:726
 msgid "Moderator assignment created."
-msgstr "تعيين مشرف لطالب"
+msgstr "تم إنشاء تكليف المشرف."
 
 #: .\apps\accounts\views.py:737
 msgid "Moderator assignment revoked."
-msgstr "تعيين مشرف لطالب"
+msgstr "تم إلغاء تكليف المشرف."
 
 #: .\apps\accounts\views.py:748
 msgid "Cluster name is required."
-msgstr "رقم الهاتف"
+msgstr "اسم المجموعة مطلوب."
 
 #: .\apps\accounts\views.py:751
 msgid "Cluster created."
-msgstr "تم إنشاء المقرر."
+msgstr "تم إنشاء المجموعة."
 
 #: .\apps\accounts\views.py:762
 msgid "Select at least one student."
-msgstr "يرجى اختيار ملف واحد على الأقل للرفع."
+msgstr "اختر طالبًا واحدًا على الأقل."
 
 #: .\apps\accounts\views.py:772
 #, python-format
@@ -2386,7 +2314,7 @@ msgstr "تمت إضافة %(count)d طالب/طلاب إلى المجموعة."
 
 #: .\apps\accounts\views.py:784
 msgid "Student removed from cluster."
-msgstr "تمت إزالة المقرر من الفصل الدراسي."
+msgstr "تمت إزالة الطالب من المجموعة."
 
 #: .\apps\accounts\views.py:807 .\apps\accounts\views.py:812
 msgid "Activation link is invalid or expired."
@@ -2597,7 +2525,7 @@ msgstr "يرجى اختيار نوع البرنامج."
 #: .\apps\applications\forms.py:150
 #: .\apps\applications\templates\applications\register.html:149
 msgid "Please select a diploma."
-msgstr "يرجى اختيار برنامج."
+msgstr "يرجى اختيار دبلومة."
 
 #: .\apps\applications\forms.py:159
 msgid "No active cohort with an entrance exam found for this diploma."
@@ -2606,7 +2534,7 @@ msgstr "لم يتم العثور على دفعة نشطة مع امتحان قب
 #: .\apps\applications\forms.py:164
 #: .\apps\applications\templates\applications\register.html:150
 msgid "Please select a course."
-msgstr "يرجى اختيار برنامج."
+msgstr "يرجى اختيار دورة."
 
 #: .\apps\applications\forms.py:166 .\apps\applications\forms.py:171
 #: .\apps\applications\templates\applications\register.html:151
@@ -2615,7 +2543,7 @@ msgstr "اختيار مقرر غير صالح."
 
 #: .\apps\applications\models.py:28
 msgid "Reverted"
-msgstr "سبب الإلغاء"
+msgstr "تم التراجع عنه"
 
 #: .\apps\applications\models.py:43
 msgid "program type"
@@ -2646,7 +2574,7 @@ msgstr "طلبات البرامج"
 #: .\apps\applications\models.py:155
 #: .\apps\entrance_exams\templates\entrance_exams\admin_email_resend_confirm.html:29
 msgid "Entrance exam invitation"
-msgstr "تفاصيل امتحان القبول"
+msgstr "دعوة لامتحان القبول"
 
 #: .\apps\applications\models.py:156
 #: .\apps\entrance_exams\templates\entrance_exams\admin_cohort_email.html:244
@@ -2664,19 +2592,19 @@ msgstr "مقبول"
 
 #: .\apps\applications\models.py:181
 msgid "program application email log"
-msgstr "الطلبات"
+msgstr "سجل رسائل طلبات الالتحاق"
 
 #: .\apps\applications\models.py:182
 msgid "program application email logs"
-msgstr "الطلبات"
+msgstr "سجلات رسائل طلبات الالتحاق"
 
 #: .\apps\applications\models.py:209
 msgid "program application decision"
-msgstr "الطلبات"
+msgstr "قرار طلب الالتحاق"
 
 #: .\apps\applications\models.py:210
 msgid "program application decisions"
-msgstr "قرارات الترقية"
+msgstr "قرارات طلبات الالتحاق"
 
 #: .\apps\applications\services.py:224
 msgid ""
@@ -2693,7 +2621,7 @@ msgstr "لا يمكنك التراجع عن الطلب بعد وجود محاو�
 
 #: .\apps\applications\services.py:295
 msgid "No decision to revert."
-msgstr "تم تسجيل القرار."
+msgstr "لا يوجد قرار للتراجع عنه."
 
 #: .\apps\applications\templates\applications\admin_program_detail.html:5
 #: .\apps\applications\templates\applications\admin_program_detail.html:10
@@ -2734,15 +2662,15 @@ msgstr "رفض"
 
 #: .\apps\applications\templates\applications\admin_program_detail.html:57
 msgid "Revert"
-msgstr "سبب الإلغاء"
+msgstr "التراجع"
 
 #: .\apps\applications\templates\applications\admin_program_detail.html:62
 msgid "Send email notification"
-msgstr "إعادة إرسال تأكيد البريد الإلكتروني"
+msgstr "إرسال إشعار بالبريد الإلكتروني"
 
 #: .\apps\applications\templates\applications\admin_program_detail.html:66
 msgid "Last reviewer"
-msgstr "في انتظار المراجعة"
+msgstr "آخر مراجع"
 
 #: .\apps\applications\templates\applications\admin_program_detail.html:73
 #: .\apps\progression\templates\progression\admin_student_detail.html:241
@@ -2767,11 +2695,11 @@ msgstr "التاريخ"
 #: .\apps\entrance_exams\templates\entrance_exams\admin_email_log_list.html:16
 #: .\apps\entrance_exams\templates\entrance_exams\admin_email_resend_confirm.html:26
 msgid "Action"
-msgstr "الطلبات"
+msgstr "الإجراء"
 
 #: .\apps\applications\templates\applications\admin_program_detail.html:80
 msgid "By"
-msgstr "بايت"
+msgstr "بواسطة"
 
 #: .\apps\applications\templates\applications\admin_program_detail.html:82
 #: .\apps\certificates\templates\certificates\admin_certificate_list.html:25
@@ -2853,11 +2781,11 @@ msgstr "رسوب"
 #: .\templates\partials\_mobile_nav.html:27
 #: .\templates\partials\_navbar.html:42
 msgid "Program Applications"
-msgstr "طلبات البرامج"
+msgstr "طلبات الالتحاق"
 
 #: .\apps\applications\templates\applications\partials\_program_course_picker_page.html:15
 msgid "Loading more..."
-msgstr "جاري الرفع..."
+msgstr "جارٍ تحميل المزيد..."
 
 #: .\apps\applications\templates\applications\partials\_program_list_table.html:2
 #: .\apps\applications\views.py:160
@@ -2888,7 +2816,7 @@ msgstr "تحميل المزيد"
 
 #: .\apps\applications\templates\applications\partials\_program_options.html:16
 msgid "No more options"
-msgstr "ملاحظات (اختياري)"
+msgstr "لا توجد خيارات أخرى"
 
 #: .\apps\applications\templates\applications\register.html:4
 #: .\apps\applications\templates\applications\register.html:24
@@ -2906,12 +2834,12 @@ msgstr "يرجى ملء النموذج أدناه. سيقوم فريقنا بم�
 
 #: .\apps\applications\templates\applications\register.html:88
 msgid "Select diploma type first"
-msgstr "الدبلومات النشطة"
+msgstr "اختر نوع الدبلومة أولًا"
 
 #: .\apps\applications\templates\applications\register.html:90
 #: .\apps\students\templates\students\profile\apply.html:37
 msgid "Loading diplomas..."
-msgstr "دبلومة"
+msgstr "جارٍ تحميل الدبلومات..."
 
 #: .\apps\applications\templates\applications\register.html:91
 msgid "The system will automatically assign the currently available intake."
@@ -2919,12 +2847,12 @@ msgstr "سيقوم النظام تلقائيًا بتعيين الدفعة ال�
 
 #: .\apps\applications\templates\applications\register.html:104
 msgid "Select course type first"
-msgstr "إلى الفصل"
+msgstr "اختر نوع الدورة أولًا"
 
 #: .\apps\applications\templates\applications\register.html:106
 #: .\apps\students\templates\students\profile\apply.html:49
 msgid "Loading courses..."
-msgstr "جاري حفظ الدرجات..."
+msgstr "جارٍ تحميل الدورات..."
 
 #: .\apps\applications\templates\applications\register.html:112
 msgid "Submit registration"
@@ -2932,19 +2860,19 @@ msgstr "إرسال التسجيل"
 
 #: .\apps\applications\templates\applications\register.html:130
 msgid "Full name is required."
-msgstr "البريد الإلكتروني مطلوب"
+msgstr "الاسم الكامل مطلوب."
 
 #: .\apps\applications\templates\applications\register.html:131
 msgid "Date of birth is required."
-msgstr "البريد الإلكتروني مطلوب"
+msgstr "تاريخ الميلاد مطلوب."
 
 #: .\apps\applications\templates\applications\register.html:132
 msgid "Gender is required."
-msgstr "البريد الإلكتروني مطلوب"
+msgstr "النوع مطلوب."
 
 #: .\apps\applications\templates\applications\register.html:133
 msgid "Address is required."
-msgstr "البريد الإلكتروني مطلوب"
+msgstr "العنوان مطلوب."
 
 #: .\apps\applications\templates\applications\register.html:135
 msgid "Email is required."
@@ -2952,43 +2880,43 @@ msgstr "البريد الإلكتروني مطلوب"
 
 #: .\apps\applications\templates\applications\register.html:136
 msgid "Education level is required."
-msgstr "الرقم القومي مطلوب."
+msgstr "المستوى التعليمي مطلوب."
 
 #: .\apps\applications\templates\applications\register.html:137
 msgid "Specialization is required."
-msgstr "الموضوع والمحتوى مطلوبان."
+msgstr "التخصص مطلوب."
 
 #: .\apps\applications\templates\applications\register.html:138
 msgid "Employer is required."
-msgstr "البريد الإلكتروني مطلوب"
+msgstr "جهة العمل مطلوبة."
 
 #: .\apps\applications\templates\applications\register.html:139
 msgid "Current job is required."
-msgstr "تم إنشاء إصدار المقرر."
+msgstr "الوظيفة الحالية مطلوبة."
 
 #: .\apps\applications\templates\applications\register.html:140
 msgid "Church is required."
-msgstr "الموضوع والمحتوى مطلوبان."
+msgstr "الكنيسة مطلوبة."
 
 #: .\apps\applications\templates\applications\register.html:141
 msgid "Priest name is required."
-msgstr "رقم الهاتف"
+msgstr "اسم الأب الكاهن مطلوب."
 
 #: .\apps\applications\templates\applications\register.html:142
 msgid "Priest contact is required."
-msgstr "رقم الهاتف"
+msgstr "بيانات التواصل مع الأب الكاهن مطلوبة."
 
 #: .\apps\applications\templates\applications\register.html:144
 msgid "Enter a valid email address."
-msgstr "رقم الهاتف"
+msgstr "أدخل عنوان بريد إلكتروني صالحًا."
 
 #: .\apps\applications\templates\applications\register.html:147
 msgid "Enter a valid National ID."
-msgstr "الرقم القومي الموحد"
+msgstr "أدخل رقمًا قوميًّا صالحًا."
 
 #: .\apps\applications\templates\applications\registration_success.html:3
 msgid "Registration received"
-msgstr "قائمة التسجيل"
+msgstr "تم استلام التسجيل"
 
 #: .\apps\applications\templates\applications\registration_success.html:6
 msgid "Thank you"
@@ -3003,12 +2931,11 @@ msgstr "تم استلام طلب تسجيلك"
 msgid ""
 "Check <strong>%(email)s</strong> for the activation link and initial login "
 "details."
-msgstr ""
+msgstr "تحقق من <strong>%(email)s</strong> للحصول على رابط التفعيل وبيانات الدخول الأولية."
 
 #: .\apps\applications\templates\applications\registration_success.html:11
 msgid "Check your email for the activation link and initial login details."
 msgstr "تحقق من بريدك الإلكتروني للحصول على رابط التفعيل وبيانات الدخول الأولية."
-"تحقق من بريدك الإلكتروني للحصول على رابط التفعيل وبيانات الدخول الأولية."
 
 #: .\apps\applications\templates\applications\registration_success.html:14
 #: .\templates\core\errors\400.html:10 .\templates\core\errors\403.html:10
@@ -3034,11 +2961,11 @@ msgstr "سبب الرفض مطلوب."
 
 #: .\apps\applications\views.py:207
 msgid "Application rejected."
-msgstr "الطلبات"
+msgstr "تم رفض الطلب."
 
 #: .\apps\applications\views.py:220
 msgid "Application reverted."
-msgstr "الطلبات"
+msgstr "تم التراجع عن الطلب."
 
 #: .\apps\applications\views.py:223
 msgid "Action not allowed for the current status."
@@ -3101,7 +3028,7 @@ msgstr "مخفي"
 #: .\apps\assessments\templates\assessments\admin_detail.html:165
 #: .\apps\assessments\templates\assessments\admin_grade_detail.html:22
 msgid "Released"
-msgstr "تاريخ الإتاحة"
+msgstr "متاح"
 
 #: .\apps\assessments\constants.py:44
 #: .\apps\assessments\templates\assessments\admin_detail.html:160
@@ -3109,7 +3036,7 @@ msgstr "تاريخ الإتاحة"
 #: .\apps\students\templates\students\profile\exams.html:11
 #: .\templates\accounts\dashboards\admin.html:75
 msgid "Assigned"
-msgstr "تم التعيين بواسطة"
+msgstr "مُسند"
 
 #: .\apps\assessments\constants.py:48 .\apps\assessments\constants.py:70
 #: .\apps\assessments\templates\assessments\admin_detail.html:164
@@ -3127,7 +3054,7 @@ msgstr "تم التعيين بواسطة"
 #: .\apps\exams\templates\exams\student_list.html:26
 #: .\templates\accounts\dashboards\admin.html:78
 msgid "Graded"
-msgstr "تصحيح"
+msgstr "تم التصحيح"
 
 #: .\apps\assessments\constants.py:51
 #: .\apps\assessments\templates\assessments\admin_detail.html:167
@@ -3142,31 +3069,23 @@ msgstr "رفع"
 msgid "Needs revision"
 msgstr "القرار"
 
-#: .\apps\assessments\forms.py:102
-msgid "Standalone course is required for course-scoped assessments."
-msgstr "لا يمكن ربط المقرر المستقل بفصل دراسي."
-
-#: .\apps\assessments\forms.py:109
-msgid "Selected standalone course has no active version."
-msgstr "أنشئ كورسات مستقلة من الأكاديميات."
-
 #: .\apps\assessments\forms.py:116
 msgid "Both semester and cohort are required for diploma-scoped assessments."
 msgstr "يتطلب تقييم نطاق الدبلومة كلاً من الفصل الدراسي والدفعة."
 
 #: .\apps\assessments\forms.py:121
 msgid "Semester and cohort must belong to the same diploma."
-msgstr "الفصل الدراسي لا ينتمي إلى الدبلومة."
+msgstr "يجب أن ينتمي الفصل الدراسي والدفعة إلى الدبلومة نفسها."
 
 #: .\apps\assessments\forms.py:125
 msgid "Please select a scope (course or diploma)."
-msgstr "يرجى اختيار ملف واحد على الأقل للرفع."
+msgstr "يرجى اختيار نطاق: دورة أو دبلومة."
 
 #: .\apps\assessments\forms.py:131 .\apps\assessments\models.py:131
 #: .\apps\entrance_exams\forms.py:51 .\apps\exams\forms.py:40
 #: .\apps\exams\validators.py:8
 msgid "Open time must be before close time."
-msgstr "يجب أن يكون وقت الإغلاق في المستقبل."
+msgstr "يجب أن يسبق وقت الفتح وقت الإغلاق."
 
 #: .\apps\assessments\forms.py:134
 msgid "Duration must be positive."
@@ -3178,7 +3097,7 @@ msgstr "يجب ألا يقل الحد الأقصى للمحاولات عن 1."
 
 #: .\apps\assessments\models.py:29
 msgid "assessment type"
-msgstr "لا توجد تقييمات بعد"
+msgstr "نوع التقييم"
 
 #: .\apps\assessments\models.py:58 .\apps\entrance_exams\models.py:104
 #: .\apps\exams\models.py:84
@@ -3188,16 +3107,16 @@ msgstr "يفتح في"
 #: .\apps\assessments\models.py:59 .\apps\entrance_exams\models.py:105
 #: .\apps\exams\models.py:85
 msgid "close at"
-msgstr "تاريخ النشر"
+msgstr "يغلق في"
 
 #: .\apps\assessments\models.py:61 .\apps\entrance_exams\models.py:82
 #: .\apps\exams\models.py:70
 msgid "duration (minutes)"
-msgstr "ملاحظات التخرج"
+msgstr "المدة (بالدقائق)"
 
 #: .\apps\assessments\models.py:64
 msgid "Leave blank for untimed assessments like homework."
-msgstr "التقييمات والواجبات المتاحة"
+msgstr "اتركه فارغًا للتقييمات غير المحددة بوقت، مثل الواجبات."
 
 #: .\apps\assessments\models.py:67 .\apps\exams\models.py:78
 msgid "total points"
@@ -3213,7 +3132,7 @@ msgstr "الحد الأقصى للمحاولات"
 
 #: .\apps\assessments\models.py:80
 msgid "max uploaded files"
-msgstr "تنزيل الملف المرفوع"
+msgstr "الحد الأقصى للملفات المرفوعة"
 
 #: .\apps\assessments\models.py:82
 msgid ""
@@ -3228,7 +3147,7 @@ msgstr "عرض الإجابات الصحيحة"
 
 #: .\apps\assessments\models.py:86
 msgid "show written feedback"
-msgstr "التعليق المقترح"
+msgstr "إظهار الملاحظات التحريرية"
 
 #: .\apps\assessments\models.py:88
 msgid "grade visibility"
@@ -3236,11 +3155,11 @@ msgstr "رؤية الدرجة"
 
 #: .\apps\assessments\models.py:94
 msgid "allow late submission"
-msgstr "العودة إلى التقديمات"
+msgstr "السماح بالإرسال المتأخر"
 
 #: .\apps\assessments\models.py:96
 msgid "penalty percent"
-msgstr "نسبة النجاح"
+msgstr "نسبة الخصم"
 
 #: .\apps\assessments\models.py:101
 msgid "Percentage deducted for wrong MCQ answers. 0 means no penalty."
@@ -3268,20 +3187,20 @@ msgstr "يجب ألا يقل الحد الأقصى للملفات المرفوع
 #: .\apps\assessments\models.py:147 .\apps\entrance_exams\models.py:139
 #: .\apps\exams\models.py:113
 msgid "question text"
-msgstr "لا توجد أسئلة بعد"
+msgstr "نص السؤال"
 
 #: .\apps\assessments\models.py:149 .\apps\entrance_exams\models.py:141
 #: .\apps\exams\models.py:115
 msgid "type"
-msgstr "نوع الامتحان"
+msgstr "النوع"
 
 #: .\apps\assessments\models.py:155 .\apps\exams\models.py:121
 msgid "points"
-msgstr "إجمالي النقاط"
+msgstr "النقاط"
 
 #: .\apps\assessments\models.py:162
 msgid "required"
-msgstr "مطلوب إعادة"
+msgstr "مطلوب"
 
 #: .\apps\assessments\models.py:163
 msgid "rubric"
@@ -3293,11 +3212,11 @@ msgstr "سلم تقييم اختياري للطاقم."
 
 #: .\apps\assessments\models.py:166
 msgid "assessment question"
-msgstr "تفاصيل التقييم"
+msgstr "سؤال التقييم"
 
 #: .\apps\assessments\models.py:167
 msgid "assessment questions"
-msgstr "تفاصيل التقييم"
+msgstr "أسئلة التقييم"
 
 #: .\apps\assessments\models.py:189 .\apps\assessments\models.py:292
 #: .\apps\entrance_exams\models.py:34 .\apps\entrance_exams\models.py:173
@@ -3305,7 +3224,7 @@ msgstr "تفاصيل التقييم"
 #: .\apps\exams\models.py:129 .\apps\exams\models.py:152
 #: .\apps\exams\models.py:240
 msgid "question"
-msgstr "الأسئلة"
+msgstr "السؤال"
 
 #: .\apps\assessments\models.py:191 .\apps\entrance_exams\models.py:175
 #: .\apps\exams\models.py:154
@@ -3316,19 +3235,19 @@ msgstr "نص"
 #: .\apps\entrance_exams\templates\entrance_exams\admin_grade_attempt.html:49
 #: .\apps\exams\models.py:155
 msgid "correct"
-msgstr "خطأ"
+msgstr "صحيح"
 
 #: .\apps\assessments\models.py:196
 msgid "assessment choice"
-msgstr "لا توجد تقييمات بعد"
+msgstr "خيار التقييم"
 
 #: .\apps\assessments\models.py:197
 msgid "assessment choices"
-msgstr "تقييم(ات)"
+msgstr "خيارات التقييم"
 
 #: .\apps\assessments\models.py:223 .\apps\exams\models.py:186
 msgid "attempt number"
-msgstr "رقم الشهادة"
+msgstr "رقم المحاولة"
 
 #: .\apps\assessments\models.py:232 .\apps\assessments\models.py:373
 #: .\apps\entrance_exams\models.py:242 .\apps\exams\models.py:203
@@ -3339,17 +3258,17 @@ msgstr "تم التقديم في"
 #: .\apps\entrance_exams\models.py:243 .\apps\entrance_exams\models.py:320
 #: .\apps\exams\models.py:204 .\apps\exams\models.py:259
 msgid "graded at"
-msgstr "تاريخ التخرج"
+msgstr "تاريخ التصحيح"
 
 #: .\apps\assessments\models.py:240 .\apps\assessments\models.py:322
 #: .\apps\entrance_exams\models.py:250 .\apps\entrance_exams\models.py:327
 #: .\apps\exams\models.py:211 .\apps\exams\models.py:266
 msgid "graded by"
-msgstr "تم الإنشاء بواسطة"
+msgstr "صححه"
 
 #: .\apps\assessments\models.py:243
 msgid "score (points)"
-msgstr "لقطة للدرجة"
+msgstr "الدرجة (بالنقاط)"
 
 #: .\apps\assessments\models.py:250
 msgid "score (percent)"
@@ -3361,15 +3280,15 @@ msgstr "ناجح"
 
 #: .\apps\assessments\models.py:257
 msgid "visible to student"
-msgstr "نشر للطالب"
+msgstr "مرئي للطالب"
 
 #: .\apps\assessments\models.py:260
 msgid "assessment attempt"
-msgstr "لا توجد محاولات تقييم بعد."
+msgstr "محاولة تقييم"
 
 #: .\apps\assessments\models.py:261
 msgid "assessment attempts"
-msgstr "لا توجد محاولات تقييم بعد."
+msgstr "محاولات التقييم"
 
 #: .\apps\assessments\models.py:286 .\apps\assessments\models.py:357
 #: .\apps\entrance_exams\models.py:28 .\apps\entrance_exams\models.py:273
@@ -3380,7 +3299,7 @@ msgstr "محاولة"
 #: .\apps\entrance_exams\models.py:287 .\apps\exams\models.py:38
 #: .\apps\exams\models.py:248
 msgid "selected choice"
-msgstr "اختيار من متعدد"
+msgstr "الخيار المحدد"
 
 #: .\apps\assessments\models.py:302
 msgid "written text"
@@ -3421,7 +3340,7 @@ msgstr "مفتاح تخزين PDF"
 
 #: .\apps\assessments\models.py:381 .\apps\progression\models.py:316
 msgid "reviewed by"
-msgstr "تمت المراجعة في"
+msgstr "راجعه"
 
 #: .\apps\assessments\models.py:393
 msgid "homework submission"
@@ -3434,7 +3353,7 @@ msgstr "جميع تقديمات الواجبات المنزلية"
 #: .\apps\assessments\services.py:91 .\apps\assessments\services.py:142
 #: .\apps\assessments\services.py:277
 msgid "Assessment is not active."
-msgstr "تم بدء التقييم."
+msgstr "التقييم غير نشط."
 
 #: .\apps\assessments\services.py:93 .\apps\assessments\services.py:279
 #: .\apps\assessments\views.py:158
@@ -3449,7 +3368,7 @@ msgstr "لقد أغلق الامتحان بالفعل."
 #: .\apps\assessments\services.py:97 .\apps\assessments\services.py:283
 #: .\apps\assessments\views.py:155
 msgid "You do not have an active enrollment for this course."
-msgstr "ليس لديك طلب لهذه المجموعة."
+msgstr "ليس لديك تسجيل نشط في هذه الدورة."
 
 #: .\apps\assessments\services.py:104 .\apps\assessments\services.py:125
 #: .\apps\assessments\services.py:292
@@ -3478,7 +3397,7 @@ msgstr "إجابة المقال لا يجب أن تحتوي على اختيار 
 
 #: .\apps\assessments\services.py:274
 msgid "This assessment does not accept homework uploads."
-msgstr "هذا ليس تقييم واجب."
+msgstr "هذا التقييم لا يقبل رفع الواجبات."
 
 #: .\apps\assessments\services.py:285
 msgid "Maximum number of files reached for this assessment."
@@ -4183,7 +4102,7 @@ msgstr[1] "تم تقديم ملفين؛ باقي الملفات فشلت."
 msgstr[2] "تم تقديم %(count)d ملفات؛ باقي الملفات فشلت."
 msgstr[3] "تم تقديم %(count)d ملفاً؛ باقي الملفات فشلت."
 msgstr[4] "تم تقديم %(count)d ملف؛ باقي الملفات فشلت."
-msgstr[5] "لم يتم تقديم أي ملفات؛ باقي الملفات فشلت."
+msgstr[5] "تم تقديم %(count)d ملف؛ باقي الملفات فشلت."
 
 #: .\apps\assessments\views.py:461
 msgid "Assessment created."
@@ -4787,7 +4706,7 @@ msgstr "بسيط"
 
 #: .\apps\communications\constants.py:139
 msgid "Modern"
-msgstr "اسم النموذج"
+msgstr "عصري"
 
 #: .\apps\communications\constants.py:140
 msgid "Elegant"
@@ -4830,11 +4749,11 @@ msgstr "أُرسل في"
 
 #: .\apps\communications\email_message.py:47
 msgid "email message"
-msgstr "عنوان البريد الإلكتروني"
+msgstr "رسالة بريد إلكتروني"
 
 #: .\apps\communications\email_message.py:48
 msgid "email messages"
-msgstr "عنوان البريد الإلكتروني"
+msgstr "رسائل البريد الإلكتروني"
 
 #: .\apps\communications\models.py:27
 msgid "slug"
@@ -4842,7 +4761,7 @@ msgstr "معرف"
 
 #: .\apps\communications\models.py:36
 msgid "enabled for action"
-msgstr "معلومات قابلة للتعديل"
+msgstr "مفعّل للإجراء"
 
 #: .\apps\communications\models.py:37
 msgid "design"
@@ -4850,7 +4769,7 @@ msgstr "التصاميم"
 
 #: .\apps\communications\models.py:39
 msgid "required variables"
-msgstr "اشتراط الامتحان النهائي"
+msgstr "المتغيرات المطلوبة"
 
 #: .\apps\communications\models.py:42
 msgid ""
@@ -4863,7 +4782,7 @@ msgstr "قالب البريد الإلكتروني"
 
 #: .\apps\communications\models.py:47
 msgid "email templates"
-msgstr "عنوان البريد الإلكتروني"
+msgstr "قوالب البريد الإلكتروني"
 
 #: .\apps\communications\models.py:56
 msgid "Unknown template slug."
@@ -4876,7 +4795,7 @@ msgstr "يجب أن يحتوي النص على المتغير المطلوب {{ 
 
 #: .\apps\communications\models.py:63 .\apps\communications\views.py:350
 msgid "A template for this action already exists."
-msgstr "يوجد حساب بهذا الرقم القومي بالفعل."
+msgstr "يوجد قالب لهذا الإجراء بالفعل."
 
 #: .\apps\communications\models.py:83
 msgid "Appended to every outgoing email. Supports {{ variable }} placeholders."
@@ -4884,7 +4803,7 @@ msgstr "يُضاف إلى كل رسالة بريد صادرة. يدعم عناص
 
 #: .\apps\communications\models.py:84
 msgid "updated at"
-msgstr "تم الاجتياز في"
+msgstr "تاريخ التحديث"
 
 #: .\apps\communications\models.py:87 .\apps\communications\models.py:88
 msgid "email footer"
@@ -4953,7 +4872,7 @@ msgstr "تذييل البريد الإلكتروني العام"
 #: .\templates\partials\_mobile_nav.html:36
 #: .\templates\partials\_navbar.html:51
 msgid "Email Templates"
-msgstr "عنوان البريد الإلكتروني"
+msgstr "قوالب البريد الإلكتروني"
 
 #: .\apps\communications\templates\communications\admin_footer_form.html:8
 #: .\apps\communications\templates\communications\admin_template_list.html:9
@@ -4975,11 +4894,11 @@ msgstr "نص التذييل"
 #: .\apps\communications\templates\communications\admin_template_create.html:2
 #: .\apps\communications\templates\communications\admin_template_list.html:8
 msgid "Create Template"
-msgstr "قوالب الشهادات"
+msgstr "إنشاء قالب"
 
 #: .\apps\communications\templates\communications\admin_template_create.html:11
 msgid "Create Email Template"
-msgstr "قالب البريد الإلكتروني"
+msgstr "إنشاء قالب بريد إلكتروني"
 
 #: .\apps\communications\templates\communications\admin_template_create.html:22
 msgid "-- Select action --"
@@ -5018,30 +4937,30 @@ msgstr "مفعّل للإرسال التلقائي"
 
 #: .\apps\communications\templates\communications\admin_template_form.html:2
 msgid "Edit Template"
-msgstr "قالب جديد"
+msgstr "تعديل القالب"
 
 #: .\apps\communications\templates\communications\admin_template_form.html:29
 #: .\apps\communications\templates\communications\partials\_template_variables.html:3
 msgid "Available Variables"
-msgstr "الامتحانات المتاحة"
+msgstr "المتغيرات المتاحة"
 
 #: .\apps\communications\templates\communications\admin_template_form.html:34
 #: .\apps\communications\templates\communications\admin_template_preview.html:34
 #: .\apps\communications\templates\communications\partials\_template_variables.html:8
 msgid "Variable"
-msgstr "متاح"
+msgstr "المتغير"
 
 #: .\apps\communications\templates\communications\admin_template_form.html:35
 #: .\apps\communications\templates\communications\admin_template_form.html:46
 #: .\apps\communications\templates\communications\partials\_template_variables.html:9
 #: .\apps\communications\templates\communications\partials\_template_variables.html:21
 msgid "Required"
-msgstr "مطلوب إعادة"
+msgstr "مطلوب"
 
 #: .\apps\communications\templates\communications\admin_template_form.html:36
 #: .\apps\communications\templates\communications\partials\_template_variables.html:10
 msgid "Example"
-msgstr "الامتحان"
+msgstr "مثال"
 
 #: .\apps\communications\templates\communications\admin_template_form.html:55
 #: .\apps\communications\templates\communications\partials\_template_variables.html:32
@@ -5050,7 +4969,7 @@ msgstr "حدد المتغيرات التي يجب أن تظهر في النص."
 
 #: .\apps\communications\templates\communications\admin_template_list.html:5
 msgid "Email Template Management"
-msgstr "إدارة الامتحانات"
+msgstr "إدارة قوالب البريد الإلكتروني"
 
 #: .\apps\communications\templates\communications\admin_template_list.html:16
 msgid "Slug"
@@ -5278,9 +5197,9 @@ msgstr "تجاهل"
 #: .\apps\communications\templates\communications\email_designs\acceptance.html:2
 #: .\apps\communications\templates\communications\email_designs\payment_notification.html:2
 #: .\apps\communications\templates\communications\email_designs\rejection.html:2
-#, fuzzy, python-format
+#, python-format
 msgid "Dear %(name)s,"
-msgstr "مرحباً، %(name)s"
+msgstr "عزيزي/عزيزتي %(name)s،"
 
 #: .\apps\communications\templates\communications\email_designs\acceptance.html:5
 msgid "Please activate your account to get started"
@@ -5649,12 +5568,12 @@ msgstr "العودة إلى الامتحان"
 #: .\apps\entrance_exams\templates\entrance_exams\admin_cohort_email.html:22
 #: .\apps\exams\templates\exams\admin_exam_emails.html:21
 msgid "Exam Invitation"
-msgstr "التعليمات"
+msgstr "دعوة الامتحان"
 
 #: .\apps\entrance_exams\templates\entrance_exams\admin_cohort_email.html:28
 #: .\apps\exams\templates\exams\admin_exam_emails.html:27
 msgid "Acceptance / Rejection"
-msgstr "سبب الرفض"
+msgstr "القبول / الرفض"
 
 #: .\apps\entrance_exams\templates\entrance_exams\admin_cohort_email.html:34
 #: .\apps\exams\templates\exams\admin_exam_emails.html:33
@@ -5664,7 +5583,7 @@ msgstr "السجل"
 #: .\apps\entrance_exams\templates\entrance_exams\admin_cohort_email.html:41
 #: .\apps\exams\templates\exams\admin_exam_emails.html:40
 msgid "Send Exam Invitations"
-msgstr "إجراءات المراجعة"
+msgstr "إرسال دعوات الامتحان"
 
 #: .\apps\entrance_exams\templates\entrance_exams\admin_cohort_email.html:43
 msgid "Select students to send entrance exam invitation emails."
@@ -5674,7 +5593,7 @@ msgstr "حدد الطلاب لإرسال رسائل دعوة امتحان الق
 #: .\apps\entrance_exams\templates\entrance_exams\admin_cohort_email.html:130
 #: .\apps\entrance_exams\templates\entrance_exams\admin_cohort_email.html:215
 msgid "Search by name or email..."
-msgstr "بريد المستلمين الإلكتروني"
+msgstr "البحث بالاسم أو البريد الإلكتروني..."
 
 #: .\apps\entrance_exams\templates\entrance_exams\admin_cohort_email.html:59
 #: .\apps\entrance_exams\templates\entrance_exams\admin_cohort_email.html:140
@@ -5698,22 +5617,22 @@ msgstr "الكل"
 #: .\apps\entrance_exams\templates\entrance_exams\admin_cohort_email.html:192
 #: .\apps\entrance_exams\templates\entrance_exams\admin_cohort_email.html:289
 msgid "No data"
-msgstr "البيانات الأولية"
+msgstr "لا توجد بيانات"
 
 #: .\apps\entrance_exams\templates\entrance_exams\admin_cohort_email.html:115
 #: .\apps\exams\templates\exams\admin_exam_emails.html:76
 msgid "Send Invitations"
-msgstr "إجراءات المراجعة"
+msgstr "إرسال الدعوات"
 
 #: .\apps\entrance_exams\templates\entrance_exams\admin_cohort_email.html:124
 msgid "Completed / Graded Attempts"
-msgstr "الفصول الدراسية المكتملة"
+msgstr "المحاولات المكتملة / المصححة"
 
 #: .\apps\entrance_exams\templates\entrance_exams\admin_cohort_email.html:126
 msgid ""
 "Select students and send result emails. The email type (pass/fail) is auto-"
 "detected from each student's result."
-msgstr ""
+msgstr "اختر الطلاب وأرسل رسائل النتائج. يحدد النظام تلقائيًا نوع الرسالة (نجاح أو رسوب) بناءً على نتيجة كل طالب."
 
 #: .\apps\entrance_exams\templates\entrance_exams\admin_cohort_email.html:143
 #: .\apps\entrance_exams\templates\entrance_exams\admin_cohort_email.html:228
@@ -5724,28 +5643,27 @@ msgstr "تصفية"
 #: .\apps\entrance_exams\templates\entrance_exams\admin_cohort_email.html:202
 #: .\apps\exams\templates\exams\admin_exam_emails.html:137
 msgid "Send Results"
-msgstr "عرض النتائج"
+msgstr "إرسال النتائج"
 
 #: .\apps\entrance_exams\templates\entrance_exams\admin_cohort_email.html:211
 #: .\apps\exams\templates\exams\admin_exam_emails.html:148
 msgid "Sent Emails"
-msgstr "البريد الإلكتروني"
+msgstr "الرسائل المرسلة"
 
 #: .\apps\entrance_exams\templates\entrance_exams\admin_cohort_email.html:212
 msgid "All email logs for this cohort. Select logs to bulk-resend."
-msgstr "جميع سجلات البريد الإلكتروني لهذه الدفعة. حدد السجلات لإعادة الإرسال جماعيًا."
-"جميع سجلات البريد الإلكتروني لهذه الدفعة. حدد السجلات لإعادة الإرسال جماعيًا."
+msgstr "جميع سجلات البريد الإلكتروني لهذه الدفعة. حدد السجلات لإعادة إرسالها جماعيًا."
 
 #: .\apps\entrance_exams\templates\entrance_exams\admin_cohort_email.html:236
 #: .\apps\entrance_exams\templates\entrance_exams\admin_cohort_email.html:271
 #: .\apps\entrance_exams\templates\entrance_exams\admin_email_log_list.html:30
 msgid "Invitation"
-msgstr "التعليمات"
+msgstr "دعوة"
 
 #: .\apps\entrance_exams\templates\entrance_exams\admin_cohort_email.html:299
 #: .\apps\exams\templates\exams\admin_exam_emails.html:190
 msgid "Resend Selected"
-msgstr "إضافة فصل دراسي"
+msgstr "إعادة إرسال المحدد"
 
 #: .\apps\entrance_exams\templates\entrance_exams\admin_detail.html:6
 msgid "Entrance Exam Detail"
@@ -5799,7 +5717,7 @@ msgstr "لا توجد أسئلة بعد."
 #: .\apps\entrance_exams\templates\entrance_exams\admin_detail.html:304
 #: .\apps\exams\templates\exams\admin_detail.html:1
 msgid "Finalize Pending"
-msgstr "الامتحان النهائي معلق"
+msgstr "إنهاء المحاولات المعلقة"
 
 #: .\apps\entrance_exams\templates\entrance_exams\admin_detail.html:370
 msgid "Print"
@@ -5807,7 +5725,7 @@ msgstr "طباعة"
 
 #: .\apps\entrance_exams\templates\entrance_exams\admin_detail.html:375
 msgid "Student access link:"
-msgstr "تغيير وصول الطالب"
+msgstr "رابط وصول الطالب:"
 
 #: .\apps\entrance_exams\templates\entrance_exams\admin_detail.html:381
 msgid "Copy"
@@ -5835,13 +5753,13 @@ msgstr "لا يمكن التراجع عن هذا الإجراء."
 
 #: .\apps\entrance_exams\templates\entrance_exams\admin_detail.html:429
 msgid "Finalize Pending Attempts"
-msgstr "الامتحان النهائي معلق"
+msgstr "إنهاء المحاولات المعلقة"
 
 #: .\apps\entrance_exams\templates\entrance_exams\admin_detail.html:429
 msgid ""
 "Rebuild answers from the latest saved snapshots and grade all in-progress "
 "attempts. This cannot be undone."
-msgstr ""
+msgstr "أعد بناء الإجابات من أحدث اللقطات المحفوظة وصحح جميع المحاولات قيد التنفيذ. لا يمكن التراجع عن هذا الإجراء."
 
 #: .\apps\entrance_exams\templates\entrance_exams\admin_detail.html:429
 #: .\apps\exams\templates\exams\admin_detail.html:1
@@ -5851,7 +5769,7 @@ msgstr "الامتحان النهائي"
 #: .\apps\entrance_exams\templates\entrance_exams\admin_email_log_list.html:5
 #: .\apps\entrance_exams\templates\entrance_exams\admin_email_log_list.html:9
 msgid "Application Email Log"
-msgstr "الطلبات"
+msgstr "سجل رسائل الطلبات"
 
 #: .\apps\entrance_exams\templates\entrance_exams\admin_email_log_list.html:18
 #: .\apps\exams\templates\exams\admin_exam_emails.html:161
@@ -5860,15 +5778,15 @@ msgstr "المستلمون"
 
 #: .\apps\entrance_exams\templates\entrance_exams\admin_email_log_list.html:19
 msgid "Sent by"
-msgstr "تم الإرسال"
+msgstr "أرسلها"
 
 #: .\apps\entrance_exams\templates\entrance_exams\admin_email_log_list.html:21
 msgid "Resend"
-msgstr "إعادة تعيين"
+msgstr "إعادة إرسال"
 
 #: .\apps\entrance_exams\templates\entrance_exams\admin_email_log_list.html:56
 msgid "No email logs yet."
-msgstr "لا توجد امتحانات بعد."
+msgstr "لا توجد سجلات بريد إلكتروني بعد."
 
 #: .\apps\entrance_exams\templates\entrance_exams\admin_email_resend_confirm.html:5
 msgid "Resend email confirmation"
@@ -5881,7 +5799,7 @@ msgstr "تأكيد وإرسال"
 #: .\apps\entrance_exams\templates\entrance_exams\admin_email_resend_confirm.html:36
 #: .\apps\exams\templates\exams\admin_exam_emails.html:162
 msgid "Template"
-msgstr "قالب جديد"
+msgstr "القالب"
 
 #: .\apps\entrance_exams\templates\entrance_exams\admin_email_resend_confirm.html:49
 msgid "Confirm resend"
@@ -5966,18 +5884,18 @@ msgid ""
 "Your answers are saved automatically every few seconds. A copy is also "
 "stored locally on your device. If your browser closes or you lose "
 "connection, your latest answers will be recovered."
-msgstr ""
+msgstr "تُحفظ إجاباتك تلقائيًا كل بضع ثوانٍ، وتُخزن نسخة منها على جهازك. إذا أُغلق المتصفح أو انقطع الاتصال، فستُستعاد أحدث إجاباتك."
 
 #: .\apps\entrance_exams\templates\entrance_exams\exam_instructions.html:31
 msgid "Auto-submission"
-msgstr "العودة إلى التقديمات"
+msgstr "الإرسال التلقائي"
 
 #: .\apps\entrance_exams\templates\entrance_exams\exam_instructions.html:33
 msgid ""
 "When the timer reaches zero, your exam will be submitted automatically with "
 "your saved answers. If auto-submission fails (e.g. no internet), an "
 "administrator will finalize your attempt from the latest saved snapshot."
-msgstr ""
+msgstr "عند وصول المؤقت إلى الصفر، سيُرسل امتحانك تلقائيًا مع إجاباتك المحفوظة. وإذا فشل الإرسال التلقائي، مثلًا بسبب انقطاع الإنترنت، فسيُنهي المسؤول محاولتك من أحدث لقطة محفوظة."
 
 #: .\apps\entrance_exams\templates\entrance_exams\exam_instructions.html:38
 #: .\apps\exams\templates\exams\exam_instructions.html:38
@@ -6089,7 +6007,7 @@ msgstr "قرار غير صالح. اختر نجاح أو رسوب."
 #: .\apps\entrance_exams\views.py:656
 #, python-format
 msgid "No attempts with result '%(result)s' to email."
-msgstr "لا توجد محاولات بنتيجة '%(result)s)' لإرسال البريد الإلكتروني."
+msgstr "لا توجد محاولات بنتيجة '%(result)s' لإرسالها بالبريد الإلكتروني."
 
 #: .\apps\entrance_exams\views.py:704
 #, python-format
@@ -6097,23 +6015,23 @@ msgid "Sent %(sent)d emails (%(failed)d failed) for result '%(result)s'."
 msgstr "تم إرسال %(sent)d بريد إلكتروني (فشل %(failed)d) لنتيجة '%(result)s'."
 
 #: .\apps\entrance_exams\views.py:801 .\apps\exams\views.py:429
-#, fuzzy, python-format
+#, python-format
 msgid "Sent %(sent)d invitations (%(failed)d failed)."
-msgstr "تم إرسال %(sent)d بريد إلكتروني (فشل %(failed)d) لنتيجة '%(result)s'."
+msgstr "تم إرسال %(sent)d دعوة (فشل إرسال %(failed)d)."
 
 #: .\apps\entrance_exams\views.py:870 .\apps\exams\views.py:507
-#, fuzzy, python-format
+#, python-format
 msgid "Sent %(sent)d result emails (%(failed)d failed)."
-msgstr "تم إرسال %(sent)d بريد إلكتروني (فشل %(failed)d) لنتيجة '%(result)s'."
+msgstr "تم إرسال %(sent)d رسالة نتائج (فشل إرسال %(failed)d)."
 
 #: .\apps\entrance_exams\views.py:881 .\apps\exams\views.py:518
 msgid "No emails selected."
-msgstr "لا توجد امتحانات بعد."
+msgstr "لم يتم اختيار أي رسائل."
 
 #: .\apps\entrance_exams\views.py:931 .\apps\exams\views.py:554
-#, fuzzy, python-format
+#, python-format
 msgid "Resent %(sent)d emails (%(failed)d failed)."
-msgstr "تم إرسال %(sent)d بريد إلكتروني (فشل %(failed)d) لنتيجة '%(result)s'."
+msgstr "أُعيد إرسال %(sent)d رسالة (فشل إرسال %(failed)d)."
 
 #: .\apps\entrance_exams\views.py:955 .\apps\exams\views.py:392
 msgid "No students selected."
@@ -6121,15 +6039,15 @@ msgstr "لم يتم العثور على طلاب."
 
 #: .\apps\entrance_exams\views.py:961 .\apps\exams\views.py:437
 msgid "Invalid tab."
-msgstr "اختيار دبلومة غير صالح."
+msgstr "تبويب غير صالح."
 
 #: .\apps\entrance_exams\views.py:1038 .\apps\entrance_exams\views.py:1056
 msgid "Invalid email action."
-msgstr "اختيار دبلومة غير صالح."
+msgstr "إجراء بريد إلكتروني غير صالح."
 
 #: .\apps\entrance_exams\views.py:1061
 msgid "Student has no email address."
-msgstr "الطالب لم يكمل/يتخرج بعد."
+msgstr "لا يوجد للطالب عنوان بريد إلكتروني."
 
 #: .\apps\entrance_exams\views.py:1099
 msgid "Failed to resend email."
@@ -6137,7 +6055,7 @@ msgstr "فشل إعادة إرسال البريد الإلكتروني."
 
 #: .\apps\entrance_exams\views.py:1113
 msgid "Email resent."
-msgstr "معاينات البريد الإلكتروني"
+msgstr "تمت إعادة إرسال البريد الإلكتروني."
 
 #: .\apps\exams\apps.py:8
 msgid "Exams"
@@ -6166,7 +6084,7 @@ msgstr "نص المقال"
 
 #: .\apps\exams\models.py:44
 msgid "exam snapshot"
-msgstr "لقطة للدرجة"
+msgstr "لقطة الامتحان"
 
 #: .\apps\exams\models.py:45
 msgid "exam snapshots"
@@ -6264,13 +6182,13 @@ msgstr "إنهاء المهام المعلقة"
 msgid ""
 "Rebuild answers from the latest saved snapshots and complete all in-progress "
 "assignments. This cannot be undone."
-msgstr ""
+msgstr "أعد بناء الإجابات من أحدث اللقطات المحفوظة وأنهِ جميع التكليفات قيد التنفيذ. لا يمكن التراجع عن هذا الإجراء."
 
 #: .\apps\exams\templates\exams\admin_exam_emails.html:42
 msgid ""
 "Select students with assigned (not started) status to send exam invitation "
 "emails."
-msgstr ""
+msgstr "اختر الطلاب الذين حالتهم مسندة ولم يبدأوا الامتحان لإرسال رسائل دعوة الامتحان."
 
 #: .\apps\exams\templates\exams\admin_exam_emails.html:80
 msgid "No assigned students to invite."
@@ -6346,7 +6264,7 @@ msgstr "الحفظ التلقائي:"
 msgid ""
 "Your answers are saved locally and sent to the server every few seconds. If "
 "your browser crashes, you can return and continue from your last save."
-msgstr ""
+msgstr "تُحفظ إجاباتك محليًا وتُرسل إلى الخادم كل بضع ثوانٍ. إذا تعطل المتصفح، يمكنك العودة والمتابعة من آخر حفظ."
 
 #: .\apps\exams\templates\exams\exam_instructions.html:32
 msgid "Auto-submission:"
@@ -6356,7 +6274,7 @@ msgstr "العودة إلى التقديمات"
 msgid ""
 "When 30 seconds remain, the exam auto-submits your latest answers. An admin "
 "can recover from server snapshots if submission fails."
-msgstr ""
+msgstr "عند بقاء 30 ثانية، يرسل الامتحان أحدث إجاباتك تلقائيًا. ويمكن للمسؤول استعادتها من لقطات الخادم إذا فشل الإرسال."
 
 #: .\apps\exams\templates\exams\exam_results.html:19
 msgid "Pending grade"
@@ -6589,9 +6507,9 @@ msgid "Empty national ID"
 msgstr "رقم قومي فارغ"
 
 #: .\apps\payments\services.py:392 .\apps\payments\services.py:408
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid "Invalid enrollment type: {t}"
-msgstr "نوع برنامج غير صالح."
+msgstr "نوع تسجيل غير صالح: {t}"
 
 #: .\apps\payments\templates\payments\admin_record_detail.html:2
 #: .\apps\payments\templates\payments\admin_record_detail.html:4
@@ -7039,11 +6957,11 @@ msgstr "تقدم الطالب مقفل."
 
 #: .\apps\progression\services.py:292
 msgid "All semesters completed"
-msgstr "لا توجد تقييمات بعد"
+msgstr "اكتملت جميع الفصول الدراسية"
 
 #: .\apps\progression\services.py:303
 msgid "Would promote"
-msgstr "ترقية يدوية"
+msgstr "سيتم تصعيده"
 
 #: .\apps\progression\services.py:321
 msgid "Auto-promoted based on passing scores."
@@ -7131,7 +7049,7 @@ msgstr "الطالب غير مؤهل للامتحان النهائي."
 #: .\apps\progression\templates\progression\admin_dashboard.html:1
 #: .\apps\progression\views.py:85 .\apps\progression\views.py:130
 msgid "Progression Dashboard"
-msgstr "لوحة التقدم"
+msgstr "لوحة التقدم الدراسي"
 
 #: .\apps\progression\templates\progression\admin_dashboard.html:1
 msgid "No students found."
@@ -7144,7 +7062,7 @@ msgstr "التقدم"
 #: .\apps\progression\templates\progression\admin_student_detail.html:12
 #: .\apps\students\templates\students\profile\details.html:10
 msgid "Account status"
-msgstr "الحسابات"
+msgstr "حالة الحساب"
 
 #: .\apps\progression\templates\progression\admin_student_detail.html:39
 msgid "Missing"
@@ -7426,7 +7344,7 @@ msgstr "الثانوية"
 
 #: .\apps\students\constants.py:23
 msgid "Bachelor"
-msgstr "معلم"
+msgstr "بكالوريوس"
 
 #: .\apps\students\constants.py:24
 msgid "Master"
@@ -7434,7 +7352,7 @@ msgstr "الماجستير"
 
 #: .\apps\students\constants.py:25
 msgid "Doctorate"
-msgstr "التخزين"
+msgstr "دكتوراه"
 
 #: .\apps\students\constants.py:26
 msgid "Other"
@@ -7466,7 +7384,7 @@ msgstr "المستوى التعليمي"
 
 #: .\apps\students\models.py:35
 msgid "specialization"
-msgstr "الطلبات"
+msgstr "التخصص"
 
 #: .\apps\students\models.py:36
 msgid "employer"
@@ -7490,19 +7408,19 @@ msgstr "التواصل مع الكاهن"
 
 #: .\apps\students\models.py:43
 msgid "student profile"
-msgstr "ملفك الشخصي"
+msgstr "ملف الطالب"
 
 #: .\apps\students\models.py:44
 msgid "student profiles"
-msgstr "ملفك الشخصي"
+msgstr "ملفات الطلاب"
 
 #: .\apps\students\services.py:84
 msgid "You have already completed this diploma."
-msgstr "لقد أكملت امتحان القبول هذا بالفعل."
+msgstr "لقد أكملت هذه الدبلومة بالفعل."
 
 #: .\apps\students\services.py:97
 msgid "You are already enrolled in this diploma."
-msgstr "لقد أكملت امتحان القبول هذا بالفعل."
+msgstr "أنت مسجل بالفعل في هذه الدبلومة."
 
 #: .\apps\students\services.py:109
 msgid "You already have a pending application for this diploma."
@@ -7510,11 +7428,11 @@ msgstr "لديك بالفعل طلب معلق أو نشط لهذه المجمو�
 
 #: .\apps\students\services.py:130
 msgid "You have already completed this course."
-msgstr "لقد أكملت امتحان القبول هذا بالفعل."
+msgstr "لقد أكملت هذه الدورة بالفعل."
 
 #: .\apps\students\services.py:142
 msgid "You are already enrolled in this course."
-msgstr "لم يتم تسجيلك في أي مقرر."
+msgstr "أنت مسجل بالفعل في هذه الدورة."
 
 #: .\apps\students\services.py:154
 msgid "You already have a pending application for this course."
@@ -7522,7 +7440,7 @@ msgstr "لديك بالفعل طلب معلق أو نشط لهذا المقرر.
 
 #: .\apps\students\services.py:246
 msgid "A cohort or course must be specified for application."
-msgstr "يجب تحديد مجموعة أو مقرر لإعادة التقديم."
+msgstr "يجب تحديد دفعة أو دورة للتقديم."
 
 #: .\apps\students\templates\students\profile\access.html:2
 #: .\apps\students\templates\students\profile\base_profile.html:19
@@ -7570,7 +7488,7 @@ msgstr "تقديم الآن"
 
 #: .\apps\students\templates\students\profile\applications.html:40
 msgid "Need a new application?"
-msgstr "إجراءات المراجعة"
+msgstr "هل تحتاج إلى طلب جديد؟"
 
 #: .\apps\students\templates\students\profile\apply.html:3
 #: .\apps\students\templates\students\profile\base_profile.html:16
@@ -7596,7 +7514,7 @@ msgstr "تقديم الطلب"
 #: .\apps\students\templates\students\profile\assessments.html:16
 #: .\apps\students\templates\students\profile\exams.html:14
 msgid "Access"
-msgstr "نجاح"
+msgstr "الوصول"
 
 #: .\apps\students\templates\students\profile\assessments.html:32
 msgid "Grade not yet released"
@@ -7726,11 +7644,11 @@ msgstr "تاريخ الانضمام"
 
 #: .\apps\students\templates\students\profile\diploma_course.html:17
 msgid "Until"
-msgstr "بدون وقت"
+msgstr "حتى"
 
 #: .\apps\students\templates\students\profile\diploma_course.html:29
 msgid "No diploma or course information yet."
-msgstr "الدبلومات والمقررات"
+msgstr "لا توجد معلومات عن الدبلومة أو الدورة بعد."
 
 #: .\apps\students\templates\students\profile\diploma_course_detail.html:13
 #: .\templates\accounts\dashboards\teacher.html:7
@@ -7772,7 +7690,7 @@ msgstr "البرنامج"
 
 #: .\apps\students\templates\students\profile\payments.html:46
 msgid "Transactions"
-msgstr "التعليمات"
+msgstr "المعاملات"
 
 #: .\apps\students\templates\students\profile\payments.html:69
 msgid "Total paid"
@@ -7948,7 +7866,7 @@ msgstr "المدفوعات"
 
 #: .\templates\accounts\dashboards\admin.html:40
 msgid "Unpublished"
-msgstr "منشور"
+msgstr "غير منشور"
 
 #: .\templates\accounts\dashboards\admin.html:42
 msgid "Lectures"
@@ -7956,7 +7874,7 @@ msgstr "محاضرات"
 
 #: .\templates\accounts\dashboards\admin.html:50
 msgid "Applications by status"
-msgstr "تغيير حالة الطلب"
+msgstr "الطلبات حسب الحالة"
 
 #: .\templates\accounts\dashboards\admin.html:54
 msgid "Approved"
@@ -7972,11 +7890,11 @@ msgstr "تمت الدعوة"
 
 #: .\templates\accounts\dashboards\admin.html:73
 msgid "Entrance exam queue"
-msgstr "تم إنشاء امتحان القبول."
+msgstr "قائمة انتظار امتحانات القبول"
 
 #: .\templates\accounts\dashboards\admin.html:77
 msgid "Completed (needs grading)"
-msgstr "الفصول الدراسية المكتملة"
+msgstr "مكتملة (تحتاج إلى تصحيح)"
 
 #: .\templates\accounts\dashboards\admin.html:81
 msgid "Grading queue"
@@ -7984,7 +7902,7 @@ msgstr "قائمة التصحيح"
 
 #: .\templates\accounts\dashboards\admin.html:83
 msgid "Assessment attempts"
-msgstr "لا توجد محاولات تقييم بعد."
+msgstr "محاولات التقييم"
 
 #: .\templates\accounts\dashboards\admin.html:84
 #: .\templates\accounts\dashboards\admin.html:247
@@ -7993,7 +7911,7 @@ msgstr "امتحانات القبول"
 
 #: .\templates\accounts\dashboards\admin.html:91
 msgid "Payment queue"
-msgstr "سجل الدفع"
+msgstr "قائمة انتظار المدفوعات"
 
 #: .\templates\accounts\dashboards\admin.html:95
 msgid "Unmatched upload rows"
@@ -8001,12 +7919,12 @@ msgstr "الصفوف غير المتطابقة"
 
 #: .\templates\accounts\dashboards\admin.html:99
 msgid "Recent uploads"
-msgstr "تحميلات الدفعات"
+msgstr "التحميلات الأخيرة"
 
 #: .\templates\accounts\dashboards\admin.html:113
 #: .\templates\accounts\dashboards\moderator.html:23
 msgid "Cohorts starting soon"
-msgstr "التعلم الجماعي"
+msgstr "دفعات تبدأ قريبًا"
 
 #: .\templates\accounts\dashboards\admin.html:120
 msgid "Start date"
@@ -8018,7 +7936,7 @@ msgstr "إصدار الموجه"
 
 #: .\templates\accounts\dashboards\admin.html:148
 msgid "Reviews total"
-msgstr "إجراءات المراجعة"
+msgstr "إجمالي المراجعات"
 
 #: .\templates\accounts\dashboards\admin.html:150
 msgid "Accepted / Rejected"
@@ -8026,11 +7944,11 @@ msgstr "مقبول / مرفوض"
 
 #: .\templates\accounts\dashboards\admin.html:154
 msgid "Last review"
-msgstr "في انتظار المراجعة"
+msgstr "آخر مراجعة"
 
 #: .\templates\accounts\dashboards\admin.html:161
 msgid "Site Configuration"
-msgstr "معلومات قابلة للتعديل"
+msgstr "إعدادات الموقع"
 
 #: .\templates\accounts\dashboards\admin.html:162
 msgid "Customize landing page"
@@ -8038,11 +7956,11 @@ msgstr "تخصيص صفحة الهبوط"
 
 #: .\templates\accounts\dashboards\admin.html:164
 msgid "Site name"
-msgstr "اسم الملف"
+msgstr "اسم الموقع"
 
 #: .\templates\accounts\dashboards\admin.html:165
 msgid "Site name (Arabic)"
-msgstr "الاسم الكامل (بالعربية)"
+msgstr "اسم الموقع (بالعربية)"
 
 #: .\templates\accounts\dashboards\admin.html:166
 msgid "Timezone"
@@ -8050,27 +7968,27 @@ msgstr "المنطقة الزمنية"
 
 #: .\templates\accounts\dashboards\admin.html:168
 msgid "Default from email"
-msgstr "البريد الإلكتروني"
+msgstr "البريد الإلكتروني الافتراضي للمرسل"
 
 #: .\templates\accounts\dashboards\admin.html:169
 msgid "Email backend"
-msgstr "خلفية التخزين"
+msgstr "نظام البريد الإلكتروني"
 
 #: .\templates\accounts\dashboards\admin.html:171
 msgid "Available languages"
-msgstr "الامتحانات المتاحة"
+msgstr "اللغات المتاحة"
 
 #: .\templates\accounts\dashboards\admin.html:172
 msgid "Email sent"
-msgstr "معاينات البريد الإلكتروني"
+msgstr "الرسائل المرسلة"
 
 #: .\templates\accounts\dashboards\admin.html:173
 msgid "Email failed"
-msgstr "خلفية التخزين"
+msgstr "الرسائل الفاشلة"
 
 #: .\templates\accounts\dashboards\admin.html:175
 msgid "Last email"
-msgstr "البريد الإلكتروني"
+msgstr "آخر رسالة بريد إلكتروني"
 
 #: .\templates\accounts\dashboards\admin.html:180
 msgid "Active announcement"
@@ -8078,37 +7996,31 @@ msgstr "إعلان قابل للتعديل من الإدارة"
 
 #: .\templates\accounts\dashboards\admin.html:190
 msgid "Recent applications"
-msgstr "الطلبات"
+msgstr "الطلبات الأخيرة"
 
 #: .\templates\accounts\dashboards\admin.html:201
 msgid "No recent applications."
-msgstr "الطلبات"
+msgstr "لا توجد طلبات أخيرة."
 
 #: .\templates\accounts\dashboards\admin.html:206
 msgid "Recent payments"
-msgstr "المستلمون"
+msgstr "المدفوعات الأخيرة"
 
 #: .\templates\accounts\dashboards\admin.html:217
 msgid "No recent payments."
-msgstr "لا توجد تقييمات بعد."
+msgstr "لا توجد مدفوعات أخيرة."
 
 #: .\templates\accounts\dashboards\admin.html:222
 msgid "Recent audit"
-msgstr "أُرسل في"
+msgstr "سجل التدقيق الأخير"
 
 #: .\templates\accounts\dashboards\admin.html:233
 msgid "No recent audit events."
-msgstr "أحداث التدقيق"
+msgstr "لا توجد أحداث تدقيق أخيرة."
 
 #: .\templates\accounts\dashboards\admin.html:240
 msgid "Quick actions"
-msgstr "إجراءات المراجعة"
-
-#: .\templates\accounts\dashboards\admin.html:245
-#: .\templates\partials\_mobile_nav.html:30
-#: .\templates\partials\_navbar.html:45
-msgid "Standalone Courses"
-msgstr "كورس مستقل"
+msgstr "إجراءات سريعة"
 
 #: .\templates\accounts\dashboards\admin.html:248
 msgid "Grade exams"
@@ -8120,16 +8032,16 @@ msgstr "تحميلات الدفعات"
 
 #: .\templates\accounts\dashboards\admin.html:250
 msgid "Email templates"
-msgstr "عنوان البريد الإلكتروني"
+msgstr "قوالب البريد الإلكتروني"
 
 #: .\templates\accounts\dashboards\admin.html:251
 #: .\templates\core\admin_landing_settings.html:7
 msgid "Landing page"
-msgstr "التقدم التعليمي"
+msgstr "صفحة الهبوط"
 
 #: .\templates\accounts\dashboards\admin.html:253
 msgid "Email log"
-msgstr "البريد الإلكتروني"
+msgstr "سجل البريد الإلكتروني"
 
 #: .\templates\accounts\dashboards\admin.html:255
 msgid "Django admin"
@@ -8153,7 +8065,7 @@ msgstr "في انتظار المراجعة"
 
 #: .\templates\accounts\dashboards\moderator.html:18
 msgid "Active users"
-msgstr "المقررات النشطة"
+msgstr "المستخدمون النشطون"
 
 #: .\templates\accounts\dashboards\moderator.html:20
 msgid "In the system"
@@ -8169,7 +8081,7 @@ msgstr "المجموعات المفتوحة"
 
 #: .\templates\accounts\dashboards\moderator.html:36
 msgid "Starts"
-msgstr "بدء الامتحان"
+msgstr "تبدأ في"
 
 #: .\templates\accounts\dashboards\moderator.html:44
 msgid "Review program applications"
@@ -8177,7 +8089,7 @@ msgstr "طلبات البرامج"
 
 #: .\templates\accounts\dashboards\moderator.html:45
 msgid "Browse students"
-msgstr "الطالب"
+msgstr "تصفح الطلاب"
 
 #: .\templates\accounts\dashboards\student.html:3
 msgid "Student dashboard"
@@ -8276,7 +8188,7 @@ msgstr "إعادة إرسال تأكيد البريد الإلكتروني"
 
 #: .\templates\accounts\resend_activation.html:6
 msgid "Resend Activation Email"
-msgstr "سبب الرفض"
+msgstr "إعادة إرسال رسالة التفعيل"
 
 #: .\templates\accounts\resend_activation.html:12
 msgid "Send"
@@ -8284,17 +8196,17 @@ msgstr "إرسال"
 
 #: .\templates\core\admin_landing_settings.html:7
 msgid "Website configuration"
-msgstr "معلومات قابلة للتعديل"
+msgstr "إعدادات الموقع"
 
 #: .\templates\core\admin_landing_settings.html:7
 msgid ""
 "Edit the complete bilingual brand preset, imagery, statistics, contact "
 "details, and social links."
-msgstr ""
+msgstr "عدّل إعداد العلامة التجارية الثنائية اللغة بالكامل، بما في ذلك الصور والإحصاءات وبيانات التواصل وروابط التواصل الاجتماعي."
 
 #: .\templates\core\admin_landing_settings.html:8
 msgid "Preview landing page"
-msgstr "وضع المعاينة"
+msgstr "معاينة صفحة الهبوط"
 
 #: .\templates\core\admin_landing_settings.html:16
 msgid "Brand images"
@@ -8304,11 +8216,11 @@ msgstr "صور العلامة التجارية"
 msgid ""
 "WebP only. Leave blank to keep the current image; reset restores the curated "
 "preset."
-msgstr ""
+msgstr "يُسمح بصور WebP فقط. اترك الحقل فارغًا للإبقاء على الصورة الحالية، ويعيد خيار الاستعادة الإعداد المختار مسبقًا."
 
 #: .\templates\core\admin_landing_settings.html:32
 msgid "Statistics and contact"
-msgstr "التواصل مع الأب الكاهن"
+msgstr "الإحصاءات وبيانات التواصل"
 
 #: .\templates\core\admin_landing_settings.html:33
 msgid "Use live LMS statistics"
@@ -8316,7 +8228,7 @@ msgstr "استخدام إحصائيات نظام إدارة التعلم الم�
 
 #: .\templates\core\admin_landing_settings.html:39
 msgid "Save landing page"
-msgstr "في انتظار التصحيح"
+msgstr "حفظ صفحة الهبوط"
 
 #: .\templates\core\admin_landing_settings.html:40
 msgid "Restore all landing content and images to the default preset?"
@@ -8574,7 +8486,7 @@ msgstr "الأشخاص"
 #: .\templates\partials\_mobile_nav.html:25
 #: .\templates\partials\_navbar.html:40
 msgid "Import"
-msgstr "تم الاستيراد بواسطة"
+msgstr "استيراد الطلاب"
 
 #: .\templates\partials\_mobile_nav.html:31
 #: .\templates\partials\_navbar.html:46
@@ -8584,12 +8496,12 @@ msgstr "تقييم"
 #: .\templates\partials\_mobile_nav.html:34
 #: .\templates\partials\_navbar.html:49
 msgid "Finance &amp; Comms"
-msgstr "المالية والاتصالات"
+msgstr "المدفوعات والبريد الإلكتروني"
 
 #: .\templates\partials\_mobile_nav.html:37
 #: .\templates\partials\_navbar.html:52
 msgid "Email Log"
-msgstr "البريد الإلكتروني"
+msgstr "سجل البريد الإلكتروني"
 
 #: .\templates\partials\_mobile_nav.html:44
 #: .\templates\partials\_navbar.html:71
@@ -8648,10 +8560,6 @@ msgstr "التبديل إلى الوضع النهاري"
 #: .\templates\partials\_theme_toggle.html:3
 msgid "Switch to dark"
 msgstr "التبديل إلى الوضع الليلي"
-
-#~| msgid "standalone"
-#~ msgid "Standalone"
-#~ msgstr "مستقل"
 
 #, python-format
 #~ msgid ""
@@ -9009,10 +8917,6 @@ msgstr "التبديل إلى الوضع الليلي"
 #~ msgid "Guide"
 #~ msgstr "وجّه"
 
-#~| msgid "Diplomas and courses"
-#~ msgid "Servants and counselors"
-#~ msgstr "الدبلومات والمواد"
-
 #~| msgid ""
 #~| "Build a shared language for referral, listening, boundaries, and "
 #~| "coordinated church care."
@@ -9030,9 +8934,6 @@ msgstr "التبديل إلى الوضع الليلي"
 
 #~ msgid "Choose the right path"
 #~ msgstr "اختر المسار المناسب"
-
-#~ msgid "Review diplomas, cohorts, and standalone courses before applying."
-#~ msgstr "راجع الدبلومات والدفعات والكورسات المستقلة قبل التقديم."
 
 #~ msgid ""
 #~ "The application flow keeps personal details, program choice, and review "
@@ -9086,32 +8987,6 @@ msgstr "التبديل إلى الوضع الليلي"
 
 #~ msgid "Active academic program"
 #~ msgstr "برنامج أكاديمي نشط"
-
-#~ msgid "Standalone learning"
-#~ msgstr "تعلم مستقل"
-
-#~ msgid "Shorter courses can stand beside full diploma tracks."
-#~ msgstr "يمكن للكورسات الأقصر أن تقف بجانب مسارات الدبلومات الكاملة."
-
-#~ msgid ""
-#~ "Standalone courses are useful for focused needs, while diplomas keep "
-#~ "semester and cohort structure for deeper formation."
-#~ msgstr ""
-#~ "الكورسات المستقلة مناسبة للاحتياجات المحددة، بينما تحفظ الدبلومات بنية "
-#~ "الفصول والدفعات للتكوين الأعمق."
-
-#~ msgid "Focused course available in the LMS."
-#~ msgstr "كورس مركز متاح داخل النظام."
-
-#~ msgid "No standalone courses yet"
-#~ msgstr "لا توجد كورسات مستقلة بعد"
-
-#~ msgid "Create standalone courses from Academics."
-#~ msgstr "أنشئ كورسات مستقلة من الأكاديميات."
-
-#~ msgid ""
-#~ "When active standalone courses exist, they will appear here automatically."
-#~ msgstr "عند وجود كورسات مستقلة نشطة، ستظهر هنا تلقائيا."
 
 #~ msgid "Learning library"
 #~ msgstr "مكتبة التعلم"
@@ -9707,3 +9582,51 @@ msgstr "التبديل إلى الوضع الليلي"
 
 #~ msgid "Welcome"
 #~ msgstr "مرحباً"
+
+msgid "Admission Applications"
+msgstr "طلبات الالتحاق"
+
+msgid "Payments &amp; Email"
+msgstr "المدفوعات والبريد الإلكتروني"
+
+msgid "Accepts new enrollments"
+msgstr "يقبل تسجيل طلاب جدد"
+
+msgid "Create a course version"
+msgstr "إنشاء إصدار دورة"
+
+msgid "Current semester"
+msgstr "الفصل الدراسي الحالي"
+
+msgid "Back to diploma"
+msgstr "العودة إلى الدبلومة"
+
+msgid "Course version status updated."
+msgstr "تم تحديث حالة إصدار الدورة."
+
+msgid "Archive"
+msgstr "أرشفة"
+
+msgid "Accept new enrollments"
+msgstr "يقبل تسجيل طلاب جدد"
+
+msgid "Migrate"
+msgstr "نقل"
+
+msgid "Student migrated to the selected course version."
+msgstr "تم نقل الطالب إلى إصدار الدورة المحدد."
+
+msgid "Academic year promote"
+msgstr "ترقية إلى السنة الأكاديمية التالية"
+
+msgid "Diploma deleted."
+msgstr "تم حذف الدبلومة."
+
+msgid "Course deleted."
+msgstr "تم حذف الدورة."
+
+msgid "Delete this course and all its versions and lectures?"
+msgstr "حذف هذه الدورة وجميع إصداراتها ومحاضراتها؟"
+
+msgid "Delete this diploma and all its semesters, cohorts, and lectures?"
+msgstr "حذف هذه الدبلومة وجميع فصولها ودفعاتها ومحاضراتها؟"

@@ -21,6 +21,11 @@ urlpatterns = [
         name="record_detail",
     ),
     path(
+        "records/<int:record_id>/edit/",
+        views.payment_record_edit,
+        name="record_edit",
+    ),
+    path(
         "enrollment/<int:student_id>/<str:enrollment_type>/<int:enrollment_id>/toggle/",
         views.enrollment_payment_toggle,
         name="enrollment_payment_toggle",

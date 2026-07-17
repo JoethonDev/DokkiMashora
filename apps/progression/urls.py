@@ -9,6 +9,7 @@ urlpatterns = [
     path("manage/students/<int:student_id>/", views.admin_student_detail, name="admin_student_detail"),
     path("manage/students/<int:student_id>/evaluate/", views.admin_evaluate_semester, name="admin_evaluate_semester"),
     path("manage/students/<int:student_id>/promote/", views.admin_promote, name="admin_promote"),
+    path("manage/students/<int:student_id>/promote-year/", views.admin_promote_academic_year, name="admin_promote_academic_year"),
     path("manage/students/<int:student_id>/demote/", views.admin_demote, name="admin_demote"),
     path("manage/students/<int:student_id>/override/", views.admin_override, name="admin_override"),
     path("manage/students/<int:student_id>/lock/", views.admin_lock, name="admin_lock"),

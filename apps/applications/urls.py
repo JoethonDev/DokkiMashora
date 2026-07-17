@@ -16,6 +16,5 @@ urlpatterns = [
     path("documents/upload/<str:token>/", views.document_upload, name="document_upload"),
     path("documents/<int:upload_id>/persona/download/", views.download_persona_image, name="download_persona"),
     path("documents/<int:upload_id>/attachments/download/", views.download_attachments_pdf, name="download_attachments"),
-    path("apply/", views.dashboard_apply, name="dashboard_apply"),
     path("program-targets/", views.program_targets, name="program_targets"),
 ]

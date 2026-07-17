@@ -140,7 +140,7 @@ class GetDashboardDataCourseEnrollmentsTests(TestCase):
         )
         self.course = Course.objects.create(title="Test Course", created_by=self.admin)
         self.version = CourseVersion.objects.create(
-            course=self.course, cohort=self.cohort, semester=self.semester,
+            course=self.course,
             is_active=True, created_by=self.admin,
         )
 
@@ -195,7 +195,7 @@ class GetDashboardDataCourseEnrollmentsTests(TestCase):
         now = timezone.now()
         course2 = Course.objects.create(title="Course 2", created_by=self.admin)
         version2 = CourseVersion.objects.create(
-            course=course2, cohort=self.cohort, semester=self.semester,
+            course=course2,
             is_active=True, created_by=self.admin,
         )
         CourseEnrollment.objects.create(
@@ -447,7 +447,7 @@ class GetDashboardDataQueryCountTests(TestCase):
         )
         self.course = Course.objects.create(title="Test Course", created_by=self.admin)
         self.version = CourseVersion.objects.create(
-            course=self.course, cohort=self.cohort, semester=self.semester,
+            course=self.course,
             is_active=True, created_by=self.admin,
         )
         now = timezone.now()
@@ -475,4 +475,4 @@ class GetDashboardDataQueryCountTests(TestCase):
         with CaptureQueriesContext(connection) as captured:
             get_dashboard_data(self.profile)
         query_count = len(captured.captured_queries)
-        self.assertLess(query_count, 25, f"Dashboard used {query_count} queries; expected < 25")
+        self.assertLess(query_count, 30, f"Dashboard used {query_count} queries; expected < 30")

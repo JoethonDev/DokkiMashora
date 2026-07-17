@@ -22,13 +22,13 @@
             <div class="mt-3 mb-1 px-3 py-1 text-xs font-bold text-brand-600 dark:text-brand-400 uppercase tracking-wider">{% trans "Manage" %}</div>
             <div class="px-3 text-xs font-bold text-brand-600 dark:text-brand-400">{% trans "People" %}</div>
             <a href="{% url 'accounts:admin_student_list' %}" class="rounded-md px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text text-sm">{% trans "Students" %}</a>
-            <a href="{% url 'accounts:admin_student_import' %}" class="rounded-md px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text text-sm">{% trans "Import" %}</a>
+            <a href="{% url 'accounts:admin_student_import' %}" class="rounded-md px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text text-sm">{% trans "Import Students" %}</a>
             <a href="{% url 'accounts:admin_staff_list' %}" class="rounded-md px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text text-sm">{% trans "Staff" %}</a>
-             <a href="{% url 'applications:program_list' %}" class="rounded-md px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text text-sm">{% trans "Program Applications" %}</a>
+             <a href="{% url 'applications:program_list' %}" class="rounded-md px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text text-sm">{% trans "Admission Applications" %}</a>
            <div class="mt-3 pt-3 border-t dm-border px-3 text-xs font-bold text-brand-600 dark:text-brand-400">{% trans "Academics" %}</div>
            <a href="{% url 'academics:admin_diploma_list' %}" class="rounded-md px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text text-sm">{% trans "Diplomas" %}</a>
-           <a href="{% url 'academics:admin_course_list' %}" class="rounded-md px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text text-sm">{% trans "Standalone Courses" %}</a>
-           <div class="mt-3 pt-3 border-t dm-border px-3 text-xs font-bold text-brand-600 dark:text-brand-400">{% trans "Evaluation" %}</div>
+            <a href="{% url 'academics:admin_course_list' %}" class="rounded-md px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text text-sm">{% trans "Courses" %}</a>
+           <div class="mt-3 pt-3 border-t dm-border px-3 text-xs font-bold text-brand-600 dark:text-brand-400">{% trans "Assessments" %}</div>
            <a href="{% url 'assessments:admin_list' %}" class="rounded-md px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text text-sm">{% trans "Assessments" %}</a>
            <a href="{% url 'assessments:admin_reviewer_assignment_list' %}" class="rounded-md px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text text-sm">{% trans "Reviewer Assignments" %}</a>
            <a href="{% url 'entrance_exams:admin_list' %}" class="rounded-md px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text text-sm">{% trans "Entrance Exams" %}</a>
@@ -39,13 +39,14 @@
            <a href="{% url 'attendance:attendance_scan' %}" class="rounded-md px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text text-sm">{% trans "Scan Attendance" %}</a>
            <div class="mt-3 pt-3 border-t dm-border px-3 text-xs font-bold text-brand-600 dark:text-brand-400">{% trans "Intake Forms" %}</div>
            <a href="{% url 'intake_forms:admin_intake_form_list' %}" class="rounded-md px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text text-sm">{% trans "Intake Form Builder" %}</a>
-           <div class="mt-3 pt-3 border-t dm-border px-3 text-xs font-bold text-brand-600 dark:text-brand-400">{% trans "Finance &amp; Comms" %}</div>
+            <div class="mt-3 pt-3 border-t dm-border px-3 text-xs font-bold text-brand-600 dark:text-brand-400">{% trans "Payments &amp; Email" %}</div>
            <a href="{% url 'payments:upload_list' %}" class="rounded-md px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text text-sm">{% trans "Payment Uploads" %}</a>
+           <a href="{% url 'payments:record_list' %}" class="rounded-md px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text text-sm">{% trans "Payment Records" %}</a>
            <a href="{% url 'communications:admin_template_list' %}" class="rounded-md px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text text-sm">{% trans "Email Templates" %}</a>
            <a href="{% url 'entrance_exams:admin_email_log_list' %}" class="rounded-md px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text text-sm">{% trans "Email Log" %}</a>
         {% elif CAN_VIEW_MODERATOR_NAV %}
             <div class="mt-3 mb-1 px-3 py-1 text-xs font-bold text-brand-600 dark:text-brand-400 uppercase tracking-wider">{% trans "Manage" %}</div>
-           <div class="px-3 text-xs font-bold text-brand-600 dark:text-brand-400">{% trans "Evaluation" %}</div>
+            <div class="px-3 text-xs font-bold text-brand-600 dark:text-brand-400">{% trans "Assessments" %}</div>
            <a href="{% url 'assessments:admin_list' %}" class="rounded-md px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 dm-text text-sm">{% trans "Assessments" %}</a>
         {% elif CAN_VIEW_SECRETARY_NAV %}
             <div class="mt-3 mb-1 px-3 py-1 text-xs font-bold text-brand-600 dark:text-brand-400 uppercase tracking-wider">{% trans "Attendance" %}</div>
