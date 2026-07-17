@@ -131,9 +131,16 @@
           </div>
         </form>
 
-      {% elif application.status == "submitted" or application.status == "invited_to_entrance" %}
-        {# No active admin actions for these statuses #}
-        <p class="text-sm text-slate-500 dark:text-slate-400">{% trans "This application is awaiting further steps." %}</p>
+      {% elif application.status == "submitted" or application.status == "account_activated" or application.status == "invited_to_entrance" %}
+        <form method="post">
+          {% csrf_token %}
+          <p class="mb-3 text-sm text-slate-500 dark:text-slate-400">{% trans "Continue the entrance assessment workflow from here." %}</p>
+          <label class="mb-3 flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+            <input type="checkbox" name="send_email" checked class="rounded border-slate-300 dark:border-slate-700 text-brand-600 focus:ring-brand-500">
+            {% trans "Send entrance invitation email" %}
+          </label>
+          {% include "partials/_button.html" with label=_("Assign / send entrance exam") size="sm" variant="primary" attrs='name="action" value="invite_to_entrance"' %}
+        </form>
 
       {% elif application.status == "survey_requested" or application.status == "survey_submitted" %}
         {# Intake form state #}

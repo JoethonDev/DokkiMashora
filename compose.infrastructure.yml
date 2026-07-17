@@ -6,12 +6,12 @@ x-logging: &default-logging
 
 services:
   postgres:
-    image: postgres:17-alpine
+    image: postgres:18
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env.docker}
-      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env.docker}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.docker}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     command:
       - postgres
       - -c
@@ -27,7 +27,7 @@ services:
       - -c
       - checkpoint_completion_target=0.9
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
@@ -58,7 +58,7 @@ services:
     image: dokkimashora-app:${APP_IMAGE_TAG:-local}
     restart: unless-stopped
     env_file:
-      - ${APP_ENV_FILE:-.env.docker}
+      - ${APP_ENV_FILE:-.env}
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       CACHE_URL: redis://redis:6379/1
@@ -118,7 +118,7 @@ services:
     logging: *default-logging
 
   backup:
-    image: postgres:17-alpine
+    image: postgres:18
     profiles: [tools]
     environment:
       PGHOST: postgres

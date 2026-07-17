@@ -57,13 +57,11 @@ def admin_intake_form_create(request: HttpRequest) -> HttpResponse:
         form = IntakeFormBuildForm(request.POST)
         if form.is_valid():
             target_type = form.cleaned_data["target_type"]
-            target_id = form.cleaned_data["target_id"]
             if target_type == "course_version":
-                target_obj = get_object_or_404(CourseVersion, pk=target_id)
                 intake_form = IntakeForm.objects.create(
                     title=form.cleaned_data["title"],
                     description=form.cleaned_data.get("description", ""),
-                    course_version=target_obj,
+                    course_version=form.cleaned_data["course_version"],
                     is_required=form.cleaned_data.get("is_required", False),
                     is_active=form.cleaned_data.get("is_active", True),
                     open_at=form.cleaned_data.get("open_at"),
@@ -71,11 +69,10 @@ def admin_intake_form_create(request: HttpRequest) -> HttpResponse:
                     created_by=request.user,
                 )
             else:
-                target_obj = get_object_or_404(Cohort, pk=target_id)
                 intake_form = IntakeForm.objects.create(
                     title=form.cleaned_data["title"],
                     description=form.cleaned_data.get("description", ""),
-                    cohort=target_obj,
+                    cohort=form.cleaned_data["cohort"],
                     is_required=form.cleaned_data.get("is_required", False),
                     is_active=form.cleaned_data.get("is_active", True),
                     open_at=form.cleaned_data.get("open_at"),

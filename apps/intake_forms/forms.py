@@ -3,6 +3,8 @@ from __future__ import annotations
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
+from apps.academics.models import Cohort, CourseVersion
+
 from .constants import (
     FIELD_TYPE_BOOLEAN,
     FIELD_TYPE_CHOICE,
@@ -18,10 +20,17 @@ class IntakeFormBuildForm(forms.Form):
         widget=forms.Textarea, required=False, label=_("Description"),
     )
     target_type = forms.ChoiceField(
-        choices=[("course_version", _("Course Version")), ("cohort", _("Cohort"))],
+        choices=[("course_version", _("Course")), ("cohort", _("Diploma"))],
         label=_("Target type"),
     )
-    target_id = forms.IntegerField(label=_("Target ID"))
+    course_version = forms.ModelChoiceField(
+        queryset=CourseVersion.objects.filter(is_active=True).select_related("course"),
+        required=False, label=_("Course version"),
+    )
+    cohort = forms.ModelChoiceField(
+        queryset=Cohort.objects.filter(is_active=True).select_related("diploma"),
+        required=False, label=_("Diploma cohort"),
+    )
     is_required = forms.BooleanField(required=False, label=_("Required"))
     is_active = forms.BooleanField(required=False, label=_("Active"))
     open_at = forms.DateTimeField(
@@ -32,6 +41,21 @@ class IntakeFormBuildForm(forms.Form):
         required=False, label=_("Close at"),
         widget=forms.DateTimeInput(attrs={"type": "datetime-local"}),
     )
+
+    def clean(self):
+        cleaned = super().clean()
+        target_type = cleaned.get("target_type")
+        course_version = cleaned.get("course_version")
+        cohort = cleaned.get("cohort")
+        if target_type == "course_version" and not course_version:
+            self.add_error("course_version", _("Select a course version."))
+        elif target_type == "cohort" and not cohort:
+            self.add_error("cohort", _("Select a diploma cohort."))
+        if target_type == "course_version":
+            cleaned["cohort"] = None
+        elif target_type == "cohort":
+            cleaned["course_version"] = None
+        return cleaned
 
 
 class IntakeFormFieldForm(forms.Form):

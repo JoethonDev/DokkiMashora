@@ -2,6 +2,7 @@
 {% block title %}{% trans "Payment Uploads" %} — {{ SITE_NAME }}{% endblock %}
 {% block content %}
 {% include "partials/_page.html" with title=_("Payment Uploads") %}
+<section class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-10">
   <div class="mb-4 flex flex-wrap items-center gap-3">
     <a href="{% url 'payments:upload_create' %}" class="inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 shadow-sm">{% trans "Upload CSV" %}</a>
   </div>
@@ -51,11 +52,12 @@
           <td class="px-4 py-3 text-slate-500 dark:text-slate-400 text-xs">{{ u.created_at|date:"DATETIME_FORMAT" }}</td>
         </tr>
         {% endfor %}
-    {% include "partials/_pagination.html" %}
       </tbody>
     </table>
   </div>
+  {% include "partials/_pagination.html" %}
   {% else %}
   {% include "partials/_empty_state.html" with title=_("No uploads yet") subtitle=_("Upload a CSV file to import payment records.") %}
   {% endif %}
+</section>
 {% endblock %}

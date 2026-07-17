@@ -126,6 +126,7 @@ class AssessmentForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["assessment_type"].widget.attrs["x-model"] = "assessmentType"
         instance = kwargs.get("instance")
         data = kwargs.get("data")
         diploma_id = None
@@ -200,6 +201,11 @@ class AssessmentForm(forms.ModelForm):
         max_attempts = cleaned.get("max_attempts")
         if max_attempts is not None and max_attempts < 1:
             raise forms.ValidationError(_("Max attempts must be at least 1."))
+        if cleaned.get("assessment_type") != "homework":
+            cleaned["max_upload_files"] = 1
+            cleaned["allow_late_submission"] = False
+        elif cleaned.get("max_upload_files", 0) < 1:
+            self.add_error("max_upload_files", _("Max uploaded files must be at least 1."))
         return cleaned
 
 

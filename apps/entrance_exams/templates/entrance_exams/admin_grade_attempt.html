@@ -38,24 +38,16 @@
           <div class="mt-4 space-y-2">
             <p class="text-xs font-medium text-slate-500 dark:text-slate-400">{% trans "Choices" %}:</p>
             {% for choice in question.choices.all %}
-              <div class="flex items-center gap-2 text-sm px-3 py-1.5 rounded-md
-                {% if choice.score and answer.selected_choice == choice %}bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700
-                {% elif choice.score %}bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800
-                {% elif answer.selected_choice == choice %}bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-700
+              <div class="flex items-center justify-between gap-2 text-sm px-3 py-1.5 rounded-md
+                {% if answer.selected_choice == choice %}bg-brand-50 dark:bg-brand-950/20 text-brand-700 dark:text-brand-300 border border-brand-300 dark:border-brand-700
                 {% else %}text-slate-600 dark:text-slate-300{% endif %}">
-                {% if choice.score and answer.selected_choice == choice %}
-                  ✓
-                {% elif choice.score %}
-                  ({% trans "correct" %})
-                {% elif answer.selected_choice == choice %}
-                  ✗
-                {% endif %}
-                {{ choice.text }}
+                <span>{% if answer.selected_choice == choice %}&#10003; {% endif %}{{ choice.text }}</span>
+                <span class="text-xs text-slate-500 dark:text-slate-400">{% trans "Score" %}: {{ choice.score }}</span>
               </div>
             {% endfor %}
             {% if answer and answer.score is not None %}
               <p class="text-sm text-slate-500 dark:text-slate-400">
-                {% trans "Auto-graded" %}: {{ answer.score }}
+                 {% trans "Score" %}: {{ answer.score }}
               </p>
             {% endif %}
           </div>

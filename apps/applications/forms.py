@@ -255,6 +255,13 @@ class MultipleFileInput(forms.ClearableFileInput):
     allow_multiple_selected = True
 
 
+class MultipleFileField(forms.FileField):
+    def clean(self, data, initial=None):
+        if isinstance(data, (list, tuple)):
+            return [forms.FileField.clean(self, item, initial) for item in data]
+        return [forms.FileField.clean(self, data, initial)]
+
+
 class StudentDocumentUploadForm(forms.Form):
     """Student upload form for persona image and attachments."""
 
@@ -262,7 +269,7 @@ class StudentDocumentUploadForm(forms.Form):
         label=_("Personal photo"),
         required=True,
     )
-    attachments = forms.FileField(
+    attachments = MultipleFileField(
         label=_("Documents (one PDF or multiple images)"),
         required=True,
         widget=MultipleFileInput,

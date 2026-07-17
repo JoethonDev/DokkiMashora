@@ -6,7 +6,7 @@ services:
     image: dokkimashora-app:${APP_IMAGE_TAG:-local}
     restart: unless-stopped
     env_file:
-      - ${APP_ENV_FILE:-.env.docker}
+      - ${APP_ENV_FILE:-.env}
     environment:
       PORT: 8000
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}

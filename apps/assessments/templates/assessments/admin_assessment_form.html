@@ -14,6 +14,7 @@
     <form method="post" class="mt-6 space-y-5" id="assessmentForm"
       x-data="assessmentForm({
         scopeType: '{{ form.scope_type.value|default:"" }}',
+        assessmentType: '{{ form.assessment_type.value|default:"" }}',
         diplomaId: '{{ form.diploma.value|default:"" }}',
         semesterId: '{{ form.semester.value|default:"" }}',
         cohortId: '{{ form.cohort.value|default:"" }}',
@@ -41,7 +42,9 @@
       </div>
       {% for field in form %}
       {% if field.name != 'scope_type' and field.name != 'standalone_course' and field.name != 'diploma' and field.name != 'semester' and field.name != 'cohort' and field.name != 'course_version' %}
-      {% include "partials/_field.html" %}
+      <div {% if field.name == 'max_upload_files' or field.name == 'allow_late_submission' %}x-show="assessmentType === 'homework'" x-cloak{% endif %}>
+        {% include "partials/_field.html" %}
+      </div>
       {% endif %}
       {% endfor %}
       <div class="flex gap-2 pt-4">
@@ -59,7 +62,8 @@
 <script>
 function assessmentForm(opts) {
   return {
-    scopeType: opts.scopeType || '',
+     scopeType: opts.scopeType || '',
+     assessmentType: opts.assessmentType || '',
     diplomaId: opts.diplomaId || '',
     semesterId: opts.semesterId || '',
     cohortId: opts.cohortId || '',

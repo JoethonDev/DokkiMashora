@@ -10,6 +10,7 @@ PRODUCTION_DEPLOYMENT = True
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 SECURE_SSL_REDIRECT = env.bool("DJANGO_SECURE_SSL_REDIRECT", default=True)
+SECURE_REDIRECT_EXEMPT = [r"^healthz$"]
 
 # WhiteNoise serves static files in production too.
 STATICFILES_STORAGE = "whitenoise.storage.CompressedStaticFilesStorage"

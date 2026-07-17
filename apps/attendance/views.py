@@ -87,6 +87,7 @@ def attendance_session_list(request):
 @role_required(*ADMIN_ONLY)
 def attendance_session_create(request):
     if request.method == "POST":
+        target_type = request.POST.get("target_type")
         cohort_id = safe_int(request.POST.get("cohort_id"))
         course_version_id = safe_int(request.POST.get("course_version_id"))
         semester_id = safe_int(request.POST.get("semester_id"))
@@ -109,13 +110,20 @@ def attendance_session_create(request):
             messages.error(request, _("Invalid date/time format."))
             return redirect("attendance:attendance_session_create")
 
-        if cohort_id:
-            target = get_object_or_404(Cohort, id=cohort_id)
-        elif course_version_id:
-            target = get_object_or_404(CourseVersion, id=course_version_id)
-        else:
-            messages.error(request, _("Select a cohort or course version."))
+        if target_type not in {"diploma", "course"}:
+            messages.error(request, _("Select a target type."))
             return redirect("attendance:attendance_session_create")
+        if target_type == "diploma" and (not cohort_id or course_version_id):
+            messages.error(request, _("Select a cohort and no course version for a diploma session."))
+            return redirect("attendance:attendance_session_create")
+        if target_type == "course" and (not course_version_id or cohort_id or semester_id):
+            messages.error(request, _("Select a course version and no cohort or semester for a course session."))
+            return redirect("attendance:attendance_session_create")
+
+        if target_type == "diploma":
+            target = get_object_or_404(Cohort, id=cohort_id)
+        else:
+            target = get_object_or_404(CourseVersion, id=course_version_id)
 
         semester = None
         if semester_id:
@@ -140,8 +148,12 @@ def attendance_session_create(request):
             return redirect("attendance:attendance_session_create")
 
     cohorts = Cohort.objects.filter(is_active=True).select_related("diploma")
+    course_versions = CourseVersion.objects.filter(is_active=True).select_related("course")
+    semesters = Semester.objects.filter(is_active=True).order_by("diploma_id", "order")
     ctx = {
         "cohorts": cohorts,
+        "course_versions": course_versions,
+        "semesters": semesters,
         "breadcrumb_items": [
             {"label": _("Attendance Sessions"), "href": reverse("attendance:attendance_session_list")},
             {"label": _("Create Session")},

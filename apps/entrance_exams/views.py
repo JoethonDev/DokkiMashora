@@ -1079,8 +1079,27 @@ def admin_email_log_list(request):
     if not is_admin(request.user):
         raise PermissionDenied
     qs = PAEL.objects.select_related("program_application__student", "sent_by").all()
+    action = request.GET.get("action", "")
+    status = request.GET.get("status", "")
+    search = request.GET.get("q", "").strip()
+    if action:
+        qs = qs.filter(action=action)
+    if status:
+        qs = qs.filter(status=status)
+    if search:
+        qs = qs.filter(
+            Q(recipient__icontains=search)
+            | Q(program_application__student__full_name__icontains=search)
+            | Q(program_application__student__user__email__icontains=search)
+        )
+    qs = qs.order_by("-sent_at", "-id")
     page_obj, pagination_qs = paginate(request, qs, per_page=25)
     return render(request, "entrance_exams/admin_email_log_list.html", {
         "page_obj": page_obj,
         "pagination_qs": pagination_qs,
+        "action_choices": PAEL._meta.get_field("action").choices,
+        "status_choices": PAEL._meta.get_field("status").choices,
+        "current_action": action,
+        "current_status": status,
+        "search_value": search,
     })

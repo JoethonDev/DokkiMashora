@@ -442,9 +442,9 @@ def mark_entrance_submitted(application, actor=None, attempt=None) -> None:
 
 
 def invite_to_entrance_exam(application, actor) -> None:
-    """Transition submitted -> invited_to_entrance (diploma only)."""
-    if application.status != PROGRAM_APP_STATUS_SUBMITTED:
-        raise ValueError(_("Application must be in submitted status to invite to entrance exam."))
+    """Transition an activated diploma application to entrance invitation."""
+    if application.status not in (PROGRAM_APP_STATUS_SUBMITTED, PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED):
+        raise ValueError(_("Application must be awaiting admin review before invitation."))
     if application.program_type != PROGRAM_TYPE_DIPLOMA:
         raise ValueError(_("Only diploma applications can be invited to entrance exam."))
     _advance_to(application, PROGRAM_APP_STATUS_INVITED, DECISION_ACTION_INVITED_TO_ENTRANCE, actor)
@@ -653,7 +653,8 @@ def handle_user_account_activated(user, actor=None) -> None:
     )
     for application in applications:
         mark_application_account_activated(application, actor=actor)
-        send_post_activation_application_email(application, actor=actor)
+        if application.program_type == PROGRAM_TYPE_COURSE:
+            send_post_activation_application_email(application, actor=actor)
 
 
 # ---------------------------------------------------------------------------

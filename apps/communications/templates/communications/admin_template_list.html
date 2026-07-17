@@ -9,6 +9,12 @@
     {% url 'communications:admin_footer_edit' as url_footer %}{% include "partials/_button.html" with href=url_footer label=_("Global Footer") variant="secondary" %}
   </div>
 
+  {% if not templates %}
+    <div class="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+      {% trans "No templates found. Run" %} <code>python manage.py seed_email_templates</code> {% trans "to seed the default templates." %}
+    </div>
+  {% endif %}
+
   <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
     <table class="min-w-[640px] w-full divide-y divide-slate-200 dark:divide-slate-800 text-sm">
       <thead class="bg-slate-50 dark:bg-slate-800/50">
