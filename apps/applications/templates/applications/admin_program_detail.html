@@ -115,23 +115,24 @@
         </form>
 
       {% elif application.status == "payment_pending" %}
-        {# Course accept/reject #}
+        {# Course payment #}
         <form method="post" class="space-y-3">
           {% csrf_token %}
-          <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">{% trans "Admin notes" %}</label>
-            <textarea name="admin_notes" rows="3" class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900 dark:text-slate-100">{{ application.admin_notes }}</textarea>
-          </div>
-          <div class="flex flex-wrap gap-2">
-            {% include "partials/_button.html" with label=_("Accept") size="sm" variant="success" attrs='name="action" value="accept"' %}
-          </div>
-          <div class="flex items-center gap-2">
-            <input type="checkbox" name="send_email" id="send_email" class="rounded border-slate-300 dark:border-slate-700 text-brand-600 focus:ring-brand-500">
-            <label for="send_email" class="text-sm text-slate-700 dark:text-slate-200">{% trans "Send email notification" %}</label>
-          </div>
+          <h3 class="font-semibold text-sm">{% trans "Record Payment" %}</h3>
+          <input type="number" name="amount" step="0.01" min="0" placeholder="{% trans 'Amount' %}" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm dark:text-slate-100">
+          <input type="text" name="external_reference" placeholder="{% trans 'External reference' %}" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm dark:text-slate-100">
+          <textarea name="notes" rows="2" placeholder="{% trans 'Notes' %}" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm dark:text-slate-100"></textarea>
+          {% include "partials/_button.html" with label=_("Mark Paid") size="sm" variant="primary" attrs='name="action" value="mark_paid"' %}
         </form>
 
-      {% elif application.status == "submitted" or application.status == "account_activated" or application.status == "invited_to_entrance" %}
+      {% elif application.program_type == "course" and application.status == "submitted" or application.program_type == "course" and application.status == "account_activated" %}
+        <form method="post">
+          {% csrf_token %}
+          <p class="mb-3 text-sm text-slate-500 dark:text-slate-400">{% trans "Review the course application. If no intake form is required, the payment instructions will be sent immediately." %}</p>
+          {% include "partials/_button.html" with label=_("Accept and send payment request") size="sm" variant="primary" attrs='name="action" value="accept"' %}
+        </form>
+
+      {% elif application.program_type == "diploma" and application.status == "submitted" or application.program_type == "diploma" and application.status == "account_activated" or application.program_type == "diploma" and application.status == "invited_to_entrance" %}
         <form method="post">
           {% csrf_token %}
           <p class="mb-3 text-sm text-slate-500 dark:text-slate-400">{% trans "Continue the entrance assessment workflow from here." %}</p>

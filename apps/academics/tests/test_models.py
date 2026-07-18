@@ -76,10 +76,6 @@ class CourseTests(TestCase):
     def test_str(self):
         self.assertEqual(str(self.course), "Greek 101")
 
-    def test_default_not_standalone(self):
-        self.assertFalse(self.course.is_standalone)
-
-
 
 class CohortTests(TestCase):
     def setUp(self):
@@ -126,7 +122,7 @@ class CourseVersionTests(TestCase):
         diploma = Diploma.objects.create(title="D", total_semesters=2, created_by=self.admin)
         cohort = Cohort.objects.create(diploma=diploma, name="C1", start_date=date(2026, 1, 1), created_by=self.admin)
         version = CourseVersion.objects.create(
-            course=self.course, cohort=cohort, label="v1", created_by=self.admin,
+            course=self.course, label="v2", created_by=self.admin,
         )
         self.assertIn("C1", str(version))
 

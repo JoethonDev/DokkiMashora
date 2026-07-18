@@ -21,6 +21,7 @@ from apps.core.permissions import (
     role_required,
     safe_date_str,
     safe_int,
+    student_required,
 )
 
 from .constants import (
@@ -338,7 +339,7 @@ def attendance_scan(request):
 # ---------------------------------------------------------------------------
 
 
-@login_required
+@student_required
 def my_attendance(request):
     student_profile = getattr(request.user, "student_profile", None)
     if not student_profile:

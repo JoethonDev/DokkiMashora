@@ -43,7 +43,7 @@ def landing(request: HttpRequest) -> HttpResponse:
     open_course_ids = {course.pk for course in open_course_targets}
     open_versions = {}
     for version in CourseVersion.objects.filter(
-        course_id__in=open_course_ids, cohort__isnull=True, is_active=True
+        course_id__in=open_course_ids, is_active=True
     ).order_by("course_id", "-created_at"):
         open_versions.setdefault(version.course_id, version)
 
@@ -52,8 +52,8 @@ def landing(request: HttpRequest) -> HttpResponse:
         .annotate(
             historical_group_count=Count("cohorts", distinct=True),
             published_lecture_count=Count(
-                "cohorts__course_versions__lectures",
-                filter=Q(cohorts__course_versions__lectures__is_published=True),
+                "cohorts__lectures",
+                filter=Q(cohorts__lectures__is_published=True),
                 distinct=True,
             ),
         )

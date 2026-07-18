@@ -222,7 +222,10 @@ def submit_intake_form_response(
         old_status, PROGRAM_APP_STATUS_SURVEY_SUBMITTED, actor,
     )
 
-    activate_application_if_ready(application, actor=actor)
+    result = activate_application_if_ready(application, actor=actor)
+    from apps.applications.services import send_post_activation_application_email
+    if not result.activated:
+        send_post_activation_application_email(application, actor=actor)
 
     return response
 

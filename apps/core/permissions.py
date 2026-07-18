@@ -380,3 +380,16 @@ def role_required(*group_names: str) -> Callable:
         return _wrapped
 
     return decorator
+
+
+def student_required(view_func: Callable) -> Callable:
+    """Allow student portal pages to students and intentional superuser previews."""
+
+    @wraps(view_func)
+    @login_required
+    def _wrapped(request, *args, **kwargs):
+        if not (is_student(request.user) or request.user.is_superuser):
+            raise PermissionDenied
+        return view_func(request, *args, **kwargs)
+
+    return _wrapped

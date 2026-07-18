@@ -10,7 +10,7 @@
     </div>
     <div class="flex flex-wrap gap-2">
       <a href="{% url 'accounts:admin_user_edit' user_obj.id %}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Edit" %}</a>
-      <a href="{% url 'accounts:admin_student_list' %}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm bg-brand-600 text-white hover:bg-brand-700 shadow-sm">{% trans "Back to list" %}</a>
+      <a href="{{ back_url }}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm bg-brand-600 text-white hover:bg-brand-700 shadow-sm">{% trans "Back to list" %}</a>
     </div>
   </header>
 

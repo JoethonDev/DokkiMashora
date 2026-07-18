@@ -11,7 +11,7 @@
       <h2 class="text-xs font-black uppercase tracking-widest text-amber-300">{{ FOOTER_CONTENT.footer_links_title }}</h2>
       <ul class="mt-4 space-y-3 text-sm font-bold text-amber-50/80">
         <li><a href="{% url 'core:landing' %}#programs" class="hover:text-white hover:underline">{{ FOOTER_CONTENT.footer_programs_link }}</a></li>
-        <li><a href="{% if user.is_authenticated %}{% url 'students:apply' %}{% else %}{% url 'applications:register' %}{% endif %}" class="hover:text-white hover:underline">{{ FOOTER_CONTENT.footer_apply_link }}</a></li>
+        {% if not user.is_authenticated or CAN_VIEW_STUDENT_NAV %}<li><a href="{% if CAN_VIEW_STUDENT_NAV %}{% url 'students:apply' %}{% else %}{% url 'applications:register' %}{% endif %}" class="hover:text-white hover:underline">{{ FOOTER_CONTENT.footer_apply_link }}</a></li>{% endif %}
         <li><a href="{% url 'accounts:login' %}" class="hover:text-white hover:underline">{{ FOOTER_CONTENT.footer_login_link }}</a></li>
       </ul>
     </nav>

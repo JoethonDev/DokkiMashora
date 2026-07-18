@@ -45,7 +45,7 @@ from apps.communications.constants import (
 from apps.communications.services import send_templated_email
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
-from apps.core.permissions import is_admin
+from apps.core.permissions import is_admin, student_required
 from apps.students.models import StudentProfile
 
 from .constants import (
@@ -78,7 +78,7 @@ def _get_profile(user):
         raise Http404 from None
 
 
-@login_required
+@student_required
 def exam_access_token(request, token):
     """Show exam instructions via access token. Students never see integer IDs."""
     profile = _get_profile(request.user)
@@ -110,7 +110,7 @@ def exam_access_token(request, token):
     })
 
 
-@login_required
+@student_required
 def exam_qr_code(request, token):
     """Return a QR code PNG for the exam access URL."""
     exam_url = request.build_absolute_uri(reverse("entrance_exams:exam_access_token", args=[token]))
@@ -127,7 +127,7 @@ def exam_qr_code(request, token):
 # ---------------------------------------------------------------------------
 
 
-@login_required
+@student_required
 def student_list(request):
     """Show the student's entrance exam attempts and available exams."""
     if is_admin(request.user):
@@ -135,7 +135,7 @@ def student_list(request):
     return redirect("students:exam_results")
 
 
-@login_required
+@student_required
 @require_POST
 def start_exam(request, token):
     """Start an entrance exam (POST only, token-based)."""
@@ -152,7 +152,7 @@ def start_exam(request, token):
     return redirect("entrance_exams:take_exam", token=token)
 
 
-@login_required
+@student_required
 def take_exam(request, token):
     """Render the exam-taking page with timer (token-based)."""
     profile = _get_profile(request.user)
@@ -176,7 +176,7 @@ def take_exam(request, token):
     })
 
 
-@login_required
+@student_required
 @require_http_methods(["POST"])
 def submit_exam(request, token):
     """Submit an entrance exam (POST only, token-based)."""
@@ -207,7 +207,7 @@ def submit_exam(request, token):
     return redirect("entrance_exams:results", token=token)
 
 
-@login_required
+@student_required
 @require_POST
 def save_exam_snapshot(request, token):
     """Save periodic answer snapshots for auto-recovery (AJAX, returns JSON)."""
@@ -233,7 +233,7 @@ def save_exam_snapshot(request, token):
         return JsonResponse({"ok": False, "error": _("Invalid data")}, status=400)
 
 
-@login_required
+@student_required
 def exam_results(request, token):
     """Show entrance exam results (token-based)."""
     profile = _get_profile(request.user)

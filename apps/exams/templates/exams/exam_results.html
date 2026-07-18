@@ -90,13 +90,8 @@
   {% endfor %}
 
     <div class="text-center mt-8 mb-8">
-      {% if token %}
-        {% url 'exams:exam_instructions_token' token as back_url %}
-        {% include "partials/_button.html" with href=back_url label=_("Back to instructions") variant="secondary" %}
-      {% else %}
-        {% url 'exams:student_list' as back_url %}
-        {% include "partials/_button.html" with href=back_url label=_("Back to exams") variant="secondary" %}
-      {% endif %}
+      {% url 'exams:student_list' as back_url %}
+      {% include "partials/_button.html" with href=back_url label=_("Back to exams") variant="secondary" %}
     </div>
 </section>
 {% endblock %}

@@ -1321,6 +1321,8 @@ def request_interview(
     notes: str = "",
 ) -> PromotionDecision:
     eval_result = evaluate_semester_components(enrollment, enrollment.cohort, semester)
+    if eval_result.status != SEMESTER_PROGRESS_PASSED_PENDING_CONFIRMATION:
+        raise ValueError(_("An interview can only be requested for a pending calculated pass."))
     metadata: dict = {
         "component_summary": {
             "total_percent": str(eval_result.total_percent) if eval_result.total_percent is not None else None,
@@ -1354,6 +1356,9 @@ def confirm_pass(
     notes: str = "",
     skip_interview: bool = False,
 ) -> PromotionDecision:
+    eval_result = evaluate_semester_components(enrollment, enrollment.cohort, semester)
+    if eval_result.status != SEMESTER_PROGRESS_PASSED_PENDING_CONFIRMATION:
+        raise ValueError(_("Pass confirmation requires a pending calculated pass."))
     if not skip_interview:
         has_interview_pass = PromotionDecision.objects.filter(
             diploma_enrollment=enrollment,
@@ -1395,6 +1400,13 @@ def confirm_interview_pass(
     actor=None,
     notes: str = "",
 ) -> PromotionDecision:
+    has_interview_request = PromotionDecision.objects.filter(
+        diploma_enrollment=enrollment,
+        from_semester=semester,
+        decision_type=PROMOTION_DECISION_REQUEST_INTERVIEW,
+    ).exists()
+    if not has_interview_request:
+        raise ValueError(_("An interview request is required before recording an interview result."))
     decision = PromotionDecision.objects.create(
         student=student_profile,
         diploma_enrollment=enrollment,

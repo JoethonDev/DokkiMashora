@@ -14,6 +14,7 @@ from django.utils.translation import gettext_lazy as _
 from apps.academics.constants import (
     ENROLLMENT_STATUS_ACTIVE,
     ENROLLMENT_STATUS_EXPIRED,
+    SCOPE_COURSE_VERSION,
     SCOPE_DIPLOMA_COHORT,
     SCOPE_DIPLOMA_SEMESTER,
     SCOPE_SEMESTER_COHORT,
@@ -312,21 +313,14 @@ def revoke_teacher_assignment(assignment: TeacherAssignment, actor, reason: str 
 
 
 def teacher_course_versions(user) -> list[CourseVersion]:
-    """Return all CourseVersions a teacher has access to via their assignments."""
+    """Return all CourseVersions a teacher has access to via their course-version assignments."""
     if not user or not user.is_authenticated:
         return []
-    qs = TeacherAssignment.objects.filter(teacher=user, active=True)
-    versions = CourseVersion.objects.none()
-    for a in qs:
-        if a.scope_type == SCOPE_WHOLE_DIPLOMA:
-            versions = versions | CourseVersion.objects.filter(cohort__diploma=a.diploma)
-        elif a.scope_type == SCOPE_DIPLOMA_SEMESTER:
-            versions = versions | CourseVersion.objects.filter(semester=a.semester)
-        elif a.scope_type == SCOPE_DIPLOMA_COHORT:
-            versions = versions | CourseVersion.objects.filter(cohort=a.cohort)
-        elif a.scope_type == SCOPE_SEMESTER_COHORT:
-            versions = versions | CourseVersion.objects.filter(semester=a.semester, cohort=a.cohort)
-    return versions.distinct()
+    return list(CourseVersion.objects.filter(
+        teacher_assignments__teacher=user,
+        teacher_assignments__active=True,
+        teacher_assignments__scope_type=SCOPE_COURSE_VERSION,
+    ).distinct())
 
 
 def teacher_students(user) -> list:

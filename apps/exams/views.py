@@ -60,6 +60,14 @@ from apps.exams.services import (
 )
 
 
+def legacy_student_redirect(request):
+    return redirect("assessments:student_list")
+
+
+def legacy_admin_redirect(request):
+    return redirect("entrance_exams:admin_list")
+
+
 @login_required
 def student_list(request):
     assignments = get_student_assignments(request.user)

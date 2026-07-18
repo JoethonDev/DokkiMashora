@@ -153,12 +153,6 @@ def teacher_dashboard(request: HttpRequest) -> HttpResponse:
     return render(request, "accounts/dashboards/teacher.html", _dashboard_context(request.user))
 
 
-@login_required
-@role_required(GROUP_STUDENT)
-def student_dashboard(request: HttpRequest) -> HttpResponse:
-    return render(request, "accounts/dashboards/student.html", _dashboard_context(request.user))
-
-
 # --- Helpers ----------------------------------------------------------------
 def _dashboard_context(user: User) -> dict:
     ctx = {
@@ -451,12 +445,16 @@ def admin_staff_list(request):
 @role_required(*ROLE_EXAM_STAFF)
 def admin_user_detail(request, user_id):
     user_obj = get_object_or_404(User.objects.select_related("student_profile").prefetch_related("groups"), id=user_id)
+    back_url = safe_next_url(request)
+    if not back_url:
+        back_url = reverse("accounts:admin_student_list" if getattr(user_obj, "student_profile", None) else "accounts:admin_staff_list")
     return render(
         request,
         "accounts/admin_user_detail.html",
         {
             "user_obj": user_obj,
             "student_profile": getattr(user_obj, "student_profile", None),
+            "back_url": back_url,
         },
     )
 
@@ -594,7 +592,7 @@ def admin_staff_assignments(request, user_id):
     )
 
     cohorts = Cohort.objects.all()
-    course_versions = CourseVersion.objects.select_related("course", "cohort").all()
+    course_versions = CourseVersion.objects.select_related("course").all()
 
     ctx = {
         "staff_user": staff_user,
@@ -762,7 +760,7 @@ def _dashboard_url_name(user: User) -> str:
     if role == GROUP_SECRETARY:
         return "attendance:attendance_session_list"
     if role == GROUP_STUDENT:
-        return "accounts:dashboard_student"
+        return "students:dashboard"
     return "core:landing"
 
 

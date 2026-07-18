@@ -256,8 +256,10 @@ class SubmitAssessmentTests(TestCase):
             AssessmentAnswerData(question_id=self.mcq_q.id, selected_choice_id=self.correct_choice.id),
         ])
         self.attempt.refresh_from_db()
-        self.assertEqual(self.attempt.status, ATTEMPT_STATUS_SUBMITTED)
+        self.assertEqual(self.attempt.status, ATTEMPT_STATUS_GRADED)
         self.assertEqual(self.attempt.score_points, Decimal("10.00"))
+        self.assertIsNotNone(self.attempt.graded_at)
+        self.assertTrue(self.attempt.is_pass)
 
     def test_mcq_wrong_answer(self):
         submit_assessment(self.attempt, [
@@ -317,7 +319,7 @@ class SubmitAssessmentTests(TestCase):
             AssessmentAnswerData(question_id=self.mcq_q.id, selected_choice_id=self.correct_choice.id),
         ])
         self.attempt.refresh_from_db()
-        self.assertEqual(self.attempt.status, ATTEMPT_STATUS_SUBMITTED)
+        self.assertEqual(self.attempt.status, ATTEMPT_STATUS_GRADED)
 
     def test_duration_expired_raises(self):
         self.assessment.duration_minutes = 30
@@ -401,11 +403,16 @@ class GradeHomeworkTests(TestCase):
             open_at=now - timezone.timedelta(days=1),
             close_at=now + timezone.timedelta(days=7),
             passing_score=Decimal("50.00"),
+            total_points=Decimal("20.00"),
             is_active=True,
             created_by=self.admin,
         )
         self.submission = HomeworkSubmission.objects.create(
             assessment=self.assessment, student=self.student,
+            attempt=AssessmentAttempt.objects.create(
+                assessment=self.assessment, student=self.student,
+                attempt_number=1, status=ATTEMPT_STATUS_SUBMITTED,
+            ),
             original_filename="hw.pdf", storage_key="hw/hw.pdf",
             content_type="application/pdf", file_size=1024,
         )
@@ -417,6 +424,12 @@ class GradeHomeworkTests(TestCase):
         self.assertEqual(result.status, HOMEWORK_STATUS_GRADED)
         self.assertIsNotNone(result.reviewed_at)
         self.assertEqual(result.reviewed_by, self.grader)
+        result.attempt.refresh_from_db()
+        self.assertEqual(result.attempt.status, ATTEMPT_STATUS_GRADED)
+        self.assertEqual(result.attempt.score_points, Decimal("18.00"))
+        self.assertEqual(result.attempt.score_percent, Decimal("90.00"))
+        self.assertTrue(result.attempt.is_pass)
+        self.assertEqual(result.attempt.graded_by, self.grader)
 
 
 class ReleaseAndHideGradesTests(TestCase):
@@ -973,6 +986,7 @@ class FullFlowIntegrationTests(TestCase):
             open_at=self.now - timezone.timedelta(days=1),
             close_at=self.now + timezone.timedelta(days=7),
             passing_score=Decimal("50.00"),
+            total_points=Decimal("20.00"),
             is_active=True,
             max_attempts=3,
             created_by=self.admin,

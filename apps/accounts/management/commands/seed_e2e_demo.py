@@ -243,7 +243,7 @@ class Command(BaseCommand):
                 student_users[s["email"]] = (user, s)
 
             diploma, sem1, sem2, course, cohort_a, cohort_b = self._ensure_academics(super_admin)
-            course_version = self._ensure_course_version(super_admin, course, sem1)
+            course_version = self._ensure_course_version(super_admin, course)
             self._ensure_lectures(course_version)
 
             profiles: dict[str, StudentProfile] = {}
@@ -432,25 +432,22 @@ class Command(BaseCommand):
 
         return diploma, sem1, sem2, course, cohort_a, cohort_b
 
-    def _ensure_course_version(self, admin, course, sem1):
+    def _ensure_course_version(self, admin, course):
         course_version = (
             CourseVersion.objects
-            .filter(course=course, cohort__isnull=True, label="course")
+            .filter(course=course, label="course")
             .first()
         )
         if course_version is None:
             course_version = CourseVersion.objects.create(
                 course=course,
-                cohort=None,
                 label="course",
-                semester=sem1,
                 access_duration_days=90,
                 is_active=True,
                 created_by=admin,
             )
             self._report("CourseVersion", True)
         else:
-            course_version.semester = sem1
             course_version.access_duration_days = 90
             course_version.is_active = True
             course_version.created_by = admin
@@ -1125,7 +1122,7 @@ class Command(BaseCommand):
         out.append("- Student portal: `/profile/`")
         out.append("- Admin applications: `/applications/admin/`")
         out.append("- Program applications: `/applications/programs/`")
-        out.append("- Academics: `/academics/my-courses/`")
+        out.append("- Learning: `/profile/diploma-course/`")
         out.append("- Assessments: `/assessments/`")
         out.append("- Entrance exams: `/entrance-exams/`")
         out.append("- Payments: `/payments/`")

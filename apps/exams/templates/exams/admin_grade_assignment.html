@@ -87,12 +87,6 @@
                          class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900 dark:text-slate-100">
                 </div>
               </div>
-              {% if not answer.graded_at %}
-                <div class="mt-3">
-              {% url 'exams:admin_grade_with_gemini' answer.id as gemini_url %}
-              {% include "partials/_button.html" with href=gemini_url label=_("Grade with Gemini") variant="secondary" size="sm" class="text-brand-600 dark:text-brand-400" %}
-                </div>
-              {% endif %}
               {% if answer.graded_at %}
                 <p class="mt-2 text-xs text-slate-500 dark:text-slate-400 tabular-nums">
                   {% trans "Graded" %} {% dt answer.graded_at %}

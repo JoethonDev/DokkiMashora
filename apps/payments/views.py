@@ -10,7 +10,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_POST
 
-from apps.accounts.constants import GROUP_ADMIN, GROUP_MODERATOR, GROUP_SUPER_ADMIN
+from apps.accounts.constants import GROUP_ADMIN, GROUP_SUPER_ADMIN
 from apps.audit.constants import (
     ACTION_PAYMENT_RECORD_DELETED,
     ACTION_PAYMENT_UPLOAD_CONFIRMED,
@@ -40,7 +40,7 @@ from .services import (
     preview_upload,
 )
 
-ROLE_PAYMENT_STAFF = (GROUP_SUPER_ADMIN, GROUP_ADMIN, GROUP_MODERATOR)
+ROLE_PAYMENT_STAFF = (GROUP_SUPER_ADMIN, GROUP_ADMIN)
 
 
 @login_required

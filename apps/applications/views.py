@@ -17,7 +17,7 @@ from django.views.decorators.http import require_http_methods
 
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
-from apps.core.permissions import is_admin
+from apps.core.permissions import ROLE_SENIOR_STAFF, is_admin, role_required
 from apps.intake_forms.selectors import get_application_intake_state  # noqa: E402
 from apps.intake_forms.services import request_intake_form_for_application  # noqa: E402
 from apps.storage.services import StorageError, storage_service
@@ -163,11 +163,9 @@ def _reject_allowed(status, program_type=None):
 
 
 @require_http_methods(["GET"])
-@login_required
+@role_required(*ROLE_SENIOR_STAFF)
 def program_application_list(request: HttpRequest) -> HttpResponse:
     """Admin list of program applications, with status filter."""
-    if not is_admin(request.user):
-        raise PermissionDenied
     status_filter = request.GET.get("status", "")
     program_type_filter = request.GET.get("program_type", "")
     q = request.GET.get("q", "")
@@ -211,11 +209,9 @@ def program_application_list(request: HttpRequest) -> HttpResponse:
 
 
 @require_http_methods(["GET", "POST"])
-@login_required
+@role_required(*ROLE_SENIOR_STAFF)
 def program_application_detail(request: HttpRequest, application_id: int) -> HttpResponse:
     """Admin detail/edit view for a ProgramApplication with actions."""
-    if not is_admin(request.user):
-        raise PermissionDenied
     application = get_object_or_404(
         ProgramApplication.objects.select_related(
             "student__user", "reviewed_by", "cohort__diploma", "course"

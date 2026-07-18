@@ -1,0 +1,36 @@
+{% load i18n %}
+<p class="{{ heading_class }}">{% trans "People" %}</p>
+<a href="{% url 'accounts:admin_student_list' %}" class="{{ link_class }}">{% trans "Students" %}</a>
+<a href="{% url 'accounts:admin_student_import' %}" class="{{ link_class }}">{% trans "Import Students" %}</a>
+<a href="{% url 'accounts:admin_staff_list' %}" class="{{ link_class }}">{% trans "Staff" %}</a>
+<a href="{% url 'applications:program_list' %}" class="{{ link_class }}">{% trans "Program Applications" %}</a>
+
+<p class="{{ heading_class }}">{% trans "Academics" %}</p>
+<a href="{% url 'academics:admin_diploma_list' %}" class="{{ link_class }}">{% trans "Diplomas" %}</a>
+<a href="{% url 'academics:admin_course_list' %}" class="{{ link_class }}">{% trans "Courses" %}</a>
+
+<p class="{{ heading_class }}">{% trans "Evaluation" %}</p>
+<a href="{% url 'assessments:admin_list' %}" class="{{ link_class }}">{% trans "Assessments" %}</a>
+<a href="{% url 'assessments:admin_reviewer_assignment_list' %}" class="{{ link_class }}">{% trans "Reviewer Assignments" %}</a>
+<a href="{% url 'entrance_exams:admin_list' %}" class="{{ link_class }}">{% trans "Entrance Exams" %}</a>
+
+<p class="{{ heading_class }}">{% trans "Progression &amp; Attendance" %}</p>
+<a href="{% url 'progression:admin_dashboard' %}" class="{{ link_class }}">{% trans "Progression Dashboard" %}</a>
+<a href="{% url 'progression:admin_rejoin_plan_list' %}" class="{{ link_class }}">{% trans "Rejoin Plans" %}</a>
+<a href="{% url 'attendance:attendance_session_list' %}" class="{{ link_class }}">{% trans "Attendance Sessions" %}</a>
+<a href="{% url 'attendance:attendance_scan' %}" class="{{ link_class }}">{% trans "Scan Attendance" %}</a>
+
+<p class="{{ heading_class }}">{% trans "Intake" %}</p>
+<a href="{% url 'intake_forms:admin_intake_form_list' %}" class="{{ link_class }}">{% trans "Intake Form Builder" %}</a>
+
+<p class="{{ heading_class }}">{% trans "Finance &amp; Communications" %}</p>
+<a href="{% url 'payments:upload_list' %}" class="{{ link_class }}">{% trans "Payment Uploads" %}</a>
+<a href="{% url 'payments:record_list' %}" class="{{ link_class }}">{% trans "Payment Records" %}</a>
+<a href="{% url 'communications:admin_template_list' %}" class="{{ link_class }}">{% trans "Email Templates" %}</a>
+<a href="{% url 'entrance_exams:admin_email_log_list' %}" class="{{ link_class }}">{% trans "Entrance Exam Email Log" %}</a>
+
+<p class="{{ heading_class }}">{% trans "System" %}</p>
+<a href="{% url 'core:landing_settings' %}" class="{{ link_class }}">{% trans "Landing Page" %}</a>
+{% if request.user.is_staff or request.user.is_superuser %}
+  <a href="{% url 'admin:index' %}" class="{{ link_class }}">{% trans "Django Admin" %}</a>
+{% endif %}

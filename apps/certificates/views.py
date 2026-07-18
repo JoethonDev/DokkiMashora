@@ -17,7 +17,7 @@ from apps.audit.constants import (
 )
 from apps.audit.services import record_audit_event
 from apps.core.pagination import paginate
-from apps.core.permissions import ROLE_SENIOR_STAFF, is_admin, is_moderator, role_required
+from apps.core.permissions import ROLE_SENIOR_STAFF, is_admin, is_moderator, role_required, student_required
 from apps.progression.constants import CERTIFICATE_STATUS_AVAILABLE
 from apps.storage.services import storage_service
 from apps.students.models import StudentProfile
@@ -211,7 +211,7 @@ def admin_regenerate_certificate(request, cert_id):
 # ---------------------------------------------------------------------------
 
 
-@login_required
+@student_required
 def student_certificate_list(request):
     student_profile = getattr(request.user, "student_profile", None)
     if not student_profile:
@@ -229,7 +229,7 @@ def student_certificate_list(request):
     return render(request, "certificates/student_certificate_list.html", ctx)
 
 
-@login_required
+@student_required
 def student_certificate_download(request, cert_id):
     student_profile = getattr(request.user, "student_profile", None)
     cert = get_object_or_404(

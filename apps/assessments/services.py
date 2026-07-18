@@ -377,15 +377,22 @@ def submit_assessment(attempt: AssessmentAttempt, answers: list[AssessmentAnswer
                     },
                 )
                 has_ungraded = True
-        status = ATTEMPT_STATUS_UNDER_REVIEW if has_ungraded else ATTEMPT_STATUS_SUBMITTED
+        status = ATTEMPT_STATUS_UNDER_REVIEW if has_ungraded else ATTEMPT_STATUS_GRADED
         attempt.status = status
         attempt.submitted_at = now
         attempt.score_points = total_score
         if total_possible > 0:
             attempt.score_percent = (total_score / total_possible) * Decimal("100.00")
+        if not has_ungraded:
+            attempt.graded_at = now
+            attempt.is_pass = (
+                attempt.score_percent >= assessment.passing_score
+                if attempt.score_percent is not None else False
+            )
         attempt.save(
             update_fields=[
                 "status", "submitted_at", "score_points", "score_percent",
+                "graded_at", "is_pass",
             ],
         )
     return attempt
@@ -707,14 +714,31 @@ def _update_diploma_attempt_grade(attempt: AssessmentAttempt) -> None:
 
 
 def grade_homework(submission_id: int, score: Decimal, feedback: str, grader) -> HomeworkSubmission:
-    validate_score(score, max_score=None)
-    submission = HomeworkSubmission.objects.select_related("assessment").get(id=submission_id)
-    submission.score = score
-    submission.feedback = feedback
-    submission.reviewed_at = timezone.now()
-    submission.reviewed_by = grader
-    submission.status = HOMEWORK_STATUS_GRADED
-    submission.save(update_fields=["score", "feedback", "reviewed_at", "reviewed_by", "status"])
+    with transaction.atomic():
+        submission = HomeworkSubmission.objects.select_for_update().select_related("assessment").get(id=submission_id)
+        score = validate_score(score, max_score=submission.assessment.total_points)
+        if not submission.attempt_id:
+            raise ValueError(_("This homework submission has no linked assessment attempt."))
+        attempt = AssessmentAttempt.objects.select_for_update().get(pk=submission.attempt_id)
+        now = timezone.now()
+        submission.score = score
+        submission.feedback = feedback
+        submission.reviewed_at = now
+        submission.reviewed_by = grader
+        submission.status = HOMEWORK_STATUS_GRADED
+        submission.save(update_fields=["score", "feedback", "reviewed_at", "reviewed_by", "status"])
+
+        if submission.assessment.total_points <= 0:
+            raise ValueError(_("Assessment total points must be positive."))
+        attempt.score_points = score
+        attempt.score_percent = (score / submission.assessment.total_points * Decimal("100")).quantize(Decimal("0.01"))
+        attempt.graded_at = now
+        attempt.graded_by = grader
+        attempt.is_pass = attempt.score_percent >= submission.assessment.passing_score
+        attempt.status = ATTEMPT_STATUS_GRADED
+        attempt.save(update_fields=[
+            "score_points", "score_percent", "graded_at", "graded_by", "is_pass", "status",
+        ])
     return submission
 
 

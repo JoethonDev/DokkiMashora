@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -17,9 +16,7 @@ from apps.academics.models import (
     Course,
     CourseEnrollment,
     CourseVersion,
-    DiplomaEnrollment,
     LectureWatchProgress,
-    ModeratorStudentAssignment,
     TeacherAssignment,
 )
 from apps.assessments.constants import (
@@ -29,6 +26,7 @@ from apps.assessments.constants import (
 )
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
+from apps.core.permissions import student_required
 from apps.entrance_exams.constants import ATTEMPT_STATUS_GRADED
 
 from .forms import StudentProfileUpdateForm
@@ -82,7 +80,7 @@ def _render_profile(request, template_name, context):
 # ---------------------------------------------------------------------------
 
 
-@login_required
+@student_required
 def dashboard(request: HttpRequest) -> HttpResponse:
     """Student profile dashboard -- aggregation overview."""
     profile = _get_profile_or_404(request.user)
@@ -95,7 +93,7 @@ def dashboard(request: HttpRequest) -> HttpResponse:
 # ---------------------------------------------------------------------------
 
 
-@login_required
+@student_required
 def details(request: HttpRequest) -> HttpResponse:
     """View-only student profile details."""
     profile = _get_profile_or_404(request.user)
@@ -112,7 +110,7 @@ def details(request: HttpRequest) -> HttpResponse:
 # ---------------------------------------------------------------------------
 
 
-@login_required
+@student_required
 @require_http_methods(["GET", "POST"])
 def edit_profile(request: HttpRequest) -> HttpResponse:
     """Edit allowed student profile fields."""
@@ -133,7 +131,7 @@ def edit_profile(request: HttpRequest) -> HttpResponse:
 # ---------------------------------------------------------------------------
 
 
-@login_required
+@student_required
 def application_history(request: HttpRequest) -> HttpResponse:
     """Show all applications submitted by the student."""
     profile = _get_profile_or_404(request.user)
@@ -144,20 +142,7 @@ def application_history(request: HttpRequest) -> HttpResponse:
     return _render_profile(request, "students/profile/applications.html", data)
 
 
-# ---------------------------------------------------------------------------
-# Enrollment history
-# ---------------------------------------------------------------------------
-
-
-@login_required
-def enrollment_history(request: HttpRequest) -> HttpResponse:
-    """Show all diploma and course enrollments."""
-    profile = _get_profile_or_404(request.user)
-    data = get_dashboard_data(profile, sections=["diploma_enrollments", "course_enrollments"])
-    return _render_profile(request, "students/profile/enrollments.html", data)
-
-
-@login_required
+@student_required
 def diploma_course(request: HttpRequest) -> HttpResponse:
     """Show the student's diploma and course enrollments listing."""
     profile = _get_profile_or_404(request.user)
@@ -188,7 +173,7 @@ def diploma_course(request: HttpRequest) -> HttpResponse:
     return _render_profile(request, "students/profile/diploma_course.html", {"items": items})
 
 
-@login_required
+@student_required
 def diploma_course_detail(request: HttpRequest, version_id: int) -> HttpResponse:
     """Show course content, teacher, and moderator within the profile.
 
@@ -196,16 +181,7 @@ def diploma_course_detail(request: HttpRequest, version_id: int) -> HttpResponse
     Course-version content is served here.
     """
     profile = _get_profile_or_404(request.user)
-    cv = get_object_or_404(CourseVersion.objects.select_related("course", "cohort"), id=version_id, is_active=True)
-
-    # Redirect diploma course versions to the new DiplomaLecture detail page.
-    if cv.cohort_id and cv.cohort.diploma_id:
-        enrollment = DiplomaEnrollment.objects.filter(
-            student=profile, cohort=cv.cohort, status=ENROLLMENT_STATUS_ACTIVE
-        ).first()
-        if enrollment:
-            return redirect("academics:student_diploma_detail", enrollment_id=enrollment.id)
-        raise PermissionDenied
+    cv = get_object_or_404(CourseVersion.objects.select_related("course"), id=version_id, is_active=True)
 
     has_access = CourseEnrollment.objects.filter(student=profile, course_version=cv, status=ENROLLMENT_STATUS_ACTIVE).exists()
     if not has_access:
@@ -222,29 +198,10 @@ def diploma_course_detail(request: HttpRequest, version_id: int) -> HttpResponse
         TeacherAssignment.objects.filter(scope_type=SCOPE_COURSE_VERSION, course_version=cv, active=True)
         .select_related("teacher")
     )
-    moderator = None
-    if cv.cohort_id:
-        m = ModeratorStudentAssignment.objects.filter(
-            student=profile, cohort_id=cv.cohort_id, active=True
-        ).select_related("moderator").first()
-        moderator = m.moderator if m else None
     return _render_profile(request, "students/profile/diploma_course_detail.html", {
-        "course_version": cv, "lectures": lectures, "teachers": teachers, "moderator": moderator,
+        "course_version": cv, "lectures": lectures, "teachers": teachers,
         "completed_lecture_ids": completed_ids,
     })
-
-
-# ---------------------------------------------------------------------------
-# Access list (active + expired/restricted)
-# ---------------------------------------------------------------------------
-
-
-@login_required
-def access_list(request: HttpRequest) -> HttpResponse:
-    """Show active and expired/restricted access."""
-    profile = _get_profile_or_404(request.user)
-    data = get_dashboard_data(profile, sections=["active_courses", "expired_courses"])
-    return _render_profile(request, "students/profile/access.html", data)
 
 
 # ---------------------------------------------------------------------------
@@ -252,7 +209,7 @@ def access_list(request: HttpRequest) -> HttpResponse:
 # ---------------------------------------------------------------------------
 
 
-@login_required
+@student_required
 def exam_results(request: HttpRequest) -> HttpResponse:
     """Show entrance exam assignments and results."""
     profile = _get_profile_or_404(request.user)
@@ -266,7 +223,7 @@ def exam_results(request: HttpRequest) -> HttpResponse:
 # ---------------------------------------------------------------------------
 
 
-@login_required
+@student_required
 def assessment_history(request: HttpRequest) -> HttpResponse:
     """Show normal assessment attempts, grades, feedback."""
     profile = _get_profile_or_404(request.user)
@@ -278,24 +235,11 @@ def assessment_history(request: HttpRequest) -> HttpResponse:
 
 
 # ---------------------------------------------------------------------------
-# Homework submissions
-# ---------------------------------------------------------------------------
-
-
-@login_required
-def homework_list(request: HttpRequest) -> HttpResponse:
-    """Show homework submissions."""
-    profile = _get_profile_or_404(request.user)
-    data = get_dashboard_data(profile, sections=["homework_submissions"])
-    return _render_profile(request, "students/profile/homework.html", data)
-
-
-# ---------------------------------------------------------------------------
 # Progression history
 # ---------------------------------------------------------------------------
 
 
-@login_required
+@student_required
 def progression_history(request: HttpRequest) -> HttpResponse:
     """Show academic lifecycle -- semesters, promotions, completions."""
     profile = _get_profile_or_404(request.user)
@@ -306,50 +250,11 @@ def progression_history(request: HttpRequest) -> HttpResponse:
 
 
 # ---------------------------------------------------------------------------
-# Certificates
-# ---------------------------------------------------------------------------
-
-
-@login_required
-def certificate_list(request: HttpRequest) -> HttpResponse:
-    """Show available certificates."""
-    profile = _get_profile_or_404(request.user)
-    data = get_dashboard_data(profile, sections=["certificates"])
-    return _render_profile(request, "students/profile/certificates.html", data)
-
-
-# ---------------------------------------------------------------------------
-# Payment status (placeholder)
-# ---------------------------------------------------------------------------
-
-
-@login_required
-def payment_status(request: HttpRequest) -> HttpResponse:
-    """Show payment status -- placeholder until Phase 8."""
-    profile = _get_profile_or_404(request.user)
-    data = get_dashboard_data(profile, sections=["payments"])
-    return _render_profile(request, "students/profile/payments.html", data)
-
-
-# ---------------------------------------------------------------------------
-# Notification history
-# ---------------------------------------------------------------------------
-
-
-@login_required
-def notification_history(request: HttpRequest) -> HttpResponse:
-    """Show email/notification history."""
-    profile = _get_profile_or_404(request.user)
-    data = get_dashboard_data(profile, sections=["notifications"])
-    return _render_profile(request, "students/profile/notifications.html", data)
-
-
-# ---------------------------------------------------------------------------
 # Apply
 # ---------------------------------------------------------------------------
 
 
-@login_required
+@student_required
 @require_http_methods(["GET", "POST"])
 def apply(request: HttpRequest) -> HttpResponse:
     """Apply flow -- create a new ProgramApplication if eligible."""

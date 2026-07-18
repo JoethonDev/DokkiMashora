@@ -356,10 +356,24 @@ def send_post_activation_application_email(application, actor=None, force_resend
 
     Emails are sent via on_commit so they only fire after the transaction commits.
     """
-    if application.status not in (PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED, PROGRAM_APP_STATUS_PAYMENT_PENDING, PROGRAM_APP_STATUS_INVITED):
+    if application.status not in (
+        PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED,
+        PROGRAM_APP_STATUS_ACCEPTED,
+        PROGRAM_APP_STATUS_PAYMENT_PENDING,
+        PROGRAM_APP_STATUS_INVITED,
+        PROGRAM_APP_STATUS_SURVEY_SUBMITTED,
+    ):
         raise ValueError(_("Application must be in account_activated status to send post-activation email."))
 
     if application.program_type == PROGRAM_TYPE_COURSE:
+        from apps.intake_forms.selectors import get_required_intake_form_for_application
+        from apps.intake_forms.services import ensure_required_intake_request
+
+        form = get_required_intake_form_for_application(application)
+        if form and not has_required_intake_response(application):
+            ensure_required_intake_request(application, actor=actor)
+            return
+
         email_action = "course_payment_instructions"
         if not force_resend and _has_non_resend_email_log(application, email_action):
             return
@@ -512,8 +526,11 @@ def accept_program_application(application, actor, notes: str = "", send_email: 
         transaction.on_commit(lambda: _send_program_app_acceptance_email(application))
 
     # Trigger intake request for course applications that are already paid
-    if application.program_type == PROGRAM_TYPE_COURSE and has_application_paid_record(application):
-        _attempt_intake_request_safe(application, actor=actor)
+    if application.program_type == PROGRAM_TYPE_COURSE:
+        if has_application_paid_record(application):
+            _attempt_intake_request_safe(application, actor=actor)
+        else:
+            send_post_activation_application_email(application, actor=actor)
 
 
 @transaction.atomic
@@ -706,7 +723,7 @@ def can_activate_application(application) -> ActivationCheck:
         reasons.append("account_not_activated")
 
     if application.program_type == PROGRAM_TYPE_COURSE:
-        if application.status != PROGRAM_APP_STATUS_ACCEPTED:
+        if application.status not in (PROGRAM_APP_STATUS_ACCEPTED, PROGRAM_APP_STATUS_PAYMENT_PENDING):
             reasons.append("not_accepted")
         if not application.course:
             reasons.append("no_course_target")
@@ -854,6 +871,7 @@ def _find_paid_record_id(application):
 
 LEGAL_PAYMENT_STATUSES = {
     PROGRAM_APP_STATUS_ACCEPTED,
+    PROGRAM_APP_STATUS_PAYMENT_PENDING,
     PROGRAM_APP_STATUS_DOCUMENTS_REQUESTED,
     PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED,
     PROGRAM_APP_STATUS_SURVEY_REQUESTED,

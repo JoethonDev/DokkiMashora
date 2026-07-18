@@ -67,6 +67,7 @@ from apps.core.permissions import (
     is_admin,
     is_student,
     role_required,
+    student_required,
 )
 from apps.core.views import safe_next_url
 from apps.intake_forms.models import IntakeForm
@@ -348,7 +349,7 @@ def admin_course_list(request):
 @role_required(*ROLE_EXAM_STAFF)
 def admin_course_detail(request, course_id):
     course = get_object_or_404(Course, id=course_id)
-    versions = course.versions.select_related("cohort", "semester").prefetch_related("lectures").all()
+    versions = course.versions.prefetch_related("lectures").all()
     return render(
         request,
         "academics/admin_course_detail.html",
@@ -677,47 +678,7 @@ def _process_lecture_audio(request, lecture, files, key_prefix=None):
 # ---------------------------------------------------------------------------
 
 
-@login_required
-def student_course_list(request):
-    """Show the student their enrolled courses and diploma enrollments."""
-    if not is_student(request.user) and not request.user.is_superuser:
-        raise PermissionDenied
-    try:
-        profile = request.user.student_profile
-    except StudentProfile.DoesNotExist:
-        return render(request, "academics/student_course_list.html", {"diploma_enrollments": [], "course_versions": []})
-
-    # Course versions
-    course_versions = get_student_course_versions(profile)
-
-    # Diploma enrollments with progress
-    diploma_enrollments = list(
-        DiplomaEnrollment.objects.filter(student=profile, status=ENROLLMENT_STATUS_ACTIVE)
-        .select_related("cohort__diploma")
-    )
-    # Annotate with lecture counts per enrollment
-    diploma_data = []
-    for de in diploma_enrollments:
-        cohort = de.cohort
-        lecture_count = DiplomaLecture.objects.filter(
-            cohort=cohort,
-            is_published=True,
-        ).count()
-        diploma_data.append({
-            "enrollment": de,
-            "diploma": cohort.diploma,
-            "cohort": cohort,
-            "lecture_count": lecture_count,
-        })
-
-    return render(
-        request,
-        "academics/student_course_list.html",
-        {"diploma_data": diploma_data, "course_versions": course_versions},
-    )
-
-
-@login_required
+@student_required
 def student_course_detail(request, version_id):
     """Show a student the lectures for a course version they can access."""
     if not is_student(request.user) and not request.user.is_superuser:
@@ -757,7 +718,7 @@ def student_course_detail(request, version_id):
     )
 
 
-@login_required
+@student_required
 def student_lecture_view(request, version_id, lecture_id):
     """Show a student a single lecture (YouTube embed, authenticated only)."""
     if not is_student(request.user) and not request.user.is_superuser:
@@ -777,7 +738,7 @@ def student_lecture_view(request, version_id, lecture_id):
     )
 
 
-@login_required
+@student_required
 def student_lecture_audio(request, version_id, lecture_id, file_path=""):
     """Serve lecture audio file (HLS playlist/segment) with permission check."""
     if not is_student(request.user) and not request.user.is_superuser:
@@ -804,7 +765,7 @@ def student_lecture_audio(request, version_id, lecture_id, file_path=""):
     return HttpResponse(file_data, content_type=content_type)
 
 
-@login_required
+@student_required
 def student_lecture_audio_download(request, version_id, lecture_id):
     """Serve original uploaded audio file with permission check."""
     if not is_student(request.user) and not request.user.is_superuser:

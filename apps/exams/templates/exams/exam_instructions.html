@@ -33,7 +33,7 @@
         </p>
       </div>
     </div>
-    <form method="post" action="{% if token %}{% url 'exams:start_exam_token' token %}{% else %}{% url 'exams:start_exam' exam.id %}{% endif %}" class="mt-6">
+    <form method="post" action="{% url 'exams:start_exam' exam.id %}" class="mt-6">
       {% csrf_token %}
       {% include "partials/_button.html" with label=_("Start Exam") variant="primary" size="lg" %}
     </form>

@@ -16,10 +16,12 @@
       <nav class="hidden md:flex items-center gap-5 text-sm font-medium dm-muted">
         <a href="{% url 'core:landing' %}" class="hover:text-brand-700 dark:hover:text-brand-300 dm-brand-text">{% trans "Home" %}</a>
         {% if user.is_authenticated %}
-          <a href="{% url 'accounts:dashboard' %}" class="hover:text-brand-700 dark:hover:text-brand-300 dm-brand-text">{% trans "Dashboard" %}</a>
           {% if CAN_VIEW_STUDENT_NAV %}
-            <a href="{% url 'students:dashboard' %}" class="hover:text-brand-700 dark:hover:text-brand-300 dm-brand-text">{% trans "My Profile" %}</a>
-            <a href="{% url 'academics:student_course_list' %}" class="hover:text-brand-700 dark:hover:text-brand-300 dm-brand-text">{% trans "My Courses" %}</a>
+            <a href="{% url 'students:dashboard' %}" class="hover:text-brand-700 dark:hover:text-brand-300 dm-brand-text">{% trans "My Portal" %}</a>
+          {% elif CAN_VIEW_REVIEWER_NAV %}
+            <a href="{% url 'assessments:reviewer_dashboard' %}" class="hover:text-brand-700 dark:hover:text-brand-300 dm-brand-text">{% trans "Review Dashboard" %}</a>
+          {% else %}
+            <a href="{% url 'accounts:dashboard' %}" class="hover:text-brand-700 dark:hover:text-brand-300 dm-brand-text">{% trans "Dashboard" %}</a>
           {% endif %}
           {% if CAN_VIEW_ADMIN_NAV %}
             <div x-data="{ open: false }" class="relative">
@@ -35,30 +37,7 @@
                    x-transition:leave-start="opacity-100 translate-y-0"
                    x-transition:leave-end="opacity-0 -translate-y-2"
                    class="absolute top-full start-0 mt-1 w-56 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg py-2 text-sm z-50" @click="open = false">
-                <p class="px-4 py-1 text-xs font-bold text-brand-600 dark:text-brand-400 uppercase tracking-wider">{% trans "People" %}</p>
-                <a href="{% url 'accounts:admin_student_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Students" %}</a>
-                 <a href="{% url 'accounts:admin_student_import' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Import Students" %}</a>
-                <a href="{% url 'accounts:admin_staff_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Staff" %}</a>
-                 <a href="{% url 'applications:program_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Admission Applications" %}</a>
-                <p class="mt-3 pt-3 border-t dm-border px-4 py-1 text-xs font-bold text-brand-600 dark:text-brand-400 uppercase tracking-wider">{% trans "Academics" %}</p>
-                <a href="{% url 'academics:admin_diploma_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Diplomas" %}</a>
-                 <a href="{% url 'academics:admin_course_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Courses" %}</a>
-                 <p class="mt-3 pt-3 border-t dm-border px-4 py-1 text-xs font-bold text-brand-600 dark:text-brand-400 uppercase tracking-wider">{% trans "Assessments" %}</p>
-                <a href="{% url 'assessments:admin_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Assessments" %}</a>
-                <a href="{% url 'assessments:admin_reviewer_assignment_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Reviewer Assignments" %}</a>
-                <a href="{% url 'entrance_exams:admin_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Entrance Exams" %}</a>
-                <p class="mt-3 pt-3 border-t dm-border px-4 py-1 text-xs font-bold text-brand-600 dark:text-brand-400 uppercase tracking-wider">{% trans "Progression &amp; Attendance" %}</p>
-                <a href="{% url 'progression:admin_dashboard' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Progression Dashboard" %}</a>
-                <a href="{% url 'progression:admin_rejoin_plan_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Rejoin Plans" %}</a>
-                <a href="{% url 'attendance:attendance_session_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Attendance Sessions" %}</a>
-                <a href="{% url 'attendance:attendance_scan' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Scan Attendance" %}</a>
-                <p class="mt-3 pt-3 border-t dm-border px-4 py-1 text-xs font-bold text-brand-600 dark:text-brand-400 uppercase tracking-wider">{% trans "Intake Forms" %}</p>
-                <a href="{% url 'intake_forms:admin_intake_form_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Intake Form Builder" %}</a>
-                 <p class="mt-3 pt-3 border-t dm-border px-4 py-1 text-xs font-bold text-brand-600 dark:text-brand-400 uppercase tracking-wider">{% trans "Payments &amp; Email" %}</p>
-                <a href="{% url 'payments:upload_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Payment Uploads" %}</a>
-                <a href="{% url 'payments:record_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Payment Records" %}</a>
-                <a href="{% url 'communications:admin_template_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Email Templates" %}</a>
-                <a href="{% url 'entrance_exams:admin_email_log_list' %}" class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Email Log" %}</a>
+                 {% include "partials/_admin_nav_items.html" with heading_class="mt-3 pt-3 border-t dm-border px-4 py-1 text-xs font-bold text-brand-600 dark:text-brand-400 uppercase tracking-wider first:mt-0 first:pt-1 first:border-0" link_class="block px-4 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800" %}
               </div>
             </div>
           {% elif CAN_VIEW_MODERATOR_NAV %}

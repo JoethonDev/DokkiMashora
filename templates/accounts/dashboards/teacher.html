@@ -8,13 +8,8 @@
     <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{% trans "Your classes" %}</h1>
   </header>
 
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-    {% include "accounts/dashboards/_tile.html" with title=_("Active cohorts") value="0" sub=_("Assigned to you") %}
-    {% include "accounts/dashboards/_tile.html" with title=_("Homework to grade") value="0" sub=_("This week") %}
-    {% include "accounts/dashboards/_tile.html" with title=_("Quizzes") value="0" sub=_("Draft + published") %}
-  </div>
-  <div class="mt-8 sm:mt-10 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 text-sm text-slate-500 dark:text-slate-400">
-    {% trans "Course content and grading tools land in Phase 4 and Phase 5." %}
+  <div class="mt-8 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 text-sm text-slate-500 dark:text-slate-400">
+    {% trans "No assigned work yet." %}
   </div>
 </div>
 {% endblock content %}

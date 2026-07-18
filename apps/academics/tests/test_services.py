@@ -228,7 +228,7 @@ class YouTubeMetadataTests(TestCase):
         from unittest.mock import patch
 
         from apps.academics.services import populate_youtube_metadata
-        course = Course.objects.create(title="YT", is_standalone=True, created_by=self.user)
+        course = Course.objects.create(title="YT", created_by=self.user)
         version = CourseVersion.objects.create(course=course, label="v1", created_by=self.user)
         lecture = Lecture.objects.create(
             course_version=version, order=1, title="L1",
@@ -242,7 +242,7 @@ class YouTubeMetadataTests(TestCase):
 
     def test_populate_youtube_metadata_clears_id_on_blank_url(self):
         from apps.academics.services import populate_youtube_metadata
-        course = Course.objects.create(title="YT2", is_standalone=True, created_by=self.user)
+        course = Course.objects.create(title="YT2", created_by=self.user)
         version = CourseVersion.objects.create(course=course, label="v1", created_by=self.user)
         lecture = Lecture.objects.create(
             course_version=version, order=1, title="L1",
@@ -258,7 +258,7 @@ class YouTubeMetadataTests(TestCase):
         from unittest.mock import patch
 
         from apps.academics.services import populate_youtube_metadata
-        course = Course.objects.create(title="YT3", is_standalone=True, created_by=self.user)
+        course = Course.objects.create(title="YT3", created_by=self.user)
         version = CourseVersion.objects.create(course=course, label="v1", created_by=self.user)
         lecture = Lecture.objects.create(
             course_version=version, order=1, title="L1",
@@ -281,7 +281,7 @@ class WatchServerTests(TestCase):
         from apps.students.models import StudentProfile
         self.user = User.objects.create_user("watch@test.com", password="pass")
         self.student = StudentProfile.objects.create(user=self.user, full_name="W", date_of_birth=date(2000, 1, 1))
-        self.course = Course.objects.create(title="WC", is_standalone=True, created_by=self.user)
+        self.course = Course.objects.create(title="WC", created_by=self.user)
         self.version = CourseVersion.objects.create(course=self.course, label="v1", created_by=self.user)
         self.lecture = Lecture.objects.create(
             course_version=self.version, order=1, title="WL1",

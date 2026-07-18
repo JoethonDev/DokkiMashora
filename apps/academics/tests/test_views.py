@@ -176,11 +176,6 @@ class AdminViewTests(TestCase):
         r = self.client.get(reverse("academics:admin_course_edit", args=[self.course.id]))
         self.assertEqual(r.status_code, 200)
 
-    def test_standalone_course_form_still_shows_standalone(self):
-        standalone = Course.objects.create(title="Standalone", created_by=self.admin, is_standalone=True)
-        r = self.client.get(reverse("academics:admin_course_edit", args=[standalone.id]))
-        self.assertContains(r, 'name="is_standalone"')
-
     def test_cohort_create_get(self):
         r = self.client.get(reverse("academics:admin_cohort_create", args=[self.diploma.id]))
         self.assertEqual(r.status_code, 200)

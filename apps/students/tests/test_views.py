@@ -5,11 +5,13 @@ from __future__ import annotations
 from datetime import date
 
 from django.test import TestCase
+from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.utils.translation import override as translation_override
 
-from apps.academics.models import Cohort, Diploma, DiplomaEnrollment
+from apps.academics.models import Cohort, Course, CourseEnrollment, CourseVersion, Diploma
 from apps.accounts.models import User
+from apps.accounts.constants import GROUP_STUDENT
 from apps.applications.constants import (
     PROGRAM_APP_STATUS_ACTIVATED,
     PROGRAM_APP_STATUS_REJECTED,
@@ -22,6 +24,7 @@ from apps.students.models import StudentProfile
 
 def _create_student(email="student@example.com") -> tuple[User, StudentProfile]:
     user = User.objects.create_user(email=email, password="x", full_name="Test Student")
+    user.groups.add(Group.objects.get_or_create(name=GROUP_STUDENT)[0])
     profile = StudentProfile.objects.create(
         user=user,
         full_name="Test Student",
@@ -44,11 +47,8 @@ class AnonymousAccessTests(TestCase):
     def test_all_views_redirect_anonymous(self) -> None:
         names = [
             "students:dashboard", "students:details", "students:edit_profile",
-            "students:application_history", "students:enrollment_history",
-            "students:access_list", "students:exam_results",
-            "students:assessment_history", "students:homework_list",
-            "students:progression_history", "students:certificate_list",
-            "students:payment_status", "students:notification_history",
+            "students:application_history", "students:exam_results",
+            "students:assessment_history", "students:progression_history",
             "students:apply",
         ]
         for name in names:
@@ -77,32 +77,14 @@ class AuthenticatedAccessTests(TestCase):
     def test_application_history_accessible(self) -> None:
         self.assertEqual(self.client.get(reverse("students:application_history")).status_code, 200)
 
-    def test_enrollment_history_accessible(self) -> None:
-        self.assertEqual(self.client.get(reverse("students:enrollment_history")).status_code, 200)
-
-    def test_access_list_accessible(self) -> None:
-        self.assertEqual(self.client.get(reverse("students:access_list")).status_code, 200)
-
     def test_exam_results_accessible(self) -> None:
         self.assertEqual(self.client.get(reverse("students:exam_results")).status_code, 200)
 
     def test_assessment_history_accessible(self) -> None:
         self.assertEqual(self.client.get(reverse("students:assessment_history")).status_code, 200)
 
-    def test_homework_list_accessible(self) -> None:
-        self.assertEqual(self.client.get(reverse("students:homework_list")).status_code, 200)
-
     def test_progression_history_accessible(self) -> None:
         self.assertEqual(self.client.get(reverse("students:progression_history")).status_code, 200)
-
-    def test_certificate_list_accessible(self) -> None:
-        self.assertEqual(self.client.get(reverse("students:certificate_list")).status_code, 200)
-
-    def test_payment_status_accessible(self) -> None:
-        self.assertEqual(self.client.get(reverse("students:payment_status")).status_code, 200)
-
-    def test_notification_history_accessible(self) -> None:
-        self.assertEqual(self.client.get(reverse("students:notification_history")).status_code, 200)
 
     def test_apply_accessible(self) -> None:
         self.assertEqual(self.client.get(reverse("students:apply")).status_code, 200)
@@ -140,7 +122,7 @@ class DetailsViewTests(TestCase):
         self.assertContains(response, "Test Student")
         self.assertContains(response, "student@example.com")
         self.assertContains(response, "Phone number")
-        self.assertContains(response, "Edit allowed fields")
+        self.assertContains(response, ">Edit<")
 
 
 class EditProfileViewTests(TestCase):
@@ -196,23 +178,23 @@ class ApplicationHistoryViewTests(TestCase):
         self.assertContains(response, "Submitted")
 
 
-class EnrollmentHistoryViewTests(TestCase):
+class CourseDetailViewTests(TestCase):
     def setUp(self) -> None:
         self.admin = User.objects.create_superuser(email="admin@test.com", password="x")
         self.user, self.profile = _create_student()
         self.client.force_login(self.user)
-        self.diploma = Diploma.objects.create(title="Test Diploma", created_by=self.admin)
-        self.cohort = Cohort.objects.create(
-            diploma=self.diploma, name="C2025",
-            start_date=date(2025, 9, 1), created_by=self.admin,
+        self.course = Course.objects.create(title="Test Course", created_by=self.admin)
+        self.version = CourseVersion.objects.create(course=self.course, created_by=self.admin)
+
+    def test_course_detail_does_not_assume_course_version_has_cohort(self) -> None:
+        CourseEnrollment.objects.create(
+            student=self.profile, course_version=self.version, status="active",
         )
 
-    def test_shows_diploma_enrollment(self) -> None:
-        DiplomaEnrollment.objects.create(
-            student=self.profile, cohort=self.cohort, status="active",
-        )
-        response = self.client.get(reverse("students:enrollment_history"))
+        response = self.client.get(reverse("students:diploma_course_detail", args=[self.version.id]))
+
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Test Course")
 
 
 class ApplyViewTests(TestCase):
@@ -293,9 +275,9 @@ class ApplyViewTests(TestCase):
         existing.refresh_from_db()
         self.assertEqual(existing.status, PROGRAM_APP_STATUS_ACTIVATED)
 
-    def test_profile_without_student_profile_returns_404(self) -> None:
-        """A user without a StudentProfile should get 404 on profile views."""
+    def test_non_student_cannot_open_profile(self) -> None:
+        """A user without the student role is denied before profile lookup."""
         user = User.objects.create_user(email="noprofile@example.com", password="x")
         self.client.force_login(user)
         response = self.client.get(reverse("students:dashboard"))
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 403)

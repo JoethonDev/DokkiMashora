@@ -154,8 +154,8 @@ class Command(BaseCommand):
         )
         self._report("Diploma enrollment", _)
 
-        version_ot = CourseVersion.objects.filter(course=course_ot, cohort=cohort).first()
-        version_nt = CourseVersion.objects.filter(course=course_nt, cohort=cohort).first()
+        version_ot = CourseVersion.objects.filter(course=course_ot, is_active=True).first()
+        version_nt = CourseVersion.objects.filter(course=course_nt, is_active=True).first()
 
         if version_ot:
             CourseEnrollment.objects.get_or_create(
@@ -290,7 +290,7 @@ class Command(BaseCommand):
             title="Homework: Church History Essay",
             defaults={
                 "assessment_type": ASSESSMENT_TYPE_HOMEWORK,
-                "course_version": CourseVersion.objects.filter(cohort=cohort).first(),
+                "course_version": CourseVersion.objects.filter(course__is_active=True, is_active=True).first(),
                 "semester": sem2,
                 "cohort": cohort,
                 "created_by": teacher or admin,

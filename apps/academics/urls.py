@@ -125,7 +125,6 @@ urlpatterns = [
         name="admin_diploma_lecture_preview",
     ),
     # Student: content access
-    path("my-courses/", views.student_course_list, name="student_course_list"),
     path("my-courses/<int:version_id>/", views.student_course_detail, name="student_course_detail"),
     path(
         "my-courses/<int:version_id>/lectures/<int:lecture_id>/",

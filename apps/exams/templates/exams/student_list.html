@@ -29,18 +29,6 @@
             </p>
           </div>
           <div class="shrink-0">
-            {% if a.exam.exam_type == "entrance" %}
-              {% if a.status == "assigned" %}
-                {% url 'exams:exam_instructions_token' a.exam.access_token as action_url %}
-                {% include "partials/_button.html" with href=action_url label=_("Start") variant="primary" %}
-              {% elif a.status == "in_progress" %}
-                {% url 'exams:take_exam_token' a.exam.access_token as action_url %}
-                {% include "partials/_button.html" with href=action_url label=_("Continue") variant="primary" %}
-              {% elif a.status == "completed" or a.status == "graded" %}
-                {% url 'exams:exam_results_token' a.exam.access_token as action_url %}
-                {% include "partials/_button.html" with href=action_url label=_("View Results") variant="secondary" %}
-              {% endif %}
-            {% else %}
               {% if a.status == "assigned" %}
                 {% url 'exams:exam_instructions' a.exam.id as action_url %}
                 {% include "partials/_button.html" with href=action_url label=_("Start") variant="primary" %}
@@ -51,7 +39,6 @@
                 {% url 'exams:results' a.exam.id as action_url %}
                 {% include "partials/_button.html" with href=action_url label=_("View Results") variant="secondary" %}
               {% endif %}
-            {% endif %}
           </div>
         </div>
       {% endfor %}

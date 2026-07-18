@@ -12,7 +12,7 @@ from django.views.decorators.http import require_http_methods
 from apps.academics.models import Cohort, CourseVersion
 from apps.applications.models import ProgramApplication
 from apps.core.pagination import paginate
-from apps.core.permissions import is_admin
+from apps.core.permissions import ROLE_SENIOR_STAFF, is_admin, role_required, student_required
 
 from .constants import FIELD_TYPE_BOOLEAN, INTAKE_REQUEST_STATUS_EXPIRED, INTAKE_REQUEST_STATUS_SUBMITTED
 from .forms import IntakeFormBuildForm, IntakeFormFieldForm, IntakeFormSubmitForm
@@ -37,10 +37,8 @@ def _get_profile_or_404(user):
 
 
 @require_http_methods(["GET"])
-@login_required
+@role_required(*ROLE_SENIOR_STAFF)
 def admin_intake_form_list(request: HttpRequest) -> HttpResponse:
-    if not is_admin(request.user):
-        raise PermissionDenied
     forms_qs = IntakeForm.objects.select_related(
         "course_version__course", "cohort__diploma", "created_by",
     ).order_by("-created_at")
@@ -49,10 +47,8 @@ def admin_intake_form_list(request: HttpRequest) -> HttpResponse:
 
 
 @require_http_methods(["GET", "POST"])
-@login_required
+@role_required(*ROLE_SENIOR_STAFF)
 def admin_intake_form_create(request: HttpRequest) -> HttpResponse:
-    if not is_admin(request.user):
-        raise PermissionDenied
     if request.method == "POST":
         form = IntakeFormBuildForm(request.POST)
         if form.is_valid():
@@ -90,10 +86,8 @@ def admin_intake_form_create(request: HttpRequest) -> HttpResponse:
 
 
 @require_http_methods(["GET", "POST"])
-@login_required
+@role_required(*ROLE_SENIOR_STAFF)
 def admin_intake_form_detail(request: HttpRequest, form_id: int) -> HttpResponse:
-    if not is_admin(request.user):
-        raise PermissionDenied
     intake_form = get_object_or_404(
         IntakeForm.objects.select_related("course_version__course", "cohort__diploma"),
         pk=form_id,
@@ -208,7 +202,7 @@ def admin_intake_request_send(request: HttpRequest, application_id: int) -> Http
 
 
 @require_http_methods(["GET", "POST"])
-@login_required
+@student_required
 def fill_intake_form(request: HttpRequest, token: str) -> HttpResponse:
     """Student fills an intake form via expiring token link."""
     profile = _get_profile_or_404(request.user)

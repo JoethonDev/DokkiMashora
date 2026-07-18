@@ -22,7 +22,7 @@
     </div>
   </div>
 
-  <form id="exam-form" method="post" action="{% if token %}{% url 'exams:submit_exam_token' token %}{% else %}{% url 'exams:submit_exam' exam.id %}{% endif %}">
+  <form id="exam-form" method="post" action="{% url 'exams:submit_exam' exam.id %}">
     {% csrf_token %}
     {% for question in questions %}
       <fieldset class="mb-8 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5" id="q-{{ question.id }}">

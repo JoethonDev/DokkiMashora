@@ -115,7 +115,7 @@
                   <a href="{% url 'intake_forms:admin_cohort_intake_responses' cohort.id %}" class="text-xs text-brand-600 dark:text-brand-400 hover:underline font-semibold">{% trans "View Intake" %}</a>
                 </td>
                 <td class="px-4 py-3">
-                  <div class="flex flex-wrap items-center justify-end gap-2">
+                  <div class="flex flex-wrap items-center justify-center gap-2">
                     <a href="{% url 'academics:admin_cohort_edit' diploma.id cohort.id %}?next={{ request.path|urlencode }}" class="text-slate-600 dark:text-slate-300 hover:text-brand-600 text-sm font-semibold">{% trans "Edit" %}</a>
                   </div>
                 </td>
