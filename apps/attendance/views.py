@@ -70,6 +70,7 @@ def attendance_session_list(request):
     cohort_id = safe_int(request.GET.get("cohort_id"))
     date_from = safe_date_str(request.GET.get("date_from"))
     date_to = safe_date_str(request.GET.get("date_to"))
+    exception = request.GET.get("exception", "")
 
     if cohort_id:
         sessions = sessions.filter(cohort_id=cohort_id)
@@ -77,6 +78,8 @@ def attendance_session_list(request):
         sessions = sessions.filter(date__gte=date_from)
     if date_to:
         sessions = sessions.filter(date__lte=date_to)
+    if exception == "overdue":
+        sessions = sessions.filter(status="scheduled", date__lt=timezone.localdate())
 
     sessions = sessions.order_by("-date", "-created_at")
 
@@ -86,6 +89,7 @@ def attendance_session_list(request):
         "selected_cohort_id": cohort_id,
         "date_from": date_from,
         "date_to": date_to,
+        "exception": exception,
         "breadcrumb_items": [{"label": _("Attendance Sessions")}],
         "is_admin_user": is_admin(request.user),
     }

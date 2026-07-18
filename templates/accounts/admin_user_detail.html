@@ -82,6 +82,31 @@
       <dd class="text-slate-900 dark:text-slate-100">{{ student_profile.priest_contact|default:"—" }}</dd>
     </dl>
   </div>
+
+  <div class="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <section class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+      <h2 class="font-semibold mb-3">{% trans "Applications" %}</h2>
+      <div class="space-y-2 text-sm">{% for application in applications %}<a class="block rounded-lg border border-slate-200 dark:border-slate-700 p-3 hover:border-brand-500" href="{% url 'applications:program_detail' application.id %}"><span class="font-medium">{% if application.cohort %}{{ application.cohort }}{% elif application.course %}{{ application.course.title }}{% endif %}</span><span class="ms-2 text-slate-500">{{ application.get_status_display }}</span></a>{% empty %}<p class="text-slate-500">{% trans "No applications." %}</p>{% endfor %}</div><a class="mt-3 inline-block text-sm text-brand-600 hover:underline" href="{{ application_list_url }}">{% trans "View all applications" %}</a>
+    </section>
+    <section class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+      <h2 class="font-semibold mb-3">{% trans "Enrollment and access" %}</h2>
+      <div class="space-y-2 text-sm">{% for enrollment in enrollment_links %}<a href="{{ enrollment.url }}" class="block rounded-lg border border-slate-200 dark:border-slate-700 p-3 hover:border-brand-500"><span class="font-medium">{{ enrollment.label }}</span> <span class="text-slate-500">{{ enrollment.status }}</span></a>{% empty %}<p class="text-slate-500">{% trans "No enrollments." %}</p>{% endfor %}</div><a class="mt-3 inline-block text-sm text-brand-600 hover:underline" href="{{ progression_url }}">{% trans "View progression and access" %}</a>
+    </section>
+    <section class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+      <h2 class="font-semibold mb-3">{% trans "Payments and attendance" %}</h2>
+      <p class="text-sm mb-3">{% trans "Attendance records" %}: <strong>{{ attendance_count }}</strong></p>
+      <div class="space-y-2 text-sm">{% for payment in payments %}<a href="{% url 'payments:record_detail' payment.id %}" class="flex justify-between gap-2 hover:text-brand-600"><span>{{ payment.amount }} {{ payment.get_currency_display }}</span><span class="text-slate-500">{{ payment.get_status_display }}</span></a>{% empty %}<p class="text-slate-500">{% trans "No payments." %}</p>{% endfor %}</div><a class="mt-3 inline-block text-sm text-brand-600 hover:underline" href="{{ payment_list_url }}">{% trans "View all payments" %}</a>
+    </section>
+    <section class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+      <h2 class="font-semibold mb-3">{% trans "Progression and certificates" %}</h2>
+      <div class="space-y-2 text-sm">{% for item in progression %}<p>{{ item.semester }} — {{ item.get_status_display }}</p>{% empty %}<p class="text-slate-500">{% trans "No progression records." %}</p>{% endfor %}{% for certificate in certificates %}<p class="text-brand-600">{{ certificate.diploma_enrollment.cohort.diploma }} — {{ certificate.get_status_display }}</p>{% endfor %}</div>
+    </section>
+  </div>
+  <div class="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <section class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5"><h2 class="font-semibold mb-3">{% trans "Assessments and entrance exams" %}</h2>{% for attempt in assessment_attempts %}<p class="text-sm">{{ attempt.assessment }} — {{ attempt.get_status_display }}</p>{% empty %}<p class="text-sm text-slate-500">{% trans "No learning assessments." %}</p>{% endfor %}{% for attempt in entrance_attempts %}<p class="text-sm">{{ attempt.exam }} — {{ attempt.get_status_display }}</p>{% endfor %}<div class="mt-3 flex gap-3 text-sm"><a class="text-brand-600 hover:underline" href="{{ assessment_list_url }}">{% trans "View all assessments" %}</a><a class="text-brand-600 hover:underline" href="{{ entrance_list_url }}">{% trans "View all entrance exams" %}</a></div></section>
+    <section class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5"><h2 class="font-semibold mb-3">{% trans "Staff assignments" %}</h2>{% for assignment in staff_assignments %}<a class="block text-sm text-brand-600 hover:underline" href="{% url 'accounts:admin_staff_assignments' assignment.moderator_id %}">{{ assignment.moderator }} — {{ assignment.cohort|default:_('All assigned scope') }}</a>{% empty %}<p class="text-sm text-slate-500">{% trans "No direct staff assignments." %}</p>{% endfor %}<a class="mt-3 inline-block text-sm text-brand-600 hover:underline" href="{{ staff_assignment_url }}">{% trans "View assignment context" %}</a></section>
+    <section class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5"><h2 class="font-semibold mb-3">{% trans "Progression and certificates" %}</h2>{% for item in progression %}<p>{{ item.semester }} — {{ item.get_status_display }}</p>{% empty %}<p class="text-slate-500">{% trans "No progression records." %}</p>{% endfor %}{% for certificate in certificates %}<p class="text-brand-600">{{ certificate.diploma_enrollment.cohort.diploma }} — {{ certificate.get_status_display }}</p>{% endfor %}<a class="mt-3 inline-block text-sm text-brand-600 hover:underline" href="{{ certificate_list_url }}">{% trans "View all certificates" %}</a></section>
+  </div>
   {% endif %}
 </div>
 {% endblock %}

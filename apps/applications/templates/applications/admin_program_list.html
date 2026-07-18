@@ -12,6 +12,17 @@
   </header>
 
   {% include "partials/_search_filter.html" %}
+  <form method="get" class="mb-4 flex flex-wrap items-end gap-3 text-sm">
+    <input type="hidden" name="q" value="{{ search_value }}">
+    <input type="hidden" name="status" value="{{ request.GET.status }}">
+    <input type="hidden" name="program_type" value="{{ request.GET.program_type }}">
+    <input type="hidden" name="action_needed" value="{{ request.GET.action_needed }}">
+    <input type="hidden" name="cohort" value="{{ request.GET.cohort }}">
+    <input type="hidden" name="student_id" value="{{ request.GET.student_id }}">
+    <label>{% trans "From" %}<input type="date" name="from" value="{{ from_filter }}" class="ms-2 rounded-lg border border-slate-300 px-2 py-1.5 dark:border-slate-700 dark:bg-slate-900"></label>
+    <label>{% trans "To" %}<input type="date" name="to" value="{{ to_filter }}" class="ms-2 rounded-lg border border-slate-300 px-2 py-1.5 dark:border-slate-700 dark:bg-slate-900"></label>
+    <button class="dm-button dm-button-secondary px-3 py-1.5" type="submit">{% trans "Apply dates" %}</button>
+  </form>
 
   <div id="list-table">
   {% include "applications/partials/_program_list_table.html" %}

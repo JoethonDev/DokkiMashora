@@ -45,7 +45,7 @@ from apps.communications.constants import (
 from apps.communications.services import send_templated_email
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
-from apps.core.permissions import ROLE_EXAM_STAFF, is_admin, role_required, student_required
+from apps.core.permissions import ROLE_EXAM_STAFF, is_admin, role_required, safe_int, student_required
 from apps.students.models import StudentProfile
 
 from .constants import (
@@ -173,6 +173,7 @@ def take_exam(request, token):
         "questions": questions,
         "remaining_seconds": remaining,
         "access_token": token,
+        "student_id": request.user.pk,
     })
 
 
@@ -188,7 +189,10 @@ def submit_exam(request, token):
     for key, value in request.POST.items():
         if not key.startswith("question_"):
             continue
-        qid = int(key.removeprefix("question_"))
+        qid = safe_int(key.removeprefix("question_"))
+        if qid is None:
+            messages.error(request, _("Invalid question."))
+            return redirect("entrance_exams:take_exam", token=token)
         question = questions.get(qid)
         if not question:
             messages.error(request, _("Unknown question."))
@@ -258,9 +262,12 @@ def admin_list(request):
     """List all entrance exams for admin."""
     if not is_admin(request.user):
         raise PermissionDenied
+    student_id = request.GET.get("student_id", "")
     exams = EntranceExam.objects.select_related("diploma", "cohort", "created_by")
+    if student_id.isdigit():
+        exams = exams.filter(attempts__student_id=int(student_id)).distinct()
     page_obj, pagination_qs = paginate(request, exams)
-    return render(request, "entrance_exams/admin_list.html", {"page_obj": page_obj, "pagination_qs": pagination_qs})
+    return render(request, "entrance_exams/admin_list.html", {"page_obj": page_obj, "pagination_qs": pagination_qs, "student_id": student_id})
 
 
 @login_required

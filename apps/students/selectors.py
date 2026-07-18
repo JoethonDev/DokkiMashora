@@ -9,7 +9,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from django.db.models import Count, Q
+from django.urls import reverse
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 from apps.academics.constants import (
     ENROLLMENT_STATUS_ACTIVE,
@@ -22,8 +24,16 @@ from apps.academics.models import (
     CourseEnrollment,
     CourseVersion,
     DiplomaEnrollment,
+    DiplomaLectureWatchProgress,
+    Lecture,
+    LectureWatchProgress,
 )
 from apps.applications.models import ProgramApplication
+from apps.applications.constants import (
+    DOCUMENT_REQUEST_STATUS_REQUESTED,
+    PROGRAM_APP_STATUS_PAYMENT_PENDING,
+    PROGRAM_APP_STATUS_REJECTED,
+)
 from apps.assessments.models import AssessmentAttempt, HomeworkSubmission
 from apps.assessments.services import get_student_attempts
 from apps.certificates.models import GeneratedCertificate
@@ -40,6 +50,8 @@ from apps.progression.models import (
     StudentSemesterProgress,
 )
 from apps.students.services import check_apply_eligibility
+from apps.attendance.models import AttendanceRecord
+from apps.academics.services import get_visible_diploma_lectures
 
 if TYPE_CHECKING:
     from apps.accounts.models import User
@@ -47,11 +59,12 @@ if TYPE_CHECKING:
 
 
 ALL_SECTIONS = [
-    "identity", "applications", "diploma_enrollments", "course_enrollments",
+    "identity", "applications", "intake_requests", "diploma_enrollments", "course_enrollments",
     "active_courses", "expired_courses", "exam_assignments",
     "assessment_attempts", "homework_submissions", "semester_progress",
     "promotion_decisions", "completions", "certificates", "eligibilities", "apply",
     "payments", "notifications", "grade_items",
+    "attendance",
 ]
 
 _SECTION_LOADERS: dict[str, tuple] = {
@@ -74,6 +87,7 @@ _SECTION_LOADERS: dict[str, tuple] = {
     "payments": ("payments", lambda p, u: _get_payments(p)),
     "notifications": ("notifications", lambda p, u: _get_notifications(p)),
     "apply": ("apply", lambda p, u: _apply_eligibility(p)),
+    "attendance": ("attendance", lambda p, u: _get_attendance(p)),
 }
 
 
@@ -102,7 +116,117 @@ def get_dashboard_data(
             result[key] = loader_fn(student_profile, user)
 
     result.setdefault("apply", None)
+    result.update(_home_context(result))
     return result
+
+
+def _home_context(data: dict) -> dict:
+    """Build the student's actionable home from already-loaded sections."""
+    now = timezone.now()
+    actions = []
+    applications = data.get("applications", [])
+    open_applications = [a for a in applications if a.status != PROGRAM_APP_STATUS_REJECTED]
+
+    for application in open_applications:
+        target = application.cohort.diploma.title if application.cohort_id and application.cohort.diploma_id else getattr(application.course, "title", _("Program"))
+        for request in application.document_requests.all():
+            if request.status == DOCUMENT_REQUEST_STATUS_REQUESTED and request.expires_at > now:
+                actions.append({
+                    "kind": "document", "priority": "urgent" if (request.expires_at - now).days < 7 else "normal",
+                    "title": _("Upload requested documents"),
+                    "description": target, "url": reverse("students:applications"),
+                    "cta_label": _("Open application"), "due_at": request.expires_at, "blocked_reason": None,
+                })
+        for request in application.intake_requests.all():
+            if request.status == "requested" and request.expires_at > now:
+                actions.append({
+                    "kind": "intake", "priority": "urgent" if (request.expires_at - now).days < 7 else "normal",
+                    "title": _("Complete the intake form"), "description": target,
+                    "url": reverse("students:applications"), "cta_label": _("Open application"),
+                    "due_at": request.expires_at, "blocked_reason": None,
+                })
+        if application.status == PROGRAM_APP_STATUS_PAYMENT_PENDING:
+            actions.append({
+                "kind": "payment", "priority": "urgent", "title": _("Complete application payment"),
+                "description": target, "url": reverse("students:applications"),
+                "cta_label": _("Open application"), "due_at": None, "blocked_reason": None,
+            })
+
+    for attempt in data.get("exam_assignments", []):
+        if attempt.status in {"assigned", "in_progress"}:
+            actions.append({
+                "kind": "entrance_exam", "priority": "urgent", "title": attempt.exam.title,
+                "description": _("Your entrance exam is ready."),
+                "url": reverse("entrance_exams:exam_access_token", args=[attempt.exam.access_token]),
+                "cta_label": _("Continue exam"), "due_at": None, "blocked_reason": None,
+            })
+
+    for attempt in data.get("assessment_attempts", []):
+        if attempt.status in {"assigned", "in_progress"}:
+            close_at = getattr(attempt.assessment, "close_at", None)
+            actions.append({
+                "kind": "assessment", "priority": "normal", "title": attempt.assessment.title,
+                "description": _("Assessment ready to start or continue."),
+                "url": reverse("assessments:instructions", args=[attempt.assessment_id]),
+                "cta_label": _("Continue assessment"), "due_at": close_at if close_at and close_at > now else None, "blocked_reason": None,
+            })
+
+    for certificate in data.get("certificates", []):
+        actions.append({
+            "kind": "certificate", "priority": "normal", "title": _("Certificate available"),
+            "description": certificate.diploma_enrollment.cohort.diploma.title if certificate.diploma_enrollment_id else _("Your completed program"),
+            "url": reverse("certificates:student_certificate_download", args=[certificate.id]),
+            "cta_label": _("Download certificate"), "due_at": None, "blocked_reason": None,
+        })
+
+    for item in data.get("active_courses", []):
+        actions.append({
+            "kind": "lecture", "priority": "normal", "title": item["course"].title,
+            "description": _("Continue your learning."),
+            "url": reverse("students:learning"), "cta_label": _("Open Learning"),
+            "due_at": None, "blocked_reason": None,
+        })
+
+    actions.sort(key=lambda item: (item["priority"] != "urgent", item["due_at"] is None, item["due_at"] or now))
+    current_application = None
+    if open_applications:
+        application = open_applications[0]
+        current_application = {
+            "application": application,
+            "status": application.status,
+            "status_label": application.get_status_display(),
+            "title": application.cohort.diploma.title if application.cohort_id and application.cohort.diploma_id else getattr(application.course, "title", _("Program")),
+        }
+    diploma_cards = []
+    for enrollment in data.get("diploma_enrollments", []):
+        lectures = list(get_visible_diploma_lectures(data["student"], enrollment))
+        completed_ids = set(DiplomaLectureWatchProgress.objects.filter(
+            student=data["student"], diploma_enrollment=enrollment,
+            lecture_id__in=[lecture.id for lecture in lectures], status="completed",
+        ).values_list("lecture_id", flat=True))
+        next_lecture = next((lecture for lecture in lectures if lecture.id not in completed_ids), None)
+        diploma_attempt = next((attempt for attempt in data.get("assessment_attempts", []) if attempt.status in {"assigned", "in_progress"} and attempt.assessment.cohort_id == enrollment.cohort_id), None)
+        diploma_cards.append({
+            "type": "diploma", "title": enrollment.cohort.diploma.title,
+            "status": enrollment.status, "enrollment_id": enrollment.id,
+            "expires_at": enrollment.expires_at,
+            "lecture_count": len(lectures), "completed_count": len(completed_ids),
+            "next_lecture": next_lecture,
+            "next_lecture_url": reverse("academics:student_diploma_lecture_view", args=[enrollment.id, next_lecture.semester_id, next_lecture.id]) if next_lecture else None,
+            "next_assessment": diploma_attempt,
+            "next_assessment_url": reverse("assessments:instructions", args=[diploma_attempt.assessment_id]) if diploma_attempt else None,
+        })
+    return {
+        "next_actions": actions,
+        "learning_cards": diploma_cards + data.get("active_courses", []) + data.get("expired_courses", []),
+        "current_application": current_application,
+        "summary": {
+            "active_learning_count": len(data.get("active_courses", [])),
+            "actionable_assessment_count": sum(a.status in {"assigned", "in_progress"} for a in data.get("assessment_attempts", [])),
+            "open_entrance_exam_count": sum(a.status in {"assigned", "in_progress"} for a in data.get("exam_assignments", [])),
+            "available_certificate_count": len(data.get("certificates", [])),
+        },
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -140,6 +264,7 @@ def _get_applications(student_profile: StudentProfile) -> list[ProgramApplicatio
     return list(
         ProgramApplication.objects.filter(student=student_profile)
         .select_related("reviewed_by", "cohort__diploma", "course")
+        .prefetch_related("document_requests", "intake_requests")
         .order_by("-created_at")
     )
 
@@ -213,12 +338,31 @@ def _get_active_courses(student_profile: StudentProfile) -> list[dict]:
         .distinct()
         .order_by("course__title")
     )
+    versions = list(qs)
     enrollments_map = {
         e.course_version_id: e
         for e in CourseEnrollment.objects.filter(
             student=student_profile,
-            course_version__in=qs,
+            course_version_id__in=[cv.pk for cv in versions],
         )
+    }
+    lectures = list(Lecture.objects.filter(
+        course_version_id__in=[cv.pk for cv in versions], is_published=True,
+    ).filter(Q(release_at__isnull=True) | Q(release_at__lte=now)).order_by("course_version_id", "order"))
+    completed_ids = set(LectureWatchProgress.objects.filter(
+        student=student_profile, lecture_id__in=[lecture.pk for lecture in lectures], status="completed",
+    ).values_list("lecture_id", flat=True))
+    next_lectures = {}
+    for lecture in lectures:
+        if lecture.pk not in completed_ids and lecture.course_version_id not in next_lectures:
+            next_lectures[lecture.course_version_id] = lecture
+    next_assessments = {
+        attempt.assessment.course_version_id: attempt
+        for attempt in AssessmentAttempt.objects.filter(
+            student=student_profile.user,
+            assessment__course_version_id__in=[cv.pk for cv in versions],
+            status__in={"assigned", "in_progress"},
+        ).select_related("assessment").order_by("assessment__close_at")
     }
     return [
         {
@@ -227,8 +371,13 @@ def _get_active_courses(student_profile: StudentProfile) -> list[dict]:
             "lecture_count": cv.lecture_count,
             "completed_count": cv.completed_count,
             "expires_at": enrollments_map[cv.pk].expires_at if cv.pk in enrollments_map else None,
+            "status": ENROLLMENT_STATUS_ACTIVE,
+            "next_lecture": next_lectures.get(cv.pk),
+            "next_lecture_url": reverse("academics:student_lecture_view", args=[cv.pk, next_lectures[cv.pk].pk]) if cv.pk in next_lectures else None,
+            "next_assessment": next_assessments.get(cv.pk),
+            "next_assessment_url": reverse("assessments:instructions", args=[next_assessments[cv.pk].assessment_id]) if cv.pk in next_assessments else None,
         }
-        for cv in qs
+        for cv in versions
     ]
 
 
@@ -293,6 +442,31 @@ def _get_homework_submissions(user: User) -> list[HomeworkSubmission]:
         .select_related("assessment__course_version__course", "reviewed_by", "attempt")
         .order_by("-submitted_at")[:50]
     )
+
+
+def _get_attendance(student_profile: StudentProfile) -> dict:
+    attendance_qs = AttendanceRecord.objects.filter(student=student_profile)
+    records = list(
+        attendance_qs
+        .select_related("session")
+        .order_by("-session__date", "-id")[:50]
+    )
+    totals = attendance_qs.aggregate(
+        total=Count("id"),
+        present=Count("id", filter=Q(status="present")),
+        late=Count("id", filter=Q(status="late")),
+        excused=Count("id", filter=Q(status="excused")),
+        absent=Count("id", filter=Q(status="absent")),
+    )
+    counts = {status: totals[status] or 0 for status in ("present", "late", "excused", "absent")}
+    total = totals["total"] or 0
+    attended = counts["present"] + counts["late"]
+    return {
+        "records": records,
+        "counts": counts,
+        "total": total,
+        "attendance_percent": round(attended / total * 100, 2) if total else 0,
+    }
 
 
 # ---------------------------------------------------------------------------

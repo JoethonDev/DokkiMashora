@@ -44,6 +44,7 @@
     <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ lecture.title }}</h1>
     {% if version %}<p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{{ version.course.title }}</p>{% elif diploma %}<p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{{ semester.title }}</p>{% endif %}
   </header>
+  {% if watch_progress %}<div class="mb-6 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4"><p class="text-sm font-semibold">{% trans "Your progress" %}: {% if watch_progress.status == "completed" %}{% trans "Completed" %}{% else %}{% trans "Resume available" %}{% endif %}</p></div>{% endif %}
 
   {% if lecture.description %}
     <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 mb-6">
@@ -119,6 +120,12 @@
       <audio controls class="w-full"><source src="{{ lecture.audio_url }}"></audio>
     </div>
   {% endif %}
+  {% if lecture.audio_processing_status == "failed" %}<div class="rounded-xl border border-rose-200 bg-rose-50 dark:border-rose-900 dark:bg-rose-950/30 p-5 mb-6" role="alert"><p class="font-semibold">{% trans "Audio is temporarily unavailable" %}</p><p class="text-sm mt-1">{% trans "The uploaded audio could not be prepared. Please try again later." %}</p></div>{% endif %}
+
+  <nav class="mt-6 flex flex-wrap items-center justify-between gap-3" aria-label="{% trans 'Lecture navigation' %}">
+    {% if navigation.previous_url %}<a class="dm-button dm-button-secondary min-h-11 px-4 py-2 text-sm" href="{{ navigation.previous_url }}">{% trans "Previous" %}</a>{% else %}<span></span>{% endif %}
+    {% if navigation.next_url %}<a class="dm-button dm-button-primary min-h-11 px-4 py-2 text-sm" href="{{ navigation.next_url }}">{% trans "Next lecture" %}</a>{% endif %}
+  </nav>
 
   <div>
     {% if is_preview %}

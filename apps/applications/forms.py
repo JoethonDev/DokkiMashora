@@ -77,7 +77,17 @@ class RegistrationForm(forms.Form):
         super().__init__(*args, **kwargs)
         self._load_program_choices()
         cc_raw = (self.data.get("country_code") if self.data else None) or self.initial.get("country_code") or "EG"
-        self.fields["national_id"].label = identity_label(normalize_country_code(cc_raw))
+        country_code = normalize_country_code(cc_raw)
+        self.fields["national_id"].label = identity_label(country_code)
+        self.fields["national_id"].help_text = (
+            _("Enter 14 digits, for example 29001010100001.")
+            if country_code == "EG" else
+            _("Use the passport number as printed, for example A1234567.")
+        )
+        phone_prefix = {"EG": "+20", "SA": "+966", "AE": "+971", "US": "+1", "GB": "+44", "CA": "+1", "AU": "+61"}.get(country_code, "+country code")
+        self.fields["phone"].help_text = _(
+            "Use international format, for example %(prefix)s 10 1234 5678."
+        ) % {"prefix": phone_prefix}
 
     def _load_program_choices(self) -> None:
         self.fields["program_type"].choices = PROGRAM_TYPE_CHOICES

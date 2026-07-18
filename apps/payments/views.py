@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -41,18 +42,21 @@ from .services import (
 )
 
 ROLE_PAYMENT_STAFF = (GROUP_SUPER_ADMIN, GROUP_ADMIN)
+logger = logging.getLogger(__name__)
 
 
 @login_required
 @role_required(*ROLE_PAYMENT_STAFF)
 def upload_list(request):
     status = request.GET.get("status", "")
+    row_status = request.GET.get("row_status", "")
     raw_date_from = request.GET.get("date_from", "")
     raw_date_to = request.GET.get("date_to", "")
     date_from = safe_date_str(raw_date_from)
     date_to = safe_date_str(raw_date_to)
     uploads = get_upload_queryset(
         status=status or None,
+        row_status=row_status or None,
         date_from=date_from,
         date_to=date_to,
     )
@@ -65,6 +69,7 @@ def upload_list(request):
             "pagination_qs": pagination_qs,
             "upload_status_choices": UPLOAD_STATUS_CHOICES,
             "current_status": status,
+            "current_row_status": row_status,
             "current_date_from": raw_date_from,
             "current_date_to": raw_date_to,
         },
@@ -126,8 +131,9 @@ def upload_create(request):
                 return redirect("payments:upload_detail", upload_id=upload.id)
             except ValueError as e:
                 messages.error(request, str(e))
-            except Exception as e:
-                messages.error(request, _("Failed to process file: %(error)s") % {"error": str(e)})
+            except Exception:
+                logger.exception("Payment upload processing failed for %s", request.FILES["csv_file"].name)
+                messages.error(request, _("The file could not be processed. Check the format and try again."))
     return render(request, "payments/admin_upload_form.html", {"form": form})
 
 

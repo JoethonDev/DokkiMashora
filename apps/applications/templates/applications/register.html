@@ -26,25 +26,31 @@
      <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{% trans "Please fill in the form below. We will send an activation email after your account is created." %}</p>
   </header>
 
-  <form method="post" id="registration-form" class="space-y-5" novalidate>
+  <form method="post" id="registration-form" class="space-y-5" novalidate x-data="{step: {{ registration_error_step|default:1 }}}">
     {% csrf_token %}
     {% if form.non_field_errors %}
-      <div class="rounded-md bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-200 text-sm px-3 py-2">
+      <div id="registration-errors" role="alert" class="rounded-md bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-200 text-sm px-3 py-2">
         {{ form.non_field_errors|join:" " }}
       </div>
     {% endif %}
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      {% for field in form %}
-        {% if field.name != "apply_program" and field.name != "program_type" and field.name != "diploma" and field.name != "program_target" %}
-          <div class="{% if field.name == 'address' or field.name == 'priest_contact' %}sm:col-span-2{% endif %}">
-            {% include "partials/_field.html" %}
-          </div>
-        {% endif %}
-      {% endfor %}
-    </div>
+    <nav aria-label="{% trans 'Registration steps' %}" class="grid grid-cols-3 gap-2 text-sm">
+      <button type="button" @click="step = 1" :aria-current="step === 1 ? 'step' : null" class="rounded-lg border px-3 py-2 text-start" :class="step === 1 ? 'border-brand-500 bg-brand-50 dark:bg-brand-950/30' : 'border-slate-200 dark:border-slate-700'"><span class="font-semibold">1.</span> {% trans "Your details" %}</button>
+      <button type="button" @click="step = 2" :aria-current="step === 2 ? 'step' : null" class="rounded-lg border px-3 py-2 text-start" :class="step === 2 ? 'border-brand-500 bg-brand-50 dark:bg-brand-950/30' : 'border-slate-200 dark:border-slate-700'"><span class="font-semibold">2.</span> {% trans "Contact" %}</button>
+      <button type="button" @click="step = 3" :aria-current="step === 3 ? 'step' : null" class="rounded-lg border px-3 py-2 text-start" :class="step === 3 ? 'border-brand-500 bg-brand-50 dark:bg-brand-950/30' : 'border-slate-200 dark:border-slate-700'"><span class="font-semibold">3.</span> {% trans "Program" %}</button>
+    </nav>
 
-    <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-4 space-y-4">
+    <fieldset x-show="step === 1" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <legend class="sr-only">{% trans "Your details" %}</legend>
+      {% for field in form %}{% if field.name in "full_name,date_of_birth,gender,address,education,country_code,national_id" %}<div class="{% if field.name == 'address' %}sm:col-span-2{% endif %}">{% include "partials/_field.html" %}</div>{% endif %}{% endfor %}
+    </fieldset>
+    <fieldset x-show="step === 2" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <legend class="sr-only">{% trans "Contact" %}</legend>
+      {% for field in form %}{% if field.name in "phone,email,specialization,employer,current_job,church,priest_name,priest_contact" %}<div class="{% if field.name == 'priest_contact' %}sm:col-span-2{% endif %}">{% include "partials/_field.html" %}</div>{% endif %}{% endfor %}
+    </fieldset>
+
+    <fieldset x-show="step === 3" class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-4 space-y-4">
+      <legend class="sr-only">{% trans "Program" %}</legend>
       <label class="flex items-center gap-3 cursor-pointer">
         <input type="checkbox" name="apply_program" value="true"
                x-ref="applyProgramCheckbox"
@@ -107,9 +113,13 @@
           </div>
         </div>
       </div>
-    </div>
+    </fieldset>
 
-    {% include "partials/_button.html" with label=_("Submit registration") variant="primary" class="w-full justify-center" %}
+    <div class="flex flex-wrap justify-between gap-2">
+      <button type="button" x-show="step > 1" @click="step--" class="dm-button dm-button-secondary px-4 py-2">{% trans "Previous" %}</button>
+      <button type="button" x-show="step < 3" @click="step++" class="dm-button dm-button-primary px-4 py-2 ms-auto">{% trans "Next" %}</button>
+      <button type="submit" x-show="step === 3" class="dm-button dm-button-primary px-4 py-2 ms-auto">{% trans "Submit registration" %}</button>
+    </div>
   </form>
 </div>
 
@@ -162,6 +172,10 @@
     clearErr(name);
     var input = form.querySelector('[name="' + name + '"]');
     if (!input) return;
+    var fieldset = input.closest('fieldset');
+    if (fieldset && window.Alpine && Alpine.$data) {
+      Alpine.$data(form).step = Array.prototype.indexOf.call(form.querySelectorAll('fieldset'), fieldset) + 1;
+    }
     mark(input);
     var p = document.createElement('p');
     p.id = 'ce-' + name;

@@ -1,7 +1,7 @@
 {% load i18n %}
 {% for course in items %}
   <button type="button"
-          class="w-full rounded-lg border px-3 py-2 text-left text-sm transition"
+          class="w-full rounded-lg border px-3 py-2 text-start text-sm transition"
           :class="selectedTarget === 'course_{{ course.pk }}' ? 'border-brand-500 bg-brand-50 dark:bg-brand-950/30' : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'"
           @click="$refs.target.value = 'course_{{ course.pk }}'; selectedTarget = 'course_{{ course.pk }}'">
     {{ course.title }}

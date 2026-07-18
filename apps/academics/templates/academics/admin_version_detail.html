@@ -5,6 +5,7 @@
 
 {% block content %}
 <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  {% include "partials/_breadcrumb.html" with items=breadcrumb_items %}
   <header class="mb-6 flex flex-wrap items-end justify-between gap-3">
     <div>
       <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Course version" %}</p>

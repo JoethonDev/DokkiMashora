@@ -1,10 +1,7 @@
-/* DokkiMashora LMS - base styles
- * Tailwind via CDN handles most styling. This file is for project-specific
- * overrides and ensures we have a stable asset to ship via WhiteNoise.
- */
+/* DokkiMashora LMS - project-specific overrides for the compiled Tailwind CSS. */
 
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
 }
 
 /* ── Dual UI Theme Tokens ───────────────────────────────────────────── */
@@ -100,12 +97,18 @@
   gap: 0.5rem;
   border-radius: 0.5rem;
   font-weight: 600;
+  min-height: 2.75rem;
   transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
 }
 
 .dm-button:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--dm-brand-soft);
+}
+
+:not(:disabled):focus-visible {
+  outline: 2px solid var(--dm-brand);
+  outline-offset: 2px;
 }
 
 .dm-button-primary {
@@ -138,6 +141,19 @@
 .dm-input {
   background: var(--dm-surface);
   border: 1px solid var(--dm-border);
+  color: var(--dm-text);
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="submit"]):not([type="button"]):not([type="reset"]),
+select,
+textarea {
+  color-scheme: light;
+  background-color: var(--dm-surface);
+  color: var(--dm-text);
+}
+
+select option {
+  background-color: var(--dm-surface);
   color: var(--dm-text);
 }
 
@@ -411,7 +427,10 @@ html, body {
 body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  line-height: 1.7;
 }
+
+html { font-size: 16px; }
 
 [dir="rtl"] .flip-on-rtl {
   transform: scaleX(-1);
@@ -419,6 +438,74 @@ body {
 
 .landing-hero {
   min-height: calc(100svh - 8rem);
+}
+
+.dm-touch-target { min-width: 2.75rem; min-height: 2.75rem; }
+
+.dm-control { min-height: 2.75rem; font-size: 1rem; }
+.dm-nav-active { font-weight: 700; color: var(--dm-brand-700, #047857); }
+
+.dm-account-identity { display: flex; }
+
+@media (max-width: 639px) {
+  .dm-account-identity { display: none; }
+}
+
+[lang="ar"] body, [lang="ar"] .font-sans, [lang="ar"] .font-display {
+  font-family: "Cairo", "Noto Sans Arabic", system-ui, sans-serif;
+}
+
+[lang="en"] body, [lang="en"] .font-sans, [lang="en"] .font-display {
+  font-family: Inter, system-ui, sans-serif;
+}
+
+@font-face {
+  font-family: "Cairo";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../fonts/Cairo-400.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Cairo";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("../fonts/Cairo-700.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../fonts/Inter-400.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("../fonts/Inter-700.ttf") format("truetype");
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a, button, input, select, textarea, summary, [role="button"] {
+    transition: color 160ms ease, background-color 160ms ease,
+      border-color 160ms ease, box-shadow 160ms ease, opacity 160ms ease,
+      transform 160ms ease;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 @media (min-width: 1024px) {
@@ -654,6 +741,10 @@ select:not([multiple]) {
   padding-inline-end: 2.5rem;
 }
 
+@media (max-width: 639px) {
+  .dm-language-select { width: 6rem; }
+}
+
 /* Tiny utility class for our loading spinner. */
 .spinner {
   display: inline-block;
@@ -783,10 +874,12 @@ main {
   scrollbar-width: thin;
   scrollbar-color: #cbd5e1 transparent;
 }
-@media (prefers-color-scheme: dark) {
-  * {
-    scrollbar-color: #334155 transparent;
-  }
+.dm-scrollbar-hidden {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.dm-scrollbar-hidden::-webkit-scrollbar {
+  display: none;
 }
 ::-webkit-scrollbar {
   width: 6px;
@@ -801,12 +894,4 @@ main {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
-}
-@media (prefers-color-scheme: dark) {
-  ::-webkit-scrollbar-thumb {
-    background: #334155;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    background: #475569;
-  }
 }

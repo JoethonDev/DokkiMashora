@@ -1,8 +1,8 @@
 {% load i18n %}
-<form action="{% url 'set_language' %}" method="post" class="flex items-center gap-1 text-xs">
+<form action="{% url 'set_language' %}" method="post" class="flex items-center gap-1 text-sm">
   {% csrf_token %}
   <input name="next" type="hidden" value="{{ request.get_full_path }}">
-  <select name="language" class="rounded-md dm-input px-2 py-1 text-xs" onchange="this.form.submit()">
+  <select name="language" class="dm-language-select dm-control rounded-md dm-input px-2 py-2 text-base" onchange="this.form.submit()">
     {% get_available_languages as languages %}
     {% get_current_language as current_lang %}
     {% for lang_code, lang_name in languages %}

@@ -27,6 +27,7 @@
     </div>
     <div id="qr-scanner" class="w-full aspect-video rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800"></div>
     <button type="button" id="start-scanner" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Open Camera" %}</button>
+    <p id="scanner-status" class="text-sm dm-muted" role="status" aria-live="polite">{% trans "Camera is off. You can type or paste a QR payload instead." %}</p>
     <button type="submit" class="dm-button dm-button-primary px-4 py-2 text-sm" {% if not open_sessions %}disabled{% endif %}>{% trans "Record Attendance" %}</button>
   </form>
 
@@ -53,20 +54,26 @@
   var el = document.getElementById('qr-scanner');
   var input = document.getElementById('qr_payload');
   var btn = document.getElementById('start-scanner');
+  var status = document.getElementById('scanner-status');
 
   function onScan(decodedText) {
     if (scanner) { scanner.stop().catch(function(){}); scanner.clear(); scanner = null; }
     input.value = decodedText;
     btn.textContent = '{% trans "Open Camera" %}';
+    status.textContent = '{% trans "QR code captured. Submit to record attendance." %}';
   }
 
   btn.addEventListener('click', function() {
     if (scanner) {
       scanner.stop().catch(function(){}); scanner.clear(); scanner = null;
       btn.textContent = '{% trans "Open Camera" %}';
+      status.textContent = '{% trans "Camera is off. You can type or paste a QR payload instead." %}';
       return;
     }
-    if (typeof Html5Qrcode === 'undefined') return;
+    if (typeof Html5Qrcode === 'undefined') {
+      status.textContent = '{% trans "Camera scanning is unavailable. Type the QR payload manually." %}';
+      return;
+    }
     scanner = new Html5Qrcode('qr-scanner');
     scanner.start(
       { facingMode: 'environment' },
@@ -78,6 +85,7 @@
     }).catch(function(err) {
       console.warn(err);
       scanner = null;
+      status.textContent = '{% trans "Camera permission was denied or no camera is available. Type the QR payload manually." %}';
     });
   });
 })();

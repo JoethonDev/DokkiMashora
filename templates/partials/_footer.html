@@ -12,7 +12,7 @@
       <ul class="mt-4 space-y-3 text-sm font-bold text-amber-50/80">
         <li><a href="{% url 'core:landing' %}#programs" class="hover:text-white hover:underline">{{ FOOTER_CONTENT.footer_programs_link }}</a></li>
         {% if not user.is_authenticated or CAN_VIEW_STUDENT_NAV %}<li><a href="{% if CAN_VIEW_STUDENT_NAV %}{% url 'students:apply' %}{% else %}{% url 'applications:register' %}{% endif %}" class="hover:text-white hover:underline">{{ FOOTER_CONTENT.footer_apply_link }}</a></li>{% endif %}
-        <li><a href="{% url 'accounts:login' %}" class="hover:text-white hover:underline">{{ FOOTER_CONTENT.footer_login_link }}</a></li>
+        {% if not user.is_authenticated %}<li><a href="{% url 'accounts:login' %}" class="hover:text-white hover:underline">{{ FOOTER_CONTENT.footer_login_link }}</a></li>{% endif %}
       </ul>
     </nav>
     <section>

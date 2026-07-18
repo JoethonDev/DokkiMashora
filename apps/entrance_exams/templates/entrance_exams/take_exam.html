@@ -14,11 +14,12 @@
     </div>
   </div>
 {% endif %}
-<div {% if not is_preview %}x-data="examTimer({{ remaining_seconds }}, '{{ access_token }}', '{{ exam.id }}')"{% endif %} class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+<div {% if not is_preview %}x-data="examTimer({{ remaining_seconds }}, '{{ access_token }}', '{{ exam.id }}', '{{ student_id }}')"{% endif %} class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
   <div class="sticky top-16 z-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 mb-8 flex items-center justify-between gap-4">
     <h1 class="truncate text-base font-semibold text-slate-900 dark:text-slate-100">{{ exam.title }}</h1>
     <div class="flex items-center gap-4 shrink-0">
       {% if not is_preview %}
+        <span class="text-xs text-slate-500 dark:text-slate-400"><span x-text="answeredCount"></span> / <span x-text="questionCount"></span> {% trans "answered" %}</span>
         <span x-show="snapshotSaving" x-transition class="text-xs text-emerald-600 dark:text-emerald-400">{% trans "Saving..." %}</span>
         <span x-show="snapshotSaved" x-transition x-init="setTimeout(() => snapshotSaved = false, 2000)" class="text-xs text-emerald-600 dark:text-emerald-400">{% trans "Saved" %}</span>
         <div class="text-lg font-mono font-bold tabular-nums"
@@ -33,7 +34,16 @@
     </div>
   </div>
 
-  <form id="exam-form" method="post" action="{% url 'entrance_exams:submit_exam' access_token %}">
+  {% if not is_preview %}
+    <nav class="mb-6 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4" aria-label="{% trans 'Question navigation' %}">
+      <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{% trans "Questions" %}</p>
+      <div class="flex flex-wrap gap-2">
+        {% for question in questions %}<a href="#q-{{ question.id }}" class="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-slate-300 px-3 text-sm font-semibold text-brand-700 hover:bg-brand-50 dark:border-slate-700 dark:text-brand-300 dark:hover:bg-slate-800">{{ forloop.counter }}</a>{% endfor %}
+      </div>
+    </nav>
+  {% endif %}
+
+  <form id="exam-form" method="post" action="{% url 'entrance_exams:submit_exam' access_token %}" x-on:submit.prevent="confirmSubmit">
     {% csrf_token %}
     {% for question in questions %}
       <fieldset class="mb-8 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5" id="q-{{ question.id }}">
@@ -77,17 +87,21 @@
 
 {% block extra_js %}
 <script>
-function examTimer(remainingSeconds, accessToken, examId) {
+function examTimer(remainingSeconds, accessToken, examId, studentId) {
   return {
     timeLeft: remainingSeconds,
+    questionCount: 0,
+    answeredCount: 0,
     saved: true,
     snapshotSaving: false,
     snapshotSaved: false,
     snapshotInterval: null,
     autoSubmitDone: false,
-    STORAGE_KEY: 'exam_' + examId + '_answers',
+    STORAGE_KEY: 'exam_' + examId + '_student_' + studentId + '_answers',
     init() {
       this.restoreFromStorage();
+      this.questionCount = new Set(Array.from(document.querySelectorAll('#exam-form [name^="question_"]')).map(el => el.name)).size;
+      this.updateAnswered();
       if (this.timeLeft <= 0) {
         this.submitNow();
         return;
@@ -99,12 +113,15 @@ function examTimer(remainingSeconds, accessToken, examId) {
         if (document.visibilityState === 'hidden') this.saveToStorage();
       });
       window.addEventListener('pagehide', () => this.saveToStorage());
+      document.getElementById('exam-form')?.addEventListener('change', () => this.updateAnswered());
+      document.getElementById('exam-form')?.addEventListener('input', () => this.updateAnswered());
     },
     startTimer() {
       setInterval(() => {
-        if (this.timeLeft > 0) {
+      if (this.timeLeft > 0) {
           this.timeLeft--;
-          if (this.timeLeft <= 30 && !this.autoSubmitDone) {
+          if (this.timeLeft <= 0 && !this.autoSubmitDone) {
+            this.saveToStorage();
             this.submitNow();
           }
         }
@@ -132,6 +149,13 @@ function examTimer(remainingSeconds, accessToken, examId) {
       clearTimeout(this._writeTimers && this._writeTimers[qid]);
       if (!this._writeTimers) this._writeTimers = {};
       this._writeTimers[qid] = setTimeout(() => this.saveToStorage(), 1000);
+    },
+    updateAnswered() {
+      const names = new Set();
+      document.querySelectorAll('#exam-form [name^="question_"]').forEach(el => {
+        if ((el.type === 'radio' && el.checked) || (el.type !== 'radio' && el.value.trim())) names.add(el.name);
+      });
+      this.answeredCount = names.size;
     },
     saveToStorage() {
       try {
@@ -177,10 +201,17 @@ function examTimer(remainingSeconds, accessToken, examId) {
       if (this.autoSubmitDone) return;
       this.autoSubmitDone = true;
       if (this.snapshotInterval) clearInterval(this.snapshotInterval);
+      try { localStorage.removeItem(this.STORAGE_KEY); } catch (e) {}
       this.sendSnapshot();
       setTimeout(() => {
         document.getElementById('exam-form').submit();
       }, 500);
+    },
+    confirmSubmit() {
+      if (this.answeredCount < this.questionCount && !window.confirm('{% trans "Some questions are unanswered. Submit anyway?"|escapejs %}')) return;
+      this.autoSubmitDone = true;
+      this.saveToStorage();
+      document.getElementById('exam-form').submit();
     },
     formatTime(seconds) {
       const m = Math.floor(seconds / 60);

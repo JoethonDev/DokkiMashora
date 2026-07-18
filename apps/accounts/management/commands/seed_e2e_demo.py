@@ -842,8 +842,8 @@ class Command(BaseCommand):
             defaults={
                 "title": "E2E Entrance Exam Cohort A",
                 "duration_minutes": 30,
-                "passing_score": 60,
-                "total_points": 30,
+                "pass_percentage": 60,
+                "total_score": 30,
                 "is_active": True,
                 "open_at": now - timedelta(days=1),
                 "close_at": now + timedelta(days=1),
@@ -854,35 +854,35 @@ class Command(BaseCommand):
 
         eq1, created = EntranceQuestion.objects.update_or_create(
             exam=exam, order=1,
-            defaults={"text": "MCQ: What is theology?", "question_type": "mcq", "points": 10},
+            defaults={"text": "MCQ: What is theology?", "question_type": "mcq"},
         )
         _obj, created = EntranceChoice.objects.update_or_create(
-            question=eq1, text="Study of God", defaults={"weight": 1.0, "order": 1},
+            question=eq1, text="Study of God", defaults={"score": 2, "order": 1},
         )
         _obj, created = EntranceChoice.objects.update_or_create(
-            question=eq1, text="Study of animals", defaults={"weight": 0.0, "order": 2},
+            question=eq1, text="Study of animals", defaults={"score": 0, "order": 2},
         )
         _obj, created = EntranceChoice.objects.update_or_create(
-            question=eq1, text="Study of rocks", defaults={"weight": 0.0, "order": 3},
+            question=eq1, text="Study of rocks", defaults={"score": 0, "order": 3},
         )
 
         eq2, created = EntranceQuestion.objects.update_or_create(
             exam=exam, order=2,
-            defaults={"text": "MCQ: Who wrote the Gospel of John?", "question_type": "mcq", "points": 10},
+            defaults={"text": "MCQ: Who wrote the Gospel of John?", "question_type": "mcq"},
         )
         _obj, created = EntranceChoice.objects.update_or_create(
-            question=eq2, text="Matthew", defaults={"weight": 0.0, "order": 1},
+            question=eq2, text="Matthew", defaults={"score": 0, "order": 1},
         )
         _obj, created = EntranceChoice.objects.update_or_create(
-            question=eq2, text="John", defaults={"weight": 1.0, "order": 2},
+            question=eq2, text="John", defaults={"score": 2, "order": 2},
         )
         _obj, created = EntranceChoice.objects.update_or_create(
-            question=eq2, text="Paul", defaults={"weight": 0.0, "order": 3},
+            question=eq2, text="Paul", defaults={"score": 0, "order": 3},
         )
 
         _obj, created = EntranceQuestion.objects.update_or_create(
             exam=exam, order=3,
-            defaults={"text": "Written: Why do you want to study counseling?", "question_type": "written", "points": 10},
+            defaults={"text": "Written: Why do you want to study counseling?", "question_type": "written"},
         )
 
         # Entrance attempt for pending student.

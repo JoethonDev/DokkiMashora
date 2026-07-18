@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+from urllib.parse import quote
 
 from django.conf import settings as django_settings
 from django.contrib import messages
@@ -43,7 +44,8 @@ from apps.applications.constants import (
     PROGRAM_APP_STATUS_SUBMITTED,
     PROGRAM_APP_STATUS_UNDER_REVIEW,
 )
-from apps.applications.models import ProgramApplication
+from apps.applications.models import ProgramApplication, ProgramApplicationDecision
+from apps.applications.models import ProgramApplicationEmailLog
 from apps.assessments.constants import ATTEMPT_STATUS_SUBMITTED, ATTEMPT_STATUS_UNDER_REVIEW
 from apps.assessments.models import AssessmentAttempt
 from apps.audit.models import AuditEvent
@@ -51,7 +53,7 @@ from apps.audit.services import record_audit_event
 from apps.communications.email_message import EmailMessage as CommEmailMessage
 from apps.core.htmx import is_htmx
 from apps.core.models import LandingAnnouncement
-from apps.core.permissions import ROLE_EXAM_STAFF, ROLE_SENIOR_STAFF, role_required
+from apps.core.permissions import ROLE_ATTENDANCE_STAFF, ROLE_EXAM_STAFF, ROLE_SENIOR_STAFF, role_required
 from apps.core.views import safe_next_url
 from apps.entrance_exams.models import EntranceAttempt
 from apps.payments.constants import (
@@ -63,6 +65,12 @@ from apps.payments.constants import (
 )
 from apps.payments.models import PaymentRecord, PaymentUpload, PaymentUploadRow
 from apps.students.models import StudentProfile
+from apps.attendance.models import AttendanceSession
+from apps.attendance.models import AttendanceRecord
+from apps.certificates.models import GeneratedCertificate
+from apps.progression.models import StudentSemesterProgress
+from apps.progression.constants import REJOIN_STATUS_PLANNED
+from apps.progression.models import SemesterRejoinPlan
 
 from .constants import (
     GROUP_ADMIN,
@@ -133,13 +141,8 @@ def admin_dashboard(request: HttpRequest) -> HttpResponse:
 @login_required
 @role_required(*ROLE_SENIOR_STAFF)
 def admin_settings(request: HttpRequest) -> HttpResponse:
-    ai_config = {
-        "enabled": bool(django_settings.GEMINI_API_KEY),
-        "provider": "Gemini",
-        "model": django_settings.GEMINI_MODEL,
-        "timeout": django_settings.GEMINI_TIMEOUT_SECONDS,
-    }
-    return render(request, "accounts/admin_settings.html", {"ai_config": ai_config})
+    context = _admin_settings_data()
+    return render(request, "accounts/admin_settings.html", context)
 
 
 @login_required
@@ -155,17 +158,78 @@ def teacher_dashboard(request: HttpRequest) -> HttpResponse:
     return render(request, "accounts/dashboards/teacher.html", _dashboard_context(request.user))
 
 
+@login_required
+@role_required(*ROLE_ATTENDANCE_STAFF)
+def secretary_dashboard(request: HttpRequest) -> HttpResponse:
+    now = timezone.now()
+    sessions = AttendanceSession.objects.filter(
+        date__gte=now.date(),
+    ).select_related("cohort", "course_version").order_by("date", "open_at")[:5]
+    return render(request, "accounts/dashboards/secretary.html", {
+        "upcoming_sessions": sessions,
+        "session_count": AttendanceSession.objects.filter(date=now.date()).count(),
+        "user_role": request.user.primary_role,
+        "show_role_label": True,
+    })
+
+
 # --- Helpers ----------------------------------------------------------------
 def _dashboard_context(user: User) -> dict:
     ctx = {
         "user_role": user.primary_role or _("Super Admin"),
         "show_role_label": True,
     }
-    if user.is_staff or user.is_superuser:
+    if user.primary_role == GROUP_MODERATOR:
+        ctx["assignment_count"] = ModeratorAssignment.objects.filter(moderator=user, active=True).count()
+    elif user.primary_role == GROUP_TEACHER:
+        ctx["assignment_count"] = TeacherAssignment.objects.filter(teacher=user, active=True).count()
+    elif user.is_staff or user.is_superuser:
         ctx["diploma_count"] = Diploma.objects.filter(is_active=True).count()
     elif hasattr(user, "student_profile"):
         ctx["course_count"] = get_student_course_versions(user.student_profile).count()
     return ctx
+
+
+def _admin_settings_data() -> dict:
+    ai_review_totals = GeminiReview.objects.aggregate(
+        total=Count("id"),
+        pending=Count("id", filter=Q(decision="pending")),
+        accepted=Count("id", filter=Q(decision="accepted")),
+        rejected=Count("id", filter=Q(decision="rejected")),
+    )
+    last_review = GeminiReview.objects.order_by("-created_at").values("created_at", "decision").first()
+    email_health = CommEmailMessage.objects.aggregate(
+        total=Count("id"),
+        sent=Count("id", filter=Q(status="sent")),
+        failed=Count("id", filter=Q(status="failed")),
+    )
+    last_email = CommEmailMessage.objects.order_by("-created_at").values("to_email", "created_at", "status").first()
+    return {
+        "ai_config": {
+            "enabled": bool(django_settings.GEMINI_API_KEY),
+            "provider": "Gemini", "model": django_settings.GEMINI_MODEL,
+            "timeout": django_settings.GEMINI_TIMEOUT_SECONDS,
+            "prompt_version": DEFAULT_PROMPT_VERSION,
+            "review_count": ai_review_totals["total"], "review_pending": ai_review_totals["pending"],
+            "review_accepted": ai_review_totals["accepted"], "review_rejected": ai_review_totals["rejected"],
+            "last_review_at": last_review["created_at"] if last_review else None,
+            "last_review_decision": last_review["decision"] if last_review else None,
+        },
+        "site_config": {
+            "site_name": "DokkiMashora LMS", "site_name_ar": "Ø¯ÙƒÙ‰ Ù…Ø´ÙˆØ±Ø©",
+            "timezone": django_settings.TIME_ZONE, "language_code": "ar",
+            "languages": dict(django_settings.LANGUAGES),
+            "default_from_email": django_settings.DEFAULT_FROM_EMAIL,
+            "email_backend": django_settings.EMAIL_BACKEND.split(".")[-1],
+            "storage_backend": getattr(django_settings, "STORAGE_BACKEND", "local"),
+            "email_total": email_health["total"], "email_sent": email_health["sent"],
+            "email_failed": email_health["failed"],
+            "last_email_to": last_email["to_email"] if last_email else None,
+            "last_email_at": last_email["created_at"] if last_email else None,
+            "last_email_status": last_email["status"] if last_email else None,
+        },
+        "active_announcement": LandingAnnouncement.current(),
+    }
 
 
 def _admin_dashboard_data() -> dict:
@@ -200,9 +264,16 @@ def _admin_dashboard_data() -> dict:
     )
 
     # 5) Single query: PaymentUploadRow unmatched count
-    unmatched_upload_count = PaymentUploadRow.objects.filter(
-        status=ROW_STATUS_UNMATCHED
+    unmatched_upload_count = PaymentUpload.objects.filter(
+        rows__status=ROW_STATUS_UNMATCHED
+    ).distinct().count()
+    attendance_exception_count = AttendanceSession.objects.filter(
+        status="scheduled", date__lt=today,
     ).count()
+    progression_exception_count = SemesterRejoinPlan.objects.filter(
+        status=REJOIN_STATUS_PLANNED,
+    ).count()
+    failed_email_count = ProgramApplicationEmailLog.objects.filter(status="failed").count()
 
     # 6) Single query: pending uploads (limit 5)
     pending_uploads = list(
@@ -254,58 +325,6 @@ def _admin_dashboard_data() -> dict:
     # Combined grade count from entrance attempts (already fetched in #3)
     entrance_ungraded = entrance_status_counts.get("completed", 0)
 
-    # AI configuration status
-    ai_enabled = bool(django_settings.GEMINI_API_KEY)
-    ai_review_totals = GeminiReview.objects.aggregate(
-        total=Count("id"),
-        pending=Count("id", filter=Q(decision="pending")),
-        accepted=Count("id", filter=Q(decision="accepted")),
-        rejected=Count("id", filter=Q(decision="rejected")),
-    )
-    last_review = GeminiReview.objects.order_by("-created_at").values("created_at", "decision").first()
-    ai_config = {
-        "enabled": ai_enabled,
-        "provider": "Gemini",
-        "model": django_settings.GEMINI_MODEL,
-        "timeout": django_settings.GEMINI_TIMEOUT_SECONDS,
-        "prompt_version": DEFAULT_PROMPT_VERSION,
-        "review_count": ai_review_totals["total"],
-        "review_pending": ai_review_totals["pending"],
-        "review_accepted": ai_review_totals["accepted"],
-        "review_rejected": ai_review_totals["rejected"],
-        "last_review_at": last_review["created_at"] if last_review else None,
-        "last_review_decision": last_review["decision"] if last_review else None,
-    }
-
-    # Email health
-    email_health = CommEmailMessage.objects.aggregate(
-        total=Count("id"),
-        sent=Count("id", filter=Q(status="sent")),
-        failed=Count("id", filter=Q(status="failed")),
-    )
-    last_email = CommEmailMessage.objects.order_by("-created_at").values("to_email", "created_at", "status").first()
-
-    # Active announcement
-    active_announcement = LandingAnnouncement.current()
-
-    # Site configuration
-    site_config = {
-        "site_name": "DokkiMashora LMS",
-        "site_name_ar": "دكى مشورة",
-        "timezone": django_settings.TIME_ZONE,
-        "language_code": "ar",
-        "languages": dict(django_settings.LANGUAGES),
-        "default_from_email": django_settings.DEFAULT_FROM_EMAIL,
-        "email_backend": django_settings.EMAIL_BACKEND.split(".")[-1],
-        "storage_backend": getattr(django_settings, "STORAGE_BACKEND", "local"),
-        "email_total": email_health["total"],
-        "email_sent": email_health["sent"],
-        "email_failed": email_health["failed"],
-        "last_email_to": last_email["to_email"] if last_email else None,
-        "last_email_at": last_email["created_at"] if last_email else None,
-        "last_email_status": last_email["status"] if last_email else None,
-    }
-
     return {
         "prog_submitted_count": prog_app_status_counts.get(PROGRAM_APP_STATUS_SUBMITTED, 0),
         "prog_under_review_count": prog_app_status_counts.get(PROGRAM_APP_STATUS_UNDER_REVIEW, 0),
@@ -320,6 +339,9 @@ def _admin_dashboard_data() -> dict:
         "paid_count": payment_status_counts.get(PAYMENT_STATUS_PAID, 0),
         "unpaid_count": payment_status_counts.get(PAYMENT_STATUS_UNPAID, 0),
         "unmatched_upload_count": unmatched_upload_count,
+        "attendance_exception_count": attendance_exception_count,
+        "progression_exception_count": progression_exception_count,
+        "failed_email_count": failed_email_count,
         "pending_uploads": pending_uploads,
         "active_diploma_count": active_diploma_count,
         "course_count": course_stats.get("course_count", 0),
@@ -328,11 +350,8 @@ def _admin_dashboard_data() -> dict:
         "assessment_ungraded": assessment_ungraded,
         "entrance_ungraded": entrance_ungraded,
         "recent_audit": recent_audit,
-        "ai_config": ai_config,
-        "site_config": site_config,
         "recent_applications": recent_applications,
         "recent_payments": recent_payments,
-        "active_announcement": active_announcement,
         "now": now,
     }
 
@@ -489,14 +508,47 @@ def admin_user_detail(request, user_id):
     back_url = safe_next_url(request)
     if not back_url:
         back_url = reverse("accounts:admin_student_list" if getattr(user_obj, "student_profile", None) else "accounts:admin_staff_list")
+    profile = getattr(user_obj, "student_profile", None)
+    context = {
+        "user_obj": user_obj,
+        "student_profile": profile,
+        "back_url": back_url,
+    }
+    if profile:
+        context.update({
+            "applications": list(profile.program_applications.select_related("cohort__diploma", "course").order_by("-created_at")[:10]),
+            "diploma_enrollments": list(profile.diploma_enrollments.select_related("cohort__diploma").order_by("-created_at")[:10]),
+            "course_enrollments": list(profile.course_enrollments.select_related("course_version__course").order_by("-created_at")[:10]),
+            "payments": list(profile.payment_records.order_by("-created_at")[:10]),
+            "attendance_count": AttendanceRecord.objects.filter(student=profile).count(),
+            "progression": list(StudentSemesterProgress.objects.filter(student=profile).select_related("semester", "cohort").order_by("-created_at")[:10]),
+            "certificates": list(GeneratedCertificate.objects.filter(student=profile).select_related("diploma_enrollment__cohort__diploma").order_by("-created_at")[:10]),
+            "assessment_attempts": list(AssessmentAttempt.objects.filter(student=user_obj).select_related("assessment").order_by("-created_at")[:10]),
+            "entrance_attempts": list(EntranceAttempt.objects.filter(student=profile).select_related("exam").order_by("-created_at")[:10]),
+            "staff_assignments": list(profile.moderator_assignments.select_related("moderator", "cohort").order_by("-created_at")[:10]),
+            "decisions": list(ProgramApplicationDecision.objects.filter(program_application__student=profile).select_related("program_application", "actor").order_by("-created_at")[:10]),
+            "application_list_url": f'{reverse("applications:program_list")}?student_id={profile.pk}',
+            "progression_url": reverse("progression:admin_student_detail", args=[profile.pk]),
+            "payment_list_url": f'{reverse("payments:record_list")}?student_q={profile.user.email}',
+            "assessment_list_url": f'{reverse("assessments:admin_list")}?student_id={profile.user_id}',
+            "entrance_list_url": f'{reverse("entrance_exams:admin_list")}?student_id={profile.pk}',
+            "certificate_list_url": f'{reverse("certificates:admin_certificate_list")}?student_id={profile.pk}',
+            "staff_assignment_url": reverse("progression:admin_student_detail", args=[profile.pk]),
+            "enrollment_links": [
+                *[
+                    {"label": str(enrollment.cohort), "status": enrollment.get_status_display(), "url": f'{reverse("academics:admin_diploma_enrollment_list", args=[enrollment.cohort.diploma_id])}?q={quote(profile.full_name)}&cohort={enrollment.cohort_id}'}
+                    for enrollment in profile.diploma_enrollments.select_related("cohort__diploma").order_by("-created_at")[:10]
+                ],
+                *[
+                    {"label": str(enrollment.course_version.course), "status": enrollment.get_status_display(), "url": f'{reverse("academics:admin_course_enrollment_list", args=[enrollment.course_version.course_id])}?q={quote(profile.full_name)}'}
+                    for enrollment in profile.course_enrollments.select_related("course_version__course").order_by("-created_at")[:10]
+                ],
+            ],
+        })
     return render(
         request,
         "accounts/admin_user_detail.html",
-        {
-            "user_obj": user_obj,
-            "student_profile": getattr(user_obj, "student_profile", None),
-            "back_url": back_url,
-        },
+        context,
     )
 
 
@@ -799,7 +851,7 @@ def _dashboard_url_name(user: User) -> str:
     if role == GROUP_REVIEWER:
         return "assessments:reviewer_dashboard"
     if role == GROUP_SECRETARY:
-        return "attendance:attendance_session_list"
+        return "accounts:dashboard_secretary"
     if role == GROUP_STUDENT:
         return "students:dashboard"
     return "core:landing"

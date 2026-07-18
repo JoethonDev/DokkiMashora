@@ -49,10 +49,11 @@ def transcode_to_hls(
     file_data: bytes,
     original_filename: str,
     content_type: str,
+    storage_prefix: str | None = None,
 ) -> None:
     """Transcode uploaded audio to HLS, upload segments to storage."""
     lect_id = lecture.id
-    prefix = f"lectures/{lect_id}/audio"
+    prefix = storage_prefix or f"lectures/{lect_id}/audio"
     playlist_key = "index.m3u8"
     segment_prefix = "seg_"
 

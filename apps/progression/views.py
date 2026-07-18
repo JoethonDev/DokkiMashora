@@ -146,6 +146,7 @@ def admin_student_detail(request, student_id):
     allowed_cohort_ids = list(enrollments.values_list("cohort_id", flat=True).distinct())
     cohort_filter = {"diploma_enrollment__cohort_id__in": allowed_cohort_ids} if not is_admin(request.user) and allowed_cohort_ids else {}
     progress_detail = get_student_progress_detail(student, cohort_ids=allowed_cohort_ids if not is_admin(request.user) else None)
+    current_progress = progress_detail["semesters"][-1] if progress_detail["semesters"] else None
     eligibility_qs = FinalExamEligibility.objects.filter(student=student)
     if cohort_filter:
         eligibility_qs = eligibility_qs.filter(**cohort_filter)
@@ -189,6 +190,7 @@ def admin_student_detail(request, student_id):
         "is_admin_user": is_admin(request.user),
         "enrollments": enrollments,
         "progress_semesters": progress_detail["semesters"],
+        "current_progress": current_progress,
         "requirement_summaries": requirement_summaries,
         "decisions": progress_detail["decisions"],
         "eligibility": eligibility,
@@ -896,8 +898,12 @@ def admin_rejoin_plan_list(request):
         "student__user", "from_enrollment__cohort", "failed_semester",
         "target_cohort", "planned_by", "to_enrollment__cohort",
     ).all()
+    status = request.GET.get("status", "")
+    if status:
+        plans = plans.filter(status=status)
     ctx = {
         "plans": plans,
+        "current_status": status,
         "rejoin_status_choices": REJOIN_STATUS_CHOICES,
         "breadcrumb_items": [
             {"label": _("Progression Dashboard"), "href": reverse("progression:admin_dashboard")},

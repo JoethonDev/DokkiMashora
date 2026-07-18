@@ -273,7 +273,7 @@
                     {% for choice in question.choices.all %}
                       <li class="text-sm text-slate-700 dark:text-slate-200">
                         {{ choice.text }}
-                        {% trans "pts" as pts_label %}<span class="text-xs text-slate-400 ml-1">({{ choice.score }} {{ pts_label }})</span>
+                        {% trans "pts" as pts_label %}<span class="text-xs text-slate-400 ms-1">({{ choice.score }} {{ pts_label }})</span>
                       </li>
                     {% endfor %}
                   </ul>

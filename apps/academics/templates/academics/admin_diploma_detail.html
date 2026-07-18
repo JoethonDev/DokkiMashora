@@ -54,7 +54,7 @@
             <a href="{% url 'academics:admin_semester_edit' diploma.id scd.semester.id %}?next={{ request.path|urlencode }}" class="text-xs text-slate-500 hover:text-brand-600 shrink-0">{% trans "Edit" %}</a>
             <div x-data="{ confirmId: null }" @modal-confirm.window="if($event.detail.id===confirmId) document.getElementById($event.detail.id+'-form').requestSubmit()" class="inline shrink-0">
               <form id="del-sem-{{ scd.semester.id }}-form" method="post" action="{% url 'academics:admin_semester_delete' diploma.id scd.semester.id %}" hx-post="{% url 'academics:admin_semester_delete' diploma.id scd.semester.id %}" hx-target="body" class="inline">{% csrf_token %}<button type="submit" hidden></button><input type="hidden" name="next" value="{{ request.path }}"><button type="button" @click.stop="confirmId='del-sem-{{ scd.semester.id }}'; $dispatch('open-modal', {id:'del-sem-{{ scd.semester.id }}'})" class="text-xs text-slate-500 hover:text-red-600 bg-transparent border-0 p-0 cursor-pointer">{% trans "Delete" %}</button></form>
-              {% with sem_id=scd.semester.id|stringformat:"d" %}{% include "partials/_modal.html" with modal_id="del-sem-"|add:sem_id title=_("Confirm Delete") body=_("Delete this semester?") confirm_label=_("Delete") %}{% endwith %}
+              {% with sem_id=scd.semester.id|stringformat:"d" %}{% include "partials/_modal.html" with modal_id="del-sem-"|add:sem_id title=_("Confirm Delete") body=_("Delete this semester and its diploma lectures, assessments, and dependent delivery data?") confirm_label=_("Delete") %}{% endwith %}
             </div>
           </summary>
           <div class="px-5 pb-4 pt-2">

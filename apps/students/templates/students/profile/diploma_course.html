@@ -1,38 +1,20 @@
-{% extends "students/profile/base_profile.html" %}{% load i18n student_extras %}
-{% block profile_title %}{% trans "Diploma / Course" %}{% endblock %}
+{% extends "students/profile/base_profile.html" %}{% load i18n %}
+{% block profile_title %}{% trans "Learning" %}{% endblock %}
+{% block profile_subtitle %}<p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{% trans "Your active programs, progress, next lesson, and due work." %}</p>{% endblock %}
 {% block profile_content %}
-{% if items %}
-<div class="space-y-3">
-  {% for item in items %}
-  <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
-    <div class="flex items-center justify-between">
-      <div class="min-w-0 flex-1">
-        {% if item.label %}
-        <p class="text-xs text-slate-500 mb-0.5">{{ item.label }}</p>
-        {% endif %}
-        <p class="text-sm font-medium truncate">{{ item.course_title|default:item.label }}</p>
-        <div class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
-          <span>{% trans "Joined" %}: {{ item.joined_at|date:"j M Y" }}</span>
-          {% if item.expires_at %}
-          <span>{% trans "Until" %}: {{ item.expires_at|date:"j M Y" }}</span>
-          {% endif %}
-          {% if item.lecture_count is not None %}
-          <span>{{ item.lecture_count }} {% trans "lectures" %}</span>
-          {% endif %}
-        </div>
-      </div>
-      {% if item.type == "diploma" %}
-      <a href="{% url 'academics:student_diploma_detail' item.enrollment_id %}" class="shrink-0 ml-3 inline-flex items-center rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700 transition">{% trans "View" %}</a>
-      {% else %}
-      <a href="{% url 'students:diploma_course_detail' item.cv_id %}" class="shrink-0 ml-3 inline-flex items-center rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700 transition">{% trans "View" %}</a>
-      {% endif %}
-    </div>
+{% if learning_cards %}<div class="space-y-4">{% for card in learning_cards %}
+<article class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div class="min-w-0"><p class="text-xs text-slate-500">{% if card.type == "diploma" %}{% trans "Diploma" %}{% else %}{% trans "Course" %}{% endif %}</p><h2 class="mt-1 break-words text-lg font-semibold">{% if card.type == "diploma" %}{{ card.title }}{% else %}{{ card.course.title }}{% endif %}</h2></div>
+    <span class="text-sm text-slate-500">{% if card.status == "active" %}{% trans "Active" %}{% elif card.status == "expired" %}{% trans "Access expired" %}{% elif card.status == "restricted" %}{% trans "Access restricted" %}{% elif card.status == "pending" %}{% trans "Pending activation" %}{% else %}{% trans "Completed" %}{% endif %}</span>
   </div>
-  {% endfor %}
-</div>
-{% else %}
-<div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 text-sm text-slate-500 dark:text-slate-400">
-  <p>{% trans "No diploma or course information yet." %}</p>
-</div>
-{% endif %}
+  {% if card.lecture_count is not None %}
+  <div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-600 dark:text-slate-300"><span>{{ card.completed_count }}/{{ card.lecture_count }} {% trans "lectures complete" %}</span>{% if card.expires_at %}<span>{% trans "Until" %}: {{ card.expires_at|date:"j M Y" }}</span>{% endif %}</div>
+  <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"><div class="h-full rounded-full bg-brand-500" style="width: {% widthratio card.completed_count card.lecture_count 100 %}%"></div></div>
+  {% if card.next_lecture %}<p class="mt-3 text-sm">{% trans "Next lecture" %}: <span class="font-medium">{{ card.next_lecture.title }}</span></p>{% endif %}
+  {% if card.next_assessment %}<p class="mt-1 text-sm text-amber-700 dark:text-amber-300">{% trans "Due work" %}: {{ card.next_assessment.assessment.title }} — {{ card.next_assessment.assessment.close_at|date:"j M Y, H:i" }}</p>{% endif %}
+  {% if card.status == "active" %}<div class="mt-4 flex flex-wrap gap-2">{% if card.next_lecture_url %}<a href="{{ card.next_lecture_url }}" class="dm-button dm-button-primary min-h-11 px-4 py-2 text-sm">{% trans "Open next lecture" %}</a>{% endif %}{% if card.next_assessment_url %}<a href="{{ card.next_assessment_url }}" class="dm-button dm-button-secondary min-h-11 px-4 py-2 text-sm">{% trans "Open due work" %}</a>{% endif %}{% if card.type == "diploma" %}<a href="{% url 'academics:student_diploma_detail' card.enrollment_id %}" class="dm-button dm-button-secondary min-h-11 px-4 py-2 text-sm">{% trans "Open diploma" %}</a>{% endif %}</div>{% endif %}
+  {% elif card.status == "active" %}<a href="{% url 'academics:student_diploma_detail' card.enrollment_id %}" class="mt-4 inline-flex min-h-11 items-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white">{% trans "Open diploma" %}</a>{% elif card.status == "expired" or card.status == "restricted" %}<p class="mt-3 text-sm text-slate-500">{% trans "Contact support to restore access." %}</p>{% endif %}
+</article>
+{% endfor %}</div>{% else %}<div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-6 text-slate-600 dark:text-slate-300">{% trans "No learning programs yet." %}</div>{% endif %}
 {% endblock %}

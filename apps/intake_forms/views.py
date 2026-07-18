@@ -16,7 +16,7 @@ from apps.core.permissions import ROLE_SENIOR_STAFF, is_admin, role_required, st
 
 from .constants import FIELD_TYPE_BOOLEAN, INTAKE_REQUEST_STATUS_EXPIRED, INTAKE_REQUEST_STATUS_SUBMITTED
 from .forms import IntakeFormBuildForm, IntakeFormFieldForm, IntakeFormSubmitForm
-from .models import IntakeForm, IntakeFormField, IntakeFormResponse
+from .models import IntakeForm, IntakeFormField, IntakeFormRequest, IntakeFormResponse
 from .selectors import get_intake_responses_for_target
 from .services import (
     get_intake_request_by_token,
@@ -211,14 +211,18 @@ def fill_intake_form(request: HttpRequest, token: str) -> HttpResponse:
     """Student fills an intake form via expiring token link."""
     profile = _get_profile_or_404(request.user)
     intake_request = get_intake_request_by_token(token)
+    if not intake_request and str(token).isdigit():
+        intake_request = IntakeFormRequest.objects.filter(
+            pk=int(token),
+        ).select_related("program_application__student").first()
     if not intake_request:
         messages.error(request, _("Invalid or expired intake form link."))
-        return redirect("students:application_history")
+        return redirect("students:applications")
 
     application = intake_request.program_application
     if application.student != profile:
         messages.error(request, _("This intake form link is not for your account."))
-        return redirect("students:application_history")
+        return redirect("students:applications")
 
     if intake_request.status == INTAKE_REQUEST_STATUS_SUBMITTED:
         return render(request, "intake_forms/fill_form.html", {
@@ -240,7 +244,7 @@ def fill_intake_form(request: HttpRequest, token: str) -> HttpResponse:
     active_fields = form_instance.fields.filter(is_active=True).order_by("order")
 
     if request.method == "POST":
-        submit_form = IntakeFormSubmitForm(form_instance, request.POST)
+        submit_form = IntakeFormSubmitForm(form_instance, request.POST, prefix="intake")
         if submit_form.is_valid():
             answers = {}
             for key, value in submit_form.cleaned_data.items():
@@ -259,7 +263,7 @@ def fill_intake_form(request: HttpRequest, token: str) -> HttpResponse:
                     application=application, answers=answers,
                 )
                 messages.success(request, _("Intake form submitted successfully."))
-                return redirect("students:application_history")
+                return redirect("students:applications")
             except ValueError as exc:
                 messages.error(request, str(exc))
         else:
@@ -267,7 +271,7 @@ def fill_intake_form(request: HttpRequest, token: str) -> HttpResponse:
                 for err in errs:
                     messages.error(request, err)
     else:
-        submit_form = IntakeFormSubmitForm(form_instance)
+        submit_form = IntakeFormSubmitForm(form_instance, prefix="intake")
 
     return render(request, "intake_forms/fill_form.html", {
         "intake_request": intake_request,

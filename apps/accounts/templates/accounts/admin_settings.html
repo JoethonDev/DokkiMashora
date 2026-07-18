@@ -34,4 +34,16 @@
     </p>
   </div>
 </div>
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
+  <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
+    <h2 class="text-base font-semibold mb-4">{% trans "Site configuration" %}</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+      <div><span class="text-slate-500 dark:text-slate-400 block">{% trans "Site name" %}</span><span class="font-semibold">{{ site_config.site_name }}</span></div>
+      <div><span class="text-slate-500 dark:text-slate-400 block">{% trans "Timezone" %}</span><span class="font-semibold">{{ site_config.timezone }}</span></div>
+      <div><span class="text-slate-500 dark:text-slate-400 block">{% trans "Email status" %}</span><span class="font-semibold">{{ site_config.email_sent }} / {{ site_config.email_total }} {% trans "sent" %}</span></div>
+      <div><span class="text-slate-500 dark:text-slate-400 block">{% trans "Storage" %}</span><span class="font-semibold">{{ site_config.storage_backend }}</span></div>
+    </div>
+    <a href="{% url 'core:landing_settings' %}" class="mt-5 inline-flex dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Customize landing page" %}</a>
+  </div>
+</div>
 {% endblock %}

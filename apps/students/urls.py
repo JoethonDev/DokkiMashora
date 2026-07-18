@@ -8,6 +8,9 @@ app_name = "students"
 
 urlpatterns = [
     path("", views.dashboard, name="dashboard"),
+    path("learning/", views.diploma_course, name="learning"),
+    path("applications/portal/", views.application_history, name="applications"),
+    path("record/", views.record, name="record"),
     path("details/", views.details, name="details"),
     path("edit/", views.edit_profile, name="edit_profile"),
     path("applications/", views.application_history, name="application_history"),

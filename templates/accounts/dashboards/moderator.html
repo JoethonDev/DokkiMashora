@@ -6,10 +6,12 @@
   <header class="mb-6">
     <p class="text-xs sm:text-sm font-semibold dm-page-eyebrow tracking-wide uppercase">{% trans "Moderator" %}</p>
     <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display dm-page-title">{% trans "Assigned assessments" %}</h1>
+    <p class="mt-2 text-sm dm-page-subtitle">{% blocktrans with count=assignment_count %}You have {{ count }} active assignment(s).{% endblocktrans %}</p>
   </header>
 
   <div class="dm-action-row flex flex-wrap gap-3">
-    <a href="{% url 'assessments:admin_list' %}" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Assessment list" %}</a>
+    <a href="{% url 'assessments:admin_list' %}" class="dm-button dm-button-primary px-4 py-2 text-sm">{% trans "Continue review" %}</a>
   </div>
+  {% if not assignment_count %}<div class="mt-6 dm-panel rounded-xl p-6 text-sm dm-muted">{% trans "No active assignments yet. An administrator must assign your cohort or course scope before work appears here." %}</div>{% endif %}
 </div>
 {% endblock content %}

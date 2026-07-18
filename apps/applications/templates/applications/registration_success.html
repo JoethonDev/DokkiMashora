@@ -11,6 +11,12 @@
     <p class="mt-3 text-slate-600 dark:text-slate-300">{% trans "Check your email for the activation link and initial login details." %}</p>
   {% endif %}
   {% url 'core:landing' as home_url %}
-  {% include "partials/_button.html" with href=home_url label=_("Back to home") variant="primary" class="mt-6" %}
+  <div class="mt-6 flex flex-wrap justify-center gap-2">
+    {% url 'accounts:login' as login_url %}
+    {% include "partials/_button.html" with href=login_url label=_("Go to login") variant="primary" %}
+    {% url 'accounts:resend_activation' as resend_url %}
+    {% include "partials/_button.html" with href=resend_url label=_("Resend activation email") variant="secondary" %}
+    {% include "partials/_button.html" with href=home_url label=_("Back to home") variant="secondary" %}
+  </div>
 </section>
 {% endblock content %}

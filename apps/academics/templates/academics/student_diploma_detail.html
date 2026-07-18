@@ -5,7 +5,7 @@
 
 {% block content %}
 <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
-  <a href="{% url 'students:diploma_course' %}" class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 mb-4">
+  <a href="{% url 'students:learning' %}" class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 mb-4">
     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
     {% trans "Back to My Courses" %}
   </a>
@@ -14,6 +14,14 @@
     <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{{ diploma.title }}</h1>
     <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{{ cohort.name }}</p>
   </header>
+
+  <div class="grid gap-3 sm:grid-cols-4 mb-6">
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4"><p class="text-xs text-slate-500">{% trans "Progress" %}</p><p class="mt-1 text-xl font-bold">{{ progress.percent }}%</p><p class="text-xs text-slate-500">{{ progress.completed_count }}/{{ progress.lecture_count }} {% trans "lectures" %}</p></div>
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4"><p class="text-xs text-slate-500">{% trans "Current semester" %}</p><p class="mt-1 text-sm font-semibold">{% if diploma_access.current_semester %}{{ diploma_access.current_semester.title }}{% else %}{% trans "Complete" %}{% endif %}</p><p class="text-xs text-slate-500 mt-1">{{ access_state }}</p></div>
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4"><p class="text-xs text-slate-500">{% trans "Next lecture" %}</p>{% if progress.next_lecture_url %}<a class="mt-1 block text-sm font-semibold text-brand-600 hover:underline" href="{{ progress.next_lecture_url }}">{{ progress.next_lecture.title }}</a>{% else %}<p class="mt-1 text-sm">{% trans "Complete" %}</p>{% endif %}</div>
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4"><p class="text-xs text-slate-500">{% trans "Attendance" %} — {{ diploma_access.current_semester.title }}</p>{% if attendance_summary %}<p class="mt-1 text-xl font-bold">{{ attendance_summary.attendance_percent }}%</p><p class="text-xs text-slate-500">{{ attendance_summary.total_attended }}/{{ attendance_summary.total_sessions }} {% trans "sessions" %}</p>{% else %}<p class="mt-1 text-sm">{% trans "No sessions yet" %}</p>{% endif %}</div>
+  </div>
+  {% if due_work %}<div class="mb-6 rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 p-4"><h2 class="font-semibold">{% trans "Due work" %}</h2>{% for attempt in due_work %}<a class="mt-2 block text-sm text-brand-700 dark:text-brand-300 hover:underline" href="{% url 'assessments:instructions' attempt.assessment_id %}">{{ attempt.assessment.title }} · {{ attempt.assessment.close_at|date:"j M Y, H:i" }}</a>{% endfor %}</div>{% endif %}
 
   <div class="grid gap-4 sm:grid-cols-2">
     {% for semester_data in semester_lectures %}

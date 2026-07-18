@@ -6,10 +6,9 @@
   <header class="mb-6">
     <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Teacher" %}</p>
     <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{% trans "Your classes" %}</h1>
+    <p class="mt-2 text-sm dm-muted">{% blocktrans with count=assignment_count %}You have {{ count }} active teaching assignment(s).{% endblocktrans %}</p>
   </header>
 
-  <div class="mt-8 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 text-sm text-slate-500 dark:text-slate-400">
-    {% trans "No assigned work yet." %}
-  </div>
+  {% if assignment_count %}<a href="{% url 'assessments:admin_grade_list' %}" class="dm-button dm-button-primary px-4 py-2 text-sm">{% trans "Continue grading" %}</a>{% else %}<div class="mt-8 dm-panel rounded-xl p-6 text-sm dm-muted">{% trans "No assigned work yet. An administrator must assign a cohort or course before grading appears here." %}</div>{% endif %}
 </div>
 {% endblock content %}

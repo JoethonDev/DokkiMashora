@@ -23,7 +23,7 @@
     <section class="dm-panel rounded-xl p-5">
       <h2 class="text-lg font-black dm-text">{{ section }}</h2>
       <div class="mt-5 space-y-4">
-        {% for english, arabic in rows %}<div class="grid gap-3 md:grid-cols-2"><label class="text-sm font-bold dm-text">{{ english.label }}{{ english }}{{ english.errors }}</label><label class="text-sm font-bold text-right dm-text">{{ arabic.label }}{{ arabic }}{{ arabic.errors }}</label></div>{% endfor %}
+        {% for english, arabic in rows %}<div class="grid gap-3 md:grid-cols-2"><label class="text-sm font-bold dm-text">{{ english.label }}{{ english }}{{ english.errors }}</label><label class="text-sm font-bold text-end dm-text">{{ arabic.label }}{{ arabic }}{{ arabic.errors }}</label></div>{% endfor %}
       </div>
     </section>
     {% endfor %}

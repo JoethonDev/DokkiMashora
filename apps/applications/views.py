@@ -16,6 +16,7 @@ from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods
 
 from apps.core.htmx import is_htmx
+from apps.academics.models import Cohort
 from apps.core.pagination import paginate
 from apps.core.permissions import ROLE_SENIOR_STAFF, is_admin, role_required
 from apps.intake_forms.selectors import get_application_intake_state  # noqa: E402
@@ -42,7 +43,7 @@ from .documents import (
     submit_application_documents,
 )
 from .forms import AdminDocumentRequestForm, RegistrationForm, StudentDocumentUploadForm
-from .models import ApplicationDocumentUpload, ProgramApplication
+from .models import ApplicationDocumentRequest, ApplicationDocumentUpload, ProgramApplication
 from .services import (
     RegistrationData,
     accept_program_application,
@@ -134,7 +135,9 @@ def register(request: HttpRequest) -> HttpResponse:
         elif program_type == "course" and target_id.startswith("course_"):
             initial = {"apply_program": True, "program_type": "course", "program_target": target_id}
         form = RegistrationForm(initial=initial)
-    return render(request, "applications/register.html", {"form": form})
+    error_fields = set(form.errors)
+    registration_error_step = 3 if error_fields & {"apply_program", "program_type", "diploma", "program_target"} else 2 if error_fields & {"phone", "email", "specialization", "employer", "current_job", "church", "priest_name", "priest_contact"} else 1
+    return render(request, "applications/register.html", {"form": form, "registration_error_step": registration_error_step})
 
 
 @require_http_methods(["GET"])
@@ -168,6 +171,11 @@ def program_application_list(request: HttpRequest) -> HttpResponse:
     """Admin list of program applications, with status filter."""
     status_filter = request.GET.get("status", "")
     program_type_filter = request.GET.get("program_type", "")
+    action_filter = request.GET.get("action_needed", "")
+    from_filter = request.GET.get("from", "")
+    to_filter = request.GET.get("to", "")
+    cohort_filter = request.GET.get("cohort", "")
+    student_filter = request.GET.get("student_id", "")
     q = request.GET.get("q", "")
     applications = ProgramApplication.objects.select_related(
         "student__user", "reviewed_by", "cohort__diploma", "course"
@@ -180,6 +188,20 @@ def program_application_list(request: HttpRequest) -> HttpResponse:
         applications = applications.filter(status=status_filter)
     if program_type_filter:
         applications = applications.filter(program_type=program_type_filter)
+    if cohort_filter:
+        applications = applications.filter(cohort_id=cohort_filter)
+    if student_filter and student_filter.isdigit():
+        applications = applications.filter(student_id=int(student_filter))
+    if action_filter == "review":
+        applications = applications.filter(status__in=(PROGRAM_APP_STATUS_SUBMITTED, PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED, PROGRAM_APP_STATUS_INTERVIEW_REQUESTED))
+    elif action_filter == "payment":
+        applications = applications.filter(status=PROGRAM_APP_STATUS_PAYMENT_PENDING)
+    elif action_filter == "documents":
+        applications = applications.filter(status__in=(PROGRAM_APP_STATUS_ACCEPTED, PROGRAM_APP_STATUS_DOCUMENTS_REQUESTED))
+    if from_filter:
+        applications = applications.filter(created_at__date__gte=from_filter)
+    if to_filter:
+        applications = applications.filter(created_at__date__lte=to_filter)
     filters = [
         {
             "name": "status",
@@ -195,6 +217,25 @@ def program_application_list(request: HttpRequest) -> HttpResponse:
             "options": [{"value": v, "label": _(label_text), "selected": program_type_filter == v}
                         for v, label_text in ProgramApplication._meta.get_field("program_type").choices],
         },
+        {
+            "name": "action_needed",
+            "label": _("Action needed"),
+            "value": action_filter,
+            "options": [
+                {"value": "review", "label": _("Review decision"), "selected": action_filter == "review"},
+                {"value": "payment", "label": _("Payment"), "selected": action_filter == "payment"},
+                {"value": "documents", "label": _("Documents"), "selected": action_filter == "documents"},
+            ],
+        },
+        {
+            "name": "cohort",
+            "label": _("Cohort / program"),
+            "value": cohort_filter,
+            "options": [
+                {"value": str(cohort.pk), "label": str(cohort), "selected": cohort_filter == str(cohort.pk)}
+                for cohort in Cohort.objects.select_related("diploma").order_by("-start_date")
+            ],
+        },
     ]
     page_obj, pagination_qs = paginate(request, applications, per_page=15)
     context = {
@@ -202,6 +243,8 @@ def program_application_list(request: HttpRequest) -> HttpResponse:
         "pagination_qs": pagination_qs,
         "search_value": q,
         "filters": filters,
+        "from_filter": from_filter,
+        "to_filter": to_filter,
     }
     if is_htmx(request):
         return render(request, "applications/partials/_program_list_table.html", context)
@@ -365,6 +408,11 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
         application.decisions.select_related("actor").order_by("-created_at"),
         per_page=15,
     )
+    status_labels = dict(ProgramApplication._meta.get_field("status").choices)
+    decision_display_rows = [
+        (decision, status_labels.get(decision.old_status, _("Unknown")), status_labels.get(decision.new_status, _("Unknown")))
+        for decision in decisions
+    ]
     notes = application.notes.all()[:20]
     is_paid = has_application_paid_record(application)
 
@@ -384,6 +432,7 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
         {
             "application": application,
             "decisions": decisions,
+            "decision_display_rows": decision_display_rows,
             "pagination_qs": decisions_qs,
             "notes": notes,
             "is_paid": is_paid,
@@ -405,16 +454,20 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
 def document_upload(request: HttpRequest, token: str) -> HttpResponse:
     """Student document upload via expiring token link."""
     doc_request = get_document_request_by_token(token)
+    if not doc_request and str(token).isdigit():
+        doc_request = ApplicationDocumentRequest.objects.filter(
+            pk=int(token),
+        ).select_related("program_application__student").first()
     if not doc_request:
         messages.error(request, _("Invalid or expired document upload link."))
-        return redirect("students:application_history")
+        return redirect("students:applications")
 
     application = doc_request.program_application
 
     # Verify ownership
     if doc_request.program_application.student.user != request.user:
         messages.error(request, _("This document upload link is not for your account."))
-        return redirect("students:application_history")
+        return redirect("students:applications")
 
     if doc_request.status == "submitted":
         messages.info(request, _("Documents have already been submitted for this request."))
@@ -435,7 +488,7 @@ def document_upload(request: HttpRequest, token: str) -> HttpResponse:
                     attachment_files=request.FILES.getlist("attachments"),
                 )
                 messages.success(request, _("Documents submitted successfully."))
-                return redirect("students:application_history")
+                return redirect("students:applications")
             except (ValueError, StorageError) as exc:
                 messages.error(request, str(exc))
         else:
@@ -480,7 +533,7 @@ def download_persona_image(request: HttpRequest, upload_id: int) -> HttpResponse
         return redirect(url)
     except StorageError as exc:
         messages.error(request, str(exc))
-        return redirect("students:application_history")
+        return redirect("students:applications")
 
 
 @login_required
@@ -506,7 +559,7 @@ def download_attachments_pdf(request: HttpRequest, upload_id: int) -> HttpRespon
         return redirect(url)
     except StorageError as exc:
         messages.error(request, str(exc))
-        return redirect("students:application_history")
+        return redirect("students:applications")
 
 
 def _can_download_document(user, application) -> bool:

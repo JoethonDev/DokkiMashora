@@ -23,7 +23,7 @@
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{% trans "Email Preview" %}</h2>
       </div>
-      <iframe id="preview-frame" class="w-full border border-slate-200 dark:border-slate-700 rounded-lg" style="min-height:400px" title="{% trans 'Email preview' %}"></iframe>
+      <iframe id="preview-frame" class="w-full border border-slate-200 dark:border-slate-700 rounded-lg" style="min-height:400px" title="{% trans 'Email preview' %}" sandbox></iframe>
       <script>(function(){document.getElementById('preview-frame').srcdoc='{{ rendered_html|escapejs|safe }}'})()</script>
     </div>
 

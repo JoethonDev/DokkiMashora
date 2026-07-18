@@ -2,7 +2,7 @@
 {% block profile_title %}{{ course_version.course.title }}{% endblock %}
 {% block profile_content %}
 <header class="mb-6">
-  <a href="{% url 'students:diploma_course' %}" class="text-xs text-brand-600 hover:text-brand-700 mb-2 inline-block">&larr; {% trans "Back" %}</a>
+  <a href="{% url 'students:learning' %}" class="text-xs text-brand-600 hover:text-brand-700 mb-2 inline-block">&larr; {% trans "Back" %}</a>
   <h1 class="text-xl font-bold">{{ course_version.course.title }}</h1>
 </header>
 

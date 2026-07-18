@@ -150,7 +150,7 @@
       {% if sections %}
         <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 text-sm">
           <span class="font-semibold text-slate-900 dark:text-slate-100">{% trans "Total max grade:" %}</span>
-          <span class="tabular-nums ml-1 {% if section_total != assessment.total_points %}text-rose-600 dark:text-rose-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">
+          <span class="tabular-nums ms-1 {% if section_total != assessment.total_points %}text-rose-600 dark:text-rose-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">
             {{ section_total }} / {{ assessment.total_points }}
           </span>
           {% if section_total != assessment.total_points %}

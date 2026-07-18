@@ -3,59 +3,21 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light dark">
+  <meta name="color-scheme" content="light">
   <title>{% block title %}{{ SITE_NAME }}{% endblock title %}</title>
 
   <link rel="icon" type="image/x-icon" href="{% static 'favicon.ico' %}">
 
-  <script>
-    (function(){try{var s=localStorage.getItem("dm-ui-theme");if(s==="landing-heritage"||s==="operational")document.documentElement.setAttribute("data-ui-theme",s);var t=localStorage.getItem("dm-theme");if(t==="dark"||(!t&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch(e){}})();
-  </script>
+  <script>try{var s=localStorage.getItem("dm-ui-theme");if(s==="landing-heritage"||s==="operational")document.documentElement.setAttribute("data-ui-theme",s)}catch(e){}</script>
 
-  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" href="{% static 'css/tailwind.css' %}">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
-
-  {# Tailwind via Play CDN for development; production builds will compile. #}
-  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['"Inter"', '"Cairo"', 'system-ui', 'sans-serif'],
-            display: ['"Inter"', '"Cairo"', 'system-ui', 'sans-serif'],
-            mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
-          },
-          colors: {
-            brand: {
-              50:  '#f0fdf6',
-              100: '#dcfce8',
-              200: '#bbf7d0',
-              300: '#86efad',
-              400: '#4ade80',
-              500: '#10b981',
-              600: '#059669',
-              700: '#047857',
-              800: '#065f46',
-              900: '#064e3b',
-              950: '#022c22',
-            },
-          },
-        },
-      },
-    };
-  </script>
 
   <script defer src="{% static 'js/htmx.min.js' %}"></script>
   <script defer src="{% static 'js/htmx-loading-states.min.js' %}"></script>
   <script defer src="{% static 'js/alpine.min.js' %}"></script>
   <script>document.addEventListener('click',(e)=>{const t=e.target.closest('input[type="date"],input[type="datetime-local"],input[type="time"]');if(t)t.showPicker()})</script>
-  <script>document.addEventListener('htmx:afterSettle',e=>{typeof Alpine!=='undefined'&&Alpine.initTree(e.detail.target);const p=window.location.pathname.replace(/\/+$/,'');document.querySelectorAll('#profile-nav a').forEach(a=>{const h=a.getAttribute('href').replace(/\/+$/,''),m=p===h||p.endsWith('/edit')&&h.endsWith('/details');a.classList.toggle('bg-brand-50',m);a.classList.toggle('text-brand-700',m);a.classList.toggle('dark:bg-brand-900/20',m);a.classList.toggle('dark:text-brand-200',m);a.classList.toggle('font-semibold',m);a.classList.toggle('text-slate-600',!m);a.classList.toggle('dark:text-slate-300',!m);a.classList.toggle('hover:bg-slate-50',!m);a.classList.toggle('dark:hover:bg-slate-800',!m)})})</script>
-
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <script>document.addEventListener('htmx:afterSettle',e=>{typeof Alpine!=='undefined'&&Alpine.initTree(e.detail.target);const p=window.location.pathname.replace(/\/+$/,'');document.querySelectorAll('#profile-nav a').forEach(a=>{const h=a.getAttribute('href').replace(/\/+$/,''),m=p===h||p.endsWith('/edit')&&h.endsWith('/details');a.classList.toggle('bg-brand-50',m);a.classList.toggle('text-brand-700',m);a.classList.toggle('font-semibold',m);a.classList.toggle('text-slate-600',!m);a.classList.toggle('hover:bg-slate-50',!m)})})</script>
 
   <style>[x-cloak] { display: none !important; }</style>
 

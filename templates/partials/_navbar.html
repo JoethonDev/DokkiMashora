@@ -3,29 +3,29 @@
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="flex h-16 items-center justify-between gap-4">
       <div class="flex items-center gap-3">
-        <button class="md:hidden dm-button dm-button-secondary p-1.5"
-                @click="$dispatch('open-nav')" aria-label="{% trans 'Menu' %}" aria-expanded="false">
+        <button type="button" x-data class="lg:hidden dm-button dm-button-secondary p-1.5"
+                @click="$dispatch('open-nav')" @nav-state.window="$el.setAttribute('aria-expanded', $event.detail.open)" aria-label="{% trans 'Menu' %}" aria-expanded="false">
           <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
         </button>
-        <a href="{% url 'core:landing' %}" class="flex items-center gap-2 dm-text">
+        <a href="{% url 'core:landing' %}" class="flex items-center gap-2 dm-text"{% if request.resolver_match.view_name == 'core:landing' %} aria-current="page"{% endif %}>
           <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg dm-brand font-bold">د</span>
           <span class="hidden sm:inline text-lg font-semibold tracking-tight">{{ SITE_NAME_AR }}</span>
         </a>
       </div>
 
-      <nav class="hidden md:flex items-center gap-5 text-sm font-medium dm-muted">
-        <a href="{% url 'core:landing' %}" class="hover:text-brand-700 dark:hover:text-brand-300 dm-brand-text">{% trans "Home" %}</a>
+      <nav class="hidden lg:flex items-center gap-5 text-sm font-medium dm-muted">
+        <a href="{% url 'core:landing' %}" class="hover:text-brand-700 dark:hover:text-brand-300 dm-brand-text{% if request.resolver_match.view_name == 'core:landing' %} dm-nav-active{% endif %}"{% if request.resolver_match.view_name == 'core:landing' %} aria-current="page"{% endif %}>{% trans "Home" %}</a>
         {% if user.is_authenticated %}
           {% if CAN_VIEW_STUDENT_NAV %}
-            <a href="{% url 'students:dashboard' %}" class="hover:text-brand-700 dark:hover:text-brand-300 dm-brand-text">{% trans "My Portal" %}</a>
+            <a href="{% url 'students:dashboard' %}" class="hover:text-brand-700 dark:hover:text-brand-300 dm-brand-text{% if request.resolver_match.view_name == 'students:dashboard' %} dm-nav-active{% endif %}"{% if request.resolver_match.view_name == 'students:dashboard' %} aria-current="page"{% endif %}>{% trans "My Portal" %}</a>
           {% elif CAN_VIEW_REVIEWER_NAV %}
-            <a href="{% url 'assessments:reviewer_dashboard' %}" class="hover:text-brand-700 dark:hover:text-brand-300 dm-brand-text">{% trans "Review Dashboard" %}</a>
+            <a href="{% url 'assessments:reviewer_dashboard' %}" class="hover:text-brand-700 dark:hover:text-brand-300 dm-brand-text{% if request.resolver_match.view_name == 'assessments:reviewer_dashboard' %} dm-nav-active{% endif %}"{% if request.resolver_match.view_name == 'assessments:reviewer_dashboard' %} aria-current="page"{% endif %}>{% trans "Review Dashboard" %}</a>
           {% else %}
-            <a href="{% url 'accounts:dashboard' %}" class="hover:text-brand-700 dark:hover:text-brand-300 dm-brand-text">{% trans "Dashboard" %}</a>
+            <a href="{% url 'accounts:dashboard' %}" class="hover:text-brand-700 dark:hover:text-brand-300 dm-brand-text{% if request.resolver_match.view_name == 'accounts:dashboard' or request.resolver_match.view_name == 'accounts:dashboard_admin' or request.resolver_match.view_name == 'accounts:dashboard_moderator' or request.resolver_match.view_name == 'accounts:dashboard_teacher' or request.resolver_match.view_name == 'accounts:dashboard_secretary' %} dm-nav-active{% endif %}"{% if request.resolver_match.view_name == 'accounts:dashboard' or request.resolver_match.view_name == 'accounts:dashboard_admin' or request.resolver_match.view_name == 'accounts:dashboard_moderator' or request.resolver_match.view_name == 'accounts:dashboard_teacher' or request.resolver_match.view_name == 'accounts:dashboard_secretary' %} aria-current="page"{% endif %}>{% trans "Dashboard" %}</a>
           {% endif %}
           {% if CAN_VIEW_ADMIN_NAV %}
             <div x-data="{ open: false }" class="relative">
-              <button @click="open = !open" @click.away="open = false" class="hover:text-brand-700 dark:hover:text-brand-300 dm-brand-text flex items-center gap-1" aria-haspopup="true">
+              <button @click="open = !open" @click.away="open = false" :aria-expanded="open.toString()" class="hover:text-brand-700 dark:hover:text-brand-300 dm-brand-text flex items-center gap-1" aria-haspopup="true">
                 {% trans "Manage" %}
                 <svg class="h-3.5 w-3.5" :class="open ? 'rotate-180' : ''" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
               </button>
@@ -42,7 +42,7 @@
             </div>
           {% elif CAN_VIEW_MODERATOR_NAV %}
             <div x-data="{ open: false }" class="relative">
-              <button @click="open = !open" @click.away="open = false" class="hover:text-brand-700 dark:hover:text-brand-300 dm-brand-text flex items-center gap-1" aria-haspopup="true">
+              <button @click="open = !open" @click.away="open = false" :aria-expanded="open.toString()" class="hover:text-brand-700 dark:hover:text-brand-300 dm-brand-text flex items-center gap-1" aria-haspopup="true">
                 {% trans "Manage" %}
                 <svg class="h-3.5 w-3.5" :class="open ? 'rotate-180' : ''" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
               </button>
@@ -71,9 +71,13 @@
       </nav>
 
       <div class="flex items-center gap-2" x-data="{ open: false }">
+        {% if user.is_authenticated %}
+          <div class="dm-account-identity min-w-0 flex-col items-end leading-tight" dir="auto">
+            <span class="max-w-40 truncate text-sm font-semibold dm-text">{{ user.get_full_name|default:user.email }}</span>
+            <span class="text-xs dm-muted">{% if user.is_superuser %}{% trans "Super Admin" %}{% elif user.groups.all %}{{ user.groups.all|join:", " }}{% else %}{% trans "Student" %}{% endif %}</span>
+          </div>
+        {% endif %}
         {% include "partials/_language_switcher.html" %}
-        {% include "partials/_design_switcher.html" %}
-        {% include "partials/_theme_toggle.html" %}
         {% if user.is_authenticated %}
           <form method="post" action="{% url 'accounts:logout' %}" class="hidden sm:block">
             {% csrf_token %}

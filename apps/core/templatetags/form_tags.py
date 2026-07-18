@@ -18,7 +18,22 @@ def add_class(field, css_class):
     widget = field.field.widget
     existing = widget.attrs.get("class", "")
     widget.attrs["class"] = (existing + " " + css_class).strip()
+    described_by = []
+    if field.help_text:
+        described_by.append(f"{field.id_for_label}-help")
+    if field.errors:
+        widget.attrs["aria-invalid"] = "true"
+        described_by.append(f"{field.id_for_label}-error")
+    if field.form.non_field_errors():
+        described_by.append(f"{field.form.prefix or 'form'}-non-field-errors")
+    if described_by:
+        widget.attrs["aria-describedby"] = " ".join(described_by)
     return field
+
+
+@register.filter
+def is_first_visible_field(field):
+    return bool(field.form.visible_fields()) and field.form.visible_fields()[0].name == field.name
 
 
 @register.filter

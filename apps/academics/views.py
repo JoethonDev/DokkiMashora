@@ -40,7 +40,11 @@ from apps.academics.models import (
     DiplomaLecture,
     Lecture,
     Semester,
+    DiplomaLectureWatchProgress,
+    LectureWatchProgress,
 )
+from apps.assessments.constants import ATTEMPT_STATUS_ASSIGNED, ATTEMPT_STATUS_IN_PROGRESS
+from apps.assessments.models import AssessmentAttempt
 from apps.academics.services import (
     can_access_course,
     can_access_diploma_lecture,
@@ -57,7 +61,7 @@ from apps.academics.services import (
     start_lecture_watch,
 )
 from apps.attendance.models import AttendanceCode
-from apps.attendance.services import build_attendance_qr_payload
+from apps.attendance.services import build_attendance_qr_payload, get_attendance_summary
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import (
@@ -352,7 +356,14 @@ def admin_course_detail(request, course_id):
     return render(
         request,
         "academics/admin_course_detail.html",
-        {"course": course, "versions": versions},
+        {
+            "course": course,
+            "versions": versions,
+            "breadcrumb_items": [
+                {"label": _("Courses"), "href": reverse("academics:admin_course_list")},
+                {"label": course.title},
+            ],
+        },
     )
 
 
@@ -536,7 +547,14 @@ def admin_version_detail(request, course_id, version_id):
     return render(
         request,
         "academics/admin_version_detail.html",
-        {"course": course, "version": version, "lectures": lectures, "intake_forms": intake_forms},
+        {
+            "course": course, "version": version, "lectures": lectures, "intake_forms": intake_forms,
+            "breadcrumb_items": [
+                {"label": _("Academics"), "href": reverse("academics:admin_course_list")},
+                {"label": course.title, "href": reverse("academics:admin_course_detail", args=[course.id])},
+                {"label": version.label},
+            ],
+        },
     )
 
 
@@ -666,7 +684,11 @@ def _process_lecture_audio(request, lecture, files, key_prefix=None):
             "audio_content_type", "audio_byte_size", "audio_checksum",
         ])
         # ponytail: sync FFmpeg blocks the request. Switch to Celery/Task queue if uploads >50MB.
-        threading.Thread(target=transcode_to_hls, args=(lecture, data, filename, content_type), daemon=True).start()
+        threading.Thread(
+            target=transcode_to_hls,
+            args=(lecture, data, filename, content_type, prefix),
+            daemon=True,
+        ).start()
     except Exception as exc:
         logger.exception("Audio upload/processing failed for lecture %s", lecture.id)
         messages.error(request, _("Audio processing failed: %(error)s") % {"error": str(exc)})
@@ -675,6 +697,49 @@ def _process_lecture_audio(request, lecture, files, key_prefix=None):
 # ---------------------------------------------------------------------------
 # Student: content access
 # ---------------------------------------------------------------------------
+
+
+def _lecture_progress(lectures, progress_rows):
+    lecture_ids = {lecture.id for lecture in lectures}
+    progress = {row.lecture_id: row for row in progress_rows if row.lecture_id in lecture_ids}
+    completed = sum(row.status == "completed" for row in progress.values())
+    next_lecture = next((lecture for lecture in lectures if lecture.id not in progress or progress[lecture.id].status != "completed"), None)
+    return {
+        "completed_count": completed,
+        "lecture_count": len(lectures),
+        "percent": round(completed * 100 / len(lectures)) if lectures else 0,
+        "next_lecture": next_lecture,
+    }
+
+
+def _assessment_due_work(user, *, course_version_id=None, cohort_id=None):
+    filters = Q(student=user, status__in=[ATTEMPT_STATUS_ASSIGNED, ATTEMPT_STATUS_IN_PROGRESS])
+    scope = Q()
+    if course_version_id:
+        scope |= Q(assessment__course_version_id=course_version_id)
+    if cohort_id:
+        scope |= Q(assessment__cohort_id=cohort_id)
+    if not scope:
+        return []
+    return list(
+        AssessmentAttempt.objects.filter(filters & scope, assessment__close_at__gte=timezone.now())
+        .select_related("assessment")
+        .order_by("assessment__close_at")[:5]
+    )
+
+
+def _lecture_navigation(lectures, lecture, *, version=None, enrollment=None, semester=None):
+    ordered = list(lectures)
+    index = ordered.index(lecture)
+    route = "academics:student_lecture_view" if version else "academics:student_diploma_lecture_view"
+    def url(item):
+        return reverse(route, args=[version.id, item.id]) if version else reverse(
+            route, args=[enrollment.id, semester.id, item.id]
+        )
+    return {
+        "previous_url": url(ordered[index - 1]) if index else None,
+        "next_url": url(ordered[index + 1]) if index + 1 < len(ordered) else None,
+    }
 
 
 @student_required
@@ -705,6 +770,11 @@ def student_course_detail(request, version_id):
             buf = _io.BytesIO()
             img.save(buf, format="PNG")
             course_attendance_qr = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+    progress = _lecture_progress(
+        list(lectures),
+        LectureWatchProgress.objects.filter(student=profile, course_enrollment=course_enrollment),
+    ) if course_enrollment else {"completed_count": 0, "lecture_count": len(lectures), "percent": 0, "next_lecture": next(iter(lectures), None)}
+    due_work = _assessment_due_work(request.user, course_version_id=version.id)
     return render(
         request,
         "academics/student_course_detail.html",
@@ -713,6 +783,13 @@ def student_course_detail(request, version_id):
             "lectures": lectures,
             "course_attendance_code": course_attendance_code,
             "course_attendance_qr": course_attendance_qr,
+            "progress": progress,
+            "due_work": due_work,
+            "access_state": course_enrollment.get_status_display() if course_enrollment else _("No active enrollment"),
+            "breadcrumb_items": [
+                {"label": _("Learning"), "href": reverse("students:learning")},
+                {"label": version.course.title},
+            ],
         },
     )
 
@@ -730,10 +807,12 @@ def student_lecture_view(request, version_id, lecture_id):
     lecture = get_object_or_404(Lecture, id=lecture_id, course_version=version)
     if not can_access_lecture(profile, lecture):
         raise PermissionDenied(_("This lecture is not available yet."))
+    navigation = _lecture_navigation(get_visible_lectures(profile, version), lecture, version=version)
+    watch_progress = LectureWatchProgress.objects.filter(student=profile, lecture=lecture, course_enrollment__isnull=False).first()
     return render(
         request,
         "academics/student_lecture_view.html",
-        {"version": version, "lecture": lecture},
+        {"version": version, "lecture": lecture, "navigation": navigation, "watch_progress": watch_progress},
     )
 
 
@@ -815,7 +894,14 @@ def admin_diploma_lecture_list(request, diploma_id, cohort_id, semester_id):
     return render(
         request,
         "academics/admin_diploma_lecture_list.html",
-        {"diploma": diploma, "cohort": cohort, "semester": semester, "lectures": lectures},
+        {
+            "diploma": diploma, "cohort": cohort, "semester": semester, "lectures": lectures,
+            "breadcrumb_items": [
+                {"label": _("Academics"), "href": reverse("academics:admin_diploma_list")},
+                {"label": diploma.title, "href": reverse("academics:admin_diploma_detail", args=[diploma.id])},
+                {"label": cohort.name}, {"label": semester.title},
+            ],
+        },
     )
 
 
@@ -1152,8 +1238,10 @@ def student_diploma_detail(request, enrollment_id):
     access = get_student_diploma_access(enrollment)
 
     semester_lectures = []
+    all_lectures = []
     for semester in access["visible_semesters"]:
         lectures = get_visible_diploma_lectures(profile, enrollment, semester=semester)
+        all_lectures.extend(lectures)
         semester_lectures.append({
             "semester": semester,
             "lectures": lectures,
@@ -1169,6 +1257,19 @@ def student_diploma_detail(request, enrollment_id):
         buf = _io.BytesIO()
         img.save(buf, format="PNG")
         attendance_qr = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+    progress = _lecture_progress(
+        all_lectures,
+        DiplomaLectureWatchProgress.objects.filter(student=profile, diploma_enrollment=enrollment),
+    )
+    progress["next_lecture_url"] = (
+        reverse("academics:student_diploma_lecture_view", args=[enrollment.id, progress["next_lecture"].semester_id, progress["next_lecture"].id])
+        if progress["next_lecture"] else None
+    )
+    attendance_summary = (
+        get_attendance_summary(enrollment, diploma_access["current_semester"])
+        if diploma_access["current_semester"]
+        else None
+    )
 
     return render(request, "academics/student_diploma_detail.html", {
         "enrollment": enrollment,
@@ -1178,6 +1279,10 @@ def student_diploma_detail(request, enrollment_id):
         "diploma_access": access,
         "attendance_code": attendance_code,
         "attendance_qr": attendance_qr,
+        "progress": progress,
+        "attendance_summary": attendance_summary,
+        "due_work": _assessment_due_work(request.user, cohort_id=cohort.id),
+        "access_state": _("Active until %(date)s") % {"date": enrollment.expires_at.strftime("%x") if enrollment.expires_at else _("unlimited")},
     })
 
 
@@ -1207,6 +1312,10 @@ def student_diploma_semester_detail(request, enrollment_id, semester_id):
         "semester": semester,
         "lectures": get_visible_diploma_lectures(profile, enrollment, semester=semester),
         "access": access,
+        "progress": _lecture_progress(
+            list(get_visible_diploma_lectures(profile, enrollment, semester=semester)),
+            DiplomaLectureWatchProgress.objects.filter(student=profile, diploma_enrollment=enrollment, lecture__semester=semester),
+        ),
     })
 
 
@@ -1235,12 +1344,19 @@ def student_diploma_lecture_view(request, enrollment_id, semester_id, lecture_id
         raise PermissionDenied(_("This lecture is not available yet."))
 
     diploma = enrollment.cohort.diploma
+    navigation = _lecture_navigation(
+        get_visible_diploma_lectures(profile, enrollment, semester=semester), lecture,
+        enrollment=enrollment, semester=semester,
+    )
+    watch_progress = DiplomaLectureWatchProgress.objects.filter(student=profile, lecture=lecture, diploma_enrollment=enrollment).first()
     return render(request, "academics/student_lecture_view.html", {
         "lecture": lecture,
         "enrollment": enrollment,
         "semester": semester,
         "diploma": diploma,
         "version": None,
+        "navigation": navigation,
+        "watch_progress": watch_progress,
     })
 
 
@@ -1262,7 +1378,12 @@ def student_diploma_lecture_audio(request, enrollment_id, semester_id, lecture_i
     if enrollment.expires_at and timezone.now() >= enrollment.expires_at:
         raise PermissionDenied(_("Enrollment has expired."))
 
-    lecture = get_object_or_404(DiplomaLecture, id=lecture_id, cohort=enrollment.cohort)
+    lecture = get_object_or_404(
+        DiplomaLecture,
+        id=lecture_id,
+        cohort=enrollment.cohort,
+        semester_id=semester_id,
+    )
     if not can_access_diploma_lecture(profile, enrollment, lecture):
         raise PermissionDenied(_("This lecture is not available yet."))
 
@@ -1298,7 +1419,12 @@ def student_diploma_lecture_audio_download(request, enrollment_id, semester_id, 
     if enrollment.expires_at and timezone.now() >= enrollment.expires_at:
         raise PermissionDenied(_("Enrollment has expired."))
 
-    lecture = get_object_or_404(DiplomaLecture, id=lecture_id, cohort=enrollment.cohort)
+    lecture = get_object_or_404(
+        DiplomaLecture,
+        id=lecture_id,
+        cohort=enrollment.cohort,
+        semester_id=semester_id,
+    )
     if not can_access_diploma_lecture(profile, enrollment, lecture):
         raise PermissionDenied(_("This lecture is not available yet."))
     if not lecture.audio_storage_key:

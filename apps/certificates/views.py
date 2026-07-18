@@ -104,15 +104,19 @@ def admin_template_edit(request, template_id):
 @login_required
 @role_required(*ROLE_SENIOR_STAFF)
 def admin_certificate_list(request):
+    student_id = request.GET.get("student_id", "")
     certs = GeneratedCertificate.objects.select_related(
         "student__user", "diploma_enrollment__cohort__diploma", "certificate_template",
     ).all().order_by("-generated_at")
+    if student_id.isdigit():
+        certs = certs.filter(student_id=int(student_id))
 
     page_obj, pagination_qs = paginate(request, certs)
     ctx = {
         "page_obj": page_obj,
         "pagination_qs": pagination_qs,
         "breadcrumb_items": [{"label": _("Certificates")}],
+        "student_id": student_id,
     }
     return render(request, "certificates/admin_certificate_list.html", ctx)
 

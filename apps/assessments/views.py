@@ -102,6 +102,7 @@ from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import (
     ROLE_EXAM_STAFF,
+    ROLE_GRADING_QUEUE,
     ROLE_GRADING_STAFF,
     ROLE_REVIEWER,
     ROLE_REVIEW_STAFF,
@@ -111,6 +112,7 @@ from apps.core.permissions import (
     is_admin,
     is_moderator,
     role_required,
+    safe_int,
     validate_score,
 )
 from apps.core.views import safe_next_url
@@ -305,8 +307,8 @@ def submit_assessment_view(request, assessment_id):
         except ValueError as exc:
             messages.error(request, str(exc))
     else:
-        answers = _parse_answers(request, assessment)
         try:
+            answers = _parse_answers(request, assessment)
             submit_assessment(attempt, answers)
             messages.success(request, _("Assessment submitted successfully."))
         except ValueError as exc:
@@ -460,7 +462,9 @@ def _parse_answers(request, assessment):
     for key, value in request.POST.items():
         if not key.startswith("question_"):
             continue
-        qid = int(key.removeprefix("question_"))
+        qid = safe_int(key.removeprefix("question_"))
+        if qid is None:
+            raise ValueError(_("Invalid question."))
         question = questions.get(qid)
         if not question:
             continue
@@ -486,12 +490,15 @@ def _parse_answers(request, assessment):
 def admin_list(request):
     q = request.GET.get("q", "")
     type_filter = request.GET.get("type", "")
+    student_id = request.GET.get("student_id", "")
     assessments = Assessment.objects.all().select_related("created_by")
     assessments = assessments.filter(assessment_scope_filter(request.user))
     if q:
         assessments = assessments.filter(Q(title__icontains=q) | Q(description__icontains=q))
     if type_filter:
         assessments = assessments.filter(assessment_type=type_filter)
+    if student_id.isdigit():
+        assessments = assessments.filter(attempts__student_id=int(student_id)).distinct()
     filters = []
     if type_filter is not None:
         filters.append({
@@ -505,7 +512,7 @@ def admin_list(request):
             ],
         })
     page_obj, pagination_qs = paginate(request, assessments)
-    ctx = {"page_obj": page_obj, "pagination_qs": pagination_qs, "search_value": q, "filters": filters, "is_admin_user": is_admin(request.user)}
+    ctx = {"page_obj": page_obj, "pagination_qs": pagination_qs, "search_value": q, "filters": filters, "is_admin_user": is_admin(request.user), "student_id": student_id}
     if is_htmx(request):
         return render(request, "assessments/partials/_assessment_list_table.html", ctx)
     return render(request, "assessments/admin_list.html", ctx)
@@ -850,7 +857,7 @@ def _save_choices_from_parsed(question, parsed_choices):
 
 
 @login_required
-@role_required(*ROLE_EXAM_STAFF)
+@role_required(*ROLE_GRADING_QUEUE)
 def admin_grade_list(request):
     queue = get_grading_queue(request.user)
     homework_queue = get_homework_pending_grading(request.user)
@@ -876,7 +883,7 @@ def admin_homework_grade_list(request):
 
 
 @login_required
-@role_required(*ROLE_GRADING_STAFF)
+@role_required(*ROLE_GRADING_QUEUE)
 def admin_homework_grade_detail(request, submission_id):
     submission = get_object_or_404(
         HomeworkSubmission.objects.select_related("assessment", "student", "attempt"),
@@ -917,7 +924,7 @@ def admin_homework_grade_detail(request, submission_id):
 
 
 @login_required
-@role_required(*ROLE_GRADING_STAFF)
+@role_required(*ROLE_GRADING_QUEUE)
 def admin_grade_detail(request, attempt_id):
     attempt = get_object_or_404(
         AssessmentAttempt.objects.select_related("assessment", "student"),
@@ -1091,7 +1098,7 @@ def admin_hide_all_grades(request, assessment_id):
 
 
 @login_required
-@role_required(*ROLE_GRADING_STAFF)
+@role_required(*ROLE_GRADING_QUEUE)
 @require_POST
 def admin_grade_answer(request, answer_id):
     answer = get_object_or_404(
@@ -1131,7 +1138,7 @@ def admin_grade_answer(request, answer_id):
 
 
 @login_required
-@role_required(*ROLE_GRADING_STAFF)
+@role_required(*ROLE_GRADING_QUEUE)
 @require_POST
 def admin_grade_homework_submission(request, submission_id):
     submission = get_object_or_404(

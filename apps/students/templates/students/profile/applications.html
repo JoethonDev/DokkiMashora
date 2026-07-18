@@ -31,6 +31,7 @@
               {% with latest=doc_requests|first %}
                 {% if latest %}
                   <p class="text-xs text-amber-600 mt-2">{% trans "Documents requested — expires" %} <span class="tabular-nums">{{ latest.expires_at|date:"j M Y, H:i" }}</span></p>
+                  {% if latest.status == "requested" %}<a href="{% url 'applications:document_upload' latest.pk %}" class="dm-button dm-button-primary mt-3 inline-flex min-h-11 px-4 py-2 text-sm">{% trans "Upload documents" %}</a>{% endif %}
                 {% endif %}
               {% endwith %}
             {% endwith %}
@@ -49,7 +50,8 @@
             {% with intake_requests=app.intake_requests.all %}
               {% with latest=intake_requests|first %}
                 {% if latest and latest.status == "requested" %}
-                  <p class="text-xs text-amber-600 mt-2">{% trans "Intake form required — link sent to your email" %}</p>
+                  <p class="text-xs text-amber-600 mt-2">{% trans "Intake form required" %}</p>
+                  <a href="{% url 'intake_forms:fill_intake_form' latest.pk %}" class="dm-button dm-button-primary mt-3 inline-flex min-h-11 px-4 py-2 text-sm">{% trans "Complete intake form" %}</a>
                 {% endif %}
               {% endwith %}
             {% endwith %}

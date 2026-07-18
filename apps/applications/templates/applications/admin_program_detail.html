@@ -273,7 +273,7 @@
       <h2 class="font-semibold mb-3">{% trans "Notes" %}</h2>
       <div class="space-y-3">
         {% for note in notes %}
-          <div class="text-sm border-l-4 border-brand-300 dark:border-brand-700 pl-3 py-1">
+          <div class="text-sm border-s-4 border-brand-300 dark:border-brand-700 ps-3 py-1">
             <p class="text-slate-700 dark:text-slate-200">{{ note.note }}</p>
             <p class="text-xs text-slate-400 mt-1">{{ note.actor.email|default:"—" }} &middot; {% dt note.created_at %}</p>
           </div>
@@ -297,12 +297,12 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
-            {% for d in decisions %}
+            {% for d, old_status, new_status in decision_display_rows %}
               <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
                 <td class="px-4 py-3 text-slate-500 dark:text-slate-400 tabular-nums whitespace-nowrap">{% dt d.created_at %}</td>
                 <td class="px-4 py-3 text-slate-900 dark:text-slate-100">{{ d.get_action_display }}</td>
                 <td class="px-4 py-3 text-slate-900 dark:text-slate-100">{{ d.actor.email|default:"—" }}</td>
-                <td class="px-4 py-3 text-slate-900 dark:text-slate-100 tabular-nums">{{ d.old_status }} → {{ d.new_status }}</td>
+                <td class="px-4 py-3 text-slate-900 dark:text-slate-100 tabular-nums">{{ old_status }} &rarr; {{ new_status }}</td>
                 <td class="px-4 py-3 text-slate-500 dark:text-slate-400 max-w-[12rem] break-words">{{ d.reason|default:"—" }}</td>
               </tr>
             {% endfor %}

@@ -1,5 +1,5 @@
 {% load i18n %}
-<section class="max-w-{{ max|default:"5xl" }} mx-auto px-4 sm:px-6 lg:px-8 {{ py|default:"py-8 sm:py-10" }}">
+<section class="{% if max == '6xl' %}max-w-6xl{% elif max == '7xl' %}max-w-7xl{% elif max == '4xl' %}max-w-4xl{% else %}max-w-5xl{% endif %} mx-auto px-4 sm:px-6 lg:px-8 {{ py|default:"py-8 sm:py-10" }}">
   {% if eyebrow or title %}
   <header class="mb-6 {% if header_actions %}flex flex-wrap items-end justify-between gap-3{% endif %}">
     <div>

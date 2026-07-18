@@ -40,6 +40,11 @@
         {% trans "Once you start, the timer begins and cannot be paused. Make sure you have a stable internet connection." %}
       </p>
     </div>
+    <ul class="mt-4 list-disc space-y-1 ps-5 text-sm text-slate-600 dark:text-slate-300">
+      <li>{% trans "You have one active attempt unless the assessment says otherwise." %}</li>
+      <li>{% trans "Answers are saved in this browser while you work; submit before the deadline." %}</li>
+      <li>{% trans "If the connection fails, keep this page open and contact support before retrying." %}</li>
+    </ul>
     <form method="post" action="{% url 'assessments:start' assessment.id %}" class="mt-6">
       {% csrf_token %}
       {% include "partials/_button.html" with label=_("Start Assessment") variant="primary" size="lg" %}

@@ -135,7 +135,7 @@ def edit_profile(request: HttpRequest) -> HttpResponse:
 def application_history(request: HttpRequest) -> HttpResponse:
     """Show all applications submitted by the student."""
     profile = _get_profile_or_404(request.user)
-    applications = profile.program_applications.select_related("reviewed_by", "cohort__diploma", "course").prefetch_related("document_requests__upload").order_by("-created_at")
+    applications = profile.program_applications.select_related("reviewed_by", "cohort__diploma", "course").prefetch_related("document_requests__upload", "intake_requests").order_by("-created_at")
     page_obj, pagination_qs = paginate(request, applications, per_page=15)
     data = get_dashboard_data(profile, sections=["apply"])
     data.update({"applications": page_obj, "pagination_qs": pagination_qs})
@@ -144,33 +144,13 @@ def application_history(request: HttpRequest) -> HttpResponse:
 
 @student_required
 def diploma_course(request: HttpRequest) -> HttpResponse:
-    """Show the student's diploma and course enrollments listing."""
+    """Canonical Learning destination backed by the student selector cards."""
     profile = _get_profile_or_404(request.user)
-    data = get_dashboard_data(profile, sections=["diploma_enrollments", "course_enrollments"])
-    items = []
-    for de in (data.get("diploma_enrollments") or []):
-        items.append({
-            "type": "diploma",
-            "label": de.cohort.diploma.title,
-            "enrollment_id": de.id,
-            "joined_at": de.activated_at or de.created_at,
-            "expires_at": de.expires_at,
-        })
-
-    for ce in (data.get("course_enrollments") or []):
-        cv = ce.course_version
-        lecture_count = cv.lectures.filter(is_published=True).count()
-        items.append({
-            "type": "course",
-            "label": "",
-            "course_title": cv.course.title,
-            "cv_id": cv.id,
-            "joined_at": ce.activated_at or ce.created_at,
-            "expires_at": ce.expires_at,
-            "lecture_count": lecture_count,
-        })
-
-    return _render_profile(request, "students/profile/diploma_course.html", {"items": items})
+    data = get_dashboard_data(profile, sections=[
+        "diploma_enrollments", "course_enrollments", "active_courses", "expired_courses",
+        "assessment_attempts",
+    ])
+    return _render_profile(request, "students/profile/diploma_course.html", data)
 
 
 @student_required
@@ -247,6 +227,22 @@ def progression_history(request: HttpRequest) -> HttpResponse:
         "semester_progress", "promotion_decisions", "completions", "eligibilities", "grade_items",
     ])
     return _render_profile(request, "students/profile/progression.html", data)
+
+
+@student_required
+def record(request: HttpRequest) -> HttpResponse:
+    """Canonical student record: released academic history and communications."""
+    profile = _get_profile_or_404(request.user)
+    data = get_dashboard_data(profile, sections=[
+        "semester_progress", "promotion_decisions", "completions", "eligibilities",
+        "grade_items", "certificates", "payments", "notifications", "assessment_attempts",
+        "exam_assignments", "attendance",
+    ])
+    data["grade_visibility_hidden"] = GRADE_VISIBILITY_HIDDEN
+    data["grade_visibility_released"] = GRADE_VISIBILITY_RELEASED
+    data["grade_visibility_under_review"] = GRADE_VISIBILITY_UNDER_REVIEW
+    data["attempt_status_graded"] = ATTEMPT_STATUS_GRADED
+    return _render_profile(request, "students/profile/record.html", data)
 
 
 # ---------------------------------------------------------------------------
@@ -369,7 +365,7 @@ def apply(request: HttpRequest) -> HttpResponse:
             })
 
         messages.success(request, _("Your application has been submitted."))
-        return redirect("students:application_history")
+        return redirect("students:applications")
 
     return _render_profile(request, "students/profile/apply.html", {
         "eligibility": eligibility,

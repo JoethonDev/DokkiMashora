@@ -8,6 +8,7 @@ from django.contrib.auth.models import Group
 from django.db import IntegrityError
 from django.test import TestCase
 from django.utils import timezone
+from django.utils.translation import gettext as _
 
 from apps.accounts.constants import GROUP_STUDENT
 from apps.accounts.models import User
@@ -221,7 +222,7 @@ class ParseRowDataTests(TestCase):
             "payment_date": "2026-01-15",
         }, 1)
         self.assertEqual(result["status"], ROW_STATUS_FAILED)
-        self.assertIn("national ID", result["error_message"])
+        self.assertIn(str(_("Empty national ID")), result["error_message"])
 
     def test_fails_on_invalid_date(self) -> None:
         result = parse_row_data({
@@ -230,7 +231,7 @@ class ParseRowDataTests(TestCase):
             "payment_date": "bad-date",
         }, 1)
         self.assertEqual(result["status"], ROW_STATUS_FAILED)
-        self.assertIn("Invalid date", result["error_message"])
+        self.assertIn(str(_("Invalid date: %(date)s") % {"date": "bad-date"}), result["error_message"])
 
 
 class ConfirmUploadRollbackTests(TestCase):

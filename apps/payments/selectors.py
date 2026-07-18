@@ -11,12 +11,15 @@ from .models import PaymentRecord, PaymentUpload, PaymentUploadRow
 
 def get_upload_queryset(
     status: str | None = None,
+    row_status: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
 ) -> QuerySet[PaymentUpload]:
     qs = PaymentUpload.objects.select_related("uploaded_by").all()
     if status:
         qs = qs.filter(status=status)
+    if row_status:
+        qs = qs.filter(rows__status=row_status).distinct()
     if date_from:
         qs = qs.filter(created_at__date__gte=date_from)
     if date_to:

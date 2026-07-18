@@ -17,6 +17,7 @@ urlpatterns = [
     path("dashboard/admin/", views.admin_dashboard, name="dashboard_admin"),
     path("dashboard/moderator/", views.moderator_dashboard, name="dashboard_moderator"),
     path("dashboard/teacher/", views.teacher_dashboard, name="dashboard_teacher"),
+    path("dashboard/secretary/", views.secretary_dashboard, name="dashboard_secretary"),
     # Admin: user management
     path("manage/students/", views.admin_student_list, name="admin_student_list"),
     path("manage/students/create/", views.admin_user_create, {"user_type": "students"}, name="admin_student_create"),

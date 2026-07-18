@@ -5,9 +5,20 @@ from datetime import date as date_type
 
 from django import template
 from django.conf import settings
+from django.utils.safestring import mark_safe
 from django.template.defaultfilters import date as date_filter
 
 register = template.Library()
+
+
+@register.simple_tag(takes_context=True)
+def nav_attrs(context, url_name, base_class=""):
+    current = getattr(context.get("request").resolver_match, "view_name", "")
+    active = current == url_name
+    attrs = f'class="{base_class}{" dm-nav-active" if active else ""}"'
+    if active:
+        attrs += ' aria-current="page"'
+    return mark_safe(attrs)
 
 
 @register.simple_tag

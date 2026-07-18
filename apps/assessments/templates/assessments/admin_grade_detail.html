@@ -34,13 +34,26 @@
         {% endif %}
       </div>
     </div>
+    <dl class="mt-4 grid grid-cols-1 gap-2 border-t border-slate-100 pt-4 text-sm dark:border-slate-800 sm:grid-cols-3">
+      <div><dt class="text-slate-500 dark:text-slate-400">{% trans "Student" %}</dt><dd class="font-semibold text-slate-900 dark:text-slate-100">{{ attempt.student.get_full_name|default:attempt.student.email }}</dd></div>
+      <div><dt class="text-slate-500 dark:text-slate-400">{% trans "Scope" %}</dt><dd class="font-semibold text-slate-900 dark:text-slate-100">{% if attempt.assessment.cohort %}{{ attempt.assessment.cohort }}{% elif attempt.assessment.course_version %}{{ attempt.assessment.course_version.course.title }} — {{ attempt.assessment.course_version.label }}{% else %}{% trans "Assessment" %}{% endif %}</dd></div>
+      <div><dt class="text-slate-500 dark:text-slate-400">{% trans "Grading progress" %}</dt><dd class="font-semibold text-slate-900 dark:text-slate-100">{% trans "Review answers and save before leaving" %}</dd></div>
+    </dl>
   </div>
+
+  <nav class="mt-6 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900" aria-label="{% trans 'Answer navigation' %}">
+    <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{% trans "Answers" %}</p>
+    <div class="flex flex-wrap gap-2">
+      {% if is_diploma_random %}{% for sq, answer in snapshot_pairs %}<a href="#answer-sq-{{ sq.order }}" class="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-slate-300 px-3 text-sm font-semibold text-brand-700 hover:bg-brand-50 dark:border-slate-700 dark:text-brand-300 dark:hover:bg-slate-800">{{ forloop.counter }}</a>{% endfor %}
+      {% else %}{% for question, answer in question_answer_pairs %}<a href="#answer-q-{{ question.id }}" class="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-slate-300 px-3 text-sm font-semibold text-brand-700 hover:bg-brand-50 dark:border-slate-700 dark:text-brand-300 dark:hover:bg-slate-800">{{ forloop.counter }}</a>{% endfor %}{% endif %}
+    </div>
+  </nav>
 
   <form method="post" class="mt-6 space-y-6">
     {% csrf_token %}
     {% if is_diploma_random %}
       {% for sq, answer in snapshot_pairs %}
-      <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+      <div id="answer-sq-{{ sq.order }}" class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 scroll-mt-24">
         <div class="flex items-center gap-2 mb-4 text-sm">
           <span class="font-semibold text-slate-900 dark:text-slate-100">{% trans "Question" %} {{ forloop.counter }}</span>
           {% if sq.source_type == "manual" %}{% include "partials/_badge.html" with label=_("Manual") tone="neutral" %}{% else %}{% include "partials/_badge.html" with label=_("Bank MCQ") tone="neutral" %}{% endif %}
@@ -102,7 +115,7 @@
       {% endfor %}
     {% else %}
       {% for question, answer in question_answer_pairs %}
-      <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+      <div id="answer-q-{{ question.id }}" class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 scroll-mt-24">
         <div class="flex items-center gap-2 mb-4 text-sm">
           <span class="font-semibold text-slate-900 dark:text-slate-100">{% trans "Question" %} {{ forloop.counter }}</span>
           {% include "partials/_badge.html" with label=question.get_question_type_display tone="neutral" %}

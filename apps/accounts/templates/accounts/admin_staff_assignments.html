@@ -16,6 +16,7 @@
       <a href="{{ back_url }}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm bg-brand-600 text-white hover:bg-brand-700 shadow-sm">{% trans "Back" %}</a>
     </div>
   </header>
+  <p class="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">{% trans "Assignments control which cohorts and course versions this staff member can access. Revoking an assignment removes that scope immediately." %}</p>
 
   {% if staff_role == GROUP_TEACHER or staff_role == GROUP_ADMIN or staff_role == GROUP_SUPER_ADMIN %}
   {% comment %}Teacher assignments{% endcomment %}
@@ -63,7 +64,7 @@
                 </td>
                 <td class="px-3 py-2">
                   {% if ta.active %}
-                    <form method="post" action="{% url 'accounts:admin_teacher_assignment_delete' staff_user.id ta.id %}" onsubmit="return confirm('{% trans "Revoke this assignment?" %}')">
+                    <form method="post" action="{% url 'accounts:admin_teacher_assignment_delete' staff_user.id ta.id %}">
                       {% csrf_token %}
                       {% include "partials/_button.html" with label=_("Revoke") variant="danger" type="submit" size="sm" %}
                     </form>
@@ -87,7 +88,7 @@
   <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 mb-6">
     <h2 class="text-base font-semibold mb-4">{% trans "Moderator Assignments" %}</h2>
 
-    <form method="post" action="{% url 'accounts:admin_moderator_assignment_create' staff_user.id %}" class="flex flex-wrap gap-3 items-end mb-4 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+    <form method="post" action="{% url 'accounts:admin_moderator_assignment_create' staff_user.id %}" x-data="{scope: 'cohort'}" class="flex flex-wrap gap-3 items-end mb-4 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
       {% csrf_token %}
       <div>
         <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{% trans "Course Version" %}</label>
@@ -100,12 +101,12 @@
       </div>
       <div>
         <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{% trans "Scope" %}</label>
-        <select name="scope" class="rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm" onchange="toggleModeratorScope(this.value)">
+        <select name="scope" x-model="scope" class="rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm">
           <option value="cohort">{% trans "Entire cohort" %}</option>
           <option value="cluster">{% trans "Specific cluster" %}</option>
         </select>
       </div>
-      <div id="cohort-field">
+      <div id="cohort-field" x-show="scope === 'cohort'">
         <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{% trans "Cohort" %}</label>
         <select name="cohort" class="rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm">
           <option value="">{% trans "Select…" %}</option>
@@ -114,7 +115,7 @@
           {% endfor %}
         </select>
       </div>
-      <div id="cluster-field" style="display:none">
+      <div id="cluster-field" x-show="scope === 'cluster'" x-cloak>
         <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{% trans "Cluster" %}</label>
         <select name="cluster" class="rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm">
           <option value="">{% trans "Select…" %}</option>
@@ -129,13 +130,6 @@
         {% include "partials/_button.html" with label=_("Add Moderator Assignment") variant="primary" type="submit" size="sm" %}
       </div>
     </form>
-    <script>
-    function toggleModeratorScope(val) {
-      document.getElementById('cohort-field').style.display = val === 'cohort' ? '' : 'none';
-      document.getElementById('cluster-field').style.display = val === 'cluster' ? '' : 'none';
-    }
-    </script>
-
     {% if moderator_assignments %}
       <div class="overflow-x-auto">
         <table class="min-w-full text-sm divide-y divide-slate-200 dark:divide-slate-800">
@@ -163,7 +157,7 @@
                 </td>
                 <td class="px-3 py-2">
                   {% if ma.active %}
-                    <form method="post" action="{% url 'accounts:admin_moderator_assignment_delete' staff_user.id ma.id %}" onsubmit="return confirm('{% trans "Revoke this assignment?" %}')">
+                    <form method="post" action="{% url 'accounts:admin_moderator_assignment_delete' staff_user.id ma.id %}">
                       {% csrf_token %}
                       {% include "partials/_button.html" with label=_("Revoke") variant="danger" type="submit" size="sm" %}
                     </form>
@@ -202,7 +196,7 @@
           {% for cluster in cohort.clusters.all %}
             <details class="mt-2 group">
               <summary class="cursor-pointer text-sm font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700">{{ cluster.name }}</summary>
-              <div class="mt-2 ml-2">
+              <div class="mt-2 ms-2">
                 <div id="cluster-{{ cluster.id }}-members">
                   {% include "accounts/_cluster_members.html" %}
                 </div>
@@ -222,7 +216,7 @@
               </div>
             </details>
           {% empty %}
-            <p class="text-xs text-slate-400 ml-1">{% trans "No clusters yet." %}</p>
+            <p class="text-xs text-slate-400 ms-1">{% trans "No clusters yet." %}</p>
           {% endfor %}
         </div>
       {% endfor %}

@@ -38,6 +38,15 @@
     </div>
   </div>
 
+  <div class="dm-panel rounded-xl p-5 mb-8">
+    <h2 class="text-sm font-bold dm-text mb-3">{% trans "Exceptions needing attention" %}</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+      <a href="{% url 'attendance:attendance_session_list' %}?exception=overdue" class="flex justify-between dm-muted hover:dm-brand-text"><span>{% trans "Overdue attendance sessions" %}</span><span class="tabular-nums font-semibold dm-text">{{ attendance_exception_count }}</span></a>
+      <a href="{% url 'progression:admin_rejoin_plan_list' %}?status=planned" class="flex justify-between dm-muted hover:dm-brand-text"><span>{% trans "Planned progression exceptions" %}</span><span class="tabular-nums font-semibold dm-text">{{ progression_exception_count }}</span></a>
+      <a href="{% url 'entrance_exams:admin_email_log_list' %}?status=failed" class="flex justify-between dm-muted hover:dm-brand-text"><span>{% trans "Failed email operations" %}</span><span class="tabular-nums font-semibold dm-text">{{ failed_email_count }}</span></a>
+    </div>
+  </div>
+
   {# ── Work Queues ── #}
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
     {# Applications queue #}
@@ -79,7 +88,7 @@
       <div class="space-y-2 text-sm">
         <a href="{% url 'payments:record_list' %}?status=paid" class="flex justify-between dm-muted hover:dm-brand-text"><span>{% trans "Paid" %}</span><span class="tabular-nums font-semibold dm-text">{{ paid_count }}</span></a>
         <a href="{% url 'payments:record_list' %}?status=unpaid" class="flex justify-between dm-muted hover:dm-brand-text"><span>{% trans "Unpaid" %}</span><span class="tabular-nums font-semibold dm-text">{{ unpaid_count }}</span></a>
-        <a href="{% url 'payments:upload_list' %}?status=previewed" class="flex justify-between dm-muted hover:dm-brand-text"><span>{% trans "Unmatched upload rows" %}</span><span class="tabular-nums font-semibold dm-text">{{ unmatched_upload_count }}</span></a>
+        <a href="{% url 'payments:upload_list' %}?row_status=unmatched" class="flex justify-between dm-muted hover:dm-brand-text"><span>{% trans "Uploads with unmatched rows" %}</span><span class="tabular-nums font-semibold dm-text">{{ unmatched_upload_count }}</span></a>
       </div>
       {% if pending_uploads %}
       <div class="mt-3 pt-3 border-t dm-border">
@@ -121,54 +130,12 @@
   </div>
   {% endif %}
 
-  {# ── AI Configuration ── #}
   <div class="dm-panel rounded-xl p-5 mb-8">
-    <h2 class="text-sm font-bold dm-text mb-3">{% trans "AI Configuration" %}</h2>
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm mb-4">
-      <div><span class="text-xs dm-muted block">{% trans "Status" %}</span>
-        {% if ai_config.enabled %}{% include "partials/_badge.html" with label=_("Enabled") tone="success" %}{% else %}{% include "partials/_badge.html" with label=_("Disabled") tone="danger" %}{% endif %}
-      </div>
-      <div><span class="text-xs dm-muted block">{% trans "Provider" %}</span><span class="dm-text">{{ ai_config.provider }}</span></div>
-      <div><span class="text-xs dm-muted block">{% trans "Model" %}</span><span class="dm-text font-mono text-xs">{{ ai_config.model }}</span></div>
-      <div><span class="text-xs dm-muted block">{% trans "Timeout" %}</span><span class="dm-text">{{ ai_config.timeout }} {% trans "s" %}</span></div>
-      <div><span class="text-xs dm-muted block">{% trans "Prompt version" %}</span><span class="dm-text font-mono text-xs">{{ ai_config.prompt_version }}</span></div>
-      <div><span class="text-xs dm-muted block">{% trans "Reviews total" %}</span><span class="dm-text tabular-nums">{{ ai_config.review_count }}</span></div>
-      <div><span class="text-xs dm-muted block">{% trans "Pending" %}</span><span class="dm-text tabular-nums">{{ ai_config.review_pending }}</span></div>
-      <div><span class="text-xs dm-muted block">{% trans "Accepted / Rejected" %}</span><span class="dm-text tabular-nums">{{ ai_config.review_accepted }} / {{ ai_config.review_rejected }}</span></div>
+    <h2 class="text-sm font-bold dm-text mb-3">{% trans "System settings" %}</h2>
+    <div class="flex flex-wrap gap-3">
+      <a href="{% url 'accounts:admin_settings' %}" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "AI and site settings" %}</a>
+      <a href="{% url 'core:landing_settings' %}" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Customize landing page" %}</a>
     </div>
-    {% if ai_config.last_review_at %}
-    <div class="pt-3 border-t dm-border text-xs dm-muted">
-      {% trans "Last review" %}: {% dt ai_config.last_review_at %} ({{ ai_config.last_review_decision }})
-    </div>
-    {% endif %}
-  </div>
-
-  {# ── Site Configuration ── #}
-  <div class="dm-panel rounded-xl p-5 mb-8">
-    <h2 class="text-sm font-bold dm-text mb-3">{% trans "Site Configuration" %}</h2>
-    <a href="{% url 'core:landing_settings' %}" class="mb-4 inline-flex dm-button dm-button-primary px-4 py-2 text-sm">{% trans "Customize landing page" %}</a>
-    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
-      <div><span class="text-xs dm-muted block">{% trans "Site name" %}</span><span class="dm-text">{{ site_config.site_name }}</span></div>
-      <div><span class="text-xs dm-muted block">{% trans "Site name (Arabic)" %}</span><span class="dm-text">{{ site_config.site_name_ar }}</span></div>
-      <div><span class="text-xs dm-muted block">{% trans "Timezone" %}</span><span class="dm-text">{{ site_config.timezone }}</span></div>
-      <div><span class="text-xs dm-muted block">{% trans "Language" %}</span><span class="dm-text">{{ site_config.language_code }}</span></div>
-      <div><span class="text-xs dm-muted block">{% trans "Default from email" %}</span><span class="dm-text font-mono text-xs">{{ site_config.default_from_email }}</span></div>
-      <div><span class="text-xs dm-muted block">{% trans "Email backend" %}</span><span class="dm-text">{{ site_config.email_backend }}</span></div>
-      <div><span class="text-xs dm-muted block">{% trans "Storage" %}</span><span class="dm-text">{{ site_config.storage_backend }}</span></div>
-      <div><span class="text-xs dm-muted block">{% trans "Available languages" %}</span><span class="dm-text">{% for code, name in site_config.languages.items %}{{ name }}{% if not forloop.last %}, {% endif %}{% endfor %}</span></div>
-      <div><span class="text-xs dm-muted block">{% trans "Email sent" %}</span><span class="dm-text tabular-nums">{{ site_config.email_sent }} / {{ site_config.email_total }}</span></div>
-      <div><span class="text-xs dm-muted block">{% trans "Email failed" %}</span><span class="dm-text tabular-nums">{{ site_config.email_failed }}</span></div>
-      {% if site_config.last_email_to %}
-      <div><span class="text-xs dm-muted block">{% trans "Last email" %}</span><span class="dm-text truncate" title="{{ site_config.last_email_to }}">{{ site_config.last_email_to }}</span></div>
-      {% endif %}
-    </div>
-    {% if active_announcement %}
-    <div class="mt-3 pt-3 border-t dm-border">
-      <h3 class="text-xs font-bold dm-muted mb-1">{% trans "Active announcement" %}</h3>
-      <p class="text-sm dm-text">{{ active_announcement.title }}</p>
-      <p class="text-xs dm-muted">{{ active_announcement.message|truncatechars:120 }}</p>
-    </div>
-    {% endif %}
   </div>
 
   {# ── Recent Activity ── #}
@@ -222,12 +189,15 @@
     </div>
   </div>
 
-  {# ── Quick Actions ── #}
+  {# ── Frequent Actions ── #}
   <div class="dm-panel rounded-xl p-5">
-    <h2 class="text-sm font-bold dm-text mb-3">{% trans "Quick actions" %}</h2>
-     <div class="flex flex-wrap gap-2">
-       {% include "partials/_admin_nav_items.html" with heading_class="sr-only" link_class="dm-button dm-button-secondary px-4 py-2 text-sm" %}
-     </div>
+    <h2 class="text-sm font-bold dm-text mb-3">{% trans "Frequent actions" %}</h2>
+    <div class="flex flex-wrap gap-2">
+      <a href="{% url 'applications:program_list' %}?status=submitted" class="dm-button dm-button-primary px-4 py-2 text-sm">{% trans "Review applications" %}</a>
+      <a href="{% url 'assessments:admin_grade_list' %}" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Grade assessments" %}</a>
+      <a href="{% url 'payments:upload_list' %}?row_status=unmatched" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Review unmatched uploads" %}</a>
+      <a href="{% url 'attendance:attendance_session_list' %}" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Attendance sessions" %}</a>
+    </div>
   </div>
 </div>
 {% endblock content %}

@@ -5,6 +5,7 @@
 
 {% block content %}
 <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+  {% include "partials/_breadcrumb.html" with items=breadcrumb_items %}
   <header class="mb-8 flex flex-wrap items-end justify-between gap-3">
     <div>
       <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "Course" %}</p>
@@ -57,7 +58,7 @@
             <input type="hidden" name="next" value="{{ request.path }}">
             {% include "partials/_button.html" with label=_("Delete") variant="danger" size="sm" type="button" attrs='@click.stop="confirmId=\''|add:del_ver_id|add:'\'; $dispatch(\'open-modal\', {id:\''|add:del_ver_id|add:'\'})"' %}
           </form>
-          {% include "partials/_modal.html" with modal_id=del_ver_id title=_("Confirm Delete") body=_("Delete this version and all its lectures?") confirm_label=_("Delete") %}
+          {% include "partials/_modal.html" with modal_id=del_ver_id title=_("Confirm Delete") body=_("Delete this version and all its lectures, assessments, and dependent content?") confirm_label=_("Delete") %}
         </div>
       </summary>
       <div class="p-5">
