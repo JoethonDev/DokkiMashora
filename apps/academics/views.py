@@ -64,7 +64,6 @@ from apps.core.permissions import (
     ROLE_EXAM_STAFF,
     can_manage_course_version,
     enrollment_scope_filter,
-    is_admin,
     is_student,
     role_required,
     student_required,
@@ -807,9 +806,8 @@ def admin_lecture_preview(request, course_id, version_id, lecture_id):
 
 
 @login_required
+@role_required(*ROLE_EXAM_STAFF)
 def admin_diploma_lecture_list(request, diploma_id, cohort_id, semester_id):
-    if not is_admin(request.user) and not request.user.is_superuser:
-        raise PermissionDenied
     diploma = get_object_or_404(Diploma, id=diploma_id)
     cohort = get_object_or_404(Cohort, id=cohort_id, diploma=diploma)
     semester = get_object_or_404(Semester, id=semester_id, diploma=diploma)
@@ -822,9 +820,8 @@ def admin_diploma_lecture_list(request, diploma_id, cohort_id, semester_id):
 
 
 @login_required
+@role_required(*ROLE_EXAM_STAFF)
 def admin_diploma_lecture_create(request, diploma_id, cohort_id, semester_id):
-    if not is_admin(request.user) and not request.user.is_superuser:
-        raise PermissionDenied
     diploma = get_object_or_404(Diploma, id=diploma_id)
     cohort = get_object_or_404(Cohort, id=cohort_id, diploma=diploma)
     semester = get_object_or_404(Semester, id=semester_id, diploma=diploma)
@@ -850,9 +847,8 @@ def admin_diploma_lecture_create(request, diploma_id, cohort_id, semester_id):
 
 
 @login_required
+@role_required(*ROLE_EXAM_STAFF)
 def admin_diploma_lecture_edit(request, diploma_id, cohort_id, semester_id, lecture_id):
-    if not is_admin(request.user) and not request.user.is_superuser:
-        raise PermissionDenied
     diploma = get_object_or_404(Diploma, id=diploma_id)
     cohort = get_object_or_404(Cohort, id=cohort_id, diploma=diploma)
     semester = get_object_or_404(Semester, id=semester_id, diploma=diploma)
@@ -876,9 +872,8 @@ def admin_diploma_lecture_edit(request, diploma_id, cohort_id, semester_id, lect
 
 @login_required
 @require_POST
+@role_required(*ROLE_EXAM_STAFF)
 def admin_diploma_lecture_delete(request, diploma_id, cohort_id, semester_id, lecture_id):
-    if not is_admin(request.user) and not request.user.is_superuser:
-        raise PermissionDenied
     diploma = get_object_or_404(Diploma, id=diploma_id)
     cohort = get_object_or_404(Cohort, id=cohort_id, diploma=diploma)
     semester = get_object_or_404(Semester, id=semester_id, diploma=diploma)
@@ -890,9 +885,8 @@ def admin_diploma_lecture_delete(request, diploma_id, cohort_id, semester_id, le
 
 
 @login_required
+@role_required(*ROLE_EXAM_STAFF)
 def admin_diploma_lecture_preview(request, diploma_id, cohort_id, semester_id, lecture_id):
-    if not is_admin(request.user) and not request.user.is_superuser:
-        raise PermissionDenied
     diploma = get_object_or_404(Diploma, id=diploma_id)
     cohort = get_object_or_404(Cohort, id=cohort_id, diploma=diploma)
     semester = get_object_or_404(Semester, id=semester_id, diploma=diploma)

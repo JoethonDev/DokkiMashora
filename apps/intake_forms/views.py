@@ -138,6 +138,7 @@ def admin_intake_form_detail(request: HttpRequest, form_id: int) -> HttpResponse
 
 @require_http_methods(["POST"])
 @login_required
+@role_required(*ROLE_SENIOR_STAFF)
 def admin_intake_form_field_delete(request: HttpRequest, form_id: int, field_id: int) -> HttpResponse:
     if not is_admin(request.user):
         raise PermissionDenied
@@ -154,6 +155,7 @@ def admin_intake_form_field_delete(request: HttpRequest, form_id: int, field_id:
 
 @require_http_methods(["GET"])
 @login_required
+@role_required(*ROLE_SENIOR_STAFF)
 def admin_version_intake_responses(request: HttpRequest, version_id: int) -> HttpResponse:
     if not is_admin(request.user):
         raise PermissionDenied
@@ -168,6 +170,7 @@ def admin_version_intake_responses(request: HttpRequest, version_id: int) -> Htt
 
 @require_http_methods(["GET"])
 @login_required
+@role_required(*ROLE_SENIOR_STAFF)
 def admin_cohort_intake_responses(request: HttpRequest, cohort_id: int) -> HttpResponse:
     if not is_admin(request.user):
         raise PermissionDenied
@@ -182,6 +185,7 @@ def admin_cohort_intake_responses(request: HttpRequest, cohort_id: int) -> HttpR
 
 @require_http_methods(["POST"])
 @login_required
+@role_required(*ROLE_SENIOR_STAFF)
 def admin_intake_request_send(request: HttpRequest, application_id: int) -> HttpResponse:
     if not is_admin(request.user):
         raise PermissionDenied

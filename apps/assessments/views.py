@@ -103,13 +103,13 @@ from apps.core.pagination import paginate
 from apps.core.permissions import (
     ROLE_EXAM_STAFF,
     ROLE_GRADING_STAFF,
+    ROLE_REVIEWER,
     ROLE_REVIEW_STAFF,
     ROLE_SENIOR_STAFF,
     assessment_scope_filter,
     can_grade_attempt,
     is_admin,
     is_moderator,
-    is_reviewer,
     role_required,
     validate_score,
 )
@@ -1514,15 +1514,14 @@ def admin_offline_grade_section(request, assessment_id, code_id, section_id):
 
 
 @login_required
+@role_required(*ROLE_REVIEWER)
 def reviewer_dashboard(request):
-    if not is_reviewer(request.user):
-        raise PermissionDenied
     assignments = ReviewerAssignment.objects.filter(
         reviewer=request.user, active=True,
     ).select_related("cohort", "semester", "section", "section__lecture", "section__assessment")
     groups = {}
     for a in assignments:
-        key = (a.cohort_id, a.semester_id, a.cohort.title, a.semester.title)
+        key = (a.cohort_id, a.semester_id, a.cohort.name, a.semester.title)
         if key not in groups:
             groups[key] = {"cohort": a.cohort, "semester": a.semester, "assignments": []}
         ungraded = get_reviewer_ungraded_count(a)
@@ -1531,9 +1530,8 @@ def reviewer_dashboard(request):
 
 
 @login_required
+@role_required(*ROLE_REVIEWER)
 def reviewer_section_grading(request, assignment_id):
-    if not is_reviewer(request.user):
-        raise PermissionDenied
     assignment = get_object_or_404(ReviewerAssignment, id=assignment_id, reviewer=request.user, active=True)
     if not assignment.section_id:
         messages.error(request, _("This assignment has no section to grade."))

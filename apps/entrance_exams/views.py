@@ -45,7 +45,7 @@ from apps.communications.constants import (
 from apps.communications.services import send_templated_email
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
-from apps.core.permissions import is_admin, student_required
+from apps.core.permissions import ROLE_EXAM_STAFF, is_admin, role_required, student_required
 from apps.students.models import StudentProfile
 
 from .constants import (
@@ -253,6 +253,7 @@ def exam_results(request, token):
 
 
 @login_required
+@role_required(*ROLE_EXAM_STAFF)
 def admin_list(request):
     """List all entrance exams for admin."""
     if not is_admin(request.user):
@@ -263,6 +264,7 @@ def admin_list(request):
 
 
 @login_required
+@role_required(*ROLE_EXAM_STAFF)
 def admin_cohorts_for_diploma(request):
     """Return cohort <option>s filtered by diploma (HTMX)."""
     if not is_admin(request.user):
@@ -276,6 +278,7 @@ def admin_cohorts_for_diploma(request):
 
 
 @login_required
+@role_required(*ROLE_EXAM_STAFF)
 def admin_detail(request, exam_id):
     """Show entrance exam detail including questions and attempts."""
     if not is_admin(request.user):
@@ -290,6 +293,7 @@ def admin_detail(request, exam_id):
 
 
 @login_required
+@role_required(*ROLE_EXAM_STAFF)
 def admin_preview(request, exam_id):
     """Render the student-facing take page for admin preview (no attempt)."""
     if not is_admin(request.user):
@@ -314,6 +318,7 @@ def admin_preview(request, exam_id):
 
 
 @login_required
+@role_required(*ROLE_EXAM_STAFF)
 def admin_create_exam(request):
     """Create a new entrance exam."""
     if not is_admin(request.user):
@@ -335,6 +340,7 @@ def admin_create_exam(request):
 
 
 @login_required
+@role_required(*ROLE_EXAM_STAFF)
 def admin_edit_exam(request, exam_id):
     """Edit an existing entrance exam."""
     if not is_admin(request.user):
@@ -357,6 +363,7 @@ def admin_edit_exam(request, exam_id):
 
 @login_required
 @require_POST
+@role_required(*ROLE_EXAM_STAFF)
 def admin_toggle_active(request, exam_id):
     """Toggle entrance exam active/inactive. Regenerates access token."""
     if not is_admin(request.user):
@@ -373,6 +380,7 @@ def admin_toggle_active(request, exam_id):
 
 @login_required
 @require_POST
+@role_required(*ROLE_EXAM_STAFF)
 def admin_finalize_pending(request, exam_id):
     """Finalize all in-progress attempts for an exam using saved snapshots."""
     if not is_admin(request.user):
@@ -387,6 +395,7 @@ def admin_finalize_pending(request, exam_id):
 
 
 @login_required
+@role_required(*ROLE_EXAM_STAFF)
 def admin_grade_list(request):
     """List completed entrance attempts ready for grading."""
     if not is_admin(request.user):
@@ -400,6 +409,7 @@ def admin_grade_list(request):
 
 
 @login_required
+@role_required(*ROLE_EXAM_STAFF)
 def admin_grade_attempt(request, attempt_id):
     """Grade a specific entrance attempt."""
     if not is_admin(request.user):
@@ -514,6 +524,7 @@ def _render_question_form(request, exam, question=None, form=None, formset=None)
 
 
 @login_required
+@role_required(*ROLE_EXAM_STAFF)
 def admin_add_question(request, exam_id):
     """Add a new question with inline choices to an entrance exam."""
     if not is_admin(request.user):
@@ -557,6 +568,7 @@ def admin_add_question(request, exam_id):
 
 
 @login_required
+@role_required(*ROLE_EXAM_STAFF)
 def admin_edit_question(request, exam_id, question_id):
     """Edit an existing question and its choices."""
     if not is_admin(request.user):
@@ -593,6 +605,7 @@ def admin_edit_question(request, exam_id, question_id):
 
 @login_required
 @require_POST
+@role_required(*ROLE_EXAM_STAFF)
 def admin_delete_question(request, exam_id, question_id):
     """Delete a question."""
     if not is_admin(request.user):
@@ -610,6 +623,7 @@ def admin_delete_question(request, exam_id, question_id):
 
 @login_required
 @require_POST
+@role_required(*ROLE_EXAM_STAFF)
 def admin_bulk_send_results(request, exam_id):
     """Send pass/fail email templates to all students of an exam (V024)."""
     if not is_admin(request.user):
@@ -897,6 +911,7 @@ def _resend_emails(request, exam, cohort, log_ids):
 
 @login_required
 @require_http_methods(["GET", "POST"])
+@role_required(*ROLE_EXAM_STAFF)
 def admin_cohort_email(request, exam_id):
     """3-tab email management: invitations, results, sent history."""
     if not is_admin(request.user):
@@ -980,6 +995,7 @@ def admin_cohort_email(request, exam_id):
 
 @login_required
 @require_http_methods(["GET", "POST"])
+@role_required(*ROLE_EXAM_STAFF)
 def admin_app_email_resend(request, exam_id, app_id):
     """Resend an email to a single application with confirmation."""
     if not is_admin(request.user):
@@ -1074,6 +1090,7 @@ def admin_app_email_resend(request, exam_id, app_id):
 
 
 @login_required
+@role_required(*ROLE_EXAM_STAFF)
 def admin_email_log_list(request):
     """List ApplicationEmailLog records in the custom admin UI."""
     if not is_admin(request.user):
