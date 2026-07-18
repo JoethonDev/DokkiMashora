@@ -11,6 +11,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView, LogoutView
 from django.core.paginator import Paginator
 from django.db import transaction
+from django.db.models.deletion import ProtectedError
 from django.db.models import Count, Q
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -71,6 +72,7 @@ from .constants import (
     GROUP_STUDENT,
     GROUP_SUPER_ADMIN,
     GROUP_TEACHER,
+    STAFF_ROLE_GROUPS,
     USER_STATUS_CHOICES,
 )
 from .forms import EmailAuthenticationForm, ProfileForm, UserEditForm, UserUploadForm
@@ -390,12 +392,29 @@ def admin_student_list(request):
 
 @login_required
 @role_required(*ROLE_SENIOR_STAFF)
+def admin_user_create(request, user_type):
+    if user_type not in ("students", "staff"):
+        raise Http404
+    role = GROUP_STUDENT if user_type == "students" else GROUP_ADMIN
+    form = UserEditForm(request.POST or None, instance=User(), initial={"role": role})
+    if request.method == "POST" and form.is_valid():
+        if (user_type == "students") != (form.cleaned_data.get("role") == GROUP_STUDENT):
+            form.add_error("role", _("Select a role valid for this list."))
+        else:
+            form.save()
+            messages.success(request, _("User created."))
+            return redirect("accounts:admin_student_list" if user_type == "students" else "accounts:admin_staff_list")
+    return render(request, "accounts/admin_user_form.html", {"form": form, "creating": True, "user_type": user_type})
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
 def admin_staff_list(request):
     q = request.GET.get("q", "")
     role_filter = request.GET.get("role", "")
     status_filter = request.GET.get("status", "")
 
-    staff_role_names = [GROUP_SUPER_ADMIN, GROUP_ADMIN, GROUP_MODERATOR, GROUP_TEACHER]
+    staff_role_names = list(STAFF_ROLE_GROUPS)
     users = User.objects.filter(groups__name__in=staff_role_names).prefetch_related("groups").distinct()
 
     if role_filter:
@@ -439,6 +458,23 @@ def admin_staff_list(request):
     if is_htmx(request):
         return render(request, "accounts/partials/_user_list_table.html", ctx)
     return render(request, "accounts/admin_user_list.html", ctx)
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_http_methods(["POST"])
+def admin_user_delete(request, user_id):
+    user_obj = get_object_or_404(User, id=user_id)
+    is_student = user_obj.groups.filter(name=GROUP_STUDENT).exists()
+    if user_obj == request.user:
+        messages.error(request, _("You cannot delete your own account."))
+    else:
+        try:
+            user_obj.delete()
+            messages.success(request, _("User deleted."))
+        except ProtectedError:
+            messages.error(request, _("This user cannot be deleted while referenced by existing records."))
+    return redirect(reverse("accounts:admin_student_list" if is_student else "accounts:admin_staff_list"))
 
 
 @login_required

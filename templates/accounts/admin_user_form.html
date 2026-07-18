@@ -1,10 +1,10 @@
 {% extends "base.html" %}{% load i18n form_tags %}
-{% block title %}{% trans "Edit user" %} - {{ block.super }}{% endblock %}
+{% block title %}{% if creating %}{% trans "Create user" %}{% else %}{% trans "Edit user" %}{% endif %} - {{ block.super }}{% endblock %}
 {% block content %}
 <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
   <header class="mb-6">
     <p class="text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 tracking-wide uppercase">{% trans "User management" %}</p>
-    <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{% trans "Edit" %}: {{ user_obj.full_name|default:user_obj.email }}</h1>
+    <h1 class="mt-1 text-2xl sm:text-3xl font-bold tracking-tight font-display">{% if creating %}{% trans "Create user" %}{% else %}{% trans "Edit" %}: {{ user_obj.full_name|default:user_obj.email }}{% endif %}</h1>
   </header>
 
   <form method="post" class="space-y-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
@@ -15,7 +15,7 @@
     <div class="flex gap-3 pt-2">
       {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
       {% include "partials/_button.html" with label=_("Save") variant="primary" type="submit" %}
-      <a href="{% if next %}{{ next }}{% else %}{% url 'accounts:admin_user_detail' user_obj.id %}{% endif %}" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Cancel" %}</a>
+      <a href="{% if next %}{{ next }}{% elif user_obj.id %}{% url 'accounts:admin_user_detail' user_obj.id %}{% else %}{% url 'accounts:admin_staff_list' %}{% endif %}" class="dm-button dm-button-secondary px-4 py-2 text-sm">{% trans "Cancel" %}</a>
     </div>
   </form>
 </div>

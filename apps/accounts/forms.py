@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm, UserChangeForm, UserCreationForm
+from django.contrib.auth.models import Group
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
@@ -17,7 +18,13 @@ from apps.students.identity import (
 )
 from apps.students.models import StudentProfile
 
-from .constants import USER_STATUS_ACTIVE, USER_STATUS_INACTIVE, USER_STATUS_SUSPENDED
+from .constants import (
+    ALL_ROLE_GROUPS,
+    GROUP_STUDENT,
+    USER_STATUS_ACTIVE,
+    USER_STATUS_INACTIVE,
+    USER_STATUS_SUSPENDED,
+)
 from .models import User
 
 
@@ -94,6 +101,7 @@ class UserEditForm(forms.ModelForm):
     priest_name = forms.CharField(label=_("Priest name"), required=False)
     priest_contact = forms.CharField(label=_("Priest contact"), required=False)
     new_password = forms.CharField(label=_("New password"), required=False, strip=False, widget=forms.PasswordInput())
+    role = forms.ChoiceField(label=_("Role"), choices=[(role, _(role)) for role in ALL_ROLE_GROUPS], required=False)
 
     class Meta:
         model = User
@@ -103,6 +111,16 @@ class UserEditForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["country_code"].choices = [("", _("Select country"))] + COUNTRY_CHOICES
         profile = getattr(self.instance, "student_profile", None)
+        if not self.instance.pk:
+            self.fields["new_password"].required = True
+            self.fields["role"].required = True
+        else:
+            self.initial["role"] = self.instance.primary_role
+            self.fields["role"].disabled = True
+        role = self.data.get("role") or self.initial.get("role")
+        if role == GROUP_STUDENT:
+            for name in ("full_name", "phone", "country_code", "national_id", "date_of_birth", "gender", "address", "education"):
+                self.fields[name].required = True
         if profile is not None:
             self.fields["full_name"].initial = profile.full_name
             self.fields["phone"].initial = profile.phone
@@ -212,6 +230,9 @@ class UserEditForm(forms.ModelForm):
             user.set_password(data["new_password"])
         if commit:
             user.save()
+            role = data.get("role")
+            if role:
+                user.groups.set([Group.objects.get(name=role)])
             if profile is not None:
                 profile.full_name = data.get("full_name", profile.full_name)
                 profile.date_of_birth = data.get("date_of_birth") or profile.date_of_birth
@@ -228,6 +249,24 @@ class UserEditForm(forms.ModelForm):
                 profile.priest_name = data.get("priest_name", profile.priest_name)
                 profile.priest_contact = data.get("priest_contact", profile.priest_contact)
                 profile.save()
+            elif role == GROUP_STUDENT:
+                StudentProfile.objects.create(
+                    user=user,
+                    full_name=data.get("full_name", ""),
+                    date_of_birth=data["date_of_birth"],
+                    gender=data["gender"],
+                    address=data["address"],
+                    phone=data["phone"],
+                    country_code=data.get("country_code") or "EG",
+                    national_id=data["national_id"],
+                    education=data["education"],
+                    specialization=data.get("specialization", ""),
+                    employer=data.get("employer", ""),
+                    current_job=data.get("current_job", ""),
+                    church=data.get("church", ""),
+                    priest_name=data.get("priest_name", ""),
+                    priest_contact=data.get("priest_contact", ""),
+                )
         return user
 
 

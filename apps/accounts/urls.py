@@ -19,10 +19,13 @@ urlpatterns = [
     path("dashboard/teacher/", views.teacher_dashboard, name="dashboard_teacher"),
     # Admin: user management
     path("manage/students/", views.admin_student_list, name="admin_student_list"),
+    path("manage/students/create/", views.admin_user_create, {"user_type": "students"}, name="admin_student_create"),
     path("manage/students/<int:user_id>/", views.admin_user_detail, name="admin_user_detail"),
     path("manage/students/<int:user_id>/edit/", views.admin_user_edit, name="admin_user_edit"),
     path("manage/settings/", views.admin_settings, name="admin_settings"),
     path("manage/staff/", views.admin_staff_list, name="admin_staff_list"),
+    path("manage/staff/create/", views.admin_user_create, {"user_type": "staff"}, name="admin_staff_create"),
+    path("manage/users/<int:user_id>/delete/", views.admin_user_delete, name="admin_user_delete"),
     # Staff assignments
     path("manage/staff/<int:user_id>/assignments/", views.admin_staff_assignments, name="admin_staff_assignments"),
     path("manage/staff/<int:user_id>/assignments/teacher/create/", views.admin_teacher_assignment_create, name="admin_teacher_assignment_create"),
