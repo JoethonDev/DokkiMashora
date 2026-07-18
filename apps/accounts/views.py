@@ -396,7 +396,12 @@ def admin_user_create(request, user_type):
     if user_type not in ("students", "staff"):
         raise Http404
     role = GROUP_STUDENT if user_type == "students" else GROUP_ADMIN
-    form = UserEditForm(request.POST or None, instance=User(), initial={"role": role})
+    form = UserEditForm(
+        request.POST or None,
+        instance=User(),
+        initial={"role": role},
+        staff_only=user_type == "staff",
+    )
     if request.method == "POST" and form.is_valid():
         if (user_type == "students") != (form.cleaned_data.get("role") == GROUP_STUDENT):
             form.add_error("role", _("Select a role valid for this list."))
@@ -502,7 +507,7 @@ def admin_user_edit(request, user_id):
     profile = getattr(user_obj, "student_profile", None)
     next_url = safe_next_url(request)
     if request.method == "POST":
-        form = UserEditForm(request.POST, instance=user_obj)
+        form = UserEditForm(request.POST, instance=user_obj, staff_only=profile is None)
         if form.is_valid():
             old_is_active = user_obj.is_active
             password_changed = bool(form.cleaned_data.get("new_password"))
@@ -523,7 +528,7 @@ def admin_user_edit(request, user_id):
             messages.success(request, _("User updated."))
             return redirect(next_url) if next_url else redirect("accounts:admin_user_detail", user_id=user_obj.id)
     else:
-        form = UserEditForm(instance=user_obj)
+        form = UserEditForm(instance=user_obj, staff_only=profile is None)
     return render(request, "accounts/admin_user_form.html", {"form": form, "user_obj": user_obj, "next": next_url})
 
 

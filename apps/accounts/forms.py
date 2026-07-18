@@ -108,7 +108,12 @@ class UserEditForm(forms.ModelForm):
         fields = ("email", "full_name", "full_name_ar", "phone", "country_code", "national_id", "status", "is_active")
 
     def __init__(self, *args, **kwargs):
+        staff_only = kwargs.pop("staff_only", False)
         super().__init__(*args, **kwargs)
+        if staff_only:
+            self.fields["role"].choices = [(role, _(role)) for role in ALL_ROLE_GROUPS if role != GROUP_STUDENT]
+        else:
+            self.fields["role"].choices = [(GROUP_STUDENT, _(GROUP_STUDENT))]
         self.fields["country_code"].choices = [("", _("Select country"))] + COUNTRY_CHOICES
         profile = getattr(self.instance, "student_profile", None)
         if not self.instance.pk:
@@ -116,7 +121,8 @@ class UserEditForm(forms.ModelForm):
             self.fields["role"].required = True
         else:
             self.initial["role"] = self.instance.primary_role
-            self.fields["role"].disabled = True
+            if not staff_only:
+                self.fields["role"].disabled = True
         role = self.data.get("role") or self.initial.get("role")
         if role == GROUP_STUDENT:
             for name in ("full_name", "phone", "country_code", "national_id", "date_of_birth", "gender", "address", "education"):
