@@ -201,7 +201,8 @@ def _update_program_application_from_result(
         },
     )
 
-    mark_entrance_submitted(prog_app, actor=actor, attempt=attempt)
+    if prog_app.status in ("invited_to_entrance", "submitted"):
+        mark_entrance_submitted(prog_app, actor=actor, attempt=attempt)
     note_text = _("Exam passed") if result == RESULT_PASS else _("Exam failed")
     record_program_application_note(prog_app, actor, note_text)
 

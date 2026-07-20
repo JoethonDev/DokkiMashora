@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 import uuid
 
 from django.conf import settings
@@ -120,6 +122,16 @@ class EntranceExam(TimeStampedModel):
             ),
         ]
 
+    def recompute_total_score(self) -> None:
+        total = Decimal("0.00")
+        for q in self.questions.all():
+            if q.question_type == "mcq":
+                total += max((c.score for c in q.choices.all()), default=0)
+            else:
+                total += q.max_score
+        self.total_score = total
+        self.save(update_fields=["total_score"])
+
     def __str__(self):
         return f"{self.title} — {self.cohort}"
 
@@ -143,11 +155,28 @@ class EntranceQuestion(TimeStampedModel):
         default=QUESTION_TYPE_MCQ,
     )
     order = models.PositiveIntegerField(_("order"), db_index=True)
+    max_score = models.DecimalField(
+        _("max score"),
+        max_digits=7,
+        decimal_places=2,
+        default=0,
+        help_text=_("Maximum possible score for this question."),
+    )
     rubric = models.TextField(
         _("scoring rubric / model answer"),
         blank=True,
         help_text=_("Instructions for scoring written answers."),
     )
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        self.exam.recompute_total_score()
+
+    def delete(self, *args, **kwargs):
+        exam = self.exam
+        result = super().delete(*args, **kwargs)
+        exam.recompute_total_score()
+        return result
 
     class Meta:
         verbose_name = _("entrance question")

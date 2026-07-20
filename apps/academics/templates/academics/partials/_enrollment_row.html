@@ -22,7 +22,7 @@
       </select>
     {% endif %}
   </td>
-  <td class="px-4 py-3">
+  <td class="px-4 py-3">{% if enrollment_type != "course" %}
     <select name="status" class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-xs"
             hx-post="{% url 'academics:admin_diploma_enrollment_update' diploma.id e.id %}"
             hx-target="#enrollment-row-{{ e.id }}" hx-swap="outerHTML"
@@ -33,7 +33,7 @@
       <option value="restricted"{% if e.status == "restricted" %} selected{% endif %}>{% trans "Restricted" %}</option>
       <option value="completed"{% if e.status == "completed" %} selected{% endif %}>{% trans "Completed" %}</option>
     </select>
-  </td>
+  {% endif %}</td>
   <td class="px-4 py-3 tabular-nums text-slate-500 dark:text-slate-400">{% include "partials/_blank.html" with value=e.activated_at|date:"DATE_FORMAT" %}</td>
   <td class="px-4 py-3 tabular-nums text-slate-500 dark:text-slate-400">{% include "partials/_blank.html" with value=e.expires_at|date:"DATE_FORMAT" %}</td>
 </tr>

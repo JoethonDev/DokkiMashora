@@ -428,24 +428,40 @@ def admin_grade_attempt(request, attempt_id):
     questions = attempt.exam.questions.prefetch_related("choices").all()
     answers = {a.question_id: a for a in attempt.answers.all()}
     if request.method == "POST":
-        with transaction.atomic():
-            for q in questions:
-                answer = answers.get(q.id)
-                if not answer:
-                    continue
-                score_key = f"score_{q.id}"
-                feedback_key = f"feedback_{q.id}"
-                if score_key in request.POST:
-                    try:
-                        score = Decimal(str(request.POST[score_key]))
-                    except Exception:
-                        messages.error(request, _("Invalid score value for question %(q)s.") % {"q": q.order})
+        graded = 0
+        try:
+            with transaction.atomic():
+                for q in questions:
+                    answer = answers.get(q.id)
+                    if not answer:
                         continue
-                    feedback = request.POST.get(feedback_key, "")
-                    grade_answer(answer, score, feedback, request.user)
-        messages.success(request, _("Grades saved."))
-        return redirect("entrance_exams:admin_grade_attempt", attempt_id=attempt_id)
-    question_answer_pairs = [(q, answers.get(q.id)) for q in questions]
+                    score_key = f"score_{q.id}"
+                    feedback_key = f"feedback_{q.id}"
+                    if score_key in request.POST:
+                        try:
+                            score = Decimal(str(request.POST[score_key]))
+                        except Exception:
+                            messages.error(request, _("Invalid score value for question %(q)s.") % {"q": q.order})
+                            continue
+                        max_score = max((c.score for c in q.choices.all()), default=0) if q.question_type == "mcq" else q.max_score
+                        if max_score and score > max_score:
+                            messages.error(request, _("Score for question %(q)s cannot exceed %(max)s.") % {"q": q.order, "max": max_score})
+                            continue
+                        feedback = request.POST.get(feedback_key, "")
+                        grade_answer(answer, score, feedback, request.user)
+                        graded += 1
+            if graded:
+                messages.success(request, _("Grades saved."))
+            return redirect("entrance_exams:admin_grade_attempt", attempt_id=attempt_id)
+        except Exception:
+            messages.error(request, _("An unexpected error occurred while saving grades."))
+    question_answer_pairs = []
+    for q in questions:
+        if q.question_type == "mcq":
+            max_score = max((c.score for c in q.choices.all()), default=0)
+        else:
+            max_score = q.max_score
+        question_answer_pairs.append((q, answers.get(q.id), max_score))
     return render(request, "entrance_exams/admin_grade_attempt.html", {
         "attempt": attempt,
         "question_answer_pairs": question_answer_pairs,
@@ -484,6 +500,10 @@ def _save_question_from_json(request, exam, question=None):
     question.text = data.get("text", "")
     question.question_type = data.get("question_type", QUESTION_TYPE_MCQ)
     question.rubric = data.get("rubric", "")
+    try:
+        question.max_score = Decimal(str(data.get("max_score", 0) or 0))
+    except (InvalidOperation, ValueError, TypeError):
+        question.max_score = Decimal('0')
     question.save()
     existing = {c.id: c for c in question.choices.all()}
     submitted_ids = set()
@@ -512,6 +532,7 @@ def _question_json(question):
         "text": question.text,
         "question_type": question.question_type,
         "rubric": question.rubric,
+        "max_score": str(question.max_score or 0),
         "choices": [
             {
                 "id": c.id,
@@ -709,14 +730,11 @@ def _eligible_applications(cohort, action, exam=None, status_filter=None):
         if status_filter:
             qs = qs.filter(status=status_filter)
         else:
-            qs = qs.filter(status__in=[PROGRAM_APP_STATUS_ACCEPTED, PROGRAM_APP_STATUS_REJECTED])
+            qs = qs.filter(status__in=[PROGRAM_APP_STATUS_ACCEPTED, PROGRAM_APP_STATUS_INVITED, PROGRAM_APP_STATUS_REJECTED])
         already_sent = PAEL.objects.filter(
             program_application__cohort=cohort, action=action, status="sent", is_resend=False,
         ).values_list("program_application_id", flat=True)
         qs = qs.exclude(id__in=list(already_sent))
-        if exam:
-            attempted = EntranceAttempt.objects.filter(exam=exam).values_list("program_application_id", flat=True)
-            qs = qs.exclude(id__in=list(attempted))
         return qs
 
     status_map = {
@@ -748,14 +766,19 @@ def _send_invitations(request, exam, cohort, student_ids):
         if not email_to:
             failed_count += 1
             continue
-        is_accepted = prog_app.status == PROGRAM_APP_STATUS_ACCEPTED
-        slug = TEMPLATE_ENTRANCE_EXAM_INVITATION if is_accepted else TEMPLATE_REJECTION
-        action = EMAIL_ACTION_INVITATION if is_accepted else EMAIL_ACTION_REJECTION
+        is_rejected = prog_app.status == PROGRAM_APP_STATUS_REJECTED
+        slug = TEMPLATE_REJECTION if is_rejected else TEMPLATE_ENTRANCE_EXAM_INVITATION
+        action = EMAIL_ACTION_REJECTION if is_rejected else EMAIL_ACTION_INVITATION
         context = {
             "full_name": prog_app.student.full_name or "",
             "email": email_to,
         }
-        if is_accepted:
+        if is_rejected:
+            context.update(
+                rejection_reason=prog_app.rejection_reason or "",
+                cohort_name=cohort.name or "",
+            )
+        else:
             EntranceAttempt.objects.get_or_create(
                 exam=exam, program_application=prog_app, student=prog_app.student,
             )
@@ -766,11 +789,6 @@ def _send_invitations(request, exam, cohort, student_ids):
                 exam_url=reverse("entrance_exams:exam_access_token", args=[exam.access_token]) if exam.access_token else "",
                 exam_open_at="",
                 exam_close_at="",
-            )
-        else:
-            context.update(
-                rejection_reason=prog_app.rejection_reason or "",
-                cohort_name=cohort.name or "",
             )
         try:
             record = send_templated_email(slug=slug, to_email=email_to, context=context, sent_by=request.user)

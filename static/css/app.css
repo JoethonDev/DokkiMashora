@@ -97,7 +97,8 @@
   gap: 0.5rem;
   border-radius: 0.5rem;
   font-weight: 600;
-  min-height: 2.75rem;
+  padding: 0.5rem 0.75rem;
+  min-height: 2.5rem;
   transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
 }
 
@@ -142,6 +143,9 @@
   background: var(--dm-surface);
   border: 1px solid var(--dm-border);
   color: var(--dm-text);
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  min-height: 2.5rem;
 }
 
 input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="submit"]):not([type="button"]):not([type="reset"]),

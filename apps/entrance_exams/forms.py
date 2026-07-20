@@ -16,7 +16,6 @@ class EntranceExamForm(forms.ModelForm):
             "diploma",
             "cohort",
             "duration_minutes",
-            "total_score",
             "pass_percentage",
             "open_at",
             "close_at",
@@ -55,7 +54,7 @@ class EntranceExamForm(forms.ModelForm):
 class EntranceQuestionForm(forms.ModelForm):
     class Meta:
         model = EntranceQuestion
-        fields = ("text", "question_type", "rubric", "order")
+        fields = ("text", "question_type", "max_score", "rubric", "order")
         widgets = {
             "text": forms.Textarea(attrs={"rows": 4}),
             "rubric": forms.Textarea(attrs={"rows": 3}),

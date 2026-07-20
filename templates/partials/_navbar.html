@@ -3,7 +3,7 @@
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="flex h-16 items-center justify-between gap-4">
       <div class="flex items-center gap-3">
-        <button type="button" x-data class="lg:hidden dm-button dm-button-secondary p-1.5"
+        <button type="button" x-data class="lg:hidden dm-button dm-button-secondary"
                 @click="$dispatch('open-nav')" @nav-state.window="$el.setAttribute('aria-expanded', $event.detail.open)" aria-label="{% trans 'Menu' %}" aria-expanded="false">
           <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
         </button>

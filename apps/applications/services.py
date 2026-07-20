@@ -352,28 +352,25 @@ def send_post_activation_application_email(application, actor=None, force_resend
     """Send the correct post-activation email for course or diploma, then advance status.
 
     Course -> payment_pending
-    Diploma -> invited_to_entrance
+    Diploma (initial) -> invited_to_entrance
+    Diploma (post-survey) -> ready_for_activation
 
     Emails are sent via on_commit so they only fire after the transaction commits.
     """
-    if application.status not in (
-        PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED,
-        PROGRAM_APP_STATUS_ACCEPTED,
-        PROGRAM_APP_STATUS_PAYMENT_PENDING,
-        PROGRAM_APP_STATUS_INVITED,
-        PROGRAM_APP_STATUS_SURVEY_SUBMITTED,
-    ):
+    allowed = [PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED, PROGRAM_APP_STATUS_ACCEPTED, PROGRAM_APP_STATUS_PAYMENT_PENDING, PROGRAM_APP_STATUS_INVITED]
+    allowed.append(PROGRAM_APP_STATUS_SURVEY_SUBMITTED)
+    if application.status not in allowed:
         raise ValueError(_("Application must be in account_activated status to send post-activation email."))
 
+    from apps.intake_forms.selectors import get_required_intake_form_for_application
+    from apps.intake_forms.services import ensure_required_intake_request
+
+    form = get_required_intake_form_for_application(application)
+    if form and not has_required_intake_response(application):
+        ensure_required_intake_request(application, actor=actor)
+        return
+
     if application.program_type == PROGRAM_TYPE_COURSE:
-        from apps.intake_forms.selectors import get_required_intake_form_for_application
-        from apps.intake_forms.services import ensure_required_intake_request
-
-        form = get_required_intake_form_for_application(application)
-        if form and not has_required_intake_response(application):
-            ensure_required_intake_request(application, actor=actor)
-            return
-
         email_action = "course_payment_instructions"
         if not force_resend and _has_non_resend_email_log(application, email_action):
             return
@@ -382,6 +379,9 @@ def send_post_activation_application_email(application, actor=None, force_resend
         _advance_to(application, PROGRAM_APP_STATUS_PAYMENT_PENDING, DECISION_ACTION_PAYMENT_PENDING, actor)
 
     elif application.program_type == PROGRAM_TYPE_DIPLOMA:
+        if application.status == PROGRAM_APP_STATUS_SURVEY_SUBMITTED:
+            _advance_to(application, PROGRAM_APP_STATUS_PAYMENT_PENDING, DECISION_ACTION_PAYMENT_PENDING, actor)
+            return
         email_action = "diploma_entrance_exam_schedule"
         if not force_resend and _has_non_resend_email_log(application, email_action):
             return
@@ -735,7 +735,7 @@ def can_activate_application(application) -> ActivationCheck:
         return ActivationCheck(ready=len(reasons) == 0, reasons=reasons)
 
     # Diploma
-    if application.status not in (PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED, PROGRAM_APP_STATUS_ACTIVATED):
+    if application.status not in (PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED, PROGRAM_APP_STATUS_PAYMENT_PENDING, PROGRAM_APP_STATUS_ACTIVATED):
         reasons.append("not_accepted_or_documents_not_submitted")
     if application.status == PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED and not application.submitted_document_upload:
         reasons.append("documents_not_uploaded")

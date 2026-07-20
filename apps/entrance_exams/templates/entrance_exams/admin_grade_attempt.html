@@ -22,7 +22,7 @@
 
   <form method="post" class="mt-8">
     {% csrf_token %}
-    {% for question, answer in question_answer_pairs %}
+    {% for question, answer, max_score in question_answer_pairs %}
       <div class="mb-6 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
         <div class="flex justify-between items-start mb-4">
           <h3 class="text-base font-semibold text-slate-900 dark:text-slate-100">
@@ -65,6 +65,22 @@
             </div>
           </div>
           {% if answer %}
+            {% if answer.score is not None %}
+              <div class="mb-4 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-700">
+                <div class="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span class="text-xs font-medium text-slate-500 dark:text-slate-400">{% trans "Current score" %}</span>
+                    <p class="text-base font-semibold text-slate-900 dark:text-slate-100 tabular-nums">{{ answer.score }}{% if max_score %} / {{ max_score }}{% endif %}</p>
+                  </div>
+                  {% if answer.feedback %}
+                  <div>
+                    <span class="text-xs font-medium text-slate-500 dark:text-slate-400">{% trans "Current feedback" %}</span>
+                    <p class="text-sm text-slate-700 dark:text-slate-300">{{ answer.feedback }}</p>
+                  </div>
+                  {% endif %}
+                </div>
+              </div>
+            {% endif %}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">
@@ -72,7 +88,7 @@
                 </label>
                 <input type="number" name="score_{{ question.id }}"
                        value="{{ answer.score|default:'' }}"
-                       step="0.01" min="0"
+                       step="0.01" min="0"{% if max_score %} max="{{ max_score }}"{% endif %}
                        class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900 dark:text-slate-100">
               </div>
               <div>

@@ -109,7 +109,7 @@
       <audio controls class="w-full" preload="none">
         {% if version %}
         <source src="{% url 'academics:student_lecture_audio' version.id lecture.id lecture.audio_hls_playlist_key %}" type="application/vnd.apple.mpegurl">
-        {% elif diploma %}
+        {% elif diploma and enrollment %}
         <source src="{% url 'academics:student_diploma_lecture_audio' enrollment.id semester.id lecture.id lecture.audio_hls_playlist_key %}" type="application/vnd.apple.mpegurl">
         {% endif %}
       </audio>

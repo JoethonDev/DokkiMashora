@@ -1266,8 +1266,8 @@ def student_diploma_detail(request, enrollment_id):
         if progress["next_lecture"] else None
     )
     attendance_summary = (
-        get_attendance_summary(enrollment, diploma_access["current_semester"])
-        if diploma_access["current_semester"]
+        get_attendance_summary(enrollment, access.get("current_semester"))
+        if access.get("current_semester")
         else None
     )
 

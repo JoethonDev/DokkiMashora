@@ -69,6 +69,10 @@
                hx-get="?tab=invitation&inv_status=accepted{% if iq %}&iq={{ iq }}{% endif %}"
                hx-target="#invitation-content" hx-select="#invitation-content" hx-push-url="true"
                class="px-2 py-1 rounded {% if inv_status == 'accepted' %}bg-brand-100 text-brand-700 font-medium{% else %}text-slate-600 hover:text-slate-800{% endif %}">{% trans "Accepted" %}</a>
+            <a href="?tab=invitation&inv_status=invited_to_entrance{% if iq %}&iq={{ iq }}{% endif %}"
+               hx-get="?tab=invitation&inv_status=invited_to_entrance{% if iq %}&iq={{ iq }}{% endif %}"
+               hx-target="#invitation-content" hx-select="#invitation-content" hx-push-url="true"
+               class="px-2 py-1 rounded {% if inv_status == 'invited_to_entrance' %}bg-brand-100 text-brand-700 font-medium{% else %}text-slate-600 hover:text-slate-800{% endif %}">{% trans "Invited" %}</a>
             <a href="?tab=invitation&inv_status=rejected{% if iq %}&iq={{ iq }}{% endif %}"
                hx-get="?tab=invitation&inv_status=rejected{% if iq %}&iq={{ iq }}{% endif %}"
                hx-target="#invitation-content" hx-select="#invitation-content" hx-push-url="true"

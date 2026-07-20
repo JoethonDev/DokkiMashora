@@ -111,23 +111,29 @@
     <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
       <h2 class="font-semibold mb-4">{% trans "Responses" %} ({{ responses|length }})</h2>
       {% if responses %}
-        <div class="space-y-3">
-          {% for r in responses %}
-            <div class="text-sm p-3 rounded-lg bg-slate-50 dark:bg-slate-800">
-              <p class="font-medium">{{ r.student.full_name }}</p>
-              <p class="text-xs text-slate-400">{{ r.student.user.email }} &middot; {% trans "App" %} #{{ r.program_application_id }}</p>
-              <p class="text-xs text-slate-400 tabular-nums">{{ r.submitted_at|date:"DATETIME_FORMAT" }}</p>
-              {% with answers=r.answers.all %}
-                {% if answers %}
-                  <div class="mt-2 space-y-1">
-                    {% for a in answers %}
-                      <p class="text-xs"><strong>{{ a.field.label }}:</strong> {{ a.value }}</p>
-                    {% endfor %}
-                  </div>
-                {% endif %}
-              {% endwith %}
-            </div>
-          {% endfor %}
+        <div class="overflow-x-auto rounded-lg border">
+          <table class="min-w-[500px] w-full divide-y text-sm">
+            <thead class="bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300">
+              <tr>
+                <th class="px-3 py-2 text-start font-medium">{% trans "Student" %}</th>
+                <th class="px-3 py-2 text-start font-medium">{% trans "Email" %}</th>
+                <th class="px-3 py-2 text-start font-medium">{% trans "Submitted" %}</th>
+                <th class="px-3 py-2 text-start font-medium">{% trans "Actions" %}</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+              {% for r in responses %}
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                  <td class="px-3 py-2 text-slate-900 dark:text-slate-100">{{ r.student.full_name }}</td>
+                  <td class="px-3 py-2 text-slate-600 dark:text-slate-400">{{ r.student.user.email }}</td>
+                  <td class="px-3 py-2 text-slate-500 dark:text-slate-400 text-xs tabular-nums">{% if r.submitted_at %}{{ r.submitted_at|date:"DATETIME_FORMAT" }}{% else %}&mdash;{% endif %}</td>
+                  <td class="px-3 py-2">
+                    <a href="{% url 'intake_forms:admin_intake_response_detail' intake_form.pk r.pk %}" class="text-brand-600 hover:text-brand-700 dark:hover:text-brand-300 font-medium text-sm">{% trans "View details" %}</a>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
       {% else %}
         <p class="text-sm text-slate-400">{% trans "No responses yet." %}</p>

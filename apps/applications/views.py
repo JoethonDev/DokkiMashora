@@ -55,7 +55,7 @@ from .services import (
     submit_registration,
 )
 from apps.entrance_exams.services import assign_exam_for_application
-from .services import invite_to_entrance_exam, send_post_activation_application_email
+from .services import activate_application_if_ready, invite_to_entrance_exam, send_post_activation_application_email
 
 PUBLIC_REGISTRATION_SESSION_KEY = "registration_email"
 
@@ -399,6 +399,18 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
                 messages.error(request, str(exc))
             else:
                 messages.success(request, _("Entrance exam assigned." if not send_email else "Entrance exam assigned and invitation sent."))
+            return redirect("applications:program_detail", application_id=application.id)
+
+        if action == "activate" and application.status == PROGRAM_APP_STATUS_READY_FOR_ACTIVATION and is_admin(request.user):
+            try:
+                result = activate_application_if_ready(application, actor=request.user)
+            except ValueError as exc:
+                messages.error(request, str(exc))
+            else:
+                if result.activated:
+                    messages.success(request, _("Application activated."))
+                else:
+                    messages.error(request, _("Activation failed: %(reason)s") % {"reason": ", ".join(result.reasons)})
             return redirect("applications:program_detail", application_id=application.id)
 
         messages.error(request, _("Action not allowed for the current status."))

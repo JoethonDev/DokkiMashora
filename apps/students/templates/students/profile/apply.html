@@ -6,7 +6,6 @@
 <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 max-w-2xl"
       x-data="{ programType: '{{ selected_program_type|default:'diploma' }}', targetId: '{{ selected_target_id|default:'' }}' }"
       x-init="$watch('programType',(val,old)=>{if(old!==undefined){const sel=val==='diploma'?document.querySelector('#id_diploma'):document.querySelector('#id_program_target');if(sel)htmx.trigger(sel,'refresh')}})">
-  {% if cohorts or courses %}
   <form method="post" class="space-y-4">
     {% csrf_token %}
     <div>
@@ -51,6 +50,5 @@
       {% include "partials/_button.html" with label=_("Submit application") variant="primary" class="w-full justify-center" %}
     </div>
   </form>
-  {% endif %}
 </div>
 {% endblock %}

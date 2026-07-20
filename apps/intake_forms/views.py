@@ -136,6 +136,22 @@ def admin_intake_form_detail(request: HttpRequest, form_id: int) -> HttpResponse
     })
 
 
+@require_http_methods(["GET"])
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+def admin_intake_response_detail(request: HttpRequest, form_id: int, response_id: int) -> HttpResponse:
+    response = get_object_or_404(
+        IntakeFormResponse.objects.select_related(
+            "form", "student__user", "program_application",
+        ).prefetch_related("answers__field"),
+        pk=response_id, form_id=form_id,
+    )
+    return render(request, "intake_forms/admin_response_detail.html", {
+        "response": response,
+        "form_obj": response.form,
+    })
+
+
 @require_http_methods(["POST"])
 @login_required
 @role_required(*ROLE_SENIOR_STAFF)

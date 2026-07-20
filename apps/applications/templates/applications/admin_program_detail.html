@@ -168,6 +168,13 @@
           </div>
         {% endif %}
 
+      {% elif application.status == "ready_for_activation" %}
+        <form method="post">
+          {% csrf_token %}
+          <p class="mb-3 text-sm text-slate-500 dark:text-slate-400">{% trans "All checks passed. Activate this application to create the enrollment." %}</p>
+          {% include "partials/_button.html" with label=_("Activate") size="sm" variant="primary" attrs='name="action" value="activate"' %}
+        </form>
+
       {% elif application.status == "accepted" or application.status == "documents_requested" or application.status == "documents_submitted" or application.status == "rejected" %}
         {# Mark paid (not rejected, not paid) #}
         {% if application.status != "rejected" and not is_paid %}
