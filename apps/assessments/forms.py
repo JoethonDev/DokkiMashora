@@ -34,12 +34,6 @@ class AssessmentLectureSectionForm(forms.ModelForm):
         else:
             self.fields["lecture"].queryset = DiplomaLecture.objects.none()
 
-    def clean_max_grade(self):
-        val = self.cleaned_data["max_grade"]
-        if val <= 0:
-            raise forms.ValidationError(_("Max grade must be positive."))
-        return val
-
     def clean_mcq_count(self):
         val = self.cleaned_data["mcq_count"]
         if val < 0:
@@ -62,6 +56,14 @@ class AssessmentLectureSectionForm(forms.ModelForm):
                 self.add_error("mcq_count", _(
                     "Only %(available)d active MCQ(s) available in this lecture's bank."
                 ) % {"available": available})
+        if lecture and (not mcq_count or mcq_count == 0) and not (self.instance.pk and self.instance.manual_questions.exists()):
+            available = DiplomaLectureQuestion.objects.filter(
+                lecture=lecture, active=True, question_type=QUESTION_TYPE_MCQ,
+            ).count()
+            if available == 0 and not (self.instance.pk and self.instance.manual_questions.exists()):
+                self.add_error("mcq_count", _(
+                    "Set at least one MCQ or add manual questions to determine max grade."
+                ))
         return cleaned
 
 
@@ -136,9 +138,13 @@ class AssessmentForm(forms.ModelForm):
                     self.fields["course"].initial = cv.course
             elif instance.semester_id or instance.cohort_id:
                 self.fields["scope_type"].initial = SCOPE_DIPLOMA
-        if instance and (instance.semester_id or instance.cohort_id) and not instance.course_version_id:
-            self.fields["total_points"].disabled = True
-            self.fields["total_points"].help_text = _("Calculated from the assessment sections.")
+                if instance.semester_id:
+                    self.fields["semester"].initial = instance.semester_id
+                    if instance.semester:
+                        self.fields["diploma"].initial = instance.semester.diploma_id
+                        self.fields["diploma"].queryset = Diploma.objects.filter(is_active=True, id=instance.semester.diploma_id)
+                if instance.cohort_id:
+                    self.fields["cohort"].initial = instance.cohort_id
         self.fields["semester"].queryset = Semester.objects.filter(is_active=True)
         self.fields["cohort"].queryset = Cohort.objects.filter(is_active=True)
         self.fields["semester"].required = False

@@ -47,8 +47,11 @@
                 <td class="px-4 py-3 text-slate-600 dark:text-slate-300 text-xs">{{ override.created_by.get_full_name|default:override.created_by.email }}</td>
                 <td class="px-4 py-3">
                   {% if override.status == "active" %}
+                    {% with modal_id="cancel-override-"|add:override.id|stringformat:"s" %}
                     {% url 'assessments:admin_cancel_exceptional_access' assessment.id override.id as cancel_override_url %}
-                    {% include "partials/_button.html" with hx_post=cancel_override_url hx_confirm=_("Cancel this override?") hx_target="body" hx_vals='{"reason": "{% trans "Cancelled by admin" %}"}' label=_("Cancel") variant="danger" size="sm" %}
+                    {% include "partials/_button.html" with type="button" label=_("Cancel") variant="danger" size="sm" attrs='@click="$dispatch(\'open-modal\', {id:\''|add:modal_id|add:'\'})"' %}
+                    {% include "partials/_modal.html" with modal_id=modal_id title=_("Confirm Cancel") body=_("Cancel this override?") confirm_label=_("Cancel") hx_post=cancel_override_url hx_target="body" hx_vals='{"reason": "{% trans "Cancelled by admin" %}"}' %}
+                    {% endwith %}
                   {% endif %}
                 </td>
               </tr>

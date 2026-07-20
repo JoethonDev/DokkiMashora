@@ -31,8 +31,11 @@
               {% url 'accounts:admin_user_edit' u.id as edit_user_url %}
               {% include "partials/_button.html" with href=edit_user_url|add:"?next="|add:request.get_full_path|urlencode label=_("Edit") variant="ghost" size="sm" %}
               {% if staff_list %}<a href="{% url 'accounts:admin_staff_assignments' u.id %}" class="text-slate-600 dark:text-slate-300 hover:text-brand-600 text-sm font-semibold">{% trans "Assignments" %}</a>{% endif %}
+              {% with modal_id="del-user-"|add:u.id|stringformat:"s" %}
               {% url 'accounts:admin_user_delete' u.id as delete_user_url %}
-              {% include "partials/_button.html" with hx_post=delete_user_url hx_confirm=_("Delete this user?") hx_target="body" hx_swap="outerHTML" label=_("Delete") variant="danger" size="sm" %}
+              {% include "partials/_button.html" with type="button" label=_("Delete") variant="danger" size="sm" attrs='@click="$dispatch(\'open-modal\', {id:\''|add:modal_id|add:'\'})"' %}
+              {% include "partials/_modal.html" with modal_id=modal_id title=_("Confirm Delete") body=_("Delete this user?") confirm_label=_("Delete") hx_post=delete_user_url hx_target="body" %}
+              {% endwith %}
             </div>
           </td>
         </tr>

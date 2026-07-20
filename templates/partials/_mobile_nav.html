@@ -1,6 +1,6 @@
 {% load i18n %}
-<div x-data="{ open: false, trigger: null, close() { this.open = false; document.body.classList.remove('overflow-hidden'); this.$dispatch('nav-state', {open: false}); this.$nextTick(() => this.trigger && this.trigger.focus()) } }" @open-nav.window="if (window.innerWidth < 1024) { trigger=document.activeElement; open=true; document.body.classList.add('overflow-hidden'); $dispatch('nav-state', {open: true}); $nextTick(() => $refs.close.focus()) }" @keydown.escape.window="if (open) close()" @resize.window="if (window.innerWidth >= 1024 && open) close()"
-     x-show="open" x-cloak x-transition.opacity class="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-labelledby="mobile-nav-title">
+<div x-data="{ open: false, trigger: null, close() { this.open = false; document.body.classList.remove('overflow-hidden'); this.$dispatch('nav-state', {open: false}); this.$nextTick(() => this.trigger && this.trigger.focus()) } }" @open-nav.window="trigger=document.activeElement; open=true; document.body.classList.add('overflow-hidden'); $dispatch('nav-state', {open: true}); $nextTick(() => $refs.close.focus())" @keydown.escape.window="if (open) close()"
+     x-show="open" x-cloak x-transition.opacity class="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-labelledby="mobile-nav-title">
    <div class="absolute inset-0 bg-slate-900/50" @click="close()" x-show="open" x-transition.opacity></div>
     <nav class="absolute start-0 top-0 h-full w-72 max-w-[80%] dm-surface p-5 shadow-xl flex flex-col gap-1 border-e dm-border overflow-y-auto overscroll-contain dm-scrollbar-hidden"
          x-show="open"

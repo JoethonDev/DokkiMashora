@@ -32,8 +32,11 @@
                   {% include "partials/_button.html" with href=edit_dl_url|add:"?next="|add:request.path label=_("Edit") variant="ghost" size="sm" %}
                   <a href="{% url 'academics:admin_diploma_lecture_preview' diploma.id cohort.id semester.id lecture.id %}" class="text-xs text-slate-500 hover:text-brand-600">{% trans "Preview" %}</a>
                   <a href="{% url 'assessments:admin_lecture_bank_list' diploma.id cohort.id semester.id lecture.id %}" class="text-xs text-slate-500 hover:text-brand-600">{% trans "Questions" %}</a>
+                  {% with modal_id="del-dl-lecture-"|add:lecture.id|stringformat:"s" %}
                   {% url 'academics:admin_diploma_lecture_delete' diploma.id cohort.id semester.id lecture.id as delete_dl_url %}
-                  {% include "partials/_button.html" with hx_post=delete_dl_url hx_confirm=_("Delete this lecture?") hx_target="body" label=_("Delete") variant="danger" size="sm" %}
+                  {% include "partials/_button.html" with type="button" label=_("Delete") variant="danger" size="sm" attrs='@click="$dispatch(\'open-modal\', {id:\''|add:modal_id|add:'\'})"' %}
+                  {% include "partials/_modal.html" with modal_id=modal_id title=_("Confirm Delete") body=_("Delete this lecture?") confirm_label=_("Delete") hx_post=delete_dl_url hx_target="body" %}
+                  {% endwith %}
                 </div>
               </td>
             </tr>

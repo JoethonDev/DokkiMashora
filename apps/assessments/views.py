@@ -24,7 +24,9 @@ from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE
 from apps.academics.models import Cohort, Diploma, DiplomaEnrollment, DiplomaLecture, Semester
 from apps.assessments.constants import (
     ASSESSMENT_TYPE_HOMEWORK,
+    ATTEMPT_STATUS_GRADED,
     ATTEMPT_STATUS_IN_PROGRESS,
+    ATTEMPT_STATUS_RELEASED,
     DELIVERY_MODE_OFFLINE,
     DELIVERY_MODE_ONLINE,
     QUESTION_TYPE_MCQ,
@@ -1076,34 +1078,18 @@ def admin_hide_grades(request, attempt_id):
 @login_required
 @role_required(*ROLE_EXAM_STAFF)
 @require_POST
-def admin_release_all_grades(request, assessment_id):
+def admin_toggle_all_grades(request, assessment_id):
     assessment = get_object_or_404(Assessment, id=assessment_id)
-    count = release_all_graded(assessment)
-    record_audit_event(
-        actor=request.user,
-        action=ACTION_GRADE_RELEASED,
-        target_type="assessment",
-        target_id=str(assessment_id),
-        metadata={"count": count},
-    )
-    messages.success(request, _("Released %(count)s graded attempt(s).") % {"count": count})
-    return redirect("assessments:admin_detail", assessment_id=assessment_id)
-
-
-@login_required
-@role_required(*ROLE_EXAM_STAFF)
-@require_POST
-def admin_hide_all_grades(request, assessment_id):
-    assessment = get_object_or_404(Assessment, id=assessment_id)
-    count = hide_all_released(assessment)
-    record_audit_event(
-        actor=request.user,
-        action=ACTION_GRADE_HIDDEN,
-        target_type="assessment",
-        target_id=str(assessment_id),
-        metadata={"count": count},
-    )
-    messages.success(request, _("Hidden %(count)s released attempt(s).") % {"count": count})
+    released = AssessmentAttempt.objects.filter(assessment=assessment, status=ATTEMPT_STATUS_RELEASED)
+    graded = AssessmentAttempt.objects.filter(assessment=assessment, status=ATTEMPT_STATUS_GRADED)
+    if released.exists():
+        count = hide_all_released(assessment)
+        messages.success(request, _("Hidden %(count)s released attempt(s).") % {"count": count})
+    elif graded.exists():
+        count = release_all_graded(assessment)
+        messages.success(request, _("Released %(count)s graded attempt(s).") % {"count": count})
+    else:
+        messages.info(request, _("No graded or released attempts to toggle."))
     return redirect("assessments:admin_detail", assessment_id=assessment_id)
 
 

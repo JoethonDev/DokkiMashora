@@ -498,8 +498,6 @@ class AssessmentLectureSection(TimeStampedModel):
                 raise ValidationError(_("Lecture must belong to the assessment's semester."))
         if self.mcq_count < 0:
             raise ValidationError(_("MCQ count cannot be negative."))
-        if self.max_grade <= 0:
-            raise ValidationError(_("Max grade must be positive."))
 
 
 class AssessmentSectionManualQuestion(TimeStampedModel):

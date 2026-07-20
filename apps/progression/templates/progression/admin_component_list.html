@@ -38,8 +38,11 @@
             {% url 'progression:admin_component_edit' c.id as edit_comp_url %}
             {% include "partials/_button.html" with href=edit_comp_url label=_("Edit") variant="ghost" size="sm" %}
             {% if c.active %}
+            {% with modal_id="del-comp-"|add:c.id|stringformat:"s" %}
             {% url 'progression:admin_component_delete' c.id as delete_comp_url %}
-            {% include "partials/_button.html" with hx_post=delete_comp_url hx_confirm=_("Deactivate this component?") hx_target="body" label=_("Deactivate") variant="danger" size="sm" %}
+            {% include "partials/_button.html" with type="button" label=_("Deactivate") variant="danger" size="sm" attrs='@click="$dispatch(\'open-modal\', {id:\''|add:modal_id|add:'\'})"' %}
+            {% include "partials/_modal.html" with modal_id=modal_id title=_("Confirm Deactivate") body=_("Deactivate this component?") confirm_label=_("Deactivate") hx_post=delete_comp_url hx_target="body" %}
+            {% endwith %}
             {% endif %}
           </td>
         </tr>

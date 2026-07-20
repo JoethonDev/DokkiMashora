@@ -34,14 +34,8 @@
             {% include "partials/_button.html" with label=_("Activate") variant="success" size="sm" %}
           {% endif %}
         </form>
-        <form method="post" action="{% url 'assessments:admin_release_all' assessment.id %}" class="inline">
-          {% csrf_token %}
-          {% include "partials/_button.html" with label=_("Release All Graded") variant="ghost" size="sm" %}
-        </form>
-        <form method="post" action="{% url 'assessments:admin_hide_all' assessment.id %}" class="inline">
-          {% csrf_token %}
-          {% include "partials/_button.html" with label=_("Hide All Released") variant="ghost" size="sm" %}
-        </form>
+        {% url 'assessments:admin_toggle_grades' assessment.id as toggle_grades_url %}
+        {% include "partials/_button.html" with hx_post=toggle_grades_url hx_target="body" label=_("Toggle Grades") variant="ghost" size="sm" %}
       </div>
     </div>
     <dl class="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-sm">
@@ -119,8 +113,11 @@
                       <span class="text-slate-500 dark:text-slate-400 shrink-0 tabular-nums">{{ mq.points }} {% trans "pts" %}</span>
                       <div class="flex gap-1 shrink-0">
                         <button type="button" onclick="window.location.href='{% url 'assessments:admin_section_manual_edit' assessment.id section.id mq.id %}'" class="dm-button dm-button-ghost text-xs">{% trans "Edit" %}</button>
+                        {% with modal_id="del-manual-"|add:section.id|stringformat:"s"|add:"-"|add:mq.id|stringformat:"s" %}
                         {% url 'assessments:admin_section_manual_delete' assessment.id section.id mq.id as delete_manual_url %}
-                        {% include "partials/_button.html" with hx_post=delete_manual_url hx_target="body" hx_swap="outerHTML" hx_confirm=_("Delete this question?") label=_('Delete') variant="danger" size="sm" %}
+                        {% include "partials/_button.html" with type="button" label=_('Delete') variant="danger" size="sm" attrs='@click="$dispatch(\'open-modal\', {id:\''|add:modal_id|add:'\'})"' %}
+                        {% include "partials/_modal.html" with modal_id=modal_id title=_("Confirm Delete") body=_("Delete this question?") confirm_label=_("Delete") hx_post=delete_manual_url hx_target="body" %}
+                        {% endwith %}
                       </div>
                     </div>
                   {% endfor %}
@@ -133,8 +130,11 @@
             <div class="flex gap-2 shrink-0">
               <a href="{% url 'assessments:admin_section_manual_create' assessment.id section.id %}" class="inline-flex items-center justify-center gap-2 rounded-md text-sm font-semibold transition px-3 py-1.5 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Add Manual" %}</a>
               <button type="button" onclick="window.location.href='{% url 'assessments:admin_section_edit' assessment.id section.id %}'" class="dm-button dm-button-secondary text-sm">{% trans "Edit" %}</button>
+              {% with modal_id="del-section-"|add:section.id|stringformat:"s" %}
               {% url 'assessments:admin_section_delete' assessment.id section.id as delete_section_url %}
-              {% include "partials/_button.html" with hx_post=delete_section_url hx_target="body" hx_swap="outerHTML" hx_confirm=_("Delete this section?") label=_('Delete') variant="danger" size="sm" %}
+              {% include "partials/_button.html" with type="button" label=_('Delete') variant="danger" size="sm" attrs='@click="$dispatch(\'open-modal\', {id:\''|add:modal_id|add:'\'})"' %}
+              {% include "partials/_modal.html" with modal_id=modal_id title=_("Confirm Delete") body=_("Delete this section?") confirm_label=_("Delete") hx_post=delete_section_url hx_target="body" %}
+              {% endwith %}
             </div>
           </div>
         </div>

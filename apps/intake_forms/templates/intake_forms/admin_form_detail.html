@@ -57,8 +57,11 @@
                 {% if field.required %}<span class="text-xs text-amber-600">*</span>{% endif %}
                 {% if not field.is_active %}<span class="text-xs text-rose-500">{% trans "inactive" %}</span>{% endif %}
               </div>
+              {% with modal_id="del-field-"|add:field.pk|stringformat:"s" %}
               {% url 'intake_forms:admin_intake_form_field_delete' intake_form.pk field.pk as delete_field_url %}
-              {% include "partials/_button.html" with hx_post=delete_field_url hx_confirm=_("Delete this field?") hx_target="body" label=_("Delete") variant="danger" size="sm" %}
+              {% include "partials/_button.html" with type="button" label=_("Delete") variant="danger" size="sm" attrs='@click="$dispatch(\'open-modal\', {id:\''|add:modal_id|add:'\'})"' %}
+              {% include "partials/_modal.html" with modal_id=modal_id title=_("Confirm Delete") body=_("Delete this field?") confirm_label=_("Delete") hx_post=delete_field_url hx_target="body" %}
+              {% endwith %}
             </div>
           {% endfor %}
         </div>

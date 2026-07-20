@@ -62,14 +62,9 @@ urlpatterns = [
         name="admin_hide_grades",
     ),
     path(
-        "manage/<int:assessment_id>/release-all/",
-        views.admin_release_all_grades,
-        name="admin_release_all",
-    ),
-    path(
-        "manage/<int:assessment_id>/hide-all/",
-        views.admin_hide_all_grades,
-        name="admin_hide_all",
+        "manage/<int:assessment_id>/toggle-grades/",
+        views.admin_toggle_all_grades,
+        name="admin_toggle_grades",
     ),
     path(
         "manage/grading/answer/<int:answer_id>/grade/",
