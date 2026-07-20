@@ -17,7 +17,8 @@
 <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 mb-4 min-w-0 break-words">
   <div class="mb-3 flex items-center justify-between gap-3">
     <h2 class="text-base font-semibold">{% trans "Editable Information" %}</h2>
-    <a href="{% url 'students:edit_profile' %}" class="dm-button dm-button-primary shrink-0 px-3 py-1.5 text-sm">{% trans "Edit" %}</a>
+    {% url 'students:edit_profile' as edit_profile_url %}
+    {% include "partials/_button.html" with href=edit_profile_url label=_("Edit") variant="primary" size="sm" %}
   </div>
   <dl class="grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-x-4 gap-y-2.5 text-sm min-w-0">
     {% for field_name in editable_fields %}

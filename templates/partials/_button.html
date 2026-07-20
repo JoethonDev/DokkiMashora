@@ -6,6 +6,7 @@
          {{ class|default:"" }}"
   {% if hx_post %}hx-post="{{ hx_post }}" hx-target="{{ hx_target|default:'this' }}" hx-swap="{{ hx_swap|default:'outerHTML' }}"{% endif %}
   {% if hx_get %}hx-get="{{ hx_get }}" hx-target="{{ hx_target|default:'#content' }}" hx-swap="{{ hx_swap|default:'innerHTML' }}"{% endif %}
+  {% if hx_vals %}hx-vals='{{ hx_vals|safe }}'{% endif %}
   {% if hx_confirm %}hx-confirm="{{ hx_confirm }}"{% endif %}
   {% if hx_indicator %}hx-indicator="{{ hx_indicator }}"{% endif %}
   {% if loading_label %}data-loading-disable data-loading-label="{{ loading_label }}"{% endif %}

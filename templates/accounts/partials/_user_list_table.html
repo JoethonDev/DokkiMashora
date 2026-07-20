@@ -28,12 +28,11 @@
           <td class="px-4 py-3">
             <div class="flex gap-2">
               <a href="{% url 'accounts:admin_user_detail' u.id %}?next={{ request.get_full_path|urlencode }}" class="text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 text-sm font-semibold">{% trans "View" %}</a>
-              <a href="{% url 'accounts:admin_user_edit' u.id %}?next={{ request.get_full_path|urlencode }}" class="text-slate-600 dark:text-slate-300 hover:text-brand-600 text-sm font-semibold">{% trans "Edit" %}</a>
+              {% url 'accounts:admin_user_edit' u.id as edit_user_url %}
+              {% include "partials/_button.html" with href=edit_user_url|add:"?next="|add:request.get_full_path|urlencode label=_("Edit") variant="ghost" size="sm" %}
               {% if staff_list %}<a href="{% url 'accounts:admin_staff_assignments' u.id %}" class="text-slate-600 dark:text-slate-300 hover:text-brand-600 text-sm font-semibold">{% trans "Assignments" %}</a>{% endif %}
-              <form method="post" action="{% url 'accounts:admin_user_delete' u.id %}" onsubmit="return confirm('{% trans "Delete this user?" %}');">
-                {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
-                <button type="submit" class="text-red-600 dark:text-red-400 hover:text-red-700 text-sm font-semibold">{% trans "Delete" %}</button>
-              </form>
+              {% url 'accounts:admin_user_delete' u.id as delete_user_url %}
+              {% include "partials/_button.html" with hx_post=delete_user_url hx_confirm=_("Delete this user?") hx_target="body" hx_swap="outerHTML" label=_("Delete") variant="danger" size="sm" %}
             </div>
           </td>
         </tr>

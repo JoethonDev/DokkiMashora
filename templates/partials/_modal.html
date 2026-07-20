@@ -37,10 +37,18 @@
     <div class="text-sm dm-muted mb-6">{{ body }}</div>
     <div class="flex justify-end gap-2">
       <button type="button" class="dm-button dm-button-secondary px-4 py-2 text-sm" @click="close()">{% trans "Cancel" %}</button>
+      {% if hx_post %}
+      <button type="button" class="dm-button px-4 py-2 text-sm {{ confirm_class|default:'dm-button-primary' }}"
+              hx-post="{{ hx_post }}" hx-target="{{ hx_target|default:'body' }}" hx-swap="{{ hx_swap|default:'outerHTML' }}" hx-confirm="{{ hx_confirm|default:'' }}"
+              x-on:click="close()">
+        {{ confirm_label|default:_("Confirm") }}
+      </button>
+      {% else %}
       <button type="button" class="dm-button px-4 py-2 text-sm {{ confirm_class|default:'dm-button-primary' }}"
               x-on:click="close(); $nextTick(() => { $dispatch('modal-confirm', {id: '{{ modal_id }}'}) })">
         {{ confirm_label|default:_("Confirm") }}
       </button>
+      {% endif %}
     </div>
   </div>
 </div>

@@ -35,12 +35,11 @@
           <td class="px-4 py-3">{% if c.required_to_pass %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</td>
           <td class="px-4 py-3">{% if c.active %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</td>
           <td class="px-4 py-3 text-end">
-            <a href="{% url 'progression:admin_component_edit' c.id %}" class="text-brand-600 hover:text-brand-700 text-xs font-medium">{% trans "Edit" %}</a>
+            {% url 'progression:admin_component_edit' c.id as edit_comp_url %}
+            {% include "partials/_button.html" with href=edit_comp_url label=_("Edit") variant="ghost" size="sm" %}
             {% if c.active %}
-            <form method="post" action="{% url 'progression:admin_component_delete' c.id %}" class="inline">
-              {% csrf_token %}
-              <button type="submit" class="text-red-600 hover:text-red-700 text-xs font-medium ms-2">{% trans "Deactivate" %}</button>
-            </form>
+            {% url 'progression:admin_component_delete' c.id as delete_comp_url %}
+            {% include "partials/_button.html" with hx_post=delete_comp_url hx_confirm=_("Deactivate this component?") hx_target="body" label=_("Deactivate") variant="danger" size="sm" %}
             {% endif %}
           </td>
         </tr>

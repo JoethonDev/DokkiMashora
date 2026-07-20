@@ -29,10 +29,6 @@
   }">
     <form method="post" novalidate>
       {% csrf_token %}
-      {% if form.non_field_errors %}
-        <div class="mb-4 p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded text-rose-800 dark:text-rose-200 text-sm">{{ form.non_field_errors|join:" " }}</div>
-      {% endif %}
-
       <fieldset>
         <legend class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">{% trans "Question" %}</legend>
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
@@ -68,8 +64,8 @@
                        class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900 dark:text-slate-100"
                        placeholder="{% trans 'Choice text' %}" required>
                 <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap sm:justify-self-start">
-                  <input type="checkbox" :name="'choice_correct_' + choice.id" value="1" :checked="choice.is_correct"
-                          @change="choice.is_correct = $event.target.checked"
+                  <input type="radio" name="choice_correct" :value="choice.id" :checked="choice.is_correct"
+                          @change="choices.forEach(c => c.is_correct = c.id === choice.id)"
                           class="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500">
                   <span>{% trans "Correct" %}</span>
                 </label>

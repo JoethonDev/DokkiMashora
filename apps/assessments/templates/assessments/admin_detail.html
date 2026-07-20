@@ -19,7 +19,7 @@
         {% url 'assessments:admin_preview' assessment.id as preview_url %}
         {% include "partials/_button.html" with href=preview_url label=_("Preview") variant="ghost" size="sm" %}
         {% url 'assessments:admin_edit' assessment.id as edit_url %}
-        {% include "partials/_button.html" with href=edit_url|add:"?next="|add:request.path label=_("Edit") variant="secondary" size="sm" %}
+        <button type="button" onclick="window.location.href='{{ edit_url }}?next={{ request.path|urlencode }}'" class="dm-button dm-button-secondary text-sm">{% trans "Edit" %}</button>
         {% if assessment.assessment_type == "semester_exam" %}
           {% url 'assessments:admin_roster' assessment.id as roster_url %}
           {% include "partials/_button.html" with href=roster_url label=_("Roster") variant="secondary" size="sm" %}
@@ -118,11 +118,9 @@
                       <span class="text-slate-800 dark:text-slate-200 truncate">{{ mq.text|truncatechars:60 }}</span>
                       <span class="text-slate-500 dark:text-slate-400 shrink-0 tabular-nums">{{ mq.points }} {% trans "pts" %}</span>
                       <div class="flex gap-1 shrink-0">
-                        <a href="{% url 'assessments:admin_section_manual_edit' assessment.id section.id mq.id %}" class="text-xs text-brand-600 dark:text-brand-400 hover:underline">{% trans "Edit" %}</a>
-                        <form method="post" action="{% url 'assessments:admin_section_manual_delete' assessment.id section.id mq.id %}" class="inline">
-                          {% csrf_token %}
-                          <button type="submit" class="text-xs text-rose-600 dark:text-rose-400 hover:underline">{% trans "Delete" %}</button>
-                        </form>
+                        <button type="button" onclick="window.location.href='{% url 'assessments:admin_section_manual_edit' assessment.id section.id mq.id %}'" class="dm-button dm-button-ghost text-xs">{% trans "Edit" %}</button>
+                        {% url 'assessments:admin_section_manual_delete' assessment.id section.id mq.id as delete_manual_url %}
+                        {% include "partials/_button.html" with hx_post=delete_manual_url hx_target="body" hx_swap="outerHTML" hx_confirm=_("Delete this question?") label=_('Delete') variant="danger" size="sm" %}
                       </div>
                     </div>
                   {% endfor %}
@@ -134,11 +132,9 @@
             </div>
             <div class="flex gap-2 shrink-0">
               <a href="{% url 'assessments:admin_section_manual_create' assessment.id section.id %}" class="inline-flex items-center justify-center gap-2 rounded-md text-sm font-semibold transition px-3 py-1.5 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Add Manual" %}</a>
-              <a href="{% url 'assessments:admin_section_edit' assessment.id section.id %}" class="inline-flex items-center justify-center gap-2 rounded-md text-sm font-semibold transition px-3 py-1.5 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-950/50">{% trans "Edit" %}</a>
-              <form method="post" action="{% url 'assessments:admin_section_delete' assessment.id section.id %}" class="inline">
-                {% csrf_token %}
-                <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-md text-sm font-semibold transition px-3 py-1.5 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-950/50">{% trans "Delete" %}</button>
-              </form>
+              <button type="button" onclick="window.location.href='{% url 'assessments:admin_section_edit' assessment.id section.id %}'" class="dm-button dm-button-secondary text-sm">{% trans "Edit" %}</button>
+              {% url 'assessments:admin_section_delete' assessment.id section.id as delete_section_url %}
+              {% include "partials/_button.html" with hx_post=delete_section_url hx_target="body" hx_swap="outerHTML" hx_confirm=_("Delete this section?") label=_('Delete') variant="danger" size="sm" %}
             </div>
           </div>
         </div>
@@ -206,10 +202,8 @@
                 <p class="text-sm text-slate-700 dark:text-slate-200">{% trans "Delete this question? This cannot be undone." %}</p>
                 <div class="mt-4 flex justify-end gap-2">
                   <button type="button" @click="deleteConfirm = false" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Cancel" %}</button>
-                  <form method="post" action="{% url 'assessments:admin_question_delete' assessment.id question.id %}" class="inline">
-                    {% csrf_token %}
-                    {% include "partials/_button.html" with label=_("Delete") variant="danger" %}
-                  </form>
+                  {% url 'assessments:admin_question_delete' assessment.id question.id as delete_question_url %}
+                  {% include "partials/_button.html" with hx_post=delete_question_url hx_target="body" hx_swap="outerHTML" label=_("Delete") variant="danger" %}
                 </div>
               </div>
             </div>

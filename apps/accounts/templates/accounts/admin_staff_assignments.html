@@ -12,7 +12,8 @@
       <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{{ staff_role }}</p>
     </div>
     <div class="flex flex-wrap gap-2">
-      <a href="{% url 'accounts:admin_user_edit' staff_user.id %}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Edit" %}</a>
+      {% url 'accounts:admin_user_edit' staff_user.id as edit_user_url %}
+      {% include "partials/_button.html" with href=edit_user_url label=_("Edit") variant="secondary" size="sm" %}
       <a href="{{ back_url }}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm bg-brand-600 text-white hover:bg-brand-700 shadow-sm">{% trans "Back" %}</a>
     </div>
   </header>
@@ -64,10 +65,8 @@
                 </td>
                 <td class="px-3 py-2">
                   {% if ta.active %}
-                    <form method="post" action="{% url 'accounts:admin_teacher_assignment_delete' staff_user.id ta.id %}">
-                      {% csrf_token %}
-                      {% include "partials/_button.html" with label=_("Revoke") variant="danger" type="submit" size="sm" %}
-                    </form>
+                    {% url 'accounts:admin_teacher_assignment_delete' staff_user.id ta.id as revoke_ta_url %}
+                    {% include "partials/_button.html" with hx_post=revoke_ta_url hx_target="body" hx_swap="outerHTML" label=_("Revoke") variant="danger" size="sm" %}
                   {% else %}
                     <span class="text-xs text-slate-400">{% trans "Revoked" %}</span>
                   {% endif %}
@@ -157,10 +156,8 @@
                 </td>
                 <td class="px-3 py-2">
                   {% if ma.active %}
-                    <form method="post" action="{% url 'accounts:admin_moderator_assignment_delete' staff_user.id ma.id %}">
-                      {% csrf_token %}
-                      {% include "partials/_button.html" with label=_("Revoke") variant="danger" type="submit" size="sm" %}
-                    </form>
+                    {% url 'accounts:admin_moderator_assignment_delete' staff_user.id ma.id as revoke_ma_url %}
+                    {% include "partials/_button.html" with hx_post=revoke_ma_url hx_target="body" hx_swap="outerHTML" label=_("Revoke") variant="danger" size="sm" %}
                   {% else %}
                     <span class="text-xs text-slate-400">{% trans "Revoked" %}</span>
                   {% endif %}

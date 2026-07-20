@@ -66,7 +66,8 @@
       {% csrf_token %}
       {% include "partials/_button.html" with label=_("Discard") variant="danger" type="submit" %}
     </form>
-    <a href="{% url 'communications:bulk_email_create' %}" class="inline-flex items-center px-4 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Edit" %}</a>
+    {% url 'communications:bulk_email_create' as edit_bulk_url %}
+    {% include "partials/_button.html" with href=edit_bulk_url label=_("Edit") variant="secondary" size="sm" %}
   </div>
 </div>
 </section>

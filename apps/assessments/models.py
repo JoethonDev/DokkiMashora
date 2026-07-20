@@ -472,6 +472,18 @@ class AssessmentLectureSection(TimeStampedModel):
     def __str__(self):
         return f"{self.assessment} - {self.lecture}"
 
+    def calculated_max_grade(self):
+        manual_total = (
+            sum(self.manual_questions.values_list("points", flat=True), Decimal("0.00"))
+            if self.pk else Decimal("0.00")
+        )
+        bank_points = list(
+            self.lecture.question_bank.filter(
+                active=True, question_type=QUESTION_TYPE_MCQ,
+            ).order_by("-points", "id").values_list("points", flat=True)[: self.mcq_count]
+        )
+        return manual_total + sum(bank_points, Decimal("0.00"))
+
     def clean(self):
         if not self.assessment_id:
             return

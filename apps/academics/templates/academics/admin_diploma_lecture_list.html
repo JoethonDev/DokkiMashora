@@ -28,10 +28,12 @@
               <td class="px-4 py-3 font-medium">{{ lecture.title }}</td>
               <td class="px-4 py-3 text-end">
                 <div class="inline-flex flex-wrap items-center justify-end gap-2">
-                  <a href="{% url 'academics:admin_diploma_lecture_edit' diploma.id cohort.id semester.id lecture.id %}?next={{ request.path|urlencode }}" class="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline">{% trans "Edit" %}</a>
+                  {% url 'academics:admin_diploma_lecture_edit' diploma.id cohort.id semester.id lecture.id as edit_dl_url %}
+                  {% include "partials/_button.html" with href=edit_dl_url|add:"?next="|add:request.path label=_("Edit") variant="ghost" size="sm" %}
                   <a href="{% url 'academics:admin_diploma_lecture_preview' diploma.id cohort.id semester.id lecture.id %}" class="text-xs text-slate-500 hover:text-brand-600">{% trans "Preview" %}</a>
                   <a href="{% url 'assessments:admin_lecture_bank_list' diploma.id cohort.id semester.id lecture.id %}" class="text-xs text-slate-500 hover:text-brand-600">{% trans "Questions" %}</a>
-                  <form method="post" action="{% url 'academics:admin_diploma_lecture_delete' diploma.id cohort.id semester.id lecture.id %}" class="inline" onsubmit="return confirm('{% trans "Delete this lecture?" %}')">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button type="submit" class="inline-flex items-center rounded-md px-2 py-1 text-xs font-semibold text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/40">{% trans "Delete" %}</button></form>
+                  {% url 'academics:admin_diploma_lecture_delete' diploma.id cohort.id semester.id lecture.id as delete_dl_url %}
+                  {% include "partials/_button.html" with hx_post=delete_dl_url hx_confirm=_("Delete this lecture?") hx_target="body" label=_("Delete") variant="danger" size="sm" %}
                 </div>
               </td>
             </tr>

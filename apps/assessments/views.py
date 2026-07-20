@@ -10,7 +10,7 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -532,8 +532,15 @@ def admin_detail(request, assessment_id):
         sections_qs = assessment.lecture_sections.select_related("lecture").prefetch_related("manual_questions").all()
         for s in sections_qs:
             s.available_count = get_available_bank_mcq_count(s.lecture)
-            section_total += s.max_grade
+            calculated = s.calculated_max_grade()
+            if s.max_grade != calculated:
+                s.max_grade = calculated
+                s.save(update_fields=["max_grade", "updated_at"])
+            section_total += calculated
             sections.append(s)
+        if assessment.total_points != section_total:
+            assessment.total_points = section_total
+            assessment.save(update_fields=["total_points", "updated_at"])
     return render(
         request,
         "assessments/admin_detail.html",
@@ -788,7 +795,10 @@ def _parse_inline_choices(request):
         text = request.POST.get(key, "").strip()
         if not text:
             continue
-        is_correct = request.POST.get(f"choice_correct_{suffix}") == "1"
+        is_correct = (
+            request.POST.get("choice_correct") == suffix
+            or request.POST.get(f"choice_correct_{suffix}") == "1"
+        )
         order_raw = request.POST.get(f"choice_order_{suffix}", "")
         try:
             order = int(order_raw)
@@ -1211,6 +1221,15 @@ def _save_diploma_choices(question, parsed_choices):
             seen_ids.add(choice_id)
 
 
+def _sync_assessment_grades_for_lecture(lecture):
+    for assessment in Assessment.objects.filter(lecture_sections__lecture=lecture).distinct():
+        for section in assessment.lecture_sections.all():
+            section.max_grade = section.calculated_max_grade()
+            section.save(update_fields=["max_grade", "updated_at"])
+        assessment.total_points = sum(section.max_grade for section in assessment.lecture_sections.all())
+        assessment.save(update_fields=["total_points", "updated_at"])
+
+
 @login_required
 @role_required(*ROLE_EXAM_STAFF)
 def admin_lecture_bank_list(request, diploma_id, cohort_id, semester_id, lecture_id):
@@ -1247,6 +1266,7 @@ def admin_lecture_bank_question_create(request, diploma_id, cohort_id, semester_
                 question.save()
                 if question.question_type == QUESTION_TYPE_MCQ:
                     _save_diploma_choices(question, parsed_choices)
+                _sync_assessment_grades_for_lecture(lecture)
                 messages.success(request, _("Bank question created."))
                 return redirect("assessments:admin_lecture_bank_list", diploma_id=diploma.id, cohort_id=cohort.id, semester_id=semester.id, lecture_id=lecture.id)
         choices = _choices_for_template(parsed_choices, None)
@@ -1281,6 +1301,7 @@ def admin_lecture_bank_question_edit(request, diploma_id, cohort_id, semester_id
                     _save_diploma_choices(question, parsed_choices)
                 elif question.question_type != QUESTION_TYPE_MCQ:
                     question.choices.all().delete()
+                _sync_assessment_grades_for_lecture(lecture)
                 messages.success(request, _("Bank question updated."))
                 return redirect("assessments:admin_lecture_bank_list", diploma_id=diploma.id, cohort_id=cohort.id, semester_id=semester.id, lecture_id=lecture.id)
         choices = _choices_for_template(parsed_choices, question)
@@ -1303,6 +1324,7 @@ def admin_lecture_bank_question_delete(request, diploma_id, cohort_id, semester_
     lecture = get_object_or_404(DiplomaLecture, id=lecture_id, cohort=cohort, semester=semester)
     question = get_object_or_404(DiplomaLectureQuestion, id=question_id, lecture=lecture)
     question.delete()
+    _sync_assessment_grades_for_lecture(lecture)
     messages.success(request, _("Bank question deleted."))
     return redirect("assessments:admin_lecture_bank_list", diploma_id=diploma.id, cohort_id=cohort.id, semester_id=semester.id, lecture_id=lecture.id)
 
@@ -1321,9 +1343,16 @@ def admin_section_create(request, assessment_id):
         if form.is_valid():
             section = form.save(commit=False)
             section.assessment = assessment
-            section.save()
-            messages.success(request, _("Section added."))
-            return redirect("assessments:admin_detail", assessment_id=assessment.id)
+            section.max_grade = section.calculated_max_grade()
+            try:
+                section.save()
+            except IntegrityError:
+                form.add_error("order", _("A section with this order already exists in this assessment."))
+            else:
+                assessment.total_points = sum(s.calculated_max_grade() for s in assessment.lecture_sections.all())
+                assessment.save(update_fields=["total_points", "updated_at"])
+                messages.success(request, _("Section added."))
+                return redirect("assessments:admin_detail", assessment_id=assessment.id)
     else:
         form = AssessmentLectureSectionForm(assessment=assessment)
     return render(request, "assessments/admin_section_form.html", {
@@ -1342,9 +1371,17 @@ def admin_section_edit(request, assessment_id, section_id):
     if request.method == "POST":
         form = AssessmentLectureSectionForm(request.POST, instance=section, assessment=assessment)
         if form.is_valid():
-            form.save()
-            messages.success(request, _("Section updated."))
-            return redirect("assessments:admin_detail", assessment_id=assessment.id)
+            updated = form.save(commit=False)
+            updated.max_grade = updated.calculated_max_grade()
+            try:
+                updated.save()
+            except IntegrityError:
+                form.add_error("order", _("A section with this order already exists in this assessment."))
+            else:
+                assessment.total_points = sum(s.calculated_max_grade() for s in assessment.lecture_sections.all())
+                assessment.save(update_fields=["total_points", "updated_at"])
+                messages.success(request, _("Section updated."))
+                return redirect("assessments:admin_detail", assessment_id=assessment.id)
     else:
         form = AssessmentLectureSectionForm(instance=section, assessment=assessment)
     return render(request, "assessments/admin_section_form.html", {
@@ -1362,6 +1399,8 @@ def admin_section_delete(request, assessment_id, section_id):
         messages.error(request, _("Cannot delete section after attempts exist."))
         return redirect("assessments:admin_detail", assessment_id=assessment.id)
     section.delete()
+    assessment.total_points = sum(s.calculated_max_grade() for s in assessment.lecture_sections.all())
+    assessment.save(update_fields=["total_points", "updated_at"])
     messages.success(request, _("Section deleted."))
     return redirect("assessments:admin_detail", assessment_id=assessment.id)
 
@@ -1377,6 +1416,10 @@ def admin_section_manual_question_create(request, assessment_id, section_id):
             mq = form.save(commit=False)
             mq.section = section
             mq.save()
+            section.max_grade = section.calculated_max_grade()
+            section.save(update_fields=["max_grade", "updated_at"])
+            assessment.total_points = sum(s.calculated_max_grade() for s in assessment.lecture_sections.all())
+            assessment.save(update_fields=["total_points", "updated_at"])
             messages.success(request, _("Manual question added."))
             return redirect("assessments:admin_detail", assessment_id=assessment.id)
     else:
@@ -1396,6 +1439,10 @@ def admin_section_manual_question_edit(request, assessment_id, section_id, mq_id
         form = AssessmentSectionManualQuestionForm(request.POST, instance=mq)
         if form.is_valid():
             form.save()
+            section.max_grade = section.calculated_max_grade()
+            section.save(update_fields=["max_grade", "updated_at"])
+            assessment.total_points = sum(s.calculated_max_grade() for s in assessment.lecture_sections.all())
+            assessment.save(update_fields=["total_points", "updated_at"])
             messages.success(request, _("Manual question updated."))
             return redirect("assessments:admin_detail", assessment_id=assessment.id)
     else:
@@ -1413,6 +1460,10 @@ def admin_section_manual_question_delete(request, assessment_id, section_id, mq_
     section = get_object_or_404(AssessmentLectureSection, id=section_id, assessment=assessment)
     mq = get_object_or_404(AssessmentSectionManualQuestion, id=mq_id, section=section)
     mq.delete()
+    section.max_grade = section.calculated_max_grade()
+    section.save(update_fields=["max_grade", "updated_at"])
+    assessment.total_points = sum(s.calculated_max_grade() for s in assessment.lecture_sections.all())
+    assessment.save(update_fields=["total_points", "updated_at"])
     messages.success(request, _("Manual question deleted."))
     return redirect("assessments:admin_detail", assessment_id=assessment.id)
 

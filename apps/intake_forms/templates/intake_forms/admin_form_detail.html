@@ -57,10 +57,8 @@
                 {% if field.required %}<span class="text-xs text-amber-600">*</span>{% endif %}
                 {% if not field.is_active %}<span class="text-xs text-rose-500">{% trans "inactive" %}</span>{% endif %}
               </div>
-              <form method="post" action="{% url 'intake_forms:admin_intake_form_field_delete' intake_form.pk field.pk %}" class="inline">
-                {% csrf_token %}
-                <button type="submit" class="text-xs text-rose-600 hover:text-rose-800 font-semibold bg-transparent border-0 cursor-pointer">{% trans "Delete" %}</button>
-              </form>
+              {% url 'intake_forms:admin_intake_form_field_delete' intake_form.pk field.pk as delete_field_url %}
+              {% include "partials/_button.html" with hx_post=delete_field_url hx_confirm=_("Delete this field?") hx_target="body" label=_("Delete") variant="danger" size="sm" %}
             </div>
           {% endfor %}
         </div>

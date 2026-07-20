@@ -9,7 +9,8 @@
       <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{{ user_obj.primary_role }}</p>
     </div>
     <div class="flex flex-wrap gap-2">
-      <a href="{% url 'accounts:admin_user_edit' user_obj.id %}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Edit" %}</a>
+      {% url 'accounts:admin_user_edit' user_obj.id as edit_user_url %}
+      {% include "partials/_button.html" with href=edit_user_url label=_("Edit") variant="secondary" size="sm" %}
       <a href="{{ back_url }}" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm bg-brand-600 text-white hover:bg-brand-700 shadow-sm">{% trans "Back to list" %}</a>
     </div>
   </header>

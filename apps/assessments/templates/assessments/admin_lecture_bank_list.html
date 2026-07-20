@@ -41,7 +41,7 @@
           </div>
           <div class="flex gap-2 shrink-0">
             {% url 'assessments:admin_lecture_bank_question_edit' diploma.id cohort.id semester.id lecture.id question.id as edit_url %}
-            {% include "partials/_button.html" with href=edit_url label=_("Edit") variant="ghost" size="sm" %}
+            <button type="button" onclick="window.location.href='{{ edit_url }}'" class="dm-button dm-button-ghost text-sm">{% trans "Edit" %}</button>
             <button type="button" @click="deleteConfirm = true" class="inline-flex items-center justify-center gap-2 rounded-md text-sm font-semibold transition px-3 py-1.5 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-950/50">{% trans "Delete" %}</button>
           </div>
         </div>
@@ -50,10 +50,8 @@
             <p class="text-sm text-slate-700 dark:text-slate-200">{% trans "Delete this question? This cannot be undone." %}</p>
             <div class="mt-4 flex justify-end gap-2">
               <button type="button" @click="deleteConfirm = false" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">{% trans "Cancel" %}</button>
-              <form method="post" action="{% url 'assessments:admin_lecture_bank_question_delete' diploma.id cohort.id semester.id lecture.id question.id %}" class="inline">
-                {% csrf_token %}
-                {% include "partials/_button.html" with label=_("Delete") variant="danger" %}
-              </form>
+              {% url 'assessments:admin_lecture_bank_question_delete' diploma.id cohort.id semester.id lecture.id question.id as delete_url %}
+              {% include "partials/_button.html" with hx_post=delete_url hx_target="body" hx_swap="outerHTML" label=_("Delete") variant="danger" %}
             </div>
           </div>
         </div>

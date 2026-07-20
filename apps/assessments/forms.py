@@ -22,7 +22,7 @@ from .models import (
 class AssessmentLectureSectionForm(forms.ModelForm):
     class Meta:
         model = AssessmentLectureSection
-        fields = ["lecture", "order", "mcq_count", "max_grade"]
+        fields = ["lecture", "order", "mcq_count"]
 
     def __init__(self, *args, assessment=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -136,6 +136,9 @@ class AssessmentForm(forms.ModelForm):
                     self.fields["course"].initial = cv.course
             elif instance.semester_id or instance.cohort_id:
                 self.fields["scope_type"].initial = SCOPE_DIPLOMA
+        if instance and (instance.semester_id or instance.cohort_id) and not instance.course_version_id:
+            self.fields["total_points"].disabled = True
+            self.fields["total_points"].help_text = _("Calculated from the assessment sections.")
         self.fields["semester"].queryset = Semester.objects.filter(is_active=True)
         self.fields["cohort"].queryset = Cohort.objects.filter(is_active=True)
         self.fields["semester"].required = False
@@ -169,6 +172,11 @@ class AssessmentForm(forms.ModelForm):
                     _("Both semester and cohort are required for diploma-scoped assessments."),
                 )
             cleaned["course_version"] = None
+            if self.instance.pk:
+                cleaned["total_points"] = sum(
+                    section.calculated_max_grade()
+                    for section in self.instance.lecture_sections.all()
+                )
             if semester and cohort and semester.diploma_id != cohort.diploma_id:
                 raise forms.ValidationError(
                     _("Semester and cohort must belong to the same diploma.")

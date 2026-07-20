@@ -19,12 +19,10 @@
       {% include "partials/_button.html" with href=edit_url|add:"?next="|add:request.path label=_("Edit") variant="secondary" %}
          {% url 'academics:admin_version_create' course.id as create_url %}
        {% trans "Add version" as av_label %}{% include "partials/_button.html" with href=create_url|add:"?next="|add:request.path label="+ "|add:av_label variant="primary" %}
-       <div x-data="{ confirmId: null }" @modal-confirm.window="if($event.detail.id===confirmId) document.getElementById($event.detail.id+'-form').requestSubmit()">
-         <form id="delete-course-form" method="post" action="{% url 'academics:admin_course_delete' course.id %}" hx-post="{% url 'academics:admin_course_delete' course.id %}" hx-target="body" class="inline">
-           {% csrf_token %}<input type="hidden" name="next" value="{% url 'academics:admin_course_list' %}">
-           <button type="button" @click.stop="confirmId='delete-course'; $dispatch('open-modal', {id:'delete-course'})" class="inline-flex items-center justify-center gap-2 rounded-md font-semibold transition px-4 py-2 text-sm bg-red-600 text-white hover:bg-red-700">{% trans "Delete" %}</button>
-         </form>
-         {% include "partials/_modal.html" with modal_id="delete-course" title=_("Confirm Delete") body=_("Delete this course and all its versions and lectures?") confirm_label=_("Delete") %}
+       <div x-data>
+         {% url 'academics:admin_course_delete' course.id as delete_course_url %}
+         {% include "partials/_button.html" with label=_("Delete") variant="danger" size="sm" type="button" attrs='@click="$dispatch(\'open-modal\', {id:\'delete-course\'})"' %}
+         {% include "partials/_modal.html" with modal_id="delete-course" title=_("Confirm Delete") body=_("Delete this course and all its versions and lectures?") confirm_label=_("Delete") hx_post=delete_course_url hx_target="body" %}
        </div>
     </div>
   </header>
@@ -43,23 +41,19 @@
           {% if version.access_duration_days %}<span class="text-xs text-slate-500 dark:text-slate-400">· {{ version.access_duration_days }} {% trans "days" %}</span>{% endif %}
            {% if version.is_active %}{% include "partials/_badge.html" with label=_("Accepts new enrollments") tone="success" %}{% else %}{% include "partials/_badge.html" with label=_("Archived") tone="danger" %}{% endif %}
         </div>
-        <div class="dm-action-row" x-data="{ confirmId: null }" @modal-confirm.window="if($event.detail.id===confirmId) document.getElementById($event.detail.id+'-form').requestSubmit()">
-          {% url 'academics:admin_lecture_create' course.id version.id as lec_url %}
-          {% trans "Lecture" as lec_label %}{% include "partials/_button.html" with href=lec_url|add:"?next="|add:request.path label="+ "|add:lec_label variant="ghost" size="sm" %}
-           {% url 'academics:admin_version_detail' course.id version.id as ver_url %}
-           {% include "partials/_button.html" with href=ver_url label=_("Manage") variant="ghost" size="sm" %}
-           <form method="post" action="{% url 'academics:admin_version_toggle_active' course.id version.id %}" class="inline">
-             {% csrf_token %}
-             {% if version.is_active %}{% include "partials/_button.html" with label=_("Archive") variant="secondary" size="sm" type="submit" %}{% else %}{% include "partials/_button.html" with label=_("Accept new enrollments") variant="secondary" size="sm" type="submit" %}{% endif %}
-           </form>
-          <form id="{{ del_ver_id }}-form" method="post" action="{% url 'academics:admin_version_delete' course.id version.id %}" hx-post="{% url 'academics:admin_version_delete' course.id version.id %}" hx-target="body" class="inline">
-            {% csrf_token %}
-            <button type="submit" hidden></button>
-            <input type="hidden" name="next" value="{{ request.path }}">
-            {% include "partials/_button.html" with label=_("Delete") variant="danger" size="sm" type="button" attrs='@click.stop="confirmId=\''|add:del_ver_id|add:'\'; $dispatch(\'open-modal\', {id:\''|add:del_ver_id|add:'\'})"' %}
-          </form>
-          {% include "partials/_modal.html" with modal_id=del_ver_id title=_("Confirm Delete") body=_("Delete this version and all its lectures, assessments, and dependent content?") confirm_label=_("Delete") %}
-        </div>
+         <div class="dm-action-row">
+           {% url 'academics:admin_lecture_create' course.id version.id as lec_url %}
+           {% trans "Lecture" as lec_label %}{% include "partials/_button.html" with href=lec_url|add:"?next="|add:request.path label="+ "|add:lec_label variant="ghost" size="sm" %}
+            {% url 'academics:admin_version_detail' course.id version.id as ver_url %}
+            {% include "partials/_button.html" with href=ver_url label=_("Manage") variant="ghost" size="sm" %}
+            <form method="post" action="{% url 'academics:admin_version_toggle_active' course.id version.id %}" class="inline">
+              {% csrf_token %}
+              {% if version.is_active %}{% include "partials/_button.html" with label=_("Archive") variant="secondary" size="sm" type="submit" %}{% else %}{% include "partials/_button.html" with label=_("Accept new enrollments") variant="secondary" size="sm" type="submit" %}{% endif %}
+            </form>
+           {% url 'academics:admin_version_delete' course.id version.id as delete_ver_url %}
+           {% include "partials/_button.html" with label=_("Delete") variant="danger" size="sm" type="button" attrs='@click="$dispatch(\'open-modal\', {id:\''|add:del_ver_id|add:'\'})"' %}
+           {% include "partials/_modal.html" with modal_id=del_ver_id title=_("Confirm Delete") body=_("Delete this version and all its lectures, assessments, and dependent content?") confirm_label=_("Delete") hx_post=delete_ver_url hx_target="body" %}
+         </div>
       </summary>
       <div class="p-5">
         {% if version.lectures.all %}
@@ -72,16 +66,11 @@
                   <div class="dm-action-row shrink-0">
                     {% url 'academics:admin_lecture_edit' course.id version.id lecture.id as lec_edit_url %}
                     {% include "partials/_button.html" with href=lec_edit_url label=_("Edit") variant="ghost" size="sm" %}
-                    <div x-data="{ confirmId: null }" @modal-confirm.window="if($event.detail.id===confirmId) document.getElementById($event.detail.id+'-form').requestSubmit()">
-                      {% url 'academics:admin_lecture_delete' course.id version.id lecture.id as del_lec_url %}
-                      <form id="{{ del_lec_id }}-form" method="post" action="{{ del_lec_url }}" hx-post="{{ del_lec_url }}" hx-target="body" class="inline-flex items-center">
-                        {% csrf_token %}
-                        <button type="submit" hidden></button>
-                        <input type="hidden" name="next" value="{{ request.path }}">
-                        {% include "partials/_button.html" with label=_("Delete") variant="danger" size="sm" type="button" attrs='@click.stop="confirmId=\''|add:del_lec_id|add:'\'; $dispatch(\'open-modal\', {id:\''|add:del_lec_id|add:'\'})"' %}
-                      </form>
-                      {% include "partials/_modal.html" with modal_id=del_lec_id title=_("Confirm Delete") body=_("Delete this lecture?") confirm_label=_("Delete") %}
-                    </div>
+                    <div x-data>
+                       {% url 'academics:admin_lecture_delete' course.id version.id lecture.id as delete_lec_url %}
+                       {% include "partials/_button.html" with label=_("Delete") variant="danger" size="sm" type="button" attrs='@click="$dispatch(\'open-modal\', {id:\''|add:del_lec_id|add:'\'})"' %}
+                       {% include "partials/_modal.html" with modal_id=del_lec_id title=_("Confirm Delete") body=_("Delete this lecture?") confirm_label=_("Delete") hx_post=delete_lec_url hx_target="body" %}
+                     </div>
                   </div>
                 </div>
                 <p class="text-sm font-medium leading-snug">{{ lecture.title }}</p>

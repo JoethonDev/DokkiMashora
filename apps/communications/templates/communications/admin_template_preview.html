@@ -54,7 +54,8 @@
     {% endif %}
 
     <div class="flex flex-wrap gap-3">
-      <a href="{% url 'communications:admin_template_edit' template.slug %}" class="inline-flex items-center px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition">{% trans "Back to Edit" %}</a>
+      {% url 'communications:admin_template_edit' template.slug as back_edit_url %}
+      {% include "partials/_button.html" with href=back_edit_url label=_("Back to Edit") variant="secondary" size="sm" %}
       <a href="{% url 'communications:admin_template_list' %}" class="inline-flex items-center px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition">{% trans "All Templates" %}</a>
     </div>
   </div>
