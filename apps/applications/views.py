@@ -466,10 +466,6 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
 def document_upload(request: HttpRequest, token: str) -> HttpResponse:
     """Student document upload via expiring token link."""
     doc_request = get_document_request_by_token(token)
-    if not doc_request and str(token).isdigit():
-        doc_request = ApplicationDocumentRequest.objects.filter(
-            pk=int(token),
-        ).select_related("program_application__student").first()
     if not doc_request:
         messages.error(request, _("Invalid or expired document upload link."))
         return redirect("students:applications")

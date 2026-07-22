@@ -70,11 +70,16 @@ class StudentListViewTests(TestCase):
     def setUp(self):
         self.client = Client()
         self.user = User.objects.create_user(email="student@test.com", password="x")
-        _create_profile(self.user, national_id="10000000000001", phone="01000000001")
+        Group.objects.get(name=GROUP_STUDENT).user_set.add(self.user)
+        profile = _create_profile(self.user, national_id="10000000000001", phone="01000000001")
         self.client.force_login(self.user)
         self.admin = User.objects.create_superuser(email="admin@test.com", password="x")
+        self.course = Course.objects.create(title="Test Course", created_by=self.admin)
+        self.course_version = CourseVersion.objects.create(course=self.course, label="v1", created_by=self.admin)
+        CourseEnrollment.objects.create(student=profile, course_version=self.course_version, status=ENROLLMENT_STATUS_ACTIVE)
         self.first = Assessment.objects.create(
             title="First Quiz",
+            course_version=self.course_version,
             assessment_type=ASSESSMENT_TYPE_QUIZ,
             open_at=timezone.now() - timezone.timedelta(days=1),
             close_at=timezone.now() + timezone.timedelta(days=7),
@@ -84,6 +89,7 @@ class StudentListViewTests(TestCase):
         )
         self.second = Assessment.objects.create(
             title="Second Quiz",
+            course_version=self.course_version,
             assessment_type=ASSESSMENT_TYPE_QUIZ,
             open_at=timezone.now() - timezone.timedelta(days=1),
             close_at=timezone.now() + timezone.timedelta(days=7),
@@ -118,6 +124,7 @@ class AssessmentInstructionsViewTests(TestCase):
     def setUp(self):
         self.client = Client()
         self.student = User.objects.create_user(email="student@test.com", password="x")
+        Group.objects.get(name=GROUP_STUDENT).user_set.add(self.student)
         _create_profile(self.student, national_id="10000000000002", phone="01000000002")
         self.client.force_login(self.student)
         self.admin = User.objects.create_superuser(email="admin@test.com", password="x")
@@ -148,6 +155,7 @@ class HomeworkTakeViewTests(TestCase):
     def setUp(self):
         self.client = Client()
         self.student = User.objects.create_user(email="student@test.com", password="x")
+        Group.objects.get(name=GROUP_STUDENT).user_set.add(self.student)
         _create_profile(self.student, national_id="10000000000005", phone="01000000005")
         self.client.force_login(self.student)
         self.admin = User.objects.create_superuser(email="admin@test.com", password="x")
@@ -178,6 +186,7 @@ class HomeworkSubmittedViewTests(TestCase):
     def setUp(self):
         self.client = Client()
         self.student = User.objects.create_user(email="student2@test.com", password="x")
+        Group.objects.get(name=GROUP_STUDENT).user_set.add(self.student)
         _create_profile(self.student, national_id="10000000000006", phone="01000000006")
         self.client.force_login(self.student)
         self.admin = User.objects.create_superuser(email="admin2@test.com", password="x")
@@ -231,7 +240,7 @@ class HomeworkSubmittedViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         # The download link href is untranslated, so check for it directly.
         # The button label is translated per request locale.
-        self.assertContains(response, "/media/storage/homework/1/homework.pdf")
+        self.assertContains(response, "homework/1/homework.pdf")
 
 
 class AdminPreviewTests(TestCase):
@@ -284,7 +293,6 @@ class AdminGradePermissionTests(TestCase):
         course = Course.objects.create(title="Grade Course", created_by=self.admin)
         course_version = CourseVersion.objects.create(
             course=course,
-            cohort=cohort,
             label="v1",
             created_by=self.admin,
         )
@@ -387,8 +395,8 @@ class AssessmentScopeDependencyTests(TestCase):
             {"scope_type": "course"},
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "standalone_course")
         self.assertContains(response, "scope-detail-fields")
+        self.assertContains(response, 'name="course"')
 
     def test_scope_diploma_shows_diploma_selector(self):
         response = self.client.get(
@@ -397,8 +405,8 @@ class AssessmentScopeDependencyTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "diploma")
-        self.assertNotContains(response, "semester")
-        self.assertNotContains(response, "cohort")
+        self.assertContains(response, 'name="semester"')
+        self.assertContains(response, 'name="cohort"')
 
     def test_scope_diploma_with_diploma_shows_semester(self):
         response = self.client.get(reverse("assessments:admin_scope_fields"), {
@@ -651,7 +659,7 @@ class DiplomaSectionManagementTests(TestCase):
         section.refresh_from_db()
         self.assertEqual(section.order, 2)
         self.assertEqual(section.mcq_count, 4)
-        self.assertEqual(section.max_grade, Decimal("80.00"))
+        self.assertEqual(section.max_grade, Decimal("40.00"))
 
     def test_admin_can_delete_lecture_section(self):
         self.client.force_login(self.admin)

@@ -336,6 +336,13 @@ def mark_application_account_activated(application, actor=None) -> None:
     old_status = application.status
     _set_status(application, PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED)
     _record_decision(application, DECISION_ACTION_ACCOUNT_ACTIVATED, old_status, PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED, actor)
+    record_audit_event(
+        actor=actor,
+        action="application.account_activated",
+        target_type="program_application",
+        target_id=str(application.pk),
+        metadata={"old_status": old_status},
+    )
 
 
 def _has_non_resend_email_log(application, action) -> bool:
@@ -394,6 +401,13 @@ def _advance_to(application, new_status, decision_action, actor):
     old_status = application.status
     _set_status(application, new_status)
     _record_decision(application, decision_action, old_status, new_status, actor)
+    record_audit_event(
+        actor=actor,
+        action=f"application.{new_status}",
+        target_type="program_application",
+        target_id=str(application.pk),
+        metadata={"old_status": old_status, "new_status": new_status, "decision_action": decision_action},
+    )
 
 
 def _send_course_payment_instructions_email(prog_app, actor=None) -> None:
@@ -455,6 +469,13 @@ def mark_entrance_submitted(application, actor=None, attempt=None) -> None:
         application, DECISION_ACTION_ENTRANCE_SUBMITTED,
         old_status, PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED, actor,
         metadata=metadata,
+    )
+    record_audit_event(
+        actor=actor,
+        action="application.entrance_submitted",
+        target_type="program_application",
+        target_id=str(application.pk),
+        metadata={"old_status": old_status, **(metadata or {})},
     )
 
 
@@ -675,8 +696,7 @@ def handle_user_account_activated(user, actor=None) -> None:
     )
     for application in applications:
         mark_application_account_activated(application, actor=actor)
-        if application.program_type == PROGRAM_TYPE_COURSE:
-            send_post_activation_application_email(application, actor=actor)
+        send_post_activation_application_email(application, actor=actor)
 
 
 # ---------------------------------------------------------------------------
@@ -932,7 +952,13 @@ def mark_application_paid(
     # Trigger intake request if activation blocked by missing intake
     if not result.activated and "intake_form_required" in result.reasons:
         _attempt_intake_request_safe(application, actor=actor)
-
+    record_audit_event(
+        actor=actor,
+        action="application.paid",
+        target_type="program_application",
+        target_id=str(application.pk),
+        metadata={"amount": str(amount_dec), "external_reference": external_reference, "payment_record_id": str(record.pk)},
+    )
     return record
 
 

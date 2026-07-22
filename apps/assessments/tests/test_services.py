@@ -514,16 +514,23 @@ class QueryTests(TestCase):
         self.active_assessment = Assessment.objects.create(
             title="Active Quiz",
             assessment_type=ASSESSMENT_TYPE_QUIZ,
+            course_version=self.course_version,
             open_at=self.now - timezone.timedelta(days=1),
             close_at=self.now + timezone.timedelta(days=7),
             passing_score=Decimal("50.00"),
             is_active=True,
             created_by=self.admin,
         )
+        CourseEnrollment.objects.create(
+            student=self.student_profile,
+            course_version=self.course_version,
+            status=ENROLLMENT_STATUS_ACTIVE,
+        )
         self.scoped_assessment = Assessment.objects.create(
             title="Scoped Quiz",
             assessment_type=ASSESSMENT_TYPE_QUIZ,
             course_version=self.course_version,
+            cohort=self.cohort,
             open_at=self.now - timezone.timedelta(days=1),
             close_at=self.now + timezone.timedelta(days=7),
             passing_score=Decimal("50.00"),
@@ -1342,7 +1349,7 @@ class DiplomaSubmitAssessmentTests(TestCase):
         )
         submit_assessment(attempt, [AssessmentAnswerData(question_id=q.id, selected_choice_id=c.id)])
         attempt.refresh_from_db()
-        self.assertEqual(attempt.status, ATTEMPT_STATUS_SUBMITTED)
+        self.assertEqual(attempt.status, ATTEMPT_STATUS_GRADED)
         self.assertEqual(attempt.score_points, Decimal("10.00"))
 
 

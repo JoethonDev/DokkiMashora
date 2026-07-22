@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import io
 import json
+import logging
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlencode
 
 import qrcode
+
+logger = logging.getLogger(__name__)
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
@@ -440,7 +443,8 @@ def admin_grade_attempt(request, attempt_id):
                     if score_key in request.POST:
                         try:
                             score = Decimal(str(request.POST[score_key]))
-                        except Exception:
+                        except (ValueError, TypeError, InvalidOperation):
+                            logger.exception("Invalid Decimal score for question %s", q.order)
                             messages.error(request, _("Invalid score value for question %(q)s.") % {"q": q.order})
                             continue
                         max_score = max((c.score for c in q.choices.all()), default=0) if q.question_type == "mcq" else q.max_score
@@ -454,6 +458,7 @@ def admin_grade_attempt(request, attempt_id):
                 messages.success(request, _("Grades saved."))
             return redirect("entrance_exams:admin_grade_attempt", attempt_id=attempt_id)
         except Exception:
+            logger.exception("Grade save failed for attempt %s", attempt_id)
             messages.error(request, _("An unexpected error occurred while saving grades."))
     question_answer_pairs = []
     for q in questions:
@@ -696,6 +701,7 @@ def admin_bulk_send_results(request, exam_id):
                 sent_by=request.user,
             )
         except Exception:
+            logger.exception("Bulk email send failed for attempt %s", attempt.id)
             failed += 1
             continue
         if record and record.status == "sent":
@@ -793,6 +799,7 @@ def _send_invitations(request, exam, cohort, student_ids):
         try:
             record = send_templated_email(slug=slug, to_email=email_to, context=context, sent_by=request.user)
         except Exception:
+            logger.exception("Exam assign email failed for application %s", prog_app.id)
             failed_count += 1
             continue
         PAEL.objects.get_or_create(
@@ -855,6 +862,7 @@ def _send_results(request, exam, student_ids):
         try:
             record = send_templated_email(slug=slug, to_email=email_to, context=context, sent_by=request.user)
         except Exception:
+            logger.exception("Exam result email failed for attempt %s", attempt.id)
             failed_count += 1
             continue
         if record and record.status == "sent":
@@ -913,6 +921,7 @@ def _resend_emails(request, exam, cohort, log_ids):
                 context=context, sent_by=request.user,
             )
         except Exception:
+            logger.exception("Resend bulk email failed for log %s", log.id)
             failed_count += 1
             continue
         PAEL.objects.create(
@@ -1091,6 +1100,7 @@ def admin_app_email_resend(request, exam_id, app_id):
             sent_by=request.user,
         )
     except Exception:
+        logger.exception("Resend single email failed for application %s", prog_app.id)
         PAEL.objects.create(
             program_application=prog_app,
             action=action, template_slug=slug, recipient=email_to,

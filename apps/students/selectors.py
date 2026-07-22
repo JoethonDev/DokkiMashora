@@ -6,7 +6,11 @@ Each method returns structured data — never rendered HTML.
 
 from __future__ import annotations
 
+import logging
+
 from typing import TYPE_CHECKING
+
+logger = logging.getLogger(__name__)
 
 from django.db.models import Count, Q
 from django.urls import reverse
@@ -24,6 +28,7 @@ from apps.academics.models import (
     CourseEnrollment,
     CourseVersion,
     DiplomaEnrollment,
+    DiplomaLecture,
     DiplomaLectureWatchProgress,
     Lecture,
     LectureWatchProgress,
@@ -36,12 +41,15 @@ from apps.applications.constants import (
 )
 from apps.assessments.models import AssessmentAttempt, HomeworkSubmission
 from apps.assessments.services import get_student_assessments, get_student_attempts
+from apps.academics.services import get_visible_semester_ids_by_enrollment
 from apps.certificates.models import GeneratedCertificate
 from apps.communications.email_message import EmailMessage
 from apps.entrance_exams.models import EntranceAttempt
 from apps.intake_forms.models import IntakeFormRequest
 from apps.payments.selectors import get_enrollment_payment_status, get_student_payment_summary
-from apps.progression.constants import CERTIFICATE_STATUS_AVAILABLE
+from apps.progression.constants import (
+    CERTIFICATE_STATUS_AVAILABLE,
+)
 from apps.progression.models import (
     FinalExamEligibility,
     PromotionDecision,
@@ -51,7 +59,8 @@ from apps.progression.models import (
 )
 from apps.students.services import check_apply_eligibility
 from apps.attendance.models import AttendanceRecord
-from apps.academics.services import get_visible_diploma_lectures
+
+
 
 if TYPE_CHECKING:
     from apps.accounts.models import User
@@ -208,13 +217,45 @@ def _home_context(data: dict) -> dict:
     attempted_ids = {att.assessment_id for att in data.get("assessment_attempts", [])}
 
     diploma_cards = []
-    for enrollment in data.get("diploma_enrollments", []):
-        lectures = list(get_visible_diploma_lectures(data["student"], enrollment))
-        completed_ids = set(DiplomaLectureWatchProgress.objects.filter(
-            student=data["student"], diploma_enrollment=enrollment,
-            lecture_id__in=[lecture.id for lecture in lectures], status="completed",
-        ).values_list("lecture_id", flat=True))
-        next_lecture = next((lecture for lecture in lectures if lecture.id not in completed_ids), None)
+    enrollments = data.get("diploma_enrollments", [])
+    student = data["student"]
+    lectures_by_cohort = {}
+    progress_by_enrollment = {}
+    if enrollments:
+        now = timezone.now()
+        cohort_ids = [e.cohort_id for e in enrollments]
+        for lec in DiplomaLecture.objects.filter(
+            cohort_id__in=cohort_ids, is_published=True,
+        ).filter(
+            Q(release_at__isnull=True) | Q(release_at__lte=now),
+        ).order_by("order").select_related("semester"):
+            lectures_by_cohort.setdefault(lec.cohort_id, []).append(lec)
+
+        all_lecture_ids = [lec.id for lecs in lectures_by_cohort.values() for lec in lecs]
+        if all_lecture_ids:
+            enrollment_ids = [e.id for e in enrollments]
+            for eid, lid in DiplomaLectureWatchProgress.objects.filter(
+                student=student, diploma_enrollment_id__in=enrollment_ids,
+                lecture_id__in=all_lecture_ids, status="completed",
+            ).values_list("diploma_enrollment_id", "lecture_id"):
+                progress_by_enrollment.setdefault(eid, set()).add(lid)
+
+    visible_sem_ids_by_enrollment = get_visible_semester_ids_by_enrollment(enrollments)
+
+    for enrollment in enrollments:
+        if enrollment.status != ENROLLMENT_STATUS_ACTIVE:
+            lectures = []
+        elif enrollment.expires_at and timezone.now() >= enrollment.expires_at:
+            lectures = []
+        else:
+            all_lectures = lectures_by_cohort.get(enrollment.cohort_id, [])
+            visible_ids = visible_sem_ids_by_enrollment.get(enrollment.id, set())
+            lectures = [lec for lec in all_lectures if lec.semester_id in visible_ids] if visible_ids else []
+
+        completed_ids = set()
+        if lectures:
+            completed_ids = progress_by_enrollment.get(enrollment.id, set()) & {lec.id for lec in lectures}
+        next_lecture = next((lec for lec in lectures if lec.id not in completed_ids), None)
         diploma_attempt = next((attempt for attempt in data.get("assessment_attempts", []) if attempt.status in {"assigned", "in_progress"} and attempt.assessment.cohort_id == enrollment.cohort_id), None)
         if not diploma_attempt and enrollment.cohort_id in open_by_cohort:
             a = open_by_cohort[enrollment.cohort_id]
@@ -592,6 +633,7 @@ def _get_payments(student_profile: StudentProfile) -> dict:
         summary.update(enrollments)
         return summary
     except Exception:
+        logger.exception("_get_payments failed")
         return {"total_paid": 0, "record_count": 0, "records": [], "diploma_enrollments": [], "course_enrollments": []}
 
 

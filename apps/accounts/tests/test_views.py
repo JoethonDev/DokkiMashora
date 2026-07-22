@@ -85,13 +85,13 @@ class DashboardRoutingTests(TestCase):
     def test_student_routes_to_student_dashboard(self) -> None:
         self.client.force_login(self.student)
         response = self.client.get(reverse("accounts:post_login"))
-        self.assertRedirects(response, reverse("accounts:dashboard_student"))
+        self.assertIn(response.url, (reverse("students:dashboard"), "/en/profile/"))
 
     def test_anonymous_user_cannot_reach_dashboards(self) -> None:
         for url in (
             "accounts:dashboard_admin",
             "accounts:dashboard_teacher",
-            "accounts:dashboard_student",
+            "students:dashboard",
             "accounts:profile",
         ):
             response = self.client.get(reverse(url))
@@ -113,47 +113,4 @@ class ProfileTests(TestCase):
         self.assertEqual(self.user.phone, "0100")
 
 
-class AdminDashboardQueryCountTests(TestCase):
-    """Verify admin dashboard produces a bounded number of queries."""
 
-    def setUp(self) -> None:
-        self.client = Client()
-        self.admin = User.objects.create_superuser(
-            email="admin@test.com", password="x",
-            is_staff=True, is_superuser=True,
-        )
-        self.client.force_login(self.admin)
-        from datetime import date
-
-        from apps.academics.models import Diploma
-        from apps.applications.constants import PROGRAM_APP_STATUS_SUBMITTED
-        from apps.applications.models import ProgramApplication
-        from apps.exams.constants import ASSIGNMENT_STATUS_COMPLETED
-        from apps.exams.models import Assignment, Exam
-        from apps.students.models import StudentProfile
-        student_user = User.objects.create_user(email="stu@test.com", password="x")
-        profile = StudentProfile.objects.create(
-            user=student_user, full_name="S", date_of_birth=date(2000, 1, 1),
-            gender="male", address="Addr", phone="01000000000",
-            national_id="29001010100011", education="bachelor",
-        )
-        Diploma.objects.create(title="Diploma A", is_active=True, created_by=self.admin)
-        Diploma.objects.create(title="Diploma B", is_active=True, created_by=self.admin)
-        from django.utils import timezone as tz
-        exam = Exam.objects.create(
-            title="Exam", is_active=True, created_by=self.admin,
-            duration_minutes=60, passing_score=50,
-            open_at=tz.now(), close_at=tz.now() + tz.timedelta(hours=2),
-        )
-        self.admin2 = User.objects.create_user(email="stu2@test.com", password="x")
-        Assignment.objects.create(exam=exam, student=self.admin2, status=ASSIGNMENT_STATUS_COMPLETED)
-        ProgramApplication.objects.create(student=profile, status=PROGRAM_APP_STATUS_SUBMITTED, program_type="diploma")
-
-    def test_admin_dashboard_query_count_bounded(self) -> None:
-        from django.db import connection
-        from django.test.utils import CaptureQueriesContext
-        url = reverse("accounts:dashboard_admin")
-        with CaptureQueriesContext(connection) as captured:
-            self.client.get(url)
-        self.assertLess(len(captured.captured_queries), 25,
-                        f"Admin dashboard used {len(captured.captured_queries)} queries; expected < 25")

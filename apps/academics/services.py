@@ -38,6 +38,7 @@ from apps.academics.models import (
     DiplomaLectureWatchProgress,
     Lecture,
     LectureWatchProgress,
+    Semester,
     ModeratorStudentAssignment,
     TeacherAssignment,
 )
@@ -46,6 +47,7 @@ from apps.progression.constants import (
     COMPONENT_TYPE_ATTENDANCE,
     COMPONENT_TYPE_HOMEWORK_ASSESSMENT,
     COMPONENT_TYPE_SEMESTER_EXAM,
+    PROMOTION_DECISION_ACADEMIC_YEAR_PROMOTE,
     SEMESTER_PROGRESS_COMPLETED,
     SEMESTER_PROGRESS_IN_PROGRESS,
     SEMESTER_PROGRESS_NOT_STARTED,
@@ -53,7 +55,12 @@ from apps.progression.constants import (
     SEMESTER_PROGRESS_PASSED_CONFIRMED,
     SEMESTER_PROGRESS_PROMOTED,
 )
-from apps.progression.models import SemesterGradeComponent, StudentSemesterProgress
+from apps.progression.models import (
+    CohortAcademicYear,
+    PromotionDecision,
+    SemesterGradeComponent,
+    StudentSemesterProgress,
+)
 
 
 def activate_diploma_enrollment(enrollment: DiplomaEnrollment) -> DiplomaEnrollment:
@@ -154,6 +161,72 @@ def get_student_diploma_access(enrollment):
         "hidden_semesters": semesters[len(visible):],
         "blockers": blockers,
     }
+
+
+def get_visible_semester_ids_by_enrollment(enrollments) -> dict[int, set[int]]:
+    """Batch diploma semester visibility checks for dashboard and assessment lists."""
+    enrollments = list(enrollments)
+    if not enrollments:
+        return {}
+
+    enrollment_ids = [enrollment.id for enrollment in enrollments]
+    semesters_by_diploma = {}
+    semesters_by_id = {}
+    for semester in Semester.objects.filter(
+        diploma_id__in={e.cohort.diploma_id for e in enrollments}, is_active=True,
+    ).order_by("order"):
+        semesters_by_diploma.setdefault(semester.diploma_id, []).append(semester)
+        semesters_by_id[semester.id] = semester
+
+    progress_by_enrollment = {}
+    for progress in StudentSemesterProgress.objects.filter(diploma_enrollment_id__in=enrollment_ids):
+        progress_by_enrollment.setdefault(progress.diploma_enrollment_id, {})[progress.semester_id] = progress
+
+    years_by_cohort = {}
+    for year in CohortAcademicYear.objects.filter(
+        cohort_id__in={e.cohort_id for e in enrollments},
+    ).order_by("cohort_id", "year_number"):
+        years_by_cohort.setdefault(year.cohort_id, []).append(year)
+
+    promotions_by_enrollment = {}
+    for promotion in PromotionDecision.objects.filter(
+        diploma_enrollment_id__in=enrollment_ids,
+        decision_type=PROMOTION_DECISION_ACADEMIC_YEAR_PROMOTE,
+    ):
+        promotions_by_enrollment.setdefault(promotion.diploma_enrollment_id, []).append(promotion)
+
+    completed_statuses = {
+        SEMESTER_PROGRESS_COMPLETED,
+        SEMESTER_PROGRESS_PASSED,
+        SEMESTER_PROGRESS_PASSED_CONFIRMED,
+        SEMESTER_PROGRESS_PROMOTED,
+    }
+    visible_by_enrollment = {}
+    for enrollment in enrollments:
+        visible_ids = []
+        semesters = semesters_by_diploma.get(enrollment.cohort.diploma_id, [])
+        progress = progress_by_enrollment.get(enrollment.id, {})
+        years = years_by_cohort.get(enrollment.cohort_id, [])
+        promotions = promotions_by_enrollment.get(enrollment.id, [])
+        for semester in semesters:
+            item = progress.get(semester.id)
+            if item and item.status in completed_statuses:
+                visible_ids.append(semester.id)
+                continue
+            if visible_ids and years:
+                semesters_per_year = years[0].semesters_per_year
+                previous = semesters_by_id[visible_ids[-1]]
+                previous_year = ((previous.order - 1) // semesters_per_year) + 1
+                current_year = ((semester.order - 1) // semesters_per_year) + 1
+                if previous_year != current_year and not any(
+                    p.from_semester_id == previous.id and p.to_semester_id == semester.id
+                    for p in promotions
+                ):
+                    break
+            visible_ids.append(semester.id)
+            break
+        visible_by_enrollment[enrollment.id] = set(visible_ids)
+    return visible_by_enrollment
 
 
 def _academic_year_promotion_pending(enrollment, previous_semester, next_semester):

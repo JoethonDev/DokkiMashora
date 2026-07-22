@@ -115,6 +115,7 @@ from apps.core.permissions import (
     is_moderator,
     role_required,
     safe_int,
+    student_required,
     validate_score,
 )
 from apps.core.views import safe_next_url
@@ -135,7 +136,7 @@ def _htmx_redirect(response, target):
 # ---------------------------------------------------------------------------
 
 
-@login_required
+@student_required
 def student_list(request):
     assessments = list(get_student_assessments(request.user))
     attempts = list(get_student_attempts(request.user))
@@ -158,7 +159,7 @@ def student_list(request):
     )
 
 
-@login_required
+@student_required
 def assessment_instructions(request, assessment_id):
     assessment = get_object_or_404(Assessment, id=assessment_id, is_active=True)
     if assessment.assessment_type == ASSESSMENT_TYPE_HOMEWORK:
@@ -178,7 +179,7 @@ def assessment_instructions(request, assessment_id):
     )
 
 
-@login_required
+@student_required
 @require_POST
 def start_assessment_view(request, assessment_id):
     assessment = get_object_or_404(Assessment, id=assessment_id, is_active=True)
@@ -194,7 +195,7 @@ def start_assessment_view(request, assessment_id):
         return redirect("assessments:instructions", assessment_id=assessment_id)
 
 
-@login_required
+@student_required
 def take_assessment(request, assessment_id):
     assessment = get_object_or_404(Assessment, id=assessment_id, is_active=True)
     try:
@@ -281,7 +282,7 @@ def take_assessment(request, assessment_id):
     )
 
 
-@login_required
+@student_required
 def submit_assessment_view(request, assessment_id):
     if request.method != "POST":
         return redirect("assessments:take", assessment_id=assessment_id)
@@ -318,7 +319,7 @@ def submit_assessment_view(request, assessment_id):
     return redirect("assessments:results", assessment_id=assessment_id)
 
 
-@login_required
+@student_required
 def submit_homework_view(request, assessment_id):
     if request.method != "POST":
         return redirect("assessments:take", assessment_id=assessment_id)
@@ -368,7 +369,7 @@ def submit_homework_view(request, assessment_id):
     return redirect("assessments:take", assessment_id=assessment_id)
 
 
-@login_required
+@student_required
 @require_POST
 def api_diploma_autosave(request, assessment_id):
     """POST autosave for diploma random assessment in-progress attempt."""
@@ -394,7 +395,7 @@ def api_diploma_autosave(request, assessment_id):
         return JsonResponse({"error": "not_found"}, status=404)
 
 
-@login_required
+@student_required
 def assessment_results(request, assessment_id):
     assessment = get_object_or_404(Assessment, id=assessment_id)
     if assessment.assessment_type == ASSESSMENT_TYPE_HOMEWORK:
@@ -488,7 +489,7 @@ def _parse_answers(request, assessment):
 
 
 @login_required
-@role_required(*ROLE_GRADING_STAFF)
+@role_required(*ROLE_GRADING_QUEUE)
 def admin_list(request):
     q = request.GET.get("q", "")
     type_filter = request.GET.get("type", "")
@@ -535,14 +536,8 @@ def admin_detail(request, assessment_id):
         for s in sections_qs:
             s.available_count = get_available_bank_mcq_count(s.lecture)
             calculated = s.calculated_max_grade()
-            if s.max_grade != calculated:
-                s.max_grade = calculated
-                s.save(update_fields=["max_grade", "updated_at"])
             section_total += calculated
             sections.append(s)
-        if assessment.total_points != section_total:
-            assessment.total_points = section_total
-            assessment.save(update_fields=["total_points", "updated_at"])
     return render(
         request,
         "assessments/admin_detail.html",
@@ -553,6 +548,30 @@ def admin_detail(request, assessment_id):
             "is_diploma": is_diploma,
         },
     )
+
+
+@login_required
+@role_required(*ROLE_EXAM_STAFF)
+@require_POST
+def admin_recalculate_totals(request, assessment_id):
+    assessment = get_object_or_404(Assessment, id=assessment_id)
+    is_diploma = bool(assessment.semester_id and assessment.cohort_id and not assessment.course_version_id)
+    if not is_diploma:
+        messages.error(request, _("Total recalculation is only available for diploma-scoped assessments."))
+        return redirect("assessments:admin_detail", assessment_id=assessment_id)
+    sections_qs = assessment.lecture_sections.select_related("lecture").all()
+    section_total = 0
+    for s in sections_qs:
+        calculated = s.calculated_max_grade()
+        if s.max_grade != calculated:
+            s.max_grade = calculated
+            s.save(update_fields=["max_grade", "updated_at"])
+        section_total += calculated
+    if assessment.total_points != section_total:
+        assessment.total_points = section_total
+        assessment.save(update_fields=["total_points", "updated_at"])
+    messages.success(request, _("Assessment totals recalculated."))
+    return redirect("assessments:admin_detail", assessment_id=assessment_id)
 
 
 @login_required
@@ -883,7 +902,7 @@ def admin_grade_list(request):
 
 
 @login_required
-@role_required(*ROLE_EXAM_STAFF)
+@role_required(*ROLE_GRADING_QUEUE)
 def admin_homework_grade_list(request):
     submissions = get_homework_pending_grading(request.user).order_by("-created_at")
     page_obj, pagination_qs = paginate(request, submissions)

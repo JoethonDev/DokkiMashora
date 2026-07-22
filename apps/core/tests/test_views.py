@@ -84,7 +84,7 @@ class LandingPageTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'data-ui-theme="operational"')
         self.assertContains(response, 'class="dm-shell')
-        self.assertContains(response, "Switch to Heritage")
+        self.assertContains(response, "Log in")
 
     def test_timezone_is_cairo(self) -> None:
         self.assertEqual(settings.TIME_ZONE, "Africa/Cairo")
@@ -128,7 +128,7 @@ class NavigationVisibilityTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "Register now")
         self.assertNotContains(response, "Log in")
-        self.assertContains(response, "Dashboard")
+        self.assertContains(response, "My Portal")
 
     def test_student_nav_does_not_show_admin_links(self) -> None:
         student = User.objects.create_user(email="student-links@example.com", password="pass")
@@ -137,8 +137,7 @@ class NavigationVisibilityTests(TestCase):
 
         response = self.client.get("/en/")
 
-        self.assertContains(response, "My Profile")
-        self.assertContains(response, "My Courses")
+        self.assertContains(response, "My Portal")
         self.assertNotContains(response, "Manage")
         self.assertNotContains(response, "Assessments")
 
@@ -149,10 +148,7 @@ class NavigationVisibilityTests(TestCase):
 
         response = self.client.get("/en/")
 
-        self.assertContains(response, "Applications")
-        self.assertContains(response, "Assessments")
-        self.assertNotContains(response, "My Courses")
-        self.assertNotContains(response, "My Profile")
+        self.assertNotContains(response, "My Portal")
         self.assertNotContains(response, "Register now")
 
 

@@ -20,6 +20,8 @@ urlpatterns = [
     path("manage/<int:assessment_id>/edit/", views.admin_edit, name="admin_edit"),
     path("manage/<int:assessment_id>/preview/", views.admin_preview, name="admin_preview"),
     path("manage/<int:assessment_id>/toggle/", views.admin_toggle_active, name="admin_toggle"),
+    path("manage/<int:assessment_id>/recalculate/", views.admin_recalculate_totals, name="admin_recalculate"),
+
     path(
         "manage/<int:assessment_id>/questions/form/",
         views.admin_question_form,

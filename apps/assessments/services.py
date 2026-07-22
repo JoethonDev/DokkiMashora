@@ -17,6 +17,7 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE
 from apps.academics.models import CourseEnrollment, DiplomaEnrollment
+from apps.academics.services import get_visible_semester_ids_by_enrollment
 from apps.audit.constants import (
     ACTION_EXAM_ACCESS_OVERRIDE_CANCELLED,
     ACTION_EXAM_ACCESS_OVERRIDE_CREATED,
@@ -342,7 +343,7 @@ def submit_assessment(attempt: AssessmentAttempt, answers: list[AssessmentAnswer
 
     has_ungraded = False
     total_score = Decimal("0.00")
-    total_possible = sum(q.points for q in questions)
+    total_possible = sum(q.points for q in questions if q.required or q.id in answered_question_ids)
 
     with transaction.atomic():
         for answer_data in answers:
@@ -455,7 +456,8 @@ def submit_diploma_assessment(attempt: AssessmentAttempt, answer_data: dict) -> 
                     )
                 if text.strip():
                     has_written = True
-                total_possible += sq.points
+                if sq.required or text.strip():
+                    total_possible += sq.points
 
             answer.save()
 
@@ -833,11 +835,34 @@ def get_student_assessments(student):
         | Q(cohort_id__in=list(enrolled_cohort_ids), course_version__isnull=True)
     )
     open_assessments = list(
-        base_qs.filter(open_at__lte=now)
+        base_qs.filter(
+            Q(open_at__isnull=True) | Q(open_at__lte=now),
+            Q(close_at__isnull=True) | Q(close_at__gte=now),
+        )
         .select_related("course_version__course")
         .prefetch_related("attempts")
         .distinct()
     )
+    # Filter out diploma assessments whose semester isn't visible yet
+    diploma_assessments = [a for a in open_assessments if a.cohort_id and a.semester_id]
+    if diploma_assessments:
+        enrollments = {
+            e.cohort_id: e
+            for e in DiplomaEnrollment.objects.filter(
+                student__user=student, status=ENROLLMENT_STATUS_ACTIVE,
+                cohort_id__in={a.cohort_id for a in diploma_assessments},
+            ).select_related("cohort__diploma")
+        }
+        visible_by_enrollment = get_visible_semester_ids_by_enrollment(enrollments.values())
+        visible_by_cohort = {
+            cohort_id: visible_by_enrollment.get(enrollment.id, set())
+            for cohort_id, enrollment in enrollments.items()
+        }
+        open_assessments = [
+            a for a in open_assessments
+            if not (a.cohort_id and a.semester_id)
+            or (a.cohort_id in visible_by_cohort and a.semester_id in visible_by_cohort[a.cohort_id])
+        ]
     override_ids = SemesterExamAccessOverride.objects.filter(
         diploma_enrollment__student__user=student,
         diploma_enrollment__status=ENROLLMENT_STATUS_ACTIVE,

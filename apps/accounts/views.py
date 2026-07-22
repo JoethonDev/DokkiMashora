@@ -48,6 +48,16 @@ from apps.applications.models import ProgramApplication, ProgramApplicationDecis
 from apps.applications.models import ProgramApplicationEmailLog
 from apps.assessments.constants import ATTEMPT_STATUS_SUBMITTED, ATTEMPT_STATUS_UNDER_REVIEW
 from apps.assessments.models import AssessmentAttempt
+from apps.audit.constants import (
+    ACTION_CLUSTER_CREATED,
+    ACTION_CLUSTER_MEMBERSHIP_ADDED,
+    ACTION_CLUSTER_MEMBERSHIP_REMOVED,
+    ACTION_STAFF_ASSIGNMENT_CREATED,
+    ACTION_STAFF_ASSIGNMENT_REVOKED,
+    ACTION_USER_CREATED,
+    ACTION_USER_DELETED,
+    ACTION_USER_UPDATED,
+)
 from apps.audit.models import AuditEvent
 from apps.audit.services import record_audit_event
 from apps.communications.email_message import EmailMessage as CommEmailMessage
@@ -425,7 +435,14 @@ def admin_user_create(request, user_type):
         if (user_type == "students") != (form.cleaned_data.get("role") == GROUP_STUDENT):
             form.add_error("role", _("Select a role valid for this list."))
         else:
-            form.save()
+            user = form.save()
+            record_audit_event(
+                actor=request.user,
+                action=ACTION_USER_CREATED,
+                target_type="user",
+                target_id=str(user.id),
+                metadata={"role": user_type, "email": user.email},
+            )
             messages.success(request, _("User created."))
             return redirect("accounts:admin_student_list" if user_type == "students" else "accounts:admin_staff_list")
     return render(request, "accounts/admin_user_form.html", {"form": form, "creating": True, "user_type": user_type})
@@ -494,7 +511,16 @@ def admin_user_delete(request, user_id):
         messages.error(request, _("You cannot delete your own account."))
     else:
         try:
+            uid = user_obj.id
+            email = user_obj.email
             user_obj.delete()
+            record_audit_event(
+                actor=request.user,
+                action=ACTION_USER_DELETED,
+                target_type="user",
+                target_id=str(uid),
+                metadata={"email": email},
+            )
             messages.success(request, _("User deleted."))
         except ProtectedError:
             messages.error(request, _("This user cannot be deleted while referenced by existing records."))
@@ -568,7 +594,7 @@ def admin_user_edit(request, user_id):
                 if old_is_active != user_obj.is_active or password_changed:
                     record_audit_event(
                         actor=request.user,
-                        action="user.updated",
+                        action=ACTION_USER_UPDATED,
                         target_type="user",
                         target_id=str(user_obj.id),
                         metadata={
@@ -675,7 +701,7 @@ def admin_staff_assignments(request, user_id):
     """Manage teacher and moderator assignments for a staff member."""
     staff_user = get_object_or_404(User, id=user_id)
     staff_role = staff_user.primary_role
-    back_url = request.GET.get("next") or request.META.get("HTTP_REFERER") or reverse("accounts:admin_staff_list")
+    back_url = safe_next_url(request) or reverse("accounts:admin_staff_list")
 
     teacher_assignments = TeacherAssignment.objects.filter(teacher=staff_user).select_related(
         "course", "course_version", "diploma", "semester", "cohort"
@@ -718,12 +744,19 @@ def admin_teacher_assignment_create(request, user_id):
         messages.error(request, _("Course version is required."))
         return redirect("accounts:admin_staff_assignments", user_id=staff_user.id)
     version = get_object_or_404(CourseVersion, id=version_id)
-    TeacherAssignment.objects.create(
+    assignment = TeacherAssignment.objects.create(
         teacher=staff_user,
         scope_type=SCOPE_COURSE_VERSION,
         course_version=version,
         active=True,
         assigned_by=request.user,
+    )
+    record_audit_event(
+        actor=request.user,
+        action=ACTION_STAFF_ASSIGNMENT_CREATED,
+        target_type="teacher_assignment",
+        target_id=str(assignment.id),
+        metadata={"teacher_id": str(staff_user.id), "course_version_id": str(version.id)},
     )
     messages.success(request, _("Teacher assignment created."))
     return redirect("accounts:admin_staff_assignments", user_id=staff_user.id)
@@ -738,6 +771,13 @@ def admin_teacher_assignment_delete(request, user_id, assignment_id):
     assignment.revoked_by = request.user
     assignment.revoked_at = timezone.now()
     assignment.save()
+    record_audit_event(
+        actor=request.user,
+        action=ACTION_STAFF_ASSIGNMENT_REVOKED,
+        target_type="teacher_assignment",
+        target_id=str(assignment.id),
+        metadata={"teacher_id": str(user_id)},
+    )
     messages.success(request, _("Teacher assignment revoked."))
     return redirect("accounts:admin_staff_assignments", user_id=user_id)
 
@@ -766,13 +806,20 @@ def admin_moderator_assignment_create(request, user_id):
     version = get_object_or_404(CourseVersion, id=version_id)
     cluster = get_object_or_404(StudentCluster, id=cluster_id) if cluster_id else None
     cohort = cluster.cohort if cluster else get_object_or_404(Cohort, id=cohort_id)
-    ModeratorAssignment.objects.create(
+    assignment = ModeratorAssignment.objects.create(
         moderator=staff_user,
         course_version=version,
         cohort=cohort,
         cluster=cluster,
         active=True,
         assigned_by=request.user,
+    )
+    record_audit_event(
+        actor=request.user,
+        action=ACTION_STAFF_ASSIGNMENT_CREATED,
+        target_type="moderator_assignment",
+        target_id=str(assignment.id),
+        metadata={"moderator_id": str(staff_user.id), "course_version_id": str(version.id), "cohort_id": str(cohort.id)},
     )
     messages.success(request, _("Moderator assignment created."))
     return redirect("accounts:admin_staff_assignments", user_id=staff_user.id)
@@ -787,6 +834,13 @@ def admin_moderator_assignment_delete(request, user_id, assignment_id):
     assignment.revoked_by = request.user
     assignment.revoked_at = timezone.now()
     assignment.save(update_fields=["active", "revoked_by", "revoked_at", "updated_at"])
+    record_audit_event(
+        actor=request.user,
+        action=ACTION_STAFF_ASSIGNMENT_REVOKED,
+        target_type="moderator_assignment",
+        target_id=str(assignment.id),
+        metadata={"moderator_id": str(user_id)},
+    )
     messages.success(request, _("Moderator assignment revoked."))
     return redirect("accounts:admin_staff_assignments", user_id=user_id)
 
@@ -799,8 +853,15 @@ def admin_student_cluster_create(request, cohort_id):
     name = request.POST.get("name")
     if not name:
         messages.error(request, _("Cluster name is required."))
-        return redirect(request.META.get("HTTP_REFERER") or reverse("academics:admin_diploma_detail", kwargs={"diploma_id": cohort.diploma_id}))
-    StudentCluster.objects.create(name=name, cohort=cohort, created_by=request.user)
+        return redirect("academics:admin_diploma_detail", diploma_id=cohort.diploma_id)
+    cluster = StudentCluster.objects.create(name=name, cohort=cohort, created_by=request.user)
+    record_audit_event(
+        actor=request.user,
+        action=ACTION_CLUSTER_CREATED,
+        target_type="student_cluster",
+        target_id=str(cluster.id),
+        metadata={"cohort_id": str(cohort.id), "name": name},
+    )
     messages.success(request, _("Cluster created."))
     return redirect(request.META.get("HTTP_REFERER") or reverse("academics:admin_diploma_detail", kwargs={"diploma_id": cohort.diploma_id}))
 
@@ -822,10 +883,17 @@ def admin_student_cluster_membership_add(request, cluster_id):
         )
         if created:
             added += 1
+    record_audit_event(
+        actor=request.user,
+        action=ACTION_CLUSTER_MEMBERSHIP_ADDED,
+        target_type="student_cluster_membership",
+        target_id=str(cluster.id),
+        metadata={"count": added, "cohort_id": str(cluster.cohort_id)},
+    )
     messages.success(request, _("%(count)d student(s) added to cluster.") % {"count": added})
     if is_htmx(request):
         return render(request, "accounts/_cluster_members.html", {"cluster": cluster})
-    return redirect(request.META.get("HTTP_REFERER") or reverse("academics:admin_diploma_detail", kwargs={"diploma_id": cluster.cohort.diploma_id}))
+    return redirect("academics:admin_diploma_detail", diploma_id=cluster.cohort.diploma_id)
 
 
 @login_required
@@ -834,10 +902,17 @@ def admin_student_cluster_membership_add(request, cluster_id):
 def admin_student_cluster_membership_remove(request, cluster_id, membership_id):
     membership = get_object_or_404(StudentClusterMembership, id=membership_id, cluster_id=cluster_id)
     membership.delete()
+    record_audit_event(
+        actor=request.user,
+        action=ACTION_CLUSTER_MEMBERSHIP_REMOVED,
+        target_type="student_cluster_membership",
+        target_id=str(membership.id),
+        metadata={"cluster_id": str(cluster_id), "student_id": str(membership.student_id)},
+    )
     messages.success(request, _("Student removed from cluster."))
     if is_htmx(request):
         return render(request, "accounts/_cluster_members.html", {"cluster": membership.cluster})
-    return redirect(request.META.get("HTTP_REFERER") or reverse("academics:admin_diploma_detail", kwargs={"diploma_id": membership.cluster.cohort.diploma_id}))
+    return redirect("academics:admin_diploma_detail", diploma_id=membership.cluster.cohort.diploma_id)
 
 
 def _dashboard_url_name(user: User) -> str:

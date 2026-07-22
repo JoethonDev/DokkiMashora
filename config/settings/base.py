@@ -14,7 +14,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 env = environ.Env(
     DJANGO_DEBUG=(bool, False),
-    DJANGO_SECRET_KEY=(str, "django-insecure-change-me-in-production"),
+    DJANGO_SECRET_KEY=(str, ""),
     DJANGO_ALLOWED_HOSTS=(list, ["localhost", "127.0.0.1"]),
     DJANGO_CSRF_TRUSTED_ORIGINS=(list, ["http://localhost:8000", "http://127.0.0.1:8000"]),
     DATABASE_URL=(str, f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
@@ -84,7 +84,6 @@ LOCAL_APPS = [
     "apps.applications",
     "apps.communications",
     "apps.entrance_exams",
-    "apps.exams",
     "apps.academics",
     "apps.assessments",
     "apps.storage",

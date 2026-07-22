@@ -10,6 +10,8 @@ from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods
 
 from apps.academics.models import Cohort, CourseVersion
+from apps.audit.constants import ACTION_INTAKE_FORM_CREATED, ACTION_INTAKE_FORM_TOGGLED, ACTION_INTAKE_FORM_FIELD_CREATED, ACTION_INTAKE_FORM_FIELD_DELETED, ACTION_INTAKE_REQUEST_SENT
+from apps.audit.services import record_audit_event
 from apps.applications.models import ProgramApplication
 from apps.core.pagination import paginate
 from apps.core.permissions import ROLE_SENIOR_STAFF, is_admin, role_required, student_required
@@ -75,6 +77,13 @@ def admin_intake_form_create(request: HttpRequest) -> HttpResponse:
                     close_at=form.cleaned_data.get("close_at"),
                     created_by=request.user,
                 )
+            record_audit_event(
+                actor=request.user,
+                action=ACTION_INTAKE_FORM_CREATED,
+                target_type="intake_form",
+                target_id=str(intake_form.pk),
+                metadata={"title": intake_form.title, "target_type": target_type},
+            )
             messages.success(request, _("Intake form created."))
             return redirect("intake_forms:admin_intake_form_detail", form_id=intake_form.pk)
         for _field, errs in form.errors.items():
@@ -103,7 +112,7 @@ def admin_intake_form_detail(request: HttpRequest, form_id: int) -> HttpResponse
             if field_form.is_valid():
                 opts_raw = field_form.cleaned_data.get("options", "")
                 opts_list = [o.strip() for o in opts_raw.splitlines() if o.strip()]
-                IntakeFormField.objects.create(
+                field = IntakeFormField.objects.create(
                     form=intake_form,
                     label=field_form.cleaned_data["label"],
                     help_text=field_form.cleaned_data.get("help_text", ""),
@@ -111,6 +120,13 @@ def admin_intake_form_detail(request: HttpRequest, form_id: int) -> HttpResponse
                     required=field_form.cleaned_data.get("required", False),
                     options=opts_list,
                     order=field_form.cleaned_data["order"],
+                )
+                record_audit_event(
+                    actor=request.user,
+                    action=ACTION_INTAKE_FORM_FIELD_CREATED,
+                    target_type="intake_form_field",
+                    target_id=str(field.pk),
+                    metadata={"form_id": str(intake_form.pk), "label": field.label, "field_type": field.field_type},
                 )
                 messages.success(request, _("Field added."))
             else:
@@ -121,6 +137,13 @@ def admin_intake_form_detail(request: HttpRequest, form_id: int) -> HttpResponse
         if action == "toggle_active":
             intake_form.is_active = not intake_form.is_active
             intake_form.save(update_fields=["is_active"])
+            record_audit_event(
+                actor=request.user,
+                action=ACTION_INTAKE_FORM_TOGGLED,
+                target_type="intake_form",
+                target_id=str(intake_form.pk),
+                metadata={"is_active": intake_form.is_active},
+            )
             messages.success(request, _("Form active state toggled."))
             return redirect("intake_forms:admin_intake_form_detail", form_id=intake_form.pk)
         if action == "toggle_required":
@@ -159,7 +182,16 @@ def admin_intake_form_field_delete(request: HttpRequest, form_id: int, field_id:
     if not is_admin(request.user):
         raise PermissionDenied
     field = get_object_or_404(IntakeFormField, pk=field_id, form_id=form_id)
+    f_id = field.pk
+    f_label = field.label
     field.delete()
+    record_audit_event(
+        actor=request.user,
+        action=ACTION_INTAKE_FORM_FIELD_DELETED,
+        target_type="intake_form_field",
+        target_id=str(f_id),
+        metadata={"form_id": str(form_id), "label": f_label},
+    )
     messages.success(request, _("Field deleted."))
     return redirect("intake_forms:admin_intake_form_detail", form_id=form_id)
 
@@ -207,8 +239,15 @@ def admin_intake_request_send(request: HttpRequest, application_id: int) -> Http
         raise PermissionDenied
     application = get_object_or_404(ProgramApplication, pk=application_id)
     try:
-        request_intake_form_for_application(
+        intake_request = request_intake_form_for_application(
             application, actor=request.user, send_email=True,
+        )
+        record_audit_event(
+            actor=request.user,
+            action=ACTION_INTAKE_REQUEST_SENT,
+            target_type="intake_form_request",
+            target_id=str(intake_request.pk),
+            metadata={"application_id": str(application.pk)},
         )
         messages.success(request, _("Intake form request sent."))
     except ValueError as exc:
@@ -227,10 +266,6 @@ def fill_intake_form(request: HttpRequest, token: str) -> HttpResponse:
     """Student fills an intake form via expiring token link."""
     profile = _get_profile_or_404(request.user)
     intake_request = get_intake_request_by_token(token)
-    if not intake_request and str(token).isdigit():
-        intake_request = IntakeFormRequest.objects.filter(
-            pk=int(token),
-        ).select_related("program_application__student").first()
     if not intake_request:
         messages.error(request, _("Invalid or expired intake form link."))
         return redirect("students:applications")

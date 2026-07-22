@@ -260,20 +260,34 @@ def preview_upload(upload_id: int) -> PaymentUpload:
 
 @transaction.atomic
 def confirm_upload(upload_id: int, confirmed_by) -> PaymentUpload:
-    upload = PaymentUpload.objects.get(id=upload_id)
+    upload = PaymentUpload.objects.select_for_update().get(id=upload_id)
     if upload.status != UPLOAD_STATUS_PREVIEWED:
         raise ValueError(_("Upload is not in previewed state"))
     if upload.matched_rows == 0:
         raise ValueError(_("No rows matched; nothing to import"))
 
+    rows = list(upload.rows.select_for_update().filter(status=ROW_STATUS_MATCHED))
     errors: list[str] = []
     created = updated = 0
-    for row in upload.rows.filter(status=ROW_STATUS_MATCHED):
+    for row in rows:
+        sid = transaction.savepoint()
         try:
-            existing = PaymentRecord.objects.filter(
-                student=row.matched_student,
-                external_reference=row.external_reference,
-            ).first() if row.external_reference else None
+            # Serialize per student to prevent duplicate creates
+            StudentProfile.objects.filter(pk=row.matched_student_id).select_for_update().exists()
+
+            existing = None
+            if row.external_reference:
+                existing = PaymentRecord.objects.filter(
+                    student=row.matched_student,
+                    external_reference=row.external_reference,
+                ).first()
+            else:
+                existing = PaymentRecord.objects.filter(
+                    student=row.matched_student,
+                    amount=row.amount,
+                    paid_at=row.paid_at,
+                    currency=row.currency,
+                ).first()
             target_type, target_snapshot = _build_target_snapshot(row)
             if existing:
                 existing.amount = row.amount
@@ -317,10 +331,19 @@ def confirm_upload(upload_id: int, confirmed_by) -> PaymentUpload:
                 created += 1
             row.save(update_fields=["status"])
         except Exception as e:
+            transaction.savepoint_rollback(sid)
+            row.status = ROW_STATUS_FAILED
+            row.save(update_fields=["status"])
             errors.append(f"Row {row.row_number}: {e}")
+            continue
+        transaction.savepoint_commit(sid)
 
     if errors:
-        raise ValueError(_("Import failed for {count} row(s)").format(count=len(errors)))
+        upload.failed_rows = len(errors)
+        upload.status = UPLOAD_STATUS_FAILED
+        upload.error_summary = "\n".join(errors)
+    else:
+        upload.status = UPLOAD_STATUS_CONFIRMED
 
     # Attempt activation for application-linked rows
     for row in upload.rows.filter(status__in=[ROW_STATUS_CREATED, ROW_STATUS_UPDATED]):
@@ -332,12 +355,11 @@ def confirm_upload(upload_id: int, confirmed_by) -> PaymentUpload:
 
     upload.created_rows = created
     upload.updated_rows = updated
-    upload.status = UPLOAD_STATUS_CONFIRMED
     upload.completed_at = timezone.now()
     upload.save(
         update_fields=[
-            "created_rows", "updated_rows", "failed_rows",
-            "status", "completed_at",
+            "created_rows", "updated_rows", "failed_rows", "status",
+            "error_summary", "completed_at",
         ]
     )
     return upload
@@ -455,7 +477,7 @@ def mark_enrollment_paid(
 def mark_enrollment_unpaid(student: StudentProfile, enrollment_type: str, enrollment_id: int) -> int:
     """Set all paid PaymentRecords for this enrollment to unpaid. Returns count."""
 
-    filters = {"student": student, "status": PAYMENT_STATUS_PAID}
+    filters = {"student": student, "status": PAYMENT_STATUS_PAID, "deleted_at__isnull": True}
     if enrollment_type == "diploma":
         filters["diploma_enrollment_id"] = enrollment_id
     elif enrollment_type == "course":
