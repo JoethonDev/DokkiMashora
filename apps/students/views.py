@@ -148,7 +148,7 @@ def diploma_course(request: HttpRequest) -> HttpResponse:
     profile = _get_profile_or_404(request.user)
     data = get_dashboard_data(profile, sections=[
         "diploma_enrollments", "course_enrollments", "active_courses", "expired_courses",
-        "assessment_attempts",
+        "assessment_attempts", "open_assessments",
     ])
     return _render_profile(request, "students/profile/diploma_course.html", data)
 

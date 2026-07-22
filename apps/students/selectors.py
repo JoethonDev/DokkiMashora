@@ -35,7 +35,7 @@ from apps.applications.constants import (
     PROGRAM_APP_STATUS_REJECTED,
 )
 from apps.assessments.models import AssessmentAttempt, HomeworkSubmission
-from apps.assessments.services import get_student_attempts
+from apps.assessments.services import get_student_assessments, get_student_attempts
 from apps.certificates.models import GeneratedCertificate
 from apps.communications.email_message import EmailMessage
 from apps.entrance_exams.models import EntranceAttempt
@@ -64,7 +64,7 @@ ALL_SECTIONS = [
     "assessment_attempts", "homework_submissions", "semester_progress",
     "promotion_decisions", "completions", "certificates", "eligibilities", "apply",
     "payments", "notifications", "grade_items",
-    "attendance",
+    "attendance", "open_assessments",
 ]
 
 _SECTION_LOADERS: dict[str, tuple] = {
@@ -88,6 +88,7 @@ _SECTION_LOADERS: dict[str, tuple] = {
     "notifications": ("notifications", lambda p, u: _get_notifications(p)),
     "apply": ("apply", lambda p, u: _apply_eligibility(p)),
     "attendance": ("attendance", lambda p, u: _get_attendance(p)),
+    "open_assessments": ("open_assessments", lambda p, u: _get_open_assessments(u)),
 }
 
 
@@ -122,6 +123,8 @@ def get_dashboard_data(
 
 def _home_context(data: dict) -> dict:
     """Build the student's actionable home from already-loaded sections."""
+    from types import SimpleNamespace
+
     now = timezone.now()
     actions = []
     applications = data.get("applications", [])
@@ -197,6 +200,13 @@ def _home_context(data: dict) -> dict:
             "status_label": application.get_status_display(),
             "title": application.cohort.diploma.title if application.cohort_id and application.cohort.diploma_id else getattr(application.course, "title", _("Program")),
         }
+
+    # Build lookups for open assessments
+    open_assessments = data.get("open_assessments", [])
+    open_by_cohort = {a.cohort_id: a for a in open_assessments if a.cohort_id}
+    open_by_cv = {a.course_version_id: a for a in open_assessments if a.course_version_id}
+    attempted_ids = {att.assessment_id for att in data.get("assessment_attempts", [])}
+
     diploma_cards = []
     for enrollment in data.get("diploma_enrollments", []):
         lectures = list(get_visible_diploma_lectures(data["student"], enrollment))
@@ -206,6 +216,10 @@ def _home_context(data: dict) -> dict:
         ).values_list("lecture_id", flat=True))
         next_lecture = next((lecture for lecture in lectures if lecture.id not in completed_ids), None)
         diploma_attempt = next((attempt for attempt in data.get("assessment_attempts", []) if attempt.status in {"assigned", "in_progress"} and attempt.assessment.cohort_id == enrollment.cohort_id), None)
+        if not diploma_attempt and enrollment.cohort_id in open_by_cohort:
+            a = open_by_cohort[enrollment.cohort_id]
+            if a.id not in attempted_ids:
+                diploma_attempt = SimpleNamespace(assessment=a)
         diploma_cards.append({
             "type": "diploma", "title": enrollment.cohort.diploma.title,
             "status": enrollment.status, "enrollment_id": enrollment.id,
@@ -214,8 +228,18 @@ def _home_context(data: dict) -> dict:
             "next_lecture": next_lecture,
             "next_lecture_url": reverse("academics:student_diploma_lecture_view", args=[enrollment.id, next_lecture.semester_id, next_lecture.id]) if next_lecture else None,
             "next_assessment": diploma_attempt,
-            "next_assessment_url": reverse("assessments:instructions", args=[diploma_attempt.assessment_id]) if diploma_attempt else None,
+            "next_assessment_url": reverse("assessments:instructions", args=[diploma_attempt.assessment.id]) if diploma_attempt else None,
         })
+
+    # Fill in open assessments for active courses that have none yet
+    for card in data.get("active_courses", []):
+        cv = card.get("course_version")
+        if cv and not card.get("next_assessment") and cv.pk in open_by_cv:
+            a = open_by_cv[cv.pk]
+            if a.id not in attempted_ids:
+                card["next_assessment"] = SimpleNamespace(assessment=a)
+                card["next_assessment_url"] = reverse("assessments:instructions", args=[a.id])
+
     return {
         "next_actions": actions,
         "learning_cards": diploma_cards + data.get("active_courses", []) + data.get("expired_courses", []),
@@ -467,6 +491,15 @@ def _get_attendance(student_profile: StudentProfile) -> dict:
         "total": total,
         "attendance_percent": round(attended / total * 100, 2) if total else 0,
     }
+
+
+# ---------------------------------------------------------------------------
+# Open assessments
+# ---------------------------------------------------------------------------
+
+
+def _get_open_assessments(user):
+    return get_student_assessments(user)
 
 
 # ---------------------------------------------------------------------------

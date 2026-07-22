@@ -44,7 +44,8 @@ from apps.academics.models import (
     LectureWatchProgress,
 )
 from apps.assessments.constants import ATTEMPT_STATUS_ASSIGNED, ATTEMPT_STATUS_IN_PROGRESS
-from apps.assessments.models import AssessmentAttempt
+from apps.assessments.models import Assessment, AssessmentAttempt
+from apps.assessments.services import get_student_assessments
 from apps.academics.services import (
     can_access_course,
     can_access_diploma_lecture,
@@ -713,6 +714,7 @@ def _lecture_progress(lectures, progress_rows):
 
 
 def _assessment_due_work(user, *, course_version_id=None, cohort_id=None):
+    from types import SimpleNamespace
     filters = Q(student=user, status__in=[ATTEMPT_STATUS_ASSIGNED, ATTEMPT_STATUS_IN_PROGRESS])
     scope = Q()
     if course_version_id:
@@ -721,11 +723,16 @@ def _assessment_due_work(user, *, course_version_id=None, cohort_id=None):
         scope |= Q(assessment__cohort_id=cohort_id)
     if not scope:
         return []
-    return list(
+    attempts = list(
         AssessmentAttempt.objects.filter(filters & scope, assessment__close_at__gte=timezone.now())
         .select_related("assessment")
         .order_by("assessment__close_at")[:5]
     )
+    attempted_ids = {a.assessment_id for a in attempts}
+    open_assessments = [a for a in get_student_assessments(user) if (course_version_id and a.course_version_id == course_version_id or cohort_id and a.cohort_id == cohort_id) and a.id not in attempted_ids]
+    for a in open_assessments:
+        attempts.append(SimpleNamespace(assessment=a, assessment_id=a.id))
+    return attempts[:5]
 
 
 def _lecture_navigation(lectures, lecture, *, version=None, enrollment=None, semester=None):
@@ -1305,17 +1312,32 @@ def student_diploma_semester_detail(request, enrollment_id, semester_id):
     access = get_student_diploma_access(enrollment)
     if semester.id not in {item.id for item in access["visible_semesters"]}:
         raise PermissionDenied(_("This semester is not available yet."))
+    lectures = list(get_visible_diploma_lectures(profile, enrollment, semester=semester))
+    watch_rows = DiplomaLectureWatchProgress.objects.filter(student=profile, diploma_enrollment=enrollment, lecture__semester=semester)
+    lecture_watch = {row.lecture_id: row for row in watch_rows}
+    for lecture in lectures:
+        lwp = lecture_watch.get(lecture.id)
+        if lecture.youtube_duration_seconds:
+            if lwp and lwp.validated_contiguous_seconds:
+                pct = min(float(lwp.validated_contiguous_seconds) / float(lecture.youtube_duration_seconds) * 100, 100)
+                lecture.watch_pct = round(pct)
+                lecture.watch_status = lwp.status
+            else:
+                lecture.watch_pct = 0
+                lecture.watch_status = "not_started"
+        else:
+            lecture.watch_pct = 0
+            lecture.watch_status = None
     return render(request, "academics/student_diploma_semester_detail.html", {
         "enrollment": enrollment,
         "diploma": enrollment.cohort.diploma,
         "cohort": enrollment.cohort,
         "semester": semester,
-        "lectures": get_visible_diploma_lectures(profile, enrollment, semester=semester),
+        "lectures": lectures,
         "access": access,
-        "progress": _lecture_progress(
-            list(get_visible_diploma_lectures(profile, enrollment, semester=semester)),
-            DiplomaLectureWatchProgress.objects.filter(student=profile, diploma_enrollment=enrollment, lecture__semester=semester),
-        ),
+        "progress": _lecture_progress(lectures, watch_rows),
+        "due_work": _assessment_due_work(request.user, cohort_id=enrollment.cohort_id),
+        "video_tracking_enabled": enrollment.cohort.diploma.video_tracking_enabled,
     })
 
 
