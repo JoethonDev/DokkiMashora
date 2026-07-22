@@ -1,8 +1,0 @@
-{% load i18n %}
-<dd id="exam-status" class="font-semibold">
-  {% if exam.is_active %}
-    {% include "partials/_badge.html" with label=_("Yes") tone="success" %}
-  {% else %}
-    {% include "partials/_badge.html" with label=_("No") tone="danger" %}
-  {% endif %}
-</dd>

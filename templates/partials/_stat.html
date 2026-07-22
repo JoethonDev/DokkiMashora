@@ -1,6 +1,0 @@
-{% load i18n %}
-<div class="dm-card rounded-xl p-5 {{ hover|default:"" }}">
-  <p class="text-sm dm-muted">{{ label }}</p>
-  <p class="mt-1 text-3xl font-bold tabular-nums tracking-tight font-display dm-text">{{ value|default:"0" }}</p>
-  {% if sub %}<p class="mt-1 text-xs dm-muted">{{ sub }}</p>{% endif %}
-</div>

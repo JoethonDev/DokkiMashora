@@ -1,7 +1,0 @@
-{% load i18n %}
-<div class="text-center py-8 dm-panel rounded-xl px-6">
-  {% if icon %}<div class="mb-3 dm-muted">{{ icon|safe }}</div>{% endif %}
-  <p class="text-base font-semibold dm-text">{{ title }}</p>
-  {% if subtitle %}<p class="mt-1 text-sm dm-muted">{{ subtitle }}</p>{% endif %}
-  {% if cta_href %}<div class="mt-4">{% include "partials/_button.html" with href=cta_href label=cta_label variant="primary" size="sm" %}</div>{% endif %}
-</div>
