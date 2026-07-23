@@ -1,0 +1,40 @@
+{% extends "ui/layouts/student.html" %}
+{% load i18n %}
+{% block title %}
+  {% trans "Assessment results" %}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view"><section class="page-intro"><div>
+        <p class="eyebrow">{% trans "Assessment" %}</p>
+        <h2>{% trans "Assessment results" %}</h2>
+      </div>
+    </section>
+    <section class="surface">{% if attempts %}
+        <div class="table-shell"><table>
+            <thead>
+              <tr>
+                <th>{% trans "Assessment" %}</th>
+                <th>{% trans "Score" %}</th>
+                <th>{% trans "Status" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for attempt in attempts %}
+                <tr>
+                  <td>{{ attempt.assessment }}</td>
+                  <td>{{ attempt.score|default:'—' }}</td>
+                  <td>
+                    <span class="status-pill blue">{{ attempt.get_status_display }}</span>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="empty-state"><h3>{% trans "No results available" %}</h3>
+        </div>
+      {% endif %}
+    </section>
+  </div>
+{% endblock %}

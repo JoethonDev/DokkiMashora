@@ -1,0 +1,14 @@
+{% load i18n %}
+<div id="{{ loader_id }}" class="field-options"><label for="program-option">{{ placeholder }}</label>
+  <select id="program-option" name="program_target"><option value="">{{ placeholder }}</option>
+    {% for value, label in options %}
+      <option value="{{ value }}">{{ label }}</option>
+    {% endfor %}
+  </select>
+  {% if has_more %}
+    <button type="button"
+            hx-get="{{ load_url }}"
+            hx-target="#{{ loader_id }}"
+            hx-swap="outerHTML">{% trans "Load more" %}</button>
+  {% endif %}
+</div>

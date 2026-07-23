@@ -43,6 +43,6 @@ class PaymentRecordEditForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        input_class = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+        input_class = ""
         for field in self.fields.values():
             field.widget.attrs["class"] = input_class

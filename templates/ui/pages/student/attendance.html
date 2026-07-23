@@ -1,0 +1,30 @@
+{% extends "ui/layouts/student.html" %}
+{% load i18n %}
+{% block title %}
+  {% trans "My attendance" %}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view"><section class="page-intro"><div>
+        <p class="eyebrow">{% trans "Learning" %}</p>
+        <h2>{% trans "My attendance" %}</h2>
+      </div>
+    </section>
+    <section class="program-grid">{% for summary in summaries %}
+        <article class="surface"><h3>{{ summary.course_title|default:summary.semester }}</h3>
+          <p class="metric-card"><strong>
+              {{ summary.attendance_percent }}
+            %</strong>
+          </p>
+          <p>
+            {{ summary.total_attended }}
+            /
+            {{ summary.total_sessions }}
+          </p>
+        </article>
+      {% empty %}
+        <div class="empty-state"><h3>{% trans "No attendance records" %}</h3>
+        </div>
+      {% endfor %}
+    </section>
+  </div>
+{% endblock %}

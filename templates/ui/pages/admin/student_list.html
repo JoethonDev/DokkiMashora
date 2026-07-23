@@ -1,0 +1,44 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n %}
+{% block title %}
+  {% trans "Students" %}
+{% endblock %}
+{% block page_title %}
+  {% trans "Students" %}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% trans "Accounts" as eyebrow %}
+    {% trans "Students" as title %}
+    {% trans "Search, filter, and manage student records." as description %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
+    <section class="surface"><form class="filter-toolbar"
+            method="get"
+            hx-get="{% url 'accounts:admin_student_list' %}"
+            hx-trigger="input changed delay:250ms from:#student-search, change from:select, submit"
+            hx-target="#student-results"
+            hx-swap="outerHTML"
+            hx-push-url="true"
+            hx-sync="this:replace"><label class="search-input"><span>&#8981;</span><input id="student-search"
+       name="q"
+       value="{{ search_value }}"
+       type="search"
+       placeholder="{% trans 'Name, email, phone, or national ID' %}"></label>
+        <label class="select-field"><span>{% trans "Status" %}</span>
+          <select id="student-status" name="status"><option value="">{% trans "All statuses" %}</option>
+            {% for option in filters.0.options %}
+              <option value="{{ option.value }}"
+                      {% if option.selected %} selected {% endif %}>{{ option.label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <button class="button button-info filter-button" type="submit">{% trans "Filter" %}</button>
+        <a class="button button-ghost"
+           href="{% url 'accounts:admin_student_list' %}">{% trans "Reset" %}</a>
+      </form>
+      {% include "ui/fragments/admin/_student_table.html" %}
+    </section>
+    <div class="inline-actions"><a class="button button-primary"
+         href="{% url 'accounts:admin_student_create' %}">{% trans "Create student" %}</a>
+    </div>
+  </div>
+{% endblock %}

@@ -24,7 +24,7 @@ class EntranceExamForm(forms.ModelForm):
         widgets = {
             "open_at": forms.DateTimeInput(attrs={"type": "datetime-local"}),
             "close_at": forms.DateTimeInput(attrs={"type": "datetime-local"}),
-            "cohort": forms.Select(attrs={"class": "dm-input w-full rounded-lg px-3 py-2 text-sm shadow-sm"}),
+            "cohort": forms.Select(attrs={"class": ""}),
         }
 
     def __init__(self, *args, **kwargs):

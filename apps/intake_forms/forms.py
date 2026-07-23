@@ -26,12 +26,12 @@ class IntakeFormBuildForm(forms.Form):
     course_version = forms.ModelChoiceField(
         queryset=CourseVersion.objects.filter(is_active=True).select_related("course"),
         required=False, label=_("Course version"),
-        widget=forms.Select(attrs={"class": "mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm dark:text-slate-100"}),
+        widget=forms.Select(attrs={"class": ""}),
     )
     cohort = forms.ModelChoiceField(
         queryset=Cohort.objects.filter(is_active=True).select_related("diploma"),
         required=False, label=_("Diploma cohort"),
-        widget=forms.Select(attrs={"class": "mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm dark:text-slate-100"}),
+        widget=forms.Select(attrs={"class": ""}),
     )
     is_required = forms.BooleanField(required=False, label=_("Required"))
     is_active = forms.BooleanField(required=False, label=_("Active"))
@@ -46,7 +46,7 @@ class IntakeFormBuildForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        select_class = "mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm dark:text-slate-100"
+        select_class = ""
         self.fields["course_version"].widget.attrs["class"] = select_class
         self.fields["cohort"].widget.attrs["class"] = select_class
 

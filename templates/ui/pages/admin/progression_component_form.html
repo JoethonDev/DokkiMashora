@@ -1,0 +1,57 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n ui_tags %}
+{% block title %}
+  {{ title|default:_("Progression") }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% trans "Academic operations" as eyebrow %}
+    {% trans "Progression" as title %}
+    {% trans "Review semester progress, decisions, evaluations, interviews, and rejoin plans." as description %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
+    <form class="surface form-main" method="post">{% csrf_token %}
+      <label>
+        {% trans "Name" %}
+        <input name="name" value="{{ component.name|default:'' }}" required>
+      </label>
+      <label>
+        {% trans "Type" %}
+        <select name="component_type" required>
+          {% for value,label in component_type_choices %}
+            <option value="{{ value }}"
+                    {% if component.component_type == value %} selected {% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>
+        {% trans "Weight percent" %}
+        <input name="weight_percent"
+               value="{{ component.weight_percent|default:'' }}"
+               required>
+      </label>
+      <label>
+        {% trans "Required minimum percent" %}
+        <input name="required_min_percent"
+               value="{{ component.required_min_percent|default:0 }}"></label>
+      <label>
+        {% trans "Order" %}
+        <input name="order" value="{{ component.order|default:'' }}" required>
+      </label>
+      <div class="grid grid-2"><label>
+          <input type="checkbox"
+                 name="required_to_pass"
+                 value="1"
+                 {% if component.required_to_pass %} checked {% endif %}>
+          {% trans "Required to pass" %}
+        </label>
+        <label>
+          <input type="checkbox"
+                 name="active"
+                 value="1"
+                 {% if component.active or not component %} checked {% endif %}>
+          {% trans "Active" %}
+        </label>
+      </div>
+      <button class="button button-primary" type="submit">{% trans "Save component" %}</button>
+    </form>
+  </div>
+{% endblock %}

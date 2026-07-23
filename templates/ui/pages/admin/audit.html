@@ -1,0 +1,153 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n ui_tags %}
+{% block title %}
+  {{ title|default:_("Audit") }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% trans "Compliance" as eyebrow %}
+    {% trans "Audit" as title %}
+    {% trans "Trace business actions and system changes." as description %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
+    {% if event %}
+      <section class="surface"><dl class="description-list"><div>
+            <dt>{% trans "Event type" %}</dt>
+            <dd>
+              {{ event.get_action_display|default:event.action }}
+            </dd>
+          </div>
+          <div>
+            <dt>{% trans "Target" %}</dt>
+            <dd>
+              {% if event.target_type %}
+                {{ event.target_type }}
+                #
+                {{ event.target_id }}
+              {% else %}
+                —
+              {% endif %}
+            </dd>
+          </div>
+          <div>
+            <dt>{% trans "Actor" %}</dt>
+            <dd>
+              {{ event.actor|default:_("System") }}
+            </dd>
+          </div>
+          <div>
+            <dt>{% trans "IP address" %}</dt>
+            <dd>
+              {{ event.ip_address|default:'—' }}
+            </dd>
+          </div>
+          <div>
+            <dt>{% trans "Time" %}</dt>
+            <dd>
+              {{ event.created_at|date:"SHORT_DATETIME_FORMAT" }}
+            </dd>
+          </div>
+          <div>
+            <dt>{% trans "Details" %}</dt>
+            <dd>
+              {% if event.metadata %}
+                <ul>
+                  {% for key, value in event.metadata.items|slice:":5" %}
+                    <li>
+                      <strong>{{ key }}</strong>:
+                      {{ value|stringformat:'s'|escape|truncatewords:20 }}
+                    </li>
+                  {% endfor %}
+                </ul>
+              {% else %}
+                —
+              {% endif %}
+            </dd>
+          </div>
+        </dl>
+      </section>
+    {% elif page_obj %}
+      <section class="surface"><form class="filter-toolbar" method="get"><label class="select-field"><span>{% trans "Action" %}</span>
+            <select name="action"><option value="">{% trans "All actions" %}</option>
+              {% for value,label in action_choices %}
+                <option value="{{ value }}"
+                        {% if value == current_action %} selected {% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="select-field"><span>{% trans "Actor" %}</span>
+            <input name="actor"
+                   value="{{ current_actor|default:'' }}"
+                   placeholder="{% trans 'Actor name' %}"></label>
+          <label class="select-field"><span>{% trans "Target type" %}</span>
+            <select name="target_type"><option value="">{% trans "All types" %}</option>
+              {% for value,label in target_type_choices %}
+                <option value="{{ value }}"
+                        {% if value == current_target_type %} selected {% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="select-field"><span>{% trans "Date from" %}</span>
+            <input name="date_from"
+                   value="{{ current_date_from|default:'' }}"
+                   type="date"></label>
+          <label class="select-field"><span>{% trans "Date to" %}</span>
+            <input name="date_to" value="{{ current_date_to|default:'' }}" type="date"></label>
+          <button class="button button-info" type="submit">{% trans "Filter" %}</button>
+          <a class="button button-ghost" href="{% url 'audit:list' %}">{% trans "Reset" %}</a>
+        </form>
+        <div class="table-shell"><table>
+            <thead>
+              <tr>
+                <th>{% trans "Event" %}</th>
+                <th>{% trans "Target" %}</th>
+                <th>{% trans "Actor" %}</th>
+                <th>{% trans "IP address" %}</th>
+                <th>{% trans "Time" %}</th>
+                <th>{% trans "Details" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in page_obj %}
+                <tr>
+                  <td>{{ item.get_action_display|default:item.action }}</td>
+                  <td>
+                    {% if item.target_type %}
+                      {{ item.target_type }}
+                      #
+                      {{ item.target_id }}
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+                  <td>{{ item.actor|default:_("System") }}</td>
+                  <td>{{ item.ip_address|default:'—' }}</td>
+                  <td>{{ item.created_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</td>
+                  <td>
+                    {% if item.metadata %}
+                      {% for key, value in item.metadata.items|slice:":3" %}
+                        <small><strong>
+                          {{ key }}
+                        :</strong>
+                        {{ value|stringformat:'s'|escape|truncatewords:8 }}
+                        </small>
+                      {% endfor %}
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="6"><div class="empty-state"><span>&#9679;</span>
+                      <h3>{% trans "No audit events found." %}</h3>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% include "ui/components/_pagination.html" %}
+      </section>
+    {% endif %}
+  </div>
+{% endblock %}

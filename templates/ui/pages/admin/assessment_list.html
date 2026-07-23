@@ -1,0 +1,44 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n %}
+{% block title %}
+  {% trans "Assessments" %}
+{% endblock %}
+{% block page_title %}
+  {% trans "Assessments" %}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% trans "Learning" as eyebrow %}
+    {% trans "Assessments" as title %}
+    {% trans "Create, manage, and review exams, quizzes, and homework." as description %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
+    <section class="surface"><form class="filter-toolbar"
+      method="get"
+      hx-get="{% url 'assessments:admin_list' %}"
+      hx-trigger="input changed delay:250ms from:#assessment-search, change from:select, submit"
+      hx-target="#assessment-results"
+      hx-swap="outerHTML"
+      hx-push-url="true"
+      hx-sync="this:replace"><label class="search-input"><span>&#8981;</span>
+      <input id="assessment-search"
+             name="q"
+             value="{{ search_value }}"
+             type="search"
+             placeholder="{% trans 'Search assessments…' %}"></label>
+    {% for filter in filters %}
+      <label class="select-field"><span>{{ filter.label }}</span>
+        <select id="filter-{{ filter.name }}"
+                name="{{ filter.name }}"><option value="">{% trans "All" %}</option>
+          {% for option in filter.options %}
+            <option value="{{ option.value }}"
+                    {% if option.selected %} selected {% endif %}>{{ option.label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    {% endfor %}
+    <button class="button button-info filter-button" type="submit">{% trans "Filter" %}</button>
+    <a class="button button-ghost" href="{% url 'assessments:admin_list' %}">{% trans "Reset" %}</a>
+  </form>
+  {% include "ui/fragments/admin/_assessment_table.html" %}
+  </section>
+  </div>
+{% endblock %}

@@ -12,7 +12,7 @@ class CertificateTemplateForm(forms.ModelForm):
             "body_html", "active", "is_placeholder",
         ]
         widgets = {
-            "body_html": forms.Textarea(attrs={"rows": 10, "class": "font-mono text-sm"}),
+            "body_html": forms.Textarea(attrs={"rows": 10, "class": ""}),
         }
         help_texts = {
             "body_html": _(

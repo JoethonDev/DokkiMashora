@@ -103,7 +103,7 @@ class EmailLoginView(LoginView):
     """Login view that authenticates by email."""
 
     authentication_form = EmailAuthenticationForm
-    template_name = "accounts/login.html"
+    template_name = "ui/pages/public/login.html"
     redirect_authenticated_user = True
     next_page = reverse_lazy("accounts:post_login")
 
@@ -130,7 +130,7 @@ def profile(request: HttpRequest) -> HttpResponse:
             return redirect("accounts:profile")
     else:
         form = ProfileForm(instance=request.user)
-    return render(request, "accounts/profile.html", {"form": form})
+    return render(request, "ui/pages/shared/profile.html", {"form": form})
 
 
 @login_required
@@ -145,39 +145,49 @@ def admin_dashboard(request: HttpRequest) -> HttpResponse:
     context = _admin_dashboard_data()
     context["user_role"] = request.user.primary_role or _("Super Admin")
     context["show_role_label"] = True
-    return render(request, "accounts/dashboards/admin.html", context)
+    context["dashboard_kind"] = "admin"
+    return render(request, "ui/pages/admin/dashboard.html", context)
 
 
 @login_required
 @role_required(*ROLE_SENIOR_STAFF)
 def admin_settings(request: HttpRequest) -> HttpResponse:
     context = _admin_settings_data()
-    return render(request, "accounts/admin_settings.html", context)
+    return render(request, "ui/pages/admin/settings.html", context)
 
 
 @login_required
 @role_required(GROUP_MODERATOR)
 def moderator_dashboard(request: HttpRequest) -> HttpResponse:
     context = _dashboard_context(request.user)
-    return render(request, "accounts/dashboards/moderator.html", context)
+    context["dashboard_kind"] = "moderator"
+    return render(request, "ui/pages/admin/dashboard.html", context)
 
 
 @login_required
 @role_required(GROUP_TEACHER)
 def teacher_dashboard(request: HttpRequest) -> HttpResponse:
-    return render(request, "accounts/dashboards/teacher.html", _dashboard_context(request.user))
+    ctx = _dashboard_context(request.user)
+    ctx["dashboard_kind"] = "teacher"
+    return render(request, "ui/pages/admin/dashboard.html", ctx)
 
 
 @login_required
 @role_required(*ROLE_ATTENDANCE_STAFF)
 def secretary_dashboard(request: HttpRequest) -> HttpResponse:
     now = timezone.now()
+    today = now.date()
     sessions = AttendanceSession.objects.filter(
-        date__gte=now.date(),
+        date__gte=today,
     ).select_related("cohort", "course_version").order_by("date", "open_at")[:5]
-    return render(request, "accounts/dashboards/secretary.html", {
+    attendance_exception_count = AttendanceSession.objects.filter(
+        status="scheduled", date__lt=today,
+    ).count()
+    return render(request, "ui/pages/admin/dashboard.html", {
+        "dashboard_kind": "secretary",
         "upcoming_sessions": sessions,
-        "session_count": AttendanceSession.objects.filter(date=now.date()).count(),
+        "session_count": AttendanceSession.objects.filter(date=today).count(),
+        "attendance_exception_count": attendance_exception_count,
         "user_role": request.user.primary_role,
         "show_role_label": True,
     })
@@ -226,7 +236,7 @@ def _admin_settings_data() -> dict:
             "last_review_decision": last_review["decision"] if last_review else None,
         },
         "site_config": {
-            "site_name": "DokkiMashora LMS", "site_name_ar": "Ø¯ÙƒÙ‰ Ù…Ø´ÙˆØ±Ø©",
+            "site_name": django_settings.SITE_NAME, "site_name_ar": django_settings.SITE_NAME_AR,
             "timezone": django_settings.TIME_ZONE, "language_code": "ar",
             "languages": dict(django_settings.LANGUAGES),
             "default_from_email": django_settings.DEFAULT_FROM_EMAIL,
@@ -247,8 +257,7 @@ def _admin_dashboard_data() -> dict:
 
     Designed to run in a bounded number of queries — no per-row loops.
     """
-    now = timezone.now()
-    today = now.date()
+    today = timezone.now().date()
 
     # Batch counts into a few aggregation queries instead of many .count() calls.
 
@@ -259,21 +268,7 @@ def _admin_dashboard_data() -> dict:
         .values_list("status", "cnt")
     )
 
-    # 3) Single query: EntranceAttempt statuses
-    entrance_status_counts = dict(
-        EntranceAttempt.objects.values_list("status")
-        .annotate(cnt=Count("id"))
-        .values_list("status", "cnt")
-    )
-
-    # 4) Single query: PaymentRecord statuses
-    payment_status_counts = dict(
-        PaymentRecord.objects.values_list("status")
-        .annotate(cnt=Count("id"))
-        .values_list("status", "cnt")
-    )
-
-    # 5) Single query: PaymentUploadRow unmatched count
+    # 3) Single query: PaymentUploadRow unmatched count
     unmatched_upload_count = PaymentUpload.objects.filter(
         rows__status=ROW_STATUS_UNMATCHED
     ).distinct().count()
@@ -285,84 +280,32 @@ def _admin_dashboard_data() -> dict:
     ).count()
     failed_email_count = ProgramApplicationEmailLog.objects.filter(status="failed").count()
 
-    # 6) Single query: pending uploads (limit 5)
-    pending_uploads = list(
-        PaymentUpload.objects.filter(
-            status__in=[UPLOAD_STATUS_PENDING, UPLOAD_STATUS_PREVIEWED]
-        ).order_by("-created_at")[:5]
-    )
-
-    # 7) Single query: AssessmentAttempt in submitted/under_review
+    # 4) Single query: AssessmentAttempt in submitted/under_review
     assessment_ungraded = AssessmentAttempt.objects.filter(
         status__in=[ATTEMPT_STATUS_SUBMITTED, ATTEMPT_STATUS_UNDER_REVIEW]
     ).count()
 
-    # 8) Single query: Cohorts starting soon + counts + select_related
-    cohorts_starting_soon = list(
-        Cohort.objects.filter(is_active=True, start_date__gte=today)
-        .select_related("diploma")
-        .annotate(application_count=Count("program_applications"))
-        .order_by("start_date")[:5]
-    )
-
-    # 9) Single query: active diplomas count
-    active_diploma_count = Diploma.objects.filter(is_active=True).count()
-
-    # 10) Single query: courses + unpublished lectures + course counts
-    course_stats = Course.objects.aggregate(
-        course_count=Count("id", filter=Q(is_active=True)),
-    )
+    # 5) Single query: unpublished lectures count
     unpublished_lecture_count = Lecture.objects.filter(is_published=False).count()
 
-    # 11) Single query: recent audit
-    recent_audit = list(
-        AuditEvent.objects.select_related("actor")
-        .order_by("-created_at")[:10]
-    )
-
-    # 12) Single query: recent program applications
+    # 6) Single query: recent program applications
     recent_applications = list(
         ProgramApplication.objects.select_related("student__user", "cohort__diploma", "course")
         .order_by("-created_at")[:10]
     )
 
-    # 13) Single query: recent payments
-    recent_payments = list(
-        PaymentRecord.objects.select_related("student")
-        .order_by("-created_at")[:10]
-    )
-
-    # Combined grade count from entrance attempts (already fetched in #3)
-    entrance_ungraded = entrance_status_counts.get("completed", 0)
-
     return {
         "prog_submitted_count": prog_app_status_counts.get(PROGRAM_APP_STATUS_SUBMITTED, 0),
         "prog_under_review_count": prog_app_status_counts.get(PROGRAM_APP_STATUS_UNDER_REVIEW, 0),
-        "prog_invited_count": prog_app_status_counts.get(PROGRAM_APP_STATUS_INVITED, 0),
         "prog_accepted_count": prog_app_status_counts.get(PROGRAM_APP_STATUS_ACCEPTED, 0),
-        "prog_rejected_count": prog_app_status_counts.get(PROGRAM_APP_STATUS_REJECTED, 0),
         "prog_activated_count": prog_app_status_counts.get(PROGRAM_APP_STATUS_ACTIVATED, 0),
-        "entrance_assigned_count": entrance_status_counts.get("assigned", 0),
-        "entrance_in_progress_count": entrance_status_counts.get("in_progress", 0),
-        "entrance_completed_count": entrance_status_counts.get("completed", 0),
-        "entrance_graded_count": entrance_status_counts.get("graded", 0),
-        "paid_count": payment_status_counts.get(PAYMENT_STATUS_PAID, 0),
-        "unpaid_count": payment_status_counts.get(PAYMENT_STATUS_UNPAID, 0),
         "unmatched_upload_count": unmatched_upload_count,
         "attendance_exception_count": attendance_exception_count,
         "progression_exception_count": progression_exception_count,
         "failed_email_count": failed_email_count,
-        "pending_uploads": pending_uploads,
-        "active_diploma_count": active_diploma_count,
-        "course_count": course_stats.get("course_count", 0),
         "unpublished_lecture_count": unpublished_lecture_count,
-        "cohorts_starting_soon": cohorts_starting_soon,
         "assessment_ungraded": assessment_ungraded,
-        "entrance_ungraded": entrance_ungraded,
-        "recent_audit": recent_audit,
         "recent_applications": recent_applications,
-        "recent_payments": recent_payments,
-        "now": now,
     }
 
 
@@ -387,6 +330,8 @@ def admin_student_list(request):
         users = users.filter(
             Q(full_name__icontains=q) | Q(email__icontains=q) | Q(phone__icontains=q) | Q(national_id__icontains=q)
         )
+
+    users = users.order_by("-date_joined", "full_name")
 
     paginator = Paginator(users, 15)
     page_number = request.GET.get("page", 1)
@@ -415,8 +360,8 @@ def admin_student_list(request):
     }
 
     if is_htmx(request):
-        return render(request, "accounts/partials/_user_list_table.html", ctx)
-    return render(request, "accounts/admin_user_list.html", ctx)
+        return render(request, "ui/fragments/admin/_student_table.html", ctx)
+    return render(request, "ui/pages/admin/student_list.html", ctx)
 
 
 @login_required
@@ -445,7 +390,9 @@ def admin_user_create(request, user_type):
             )
             messages.success(request, _("User created."))
             return redirect("accounts:admin_student_list" if user_type == "students" else "accounts:admin_staff_list")
-    return render(request, "accounts/admin_user_form.html", {"form": form, "creating": True, "user_type": user_type})
+    template = "ui/pages/admin/student_form.html" if user_type == "students" else "ui/pages/admin/staff_form.html"
+    page_title = _("Create staff member") if user_type == "staff" else _("Create student")
+    return render(request, template, {"form": form, "creating": True, "user_type": user_type, "title": page_title})
 
 
 @login_required
@@ -464,6 +411,8 @@ def admin_staff_list(request):
         users = users.filter(status=status_filter)
     if q:
         users = users.filter(Q(full_name__icontains=q) | Q(email__icontains=q) | Q(phone__icontains=q) | Q(national_id__icontains=q))
+
+    users = users.order_by("full_name")
 
     paginator = Paginator(users, 15)
     page_number = request.GET.get("page", 1)
@@ -497,8 +446,8 @@ def admin_staff_list(request):
     }
 
     if is_htmx(request):
-        return render(request, "accounts/partials/_user_list_table.html", ctx)
-    return render(request, "accounts/admin_user_list.html", ctx)
+        return render(request, "ui/fragments/admin/_staff_table.html", ctx)
+    return render(request, "ui/pages/admin/staff_list.html", ctx)
 
 
 @login_required
@@ -573,7 +522,7 @@ def admin_user_detail(request, user_id):
         })
     return render(
         request,
-        "accounts/admin_user_detail.html",
+        "ui/pages/admin/student_detail.html",
         context,
     )
 
@@ -607,7 +556,9 @@ def admin_user_edit(request, user_id):
             return redirect(next_url) if next_url else redirect("accounts:admin_user_detail", user_id=user_obj.id)
     else:
         form = UserEditForm(instance=user_obj, staff_only=profile is None)
-    return render(request, "accounts/admin_user_form.html", {"form": form, "user_obj": user_obj, "next": next_url})
+    template = "ui/pages/admin/student_form.html" if profile else "ui/pages/admin/staff_form.html"
+    page_title = _("Edit student") if profile else _("Edit staff member")
+    return render(request, template, {"form": form, "user_obj": user_obj, "next": next_url, "title": page_title})
 
 
 @login_required
@@ -660,14 +611,14 @@ def admin_student_import(request):
                 messages.error(request, str(e))
             except Exception as e:
                 messages.error(request, _("Failed to process file: %(error)s") % {"error": str(e)})
-    return render(request, "accounts/admin_import_form.html", {"form": form})
+        return render(request, "ui/pages/admin/import.html", {"form": form})
 
 
 @login_required
 @role_required(*ROLE_SENIOR_STAFF)
 def admin_student_import_detail(request, upload_id):
     upload = get_object_or_404(UserUpload.objects.prefetch_related("rows__matched_user"), id=upload_id)
-    return render(request, "accounts/admin_import_detail.html", {"upload": upload})
+    return render(request, "ui/pages/admin/import.html", {"upload": upload})
 
 
 @login_required
@@ -712,6 +663,7 @@ def admin_staff_assignments(request, user_id):
 
     cohorts = Cohort.objects.all()
     course_versions = CourseVersion.objects.select_related("course").all()
+    clusters = StudentCluster.objects.select_related("cohort").all()
 
     ctx = {
         "staff_user": staff_user,
@@ -721,6 +673,7 @@ def admin_staff_assignments(request, user_id):
         "moderator_assignments": moderator_assignments,
         "cohorts": cohorts,
         "course_versions": course_versions,
+        "clusters": clusters,
         "SCOPE_COURSE_VERSION": SCOPE_COURSE_VERSION,
         "SCOPE_DIPLOMA_COHORT": SCOPE_DIPLOMA_COHORT,
         "GROUP_ADMIN": GROUP_ADMIN,
@@ -728,7 +681,7 @@ def admin_staff_assignments(request, user_id):
         "GROUP_MODERATOR": GROUP_MODERATOR,
         "GROUP_TEACHER": GROUP_TEACHER,
     }
-    return render(request, "accounts/admin_staff_assignments.html", ctx)
+    return render(request, "ui/pages/admin/staff_assignments.html", ctx)
 
 
 @login_required
@@ -863,7 +816,7 @@ def admin_student_cluster_create(request, cohort_id):
         metadata={"cohort_id": str(cohort.id), "name": name},
     )
     messages.success(request, _("Cluster created."))
-    return redirect(request.META.get("HTTP_REFERER") or reverse("academics:admin_diploma_detail", kwargs={"diploma_id": cohort.diploma_id}))
+    return redirect(reverse("academics:admin_diploma_detail", kwargs={"diploma_id": cohort.diploma_id}))
 
 
 @login_required
@@ -874,7 +827,7 @@ def admin_student_cluster_membership_add(request, cluster_id):
     student_ids = request.POST.getlist("students")
     if not student_ids:
         messages.error(request, _("Select at least one student."))
-        return redirect(request.META.get("HTTP_REFERER") or reverse("academics:admin_diploma_detail", kwargs={"diploma_id": cluster.cohort.diploma_id}))
+        return redirect(reverse("academics:admin_diploma_detail", kwargs={"diploma_id": cluster.cohort.diploma_id}))
     added = 0
     for sid in student_ids:
         profile = get_object_or_404(StudentProfile, id=sid)
@@ -892,7 +845,7 @@ def admin_student_cluster_membership_add(request, cluster_id):
     )
     messages.success(request, _("%(count)d student(s) added to cluster.") % {"count": added})
     if is_htmx(request):
-        return render(request, "accounts/_cluster_members.html", {"cluster": cluster})
+        return render(request, "ui/fragments/admin/_cluster_members.html", {"cluster": cluster})
     return redirect("academics:admin_diploma_detail", diploma_id=cluster.cohort.diploma_id)
 
 
@@ -911,7 +864,7 @@ def admin_student_cluster_membership_remove(request, cluster_id, membership_id):
     )
     messages.success(request, _("Student removed from cluster."))
     if is_htmx(request):
-        return render(request, "accounts/_cluster_members.html", {"cluster": membership.cluster})
+        return render(request, "ui/fragments/admin/_cluster_members.html", {"cluster": membership.cluster})
     return redirect("academics:admin_diploma_detail", diploma_id=membership.cluster.cohort.diploma_id)
 
 
@@ -966,4 +919,4 @@ def resend_activation_email(request):
             send_activation_email(user)
         messages.success(request, _("If an inactive account exists, a new activation email was sent."))
         return redirect("accounts:login")
-    return render(request, "accounts/resend_activation.html")
+    return render(request, "ui/pages/public/resend_activation.html")

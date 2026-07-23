@@ -1,0 +1,50 @@
+{% load i18n %}
+{% if not q %}
+  <div class="search-hint"><p>{% trans "Search screens and records" %}</p>
+    {% if navigation %}
+      <div class="search-group"><div class="search-group-label">{% trans "Navigation" %}</div>
+        {% for item in navigation %}
+          <a class="search-result-item" href="{{ item.url }}"><span class="search-result-icon">{{ item.icon|safe }}</span>
+            <span class="search-result-text"><strong>{{ item.label }}</strong>
+              <small>{{ item.section }}</small>
+            </span>
+          </a>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+{% elif search_error %}
+  <div class="search-error" role="alert"><p>{% trans "Something went wrong. Please try again." %}</p>
+    <button type="button"
+            class="button button-soft"
+            id="search-retry-btn">{% trans "Retry" %}
+    </button>
+  </div>
+{% elif no_results %}
+  <div class="search-empty"><p>
+      {% trans "No results for" %}
+      "
+      {{ q }}
+      "
+    </p>
+    <small>{% trans "Try a name, email, program, or screen name." %}</small>
+  </div>
+{% else %}
+  {% for group in results %}
+    <div class="search-group"><div class="search-group-label">{{ group.label }}
+        <span class="search-count">{{ group.items|length }}</span>
+      </div>
+      {% for item in group.items %}
+        <a class="search-result-item" href="{{ item.url }}">{% if group.name == "navigation" %}
+            <span class="search-result-icon">{{ item.icon|safe }}</span>
+          {% endif %}
+          <span class="search-result-text"><strong>{{ item.label }}</strong>
+            {% if item.subtitle %}
+              <small>{{ item.subtitle }}</small>
+            {% endif %}
+          </span>
+        </a>
+      {% endfor %}
+    </div>
+  {% endfor %}
+{% endif %}

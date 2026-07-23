@@ -1,0 +1,66 @@
+{% load i18n ui_tags %}
+<section id="enrollment-results-boundary"
+         class="table-section"
+         aria-live="polite"><div class="section-header"><div>
+      <p class="eyebrow">{% trans "Enrollments" %}</p>
+      <h3>
+        {{ page_obj.paginator.count }}
+        {% trans "enrollments" %}
+      </h3>
+    </div>
+    {% include "ui/components/_pagination.html" %}
+  </div>
+  {% if page_obj.object_list %}
+    <div class="table-shell"><table>
+        <thead>
+          <tr>
+            <th>{% trans "Student" %}</th>
+            <th>{% trans "Program" %}</th>
+            <th>{% trans "Status" %}</th>
+            <th>{% trans "Activated" %}</th>
+            <th>{% trans "Enrolled" %}</th>
+            <th>{% trans "Actions" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in page_obj %}
+            <tr>
+              <td>
+                <div class="student-cell"><span class="avatar avatar-sm">{{ e.student.full_name|slice:":2"|upper }}</span>
+                  <span class="cell-stack"><strong>{{ e.student.full_name }}</strong>
+                    <small>{{ e.student.user.email }}</small></span>
+                </div>
+              </td>
+              <td>
+                {% if enrollment_type == "course" %}
+                  {{ e.course_version }}
+                {% else %}
+                  {{ e.cohort }}
+                {% endif %}
+              </td>
+              <td>{% include "ui/components/_status.html" with code=e.status label=e.get_status_display %}</td>
+              <td>{{ e.activated_at|date:"DATE_FORMAT"|default:'—' }}</td>
+              <td>{{ e.created_at|date:"DATE_FORMAT"|default:'—' }}</td>
+              <td>
+                {% if enrollment_type == "course" %}
+                  <a class="button button-info"
+                     href="{% url 'academics:admin_course_enrollment_list' course.id %}?q={{ e.student.full_name|urlencode }}">{% trans "View" %}
+                  </a>
+                {% else %}
+                  <a class="button button-info"
+                     href="{% url 'academics:admin_diploma_enrollment_list' diploma.id %}?q={{ e.student.full_name|urlencode }}">{% trans "View" %}
+                  </a>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state"><span>&#9679;</span>
+      <h3>{% trans "No enrollments found" %}</h3>
+      <p>{% trans "Try changing the search or filters." %}</p>
+    </div>
+  {% endif %}
+</section>

@@ -48,6 +48,34 @@ def youtube_embed(url):
 
 
 @register.filter
+def startswith(value, arg):
+    return value.startswith(arg) if value and arg else False
+
+
+@register.filter
 def dict_key(d, key):
     """Look up a dictionary key (supports integer keys)."""
     return d.get(key)
+
+
+_SUCCESS = frozenset({"active", "accepted", "activated", "paid", "passed", "completed", "sent", "matched", "published", "graded", "present"})
+_INFO = frozenset({"submitted", "under_review", "in_progress", "scheduled", "open", "processing", "assigned", "invited"})
+_WARNING = frozenset({"pending", "payment_pending", "documents_requested", "previewed", "ungraded", "late", "restricted", "unmatched", "absent"})
+_DANGER = frozenset({"rejected", "failed", "error", "overdue", "suspended", "violated", "revoked"})
+
+
+@register.filter
+def status_tone(code):
+    """Map a raw status code to a tone class: success/info/warning/danger/neutral."""
+    if not code:
+        return "neutral"
+    code = str(code).lower().replace(" ", "_")
+    if code in _SUCCESS:
+        return "green"
+    if code in _INFO:
+        return "blue"
+    if code in _WARNING:
+        return "amber"
+    if code in _DANGER:
+        return "red"
+    return "neutral"

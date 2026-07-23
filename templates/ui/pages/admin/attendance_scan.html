@@ -1,0 +1,27 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n ui_tags %}
+{% block title %}
+  {% trans "Scan attendance" %}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% include "ui/components/_page_header.html" with title=_("Scan attendance") eyebrow=_("Attendance") %}
+    <form class="surface form-main" method="post">{% csrf_token %}
+      <div class="field"><span>{% trans "Session" %}</span>
+        <select id="session_id" name="session_id">
+          <option value="">{% trans "Select" %}</option>{% for session in open_sessions %}
+            <option value="{{ session.id }}">{{ session }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field"><label for="qr_payload">{% trans "QR payload" %}</label>
+        <input id="qr_payload" name="qr_payload" required>
+      </div>
+      <button class="button button-primary" type="submit">{% trans "Record attendance" %}</button>
+    </form>
+    {% if result %}
+      <p role="status">{{ result.student_name }}
+        —
+        {{ result.status }}</p>
+    {% endif %}
+  </div>
+{% endblock %}

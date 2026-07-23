@@ -1,0 +1,7 @@
+{% load i18n %}
+<div id="cluster-members">{% for member in cluster.members.all %}
+    <p>{{ member }}</p>
+  {% empty %}
+    <p>{% trans "No members found." %}</p>
+  {% endfor %}
+</div>

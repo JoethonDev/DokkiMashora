@@ -1,0 +1,67 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n %}
+{% block title %}
+  {% if creating %}
+    {% trans "Create student" %}
+  {% else %}
+    {% trans "Edit student" %}
+  {% endif %}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% if creating %}
+      {% trans "Create student" as title %}
+    {% else %}
+      {% trans "Edit student" as title %}
+    {% endif %}
+    {% include "ui/components/_page_header.html" with eyebrow="Accounts" title=title description="Capture identity and access details in one guided record." %}
+    <div class="inline-actions"><a class="button button-secondary"
+         href="{% url 'accounts:admin_student_list' %}">{% trans "Back to students" %}</a>
+    </div>
+    <form class="form-layout has-aside"
+          method="post"
+          hx-target="#main"
+          hx-indicator="#global-loading"
+          hx-disabled-elt="find button, find input, find select, find textarea">{% csrf_token %}
+      <div class="surface form-main"><section class="form-section"><div class="form-section-heading"><span>1</span>
+            <div>
+              <h3>{% trans "Student information" %}</h3>
+              <p>{% trans "Use the student's official identity details." %}</p>
+            </div>
+          </div>
+          <div class="form-grid">{% for field in form %}
+              <div class="field {% if field.errors %} invalid {% endif %}"><span>
+                  {{ field.label }}
+                  {% if field.field.required %}
+                    *
+                  {% endif %}
+                </span>
+                {{ field }}
+                {% if field.help_text %}
+                  <small>{{ field.help_text }}</small>
+                {% endif %}
+                {% for error in field.errors %}
+                  <small class="field-error">{{ error }}</small>
+                {% endfor %}
+              </div>
+            {% endfor %}
+          </div>
+        </section>
+        <div class="inline-actions"><a class="button button-soft"
+             href="{% url 'accounts:admin_student_list' %}">{% trans "Cancel" %}</a>
+          <button class="button button-primary" type="submit">{% trans "Save student" %}</button>
+        </div>
+      </div>
+      <aside class="form-aside"><div class="surface aside-note"
+           x-data="{visible:true}"
+           x-show="visible"
+           x-cloak><button type="button"
+             class="aside-note-close"
+             @click="visible=false"
+             aria-label="{% trans 'Dismiss' %}">&times;</button>
+          <strong>{% trans "Before saving" %}</strong>
+          <p>{% trans "Check the email and phone number. They are used for account communication." %}</p>
+        </div>
+      </aside>
+    </form>
+  </div>
+{% endblock %}

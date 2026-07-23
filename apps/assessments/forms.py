@@ -128,7 +128,6 @@ class AssessmentForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["assessment_type"].widget.attrs["x-model"] = "assessmentType"
         instance = kwargs.get("instance")
         if instance:
             if instance.course_version_id:

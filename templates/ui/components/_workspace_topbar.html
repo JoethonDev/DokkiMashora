@@ -1,0 +1,30 @@
+{% load i18n %}
+<header class="topbar">
+  <div class="topbar-left">
+    <button class="icon-button mobile-only"
+            type="button"
+            @click="sidebarOpen=true; $dispatch('sidebar-open', {trigger: $el})"
+            aria-controls="admin-sidebar"
+            :aria-expanded="sidebarOpen.toString()"
+            aria-label="{% trans 'Open navigation' %}">&#9776;</button>
+    <div>
+      <p class="eyebrow">{{ section_label|default:_("Workspace") }}</p>
+    </div>
+  </div>
+  <div class="topbar-actions">
+    {% if show_global_search %}
+      <button type="button"
+              class="search-command"
+              id="global-search-trigger"
+              aria-label="{% trans 'Quick search' %}"><span>&#8981;</span>
+        <span>{% trans "Quick search" %}</span>
+        <kbd>Ctrl+K</kbd>
+      </button>
+      {% include "ui/components/_global_search.html" %}
+    {% endif %}
+    {% include "ui/components/_language_switcher.html" %}
+    <a class="icon-button"
+       href="{% url profile_url %}"
+       aria-label="{% trans 'Profile' %}">{{ profile_icon|default:'&#9813;'|safe }}</a>
+  </div>
+</header>

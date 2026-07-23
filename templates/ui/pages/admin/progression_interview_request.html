@@ -1,0 +1,22 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n ui_tags %}
+{% block title %}
+  {{ title|default:_("Progression") }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% trans "Academic operations" as eyebrow %}
+    {% trans "Progression" as title %}
+    {% trans "Review semester progress, decisions, evaluations, interviews, and rejoin plans." as description %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
+    <form class="surface form-main" method="post">{% csrf_token %}
+      <label>
+        {% trans "Interview date/time" %}
+        <input type="datetime-local" name="interview_at"></label>
+      <label>
+        {% trans "Notes" %}
+        <textarea name="notes"></textarea>
+      </label>
+      <button class="button button-primary" type="submit">{% trans "Request interview" %}</button>
+    </form>
+  </div>
+{% endblock %}

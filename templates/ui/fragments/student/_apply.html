@@ -1,0 +1,37 @@
+{% load i18n %}
+<div id="student-content"><header class="page-header"><h1>{% trans "Apply" %}</h1>
+  </header>
+  {% if not eligibility.allowed %}
+    <div class="alert alert-warning" role="alert">{{ eligibility.reason|default:_("No eligible programs are currently available.") }}
+    </div>
+  {% endif %}
+  <form method="post" action="{% url 'students:apply' %}"><div class="field"><label for="program-type">{% trans "Program type" %}</label>
+      <select id="program-type" name="program_type" required>
+        <option value="diploma"
+                {% if selected_program_type == 'diploma' %} selected {% endif %}>{% trans "Diploma" %}</option>
+        <option value="course"
+                {% if selected_program_type == 'course' %} selected {% endif %}>{% trans "Course" %}</option>
+      </select>
+    </div>
+    <div class="field"><label for="target-id">{% trans "Program" %}</label>
+      <select id="target-id" name="target_id" required>
+        <option value="">{% trans "Select a program" %}</option>
+        {% for item in cohorts %}
+          <option value="{{ item.id }}"
+                  {% if selected_target_id == item.id|stringformat:'s' %} selected {% endif %}>
+            {{ item.diploma.title }}
+            ·
+            {{ item.name }}
+          </option>
+        {% endfor %}
+        {% for item in courses %}
+          <option value="course_ {{ item.id }} "
+                  {% if selected_target_id == 'course_'|add:item.id|stringformat:'s' %} selected {% endif %}>
+            {{ item.title }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <button class="button button-primary" type="submit">{% trans "Submit application" %}</button>
+  </form>
+</div>

@@ -49,8 +49,6 @@ from apps.audit.models import AuditEvent
 from apps.certificates.models import CertificateTemplate, GeneratedCertificate
 from apps.communications.email_message import EmailMessage
 from apps.communications.models import BulkEmailSend, EmailTemplate
-from apps.exams.constants import ASSIGNMENT_STATUS_GRADED
-from apps.exams.models import Answer, Assignment, Exam
 from apps.payments.models import PaymentRecord, PaymentUpload, PaymentUploadRow
 from apps.progression.constants import (
     CERTIFICATE_STATUS_AVAILABLE,
@@ -180,23 +178,6 @@ class Command(BaseCommand):
             self._report("Course enrollment (NT expired)", True)
 
         # ── Entrance exam assignments ─────────────────────────────────
-        entrance_exam = Exam.objects.filter(exam_type="entrance").first()
-        if entrance_exam:
-            Assignment.objects.get_or_create(
-                exam=entrance_exam, student=student_user,
-                defaults={"status": ASSIGNMENT_STATUS_GRADED, "score": 85},
-            )
-            self._report("Entrance exam assignment", True)
-
-            for q in entrance_exam.questions.all():
-                choice = q.choices.filter(is_correct=True).first()
-                if choice:
-                    Answer.objects.get_or_create(
-                        assignment=Assignment.objects.filter(student=student_user).first(),
-                        question=q,
-                        defaults={"selected_choice": choice, "score": q.points},
-                    )
-
         # ── Semester assessments ──────────────────────────────────────
         if sem1:
             quiz, _ = Assessment.objects.get_or_create(

@@ -1,0 +1,32 @@
+{% extends "ui/layouts/student.html" %}
+{% load i18n %}
+{% block title %}
+  {{ exam.title|default:_("Entrance exam") }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view"><section class="page-intro"><div>
+        <p class="eyebrow">{% trans "Entrance exam" %}</p>
+        <h2>{{ exam.title|default:_("Entrance exam") }}</h2>
+        {% if exam.description %}
+          <p>{{ exam.description }}</p>
+        {% endif %}
+      </div>
+    </section>
+    <section class="surface">{% if questions %}
+        <form method="post">{% csrf_token %}
+          {% for question in questions %}
+            <fieldset class="field"><legend>{{ question.text }}</legend>
+              {% for choice in question.choices.all %}
+                <label class="radio-label"><input type="radio" name="q_ {{ question.id }} " value="{{ choice.id }}">{{ choice.text }}
+                </label>
+              {% endfor %}
+            </fieldset>
+          {% endfor %}
+          <button class="button button-primary" type="submit">{% trans "Submit exam" %}</button>
+        </form>
+      {% else %}
+        <p>{% trans "Follow the instructions to continue." %}</p>
+      {% endif %}
+    </section>
+  </div>
+{% endblock %}

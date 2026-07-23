@@ -1,0 +1,186 @@
+{% load i18n %}
+<section class="surface"><div class="section-header"><div>
+      <p class="eyebrow">{% trans "Operations overview" %}</p>
+      <h2 class="dashboard-heading">
+        {% trans "Welcome back" %}
+        ,
+        {{ user.get_full_name|default:user.email }}
+      </h2>
+    </div>
+  </div>
+  <p>{% trans "Review the queues, exceptions, and learning operations that need attention today." %}</p>
+  <div class="inline-actions"><a class="button button-primary"
+       href="{% url 'accounts:admin_student_list' %}">{% trans "Manage students" %}</a>
+    <a class="button button-info"
+       href="{% url 'applications:program_list' %}">{% trans "Review applications" %}</a>
+  </div>
+</section>
+<section class="metric-grid"><a class="metric-card"
+     href="{% url 'applications:program_list' %}?action_needed=review"><div class="metric-icon tone-blue">&#9679;</div>
+    <div>
+      <span>{% trans "Awaiting review" %}</span>
+      <strong>{{ application_review_count|default:prog_under_review_count }}</strong>
+      <small>{% trans "Applications needing decision" %}</small>
+    </div>
+  </a>
+  <a class="metric-card" href="{% url 'assessments:admin_grade_list' %}"><div class="metric-icon tone-purple">&#10003;</div>
+    <div>
+      <span>{% trans "Ungraded assessments" %}</span>
+      <strong>{{ assessment_ungraded }}</strong>
+      <small>{% trans "In review queue" %}</small>
+    </div>
+  </a>
+  <a class="metric-card"
+     href="{% url 'attendance:attendance_session_list' %}"><div class="metric-icon tone-amber">&#9888;</div>
+    <div>
+      <span>{% trans "Attendance exceptions" %}</span>
+      <strong>{{ attendance_exception_count }}</strong>
+      <small>{% trans "Missed sessions" %}</small>
+    </div>
+  </a>
+  <a class="metric-card"
+     href="{% url 'progression:admin_rejoin_plan_list' %}"><div class="metric-icon tone-red">&#8599;</div>
+    <div>
+      <span>{% trans "Progression exceptions" %}</span>
+      <strong>{{ progression_exception_count }}</strong>
+      <small>{% trans "Need a decision" %}</small>
+    </div>
+  </a>
+</section>
+<section class="dashboard-layout"><article class="surface panel-span-2"><div class="section-header"><div>
+        <p class="eyebrow">{% trans "Admissions" %}</p>
+        <h3>{% trans "Application pipeline" %}</h3>
+      </div>
+      <a class="text-button" href="{% url 'applications:program_list' %}">{% trans "Open all" %}</a>
+    </div>
+    {% with max_count=prog_submitted_count|default:0|add:prog_under_review_count|default:0|add:prog_accepted_count|default:0|add:prog_activated_count|default:0 %}
+      <div class="pipeline-chart"><div>
+          <span style="--bar: {% if max_count > 0 %}{% widthratio prog_submitted_count|default:0 max_count 86 %}{% else %}0{% endif %}%"></span>
+          <strong>{{ prog_submitted_count|default:0 }}</strong>
+          <small>{% trans "Submitted" %}</small>
+        </div>
+        <div>
+          <span style="--bar: {% if max_count > 0 %}{% widthratio prog_under_review_count|default:0 max_count 86 %}{% else %}0{% endif %}%"></span>
+          <strong>{{ prog_under_review_count|default:0 }}</strong>
+          <small>{% trans "In review" %}</small>
+        </div>
+        <div>
+          <span style="--bar: {% if max_count > 0 %}{% widthratio prog_accepted_count|default:0 max_count 86 %}{% else %}0{% endif %}%"></span>
+          <strong>{{ prog_accepted_count|default:0 }}</strong>
+          <small>{% trans "Accepted" %}</small>
+        </div>
+        <div>
+          <span style="--bar: {% if max_count > 0 %}{% widthratio prog_activated_count|default:0 max_count 86 %}{% else %}0{% endif %}%"></span>
+          <strong>{{ prog_activated_count|default:0 }}</strong>
+          <small>{% trans "Activated" %}</small>
+        </div>
+      </div>
+    {% endwith %}
+  </article>
+  <article class="surface"><div class="section-header"><div>
+        <p class="eyebrow">{% trans "Priority" %}</p>
+        <h3>{% trans "Needs attention" %}</h3>
+      </div>
+    </div>
+    {% with attention_items=0 %}
+      {% if assessment_ungraded > 0 or unmatched_upload_count > 0 or progression_exception_count > 0 or failed_email_count > 0 or unpublished_lecture_count > 0 %}
+        <div class="task-list">{% if assessment_ungraded > 0 %}
+            <a href="{% url 'assessments:admin_grade_list' %}"><span class="priority-dot critical"></span>
+              <span><strong>
+                {{ assessment_ungraded }}
+                {% trans "ungraded assessments" %}
+              </strong><small>{% trans "Grading queue" %}</small></span>
+              <b>&#8594;</b>
+            </a>
+          {% endif %}
+          {% if unmatched_upload_count > 0 %}
+            <a href="{% url 'payments:upload_list' %}"><span class="priority-dot warning"></span>
+              <span><strong>
+                {{ unmatched_upload_count }}
+                {% trans "uploads with unmatched rows" %}
+              </strong><small>{% trans "Payment import" %}</small></span>
+              <b>&#8594;</b>
+            </a>
+          {% endif %}
+          {% if progression_exception_count > 0 %}
+            <a href="{% url 'progression:admin_rejoin_plan_list' %}"><span class="priority-dot neutral"></span>
+              <span><strong>
+                {{ progression_exception_count }}
+                {% trans "progression exceptions" %}
+              </strong><small>{% trans "Student progression" %}</small></span>
+              <b>&#8594;</b>
+            </a>
+          {% endif %}
+          {% if failed_email_count > 0 %}
+            <a href="{% url 'communications:bulk_email_history' %}"><span class="priority-dot warning"></span>
+              <span><strong>
+                {{ failed_email_count }}
+                {% trans "failed application emails" %}
+              </strong><small>{% trans "Email delivery" %}</small></span>
+              <b>&#8594;</b>
+            </a>
+          {% endif %}
+          {% if unpublished_lecture_count > 0 %}
+            <a href="{% url 'academics:admin_course_list' %}"><span class="priority-dot neutral"></span>
+              <span><strong>
+                {{ unpublished_lecture_count }}
+                {% trans "unpublished lectures" %}
+              </strong><small>{% trans "Course content" %}</small></span>
+              <b>&#8594;</b>
+            </a>
+          {% endif %}
+        </div>
+      {% else %}
+        <div class="empty-state"><span>&#10003;</span>
+          <h3>{% trans "No urgent items" %}</h3>
+          <p>{% trans "Everything is up to date." %}</p>
+        </div>
+      {% endif %}
+    {% endwith %}
+  </article>
+  <article class="surface panel-span-2"><div class="section-header"><div>
+        <p class="eyebrow">{% trans "Activity" %}</p>
+        <h3>{% trans "Recent applications" %}</h3>
+      </div>
+      <a class="text-button" href="{% url 'applications:program_list' %}">{% trans "View queue" %}</a>
+    </div>
+    <div class="activity-feed">{% for item in recent_applications|slice:":5" %}
+        <div>
+          <span class="avatar">{{ item.student.full_name|slice:":2"|upper }}</span>
+          <p>
+            <strong>{{ item.student.full_name }}</strong>
+            <small>
+              {{ item.student.email }}
+              &middot;
+              {{ item.cohort.diploma|default:item.course }}
+              {% if item.cohort %}
+                /
+                {{ item.cohort.name }}
+              {% endif %}
+            </small>
+          </p>
+          <span class="status-pill blue">{{ item.get_status_display }}</span>
+        </div>
+      {% empty %}
+        <div class="empty-state"><span>&#9679;</span>
+          <h3>{% trans "No recent applications" %}</h3>
+          <p>{% trans "New submissions will appear here." %}</p>
+        </div>
+      {% endfor %}
+    </div>
+  </article>
+  <article class="surface"><div class="section-header"><div>
+        <p class="eyebrow">{% trans "Quick action" %}</p>
+        <h3>{% trans "Open a workspace" %}</h3>
+      </div>
+    </div>
+    <div class="quick-grid"><a class="button button-info"
+         href="{% url 'accounts:admin_student_list' %}">{% trans "Students" %}</a>
+      <a class="button button-info"
+         href="{% url 'applications:program_list' %}">{% trans "Applications" %}</a>
+      <a class="button button-info"
+         href="{% url 'attendance:attendance_session_list' %}">{% trans "Attendance" %}</a>
+      <a class="button button-info" href="{% url 'assessments:admin_list' %}">{% trans "Assessments" %}</a>
+    </div>
+  </article>
+</section>

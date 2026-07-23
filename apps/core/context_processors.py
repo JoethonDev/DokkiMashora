@@ -13,12 +13,15 @@ from apps.accounts.constants import (
     GROUP_TEACHER,
 )
 from apps.core.models import LandingPageSettings
+from apps.core.navigation import workspace_navigation
+from django.contrib.auth.models import AnonymousUser
+
 from apps.core.permissions import is_admin, is_student
 
 
 def site_meta(request) -> dict[str, object]:
     """Expose site-wide metadata to all templates."""
-    user = request.user
+    user = getattr(request, "user", AnonymousUser())
     is_authenticated = user.is_authenticated
     user_roles = set(user.groups.values_list("name", flat=True)) if is_authenticated else set()
     can_view_staff_nav = bool(is_authenticated and (user.is_superuser or (user_roles & {
@@ -38,6 +41,7 @@ def site_meta(request) -> dict[str, object]:
         "SITE_NAME": settings.SITE_NAME,
         "SITE_NAME_AR": settings.SITE_NAME_AR,
         "DEFAULT_FROM_EMAIL": settings.DEFAULT_FROM_EMAIL,
+        "WORKSPACE_NAVIGATION": workspace_navigation(user),
         "CAN_VIEW_DESIGN_SHOWCASE": is_admin(user),
         "CAN_VIEW_STAFF_NAV": can_view_staff_nav,
         "CAN_VIEW_STUDENT_NAV": can_view_student_nav,

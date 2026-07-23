@@ -1,0 +1,25 @@
+{% extends "ui/layouts/student.html" %}
+{% load i18n %}
+{% block title %}
+  {% trans "Profile" %}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view"><section class="page-intro"><div>
+        <p class="eyebrow">{% trans "Account" %}</p>
+        <h2>{% trans "Profile" %}</h2>
+      </div>
+      <a class="button button-soft" href="{% url 'students:details' %}">{% trans "View details" %}</a>
+    </section>
+    <form class="surface form-main"
+          method="post"
+          action="{% url 'students:edit_profile' %}"
+          hx-target="#main"
+          hx-indicator="#global-loading"
+          hx-disabled-elt="find button, find input, find select, find textarea">{% csrf_token %}
+      {% for field in form %}
+        {% include "ui/components/_field.html" %}
+      {% endfor %}
+      <button class="button button-primary" type="submit">{% trans "Save changes" %}</button>
+    </form>
+  </div>
+{% endblock %}

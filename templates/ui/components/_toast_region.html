@@ -1,0 +1,15 @@
+{% load i18n %}
+<div id="toast-region"
+     class="toast-region"
+     aria-live="polite"
+     aria-atomic="true"
+     x-data="{toasts:[]}"
+     @toast.window="toasts.push($event.detail); setTimeout(() => toasts.shift(), 5000)"><template x-for="(toast, index) in toasts" :key="index"><div class="toast"
+         role="status"
+         :class="'toast-' + (toast.type || 'info')"><span x-text="toast.message || toast.detail || ''"></span>
+      <button type="button"
+              @click="toasts.splice(index, 1)"
+              aria-label="{% trans 'Dismiss notification' %}">x</button>
+    </div>
+  </template>
+</div>

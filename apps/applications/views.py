@@ -79,7 +79,7 @@ def program_targets(request: HttpRequest) -> HttpResponse:
         load_url = f"{request.path}?kind=diploma&page={targets['next_page']}" if targets["has_more"] and targets["next_page"] else ""
     return render(
         request,
-        "applications/partials/_program_options.html",
+        "ui/fragments/shared/_program_options.html",
         {
             "options": options,
             "placeholder": placeholder,
@@ -137,13 +137,13 @@ def register(request: HttpRequest) -> HttpResponse:
         form = RegistrationForm(initial=initial)
     error_fields = set(form.errors)
     registration_error_step = 3 if error_fields & {"apply_program", "program_type", "diploma", "program_target"} else 2 if error_fields & {"phone", "email", "specialization", "employer", "current_job", "church", "priest_name", "priest_contact"} else 1
-    return render(request, "applications/register.html", {"form": form, "registration_error_step": registration_error_step})
+    return render(request, "ui/pages/public/register.html", {"form": form, "registration_error_step": registration_error_step})
 
 
 @require_http_methods(["GET"])
 def registration_success(request: HttpRequest) -> HttpResponse:
     email = request.session.pop(PUBLIC_REGISTRATION_SESSION_KEY, None)
-    return render(request, "applications/registration_success.html", {"email": email})
+    return render(request, "ui/pages/public/registration_success.html", {"email": email})
 
 
 # ---------------------------------------------------------------------------
@@ -247,8 +247,8 @@ def program_application_list(request: HttpRequest) -> HttpResponse:
         "to_filter": to_filter,
     }
     if is_htmx(request):
-        return render(request, "applications/partials/_program_list_table.html", context)
-    return render(request, "applications/admin_program_list.html", context)
+        return render(request, "ui/fragments/admin/_program_table.html", context)
+    return render(request, "ui/pages/admin/program_list.html", context)
 
 
 @require_http_methods(["GET", "POST"])
@@ -440,7 +440,7 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
 
     return render(
         request,
-        "applications/admin_program_detail.html",
+        "ui/pages/admin/program_detail.html",
         {
             "application": application,
             "decisions": decisions,
@@ -479,11 +479,11 @@ def document_upload(request: HttpRequest, token: str) -> HttpResponse:
 
     if doc_request.status == "submitted":
         messages.info(request, _("Documents have already been submitted for this request."))
-        return render(request, "applications/document_upload.html", {"submitted": True, "doc_request": doc_request, "application": application})
+        return render(request, "ui/pages/public/document_upload.html", {"submitted": True, "doc_request": doc_request, "application": application})
 
     if doc_request.expires_at <= timezone.now():
         messages.error(request, _("This document upload link has expired."))
-        return render(request, "applications/document_upload.html", {"expired": True, "doc_request": doc_request, "application": application})
+        return render(request, "ui/pages/public/document_upload.html", {"expired": True, "doc_request": doc_request, "application": application})
 
     if request.method == "POST":
         form = StudentDocumentUploadForm(request.POST, request.FILES)
@@ -506,7 +506,7 @@ def document_upload(request: HttpRequest, token: str) -> HttpResponse:
     else:
         form = StudentDocumentUploadForm()
 
-    return render(request, "applications/document_upload.html", {
+    return render(request, "ui/pages/public/document_upload.html", {
         "form": form,
         "doc_request": doc_request,
         "application": application,

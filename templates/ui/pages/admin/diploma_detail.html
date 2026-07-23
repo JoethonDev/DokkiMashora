@@ -1,0 +1,118 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n ui_tags %}
+{% block title %}
+  {{ diploma.title }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% include "ui/components/_page_header.html" with title=diploma.title description=diploma.description eyebrow=_("Diploma") %}
+    <section class="surface"><div class="section-header"><div>
+          <p class="eyebrow">{% trans "Structure" %}</p>
+          <h3>{% trans "Cohorts" %}</h3>
+        </div>
+        <a class="button button-primary"
+           href="{% url 'academics:admin_cohort_create' diploma.id %}">{% trans "Add cohort" %}</a>
+      </div>
+      {% if cohorts %}
+        <div class="table-shell"><table>
+            <thead>
+              <tr>
+                <th>{% trans "Cohort" %}</th>
+                <th>{% trans "Status" %}</th>
+                <th>{% trans "Lectures" %}</th>
+                <th>{% trans "Actions" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for cohort in cohorts %}
+                <tr>
+                  <td>{{ cohort }}</td>
+                  <td>{% include "ui/components/_status.html" with code=cohort.is_active|yesno:"active,inactive" label=cohort.is_active|yesno:_("Active,Inactive") %}</td>
+                  <td>{{ cohort.diploma_lecture_count }}</td>
+                  <td>
+                    <div class="inline-actions"><a class="button button-info"
+                         href="{% url 'academics:admin_cohort_edit' diploma.id cohort.id %}">{% trans "Edit" %}</a>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        {% include "ui/components/_empty_state.html" with title=_("No cohorts") message=_("No cohorts found for this diploma.") %}
+      {% endif %}
+    </section>
+    <section class="surface"><div class="section-header"><div>
+          <p class="eyebrow">{% trans "Structure" %}</p>
+          <h3>{% trans "Semesters" %}</h3>
+        </div>
+        <a class="button button-primary"
+           href="{% url 'academics:admin_semester_create' diploma.id %}">{% trans "Add semester" %}</a>
+      </div>
+      {% if cohort_rows %}
+        <div class="table-shell"><table>
+            <thead>
+              <tr>
+                <th>{% trans "Cohort" %}</th>
+                <th>{% trans "Semester" %}</th>
+                <th>{% trans "Lectures" %}</th>
+                <th>{% trans "Actions" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in cohort_rows %}
+                <tr>
+                  <td>{{ row.cohort }}</td>
+                  <td>{{ row.semester }}</td>
+                  <td>{{ row.lecture_count }}</td>
+                  <td>
+                    <div class="inline-actions"><a class="button button-info"
+                         href="{% url 'academics:admin_semester_edit' diploma.id row.semester.id %}">{% trans "Edit" %}
+                      </a>
+                      <a class="button button-info"
+                         href="{% url 'academics:admin_diploma_lecture_list' diploma.id row.cohort.id row.semester.id %}">{% trans "Lectures" %}
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        {% include "ui/components/_empty_state.html" with title=_("No semesters") message=_("No semesters found for this diploma.") %}
+      {% endif %}
+    </section>
+    <section class="surface"><div class="section-header"><div>
+          <p class="eyebrow">{% trans "Students" %}</p>
+          <h3>{% trans "Enrollments" %}</h3>
+        </div>
+      </div>
+      {% if enrollments %}
+        <div class="table-shell"><table>
+            <thead>
+              <tr>
+                <th>{% trans "Student" %}</th>
+                <th>{% trans "Cohort" %}</th>
+                <th>{% trans "Status" %}</th>
+                <th>{% trans "Enrolled" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for enrollment in enrollments %}
+                <tr>
+                  <td>{{ enrollment.student }}</td>
+                  <td>{{ enrollment.cohort }}</td>
+                  <td>{% include "ui/components/_status.html" with code=enrollment.status label=enrollment.get_status_display %}</td>
+                  <td>{{ enrollment.created_at|date:"d M Y" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        {% include "ui/components/_empty_state.html" with title=_("No enrollments") message=_("No student enrollments for this diploma.") %}
+      {% endif %}
+    </section>
+  </div>
+{% endblock %}

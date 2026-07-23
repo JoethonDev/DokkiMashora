@@ -1,0 +1,160 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n ui_tags %}
+{% block title %}
+  {{ user_obj.full_name }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% include "ui/components/_page_header.html" with title=user_obj.full_name eyebrow=_("Student profile") %}
+    <section class="surface"><div class="section-header"><div>
+          <p class="eyebrow">{% trans "Identity" %}</p>
+          <h3>{% trans "Account summary" %}</h3>
+        </div>
+        <a class="button button-primary"
+           href="{% url 'accounts:admin_user_edit' user_obj.id %}">{% trans "Edit student" %}</a>
+      </div>
+      <dl class="description-list"><div>
+          <dt>{% trans "Status" %}</dt>
+          <dd>
+            {% include "ui/components/_status.html" with code=user_obj.status label=user_obj.get_status_display %}
+          </dd>
+        </div>
+        <div>
+          <dt>{% trans "Email" %}</dt>
+          <dd>
+            {{ user_obj.email }}
+          </dd>
+        </div>
+        <div>
+          <dt>{% trans "Phone" %}</dt>
+          <dd>
+            {{ user_obj.phone|default:'—' }}
+          </dd>
+        </div>
+        <div>
+          <dt>{% trans "Role" %}</dt>
+          <dd>
+            {{ user_obj.primary_role }}
+          </dd>
+        </div>
+      </dl>
+    </section>
+    {% if student_profile %}
+      <section class="detail-layout"><article class="surface"><div class="section-header"><div>
+              <p class="eyebrow">{% trans "Admissions" %}</p>
+              <h3>{% trans "Applications" %}</h3>
+            </div>
+          </div>
+          {% if applications %}
+            <div class="table-shell"><table>
+                <thead>
+                  <tr>
+                    <th>{% trans "Program" %}</th>
+                    <th>{% trans "Submitted" %}</th>
+                    <th>{% trans "Status" %}</th>
+                    <th>{% trans "Actions" %}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in applications %}
+                    <tr>
+                      <td>
+                        {% if item.cohort %}
+                          {{ item.cohort.diploma }}
+                        {% else %}
+                          {{ item.course }}
+                        {% endif %}
+                      </td>
+                      <td>{{ item.created_at|date:"d M Y" }}</td>
+                      <td>{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
+                      <td>
+                        <a class="button button-info"
+                           href="{% url 'applications:program_detail' item.id %}">{% trans "Review" %}</a>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            {% include "ui/components/_empty_state.html" with title=_("No applications") message=_("This student has not submitted any applications.") %}
+          {% endif %}
+        </article>
+        <article class="surface"><div class="section-header"><div>
+              <p class="eyebrow">{% trans "Learning" %}</p>
+              <h3>{% trans "Enrollments" %}</h3>
+            </div>
+          </div>
+          {% if diploma_enrollments or course_enrollments %}
+            <div class="table-shell"><table>
+                <thead>
+                  <tr>
+                    <th>{% trans "Program" %}</th>
+                    <th>{% trans "Type" %}</th>
+                    <th>{% trans "Status" %}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in diploma_enrollments %}
+                    <tr>
+                      <td>{{ item.cohort.diploma }}</td>
+                      <td>{% trans "Diploma" %}</td>
+                      <td>{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
+                    </tr>
+                  {% endfor %}
+                  {% for item in course_enrollments %}
+                    <tr>
+                      <td>{{ item.course_version.course }}</td>
+                      <td>{% trans "Course" %}</td>
+                      <td>{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            {% include "ui/components/_empty_state.html" with title=_("No enrollments") message=_("This student is not enrolled in any programs.") %}
+          {% endif %}
+        </article>
+      </section>
+      <section class="surface"><div class="section-header"><div>
+            <p class="eyebrow">{% trans "Finance and results" %}</p>
+            <h3>{% trans "Recent records" %}</h3>
+          </div>
+        </div>
+        {% if payments or assessment_attempts %}
+          <div class="table-shell"><table>
+              <thead>
+                <tr>
+                  <th>{% trans "Record" %}</th>
+                  <th>{% trans "Detail" %}</th>
+                  <th>{% trans "Status" %}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in payments %}
+                  <tr>
+                    <td>{% trans "Payment" %}</td>
+                    <td>
+                      {{ item.amount }}
+                      {{ item.currency }}
+                    </td>
+                    <td>{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
+                  </tr>
+                {% endfor %}
+                {% for item in assessment_attempts %}
+                  <tr>
+                    <td>{% trans "Assessment" %}</td>
+                    <td>{{ item.assessment.title }}</td>
+                    <td>{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          {% include "ui/components/_empty_state.html" with title=_("No records") message=_("No payments or assessment records available.") %}
+        {% endif %}
+      </section>
+    {% endif %}
+  </div>
+{% endblock %}

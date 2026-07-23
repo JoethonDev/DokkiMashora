@@ -106,7 +106,7 @@ def exam_access_token(request, token):
         return redirect("entrance_exams:take_exam", token=token)
     if attempt.status in (ATTEMPT_STATUS_COMPLETED, ATTEMPT_STATUS_GRADED):
         return redirect("entrance_exams:results", token=token)
-    return render(request, "entrance_exams/exam_instructions.html", {
+    return render(request, "ui/pages/student/exam.html", {
         "exam": exam,
         "attempt": attempt,
         "access_token": token,
@@ -170,7 +170,7 @@ def take_exam(request, token):
     else:
         remaining = exam.duration_minutes * 60
     questions = exam.questions.prefetch_related("choices").all()
-    return render(request, "entrance_exams/take_exam.html", {
+    return render(request, "ui/pages/student/exam.html", {
         "exam": exam,
         "attempt": attempt,
         "questions": questions,
@@ -247,7 +247,7 @@ def exam_results(request, token):
     exam = get_object_or_404(EntranceExam, access_token=token)
     attempt = get_object_or_404(EntranceAttempt, exam=exam, student=profile)
     answers = attempt.answers.select_related("question", "selected_choice").all()
-    return render(request, "entrance_exams/exam_results.html", {
+    return render(request, "ui/pages/student/exam.html", {
         "exam": exam,
         "attempt": attempt,
         "answers": answers,
@@ -270,7 +270,7 @@ def admin_list(request):
     if student_id.isdigit():
         exams = exams.filter(attempts__student_id=int(student_id)).distinct()
     page_obj, pagination_qs = paginate(request, exams)
-    return render(request, "entrance_exams/admin_list.html", {"page_obj": page_obj, "pagination_qs": pagination_qs, "student_id": student_id})
+    return render(request, "ui/pages/admin/entrance_exam_list.html", {"page_obj": page_obj, "pagination_qs": pagination_qs, "student_id": student_id, "page_kind": "exams", "title": _("Entrance exams")})
 
 
 @login_required
@@ -284,7 +284,7 @@ def admin_cohorts_for_diploma(request):
         cohorts = Cohort.objects.filter(diploma_id=diploma_id).order_by("name")
     else:
         cohorts = Cohort.objects.none()
-    return render(request, "entrance_exams/partials/_cohort_options.html", {"cohorts": cohorts})
+    return render(request, "ui/fragments/admin/_options.html", {"options": cohorts})
 
 
 @login_required
@@ -299,7 +299,7 @@ def admin_detail(request, exam_id):
         ),
         id=exam_id,
     )
-    return render(request, "entrance_exams/admin_detail.html", {"exam": exam})
+    return render(request, "ui/pages/admin/entrance_exam_detail.html", {"exam": exam, "title": _("Entrance exam")})
 
 
 @login_required
@@ -315,7 +315,7 @@ def admin_preview(request, exam_id):
     questions = exam.questions.all()
     return render(
         request,
-        "entrance_exams/take_exam.html",
+        "ui/pages/student/exam.html",
         {
             "exam": exam,
             "is_preview": True,
@@ -343,7 +343,7 @@ def admin_create_exam(request):
             return redirect("entrance_exams:admin_detail", exam_id=exam.id)
     else:
         form = EntranceExamForm()
-    return render(request, "entrance_exams/admin_exam_form.html", {
+    return render(request, "ui/pages/admin/entrance_exam_form.html", {
         "form": form,
         "title": _("Create entrance exam"),
     })
@@ -364,7 +364,7 @@ def admin_edit_exam(request, exam_id):
             return redirect("entrance_exams:admin_detail", exam_id=exam.id)
     else:
         form = EntranceExamForm(instance=exam)
-    return render(request, "entrance_exams/admin_exam_form.html", {
+    return render(request, "ui/pages/admin/entrance_exam_form.html", {
         "form": form,
         "title": _("Edit entrance exam"),
         "exam": exam,
@@ -412,9 +412,10 @@ def admin_grade_list(request):
         raise PermissionDenied
     pending = get_pending_grading()
     page_obj, pagination_qs = paginate(request, pending)
-    return render(request, "entrance_exams/admin_grade_list.html", {
+    return render(request, "ui/pages/admin/entrance_exam_grade_list.html", {
         "page_obj": page_obj,
         "pagination_qs": pagination_qs,
+        "page_kind": "grading",
     })
 
 
@@ -467,7 +468,7 @@ def admin_grade_attempt(request, attempt_id):
         else:
             max_score = q.max_score
         question_answer_pairs.append((q, answers.get(q.id), max_score))
-    return render(request, "entrance_exams/admin_grade_attempt.html", {
+    return render(request, "ui/pages/admin/entrance_exam_grade_attempt.html", {
         "attempt": attempt,
         "question_answer_pairs": question_answer_pairs,
     })
@@ -496,63 +497,10 @@ def _question_form_context(exam, question=None, form=None, formset=None):
     }
 
 
-def _save_question_from_json(request, exam, question=None):
-    data = json.loads(request.body)
-    if question is None:
-        question = EntranceQuestion(exam=exam)
-        last = exam.questions.order_by("order").last()
-        question.order = (last.order + 1) if last else 1
-    question.text = data.get("text", "")
-    question.question_type = data.get("question_type", QUESTION_TYPE_MCQ)
-    question.rubric = data.get("rubric", "")
-    try:
-        question.max_score = Decimal(str(data.get("max_score", 0) or 0))
-    except (InvalidOperation, ValueError, TypeError):
-        question.max_score = Decimal('0')
-    question.save()
-    existing = {c.id: c for c in question.choices.all()}
-    submitted_ids = set()
-    for i, c in enumerate(data.get("choices", [])):
-        cid = c.get("id")
-        if cid and int(cid) in existing:
-            choice = existing[int(cid)]
-        else:
-            choice = EntranceChoice(question=question)
-        choice.text = c["text"]
-        try:
-            choice.score = Decimal(str(c.get("score", 0) or 0))
-        except (InvalidOperation, ValueError, TypeError):
-            choice.score = Decimal('0')
-        choice.order = c.get("order", i + 1)
-        choice.save()
-        submitted_ids.add(choice.id)
-    for old_id in set(existing.keys()) - submitted_ids:
-        existing[old_id].delete()
-    return question
-
-
-def _question_json(question):
-    return {
-        "id": question.id,
-        "text": question.text,
-        "question_type": question.question_type,
-        "rubric": question.rubric,
-        "max_score": str(question.max_score or 0),
-        "choices": [
-            {
-                "id": c.id,
-                "text": c.text,
-                "score": str(c.score or 0),
-                "order": c.order,
-            }
-            for c in question.choices.all()
-        ],
-    }
-
 
 def _render_question_form(request, exam, question=None, form=None, formset=None):
     context = _question_form_context(exam, question=question, form=form, formset=formset)
-    template = "entrance_exams/partials/_question_form.html" if is_htmx(request) else "entrance_exams/admin_question_form.html"
+    template = "ui/fragments/admin/_question_form.html" if is_htmx(request) else "ui/pages/admin/entrance_exams.html"
     return render(request, template, context)
 
 
@@ -564,15 +512,6 @@ def admin_add_question(request, exam_id):
         raise PermissionDenied
     exam = get_object_or_404(EntranceExam, id=exam_id)
     if request.method == "POST":
-        if request.content_type == "application/json":
-            question = _save_question_from_json(request, exam)
-            messages.success(request, _("Question added."))
-            if is_htmx(request):
-                data = _question_json(question)
-                response = JsonResponse(data, status=201)
-                response["HX-Trigger"] = json.dumps({"question-saved": None})
-                return response
-            return redirect("entrance_exams:admin_detail", exam_id=exam.id)
         form = EntranceQuestionForm(request.POST)
         if form.is_valid():
             question = form.save(commit=False)
@@ -583,9 +522,8 @@ def admin_add_question(request, exam_id):
                 formset.save()
                 messages.success(request, _("Question added."))
                 if is_htmx(request):
-                    data = _question_json(question)
-                    response = JsonResponse(data, status=201)
-                    response["HX-Trigger"] = json.dumps({"question-saved": None})
+                    response = HttpResponse()
+                    response["HX-Redirect"] = reverse("entrance_exams:admin_detail", args=[exam.id])
                     return response
                 return redirect("entrance_exams:admin_detail", exam_id=exam.id)
             question.delete()
@@ -609,15 +547,6 @@ def admin_edit_question(request, exam_id, question_id):
     exam = get_object_or_404(EntranceExam, id=exam_id)
     question = get_object_or_404(EntranceQuestion, id=question_id, exam=exam)
     if request.method == "POST":
-        if request.content_type == "application/json":
-            _save_question_from_json(request, exam, question=question)
-            messages.success(request, _("Question updated."))
-            if is_htmx(request):
-                data = _question_json(question)
-                response = JsonResponse(data)
-                response["HX-Trigger"] = json.dumps({"question-saved": None})
-                return response
-            return redirect("entrance_exams:admin_detail", exam_id=exam.id)
         form = EntranceQuestionForm(request.POST, instance=question)
         formset = EntranceChoiceFormSet(request.POST, instance=question)
         if form.is_valid() and formset.is_valid():
@@ -625,9 +554,8 @@ def admin_edit_question(request, exam_id, question_id):
             formset.save()
             messages.success(request, _("Question updated."))
             if is_htmx(request):
-                data = _question_json(question)
-                response = JsonResponse(data)
-                response["HX-Trigger"] = json.dumps({"question-saved": None})
+                response = HttpResponse()
+                response["HX-Redirect"] = reverse("entrance_exams:admin_detail", args=[exam.id])
                 return response
             return redirect("entrance_exams:admin_detail", exam_id=exam.id)
     else:
@@ -1009,7 +937,7 @@ def admin_cohort_email(request, exam_id):
     def _make_pq(**extra):
         return urlencode({"tab": tab, **extra})
 
-    return render(request, "entrance_exams/admin_cohort_email.html", {
+    return render(request, "ui/pages/admin/entrance_exams.html", {
         "exam": exam,
         "tab": tab,
         "result_filter": result_filter,
@@ -1052,7 +980,7 @@ def admin_app_email_resend(request, exam_id, app_id):
             if action == EMAIL_ACTION_INVITATION
             else TEMPLATE_REJECTION
         )
-        return render(request, "entrance_exams/admin_email_resend_confirm.html", {
+    return render(request, "ui/pages/admin/entrance_exams.html", {
             "exam": exam,
             "prog_app": prog_app,
             "action": action,
@@ -1146,9 +1074,10 @@ def admin_email_log_list(request):
         )
     qs = qs.order_by("-sent_at", "-id")
     page_obj, pagination_qs = paginate(request, qs, per_page=25)
-    return render(request, "entrance_exams/admin_email_log_list.html", {
+    return render(request, "ui/pages/admin/entrance_exam_email_log.html", {
         "page_obj": page_obj,
         "pagination_qs": pagination_qs,
+        "page_kind": "email_log",
         "action_choices": PAEL._meta.get_field("action").choices,
         "status_choices": PAEL._meta.get_field("status").choices,
         "current_action": action,

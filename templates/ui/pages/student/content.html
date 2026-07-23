@@ -1,0 +1,99 @@
+{% extends "ui/layouts/student.html" %}
+{% load i18n %}
+{% block title %}
+  {{ course_version.course.title|default:_("Learning") }}
+{% endblock %}
+{% block page_title %}
+  {% trans "Course learning" %}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view"><section class="page-intro"><div>
+        <p class="eyebrow">{% trans "Learning" %}</p>
+        <h2>{{ course_version.course.title }}</h2>
+        <p>{{ course_version.label|default:'' }}</p>
+      </div>
+      <a class="button button-soft" href="{% url 'students:diploma_course' %}">{% trans "Back to learning" %}</a>
+    </section>
+    <section class="learning-layout"><aside class="surface lesson-sidebar"><div class="section-header"><div>
+            <p class="eyebrow">{% trans "Course content" %}</p>
+            <h3>
+              {{ lectures|length }}
+              {% trans "lessons" %}
+            </h3>
+          </div>
+        </div>
+        {% for item in lectures %}
+          <a class=" {% if item.id in completed_lecture_ids %} complete {% endif %} "
+             href="#lecture- {{ item.id }}"><span class="avatar avatar-sm">{% if item.id in completed_lecture_ids %}
+              ✓
+            {% else %}
+              {{ item.order }}
+            {% endif %}
+          </span>
+          <span><strong>{{ item.title }}</strong>
+            <small>
+              {% if item.id in completed_lecture_ids %}
+                {% trans "Completed" %}
+              {% else %}
+                {% trans "Not started" %}
+              {% endif %}
+            </small></span></a>
+        {% empty %}
+          <p class="muted">{% trans "No published lessons yet." %}</p>
+        {% endfor %}
+      </aside>
+      <article class="surface"><div class="section-header"><div>
+            <p class="eyebrow">{% trans "Course team" %}</p>
+            <h3>{% trans "Teachers and moderators" %}</h3>
+          </div>
+        </div>
+        {% for assignment in teachers %}
+          <div class="activity-feed"><div>
+              <span class="avatar">{{ assignment.teacher.get_full_name|slice:":2"|upper }}</span>
+              <p>
+                <strong>{{ assignment.teacher.get_full_name }}</strong>
+                <small>{{ assignment.get_scope_type_display|default:_("Course teacher") }}</small>
+              </p>
+            </div>
+          </div>
+        {% empty %}
+          <p class="muted">{% trans "No course team listed." %}</p>
+        {% endfor %}
+      </article>
+    </section>
+    <section class="surface"><div class="section-header"><div>
+          <p class="eyebrow">{% trans "Lessons" %}</p>
+          <h3>{% trans "Published content" %}</h3>
+        </div>
+      </div>
+      {% for item in lectures %}
+        <article id="lecture- {{ item.id }} " class="lesson-copy"><div class="section-header"><div>
+              <h3>
+                {{ item.order }}
+                .
+                {{ item.title }}
+              </h3>
+            </div>
+            {% if item.id in completed_lecture_ids %}
+              <span class="status-pill green">{% trans "Completed" %}</span>
+            {% endif %}
+          </div>
+          {% if item.description %}
+            <p>{{ item.description }}</p>
+          {% endif %}
+          {% if item.youtube_url %}
+            <a class="button button-soft"
+               href="{{ item.youtube_url }}"
+               target="_blank"
+               rel="noreferrer">{% trans "Open video" %}</a>
+          {% endif %}
+        </article>
+      {% empty %}
+        <div class="empty-state"><span>▶</span>
+          <h3>{% trans "No lessons available" %}</h3>
+          <p>{% trans "Published course content will appear here." %}</p>
+        </div>
+      {% endfor %}
+    </section>
+  </div>
+{% endblock %}

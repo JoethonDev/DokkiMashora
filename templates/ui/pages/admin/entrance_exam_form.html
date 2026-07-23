@@ -1,0 +1,22 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n ui_tags %}
+{% block title %}
+  {{ title|default:_("Entrance exam") }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% trans "Assessment operations" as eyebrow %}
+    {% trans "Entrance exam" as default_title %}
+    {% trans "Create exams, manage invitations, grade attempts, and inspect delivery history." as description %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title|default:default_title description=description %}
+    <form method="post">{% csrf_token %}
+      {% for field in form %}
+        {% include "ui/components/_field.html" %}
+      {% endfor %}
+      <button class="button button-primary" type="submit">{% trans "Save exam" %}</button>
+    </form>
+    {% if exam %}
+      <a class="button button-secondary"
+         href="{% url 'entrance_exams:admin_detail' exam.id %}">{% trans "Back" %}</a>
+    {% endif %}
+  </div>
+{% endblock %}

@@ -19,5 +19,8 @@ INTERNAL_IPS = ["127.0.0.1", "localhost"]
 # except ImportError:  # pragma: no cover - optional dependency
 #     pass
 
+# Static files in dev: serve raw files without hashed manifest.
+STATICFILES_STORAGE = "django.contrib.staticfiles.storage.StaticFilesStorage"
+
 # In dev we always use the console email backend unless overridden.
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"

@@ -1,0 +1,213 @@
+{% load i18n %}
+<div id="student-content" class="page-stack enter-view"><section class="profile-card"><div class="profile-main"><span class="avatar avatar-xl">{{ user.get_full_name|slice:":2"|upper }}</span>
+      <div>
+        <p class="eyebrow">{% trans "Student record" %}</p>
+        <h2>{{ student.full_name|default:user.get_full_name }}</h2>
+        <div class="profile-meta"><span>{{ user.email }}</span>
+          <span class="status-pill green">{% trans "Released information" %}</span>
+        </div>
+      </div>
+    </div>
+    <a class="button button-soft" href="{% url 'students:details' %}">{% trans "Profile details" %}</a>
+  </section>
+  <section class="metric-grid"><article class="metric-card"><div class="metric-icon tone-blue">◫</div>
+      <div>
+        <span>{% trans "Attendance rate" %}</span>
+        <strong>
+          {{ attendance.attendance_percent|default:0 }}
+        %</strong>
+        <small>
+          {{ attendance.records|length }}
+          {% trans "records" %}
+        </small>
+      </div>
+    </article>
+    <article class="metric-card"><div class="metric-icon tone-purple">✓</div>
+      <div>
+        <span>{% trans "Released grades" %}</span>
+        <strong>{{ grade_items|length }}</strong>
+        <small>{% trans "Visible grade items" %}</small>
+      </div>
+    </article>
+    <article class="metric-card"><div class="metric-icon tone-amber">¤</div>
+      <div>
+        <span>{% trans "Payments" %}</span>
+        <strong>{{ payments.records|length }}</strong>
+        <small>
+          {% trans "Total paid" %}
+          :
+          {{ payments.total_paid|default:0 }}
+        </small>
+      </div>
+    </article>
+    <article class="metric-card"><div class="metric-icon tone-green">▣</div>
+      <div>
+        <span>{% trans "Certificates" %}</span>
+        <strong>{{ certificates|length }}</strong>
+        <small>{% trans "Available records" %}</small>
+      </div>
+    </article>
+  </section>
+  <section class="detail-layout"><article class="surface"><div class="section-header"><div>
+          <p class="eyebrow">{% trans "Attendance" %}</p>
+          <h3>{% trans "Attendance history" %}</h3>
+        </div>
+      </div>
+      <div class="record-list">{% for item in attendance.records|slice:":6" %}
+          <div>
+            <span class="avatar avatar-sm">◷</span>
+            <span><strong>{{ item.session.date }}</strong>
+              <small>{{ item.session|default:'' }}</small></span>
+            <span class="status-pill {% if item.status == 'present' %} green {% else %} neutral {% endif %}">{{ item.get_status_display|default:item.status }}
+            </span>
+          </div>
+        {% empty %}
+          <div class="empty-state"><span>◷</span>
+            <h3>{% trans "No released attendance" %}</h3>
+            <p>{% trans "Attendance records will appear once released." %}</p>
+          </div>
+        {% endfor %}
+      </div>
+    </article>
+    <article class="surface"><div class="section-header"><div>
+          <p class="eyebrow">{% trans "Assessments" %}</p>
+          <h3>{% trans "Released assessment history" %}</h3>
+        </div>
+        <a class="text-button" href="{% url 'students:assessment_history' %}">{% trans "View all" %}</a>
+      </div>
+      <div class="record-list">{% for item in assessment_attempts %}
+          {% if item.status == attempt_status_graded and item.grade_visibility != grade_visibility_hidden %}
+            <div>
+              <span class="avatar avatar-sm">✓</span>
+              <span><strong>{{ item.assessment.title }}</strong>
+                <small>{{ item.get_status_display }}</small></span>
+              <span class="record-meta">{{ item.score|default:'—' }}</span>
+            </div>
+          {% endif %}
+        {% empty %}
+          <div class="empty-state"><span>✓</span>
+            <h3>{% trans "No released assessments" %}</h3>
+            <p>{% trans "Released results will appear here." %}</p>
+          </div>
+        {% endfor %}
+      </div>
+    </article>
+  </section>
+  <section class="detail-layout"><article class="surface"><div class="section-header"><div>
+          <p class="eyebrow">{% trans "Progression" %}</p>
+          <h3>{% trans "Academic history" %}</h3>
+        </div>
+        <a class="text-button" href="{% url 'students:progression_history' %}">{% trans "View progression" %}</a>
+      </div>
+      <div class="timeline">{% for item in semester_progress %}
+          <div>
+            <i></i>
+            <p>
+              <strong>{{ item.semester }}</strong>
+              <small>
+                {{ item.get_status_display|default:item.status }}
+                ·
+                {{ item.average_score|default:'—' }}
+              </small>
+            </p>
+          </div>
+        {% empty %}
+          <p class="muted">{% trans "No progression records." %}</p>
+        {% endfor %}
+        {% for item in promotion_decisions %}
+          <div>
+            <i></i>
+            <p>
+              <strong>
+                {{ item.from_semester }}
+                →
+                {{ item.to_semester }}
+              </strong>
+              <small>{{ item.get_decision_display|default:item.decision }}</small>
+            </p>
+          </div>
+        {% endfor %}
+      </div>
+    </article>
+    <article class="surface"><div class="section-header"><div>
+          <p class="eyebrow">{% trans "Payments" %}</p>
+          <h3>{% trans "Payment records" %}</h3>
+        </div>
+      </div>
+      <div class="record-list">{% for item in payments.records %}
+          <div>
+            <span class="avatar avatar-sm">¤</span>
+            <span><strong>
+              {{ item.amount }}
+              {{ item.currency }}
+            </strong>
+            <small>{{ item.paid_at|date:"d M Y"|default:'—' }}</small></span>
+          <span class="status-pill neutral">{{ item.get_status_display|default:item.status }}</span>
+          </div>
+        {% empty %}
+          <div class="empty-state"><span>¤</span>
+            <h3>{% trans "No payment records" %}</h3>
+            <p>{% trans "Released payment information will appear here." %}</p>
+          </div>
+        {% endfor %}
+      </div>
+    </article>
+  </section>
+  <section class="surface"><div class="section-header"><div>
+        <p class="eyebrow">{% trans "Credentials" %}</p>
+        <h3>{% trans "Certificates" %}</h3>
+      </div>
+    </div>
+    <div class="program-grid">{% for item in certificates %}
+        <article class="program-card"><div class="program-symbol">▣</div>
+          <h3>{{ item.diploma_enrollment.cohort.diploma|default:item }}</h3>
+          <p>{{ item.issued_at|date:"d M Y"|default:'' }}</p>
+          <a class="button button-primary"
+             href="{% url 'certificates:student_certificate_download' item.id %}">{% trans "Download certificate" %}
+          </a></article>
+      {% empty %}
+        <div class="empty-state"><span>▣</span>
+          <h3>{% trans "No certificates available" %}</h3>
+          <p>{% trans "Completed credentials will appear here when released." %}</p>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+  <section class="detail-layout"><article class="surface"><div class="section-header"><div>
+          <p class="eyebrow">{% trans "Entrance exams" %}</p>
+          <h3>{% trans "Exam assignments" %}</h3>
+        </div>
+      </div>
+      {% for item in exam_assignments %}
+        <div class="activity-feed"><div>
+            <span class="avatar avatar-sm">◇</span>
+            <p>
+              <strong>{{ item.exam.title }}</strong>
+              <small>{{ item.get_status_display|default:item.status }}</small>
+            </p>
+          </div>
+        </div>
+      {% empty %}
+        <p class="muted">{% trans "No entrance exam records." %}</p>
+      {% endfor %}
+    </article>
+    <article class="surface"><div class="section-header"><div>
+          <p class="eyebrow">{% trans "Communications" %}</p>
+          <h3>{% trans "Notifications" %}</h3>
+        </div>
+      </div>
+      {% for item in notifications %}
+        <div class="activity-feed"><div>
+            <span class="avatar avatar-sm">✉</span>
+            <p>
+              <strong>{{ item.title|default:item.subject }}</strong>
+              <small>{{ item.created_at|date:"d M Y" }}</small>
+            </p>
+          </div>
+        </div>
+      {% empty %}
+        <p class="muted">{% trans "No communications released." %}</p>
+      {% endfor %}
+    </article>
+  </section>
+</div>

@@ -1,0 +1,101 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n ui_tags %}
+{% block title %}
+  {{ title|default:_("Progression") }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% trans "Academic operations" as eyebrow %}
+    {% trans "Progression" as title %}
+    {% trans "Review semester progress, decisions, evaluations, interviews, and rejoin plans." as description %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
+    <section class="surface"><div class="section-header"><div>
+            <p class="eyebrow">{% trans "Student" %}</p>
+            <h3>{{ student }}</h3>
+          </div>
+        </div>
+        <p>
+          {% trans "Current progress" %}
+          :
+          {{ current_progress|default:'—' }}
+        </p>
+        {% for enrollment in enrollments %}
+          <div class="inline-actions"><form method="post"
+                  action="{% url 'progression:admin_evaluate_semester' student.id %}">{% csrf_token %}
+              <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}"><select name="semester_id" required>
+                <option value="">{% trans "Semester" %}</option>
+                {% for semester in semesters %}
+                  <option value="{{ semester.id }}">{{ semester }}</option>
+                {% endfor %}
+              </select>
+              <button class="button button-info" type="submit">{% trans "Evaluate" %}</button>
+            </form>
+            <form method="post"
+                  action="{% url 'progression:admin_promote' student.id %}">{% csrf_token %}
+              <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}"><input name="semester_id" placeholder="{% trans 'Semester id' %}" required>
+              <button class="button button-success" type="submit">{% trans "Promote" %}</button>
+            </form>
+            <form method="post"
+                  action="{% url 'progression:admin_demote' student.id %}">{% csrf_token %}
+              <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}"><input name="semester_id" placeholder="{% trans 'Semester id' %}" required>
+              <button class="button button-warning" type="submit">{% trans "Demote" %}</button>
+            </form>
+            <form method="post" action="{% url 'progression:admin_lock' student.id %}">{% csrf_token %}
+              <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}"><button class="button button-warning" type="submit">{% trans "Lock" %}</button>
+            </form>
+            <form method="post"
+                  action="{% url 'progression:admin_unlock' student.id %}">{% csrf_token %}
+              <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}"><button class="button button-success" type="submit">{% trans "Unlock" %}</button>
+            </form>
+            <a class="button button-info"
+               href="{% url 'progression:admin_create_rejoin_plan' enrollment.id %}">{% trans "Create rejoin plan" %}
+            </a>
+          </div>
+        {% endfor %}
+      </section>
+      <section class="surface"><div class="section-header"><div>
+            <p class="eyebrow">{% trans "Progress" %}</p>
+            <h3>{% trans "Semester progress" %}</h3>
+          </div>
+        </div>
+        {% for item in progress_semesters %}
+          <div class="description-list"><strong>{{ item.semester }}</strong>
+            <span>
+              {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:item.status %}
+            </span>
+          </div>
+        {% empty %}
+          <p>{% trans "No semester progress." %}</p>
+        {% endfor %}
+      </section>
+      {% if progress_components %}
+        <section class="surface"><div class="section-header"><div>
+              <p class="eyebrow">{% trans "Components" %}</p>
+              <h3>{% trans "Progress components" %}</h3>
+            </div>
+          </div>
+          {% for item in progress_components %}
+            <div class="description-list"><dt>{{ item.component.name }}</dt>
+              <dd>
+                {{ item.score|default:'—' }}
+                /
+                {{ item.max_score|default:'—' }}
+              </dd>
+            </div>
+          {% endfor %}
+        </section>
+      {% endif %}
+      {% if interviews %}
+        <section class="surface"><div class="section-header"><div>
+              <p class="eyebrow">{% trans "Interviews" %}</p>
+              <h3>{% trans "Interview requests" %}</h3>
+            </div>
+          </div>
+          {% for item in interviews %}
+            <div class="description-list"><strong>{{ item.semester }}</strong>
+              <span>{{ item.get_status_display }}</span>
+            </div>
+          {% endfor %}
+        </section>
+      {% endif %}
+  </div>
+{% endblock %}

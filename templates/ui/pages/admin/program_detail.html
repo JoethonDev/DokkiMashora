@@ -1,0 +1,141 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n ui_tags %}
+{% block title %}
+  {{ application.student.full_name }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% include "ui/components/_page_header.html" with title=application.student.full_name eyebrow=_("Application review") %}
+    <section class="detail-layout"><article class="surface"><div class="section-header"><div>
+            <p class="eyebrow">{% trans "Submitted request" %}</p>
+            <h3>{% trans "Application details" %}</h3>
+          </div>
+        </div>
+        <dl class="description-list"><div>
+            <dt>{% trans "Program" %}</dt>
+            <dd>
+              {% if application.cohort %}
+                {{ application.cohort.diploma }}
+              {% else %}
+                {{ application.course }}
+              {% endif %}
+            </dd>
+          </div>
+          {% if application.cohort %}
+            <div>
+              <dt>{% trans "Cohort" %}</dt>
+              <dd>
+                {{ application.cohort }}
+              </dd>
+            </div>
+          {% endif %}
+          <div>
+            <dt>{% trans "Submitted" %}</dt>
+            <dd>
+              {{ application.created_at|date:"d M Y H:i" }}
+            </dd>
+          </div>
+          <div>
+            <dt>{% trans "Status" %}</dt>
+            <dd>
+              {% include "ui/components/_status.html" with code=application.status label=application.get_status_display %}
+            </dd>
+          </div>
+          <div>
+            <dt>{% trans "Applicant email" %}</dt>
+            <dd>
+              {{ application.student.user.email }}
+            </dd>
+          </div>
+          {% if application.reviewed_by %}
+            <div>
+              <dt>{% trans "Reviewed by" %}</dt>
+              <dd>
+                {{ application.reviewed_by.full_name }}
+              </dd>
+            </div>
+          {% endif %}
+          {% if application.reviewed_at %}
+            <div>
+              <dt>{% trans "Reviewed at" %}</dt>
+              <dd>
+                {{ application.reviewed_at|date:"d M Y H:i" }}
+              </dd>
+            </div>
+          {% endif %}
+        </dl>
+      </article>
+      <article class="surface"><div class="section-header"><div>
+            <p class="eyebrow">{% trans "Workflow" %}</p>
+            <h3>{% trans "Decision" %}</h3>
+          </div>
+        </div>
+        <form method="post"
+              hx-target="#main"
+              hx-indicator="#global-loading"
+              hx-disabled-elt="find button, find textarea">{% csrf_token %}
+          {% if form and form.non_field_errors %}
+            <div class="alert alert-error" role="alert">{% for error in form.non_field_errors %}
+                <p>{{ error }}</p>
+              {% endfor %}
+            </div>
+          {% endif %}
+          <div class="field"><label for="admin-notes">{% trans "Reviewer notes" %}</label>
+            <textarea id="admin-notes" name="admin_notes" rows="5">{% if admin_notes %}
+                  {{ admin_notes }}
+                {% endif %}
+                  </textarea>
+          </div>
+          <div class="field"><label for="rejection-reason">{% trans "Rejection reason" %}
+              <span aria-hidden="true">*</span>
+            </label>
+            <textarea id="rejection-reason" name="rejection_reason" rows="3" aria-required="true">{% if rejection_reason %}
+                    {{ rejection_reason }}
+                  {% endif %}
+                    </textarea>
+          </div>
+          <div class="inline-actions"><button class="button button-success"
+                    name="action"
+                    value="accept"
+                    type="submit">{% trans "Accept application" %}</button>
+            <button class="button button-danger"
+                    name="action"
+                    value="reject"
+                    type="submit">{% trans "Reject application" %}</button>
+          </div>
+        </form>
+      </article>
+    </section>
+    <section class="surface"><div class="section-header"><div>
+          <p class="eyebrow">{% trans "Audit" %}</p>
+          <h3>{% trans "Decision history" %}</h3>
+        </div>
+      </div>
+      {% if decision_display_rows %}
+        <div class="timeline">{% for decision, old_status, new_status in decision_display_rows %}
+            <div>
+              <i></i>
+              <p>
+                <strong>
+                  {{ old_status }}
+                  →
+                  {{ new_status }}
+                </strong>
+                <small>
+                  {{ decision.actor }}
+                  ·
+                  {{ decision.created_at|date:"d M Y H:i" }}
+                  {% if decision.reason %}
+                    ·
+                    {{ decision.reason }}
+                  {% endif %}
+                </small>
+              </p>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        {% include "ui/components/_empty_state.html" with title=_("No decisions recorded") message=_("Workflow activity will appear here.") %}
+      {% endif %}
+    </section>
+  </div>
+{% endblock %}

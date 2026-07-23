@@ -1,0 +1,366 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n ui_tags %}
+{% block title %}
+  {{ title|default:_("Entrance exams") }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% trans "Assessment operations" as eyebrow %}
+    {% trans "Entrance exams" as default_title %}
+    {% trans "Create exams, manage invitations, grade attempts, and inspect delivery history." as description %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title|default:default_title description=description %}
+    {% if question_answer_pairs %}
+      <section class="surface"><h2>
+          {{ attempt.exam }}
+          ·
+          {{ attempt.student }}
+        </h2>
+        <form method="post">{% csrf_token %}
+          {% for question,answer,max_score in question_answer_pairs %}
+            <fieldset>
+              <legend>
+                {{ question.order }}
+                .
+                {{ question.text }}
+              </legend>
+              <label>
+                {% trans "Score" %}
+                <input name="score_{{ question.id }}"
+                       value="{{ answer.score|default:'' }}"
+                       type="number"
+                       min="0"
+                       max="{{ max_score }}"
+                       step="0.01"></label>
+              <label>
+                {% trans "Feedback" %}
+                <textarea name="feedback_{{ question.id }}">{{ answer.feedback|default:'' }}
+        </textarea>
+              </label>
+            </fieldset>
+          {% endfor %}
+          <button class="button button-primary" type="submit">{% trans "Save grades" %}</button>
+        </form>
+      </section>
+    {% elif exam and tab %}
+      <section class="surface"><div class="section-header"><div>
+            <p class="eyebrow">{% trans "Exam" %}</p>
+            <h2>{{ exam.title }}</h2>
+          </div>
+        </div>
+        <nav class="tabs"><a href="?tab=invitation" {% if tab == 'invitation' %}aria-current="page"{% endif %}>{% trans "Invitations" %}</a>
+          <a href="?tab=results" {% if tab == 'results' %}aria-current="page"{% endif %}>{% trans "Results" %}</a>
+          <a href="?tab=history" {% if tab == 'history' %}aria-current="page"{% endif %}>{% trans "History" %}</a>
+        </nav>
+        {% if tab == 'invitation' %}
+          <form method="get"><input type="hidden" name="tab" value="invitation"><input name="iq" value="{{ iq }}"><button class="button button-ghost" type="submit">{% trans "Search" %}</button>
+          </form>
+          <form method="post">{% csrf_token %}
+            <input type="hidden" name="tab" value="invitation">{% for item in invitation_page %}
+              <label>
+                <input type="checkbox" name="student_ids" value="{{ item.student.id }}">{{ item.student.full_name|default:item.student }}
+                ·
+                {{ item.get_status_display }}
+              </label>
+            {% empty %}
+              <p>{% trans "No invitation candidates." %}</p>
+            {% endfor %}
+            <button class="button button-primary" type="submit">{% trans "Send invitations" %}</button>
+          </form>
+        {% elif tab == 'results' %}
+          <form method="get"><input type="hidden" name="tab" value="results"><input name="rq" value="{{ rq }}"><select name="result"><option value="">{% trans "All results" %}</option>
+              <option value="pass">{% trans "Pass" %}</option>
+              <option value="fail">{% trans "Fail" %}</option>
+            </select>
+            <button class="button button-info" type="submit">{% trans "Filter" %}</button>
+          </form>
+          <form method="post">{% csrf_token %}
+            <input type="hidden" name="tab" value="results">{% for item in results_page %}
+              <label>
+                <input type="checkbox" name="student_ids" value="{{ item.student.id }}">{{ item.student.full_name|default:item.student }}
+                ·
+                {{ item.result }}
+              </label>
+            {% empty %}
+              <p>{% trans "No results." %}</p>
+            {% endfor %}
+            <button class="button button-primary" type="submit">{% trans "Send results" %}</button>
+          </form>
+        {% else %}
+          <form method="get"><input type="hidden" name="tab" value="history"><input name="hq" value="{{ hq }}"><button class="button button-ghost" type="submit">{% trans "Search history" %}</button>
+          </form>
+          <form method="post">{% csrf_token %}
+            <input type="hidden" name="tab" value="history">{% for item in history_page %}
+              <label>
+                <input type="checkbox" name="log_ids" value="{{ item.id }}">{{ item.recipient }}
+                ·
+                {{ item.status }}
+              </label>
+            {% empty %}
+              <p>{% trans "No email history." %}</p>
+            {% endfor %}
+            <button class="button button-primary" type="submit">{% trans "Resend emails" %}</button>
+          </form>
+        {% endif %}
+      </section>
+    {% elif form and formset %}
+      <form method="post">{% csrf_token %}
+        {% for field in form %}
+          {% include "ui/components/_field.html" %}
+        {% endfor %}
+        <fieldset class="choices-section" data-visible-for="mcq">
+          <legend>{% trans "Choices" %}</legend>
+          {{ formset.management_form }}
+          <div id="choice-forms">
+            {% for choice_form in formset %}
+              <div class="choice-row">
+                {% for hidden in choice_form.hidden_fields %}
+                  {{ hidden }}
+                {% endfor %}
+                <div class="form-grid">
+                  {% include "ui/components/_field.html" with field=choice_form.text %}
+                  {% include "ui/components/_field.html" with field=choice_form.score %}
+                  {% include "ui/components/_field.html" with field=choice_form.order %}
+                </div>
+                {% if choice_form.instance.pk %}
+                  <label class="delete-radio">
+                    {{ choice_form.DELETE }}
+                    {% trans "Remove choice" %}
+                  </label>
+                {% endif %}
+                {% if choice_form.non_field_errors %}
+                  <div class="field-error" role="alert">{{ choice_form.non_field_errors }}</div>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+          <button type="button" class="button button-ghost" id="add-choice-btn">{% trans "Add choice" %}</button>
+        </fieldset>
+        <div class="form-actions">
+          <button class="button button-primary" type="submit">{% trans "Save question" %}</button>
+          <a class="button button-ghost" href="{% url 'entrance_exams:admin_detail' exam.id %}">{% trans "Cancel" %}</a>
+        </div>
+      </form>
+    {% elif form %}
+      <form method="post">{% csrf_token %}
+        {% for field in form %}
+          {% include "ui/components/_field.html" %}
+        {% endfor %}
+        <button class="button button-primary" type="submit">{% trans "Save exam" %}</button>
+      </form>
+      {% if exam %}
+        <a class="button button-secondary"
+           href="{% url 'entrance_exams:admin_detail' exam.id %}">{% trans "Back" %}</a>
+      {% endif %}
+    {% elif exam %}
+      <section class="surface"><div class="section-header"><div>
+            <p class="eyebrow">{% trans "Exam" %}</p>
+            <h2>{{ exam.title }}</h2>
+          </div>
+        </div>
+        <p>{{ exam.description }}</p>
+        <p>
+          {% include "ui/components/_status.html" with code=exam.is_active|yesno:"active,inactive" label=exam.is_active|yesno:_("Active,Inactive") %}
+        </p>
+        <div class="inline-actions"><a class="button button-info"
+             href="{% url 'entrance_exams:admin_edit_exam' exam.id %}">{% trans "Edit" %}</a>
+          <a class="button button-info"
+             href="{% url 'entrance_exams:admin_preview' exam.id %}">{% trans "Preview" %}</a>
+          <a class="button button-info"
+             href="{% url 'entrance_exams:admin_cohort_email' exam.id %}">{% trans "Cohort emails" %}</a>
+          <form method="post"
+                action="{% url 'entrance_exams:admin_toggle_active' exam.id %}">{% csrf_token %}
+            <button class="button button-warning" type="submit">{% trans "Toggle active" %}</button>
+          </form>
+          <form method="post"
+                action="{% url 'entrance_exams:admin_finalize_pending' exam.id %}">{% csrf_token %}
+            <button class="button button-warning" type="submit">{% trans "Finalize pending" %}</button>
+          </form>
+        </div>
+      </section>
+      <section class="surface"><div class="section-header"><div>
+            <p class="eyebrow">{% trans "Content" %}</p>
+            <h3>{% trans "Questions" %}</h3>
+          </div>
+        </div>
+        {% for item in exam.questions.all %}
+          <div class="description-list"><strong>
+              {{ item.order }}
+              .
+              {{ item.text }}
+            </strong>
+            <div class="inline-actions"><a class="button button-info"
+                 href="{% url 'entrance_exams:admin_edit_question' exam.id item.id %}">{% trans "Edit" %}</a>
+              <form method="post"
+                    action="{% url 'entrance_exams:admin_delete_question' exam.id item.id %}">{% csrf_token %}
+                <button class="button button-danger" type="submit">{% trans "Delete" %}</button>
+              </form>
+            </div>
+          </div>
+        {% empty %}
+          <p>{% trans "No questions." %}</p>
+        {% endfor %}
+        <a class="button button-primary"
+           href="{% url 'entrance_exams:admin_add_question' exam.id %}">{% trans "Add question" %}</a>
+      </section>
+    {% elif page_kind == 'exams' %}
+      <section class="surface"><div class="table-shell"><table>
+            <thead>
+              <tr>
+                <th>{% trans "Exam" %}</th>
+                <th>{% trans "Cohort / scope" %}</th>
+                <th>{% trans "Window / duration" %}</th>
+                <th>{% trans "Attempts" %}</th>
+                <th>{% trans "Status" %}</th>
+                <th>{% trans "Actions" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in page_obj %}
+                <tr>
+                  <td class="cell-stack"><strong>{{ item.title }}</strong>
+                    <small>{{ item.description|truncatewords:8|default:'—' }}</small>
+                  </td>
+                  <td>{{ item.cohort|default:_("All") }}</td>
+                  <td class="cell-stack"><small>{{ item.open_at|date:"DATE_FORMAT"|default:'—' }}</small>
+                    <small>{{ item.close_at|date:"DATE_FORMAT"|default:'—' }}</small>
+                  </td>
+                  <td>{{ item.duration_minutes|default:'—' }}</td>
+                  <td>
+                    {% include "ui/components/_status.html" with code=item.is_active|yesno:"active,inactive" label=item.is_active|yesno:_("Active,Inactive") %}
+                  </td>
+                  <td>
+                    <div class="inline-actions"><a class="button button-info"
+                         href="{% url 'entrance_exams:admin_detail' item.id %}">{% trans "Open" %}</a>
+                    </div>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="6"><div class="empty-state"><span>&#9679;</span>
+                      <h3>{% trans "No entrance exams created." %}</h3>
+                      <a class="button button-primary"
+                         href="{% url 'entrance_exams:admin_create_exam' %}">{% trans "Create exam" %}</a>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% include "ui/components/_pagination.html" %}
+      </section>
+    {% elif page_kind == 'grading' %}
+      <section class="surface"><div class="section-header"><div>
+            <p class="eyebrow">{% trans "Grading" %}</p>
+            <h3>{% trans "Attempts to grade" %}</h3>
+          </div>
+        </div>
+        <div class="table-shell"><table>
+            <thead>
+              <tr>
+                <th>{% trans "Exam" %}</th>
+                <th>{% trans "Student" %}</th>
+                <th>{% trans "Status" %}</th>
+                <th>{% trans "Actions" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in page_obj %}
+                <tr>
+                  <td>{{ item.exam }}</td>
+                  <td>{{ item.student.full_name|default:item.student }}</td>
+                  <td>{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
+                  <td>
+                    <div class="inline-actions"><a class="button button-info"
+                         href="{% url 'entrance_exams:admin_grade_attempt' item.id %}">{% trans "Grade" %}</a>
+                    </div>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="4">{% trans "No attempts to grade." %}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    {% elif page_kind == 'email_log' %}
+      <section class="surface"><form class="filter-toolbar" method="get"><label class="search-input"><span>&#8981;</span>
+            <input name="q"
+                   value="{{ search_value }}"
+                   type="search"
+                   placeholder="{% trans 'Search…' %}"></label>
+          <label class="select-field"><span>{% trans "Action" %}</span>
+            <select name="action"><option value="">{% trans "All actions" %}</option>
+              {% for value,label in action_choices %}
+                <option value="{{ value }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="select-field"><span>{% trans "Status" %}</span>
+            <select name="status"><option value="">{% trans "All statuses" %}</option>
+              {% for value,label in status_choices %}
+                <option value="{{ value }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <button class="button button-info" type="submit">{% trans "Filter" %}</button>
+        </form>
+        <div class="table-shell"><table>
+            <thead>
+              <tr>
+                <th>{% trans "Recipient" %}</th>
+                <th>{% trans "Action" %}</th>
+                <th>{% trans "Status" %}</th>
+                <th>{% trans "Sent" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in page_obj %}
+                <tr>
+                  <td>{{ item.recipient }}</td>
+                  <td>{{ item.action }}</td>
+                  <td>{% include "ui/components/_status.html" with code=item.status label=item.status %}</td>
+                  <td>{{ item.sent_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="4">{% trans "No email logs." %}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    {% elif page_obj %}
+      <section class="surface"><div class="table-shell"><table>
+            <thead>
+              <tr>
+                <th>{% trans "Record" %}</th>
+                <th>{% trans "Status" %}</th>
+                <th>{% trans "Date" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in page_obj %}
+                <tr>
+                  <td>
+                    <strong>{{ item.exam.title|default:item.title|default:item.recipient|default:_("Exam record") }}</strong>
+                  </td>
+                  <td>
+                    {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:item.status|default:'—' %}
+                  </td>
+                  <td>{{ item.created_at|default:item.sent_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="3">{% trans "No records found." %}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    {% endif %}
+  </div>
+{% endblock %}

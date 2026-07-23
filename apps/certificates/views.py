@@ -44,7 +44,7 @@ def admin_template_list(request):
         "pagination_qs": pagination_qs,
         "breadcrumb_items": [{"label": _("Certificate Templates")}],
     }
-    return render(request, "certificates/admin_template_list.html", ctx)
+    return render(request, "ui/pages/admin/certificates.html", {**ctx, "title": _("Certificate templates")})
 
 
 @login_required
@@ -69,7 +69,7 @@ def admin_template_create(request):
             {"label": _("New template")},
         ],
     }
-    return render(request, "certificates/admin_template_form.html", ctx)
+    return render(request, "ui/pages/admin/certificates.html", {**ctx, "title": _("Certificate template")})
 
 
 @login_required
@@ -93,7 +93,7 @@ def admin_template_edit(request, template_id):
             {"label": template.name},
         ],
     }
-    return render(request, "certificates/admin_template_form.html", ctx)
+    return render(request, "ui/pages/admin/certificates.html", {**ctx, "title": _("Certificate template")})
 
 
 # ---------------------------------------------------------------------------
@@ -118,7 +118,7 @@ def admin_certificate_list(request):
         "breadcrumb_items": [{"label": _("Certificates")}],
         "student_id": student_id,
     }
-    return render(request, "certificates/admin_certificate_list.html", ctx)
+    return render(request, "ui/pages/admin/certificates.html", {**ctx, "title": _("Certificates")})
 
 
 @login_required
@@ -230,7 +230,7 @@ def student_certificate_list(request):
     ctx = {
         "certificates": certs,
     }
-    return render(request, "certificates/student_certificate_list.html", ctx)
+    return render(request, "ui/pages/student/certificates.html", {**ctx, "title": _("Certificates")})
 
 
 @student_required

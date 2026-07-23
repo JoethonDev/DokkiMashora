@@ -1,0 +1,45 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n %}
+{% block title %}
+  {% trans "Diplomas" %}
+{% endblock %}
+{% block page_title %}
+  {% trans "Diplomas" %}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% trans "Academics" as eyebrow %}
+    {% trans "Diplomas" as title %}
+    {% trans "Manage diploma programs, semesters, and cohorts." as description %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
+    <section class="surface"><form class="filter-toolbar"
+      method="get"
+      hx-get="{% url 'academics:admin_diploma_list' %}"
+      hx-trigger="input changed delay:250ms from:#diploma-search, change from:select, submit"
+      hx-target="#diploma-results"
+      hx-swap="outerHTML"
+      hx-push-url="true"
+      hx-sync="this:replace"><label class="search-input"><span>&#8981;</span>
+      <input id="diploma-search"
+             name="q"
+             value="{{ search_value }}"
+             type="search"
+             placeholder="{% trans 'Search diplomas…' %}"></label>
+    <label class="select-field"><span>{% trans "Status" %}</span>
+      <select id="diploma-status" name="is_active"><option value="">{% trans "All" %}</option>
+        {% for option in filters.0.options %}
+          <option value="{{ option.value }}"
+                  {% if option.selected %} selected {% endif %}>{{ option.label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button class="button button-info filter-button" type="submit">{% trans "Filter" %}</button>
+    <a class="button button-ghost"
+       href="{% url 'academics:admin_diploma_list' %}">{% trans "Reset" %}</a>
+  </form>
+  {% include "ui/fragments/admin/_diploma_table.html" %}
+  </section>
+  <div class="inline-actions"><a class="button button-primary"
+       href="{% url 'academics:admin_diploma_create' %}">{% trans "Create diploma" %}</a>
+  </div>
+  </div>
+{% endblock %}

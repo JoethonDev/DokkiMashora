@@ -1,0 +1,53 @@
+{% load i18n %}
+<div id="question-form">
+  <form method="post">{% csrf_token %}
+    {% for field in form %}
+      {% include "ui/components/_field.html" %}
+    {% endfor %}
+    <fieldset class="choices-section" data-visible-for="mcq">
+      <legend>{% trans "Choices" %}</legend>
+      {{ formset.management_form }}
+      <div id="choice-forms">
+        {% for choice_form in formset %}
+          <div class="choice-row">
+            {% for hidden in choice_form.hidden_fields %}
+              {{ hidden }}
+            {% endfor %}
+            <div class="form-grid">
+              {% include "ui/components/_field.html" with field=choice_form.text %}
+              {% include "ui/components/_field.html" with field=choice_form.score %}
+              {% include "ui/components/_field.html" with field=choice_form.order %}
+            </div>
+            {% if choice_form.instance.pk %}
+              <label class="delete-radio">
+                {{ choice_form.DELETE }}
+                {% trans "Remove choice" %}
+              </label>
+            {% endif %}
+            {% if choice_form.non_field_errors %}
+              <div class="field-error" role="alert">{{ choice_form.non_field_errors }}</div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+      <button type="button" class="button button-ghost" id="add-choice-btn">{% trans "Add choice" %}</button>
+    </fieldset>
+    <div class="form-actions">
+      <button class="button button-primary" type="submit">{% trans "Save question" %}</button>
+      <a class="button button-ghost" href="{% url 'entrance_exams:admin_detail' exam.id %}">{% trans "Cancel" %}</a>
+    </div>
+  </form>
+</div>
+<template id="choice-template">
+  <div class="choice-row">
+    <div class="form-grid">
+      {% include "ui/components/_field.html" with field=formset.empty_form.text %}
+      {% include "ui/components/_field.html" with field=formset.empty_form.score %}
+      {% include "ui/components/_field.html" with field=formset.empty_form.order %}
+    </div>
+    <label class="delete-radio">
+      <input type="checkbox" name="choices-__prefix__-DELETE" id="id_choices-__prefix__-DELETE">
+      {% trans "Remove choice" %}
+    </label>
+  </div>
+</template>

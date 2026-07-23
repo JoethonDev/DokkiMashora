@@ -1,0 +1,60 @@
+{% load i18n %}
+<section id="student-content" class="page-stack enter-view"><section class="page-intro"><div>
+      <p class="eyebrow">{% trans "Assessment" %}</p>
+      <h2>{% trans "Entrance exams" %}</h2>
+      <p>{% trans "See assigned exams, open attempts, and released results." %}</p>
+    </div>
+    <span class="status-pill blue">{{ exam_assignments|length }}
+      {% trans "assignments" %}
+    </span>
+  </section>
+  <section class="surface"><div class="table-shell"><table>
+        <thead>
+          <tr>
+            <th>{% trans "Exam" %}</th>
+            <th>{% trans "Assigned" %}</th>
+            <th>{% trans "Status" %}</th>
+            <th>{% trans "Result" %}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in exam_assignments %}
+            <tr>
+              <td>
+                <strong>{{ item.exam.title }}</strong>
+                <small>{{ item.exam.description|truncatewords:12 }}</small>
+              </td>
+              <td>{{ item.created_at|date:"d M Y"|default:'—' }}</td>
+              <td>
+                <span class="status-pill {% if item.status == attempt_status_graded %} green {% elif item.status == 'in_progress' %} amber {% else %} blue {% endif %}">{{ item.get_status_display|default:item.status }}
+                </span>
+              </td>
+              <td>
+                {% if item.result %}
+                  {{ item.result }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td>
+                {% if item.status == 'assigned' or item.status == 'in_progress' %}
+                  <a class="button button-primary"
+                     href="{% url 'entrance_exams:student_list' %}">{% trans "Open" %}</a>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5"><div class="empty-state"><span>◇</span>
+                  <h3>{% trans "No entrance exams" %}</h3>
+                  <p>{% trans "Assigned entrance exams and released results will appear here." %}</p>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</section>

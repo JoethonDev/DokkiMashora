@@ -1,0 +1,144 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n ui_tags %}
+{% block title %}
+  {% trans "Staff assignments" %}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% trans "Accounts" as eyebrow %}
+    {% trans "Staff assignments" as title %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=staff_role %}
+    <p class="muted">{{ staff_user }}</p>
+    <section class="surface"><div class="section-header"><div>
+          <p class="eyebrow">{% trans "Teaching" %}</p>
+          <h3>{% trans "Teacher assignments" %}</h3>
+        </div>
+      </div>
+      <form class="filter-toolbar"
+            method="post"
+            action="{% url 'accounts:admin_teacher_assignment_create' staff_user.id %}">{% csrf_token %}
+        <label class="select-field"><span>{% trans "Course version" %}</span>
+          <select name="course_version" required>
+            <option value="">{% trans "Select" %}</option>
+            {% for item in course_versions %}
+              <option value="{{ item.id }}">{{ item.course }}
+                ·
+                {{ item.student.full_name|default:item }}
+              </option>
+            {% endfor %}
+          </select>
+        </label>
+        <button class="button button-primary" type="submit">{% trans "Assign teacher" %}</button>
+      </form>
+      <div class="table-shell"><table>
+          <thead>
+            <tr>
+              <th>{% trans "Course" %}</th>
+              <th>{% trans "Status" %}</th>
+              <th>{% trans "Actions" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in teacher_assignments %}
+              <tr>
+                <td>{{ item.course_version.course }}</td>
+                <td>
+                  {% include "ui/components/_status.html" with code=item.active|yesno:"active,revoked" label=item.active|yesno:_("Active,Revoked") %}
+                </td>
+                <td>
+                  {% if item.active %}
+                    <form method="post"
+                          action="{% url 'accounts:admin_teacher_assignment_delete' staff_user.id item.id %}">{% csrf_token %}
+                      <button class="button button-danger" type="submit">{% trans "Revoke" %}</button>
+                    </form>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="3">{% trans "No teacher assignments." %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <section class="surface"><div class="section-header"><div>
+          <p class="eyebrow">{% trans "Moderation" %}</p>
+          <h3>{% trans "Moderator assignments" %}</h3>
+        </div>
+      </div>
+      <form class="filter-toolbar"
+            method="post"
+            action="{% url 'accounts:admin_moderator_assignment_create' staff_user.id %}">{% csrf_token %}
+        <label class="select-field"><span>{% trans "Course version" %}</span>
+          <select name="course_version" required>
+            <option value="">{% trans "Select" %}</option>
+            {% for item in course_versions %}
+              <option value="{{ item.id }}">{{ item.course }}
+                ·
+                {{ item.student.full_name|default:item }}
+              </option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="select-field"><span>{% trans "Scope" %}</span>
+          <select name="scope"><option value="cohort">{% trans "Cohort" %}</option>
+            <option value="cluster">{% trans "Cluster" %}</option>
+          </select>
+        </label>
+        <label class="select-field"><span>{% trans "Cohort" %}</span>
+          <select name="cohort"><option value="">{% trans "Select" %}</option>
+            {% for item in cohorts %}
+              <option value="{{ item.id }}">{{ item }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="select-field"><span>{% trans "Cluster" %}</span>
+          <select name="cluster"><option value="">{% trans "Select" %}</option>
+            {% for item in clusters %}
+              <option value="{{ item.id }}">{{ item.cohort }}
+                ·
+                {{ item.name }}
+              </option>
+            {% endfor %}
+          </select>
+        </label>
+        <button class="button button-primary" type="submit">{% trans "Assign moderator" %}</button>
+      </form>
+      <div class="table-shell"><table>
+          <thead>
+            <tr>
+              <th>{% trans "Version" %}</th>
+              <th>{% trans "Cohort" %}</th>
+              <th>{% trans "Cluster" %}</th>
+              <th>{% trans "Actions" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in moderator_assignments %}
+              <tr>
+                <td>{{ item.course_version }}</td>
+                <td>{{ item.cohort|default:'—' }}</td>
+                <td>{{ item.cluster|default:'—' }}</td>
+                <td>
+                  {% if item.active %}
+                    <form method="post"
+                          action="{% url 'accounts:admin_moderator_assignment_delete' staff_user.id item.id %}">{% csrf_token %}
+                      <button class="button button-danger" type="submit">{% trans "Revoke" %}</button>
+                    </form>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="4">{% trans "No moderator assignments." %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <div class="inline-actions"><a class="button button-secondary" href="{{ back_url }}">{% trans "Back" %}</a>
+    </div>
+  </div>
+{% endblock %}

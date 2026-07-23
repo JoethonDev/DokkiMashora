@@ -1,0 +1,57 @@
+{% load i18n ui_tags %}
+<section id="course-results" class="table-section" aria-live="polite"><div class="section-header"><div>
+      <p class="eyebrow">{% trans "Offerings" %}</p>
+      <h3>
+        {{ page_obj.paginator.count }}
+        {% trans "courses" %}
+      </h3>
+    </div>
+    {% include "ui/components/_pagination.html" %}
+  </div>
+  {% if page_obj.object_list %}
+    <div class="table-shell"><table>
+        <thead>
+          <tr>
+            <th>{% trans "Course" %}</th>
+            <th>{% trans "Structure" %}</th>
+            <th>{% trans "Enrollments" %}</th>
+            <th>{% trans "Status" %}</th>
+            <th>{% trans "Updated" %}</th>
+            <th>{% trans "Actions" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in page_obj %}
+            <tr>
+              <td class="cell-stack"><strong>{{ c.title }}</strong>
+                <small>{{ c.description|truncatewords:12|default:'—' }}</small>
+              </td>
+              <td>
+                {{ c.version_count }}
+                {% trans "versions" %}
+                /
+                {{ c.lecture_count }}
+                {% trans "lectures" %}
+              </td>
+              <td>{{ c.enrollment_count }}</td>
+              <td>
+                {% include "ui/components/_status.html" with code=c.is_active|yesno:"active,inactive" label=c.is_active|yesno:_("Active,Inactive") %}
+              </td>
+              <td>{{ c.updated_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</td>
+              <td>
+                <div class="inline-actions"><a class="button button-info"
+                     href="{% url 'academics:admin_course_detail' c.id %}">{% trans "Open" %}</a>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state"><span>&#9679;</span>
+      <h3>{% trans "No courses found" %}</h3>
+      <p>{% trans "Try changing the search or filters." %}</p>
+    </div>
+  {% endif %}
+</section>

@@ -1,0 +1,168 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n ui_tags %}
+{% block title %}
+  {{ assessment.title }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% include "ui/components/_page_header.html" with title=assessment.title description=assessment.description eyebrow=_("Assessment") %}
+    <section class="surface"><div class="section-header"><div>
+          <p class="eyebrow">{% trans "Details" %}</p>
+          <h3>{% trans "Assessment info" %}</h3>
+        </div>
+      </div>
+      <dl class="description-list"><div>
+          <dt>{% trans "Type" %}</dt>
+          <dd>
+            {{ assessment.get_assessment_type_display }}
+          </dd>
+        </div>
+        <div>
+          <dt>{% trans "Total points" %}</dt>
+          <dd>
+            {{ assessment.total_points }}
+          </dd>
+        </div>
+        <div>
+          <dt>{% trans "Active" %}</dt>
+          <dd>
+            {% include "ui/components/_status.html" with code=assessment.is_active|yesno:"active,inactive" label=assessment.is_active|yesno:_("Active,Inactive") %}
+          </dd>
+        </div>
+        {% if assessment.course_version %}
+          <div>
+            <dt>{% trans "Scope" %}</dt>
+            <dd>
+              {% trans "Course" %}
+              :
+              {{ assessment.course_version.course }}
+              —
+              {{ assessment.course_version }}
+            </dd>
+          </div>
+        {% elif assessment.semester and assessment.cohort %}
+          <div>
+            <dt>{% trans "Scope" %}</dt>
+            <dd>
+              {% trans "Diploma" %}
+              :
+              {{ assessment.cohort.diploma }}
+              —
+              {{ assessment.semester }}
+              (
+              {{ assessment.cohort }}
+              )
+            </dd>
+          </div>
+        {% elif assessment.semester %}
+          <div>
+            <dt>{% trans "Scope" %}</dt>
+            <dd>
+              {{ assessment.semester }}
+            </dd>
+          </div>
+        {% endif %}
+        {% if assessment.open_at %}
+          <div>
+            <dt>{% trans "Opens" %}</dt>
+            <dd>
+              {{ assessment.open_at|date:"d M Y H:i" }}
+            </dd>
+          </div>
+        {% endif %}
+        {% if assessment.close_at %}
+          <div>
+            <dt>{% trans "Closes" %}</dt>
+            <dd>
+              {{ assessment.close_at|date:"d M Y H:i" }}
+            </dd>
+          </div>
+        {% endif %}
+      </dl>
+    </section>
+    {% if sections %}
+      <section class="surface"><div class="section-header"><div>
+            <p class="eyebrow">{% trans "Structure" %}</p>
+            <h3>{% trans "Sections" %}</h3>
+          </div>
+        </div>
+        <div class="table-shell"><table>
+            <thead>
+              <tr>
+                <th>{% trans "Section" %}</th>
+                <th>{% trans "Questions" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for section in sections %}
+                <tr>
+                  <td>{{ section }}</td>
+                  <td>{{ section.manual_questions.count }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    {% endif %}
+    <section class="surface"><div class="section-header"><div>
+          <p class="eyebrow">{% trans "Results" %}</p>
+          <h3>{% trans "Attempts" %}</h3>
+        </div>
+      </div>
+      {% if attempts %}
+        <div class="table-shell"><table>
+            <thead>
+              <tr>
+                <th>{% trans "Student" %}</th>
+                <th>{% trans "Score" %}</th>
+                <th>{% trans "Status" %}</th>
+                <th>{% trans "Submitted" %}</th>
+                <th>{% trans "Actions" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for attempt in attempts %}
+                <tr>
+                  <td>{{ attempt.student }}</td>
+                  <td>
+                    {{ attempt.score|default:'—' }}
+                    /
+                    {{ attempt.assessment.total_points }}
+                  </td>
+                  <td>{% include "ui/components/_status.html" with code=attempt.status label=attempt.get_status_display %}</td>
+                  <td>{{ attempt.submitted_at|date:"d M Y H:i"|default:'—' }}</td>
+                  <td>
+                    <a class="button button-info"
+                       href="{% url 'assessments:admin_grade_detail' attempt.id %}">{% trans "Grade" %}</a>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        {% include "ui/components/_empty_state.html" with title=_("No attempts") message=_("No student attempts for this assessment.") %}
+      {% endif %}
+    </section>
+    <div class="inline-actions surface" class="actions-bar"><a class="button button-info"
+         href="{% url 'assessments:admin_grade_list' %}">{% trans "Grade queue" %}</a>
+      <a class="button button-primary"
+         href="{% url 'assessments:admin_edit' assessment.id %}">{% trans "Edit" %}</a>
+      <form method="post"
+            action="{% url 'assessments:admin_toggle' assessment.id %}"
+            class="form-inline">{% csrf_token %}
+        <button class="button button-secondary" type="submit">{% if assessment.is_active %}
+            {% trans "Deactivate" %}
+          {% else %}
+            {% trans "Activate" %}
+          {% endif %}
+        </button>
+      </form>
+      <form method="post"
+            action="{% url 'assessments:admin_recalculate' assessment.id %}"
+            class="form-inline">{% csrf_token %}
+        <button class="button button-secondary" type="submit">{% trans "Recalculate totals" %}</button>
+      </form>
+    </div>
+  </div>
+{% endblock %}

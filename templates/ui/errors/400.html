@@ -1,0 +1,6 @@
+{% extends "ui/errors/_error_page.html" %}
+{% load i18n %}
+{% block title %}{% trans "Bad request" %}{% endblock %}
+{% block status_code %}400{% endblock %}
+{% block page_title %}{% trans "Bad request" %}{% endblock %}
+{% block message %}{% trans "The request could not be understood." %}{% endblock %}

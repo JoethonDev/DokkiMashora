@@ -1,0 +1,6 @@
+{% extends "ui/errors/_error_page.html" %}
+{% load i18n %}
+{% block title %}{% trans "Page not found" %}{% endblock %}
+{% block status_code %}404{% endblock %}
+{% block page_title %}{% trans "Page not found" %}{% endblock %}
+{% block message %}{% trans "The page you requested does not exist." %}{% endblock %}

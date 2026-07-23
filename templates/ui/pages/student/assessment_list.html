@@ -1,0 +1,29 @@
+{% extends "ui/layouts/student.html" %}
+{% load i18n %}
+{% block title %}
+  {% trans "Assessments" %}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view"><section class="page-intro"><div>
+        <p class="eyebrow">{% trans "Learning" %}</p>
+        <h2>{% trans "Assessments" %}</h2>
+        <p>{% trans "Open available assessments and review your current attempt status." %}</p>
+      </div>
+    </section>
+    <section class="program-grid">{% for card in assessment_cards %}
+        <article class="surface"><h3>{{ card.assessment.title }}</h3>
+          <p class="muted">{{ card.assessment.get_assessment_type_display }}</p>
+          {% if card.latest_attempt %}
+            <span class="status-pill blue">{{ card.latest_attempt.get_status_display }}</span>
+          {% endif %}
+          <div class="inline-actions"><a class="button button-primary"
+               href="{% url 'assessments:instructions' card.assessment.id %}">{% trans "Open" %}</a>
+          </div>
+        </article>
+      {% empty %}
+        <div class="empty-state"><h3>{% trans "No assessments available" %}</h3>
+        </div>
+      {% endfor %}
+    </section>
+  </div>
+{% endblock %}

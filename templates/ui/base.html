@@ -1,0 +1,20 @@
+{% load i18n static %}
+<!DOCTYPE html>
+<html lang="{{ LANGUAGE_CODE|default:'ar' }}"
+      dir="{% if LANGUAGE_BIDI %}rtl{% else %}ltr{% endif %}"><head>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{% block title %}DokkiMashora{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800;900&family=Inter:wght@400;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}"><script src="{% static 'js/htmx.min.js' %}" defer></script>
+    <script src="{% static 'js/alpine.min.js' %}" defer></script>
+    <script src="{% static 'js/ui.js' %}" defer></script>
+  </head>
+  <body hx-indicator="#global-loading">
+    {% include "ui/components/_alert.html" %}
+    <div id="request-feedback" class="request-feedback" role="alert" aria-live="assertive" data-msg-error="{% trans 'Request failed. Please try again.' %}"></div>
+    {% include "ui/components/_loading_indicator.html" %}
+    {% block shell %}{% endblock %}
+    {% include "ui/components/_toast_region.html" %}
+  </body>
+</html>

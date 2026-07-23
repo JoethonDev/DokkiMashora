@@ -1,0 +1,37 @@
+{% extends "ui/layouts/public.html" %}
+{% load i18n %}
+{% block public_header %}{% endblock %}
+{% block title %}
+  {% trans "Register" %}
+{% endblock %}
+{% block content %}
+  <section class="auth-page"><div class="auth-visual"><a class="brand light" href="{% url 'core:landing' %}"><span class="brand-mark">DM</span>
+    <span><strong>DokkiMashora</strong>
+      <small>{% trans "Learning Management" %}</small></span></a>
+    <div class="auth-message"><p class="eyebrow">{% trans "Begin here" %}</p>
+      <h2>{% trans "Make space for meaningful learning." %}</h2>
+      <p>{% trans "Create your account, explore available programs, and submit your application when ready." %}</p>
+    </div>
+  </div>
+  <div class="auth-form-area"><section class="auth-form"><p class="eyebrow">{% trans "Registration" %}</p>
+      <h1>{% trans "Create your account" %}</h1>
+      <p>{% trans "Complete the form to begin your application." %}</p>
+      <form method="post">{% csrf_token %}
+        {% if form.non_field_errors %}
+          <div class="error-state" role="alert">{% for error in form.non_field_errors %}
+              <p>{{ error }}</p>
+            {% endfor %}
+          </div>
+        {% endif %}
+        {% for field in form %}
+          {% include "ui/components/_field.html" %}
+        {% endfor %}
+        <button class="button button-primary button-block" type="submit">{% trans "Create account" %}</button>
+      </form>
+      <p class="auth-help">{% trans "Already registered?" %}
+        <a href="{% url 'accounts:login' %}">{% trans "Log in" %}</a>
+      </p>
+    </section>
+  </div>
+  </section>
+{% endblock %}

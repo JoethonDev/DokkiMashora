@@ -107,14 +107,23 @@ class UserEditForm(forms.ModelForm):
         model = User
         fields = ("email", "full_name", "full_name_ar", "phone", "country_code", "national_id", "status", "is_active")
 
+    STUDENT_ONLY_FIELDS = [
+        "country_code", "national_id", "date_of_birth", "gender", "address",
+        "education", "specialization", "employer", "current_job", "church",
+        "priest_name", "priest_contact",
+    ]
+
     def __init__(self, *args, **kwargs):
         staff_only = kwargs.pop("staff_only", False)
         super().__init__(*args, **kwargs)
+        self.fields["country_code"].choices = [("", _("Select country"))] + COUNTRY_CHOICES
         if staff_only:
             self.fields["role"].choices = [(role, _(role)) for role in ALL_ROLE_GROUPS if role != GROUP_STUDENT]
+            for fname in self.STUDENT_ONLY_FIELDS:
+                if fname in self.fields:
+                    del self.fields[fname]
         else:
             self.fields["role"].choices = [(GROUP_STUDENT, _(GROUP_STUDENT))]
-        self.fields["country_code"].choices = [("", _("Select country"))] + COUNTRY_CHOICES
         profile = getattr(self.instance, "student_profile", None)
         if not self.instance.pk:
             self.fields["new_password"].required = True

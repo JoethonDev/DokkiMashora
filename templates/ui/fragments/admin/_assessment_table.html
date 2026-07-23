@@ -1,0 +1,53 @@
+{% load i18n ui_tags %}
+<section id="assessment-results" class="table-section" aria-live="polite"><div class="section-header"><div>
+      <p class="eyebrow">{% trans "Learning" %}</p>
+      <h3>
+        {{ page_obj.paginator.count }}
+        {% trans "assessments" %}
+      </h3>
+    </div>
+    {% include "ui/components/_pagination.html" %}
+  </div>
+  {% if page_obj.object_list %}
+    <div class="table-shell"><table>
+        <thead>
+          <tr>
+            <th>{% trans "Assessment" %}</th>
+            <th>{% trans "Type" %}</th>
+            <th>{% trans "Attempts" %}</th>
+            <th>{% trans "Status" %}</th>
+            <th>{% trans "Period" %}</th>
+            <th>{% trans "Actions" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in page_obj %}
+            <tr>
+              <td class="cell-stack"><strong>{{ a.title }}</strong>
+                <small>{{ a.description|truncatewords:8|default:'—' }}</small>
+              </td>
+              <td>{{ a.get_assessment_type_display }}</td>
+              <td>{{ a.attempt_count }}</td>
+              <td>
+                {% include "ui/components/_status.html" with code=a.is_active|yesno:"active,inactive" label=a.is_active|yesno:_("Active,Inactive") %}
+              </td>
+              <td class="cell-stack"><small>{{ a.open_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</small>
+                <small>{{ a.close_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</small>
+              </td>
+              <td>
+                <div class="inline-actions"><a class="button button-info"
+                     href="{% url 'assessments:admin_detail' a.id %}">{% trans "Open" %}</a>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state"><span>&#9679;</span>
+      <h3>{% trans "No assessments found" %}</h3>
+      <p>{% trans "Try changing the search or filters." %}</p>
+    </div>
+  {% endif %}
+</section>

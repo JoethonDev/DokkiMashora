@@ -1,0 +1,22 @@
+{% load i18n static %}
+<!DOCTYPE html>
+<html lang="{{ LANGUAGE_CODE|default:'ar' }}"
+      dir="{% if LANGUAGE_BIDI %}rtl{% else %}ltr{% endif %}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ title }}{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+</head>
+<body>
+  <main id="main" class="public-shell">
+    <h1>{% block status_code %}{{ status_code|default:"Error" }}{% endblock %}</h1>
+    <p class="eyebrow">{% block page_title %}{{ title }}{% endblock %}</p>
+    <p>{% block message %}{{ message }}{% endblock %}</p>
+    <div class="inline-actions">
+      <a class="button button-primary" href="/">{% trans "Home" %}</a>
+      {% block extra_actions %}{% endblock %}
+    </div>
+  </main>
+</body>
+</html>

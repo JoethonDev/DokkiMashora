@@ -1,0 +1,60 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n %}
+{% block title %}
+  {% trans "Enrollments" %}
+{% endblock %}
+{% block page_title %}
+  {% trans "Enrollments" %}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% if enrollment_type == "course" %}
+      {% trans "Academics" as eyebrow %}
+      {{ course.title }}
+      —
+      {% trans "Enrollments" as title %}
+      {% trans "Manage course enrollment records." as description %}
+    {% elif enrollment_type == "diploma" %}
+      {% trans "Academics" as eyebrow %}
+      {{ diploma.title }}
+      —
+      {% trans "Enrollments" as title %}
+      {% trans "Manage diploma enrollment records." as description %}
+    {% endif %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
+    <section class="surface"><form class="filter-toolbar"
+      method="get"
+      {% if enrollment_type == "course" %} hx-get="{% url 'academics:admin_course_enrollment_list' course.id %}" {% else %} hx-get="{% url 'academics:admin_diploma_enrollment_list' diploma.id %}" {% endif %}
+      hx-trigger="input changed delay:250ms from:#enrollment-search, change from:select, submit"
+      hx-target="#enrollment-results-boundary"
+      hx-swap="outerHTML"
+      hx-push-url="true"
+      hx-sync="this:replace"><label class="search-input"><span>&#8981;</span>
+      <input id="enrollment-search"
+             name="q"
+             value="{{ search_value }}"
+             type="search"
+             placeholder="{% trans 'Search by name or email…' %}"></label>
+    {% for filter in filters %}
+      <label class="select-field"><span>{{ filter.label }}</span>
+        <select id="filter-{{ filter.name }}"
+                name="{{ filter.name }}"><option value="">{% trans "All" %}</option>
+          {% for option in filter.options %}
+            <option value="{{ option.value }}"
+                    {% if option.selected %} selected {% endif %}>{{ option.label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    {% endfor %}
+    <button class="button button-info filter-button" type="submit">{% trans "Filter" %}</button>
+    {% if enrollment_type == "course" %}
+      <a class="button button-ghost"
+         href="{% url 'academics:admin_course_enrollment_list' course.id %}">{% trans "Reset" %}</a>
+    {% else %}
+      <a class="button button-ghost"
+         href="{% url 'academics:admin_diploma_enrollment_list' diploma.id %}">{% trans "Reset" %}</a>
+    {% endif %}
+  </form>
+  {% include "ui/fragments/admin/_enrollment_table.html" %}
+  </section>
+  </div>
+{% endblock %}

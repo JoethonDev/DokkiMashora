@@ -1,0 +1,196 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n ui_tags %}
+{% block title %}
+  {{ title|default:_("Intake") }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% trans "Admissions" as eyebrow %}
+    {% trans "Intake forms" as title %}
+    {% trans "Create and manage intake forms, fields, and responses." as description %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
+    {% if form %}
+      <form class="surface form-main" method="post">{% csrf_token %}
+        {% for field in form %}
+          {% include "ui/components/_field.html" %}
+        {% endfor %}
+        <button class="button button-primary" type="submit">{% trans "Save" %}</button>
+      </form>
+    {% elif intake_form %}
+      <section class="surface"><div class="section-header"><div>
+            <p class="eyebrow">{% trans "Form" %}</p>
+            <h3>{{ intake_form.title }}</h3>
+          </div>
+        </div>
+        <p>{{ intake_form.description }}</p>
+        <div class="inline-actions"><form method="post"><input type="hidden" name="action" value="toggle_active">{% csrf_token %}
+            <button class="button button-warning" type="submit">{% if intake_form.is_active %}
+                {% trans "Deactivate" %}
+              {% else %}
+                {% trans "Activate" %}
+              {% endif %}
+            </button>
+          </form>
+          <form method="post"><input type="hidden" name="action" value="toggle_required">{% csrf_token %}
+            <button class="button button-warning" type="submit">{% if intake_form.is_required %}
+                {% trans "Make optional" %}
+              {% else %}
+                {% trans "Make required" %}
+              {% endif %}
+            </button>
+          </form>
+        </div>
+      </section>
+      <section class="surface"><div class="section-header"><div>
+            <p class="eyebrow">{% trans "Fields" %}</p>
+            <h3>{% trans "Form fields" %}</h3>
+          </div>
+        </div>
+        {% for field in fields %}
+          <dl class="description-list">
+            <div>
+              <dt>{{ field.label }}</dt>
+              <dd>{{ field.get_field_type_display }}</dd>
+            </div>
+          </dl>
+          <form class="field-form"
+                method="post"
+                action="{% url 'intake_forms:admin_intake_form_field_delete' intake_form.id field.id %}">{% csrf_token %}
+            <button class="button button-danger" type="submit">{% trans "Delete" %}</button>
+          </form>
+        {% empty %}
+          <p>{% trans "No fields yet." %}</p>
+        {% endfor %}
+        {% if field_form %}
+          <form method="post">{% csrf_token %}
+            <input type="hidden" name="action" value="add_field">{% for field in field_form %}
+              {% include "ui/components/_field.html" %}
+            {% endfor %}
+            <button class="button button-primary" type="submit">{% trans "Add field" %}</button>
+          </form>
+        {% endif %}
+      </section>
+      <section class="surface"><div class="section-header"><div>
+            <p class="eyebrow">{% trans "Responses" %}</p>
+            <h3>{% trans "Form responses" %}</h3>
+          </div>
+        </div>
+        {% for item in responses %}
+          <p>
+            <a class="text-button" href="{% url 'intake_forms:admin_intake_response_detail' intake_form.id item.id %}">{{ item.student.full_name|default:item.student }}
+              ·
+              {{ item.submitted_at|date:"SHORT_DATETIME_FORMAT"|default:_("Not submitted") }}
+            </a>
+          </p>
+        {% empty %}
+          <p>{% trans "No responses." %}</p>
+        {% endfor %}
+      </section>
+    {% elif target %}
+      <section class="surface"><div class="section-header"><div>
+            <p class="eyebrow">{% trans "Target" %}</p>
+            <h3>{{ target.name|default:target|default:_("Intake target") }}</h3>
+          </div>
+        </div>
+        <p class="muted">{% trans "Responses for this target" %}</p>
+        {% for item in responses %}
+          <p>
+            {{ item.student.full_name|default:item.student }}
+            ·
+            {{ item.submitted_at|date:"SHORT_DATETIME_FORMAT"|default:_("Not submitted") }}
+          </p>
+        {% empty %}
+          <p>{% trans "No responses." %}</p>
+        {% endfor %}
+      </section>
+    {% elif response %}
+      <section class="surface"><div class="section-header"><div>
+            <p class="eyebrow">{% trans "Response" %}</p>
+            <h3>{{ form_obj.title|default:_("Intake response") }}</h3>
+          </div>
+        </div>
+        <p>{{ response.student }}</p>
+        <dl class="description-list">{% for answer in response.answers.all %}
+            <div>
+              <dt>{{ answer.field.label }}</dt>
+              <dd>
+                {{ answer.value|default:'—' }}
+              </dd>
+            </div>
+          {% endfor %}
+        </dl>
+      </section>
+    {% elif page_obj %}
+      <section class="surface"><div class="table-shell"><table>
+            <thead>
+              <tr>
+                <th>{% trans "Form" %}</th>
+                <th>{% trans "Target type" %}</th>
+                <th>{% trans "Target name" %}</th>
+                <th>{% trans "Required / optional" %}</th>
+                <th>{% trans "Status" %}</th>
+                <th>{% trans "Actions" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in page_obj %}
+                <tr>
+                  <td class="cell-stack"><strong>{{ item.title }}</strong>
+                    <small>{{ item.description|truncatewords:8|default:'—' }}</small>
+                  </td>
+                  <td>
+                    {% if item.course_version %}
+                      {% trans "Course" %}
+                    {% elif item.cohort %}
+                      {% trans "Diploma" %}
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+                  <td class="cell-stack"><strong>
+                      {% if item.course_version %}
+                        {{ item.course_version.course }}
+                      {% elif item.cohort %}
+                        {{ item.cohort.diploma }}
+                      {% endif %}
+                    </strong>
+                    <small>
+                      {% if item.course_version %}
+                        {{ item.course_version }}
+                      {% elif item.cohort %}
+                        {{ item.cohort }}
+                      {% endif %}
+                    </small>
+                  </td>
+                  <td>
+                    {% include "ui/components/_status.html" with code=item.is_required|yesno:"required,optional" label=item.is_required|yesno:_("Required,Optional") %}
+                  </td>
+                  <td>
+                    {% include "ui/components/_status.html" with code=item.is_active|yesno:"active,inactive" label=item.is_active|yesno:_("Active,Inactive") %}
+                  </td>
+                  <td>
+                    <div class="inline-actions"><a class="button button-info"
+                         href="{% url 'intake_forms:admin_intake_form_detail' item.id %}">{% trans "Manage" %}</a>
+                    </div>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="6"><div class="empty-state"><span>&#9679;</span>
+                      <h3>{% trans "No intake forms found." %}</h3>
+                      <a class="button button-primary"
+                         href="{% url 'intake_forms:admin_intake_form_create' %}">{% trans "Create form" %}</a>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% include "ui/components/_pagination.html" %}
+      </section>
+      <div class="inline-actions"><a class="button button-primary"
+           href="{% url 'intake_forms:admin_intake_form_create' %}">{% trans "Create form" %}</a>
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}

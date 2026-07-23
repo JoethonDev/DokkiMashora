@@ -1,0 +1,113 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n ui_tags %}
+{% block title %}
+  {{ course.title }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% include "ui/components/_page_header.html" with title=course.title description=course.description eyebrow=_("Course") %}
+    <section class="surface"><div class="section-header"><div>
+          <p class="eyebrow">{% trans "Versions" %}</p>
+          <h3>{% trans "Course versions" %}</h3>
+        </div>
+        <a class="button button-primary"
+           href="{% url 'academics:admin_version_create' course.id %}">{% trans "Create version" %}</a>
+      </div>
+      {% if versions %}
+        <div class="table-shell"><table>
+            <thead>
+              <tr>
+                <th>{% trans "Version" %}</th>
+                <th>{% trans "Cohort" %}</th>
+                <th>{% trans "Semester" %}</th>
+                <th>{% trans "Lectures" %}</th>
+                <th>{% trans "Actions" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for version in versions %}
+                <tr>
+                  <td>{{ version.label }}</td>
+                  <td>{{ version.cohort }}</td>
+                  <td>{{ version.semester }}</td>
+                  <td>{{ version.lectures|length }}</td>
+                  <td>
+                    <a class="button button-info"
+                       href="{% url 'academics:admin_version_detail' course.id version.id %}">{% trans "Open" %}</a>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        {% include "ui/components/_empty_state.html" with title=_("No versions") message=_("No versions found for this course.") %}
+      {% endif %}
+    </section>
+    <section class="surface"><div class="section-header"><div>
+          <p class="eyebrow">{% trans "Content" %}</p>
+          <h3>{% trans "Lectures" %}</h3>
+        </div>
+      </div>
+      {% if lectures %}
+        <div class="table-shell"><table>
+            <thead>
+              <tr>
+                <th>{% trans "Order" %}</th>
+                <th>{% trans "Title" %}</th>
+                <th>{% trans "Version" %}</th>
+                <th>{% trans "Actions" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for lecture in lectures %}
+                <tr>
+                  <td>{{ lecture.order }}</td>
+                  <td>{{ lecture.title }}</td>
+                  <td>{{ lecture.course_version.label }}</td>
+                  <td>
+                    <a class="button button-info"
+                       href="{% url 'academics:admin_lecture_edit' course.id lecture.course_version.id lecture.id %}">{% trans "Edit" %}
+                    </a>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        {% include "ui/components/_empty_state.html" with title=_("No lectures") message=_("No lectures found for this course.") %}
+      {% endif %}
+    </section>
+    <section class="surface"><div class="section-header"><div>
+          <p class="eyebrow">{% trans "Students" %}</p>
+          <h3>{% trans "Enrollments" %}</h3>
+        </div>
+      </div>
+      {% if enrollments %}
+        <div class="table-shell"><table>
+            <thead>
+              <tr>
+                <th>{% trans "Student" %}</th>
+                <th>{% trans "Version" %}</th>
+                <th>{% trans "Status" %}</th>
+                <th>{% trans "Enrolled" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for enrollment in enrollments %}
+                <tr>
+                  <td>{{ enrollment.student }}</td>
+                  <td>{{ enrollment.course_version }}</td>
+                  <td>{% include "ui/components/_status.html" with code=enrollment.status label=enrollment.get_status_display %}</td>
+                  <td>{{ enrollment.created_at|date:"d M Y" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        {% include "ui/components/_empty_state.html" with title=_("No enrollments") message=_("No student enrollments for this course.") %}
+      {% endif %}
+    </section>
+  </div>
+{% endblock %}

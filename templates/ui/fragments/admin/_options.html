@@ -1,0 +1,6 @@
+{% load i18n %}
+{% for item in all_vars|default:options %}
+  <option value="{{ item.id|default:item }}">{{ item.label|default:item }}</option>
+{% empty %}
+  <option value="">{% trans "No options" %}</option>
+{% endfor %}

@@ -1,0 +1,20 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n %}
+{% block title %}
+  {% trans "Import students" %}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% include "ui/components/_page_header.html" with title=_("Import students") eyebrow=_("Students") %}
+    {% if upload %}
+      <p>{{ upload }}</p>
+    {% endif %}
+    {% if form %}
+      <form class="surface form-main" method="post" enctype="multipart/form-data">{% csrf_token %}
+        {% for field in form %}
+          {% include "ui/components/_field.html" %}
+        {% endfor %}
+        <button class="button button-primary" type="submit">{% trans "Upload" %}</button>
+      </form>
+    {% endif %}
+  </div>
+{% endblock %}

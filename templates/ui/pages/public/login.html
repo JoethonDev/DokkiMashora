@@ -1,0 +1,37 @@
+{% extends "ui/layouts/public.html" %}
+{% load i18n %}
+{% block public_header %}{% endblock %}
+{% block title %}
+  {% trans "Log in" %}
+{% endblock %}
+{% block content %}
+  <section class="auth-page"><div class="auth-visual"><a class="brand light" href="{% url 'core:landing' %}"><span class="brand-mark">DM</span>
+    <span><strong>DokkiMashora</strong>
+      <small>{% trans "Learning Management" %}</small></span></a>
+    <div class="auth-message"><p class="eyebrow">{% trans "Student and staff portal" %}</p>
+      <h2>{% trans "Continue your learning journey." %}</h2>
+      <p>{% trans "Access programs, assessments, records, and the support you need in one calm workspace." %}</p>
+    </div>
+  </div>
+  <div class="auth-form-area"><section class="auth-form"><p class="eyebrow">{% trans "Welcome back" %}</p>
+      <h1>{% trans "Log in" %}</h1>
+      <p>{% trans "Use your account details to continue." %}</p>
+      <form method="post">{% csrf_token %}
+        {% if form.non_field_errors %}
+          <div class="error-state" role="alert">{% for error in form.non_field_errors %}
+              <p>{{ error }}</p>
+            {% endfor %}
+          </div>
+        {% endif %}
+        {% for field in form %}
+          {% include "ui/components/_field.html" %}
+        {% endfor %}
+        <input type="hidden" name="next" value="{{ next|escape }}"><button class="button button-primary button-block" type="submit">{% trans "Log in" %}</button>
+      </form>
+      <p class="auth-help">{% trans "Need an account?" %}
+        <a href="{% url 'applications:register' %}">{% trans "Register" %}</a>
+      </p>
+    </section>
+  </div>
+  </section>
+{% endblock %}

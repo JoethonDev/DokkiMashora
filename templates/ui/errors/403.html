@@ -1,0 +1,6 @@
+{% extends "ui/errors/_error_page.html" %}
+{% load i18n %}
+{% block title %}{% trans "Access denied" %}{% endblock %}
+{% block status_code %}403{% endblock %}
+{% block page_title %}{% trans "Access denied" %}{% endblock %}
+{% block message %}{% trans "You do not have permission to view this page." %}{% endblock %}

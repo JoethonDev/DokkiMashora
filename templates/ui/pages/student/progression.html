@@ -1,0 +1,8 @@
+{% extends "ui/layouts/student.html" %}
+{% load i18n %}
+{% block title %}
+  {{ title|default:_("Progression") }}
+{% endblock %}
+{% block content %}
+  {% include "ui/fragments/student/_progression.html" %}
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends "ui/layouts/public.html" %}
+{% load i18n %}
+{% block title %}
+  {% trans "Upload documents" %}
+{% endblock %}
+{% block content %}
+  <h1>{% trans "Upload documents" %}</h1>
+  <p>{{ application }}</p>
+  {% if submitted %}
+    <p role="status">{% trans "These documents have already been submitted." %}</p>
+  {% elif expired %}
+    <p role="alert">{% trans "This upload link has expired." %}</p>
+  {% else %}
+    <form method="post" enctype="multipart/form-data">{% csrf_token %}
+      {% for field in form %}
+        {% include "ui/components/_field.html" %}
+      {% endfor %}
+      <button class="button button-primary" type="submit">{% trans "Submit documents" %}</button>
+    </form>
+  {% endif %}
+{% endblock %}

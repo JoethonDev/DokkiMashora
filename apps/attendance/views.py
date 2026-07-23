@@ -4,6 +4,7 @@ from datetime import datetime
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -52,7 +53,7 @@ def semester_options_by_cohort(request):
     if cohort_id:
         cohort = get_object_or_404(Cohort, id=cohort_id)
         semesters = Semester.objects.filter(diploma=cohort.diploma, is_active=True).order_by("order")
-    return render(request, "attendance/partials/_semester_options.html", {"semesters": semesters})
+    return render(request, "ui/fragments/admin/_attendance_semester_options.html", {"semesters": semesters})
 
 
 # ---------------------------------------------------------------------------
@@ -65,7 +66,7 @@ def semester_options_by_cohort(request):
 def attendance_session_list(request):
     sessions = AttendanceSession.objects.all().select_related(
         "cohort", "course_version", "created_by"
-    )
+    ).annotate(record_count=Count("records"))
 
     cohort_id = safe_int(request.GET.get("cohort_id"))
     date_from = safe_date_str(request.GET.get("date_from"))
@@ -91,9 +92,9 @@ def attendance_session_list(request):
         "date_to": date_to,
         "exception": exception,
         "breadcrumb_items": [{"label": _("Attendance Sessions")}],
-        "is_admin_user": is_admin(request.user),
+        "is_admin": is_admin(request.user),
     }
-    return render(request, "attendance/session_list.html", ctx)
+    return render(request, "ui/pages/admin/attendance_list.html", ctx)
 
 
 # ---------------------------------------------------------------------------
@@ -177,7 +178,7 @@ def attendance_session_create(request):
             {"label": _("Create Session")},
         ],
     }
-    return render(request, "attendance/session_form.html", ctx)
+    return render(request, "ui/pages/admin/attendance_form.html", ctx)
 
 
 # ---------------------------------------------------------------------------
@@ -203,7 +204,7 @@ def attendance_session_detail(request, session_id):
             {"label": str(session)},
         ],
     }
-    return render(request, "attendance/session_detail.html", ctx)
+    return render(request, "ui/pages/admin/attendance_detail.html", ctx)
 
 
 # ---------------------------------------------------------------------------
@@ -269,7 +270,7 @@ def attendance_session_records(request, session_id):
             {"label": _("Records: %(session)s") % {"session": session}},
         ],
     }
-    return render(request, "attendance/session_records.html", ctx)
+    return render(request, "ui/pages/admin/attendance_detail.html", ctx)
 
 
 # ---------------------------------------------------------------------------
@@ -335,7 +336,7 @@ def attendance_scan(request):
         "result": result,
         "breadcrumb_items": [{"label": _("Scan Attendance")}],
     }
-    return render(request, "attendance/scan.html", ctx)
+    return render(request, "ui/pages/admin/attendance_scan.html", ctx)
 
 
 # ---------------------------------------------------------------------------
@@ -392,4 +393,4 @@ def my_attendance(request):
         "summaries": summaries,
         "breadcrumb_items": [{"label": _("My Attendance")}],
     }
-    return render(request, "attendance/my_attendance.html", ctx)
+    return render(request, "ui/pages/student/attendance.html", ctx)

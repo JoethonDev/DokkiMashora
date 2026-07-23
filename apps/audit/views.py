@@ -39,7 +39,7 @@ def audit_list(request):
     page_obj, pagination_qs = paginate(request, events)
     return render(
         request,
-        "audit/admin_list.html",
+        "ui/pages/admin/audit.html",
         {
             "page_obj": page_obj,
             "pagination_qs": pagination_qs,
@@ -60,4 +60,4 @@ def audit_detail(request, event_id):
     event = get_object_or_404(
         AuditEvent.objects.select_related("actor"), id=event_id
     )
-    return render(request, "audit/admin_detail.html", {"event": event})
+    return render(request, "ui/pages/admin/audit.html", {"event": event, "title": _("Audit detail")})

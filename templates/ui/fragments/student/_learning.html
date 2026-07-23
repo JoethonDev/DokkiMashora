@@ -1,0 +1,54 @@
+{% load i18n %}
+<div id="student-content" class="page-stack enter-view"><section class="page-intro"><div>
+      <p class="eyebrow">{% trans "Learning" %}</p>
+      <h2>{% trans "My programs and courses" %}</h2>
+      <p>{% trans "Track completion and continue from your next available lesson or assessment." %}</p>
+    </div>
+    <a class="button button-primary" href="{% url 'students:record' %}">{% trans "View record" %}</a>
+  </section>
+  <section class="program-grid">{% for card in learning_cards %}
+      <article class="program-card"><div class="program-card-top"><span class="program-symbol">{% if card.type == 'diploma' %}
+              D
+            {% else %}
+              C
+            {% endif %}
+          </span>
+          {% if card.expires_at %}
+            <span class="status-pill amber">{% trans "Expires" %}
+              {{ card.expires_at|date:"d M Y" }}
+            </span>
+          {% endif %}
+        </div>
+        <h3>
+          {% if card.type == 'diploma' %}
+            {{ card.title }}
+          {% else %}
+            {{ card.course.title|default:card.course_version.course.title }}
+          {% endif %}
+        </h3>
+        <p>{{ card.status|default:_("Active learning") |capfirst }}</p>
+        <div class="progress-info"><span>{% trans "Completion" %}</span>
+          <strong>
+            {{ card.completed_count|default:0 }}
+            /
+            {{ card.lecture_count|default:0 }}
+          </strong>
+        </div>
+        <div class="progress-track"><span style="--progress: {% if card.lecture_count %} {% widthratio card.completed_count card.lecture_count 100 %} {% else %} 0 {% endif %}"></span>
+        </div>
+        <div class="inline-actions">{% if card.next_lecture_url %}
+            <a class="button button-primary" href="{{ card.next_lecture_url }}">{% trans "Continue" %}</a>
+          {% endif %}
+          {% if card.next_assessment_url %}
+            <a class="button button-soft" href="{{ card.next_assessment_url }}">{% trans "Assessment" %}</a>
+          {% endif %}
+        </div>
+      </article>
+    {% empty %}
+      <div class="empty-state"><span>◫</span>
+        <h3>{% trans "No learning content yet" %}</h3>
+        <p>{% trans "Enrolments will appear here when they become available." %}</p>
+      </div>
+    {% endfor %}
+  </section>
+</div>

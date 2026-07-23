@@ -1,0 +1,118 @@
+{% load i18n %}
+<div id="student-content" class="page-stack enter-view"><section class="page-intro"><div>
+      <p class="eyebrow">{% trans "Academic journey" %}</p>
+      <h2>{% trans "Progression" %}</h2>
+      <p>{% trans "Track semester decisions, completion, eligibility, released grades, and certificates." %}</p>
+    </div>
+    <a class="button button-soft" href="{% url 'students:record' %}">{% trans "Open full record" %}</a>
+  </section>
+  <section class="surface"><div class="section-header"><div>
+        <p class="eyebrow">{% trans "Progress" %}</p>
+        <h3>{% trans "Semester progress" %}</h3>
+      </div>
+    </div>
+    <div class="table-shell"><table>
+        <thead>
+          <tr>
+            <th>{% trans "Semester" %}</th>
+            <th>{% trans "Status" %}</th>
+            <th>{% trans "Average score" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in semester_progress %}
+            <tr>
+              <td>
+                <strong>{{ item.semester }}</strong>
+              </td>
+              <td>
+                <span class="status-pill blue">{{ item.get_status_display|default:item.status }}</span>
+              </td>
+              <td>{{ item.average_score|default:item.score|default:'—' }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="3">{% trans "No semester progress available." %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  <section class="detail-layout"><article class="surface"><div class="section-header"><div>
+          <p class="eyebrow">{% trans "Decisions" %}</p>
+          <h3>{% trans "Promotion decisions" %}</h3>
+        </div>
+      </div>
+      <div class="timeline">{% for item in promotion_decisions %}
+          <div>
+            <i></i>
+            <p>
+              <strong>
+                {{ item.from_semester }}
+                →
+                {{ item.to_semester }}
+              </strong>
+              <small>
+                {{ item.get_decision_display|default:item.decision }}
+                ·
+                {{ item.decided_at|date:"d M Y" }}
+              </small>
+            </p>
+          </div>
+        {% empty %}
+          <p class="muted">{% trans "No promotion decisions recorded." %}</p>
+        {% endfor %}
+      </div>
+    </article>
+    <article class="surface"><div class="section-header"><div>
+          <p class="eyebrow">{% trans "Completion" %}</p>
+          <h3>{% trans "Eligibility and certificates" %}</h3>
+        </div>
+      </div>
+      {% for item in completions %}
+        <p>
+          <span class="status-pill green">{{ item.get_status_display|default:item.status }}</span>
+          {{ item.diploma_enrollment.cohort.diploma }}
+        </p>
+      {% endfor %}
+      {% for item in eligibilities %}
+        <p>
+          <span class="status-pill blue">{{ item.get_status_display|default:item.status }}</span>
+          {{ item.diploma_enrollment.cohort.diploma }}
+        </p>
+      {% empty %}
+        <p class="muted">{% trans "No final-exam eligibility records." %}</p>
+      {% endfor %}
+    </article>
+  </section>
+  <section class="surface"><div class="section-header"><div>
+        <p class="eyebrow">{% trans "Released results" %}</p>
+        <h3>{% trans "Grade items" %}</h3>
+      </div>
+    </div>
+    <div class="table-shell"><table>
+        <thead>
+          <tr>
+            <th>{% trans "Component" %}</th>
+            <th>{% trans "Score" %}</th>
+            <th>{% trans "Feedback" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in grade_items %}
+            <tr>
+              <td>{{ item.component }}</td>
+              <td>{{ item.score }}</td>
+              <td>{{ item.feedback|default:'—' }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="3">{% trans "No released grades available." %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>

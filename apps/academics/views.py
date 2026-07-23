@@ -101,7 +101,11 @@ def _diploma_breadcrumbs(diploma=None):
 def admin_diploma_list(request):
     q = request.GET.get("q", "")
     is_active_filter = request.GET.get("is_active", "")
-    diplomas = Diploma.objects.select_related("created_by").all()
+    diplomas = Diploma.objects.select_related("created_by").annotate(
+        semester_count=Count("semesters", distinct=True),
+        cohort_count=Count("cohorts", distinct=True),
+        enrollment_count=Count("cohorts__enrollments", distinct=True),
+    ).order_by("title")
     if q:
         diplomas = diplomas.filter(
             Q(title__icontains=q) | Q(description__icontains=q)
@@ -122,8 +126,8 @@ def admin_diploma_list(request):
     page_obj, pagination_qs = paginate(request, diplomas)
     ctx = {"page_obj": page_obj, "search_value": q, "filters": filters, "pagination_qs": pagination_qs}
     if is_htmx(request):
-        return render(request, "academics/partials/_diploma_list_table.html", ctx)
-    return render(request, "academics/admin_diploma_list.html", ctx)
+        return render(request, "ui/fragments/admin/_diploma_table.html", ctx)
+    return render(request, "ui/pages/admin/diploma_list.html", ctx)
 
 
 @login_required
@@ -142,22 +146,20 @@ def admin_diploma_detail(request, diploma_id):
         .annotate(count=Count("id"))
     )
     count_lookup = {(item["cohort_id"], item["semester_id"]): item["count"] for item in lecture_counts}
-    # Build semester + cohort lecture data
-    semester_cohort_data = []
-    for semester in semesters:
-        cohort_lectures = []
-        for cohort in cohorts:
+    # Build flat cohort-semester rows so one value is not positional
+    cohort_rows = []
+    for cohort in cohorts:
+        for semester in semesters:
             l_count = count_lookup.get((cohort.id, semester.id), 0)
-            cohort_lectures.append({"cohort": cohort, "lecture_count": l_count})
-        semester_cohort_data.append({"semester": semester, "cohort_lectures": cohort_lectures})
+            cohort_rows.append({"cohort": cohort, "semester": semester, "lecture_count": l_count})
     return render(
         request,
-        "academics/admin_diploma_detail.html",
+        "ui/pages/admin/diploma_detail.html",
         {
             "diploma": diploma,
             "semesters": semesters,
             "cohorts": cohorts,
-            "semester_cohort_data": semester_cohort_data,
+            "cohort_rows": cohort_rows,
             "breadcrumb_items": _diploma_breadcrumbs(diploma),
         },
     )
@@ -179,7 +181,7 @@ def admin_diploma_create(request):
         form = DiplomaForm()
     return render(
         request,
-        "academics/admin_diploma_form.html",
+        "ui/pages/admin/academic_form.html",
         {
             "form": form,
             "title": _("Create diploma"),
@@ -204,7 +206,7 @@ def admin_diploma_edit(request, diploma_id):
         form = DiplomaForm(instance=diploma)
     return render(
         request,
-        "academics/admin_diploma_form.html",
+        "ui/pages/admin/academic_form.html",
         {
             "form": form,
             "title": _("Edit diploma"),
@@ -257,7 +259,7 @@ def admin_semester_create(request, diploma_id):
         form = SemesterForm(initial={"order": diploma.semesters.count() + 1}, diploma=diploma)
     return render(
         request,
-        "academics/admin_semester_form.html",
+        "ui/pages/admin/academic_form.html",
         {
             "form": form,
             "title": _("Create semester"),
@@ -284,7 +286,7 @@ def admin_semester_edit(request, diploma_id, semester_id):
         form = SemesterForm(instance=semester, diploma=diploma)
     return render(
         request,
-        "academics/admin_semester_form.html",
+        "ui/pages/admin/academic_form.html",
         {
             "form": form,
             "title": _("Edit semester"),
@@ -325,7 +327,11 @@ def admin_semester_delete(request, diploma_id, semester_id):
 def admin_course_list(request):
     q = request.GET.get("q", "")
     is_active_filter = request.GET.get("is_active", "")
-    courses = Course.objects.select_related("created_by").all()
+    courses = Course.objects.select_related("created_by").annotate(
+        version_count=Count("versions", distinct=True),
+        lecture_count=Count("versions__lectures", distinct=True),
+        enrollment_count=Count("versions__enrollments", distinct=True),
+    ).order_by("title")
     if q:
         courses = courses.filter(
             Q(title__icontains=q) | Q(description__icontains=q)
@@ -345,8 +351,8 @@ def admin_course_list(request):
     page_obj, pagination_qs = paginate(request, courses)
     ctx = {"page_obj": page_obj, "search_value": q, "filters": filters, "pagination_qs": pagination_qs}
     if is_htmx(request):
-        return render(request, "academics/partials/_course_list_table.html", ctx)
-    return render(request, "academics/admin_course_list.html", ctx)
+        return render(request, "ui/fragments/admin/_course_table.html", ctx)
+    return render(request, "ui/pages/admin/course_list.html", ctx)
 
 
 @login_required
@@ -354,12 +360,16 @@ def admin_course_list(request):
 def admin_course_detail(request, course_id):
     course = get_object_or_404(Course, id=course_id)
     versions = course.versions.prefetch_related("lectures").all()
+    lectures = Lecture.objects.filter(course_version__course=course).order_by("course_version", "order")
+    enrollments = CourseEnrollment.objects.filter(course_version__course=course).select_related("student", "course_version")
     return render(
         request,
-        "academics/admin_course_detail.html",
+        "ui/pages/admin/course_detail.html",
         {
             "course": course,
             "versions": versions,
+            "lectures": lectures,
+            "enrollments": enrollments,
             "breadcrumb_items": [
                 {"label": _("Courses"), "href": reverse("academics:admin_course_list")},
                 {"label": course.title},
@@ -384,7 +394,7 @@ def admin_course_create(request):
         form = CourseForm()
     return render(
         request,
-        "academics/admin_course_form.html",
+        "ui/pages/admin/academic_form.html",
         {"form": form, "title": _("Create course"), "next": next_url, "diploma": None, "semesters": [], "diplomas": None},
     )
 
@@ -394,7 +404,7 @@ def admin_course_create(request):
 def admin_diploma_semester_options(request):
     diploma_id = request.GET.get("diploma_id")
     semesters = Diploma.objects.get(id=diploma_id).semesters.all() if diploma_id else []
-    return render(request, "academics/partials/_semester_options.html", {"semesters": semesters})
+    return render(request, "ui/fragments/admin/_semester_options.html", {"semesters": semesters})
 
 
 @login_required
@@ -412,7 +422,7 @@ def admin_course_edit(request, course_id):
         form = CourseForm(instance=course)
     return render(
         request,
-        "academics/admin_course_form.html",
+        "ui/pages/admin/academic_form.html",
         {"form": form, "title": _("Edit course"), "course": course, "next": next_url, "semester_courses": [], "diploma": None, "semesters": []},
     )
 
@@ -455,7 +465,7 @@ def admin_cohort_create(request, diploma_id):
         form = CohortForm(initial={"diploma": diploma.id})
     return render(
         request,
-        "academics/admin_cohort_form.html",
+        "ui/pages/admin/academic_form.html",
         {
             "form": form,
             "title": _("Create cohort"),
@@ -482,7 +492,7 @@ def admin_cohort_edit(request, diploma_id, cohort_id):
         form = CohortForm(instance=cohort)
     return render(
         request,
-        "academics/admin_cohort_form.html",
+        "ui/pages/admin/academic_form.html",
         {
             "form": form,
             "title": _("Edit cohort"),
@@ -531,7 +541,7 @@ def admin_version_create(request, course_id):
         form = CourseVersionForm(initial={"course": course.id})
     return render(
         request,
-        "academics/admin_version_form.html",
+        "ui/pages/admin/academic_form.html",
         {"form": form, "title": _("Create course version"), "course": course, "next": next_url},
     )
 
@@ -547,9 +557,10 @@ def admin_version_detail(request, course_id, version_id):
     )
     return render(
         request,
-        "academics/admin_version_detail.html",
+        "ui/pages/admin/academic_detail.html",
         {
             "course": course, "version": version, "lectures": lectures, "intake_forms": intake_forms,
+            "title": version.label, "object": version,
             "breadcrumb_items": [
                 {"label": _("Academics"), "href": reverse("academics:admin_course_list")},
                 {"label": course.title, "href": reverse("academics:admin_course_detail", args=[course.id])},
@@ -585,7 +596,7 @@ def admin_lecture_create(request, course_id, version_id):
         form = LectureForm(initial={"order": version.lectures.count() + 1})
     return render(
         request,
-        "academics/admin_lecture_form.html",
+        "ui/pages/admin/academic_form.html",
         {"form": form, "title": _("Create lecture"), "course": course, "version": version, "next": next_url},
     )
 
@@ -610,7 +621,7 @@ def admin_lecture_edit(request, course_id, version_id, lecture_id):
         form = LectureForm(instance=lecture)
     return render(
         request,
-        "academics/admin_lecture_form.html",
+        "ui/pages/admin/academic_form.html",
         {"form": form, "title": _("Edit lecture"), "course": course, "version": version, "next": next_url},
     )
 
@@ -784,7 +795,7 @@ def student_course_detail(request, version_id):
     due_work = _assessment_due_work(request.user, course_version_id=version.id)
     return render(
         request,
-        "academics/student_course_detail.html",
+        "ui/pages/student/content.html",
         {
             "version": version,
             "lectures": lectures,
@@ -818,7 +829,7 @@ def student_lecture_view(request, version_id, lecture_id):
     watch_progress = LectureWatchProgress.objects.filter(student=profile, lecture=lecture, course_enrollment__isnull=False).first()
     return render(
         request,
-        "academics/student_lecture_view.html",
+        "ui/pages/student/content.html",
         {"version": version, "lecture": lecture, "navigation": navigation, "watch_progress": watch_progress},
     )
 
@@ -881,7 +892,7 @@ def admin_lecture_preview(request, course_id, version_id, lecture_id):
     lecture = get_object_or_404(Lecture, id=lecture_id, course_version=version)
     return render(
         request,
-        "academics/student_lecture_view.html",
+        "ui/pages/student/content.html",
         {"version": version, "lecture": lecture, "is_preview": True},
     )
 
@@ -900,7 +911,7 @@ def admin_diploma_lecture_list(request, diploma_id, cohort_id, semester_id):
     lectures = DiplomaLecture.objects.filter(cohort=cohort, semester=semester).order_by("order")
     return render(
         request,
-        "academics/admin_diploma_lecture_list.html",
+        "ui/pages/admin/diploma_lecture_list.html",
         {
             "diploma": diploma, "cohort": cohort, "semester": semester, "lectures": lectures,
             "breadcrumb_items": [
@@ -934,7 +945,7 @@ def admin_diploma_lecture_create(request, diploma_id, cohort_id, semester_id):
         form = DiplomaLectureForm(initial=initial)
     return render(
         request,
-        "academics/admin_lecture_form.html",
+        "ui/pages/admin/academic_form.html",
         {"form": form, "title": _("Create diploma lecture"), "diploma": diploma, "cohort": cohort, "semester": semester, "next": next_url},
     )
 
@@ -958,7 +969,7 @@ def admin_diploma_lecture_edit(request, diploma_id, cohort_id, semester_id, lect
         form = DiplomaLectureForm(instance=lecture)
     return render(
         request,
-        "academics/admin_lecture_form.html",
+        "ui/pages/admin/academic_form.html",
         {"form": form, "title": _("Edit diploma lecture"), "diploma": diploma, "cohort": cohort, "semester": semester, "lecture": lecture, "next": next_url},
     )
 
@@ -986,7 +997,7 @@ def admin_diploma_lecture_preview(request, diploma_id, cohort_id, semester_id, l
     lecture = get_object_or_404(DiplomaLecture, id=lecture_id, cohort=cohort, semester=semester)
     return render(
         request,
-        "academics/student_lecture_view.html",
+        "ui/pages/student/content.html",
         {
             "lecture": lecture,
             "version": None,
@@ -1051,8 +1062,8 @@ def admin_course_enrollment_list(request, course_id):
         "versions": versions,
     }
     if is_htmx(request):
-        return render(request, "academics/partials/_enrollment_table.html", ctx)
-    return render(request, "academics/admin_enrollment_list.html", ctx)
+        return render(request, "ui/fragments/admin/_enrollment_table.html", ctx)
+    return render(request, "ui/pages/admin/enrollment_list.html", ctx)
 
 
 @login_required
@@ -1135,8 +1146,8 @@ def admin_diploma_enrollment_list(request, diploma_id):
         "cohorts": cohorts,
     }
     if is_htmx(request):
-        return render(request, "academics/partials/_enrollment_table.html", ctx)
-    return render(request, "academics/admin_enrollment_list.html", ctx)
+        return render(request, "ui/fragments/admin/_enrollment_table.html", ctx)
+    return render(request, "ui/pages/admin/enrollment_list.html", ctx)
 
 
 @login_required
@@ -1161,7 +1172,7 @@ def admin_diploma_enrollment_update(request, diploma_id, enrollment_id):
     if is_htmx(request):
         cohorts = diploma.cohorts.all()
         enrollment.refresh_from_db()
-        return render(request, "academics/partials/_enrollment_row.html", {
+        return render(request, "ui/fragments/admin/_enrollment_row.html", {
             "e": enrollment, "diploma": diploma, "cohorts": cohorts, "enrollment_type": "diploma",
         })
     return redirect("academics:admin_diploma_enrollment_list", diploma_id=diploma.id)
@@ -1278,7 +1289,7 @@ def student_diploma_detail(request, enrollment_id):
         else None
     )
 
-    return render(request, "academics/student_diploma_detail.html", {
+    return render(request, "ui/pages/student/content.html", {
         "enrollment": enrollment,
         "diploma": diploma,
         "cohort": cohort,
@@ -1328,7 +1339,7 @@ def student_diploma_semester_detail(request, enrollment_id, semester_id):
         else:
             lecture.watch_pct = 0
             lecture.watch_status = None
-    return render(request, "academics/student_diploma_semester_detail.html", {
+    return render(request, "ui/pages/student/content.html", {
         "enrollment": enrollment,
         "diploma": enrollment.cohort.diploma,
         "cohort": enrollment.cohort,
@@ -1371,7 +1382,7 @@ def student_diploma_lecture_view(request, enrollment_id, semester_id, lecture_id
         enrollment=enrollment, semester=semester,
     )
     watch_progress = DiplomaLectureWatchProgress.objects.filter(student=profile, lecture=lecture, diploma_enrollment=enrollment).first()
-    return render(request, "academics/student_lecture_view.html", {
+    return render(request, "ui/pages/student/content.html", {
         "lecture": lecture,
         "enrollment": enrollment,
         "semester": semester,

@@ -1,0 +1,19 @@
+{% extends "ui/layouts/public.html" %}
+{% load i18n %}
+{% block title %}
+  {% trans "Registration complete" %}
+{% endblock %}
+{% block content %}
+  <section class="card" role="status"><h1>{% trans "Registration complete" %}</h1>
+    {% if email %}
+      <p>
+        {% blocktrans %}
+      Check
+      {{ email }}
+      for the activation link.
+    {% endblocktrans %}
+      </p>
+    {% endif %}
+    <a href="{% url 'accounts:login' %}">{% trans "Go to login" %}</a>
+  </section>
+{% endblock %}

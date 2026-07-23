@@ -1,0 +1,51 @@
+{% extends "ui/base.html" %}
+{% load i18n %}
+{% block shell %}
+  <div class="app-shell" x-data="{sidebarOpen:false}"><div class="mobile-backdrop"
+         :class="{open:sidebarOpen}"
+         @click="sidebarOpen=false"></div>
+    <aside id="student-sidebar"
+           class="sidebar"
+           :class="{open:sidebarOpen}"
+           aria-label="{% trans 'Main navigation' %}"><a class="brand" href="{% url 'students:dashboard' %}"><span class="brand-mark">DM</span>
+      <span><strong>DokkiMashora</strong>
+        <small>{% trans "Student portal" %}</small></span></a>
+      <nav class="main-nav" aria-label="{% trans 'Student navigation' %}"><div class="nav-label">{% trans "My workspace" %}</div>
+        <a class="nav-link{% if request.resolver_match.url_name == 'dashboard' %} active{% endif %}"
+           href="{% url 'students:dashboard' %}"><span class="nav-icon">⌂</span>
+          {% trans "Dashboard" %}
+        </a>
+        <a class="nav-link{% if request.resolver_match.url_name == 'learning' or request.resolver_match.url_name == 'diploma_course' or request.resolver_match.url_name == 'diploma_course_detail' %} active{% endif %}"
+           href="{% url 'students:diploma_course' %}"><span class="nav-icon">◫</span>
+          {% trans "My learning" %}
+        </a>
+        <a class="nav-link{% if request.resolver_match.url_name == 'applications' or request.resolver_match.url_name == 'application_history' or request.resolver_match.url_name == 'apply' %} active{% endif %}"
+           href="{% url 'students:applications' %}"><span class="nav-icon">▤</span>
+          {% trans "Applications" %}
+        </a>
+        <a class="nav-link" href="{% url 'assessments:student_list' %}"><span class="nav-icon">✓</span>
+          {% trans "Assessments" %}
+        </a>
+        <a class="nav-link{% if request.resolver_match.url_name == 'progression_history' %} active{% endif %}"
+           href="{% url 'students:progression_history' %}"><span class="nav-icon">↗</span>
+          {% trans "Progression" %}
+        </a>
+        <a class="nav-link{% if request.resolver_match.url_name == 'record' %} active{% endif %}"
+           href="{% url 'students:record' %}"><span class="nav-icon">▥</span>
+          {% trans "My record" %}
+        </a>
+        <div class="nav-label">{% trans "Account" %}</div>
+        <a class="nav-link{% if request.resolver_match.url_name == 'details' or request.resolver_match.url_name == 'edit_profile' %} active{% endif %}"
+           href="{% url 'students:details' %}"><span class="nav-icon">♙</span>
+          {% trans "Profile" %}
+        </a>
+      </nav>
+      {% include "ui/components/_profile_menu.html" with role_label=_("Student") %}
+    </aside>
+    <section class="application">
+      {% include "ui/components/_workspace_topbar.html" with show_global_search=False profile_url="students:details" profile_icon="&#9813;" %}
+      <main id="main" class="view-root"><h1 class="sr-only">{% block page_title %}{{ title|default:request.resolver_match.url_name|capfirst }}{% endblock %}</h1>
+        {% block content %}{% endblock %}</main>
+    </section>
+  </div>
+{% endblock %}

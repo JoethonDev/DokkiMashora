@@ -1,0 +1,19 @@
+{% extends "ui/base.html" %}
+{% load i18n %}
+{% block shell %}
+  <main id="main" class="public-page">{% block public_header %}
+      <header class="public-nav"><a class="brand" href="{% url 'core:landing' %}"><span class="brand-mark">DM</span>
+        <span><strong>DokkiMashora</strong>
+          <small>{% trans "Learning Management" %}</small></span></a>
+        <nav class="public-links" aria-label="{% trans 'Public navigation' %}"><a href="{% url 'core:landing' %}#programs">{% trans "Programs" %}</a>
+          <a href="{% url 'core:landing' %}#courses">{% trans "Courses" %}</a>
+        </nav>
+        <div class="inline-actions"><a class="button button-soft" href="{% url 'accounts:login' %}">{% trans "Log in" %}</a>
+          <a class="button button-primary"
+             href="{% url 'applications:register' %}">{% trans "Register" %}</a>
+        </div>
+      </header>
+    {% endblock %}
+    {% block content %}{% endblock %}
+  </main>
+{% endblock %}

@@ -1,0 +1,11 @@
+{% extends "ui/layouts/student.html" %}
+{% load i18n %}
+{% block title %}
+  {% trans "Applications" %}
+{% endblock %}
+{% block page_title %}
+  {% trans "Applications" %}
+{% endblock %}
+{% block content %}
+  {% include "ui/fragments/student/_applications.html" %}
+{% endblock %}

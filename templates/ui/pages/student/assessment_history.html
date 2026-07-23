@@ -1,0 +1,39 @@
+{% extends "ui/layouts/student.html" %}
+{% load i18n %}
+{% block title %}
+  {% trans "Assessment history" %}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view"><section class="page-intro"><div>
+        <p class="eyebrow">{% trans "Learning" %}</p>
+        <h2>{% trans "Assessment history" %}</h2>
+      </div>
+    </section>
+    <section class="surface"><div class="table-shell"><table>
+          <thead>
+            <tr>
+              <th>{% trans "Assessment" %}</th>
+              <th>{% trans "Status" %}</th>
+              <th>{% trans "Score" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in assessment_attempts %}
+              <tr>
+                <td>{{ item.assessment }}</td>
+                <td>
+                  <span class="status-pill blue">{{ item.get_status_display }}</span>
+                </td>
+                <td>{{ item.score|default:"—" }}</td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="3">{% trans "No assessment history available." %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+{% endblock %}

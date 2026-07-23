@@ -1,0 +1,17 @@
+{% load i18n %}
+{% if breadcrumb_items %}
+  {% include "ui/components/_breadcrumbs.html" with items=breadcrumb_items %}
+{% endif %}
+<div class="page-header"><div>
+    {% if eyebrow %}
+      <p class="eyebrow">{{ eyebrow }}</p>
+    {% endif %}
+    <h1>{{ title }}</h1>
+    {% if description %}
+      <p>{{ description }}</p>
+    {% endif %}
+  </div>
+  {% if actions_template %}
+    <div class="inline-actions end">{% include actions_template %}</div>
+  {% endif %}
+</div>

@@ -2229,7 +2229,7 @@ msgstr "الحساب نشط"
 
 #: .\apps\accounts\models.py:52 .\apps\students\models.py:33
 msgid "ISO two-letter country code."
-msgstr ""
+msgstr "رمز البلد المكون من حرفين حسب ISO."
 
 #: .\apps\accounts\models.py:55 .\apps\students\models.py:35
 msgid "national ID"
@@ -2237,7 +2237,7 @@ msgstr "الرقم القومي"
 
 #: .\apps\accounts\models.py:59
 msgid "Stored identity number (National ID or Passport ID)."
-msgstr ""
+msgstr "رقم الهوية المخزن (الرقم القومي أو جواز السفر)."
 
 #: .\apps\accounts\models.py:69
 msgid "staff status"
@@ -3029,7 +3029,7 @@ msgstr "لا توجد امتحانات قبول"
 
 #: .\apps\applications\constants.py:137
 msgid "Diploma interview request"
-msgstr ""
+msgstr "طلب مقابلة الدبلومة"
 
 #: .\apps\applications\constants.py:138
 #, fuzzy
@@ -3071,7 +3071,7 @@ msgstr "بيانات التواصل مع الأب الكاهن مطلوبة."
 #: .\apps\applications\documents.py:103 .\apps\applications\forms.py:298
 #, python-format
 msgid "Maximum %(max)d attachment files allowed."
-msgstr ""
+msgstr "الحد الأقصى %(max)d من الملفات المرفقة."
 
 #: .\apps\applications\documents.py:114
 #, fuzzy
@@ -3088,30 +3088,30 @@ msgstr "نوع الملف '{file_type}' غير مسموح به. المسموح: 
 #: .\apps\applications\documents.py:120
 #, python-format
 msgid "File '%(name)s' exceeds %(max)s MB."
-msgstr ""
+msgstr "الملف '%(name)s' يتجاوز %(max)s ميغابايت."
 
 #: .\apps\applications\documents.py:124
 #, python-format
 msgid "File '%(name)s' has incorrect content type."
-msgstr ""
+msgstr "الملف '%(name)s' له نوع محتوى غير صحيح."
 
 #: .\apps\applications\documents.py:127
 #, python-format
 msgid "File '%(name)s' is not a valid PDF."
-msgstr ""
+msgstr "الملف '%(name)s' ليس PDF صالحًا."
 
 #: .\apps\applications\documents.py:129 .\apps\applications\forms.py:294
 msgid "Cannot mix PDF and image files in attachments."
-msgstr ""
+msgstr "لا يمكن خلط ملفات PDF والصور في المرفقات."
 
 #: .\apps\applications\documents.py:136
 msgid "Cannot mix image and PDF files in attachments."
-msgstr ""
+msgstr "لا يمكن خلط ملفات الصور وPDF في المرفقات."
 
 #: .\apps\applications\documents.py:139
 #, python-format
 msgid "Total attachment size exceeds %(max)s MB."
-msgstr ""
+msgstr "إجمالي حجم المرفقات يتجاوز %(max)s ميغابايت."
 
 #: .\apps\applications\documents.py:156
 #, fuzzy, python-format
@@ -3131,7 +3131,7 @@ msgstr "حجم الملف يتجاوز الحد الأقصى المسموح به
 
 #: .\apps\applications\documents.py:175
 msgid "Uploaded image is corrupted or unsupported."
-msgstr ""
+msgstr "الصورة المرفوعة تالفة أو غير مدعومة."
 
 #: .\apps\applications\documents.py:180
 #, python-format
@@ -3141,15 +3141,15 @@ msgstr ""
 
 #: .\apps\applications\documents.py:202
 msgid "No valid images to combine."
-msgstr ""
+msgstr "لا توجد صور صالحة للدمج."
 
 #: .\apps\applications\documents.py:219
 msgid "Document requests are only for diploma applications."
-msgstr ""
+msgstr "طلبات المستندات مخصصة فقط لطلبات الدبلوم."
 
 #: .\apps\applications\documents.py:221
 msgid "Documents can only be requested for accepted applications."
-msgstr ""
+msgstr "يمكن طلب المستندات فقط للطلبات المقبولة."
 
 #: .\apps\applications\documents.py:223
 #, fuzzy
@@ -3159,11 +3159,11 @@ msgstr "تغيير حالة الطلب"
 
 #: .\apps\applications\documents.py:225
 msgid "Student account must be activated before requesting documents."
-msgstr ""
+msgstr "يجب تفعيل حساب الطالب قبل طلب المستندات."
 
 #: .\apps\applications\documents.py:227 .\apps\applications\services.py:555
 msgid "Expiry time must be timezone-aware."
-msgstr ""
+msgstr "يجب أن يكون وقت الانتهاء مرتبطًا بالمنطقة الزمنية."
 
 #: .\apps\applications\documents.py:229 .\apps\applications\forms.py:248
 #: .\apps\applications\services.py:557
@@ -3198,7 +3198,7 @@ msgstr "الرفع ليس في حالة المعاينة"
 
 #: .\apps\applications\documents.py:318
 msgid "You can only upload documents for your own application."
-msgstr ""
+msgstr "يمكنك رفع المستندات لطلبك الخاص فقط."
 
 #: .\apps\applications\forms.py:31
 msgid "Full name (4 parts)"
@@ -3283,7 +3283,7 @@ msgstr "اختيار مقرر غير صالح."
 #: .\apps\applications\templates\applications\admin_program_detail.html:79
 #: .\apps\applications\templates\applications\admin_program_detail.html:201
 msgid "Expiry date/time"
-msgstr ""
+msgstr "تاريخ/وقت الانتهاء"
 
 #: .\apps\applications\forms.py:233
 #: .\apps\applications\templates\applications\admin_program_detail.html:83
@@ -3315,7 +3315,7 @@ msgstr "المعلومات الشخصية"
 
 #: .\apps\applications\forms.py:271
 msgid "Documents (one PDF or multiple images)"
-msgstr ""
+msgstr "المستندات (PDF واحد أو عدة صور)"
 
 #: .\apps\applications\models.py:39
 msgid "program type"
@@ -3434,7 +3434,7 @@ msgstr "حجم الملف"
 
 #: .\apps\applications\models.py:333
 msgid "attachments PDF key"
-msgstr ""
+msgstr "مفتاح مرفقات PDF"
 
 #: .\apps\applications\models.py:334
 #, fuzzy
@@ -3477,7 +3477,7 @@ msgstr "لديك بالفعل طلب معلق أو نشط لهذا المقرر.
 
 #: .\apps\applications\services.py:335
 msgid "Only submitted applications can be marked account_activated."
-msgstr ""
+msgstr "يمكن وضع علامة \"تم تفعيل الحساب\" فقط على الطلبات المقدمة."
 
 #: .\apps\applications\services.py:360
 #, fuzzy
@@ -3493,11 +3493,11 @@ msgstr ""
 
 #: .\apps\applications\services.py:434
 msgid "Only invited applications can submit entrance exam."
-msgstr ""
+msgstr "يمكن للطلبات المدعوة فقط تقديم امتحان القبول."
 
 #: .\apps\applications\services.py:450
 msgid "Application must be awaiting admin review before invitation."
-msgstr ""
+msgstr "يجب أن يكون الطلب في انتظار مراجعة المشرف قبل الدعوة."
 
 #: .\apps\applications\services.py:452
 #, fuzzy
@@ -3508,7 +3508,7 @@ msgstr "تمت دعوة المتقدم لتقييم القبول."
 #: .\apps\applications\services.py:476
 #, python-brace-format
 msgid "Intake request creation failed: {error}"
-msgstr ""
+msgstr "فشل إنشاء طلب التقديم: {error}"
 
 #: .\apps\applications\services.py:500
 #, fuzzy

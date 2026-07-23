@@ -47,32 +47,17 @@ def _get_profile_or_404(user):
 
 
 def _render_htmx(request, template_name, context):
-    """Render just the profile_content block for HTMX requests."""
-    engine = engines["django"]
-    source = (
-        "{% extends '" + template_name.replace("'", "\\'") + "' %}"
-        "{% block skip_link %}{% endblock %}"
-        "{% block navbar %}{% endblock %}"
-        "{% block mobile_nav %}{% endblock %}"
-        "{% block messages %}{% endblock %}"
-        "{% block footer %}{% endblock %}"
-        "{% block extra_js %}{% endblock %}"
-        "{% block extra_head %}{% endblock %}"
-        "{% block content %}"
-        '<div id="profile-content">'
-        "{% include 'partials/_messages.html' %}"
-        "{% block profile_content %}{{ block.super }}{% endblock %}"
-        "</div>"
-        "{% endblock %}"
-    )
-    return HttpResponse(engine.from_string(source).render(context, request))
+    """Render the replaceable student content boundary."""
+    name = template_name.rsplit("/", 1)[-1].replace(".html", "")
+    return render(request, f"ui/fragments/student/_{name}.html", context)
 
 
 def _render_profile(request, template_name, context):
     """Full page or HTMX fragment depending on request."""
+    page_template = template_name
     if is_htmx(request):
-        return _render_htmx(request, template_name, context)
-    return render(request, template_name, context)
+        return _render_htmx(request, page_template, context)
+    return render(request, page_template, context)
 
 
 # ---------------------------------------------------------------------------
@@ -85,7 +70,7 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     """Student profile dashboard -- aggregation overview."""
     profile = _get_profile_or_404(request.user)
     data = get_dashboard_data(profile)
-    return _render_profile(request, "students/profile/dashboard.html", data)
+    return _render_profile(request, "ui/pages/student/dashboard.html", data)
 
 
 # ---------------------------------------------------------------------------
@@ -102,7 +87,7 @@ def details(request: HttpRequest) -> HttpResponse:
     data["editable_fields"] = EDITABLE_FIELDS
     data["restricted_fields"] = RESTRICTED_FIELDS
     data["field_labels"] = field_labels
-    return _render_profile(request, "students/profile/details.html", data)
+    return _render_profile(request, "ui/pages/student/profile_details.html", data)
 
 
 # ---------------------------------------------------------------------------
@@ -123,7 +108,7 @@ def edit_profile(request: HttpRequest) -> HttpResponse:
             return redirect("students:details")
     else:
         form = StudentProfileUpdateForm(instance=profile)
-    return _render_profile(request, "students/profile/edit.html", {"form": form})
+    return _render_profile(request, "ui/pages/student/profile.html", {"form": form})
 
 
 # ---------------------------------------------------------------------------
@@ -139,7 +124,7 @@ def application_history(request: HttpRequest) -> HttpResponse:
     page_obj, pagination_qs = paginate(request, applications, per_page=15)
     data = get_dashboard_data(profile, sections=["apply"])
     data.update({"applications": page_obj, "pagination_qs": pagination_qs})
-    return _render_profile(request, "students/profile/applications.html", data)
+    return _render_profile(request, "ui/pages/student/applications.html", data)
 
 
 @student_required
@@ -150,7 +135,7 @@ def diploma_course(request: HttpRequest) -> HttpResponse:
         "diploma_enrollments", "course_enrollments", "active_courses", "expired_courses",
         "assessment_attempts", "open_assessments",
     ])
-    return _render_profile(request, "students/profile/diploma_course.html", data)
+    return _render_profile(request, "ui/pages/student/learning.html", data)
 
 
 @student_required
@@ -178,7 +163,7 @@ def diploma_course_detail(request: HttpRequest, version_id: int) -> HttpResponse
         TeacherAssignment.objects.filter(scope_type=SCOPE_COURSE_VERSION, course_version=cv, active=True)
         .select_related("teacher")
     )
-    return _render_profile(request, "students/profile/diploma_course_detail.html", {
+    return _render_profile(request, "ui/pages/student/content.html", {
         "course_version": cv, "lectures": lectures, "teachers": teachers,
         "completed_lecture_ids": completed_ids,
     })
@@ -195,7 +180,7 @@ def exam_results(request: HttpRequest) -> HttpResponse:
     profile = _get_profile_or_404(request.user)
     data = get_dashboard_data(profile, sections=["exam_assignments"])
     data["attempt_status_graded"] = ATTEMPT_STATUS_GRADED
-    return _render_profile(request, "students/profile/exams.html", data)
+    return _render_profile(request, "ui/pages/student/exam_results.html", data)
 
 
 # ---------------------------------------------------------------------------
@@ -211,7 +196,7 @@ def assessment_history(request: HttpRequest) -> HttpResponse:
     data["grade_visibility_hidden"] = GRADE_VISIBILITY_HIDDEN
     data["grade_visibility_released"] = GRADE_VISIBILITY_RELEASED
     data["grade_visibility_under_review"] = GRADE_VISIBILITY_UNDER_REVIEW
-    return _render_profile(request, "students/profile/assessments.html", data)
+    return _render_profile(request, "ui/pages/student/assessment_history.html", data)
 
 
 # ---------------------------------------------------------------------------
@@ -226,7 +211,7 @@ def progression_history(request: HttpRequest) -> HttpResponse:
     data = get_dashboard_data(profile, sections=[
         "semester_progress", "promotion_decisions", "completions", "eligibilities", "grade_items",
     ])
-    return _render_profile(request, "students/profile/progression.html", data)
+    return _render_profile(request, "ui/pages/student/progression.html", data)
 
 
 @student_required
@@ -242,7 +227,7 @@ def record(request: HttpRequest) -> HttpResponse:
     data["grade_visibility_released"] = GRADE_VISIBILITY_RELEASED
     data["grade_visibility_under_review"] = GRADE_VISIBILITY_UNDER_REVIEW
     data["attempt_status_graded"] = ATTEMPT_STATUS_GRADED
-    return _render_profile(request, "students/profile/record.html", data)
+    return _render_profile(request, "ui/pages/student/record.html", data)
 
 
 # ---------------------------------------------------------------------------
@@ -254,7 +239,6 @@ def record(request: HttpRequest) -> HttpResponse:
 @require_http_methods(["GET", "POST"])
 def apply(request: HttpRequest) -> HttpResponse:
     """Apply flow -- create a new ProgramApplication if eligible."""
-
     profile = _get_profile_or_404(request.user)
     selected_program_type = str(
         request.POST.get("program_type") if request.method == "POST" else request.GET.get("program_type", "diploma")
@@ -271,106 +255,58 @@ def apply(request: HttpRequest) -> HttpResponse:
         profile=profile,
         page_size=1000 if selected_program_type == "diploma" else 10,
     )
-
     cohorts = open_targets["items"] if selected_program_type == "diploma" else []
     courses = open_targets["items"] if selected_program_type == "course" else []
-
-    if request.method == "POST":
-        program_type = request.POST.get("program_type")
-        target_id = request.POST.get("target_id")
-        if not program_type or not target_id:
-            messages.error(request, _("Please select a program."))
-            return _render_profile(request, "students/profile/apply.html", {
-                "eligibility": eligibility,
-                "cohorts": cohorts,
-                "courses": courses,
-                "selected_program_type": selected_program_type,
-                "selected_target_id": selected_target_id,
-            })
-
-        if program_type == "diploma":
-            cohort = Cohort.objects.filter(pk=target_id).select_related("diploma").first()
-            if not cohort:
-                messages.error(request, _("Invalid cohort selected."))
-                return _render_profile(request, "students/profile/apply.html", {
-                    "eligibility": eligibility,
-                    "cohorts": cohorts,
-                    "courses": courses,
-                    "selected_program_type": program_type,
-                    "selected_target_id": target_id,
-                })
-            cohort_eligibility = check_apply_eligibility(profile, cohort=cohort)
-            if not cohort_eligibility["allowed"]:
-                messages.error(request, cohort_eligibility["reason"] or _("You are not eligible to apply."))
-                return _render_profile(request, "students/profile/apply.html", {
-                    "eligibility": eligibility,
-                    "cohorts": cohorts,
-                    "courses": courses,
-                    "selected_program_type": program_type,
-                    "selected_target_id": target_id,
-                })
-            try:
-                submit_apply_application(profile, cohort=cohort)
-            except ValueError as exc:
-                messages.error(request, str(exc))
-                return _render_profile(request, "students/profile/apply.html", {
-                    "eligibility": eligibility,
-                    "cohorts": cohorts,
-                    "courses": courses,
-                    "selected_program_type": program_type,
-                    "selected_target_id": target_id,
-                })
-        elif program_type == "course":
-            target_value = str(target_id)
-            course_id = target_value.split("_", 1)[1] if target_value.startswith("course_") else target_value
-            course = Course.objects.filter(pk=course_id, is_active=True).first()
-            if not course:
-                messages.error(request, _("Invalid course selected."))
-                return _render_profile(request, "students/profile/apply.html", {
-                    "eligibility": eligibility,
-                    "cohorts": cohorts,
-                    "courses": courses,
-                    "selected_program_type": program_type,
-                    "selected_target_id": target_id,
-                })
-            course_eligibility = check_apply_eligibility(profile, course=course)
-            if not course_eligibility["allowed"]:
-                messages.error(request, course_eligibility["reason"] or _("You are not eligible to apply."))
-                return _render_profile(request, "students/profile/apply.html", {
-                    "eligibility": eligibility,
-                    "cohorts": cohorts,
-                    "courses": courses,
-                    "selected_program_type": program_type,
-                    "selected_target_id": target_id,
-                })
-            try:
-                submit_apply_application(profile, course=course)
-            except ValueError as exc:
-                messages.error(request, str(exc))
-                return _render_profile(request, "students/profile/apply.html", {
-                    "eligibility": eligibility,
-                    "cohorts": cohorts,
-                    "courses": courses,
-                    "selected_program_type": program_type,
-                    "selected_target_id": target_id,
-                })
-        else:
-            messages.error(request, _("Invalid program type."))
-            return _render_profile(request, "students/profile/apply.html", {
-                "eligibility": eligibility,
-                "cohorts": cohorts,
-                "courses": courses,
-                "selected_program_type": program_type,
-                "selected_target_id": target_id,
-            })
-
-        messages.success(request, _("Your application has been submitted."))
-        return redirect("students:applications")
-
-    return _render_profile(request, "students/profile/apply.html", {
+    context = {
         "eligibility": eligibility,
         "cohorts": cohorts,
         "courses": courses,
         "selected_program_type": selected_program_type,
         "selected_target_id": selected_target_id,
-    })
+    }
+
+    if request.method == "POST":
+        program_type = request.POST.get("program_type", "").strip()
+        target_id = request.POST.get("target_id", "").strip()
+        context.update({"selected_program_type": program_type, "selected_target_id": target_id})
+        if not program_type or not target_id:
+            messages.error(request, _("Please select a program."))
+            return _render_profile(request, "ui/pages/student/apply.html", context)
+
+        if program_type == "diploma":
+            cohort = Cohort.objects.filter(pk=target_id).select_related("diploma").first()
+            if not cohort:
+                messages.error(request, _("Invalid cohort selected."))
+                return _render_profile(request, "ui/pages/student/apply.html", context)
+            target_eligibility = check_apply_eligibility(profile, cohort=cohort)
+            if not target_eligibility["allowed"]:
+                messages.error(request, target_eligibility["reason"] or _("You are not eligible to apply."))
+                return _render_profile(request, "ui/pages/student/apply.html", context)
+            try:
+                submit_apply_application(profile, cohort=cohort)
+            except ValueError as exc:
+                messages.error(request, str(exc))
+                return _render_profile(request, "ui/pages/student/apply.html", context)
+        elif program_type == "course":
+            course_id = target_id.removeprefix("course_")
+            course = Course.objects.filter(pk=course_id, is_active=True).first()
+            if not course:
+                messages.error(request, _("Invalid course selected."))
+                return _render_profile(request, "ui/pages/student/apply.html", context)
+            target_eligibility = check_apply_eligibility(profile, course=course)
+            if not target_eligibility["allowed"]:
+                messages.error(request, target_eligibility["reason"] or _("You are not eligible to apply."))
+                return _render_profile(request, "ui/pages/student/apply.html", context)
+            try:
+                submit_apply_application(profile, course=course)
+            except ValueError as exc:
+                messages.error(request, str(exc))
+                return _render_profile(request, "ui/pages/student/apply.html", context)
+        else:
+            messages.error(request, _("Invalid program type."))
+            return _render_profile(request, "ui/pages/student/apply.html", context)
+
+        messages.success(request, _("Your application has been submitted."))
+        return redirect("students:applications")
+
+    return _render_profile(request, "ui/pages/student/apply.html", context)

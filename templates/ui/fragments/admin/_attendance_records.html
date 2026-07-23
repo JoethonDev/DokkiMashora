@@ -1,0 +1,59 @@
+{% load i18n ui_tags %}
+<section id="attendance-results" class="table-section" aria-live="polite"><div class="section-header"><div>
+      <p class="eyebrow">{% trans "Sessions" %}</p>
+      <h3>
+        {{ sessions|length }}
+        {% trans "sessions" %}
+      </h3>
+    </div>
+  </div>
+  {% if sessions %}
+    <div class="table-shell"><table>
+        <thead>
+          <tr>
+            <th>{% trans "Session" %}</th>
+            <th>{% trans "Target" %}</th>
+            <th>{% trans "Date" %}</th>
+            <th>{% trans "Status" %}</th>
+            <th>{% trans "Records" %}</th>
+            <th>{% trans "Actions" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in sessions %}
+            <tr>
+              <td class="cell-stack"><strong>{{ s.title|default:_("Attendance") }}</strong>
+                <small>
+                  {% trans "by" %}
+                  {{ s.created_by.full_name }}
+                </small>
+              </td>
+              <td>
+                {% if s.cohort %}
+                  {{ s.cohort.name }}
+                {% elif s.course_version %}
+                  {{ s.course_version }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td>{{ s.date|date:"DATE_FORMAT"|default:'—' }}</td>
+              <td>{% include "ui/components/_status.html" with code=s.status label=s.get_status_display %}</td>
+              <td>{{ s.record_count }}</td>
+              <td>
+                <div class="inline-actions"><a class="button button-info"
+                     href="{% url 'attendance:attendance_session_detail' s.id %}">{% trans "Open" %}</a>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state"><span>&#9679;</span>
+      <h3>{% trans "No sessions found" %}</h3>
+      <p>{% trans "Try changing the filters." %}</p>
+    </div>
+  {% endif %}
+</section>

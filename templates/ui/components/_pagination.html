@@ -1,0 +1,34 @@
+{% load i18n %}
+{% if page_obj.has_other_pages %}
+  <nav class="pagination" aria-label="{% trans 'Pagination' %}"><p>
+      {% blocktranslate with first=page_obj.start_index last=page_obj.end_index total=page_obj.paginator.count %}
+  {{ first }}
+  –
+  {{ last }}
+  of
+  {{ total }}
+{% endblocktranslate %}
+    </p>
+    <div>
+      {% if page_obj.has_previous %}
+        <a class="button button-secondary"
+           href="?{% if pagination_qs %}{{ pagination_qs }}&amp;{% endif %}page={{ page_obj.previous_page_number }}">{% trans "Previous" %}
+        </a>
+      {% else %}
+        <span class="button button-secondary disabled">{% trans "Previous" %}</span>
+      {% endif %}
+      <span>
+        {{ page_obj.number }}
+        /
+        {{ page_obj.paginator.num_pages }}
+      </span>
+      {% if page_obj.has_next %}
+        <a class="button button-secondary"
+           href="?{% if pagination_qs %}{{ pagination_qs }}&amp;{% endif %}page={{ page_obj.next_page_number }}">{% trans "Next" %}
+        </a>
+      {% else %}
+        <span class="button button-secondary disabled">{% trans "Next" %}</span>
+      {% endif %}
+    </div>
+  </nav>
+{% endif %}

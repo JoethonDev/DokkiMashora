@@ -1,0 +1,9 @@
+{% load i18n %}
+<form action="{% url 'set_language' %}" method="post">{% csrf_token %}
+  <input name="next" type="hidden" value="{{ request.path }}">
+  <button type="submit"
+          name="language"
+          value="{% if LANGUAGE_CODE == 'ar' %}en{% else %}ar{% endif %}"
+          class="language-button"
+          aria-label="{% trans 'Switch language' %}">{% if LANGUAGE_CODE == 'ar' %}EN{% else %}AR{% endif %}</button>
+</form>

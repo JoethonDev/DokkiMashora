@@ -1,0 +1,22 @@
+{% load i18n %}
+<div id="global-modal"
+     class="modal-layer"
+     x-data="{open:false, trigger:null}"
+     x-show="open"
+     x-cloak
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="modal-title"
+     @open-modal.window="trigger=$event.detail?.trigger || document.activeElement; open=true"
+     @close-modal.window="open=false; trigger && trigger.focus()"
+     @keydown.escape.window="open=false; trigger && trigger.focus()"
+     x-init="$watch('open', value => value && $nextTick(() => $refs.panel.focus()))"><div class="modal-backdrop"
+       @click="open=false; trigger && trigger.focus()"></div>
+  <section class="modal" tabindex="-1" x-ref="panel"><h2 id="modal-title" class="sr-only">{% trans "Dialog" %}</h2>
+    <button type="button"
+            class="icon-button"
+            @click="open=false; trigger && trigger.focus()"
+            aria-label="{% trans 'Close dialog' %}">×</button>
+    <div id="modal-content"></div>
+  </section>
+</div>

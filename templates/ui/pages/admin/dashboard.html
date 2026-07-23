@@ -1,0 +1,30 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n %}
+{% block title %}
+  {% trans "Dashboard" %}
+{% endblock %}
+{% block page_title %}
+  {% trans "Dashboard" %}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
+    {% if dashboard_kind == "admin" %}
+      {% include "ui/fragments/admin/dashboard/_admin.html" %}
+    {% elif dashboard_kind == "teacher" %}
+      {% include "ui/fragments/admin/dashboard/_teacher.html" %}
+    {% elif dashboard_kind == "moderator" %}
+      {% include "ui/fragments/admin/dashboard/_moderator.html" %}
+    {% elif dashboard_kind == "secretary" %}
+      {% include "ui/fragments/admin/dashboard/_secretary.html" %}
+    {% else %}
+      <section class="surface"><div class="section-header"><div>
+            <p class="eyebrow">{{ user_role|default:_("Staff") }}</p>
+            <h2>{% trans "Workspace" %}</h2>
+          </div>
+        </div>
+        <p>{% trans "Welcome to the dashboard." %}</p>
+      </section>
+    {% endif %}
+  </div>
+{% endblock %}

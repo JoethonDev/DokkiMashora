@@ -1,0 +1,59 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n %}
+{% block title %}
+  {{ semester.title }} — {{ cohort.name }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">
+    {% include "ui/components/_breadcrumbs.html" with items=breadcrumb_items %}
+    <div class="page-header"><div>
+        <p class="eyebrow">{{ diploma.title }}</p>
+        <h1>{{ semester.title }} — {{ cohort.name }}</h1>
+      </div>
+      <div class="inline-actions end">
+        <a class="button button-primary"
+           href="{% url 'academics:admin_diploma_lecture_create' diploma.id cohort.id semester.id %}">{% trans "Add lecture" %}</a>
+      </div>
+    </div>
+    <section class="surface"><div class="section-header"><div>
+          <p class="eyebrow">{% trans "Lectures" %}</p>
+          <h3>{% trans "Lecture list" %}</h3>
+        </div>
+      </div>
+      {% if lectures %}
+        <div class="table-shell"><table>
+            <thead>
+              <tr>
+                <th>{% trans "Order" %}</th>
+                <th>{% trans "Title" %}</th>
+                <th>{% trans "Actions" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in lectures %}
+                <tr>
+                  <td>{{ item.order }}</td>
+                  <td>{{ item.title }}</td>
+                  <td>
+                    <div class="inline-actions">
+                      <a class="text-button"
+                         href="{% url 'academics:admin_diploma_lecture_edit' diploma.id cohort.id semester.id item.id %}">{% trans "Edit" %}</a>
+                      <a class="button button-info"
+                         href="{% url 'academics:admin_diploma_lecture_preview' diploma.id cohort.id semester.id item.id %}">{% trans "Preview" %}</a>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        {% include "ui/components/_empty_state.html" with title=_("No lectures") message=_("No lectures found for this cohort and semester.") %}
+      {% endif %}
+    </section>
+    <div class="inline-actions">
+      <a class="button button-soft"
+         href="{% url 'academics:admin_diploma_detail' diploma.id %}">{% trans "Back to diploma" %}</a>
+    </div>
+  </div>
+{% endblock %}

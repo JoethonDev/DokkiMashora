@@ -112,11 +112,7 @@ class LandingPageSettingsForm(forms.ModelForm):
                     else forms.TextInput(),
                 )
         for field in self.fields.values():
-            field.widget.attrs["class"] = (
-                "h-4 w-4 rounded border-slate-300"
-                if getattr(field.widget, "input_type", "") == "checkbox"
-                else "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
-            )
+            field.widget.attrs.pop("class", None)
 
     def clean(self):
         cleaned = super().clean()

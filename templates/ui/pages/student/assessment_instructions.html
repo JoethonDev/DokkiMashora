@@ -1,0 +1,32 @@
+{% extends "ui/layouts/student.html" %}
+{% load i18n %}
+{% block title %}
+  {{ assessment.title }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view"><section class="page-intro"><div>
+        <p class="eyebrow">{% trans "Assessment" %}</p>
+        <h2>{{ assessment.title }}</h2>
+        <p>{{ assessment.description }}</p>
+      </div>
+    </section>
+    <section class="surface"><dl class="description-list"><div>
+          <dt>{% trans "Duration" %}</dt>
+          <dd>
+            {{ assessment.duration_minutes }}
+            {% trans "minutes" %}
+          </dd>
+        </div>
+        <div>
+          <dt>{% trans "Total points" %}</dt>
+          <dd>
+            {{ assessment.total_points }}
+          </dd>
+        </div>
+      </dl>
+      <form method="post" action="{% url 'assessments:start' assessment.id %}">{% csrf_token %}
+        <button class="button button-primary" type="submit">{% trans "Start assessment" %}</button>
+      </form>
+    </section>
+  </div>
+{% endblock %}

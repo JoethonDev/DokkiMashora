@@ -1,0 +1,49 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n ui_tags %}
+{% block title %}
+  {{ title|default:_("Preview") }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% trans "Messaging" as eyebrow %}
+    {% trans "Preview" as title %}
+    {% trans "Review your draft before sending." as description %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
+    <section class="surface"><div class="section-header"><div>
+          <p class="eyebrow">{% trans "Preview" %}</p>
+          <h3>{{ draft.subject }}</h3>
+        </div>
+      </div>
+      <dl class="description-list"><div>
+          <dt>{% trans "Recipients" %}</dt>
+          <dd>
+            {{ recipient_count }}
+          </dd>
+        </div>
+        <div>
+          <dt>{% trans "Design" %}</dt>
+          <dd>
+            {{ design_label|default:_("Branded") }}
+          </dd>
+        </div>
+      </dl>
+      <p>
+        {% for source,count in source_counts.items %}
+          <span class="status-pill blue">{{ source }}
+            :
+            {{ count }}
+          </span>
+        {% endfor %}
+      </p>
+      {% if rendered_html %}
+        <div class="preview">{{ rendered_html|safe }}</div>
+      {% endif %}
+    </section>
+    <div class="inline-actions"><form method="post" action="{% url 'communications:bulk_email_preview' %}">{% csrf_token %}
+        <button class="button button-primary" type="submit">{% trans "Send" %}</button>
+      </form>
+      <form method="post" action="{% url 'communications:bulk_email_discard' %}">{% csrf_token %}
+        <button class="button button-secondary" type="submit">{% trans "Discard" %}</button>
+      </form>
+    </div>
+  </div>
+{% endblock %}

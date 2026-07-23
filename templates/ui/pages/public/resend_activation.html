@@ -1,0 +1,32 @@
+{% extends "ui/layouts/public.html" %}
+{% load i18n %}
+{% block public_header %}{% endblock %}
+{% block title %}
+  {% trans "Resend activation" %}
+{% endblock %}
+{% block content %}
+  <section class="auth-page"><div class="auth-visual"><a class="brand light" href="{% url 'core:landing' %}"><span class="brand-mark">DM</span>
+    <span><strong>DokkiMashora</strong>
+      <small>{% trans "Learning Management" %}</small></span></a>
+    <div class="auth-message"><p class="eyebrow">{% trans "Account" %}</p>
+      <h2>{% trans "Resend activation email." %}</h2>
+      <p>{% trans "Enter your email to request a new activation link." %}</p>
+    </div>
+  </div>
+  <div class="auth-form-area"><section class="auth-form"><p class="eyebrow">{% trans "Activation" %}</p>
+      <h1>{% trans "Resend activation" %}</h1>
+      <p>{% trans "Request a new activation email." %}</p>
+      <form method="post">{% csrf_token %}
+        <div class="field"><label for="email">{% trans "Email" %}
+            <span aria-hidden="true">*</span>
+          </label>
+          <input id="email" name="email" type="email" autocomplete="email" required>
+        </div>
+        <button class="button button-primary button-block" type="submit">{% trans "Send activation email" %}</button>
+      </form>
+      <p class="auth-help"><a href="{% url 'accounts:login' %}">{% trans "Back to login" %}</a>
+      </p>
+    </section>
+  </div>
+  </section>
+{% endblock %}

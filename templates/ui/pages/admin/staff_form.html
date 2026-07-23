@@ -1,0 +1,20 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n ui_tags %}
+{% block title %}
+  {% if creating %}
+    {% trans "Create staff member" as title %}
+  {% else %}
+    {% trans "Edit staff member" as title %}
+  {% endif %}
+  {{ title }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% include "ui/components/_page_header.html" with title=title|default:_("Staff member") eyebrow=_("Staff") %}
+    <form class="surface form-main" method="post">{% csrf_token %}
+      {% for field in form %}
+        {% include "ui/components/_field.html" %}
+      {% endfor %}
+      <button class="button button-primary" type="submit">{% trans "Save" %}</button>
+    </form>
+  </div>
+{% endblock %}

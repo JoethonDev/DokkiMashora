@@ -1,0 +1,254 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n ui_tags %}
+{% block title %}
+  {{ title|default:_("Payments") }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% trans "Finance" as eyebrow %}
+    {% trans "Payments" as default_title %}
+    {% trans "Payment records are created from enrollment payment actions or confirmed CSV imports." as description %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title|default:default_title description=description %}
+    <nav class="tabs">
+      <a href="{% url 'payments:index' %}" {% if page_mode == 'record_list' %}aria-current="page"{% endif %}>{% trans "Payment records" %}</a>
+      <a href="{% url 'payments:upload_list' %}" {% if page_mode == 'upload_list' or page_mode == 'upload_detail' or page_mode == 'upload_create' %}aria-current="page"{% endif %}>{% trans "Imports" %}</a>
+    </nav>
+
+    {% if page_mode == "record_list" %}
+      <section class="surface">
+        <form class="filter-toolbar" method="get" hx-get="{% url 'payments:index' %}" hx-trigger="input changed delay:250ms from:#payment-student-search, change from:select, submit" hx-target="#payment-records" hx-swap="outerHTML" hx-push-url="true" hx-sync="this:replace">
+          <label class="search-input"><span>&#8981;</span>
+            <input id="payment-student-search" name="student_q" value="{{ current_student_q|default:'' }}" type="search" placeholder="{% trans 'Search student…' %}">
+          </label>
+          <label class="select-field"><span>{% trans "Status" %}</span>
+            <select name="status">
+              <option value="">{% trans "All" %}</option>
+              {% for value,label in payment_status_choices %}
+                <option value="{{ value }}" {% if value == current_status %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="select-field"><span>{% trans "From" %}</span>
+            <input name="date_from" type="date" value="{{ current_date_from }}">
+          </label>
+          <label class="select-field"><span>{% trans "To" %}</span>
+            <input name="date_to" type="date" value="{{ current_date_to }}">
+          </label>
+          <button class="button button-info" type="submit">{% trans "Filter" %}</button>
+        </form>
+        <div id="payment-records" class="table-shell">
+          <table>
+            <thead>
+              <tr>
+                <th>{% trans "Reference" %}</th>
+                <th>{% trans "Student" %}</th>
+                <th>{% trans "Program / enrollment" %}</th>
+                <th>{% trans "Amount" %}</th>
+                <th>{% trans "Status / date" %}</th>
+                <th>{% trans "Actions" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in page_obj %}
+                <tr>
+                  <td>{{ item.external_reference|default:item.id }}</td>
+                  <td>{{ item.student.full_name|default:item.student }}</td>
+                  <td>
+                    {% if item.diploma_enrollment %}
+                      {{ item.diploma_enrollment.cohort.diploma.title }}
+                    {% elif item.course_enrollment %}
+                      {{ item.course_enrollment.course_version.course.title }}
+                    {% elif item.application.cohort %}
+                      {{ item.application.cohort.diploma.title }}
+                    {% elif item.application.course %}
+                      {{ item.application.course.title }}
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+                  <td>{{ item.amount|default:'—' }}{% if item.currency %} {{ item.currency }}{% endif %}</td>
+                  <td class="cell-stack">
+                    {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
+                    <small>{{ item.paid_at|default:item.created_at|date:"SHORT_DATE_FORMAT"|default:'—' }}</small>
+                  </td>
+                  <td>
+                    <div class="inline-actions">
+                      <a class="button button-info" href="{% url 'payments:record_detail' item.id %}">{% trans "View" %}</a>
+                    </div>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr class="empty-row">
+                  <td colspan="6">
+                    {% if current_status or current_student_q or current_date_from or current_date_to %}
+                      {% include "ui/components/_empty_state.html" with title=_("No payments match these filters.") compact=True %}
+                    {% else %}
+                      {% include "ui/components/_empty_state.html" with title=_("No payment records yet.") message=_("Records appear after an enrollment is marked paid or a CSV import is confirmed.") compact=True %}
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% include "ui/components/_pagination.html" %}
+      </section>
+      <div class="inline-actions">
+        <a class="button button-primary" href="{% url 'payments:upload_create' %}">{% trans "Import payments" %}</a>
+        <a class="button button-info" href="{% url 'payments:download_payment_csv_template' %}">{% trans "Download CSV template" %}</a>
+      </div>
+
+    {% elif page_mode == "record_detail" %}
+      <section class="surface">
+        <div class="section-header"><div>
+          <p class="eyebrow">{% trans "Payment" %}</p>
+          <h2>{% trans "Payment record" %}</h2>
+        </div></div>
+        <dl class="description-list">
+          <div><dt>{% trans "Reference" %}</dt><dd>{{ record.external_reference|default:'—' }}</dd></div>
+          <div><dt>{% trans "Student" %}</dt><dd>{{ record.student|default:'—' }}</dd></div>
+          <div><dt>{% trans "Amount" %}</dt><dd>{{ record.amount|default:'—' }}{% if record.currency %} {{ record.currency }}{% endif %}</dd></div>
+          <div><dt>{% trans "Status" %}</dt><dd>{% include "ui/components/_status.html" with code=record.status label=record.get_status_display %}</dd></div>
+          <div><dt>{% trans "Paid at" %}</dt><dd>{{ record.paid_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</dd></div>
+        </dl>
+        <div class="inline-actions">
+          <a class="button button-info" href="{% url 'payments:record_edit' record.id %}">{% trans "Edit" %}</a>
+          <form method="post" action="{% url 'payments:record_delete' record.id %}">{% csrf_token %}
+            <button class="button button-danger" type="submit">{% trans "Delete" %}</button>
+          </form>
+          <a class="button button-ghost" href="{% url 'payments:index' %}">{% trans "Back" %}</a>
+        </div>
+      </section>
+
+    {% elif page_mode == "record_edit" %}
+      <form class="surface form-main" method="post">{% csrf_token %}
+        {% for field in form %}
+          {% include "ui/components/_field.html" %}
+        {% endfor %}
+        <div class="form-actions">
+          <button class="button button-primary" type="submit">{% trans "Save" %}</button>
+          <a class="button button-ghost" href="{% url 'payments:record_detail' record.id %}">{% trans "Cancel" %}</a>
+        </div>
+      </form>
+
+    {% elif page_mode == "upload_list" %}
+      <section class="surface">
+        <form class="filter-toolbar" method="get" hx-get="{% url 'payments:upload_list' %}" hx-trigger="input changed delay:250ms from:#upload-search, change from:select, submit" hx-target="#upload-results" hx-swap="outerHTML" hx-push-url="true" hx-sync="this:replace">
+          <label class="select-field"><span>{% trans "Status" %}</span>
+            <select id="upload-search" name="status">
+              <option value="">{% trans "All" %}</option>
+              {% for value,label in upload_status_choices %}
+                <option value="{{ value }}" {% if value == current_status %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <button class="button button-info" type="submit">{% trans "Filter" %}</button>
+        </form>
+        <div id="upload-results" class="table-shell">
+          <table>
+            <thead>
+              <tr>
+                <th>{% trans "File" %}</th>
+                <th>{% trans "Uploaded by" %}</th>
+                <th>{% trans "Total" %} / {% trans "matched" %} / {% trans "unmatched" %} / {% trans "failed" %}</th>
+                <th>{% trans "Status" %}</th>
+                <th>{% trans "Created" %}</th>
+                <th>{% trans "Actions" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in page_obj %}
+                <tr>
+                  <td>{{ item.original_filename }}</td>
+                  <td>{{ item.uploaded_by|default:'—' }}</td>
+                  <td>{{ item.total_rows|default:0 }} / {{ item.matched_rows|default:0 }} / {{ item.unmatched_rows|default:0 }} / {{ item.failed_rows|default:0 }}</td>
+                  <td>{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
+                  <td>{{ item.created_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</td>
+                  <td>
+                    <div class="inline-actions"><a class="button button-info" href="{% url 'payments:upload_detail' item.id %}">{% trans "Open" %}</a></div>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr class="empty-row">
+                  <td colspan="6">
+                    {% if current_status %}
+                      {% include "ui/components/_empty_state.html" with title=_("No imports match these filters.") compact=True %}
+                    {% else %}
+                      {% url 'payments:upload_create' as new_import_url %}{% include "ui/components/_empty_state.html" with title=_("No imports yet.") message=_("Upload a CSV file to begin.") action_label=_("New import") href=new_import_url compact=True %}
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% include "ui/components/_pagination.html" %}
+      </section>
+      <div class="inline-actions">
+        <a class="button button-primary" href="{% url 'payments:upload_create' %}">{% trans "New import" %}</a>
+        <a class="button button-info" href="{% url 'payments:download_payment_csv_template' %}">{% trans "CSV template" %}</a>
+      </div>
+
+    {% elif page_mode == "upload_detail" %}
+      <section class="surface">
+        <div class="section-header"><div>
+          <p class="eyebrow">{% trans "Upload" %}</p>
+          <h2>{{ upload.original_filename }}</h2>
+        </div></div>
+        <dl class="description-list">
+          <div><dt>{% trans "Status" %}</dt><dd>{% include "ui/components/_status.html" with code=upload.status label=upload.get_status_display %}</dd></div>
+          <div><dt>{% trans "Total rows" %}</dt><dd>{{ upload.total_rows|default:upload.rows.count|default:0 }}</dd></div>
+          <div><dt>{% trans "Matched" %}</dt><dd>{{ upload.matched_rows|default:0 }}</dd></div>
+          <div><dt>{% trans "Unmatched" %}</dt><dd>{{ upload.unmatched_rows|default:0 }}</dd></div>
+          <div><dt>{% trans "Failed" %}</dt><dd>{{ upload.failed_rows|default:0 }}</dd></div>
+        </dl>
+        {% if upload.status == 'previewed' %}
+          <form method="post" action="{% url 'payments:upload_confirm' upload.id %}">{% csrf_token %}
+            <button class="button button-success" type="submit">{% trans "Confirm upload" %}</button>
+          </form>
+        {% endif %}
+      </section>
+      <div class="table-shell">
+        <table>
+          <thead>
+            <tr>
+              <th>{% trans "Row" %}</th>
+              <th>{% trans "Student" %}</th>
+              <th>{% trans "Amount" %}</th>
+              <th>{% trans "Status" %}</th>
+              <th>{% trans "Error" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in upload.rows.all %}
+              <tr>
+                <td>{{ row.row_number }}</td>
+                <td>{{ row.student|default:row.external_reference|default:'—' }}</td>
+                <td>{{ row.amount|default:'—' }}</td>
+                <td>{% include "ui/components/_status.html" with code=row.status label=row.get_status_display %}</td>
+                <td>{{ row.error_message|default:'—' }}</td>
+              </tr>
+            {% empty %}
+              <tr class="empty-row">
+                <td colspan="5">{% include "ui/components/_empty_state.html" with title=_("No rows found.") compact=True %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="inline-actions">
+        <a class="button button-ghost" href="{% url 'payments:upload_list' %}">{% trans "Back to imports" %}</a>
+      </div>
+
+    {% elif page_mode == "upload_create" %}
+      <form class="surface form-main" method="post" enctype="multipart/form-data">{% csrf_token %}
+        {% for field in form %}
+          {% include "ui/components/_field.html" %}
+        {% endfor %}
+        <div class="form-actions">
+          <button class="button button-primary" type="submit">{% trans "Upload" %}</button>
+          <a class="button button-ghost" href="{% url 'payments:upload_list' %}">{% trans "Cancel" %}</a>
+        </div>
+      </form>
+    {% endif %}
+  </div>
+{% endblock %}

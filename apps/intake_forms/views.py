@@ -45,7 +45,7 @@ def admin_intake_form_list(request: HttpRequest) -> HttpResponse:
         "course_version__course", "cohort__diploma", "created_by",
     ).order_by("-created_at")
     page_obj, _qs = paginate(request, forms_qs)
-    return render(request, "intake_forms/admin_form_list.html", {"forms": page_obj})
+    return render(request, "ui/pages/admin/intake.html", {"page_obj": page_obj, "title": _("Intake forms")})
 
 
 @require_http_methods(["GET", "POST"])
@@ -91,7 +91,7 @@ def admin_intake_form_create(request: HttpRequest) -> HttpResponse:
                 messages.error(request, err)
     else:
         form = IntakeFormBuildForm()
-    return render(request, "intake_forms/admin_form_create.html", {"form": form})
+    return render(request, "ui/pages/admin/intake.html", {"form": form, "title": _("Create intake form")})
 
 
 @require_http_methods(["GET", "POST"])
@@ -151,7 +151,7 @@ def admin_intake_form_detail(request: HttpRequest, form_id: int) -> HttpResponse
             intake_form.save(update_fields=["is_required"])
             messages.success(request, _("Form required state toggled."))
             return redirect("intake_forms:admin_intake_form_detail", form_id=intake_form.pk)
-    return render(request, "intake_forms/admin_form_detail.html", {
+    return render(request, "ui/pages/admin/intake.html", {
         "intake_form": intake_form,
         "fields": fields,
         "responses": responses,
@@ -169,7 +169,7 @@ def admin_intake_response_detail(request: HttpRequest, form_id: int, response_id
         ).prefetch_related("answers__field"),
         pk=response_id, form_id=form_id,
     )
-    return render(request, "intake_forms/admin_response_detail.html", {
+    return render(request, "ui/pages/admin/intake.html", {
         "response": response,
         "form_obj": response.form,
     })
@@ -209,7 +209,7 @@ def admin_version_intake_responses(request: HttpRequest, version_id: int) -> Htt
         raise PermissionDenied
     target = get_object_or_404(CourseVersion, pk=version_id)
     responses = get_intake_responses_for_target(target)
-    return render(request, "intake_forms/admin_response_list.html", {
+    return render(request, "ui/pages/admin/intake.html", {
         "target": target,
         "target_type": "course_version",
         "responses": responses,
@@ -224,7 +224,7 @@ def admin_cohort_intake_responses(request: HttpRequest, cohort_id: int) -> HttpR
         raise PermissionDenied
     target = get_object_or_404(Cohort, pk=cohort_id)
     responses = get_intake_responses_for_target(target)
-    return render(request, "intake_forms/admin_response_list.html", {
+    return render(request, "ui/pages/admin/intake.html", {
         "target": target,
         "target_type": "cohort",
         "responses": responses,
@@ -276,7 +276,7 @@ def fill_intake_form(request: HttpRequest, token: str) -> HttpResponse:
         return redirect("students:applications")
 
     if intake_request.status == INTAKE_REQUEST_STATUS_SUBMITTED:
-        return render(request, "intake_forms/fill_form.html", {
+        return render(request, "ui/pages/public/register.html", {
             "submitted": True,
             "intake_request": intake_request,
             "application": application,
@@ -285,7 +285,7 @@ def fill_intake_form(request: HttpRequest, token: str) -> HttpResponse:
     if intake_request.expires_at <= timezone.now():
         intake_request.status = INTAKE_REQUEST_STATUS_EXPIRED
         intake_request.save(update_fields=["status"])
-        return render(request, "intake_forms/fill_form.html", {
+        return render(request, "ui/pages/public/register.html", {
             "expired": True,
             "intake_request": intake_request,
             "application": application,
@@ -324,7 +324,7 @@ def fill_intake_form(request: HttpRequest, token: str) -> HttpResponse:
     else:
         submit_form = IntakeFormSubmitForm(form_instance, prefix="intake")
 
-    return render(request, "intake_forms/fill_form.html", {
+    return render(request, "ui/pages/public/register.html", {
         "intake_request": intake_request,
         "application": application,
         "form_instance": form_instance,

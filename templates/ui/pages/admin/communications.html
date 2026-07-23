@@ -1,0 +1,382 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n ui_tags %}
+{% block title %}
+  {{ title|default:_("Communications") }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% trans "Messaging" as eyebrow %}
+    {% trans "Communications" as title %}
+    {% trans "Design, preview, send, and inspect delivery of institutional communications." as description %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
+    {% if bulk_form %}
+      <form class="surface form-main"
+            method="post"
+            action="{% url 'communications:bulk_email_create' %}">{% csrf_token %}
+        <label>
+          {% trans "Subject" %}
+          <input name="subject" value="{{ subject|default:'' }}" required>
+        </label>
+        <label>
+          {% trans "Body" %}
+          <textarea name="body" rows="12" required>
+      {{ body|default:'' }}
+      </textarea>
+        </label>
+        <label>
+          {% trans "Template" %}
+          <select name="template_id"><option value="">{% trans "No template" %}</option>
+            {% for item in templates %}
+              <option value="{{ item.id }}"
+                      {% if template_id|stringformat:'s' == item.id|stringformat:'s' %} selected {% endif %}>
+                {{ item.name|default:item.slug }}
+              </option>
+            {% endfor %}
+          </select>
+        </label>
+        <div class="grid grid-2"><label>
+            {% trans "Diploma" %}
+            <select name="filter_diploma"><option value="">{% trans "All diplomas" %}</option>
+              {% for item in diplomas %}
+                <option value="{{ item.id }}"
+                        {% if filter_diploma|stringformat:'s' == item.id|stringformat:'s' %} selected {% endif %}>
+                  {{ item.title }}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            {% trans "Cohort" %}
+            <select name="filter_cohort"><option value="">{% trans "All cohorts" %}</option>
+              {% for item in cohorts %}
+                <option value="{{ item.id }}"
+                        {% if filter_cohort|stringformat:'s' == item.id|stringformat:'s' %} selected {% endif %}>
+                  {{ item.name|default:item }}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            {% trans "Enrollment status" %}
+            <select name="filter_status"><option value="">{% trans "Any status" %}</option>
+              {% for value,label in status_choices %}
+                <option value="{{ value }}"
+                        {% if filter_status == value %} selected {% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            {% trans "Recipient search" %}
+            <input name="recipient_search"
+                   value="{{ recipient_search|default:'' }}"
+                   placeholder="{% trans 'Name or email' %}"></label>
+        </div>
+        <label>
+          {% trans "Manual recipients" %}
+          <textarea name="manual_emails" rows="4" placeholder="{% trans 'One email per line or comma separated' %}">{{ manual_emails|default:'' }}
+                      </textarea>
+        </label>
+        <button class="button button-primary" type="submit">{% trans "Preview recipients" %}</button>
+      </form>
+    {% elif draft %}
+      <section class="surface"><div class="section-header"><div>
+            <p class="eyebrow">{% trans "Preview" %}</p>
+            <h3>{{ draft.subject }}</h3>
+          </div>
+        </div>
+        <dl class="description-list"><div>
+            <dt>{% trans "Recipients" %}</dt>
+            <dd>
+              {{ recipient_count }}
+            </dd>
+          </div>
+          <div>
+            <dt>{% trans "Design" %}</dt>
+            <dd>
+              {{ design_label|default:_("Branded") }}
+            </dd>
+          </div>
+        </dl>
+        <p>
+          {% for source,count in source_counts.items %}
+            <span class="status-pill blue">{{ source }}
+              :
+              {{ count }}
+            </span>
+          {% endfor %}
+        </p>
+        {% if rendered_html %}
+          <div class="preview">{{ rendered_html|safe }}</div>
+        {% endif %}
+      </section>
+      <div class="inline-actions"><form method="post" action="{% url 'communications:bulk_email_preview' %}">{% csrf_token %}
+          <button class="button button-primary" type="submit">{% trans "Send" %}</button>
+        </form>
+        <form method="post" action="{% url 'communications:bulk_email_discard' %}">{% csrf_token %}
+          <button class="button button-secondary" type="submit">{% trans "Discard" %}</button>
+        </form>
+      </div>
+    {% elif send %}
+      <section class="surface"><div class="section-header"><div>
+            <p class="eyebrow">{% trans "Sent" %}</p>
+            <h3>{{ send.subject }}</h3>
+          </div>
+        </div>
+        <dl class="description-list"><div>
+            <dt>{% trans "Created" %}</dt>
+            <dd>
+              {{ send.created_at|date:"SHORT_DATETIME_FORMAT" }}
+            </dd>
+          </div>
+          <div>
+            <dt>{% trans "Recipients" %}</dt>
+            <dd>
+              {{ send.recipient_count }}
+            </dd>
+          </div>
+          <div>
+            <dt>{% trans "Succeeded" %}</dt>
+            <dd>
+              {{ send.success_count }}
+            </dd>
+          </div>
+          <div>
+            <dt>{% trans "Failed" %}</dt>
+            <dd>
+              {{ send.failure_count }}
+            </dd>
+          </div>
+        </dl>
+      </section>
+      <div class="table-shell"><table>
+          <thead>
+            <tr>
+              <th>{% trans "Recipient" %}</th>
+              <th>{% trans "Status" %}</th>
+              <th>{% trans "Error" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in page_obj %}
+              <tr>
+                <td>{{ item.to_email|default:item.recipient_email }}</td>
+                <td>
+                  {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:item.status %}
+                </td>
+                <td>{{ item.error_message|default:'—' }}</td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="3">{% trans "No delivery messages." %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% elif available_slugs %}
+      <form class="surface form-main" method="post">{% csrf_token %}
+        <label>
+          {% trans "Action" %}
+          <select name="slug" required>
+            {% for slug in available_slugs %}
+              <option value="{{ slug }}">{{ slug }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>
+          {% trans "Name" %}
+          <input name="name" required>
+        </label>
+        <label>
+          {% trans "Subject" %}
+          <input name="subject" required>
+        </label>
+        <label>
+          {% trans "Body" %}
+          <textarea name="body" rows="12" required></textarea>
+        </label>
+        <label>
+          {% trans "Design" %}
+          <select name="design">{% for value,label in design_choices %}
+              <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>
+          <input type="checkbox" name="is_enabled_for_action">{% trans "Enabled for actions" %}
+        </label>
+        <button class="button button-primary" type="submit">{% trans "Create template" %}</button>
+      </form>
+    {% elif footer %}
+      <form class="surface form-main" method="post">{% csrf_token %}
+        <label>
+          {% trans "Global footer" %}
+          <textarea name="body" rows="10">{{ footer.body }}
+                                </textarea>
+        </label>
+        <button class="button button-primary" type="submit">{% trans "Save footer" %}</button>
+      </form>
+    {% elif template %}
+      {% if rendered_html %}
+        <section class="surface"><div class="section-header"><div>
+              <p class="eyebrow">{% trans "Preview" %}</p>
+              <h3>{{ template.name }}</h3>
+            </div>
+          </div>
+          <p>
+            <strong>
+              {% trans "Rendered subject" %}
+            :</strong>
+            {{ rendered_subject }}
+          </p>
+          <div class="preview">{{ rendered_html|safe }}</div>
+          <div class="inline-actions">{% for value,label in design_choices %}
+              <a class="button button-secondary" href="?design={{ value }}">{{ label }}</a>
+            {% endfor %}
+          </div>
+          {% if missing %}
+            <div class="alert alert-warning">{% trans "Missing sample variables" %}
+              :
+              {{ missing|join:', ' }}
+            </div>
+          {% endif %}
+        </section>
+      {% else %}
+        <form class="surface form-main" method="post">{% csrf_token %}
+          <label>
+            {% trans "Subject" %}
+            <input name="subject" value="{{ template.subject }}" required>
+          </label>
+          <label>
+            {% trans "Body" %}
+            <textarea name="body" rows="14" required>
+                                      {{ template.body }}
+                                      </textarea>
+          </label>
+          <label>
+            {% trans "Design" %}
+            <select name="design">{% for value,label in design_choices %}
+                <option value="{{ value }}"
+                        {% if template.design == value %} selected {% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <fieldset>
+            <legend>{% trans "Required variables" %}</legend>
+            {% for variable in all_vars %}
+              <label>
+                <input type="checkbox"
+                       name="required_variables"
+                       value="{{ variable }}"
+                       {% if variable in required_vars %} checked {% endif %}>
+                <code>
+                  {{ variable }}
+                </code>
+              </label>
+            {% endfor %}
+          </fieldset>
+          <label>
+            <input type="checkbox"
+                   name="is_enabled_for_action"
+                   {% if template.is_enabled_for_action %} checked {% endif %}>
+            {% trans "Enabled for actions" %}
+          </label>
+          <button class="button button-primary" type="submit">{% trans "Save template" %}</button>
+        </form>
+        <a class="button button-secondary"
+           href="{% url 'communications:admin_template_preview' template.slug %}">{% trans "Preview template" %}</a>
+      {% endif %}
+    {% elif templates %}
+      <section class="surface"><div class="table-shell"><table>
+            <thead>
+              <tr>
+                <th>{% trans "Template" %}</th>
+                <th>{% trans "Slug" %}</th>
+                <th>{% trans "Design" %}</th>
+                <th>{% trans "Actions" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in templates %}
+                <tr>
+                  <td>{{ item.name }}</td>
+                  <td>
+                    <code>
+                      {{ item.slug }}
+                    </code>
+                  </td>
+                  <td>{{ item.get_design_display|default:item.design }}</td>
+                  <td>
+                    <div class="inline-actions"><a class="button button-info"
+                         href="{% url 'communications:admin_template_edit' item.slug %}">{% trans "Edit" %}</a>
+                      <a class="button button-info"
+                         href="{% url 'communications:admin_template_preview' item.slug %}">{% trans "Preview" %}</a>
+                    </div>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="4">{% trans "No templates." %}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <div class="inline-actions"><a class="button button-primary"
+           href="{% url 'communications:admin_template_create' %}">{% trans "Create template" %}</a>
+        <a class="button button-info"
+           href="{% url 'communications:admin_footer_edit' %}">{% trans "Edit footer" %}</a>
+      </div>
+    {% elif page_obj %}
+      <section class="surface"><div class="table-shell"><table>
+            <thead>
+              <tr>
+                <th>{% trans "Subject" %}</th>
+                <th>{% trans "Audience" %}</th>
+                <th>{% trans "Success / failed" %}</th>
+                <th>{% trans "Status" %}</th>
+                <th>{% trans "Created" %}</th>
+                <th>{% trans "Actions" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in page_obj %}
+                <tr>
+                  <td>{{ item.subject }}</td>
+                  <td>{{ item.recipient_count|default:'—' }}</td>
+                  <td>
+                    {{ item.success_count|default:0 }}
+                    /
+                    {{ item.failure_count|default:0 }}
+                  </td>
+                  <td>
+                    {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:item.status %}
+                  </td>
+                  <td>{{ item.created_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</td>
+                  <td>
+                    <div class="inline-actions">{% if item.id %}
+                        <a class="button button-info"
+                           href="{% url 'communications:bulk_email_detail' item.id %}">{% trans "View" %}</a>
+                      {% endif %}
+                    </div>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="6"><div class="empty-state"><span>&#9679;</span>
+                      <h3>{% trans "No messages have been sent." %}</h3>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% include "ui/components/_pagination.html" %}
+      </section>
+      <div class="inline-actions"><a class="button button-primary"
+           href="{% url 'communications:bulk_email_create' %}">{% trans "Create message" %}</a>
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}

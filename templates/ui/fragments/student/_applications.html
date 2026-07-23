@@ -1,0 +1,60 @@
+{% load i18n %}
+<div id="student-content" class="page-stack enter-view"><section class="page-intro"><div>
+      <p class="eyebrow">{% trans "Admissions" %}</p>
+      <h2>{% trans "My applications" %}</h2>
+      <p>{% trans "Follow submitted applications, requested documents, and decisions." %}</p>
+    </div>
+    <a class="button button-primary" href="{% url 'students:apply' %}">{% trans "Start an application" %}</a>
+  </section>
+  <section class="surface"><div class="inline-actions"><a class="button button-soft" href="{% url 'students:apply' %}">{% trans "Apply to a program" %}</a>
+    </div>
+    <div class="table-shell"><table>
+        <thead>
+          <tr>
+            <th>{% trans "Program" %}</th>
+            <th>{% trans "Submitted" %}</th>
+            <th>{% trans "Status" %}</th>
+            <th>{% trans "Documents" %}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in applications %}
+            <tr>
+              <td>
+                <strong>
+                  {% if item.cohort_id %}
+                    {{ item.cohort.diploma.title }}
+                  {% elif item.course_id %}
+                    {{ item.course.title }}
+                  {% else %}
+                    {% trans "Program application" %}
+                  {% endif %}
+                </strong>
+                <small>{{ item.program_type|default:'' }}</small>
+              </td>
+              <td>{{ item.created_at|date:"d M Y" }}</td>
+              <td>
+                <span class="status-pill blue">{{ item.get_status_display }}</span>
+              </td>
+              <td>{{ item.document_requests.all|length|default:0 }}</td>
+              <td>
+                <a class="text-button" href="{% url 'students:details' %}">{% trans "View" %}</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5"><div class="empty-state"><span>▤</span>
+                  <h3>{% trans "No applications yet" %}</h3>
+                  <p>{% trans "Your submitted applications will appear here." %}</p>
+                  <a class="button button-primary" href="{% url 'students:apply' %}">{% trans "Explore programs" %}</a>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include "ui/components/_pagination.html" %}
+  </section>
+</div>

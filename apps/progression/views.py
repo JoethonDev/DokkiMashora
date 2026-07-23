@@ -104,13 +104,14 @@ def admin_dashboard(request):
         students_data[sid]["semesters"].append(prog)
 
     ctx = {
+        "workflow": "dashboard",
         "diplomas": diplomas,
         "students_data": list(students_data.values()),
         "selected_diploma_id": diploma_id,
         "selected_cohort_id": cohort_id,
         "breadcrumb_items": [{"label": _("Progression Dashboard")}],
     }
-    return render(request, "progression/admin_dashboard.html", ctx)
+    return render(request, "ui/pages/admin/progression_dashboard.html", {**ctx, "title": _("Progression")})
 
 
 # ---------------------------------------------------------------------------
@@ -186,6 +187,7 @@ def admin_student_detail(request, student_id):
     rejoin_plans = rejoin_plans.order_by("-created_at")
 
     ctx = {
+        "workflow": "student_detail",
         "student": student,
         "is_admin_user": is_admin(request.user),
         "enrollments": enrollments,
@@ -205,7 +207,7 @@ def admin_student_detail(request, student_id):
             {"label": str(student)},
         ],
     }
-    return render(request, "progression/admin_student_detail.html", ctx)
+    return render(request, "ui/pages/admin/progression_student_detail.html", {**ctx, "title": _("Student progression")})
 
 
 # ---------------------------------------------------------------------------
@@ -554,6 +556,7 @@ def admin_component_list(request, cohort_id, semester_id):
         cohort=cohort, semester=semester,
     ).order_by("order")
     ctx = {
+        "workflow": "component_list",
         "cohort": cohort,
         "semester": semester,
         "components": components,
@@ -562,7 +565,7 @@ def admin_component_list(request, cohort_id, semester_id):
             {"label": _("Grade Components")},
         ],
     }
-    return render(request, "progression/admin_component_list.html", ctx)
+    return render(request, "ui/pages/admin/progression_component_list.html", {**ctx, "title": _("Progression components")})
 
 
 @login_required
@@ -598,6 +601,7 @@ def admin_component_create(request, cohort_id, semester_id):
             except (ValueError, ValidationError) as exc:
                 messages.error(request, str(exc))
     ctx = {
+        "workflow": "component_create",
         "cohort": cohort,
         "semester": semester,
         "component": None,
@@ -608,7 +612,7 @@ def admin_component_create(request, cohort_id, semester_id):
             {"label": _("Create Component")},
         ],
     }
-    return render(request, "progression/admin_component_form.html", ctx)
+    return render(request, "ui/pages/admin/progression_component_form.html", {**ctx, "title": _("Progression component")})
 
 
 @login_required
@@ -640,6 +644,7 @@ def admin_component_edit(request, component_id):
             except Exception as exc:
                 messages.error(request, str(exc))
     ctx = {
+        "workflow": "component_edit",
         "cohort": component.cohort,
         "semester": component.semester,
         "component": component,
@@ -650,7 +655,7 @@ def admin_component_edit(request, component_id):
             {"label": _("Edit Component")},
         ],
     }
-    return render(request, "progression/admin_component_form.html", ctx)
+    return render(request, "ui/pages/admin/progression_component_form.html", {**ctx, "title": _("Progression component")})
 
 
 @login_required
@@ -699,6 +704,7 @@ def admin_custom_activity_grade(request, enrollment_id, component_id):
             except (ValueError, ValidationError) as exc:
                 messages.error(request, str(exc))
     ctx = {
+        "workflow": "custom_activity",
         "enrollment": enrollment,
         "component": component,
         "grade_item": grade_item,
@@ -707,7 +713,7 @@ def admin_custom_activity_grade(request, enrollment_id, component_id):
             {"label": _("Custom Activity Grade")},
         ],
     }
-    return render(request, "progression/admin_custom_activity_form.html", ctx)
+    return render(request, "ui/pages/admin/progression_custom_activity.html", {**ctx, "title": _("Custom activity")})
 
 
 @login_required
@@ -736,6 +742,7 @@ def admin_semester_evaluation(request, enrollment_id, semester_id):
         messages.error(request, str(exc))
         return redirect("progression:admin_student_detail", student_id=enrollment.student.id)
     ctx = {
+        "workflow": "semester_evaluation",
         "enrollment": enrollment,
         "semester": semester,
         "result": result,
@@ -744,7 +751,7 @@ def admin_semester_evaluation(request, enrollment_id, semester_id):
             {"label": _("Semester Evaluation")},
         ],
     }
-    return render(request, "progression/admin_semester_evaluation.html", ctx)
+    return render(request, "ui/pages/admin/progression_semester_evaluation.html", {**ctx, "title": _("Semester evaluation")})
 
 
 # ---------------------------------------------------------------------------
@@ -780,7 +787,7 @@ def student_progress(request):
         "certificates": certificates,
         "grade_items": grade_items,
     }
-    return render(request, "progression/student_progress.html", ctx)
+    return render(request, "ui/pages/student/progression.html", {**ctx, "title": _("Progress")})
 
 
 # ---------------------------------------------------------------------------
@@ -814,6 +821,7 @@ def admin_request_interview(request, enrollment_id, semester_id):
         return redirect("progression:admin_student_detail", student_id=enrollment.student.id)
 
     ctx = {
+        "workflow": "interview_request",
         "enrollment": enrollment,
         "semester": semester,
         "result": result,
@@ -822,7 +830,7 @@ def admin_request_interview(request, enrollment_id, semester_id):
             {"label": _("Request Interview")},
         ],
     }
-    return render(request, "progression/admin_interview_request.html", ctx)
+    return render(request, "ui/pages/admin/progression_interview_request.html", {**ctx, "title": _("Interview request")})
 
 
 @login_required
@@ -876,6 +884,7 @@ def admin_interview_decision(request, enrollment_id, semester_id):
         return redirect("progression:admin_student_detail", student_id=enrollment.student.id)
 
     ctx = {
+        "workflow": "interview_decision",
         "enrollment": enrollment,
         "semester": semester,
         "breadcrumb_items": [
@@ -883,7 +892,7 @@ def admin_interview_decision(request, enrollment_id, semester_id):
             {"label": _("Interview Decision")},
         ],
     }
-    return render(request, "progression/admin_interview_decision.html", ctx)
+    return render(request, "ui/pages/admin/progression_interview_decision.html", {**ctx, "title": _("Interview decision")})
 
 
 # ---------------------------------------------------------------------------
@@ -902,6 +911,7 @@ def admin_rejoin_plan_list(request):
     if status:
         plans = plans.filter(status=status)
     ctx = {
+        "workflow": "rejoin_list",
         "plans": plans,
         "current_status": status,
         "rejoin_status_choices": REJOIN_STATUS_CHOICES,
@@ -910,7 +920,7 @@ def admin_rejoin_plan_list(request):
             {"label": _("Rejoin Plans")},
         ],
     }
-    return render(request, "progression/admin_rejoin_plan_list.html", ctx)
+    return render(request, "ui/pages/admin/progression_rejoin_list.html", {**ctx, "title": _("Rejoin plans")})
 
 
 @login_required
@@ -942,6 +952,7 @@ def admin_create_rejoin_plan(request, enrollment_id):
     semesters = Semester.objects.filter(diploma=enrollment.cohort.diploma).order_by("order")
     cohorts = Cohort.objects.filter(diploma=enrollment.cohort.diploma, is_active=True)
     ctx = {
+        "workflow": "rejoin_create",
         "enrollment": enrollment,
         "semesters": semesters,
         "cohorts": cohorts,
@@ -951,7 +962,7 @@ def admin_create_rejoin_plan(request, enrollment_id):
             {"label": _("Create Rejoin Plan")},
         ],
     }
-    return render(request, "progression/admin_rejoin_plan_form.html", ctx)
+    return render(request, "ui/pages/admin/progression_rejoin_create.html", {**ctx, "title": _("Rejoin plan")})
 
 
 @login_required

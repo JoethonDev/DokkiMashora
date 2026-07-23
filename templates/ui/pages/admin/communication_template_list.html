@@ -1,0 +1,53 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n ui_tags %}
+{% block title %}
+  {{ title|default:_("Templates") }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% trans "Communications" as eyebrow %}
+    {% trans "Templates" as title %}
+    {% trans "Manage email templates for system actions." as description %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
+    <section class="surface"><div class="table-shell"><table>
+          <thead>
+            <tr>
+              <th>{% trans "Template" %}</th>
+              <th>{% trans "Slug" %}</th>
+              <th>{% trans "Design" %}</th>
+              <th>{% trans "Actions" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in templates %}
+              <tr>
+                <td>{{ item.name }}</td>
+                <td>
+                  <code>
+                    {{ item.slug }}
+                  </code>
+                </td>
+                <td>{{ item.get_design_display|default:item.design }}</td>
+                <td>
+                  <div class="inline-actions"><a class="button button-info"
+                       href="{% url 'communications:admin_template_edit' item.slug %}">{% trans "Edit" %}</a>
+                    <a class="button button-info"
+                       href="{% url 'communications:admin_template_preview' item.slug %}">{% trans "Preview" %}</a>
+                  </div>
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="4">{% trans "No templates." %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <div class="inline-actions"><a class="button button-primary"
+         href="{% url 'communications:admin_template_create' %}">{% trans "Create template" %}</a>
+      <a class="button button-info"
+         href="{% url 'communications:admin_footer_edit' %}">{% trans "Edit footer" %}</a>
+    </div>
+  </div>
+{% endblock %}

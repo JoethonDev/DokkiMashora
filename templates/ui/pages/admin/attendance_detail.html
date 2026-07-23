@@ -1,0 +1,136 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n ui_tags %}
+{% block title %}
+  {{ session }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% include "ui/components/_page_header.html" with title=session|stringformat:"s" eyebrow=_("Attendance session") %}
+    <section class="surface"><div class="section-header"><div>
+          <p class="eyebrow">{% trans "Session" %}</p>
+          <h3>{% trans "Session info" %}</h3>
+        </div>
+        {% if is_admin %}
+          <div class="inline-actions">{% if session.status == 'scheduled' %}
+              <form method="post"
+                    action="{% url 'attendance:attendance_session_open' session.id %}"
+                    class="form-inline">{% csrf_token %}
+                <button class="button button-primary" type="submit">{% trans "Open session" %}</button>
+              </form>
+            {% endif %}
+            {% if session.status == 'open' %}
+              <form method="post"
+                    action="{% url 'attendance:attendance_session_close' session.id %}"
+                    class="form-inline">{% csrf_token %}
+                <button class="button button-warning" type="submit">{% trans "Close session" %}</button>
+              </form>
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
+      <dl class="description-list"><div>
+          <dt>{% trans "Status" %}</dt>
+          <dd>
+            {% include "ui/components/_status.html" with code=session.status label=session.get_status_display %}
+          </dd>
+        </div>
+        <div>
+          <dt>{% trans "Created by" %}</dt>
+          <dd>
+            {{ session.created_by.full_name }}
+          </dd>
+        </div>
+        {% if session.cohort %}
+          <div>
+            <dt>{% trans "Cohort" %}</dt>
+            <dd>
+              {{ session.cohort }}
+            </dd>
+          </div>
+        {% endif %}
+        {% if session.course_version %}
+          <div>
+            <dt>{% trans "Course version" %}</dt>
+            <dd>
+              {{ session.course_version }}
+            </dd>
+          </div>
+        {% endif %}
+        {% if session.semester %}
+          <div>
+            <dt>{% trans "Semester" %}</dt>
+            <dd>
+              {{ session.semester }}
+            </dd>
+          </div>
+        {% endif %}
+        <div>
+          <dt>{% trans "Date" %}</dt>
+          <dd>
+            {{ session.date|date:"DATE_FORMAT"|default:'—' }}
+          </dd>
+        </div>
+        <div>
+          <dt>{% trans "Opens" %}</dt>
+          <dd>
+            {{ session.open_at|date:"d M Y H:i" }}
+          </dd>
+        </div>
+        <div>
+          <dt>{% trans "Closes" %}</dt>
+          <dd>
+            {{ session.close_at|date:"d M Y H:i" }}
+          </dd>
+        </div>
+        {% if session.opened_by %}
+          <div>
+            <dt>{% trans "Opened by" %}</dt>
+            <dd>
+              {{ session.opened_by.full_name }}
+            </dd>
+          </div>
+        {% endif %}
+        {% if session.closed_by %}
+          <div>
+            <dt>{% trans "Closed by" %}</dt>
+            <dd>
+              {{ session.closed_by.full_name }}
+            </dd>
+          </div>
+        {% endif %}
+      </dl>
+    </section>
+    <section class="surface"><div class="section-header"><div>
+          <p class="eyebrow">{% trans "Records" %}</p>
+          <h3>{% trans "Attendance records" %}</h3>
+        </div>
+      </div>
+      {% if records %}
+        <div class="table-shell"><table>
+            <thead>
+              <tr>
+                <th>{% trans "Student" %}</th>
+                <th>{% trans "Status" %}</th>
+                <th>{% trans "Scanned at" %}</th>
+                <th>{% trans "Scanned by" %}</th>
+                <th>{% trans "Notes" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for record in records %}
+                <tr>
+                  <td>{{ record.student.full_name }}</td>
+                  <td>{% include "ui/components/_status.html" with code=record.status label=record.get_status_display %}</td>
+                  <td>{{ record.scanned_at|date:"d M Y H:i"|default:'—' }}</td>
+                  <td>{{ record.scanned_by.full_name|default:'—' }}</td>
+                  <td>{{ record.notes|default:'—' }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        {% include "ui/components/_empty_state.html" with title=_("No records") message=_("No attendance records for this session.") %}
+      {% endif %}
+    </section>
+  </div>
+{% endblock %}

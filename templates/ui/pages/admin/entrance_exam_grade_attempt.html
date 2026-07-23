@@ -1,0 +1,43 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n ui_tags %}
+{% block title %}
+  {{ title|default:_("Grade attempt") }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% trans "Assessment operations" as eyebrow %}
+    {% trans "Grade attempt" as default_title %}
+    {% trans "Create exams, manage invitations, grade attempts, and inspect delivery history." as description %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title|default:default_title description=description %}
+    <section class="surface"><h2>
+        {{ attempt.exam }}
+        ·
+        {{ attempt.student }}
+      </h2>
+      <form method="post">{% csrf_token %}
+        {% for question,answer,max_score in question_answer_pairs %}
+          <fieldset>
+            <legend>
+              {{ question.order }}
+              .
+              {{ question.text }}
+            </legend>
+            <label>
+              {% trans "Score" %}
+              <input name="score_{{ question.id }}"
+                     value="{{ answer.score|default:'' }}"
+                     type="number"
+                     min="0"
+                     max="{{ max_score }}"
+                     step="0.01"></label>
+            <label>
+              {% trans "Feedback" %}
+              <textarea name="feedback_{{ question.id }}">{{ answer.feedback|default:'' }}
+        </textarea>
+            </label>
+          </fieldset>
+        {% endfor %}
+        <button class="button button-primary" type="submit">{% trans "Save grades" %}</button>
+      </form>
+    </section>
+  </div>
+{% endblock %}

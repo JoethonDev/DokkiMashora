@@ -1,0 +1,70 @@
+{% load i18n ui_tags %}
+<section id="application-results" class="table-section" aria-live="polite"><div class="section-header"><div>
+      <p class="eyebrow">{% trans "Queue" %}</p>
+      <h3>
+        {{ page_obj.paginator.count }}
+        {% trans "applications" %}
+      </h3>
+    </div>
+    {% include "ui/components/_pagination.html" %}
+  </div>
+  {% if page_obj.object_list %}
+    <div class="table-shell"><table>
+        <thead>
+          <tr>
+            <th>{% trans "Applicant" %}</th>
+            <th>{% trans "Program" %}</th>
+            <th>{% trans "Submitted" %}</th>
+            <th>{% trans "Status" %}</th>
+            <th>{% trans "Action needed" %}</th>
+            <th>{% trans "Actions" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for app in page_obj %}
+            <tr>
+              <td>
+                <div class="student-cell"><span class="avatar avatar-sm">{{ app.student.full_name|slice:":2"|upper }}</span>
+                  <span class="cell-stack"><strong>{{ app.student.full_name }}</strong>
+                    <small>{{ app.student.user.email }}</small></span>
+                </div>
+              </td>
+              <td class="cell-stack"><strong>
+                  {% if app.cohort %}
+                    {{ app.cohort.diploma }}
+                  {% else %}
+                    {{ app.course }}
+                  {% endif %}
+                </strong>
+                <small>{{ app.get_program_type_display }}</small>
+              </td>
+              <td>{{ app.created_at|date:"DATE_FORMAT"|default:'—' }}</td>
+              <td>{% include "ui/components/_status.html" with code=app.status label=app.get_status_display %}</td>
+              <td>
+                {% if app.status == "submitted" or app.status == "entrance_submitted" or app.status == "interview_requested" %}
+                  {% trans "Review" %}
+                {% elif app.status == "payment_pending" %}
+                  {% trans "Payment" %}
+                {% elif app.status == "accepted" or app.status == "documents_requested" %}
+                  {% trans "Documents" %}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td>
+                <div class="inline-actions"><a class="button button-info"
+                     href="{% url 'applications:program_detail' app.id %}">{% trans "Review" %}</a>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state"><span>&#9679;</span>
+      <h3>{% trans "No applications found" %}</h3>
+      <p>{% trans "Try changing the search or filters." %}</p>
+    </div>
+  {% endif %}
+</section>

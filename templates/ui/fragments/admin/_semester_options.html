@@ -1,0 +1,6 @@
+{% load i18n %}
+<label for="semester">{% trans "Semester" %}</label>
+<select id="semester" name="semester">{% for semester in semesters %}
+    <option value="{{ semester.id }}">{{ semester }}</option>
+  {% endfor %}
+</select>

@@ -1,0 +1,47 @@
+{% load i18n %}
+<section id="student-content" class="page-stack enter-view"><section class="page-intro"><div>
+      <p class="eyebrow">{% trans "Assessment" %}</p>
+      <h2>{% trans "Assessment history" %}</h2>
+      <p>{% trans "Review released scores, feedback, and assessment status." %}</p>
+    </div>
+    <a class="button button-soft"
+       href="{% url 'assessments:student_list' %}">{% trans "Available assessments" %}</a>
+  </section>
+  <section class="surface"><div class="table-shell"><table>
+        <thead>
+          <tr>
+            <th>{% trans "Assessment" %}</th>
+            <th>{% trans "Type" %}</th>
+            <th>{% trans "Submitted" %}</th>
+            <th>{% trans "Score" %}</th>
+            <th>{% trans "Status" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in assessment_attempts %}
+            <tr>
+              <td>
+                <strong>{{ item.assessment.title }}</strong>
+              </td>
+              <td>{{ item.assessment.get_assessment_type_display }}</td>
+              <td>{{ item.submitted_at|date:"d M Y"|default:'—' }}</td>
+              <td>{{ item.score|default:'—' }}</td>
+              <td>
+                <span class="status-pill {% if item.grade_visibility == grade_visibility_released %} green {% elif item.grade_visibility == grade_visibility_under_review %} amber {% else %} neutral {% endif %}">{{ item.get_status_display }}
+                </span>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5"><div class="empty-state"><span>✓</span>
+                  <h3>{% trans "No assessment history" %}</h3>
+                  <p>{% trans "Completed assessments and released results will appear here." %}</p>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</section>

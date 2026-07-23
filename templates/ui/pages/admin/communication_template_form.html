@@ -1,0 +1,81 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n ui_tags %}
+{% block title %}
+  {{ title|default:_("Edit template") }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% trans "Templates" as eyebrow %}
+    {% trans "Edit template" as title %}
+    {% trans "Edit an email template." as description %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
+    {% if rendered_html %}
+      <section class="surface"><div class="section-header"><div>
+            <p class="eyebrow">{% trans "Preview" %}</p>
+            <h3>{{ template.name }}</h3>
+          </div>
+        </div>
+        <p>
+          <strong>
+            {% trans "Rendered subject" %}
+          :</strong>
+          {{ rendered_subject }}
+        </p>
+        <div class="preview">{{ rendered_html|safe }}</div>
+        <div class="inline-actions">{% for value,label in design_choices %}
+            <a class="button button-secondary" href="?design={{ value }}">{{ label }}</a>
+          {% endfor %}
+        </div>
+        {% if missing %}
+          <div class="alert alert-warning">{% trans "Missing sample variables" %}
+            :
+            {{ missing|join:', ' }}
+          </div>
+        {% endif %}
+      </section>
+    {% else %}
+      <form class="surface form-main" method="post">{% csrf_token %}
+        <label>
+          {% trans "Subject" %}
+          <input name="subject" value="{{ template.subject }}" required>
+        </label>
+        <label>
+          {% trans "Body" %}
+          <textarea name="body" rows="14" required>
+                                    {{ template.body }}
+                                    </textarea>
+        </label>
+        <label>
+          {% trans "Design" %}
+          <select name="design">{% for value,label in design_choices %}
+              <option value="{{ value }}"
+                      {% if template.design == value %} selected {% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <fieldset>
+          <legend>{% trans "Required variables" %}</legend>
+          {% for variable in all_vars %}
+            <label>
+              <input type="checkbox"
+                     name="required_variables"
+                     value="{{ variable }}"
+                     {% if variable in required_vars %} checked {% endif %}>
+              <code>
+                {{ variable }}
+              </code>
+            </label>
+          {% endfor %}
+        </fieldset>
+        <label>
+          <input type="checkbox"
+                 name="is_enabled_for_action"
+                 {% if template.is_enabled_for_action %} checked {% endif %}>
+          {% trans "Enabled for actions" %}
+        </label>
+        <button class="button button-primary" type="submit">{% trans "Save template" %}</button>
+      </form>
+      <a class="button button-secondary"
+         href="{% url 'communications:admin_template_preview' template.slug %}">{% trans "Preview template" %}</a>
+    {% endif %}
+  </div>
+{% endblock %}

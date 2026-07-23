@@ -9,7 +9,14 @@ register = template.Library()
 def field_type(field):
     """Return the widget type name for a form field (select, checkbox, text, ...)."""
     widget = field.field.widget
-    return widget.__class__.__name__.lower().replace("input", "").replace("widget", "")
+    name = widget.__class__.__name__.lower().replace("input", "").replace("widget", "")
+    if name == "checkbox":
+        return "checkbox"
+    if name == "radioselect":
+        return "radio"
+    if name == "checkboxselectmultiple":
+        return "checkbox"
+    return name
 
 
 @register.filter

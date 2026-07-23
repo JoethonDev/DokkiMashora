@@ -1,0 +1,47 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n ui_tags %}
+{% block title %}
+  {% trans "Grading" %}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% trans "Assessment operations" as eyebrow %}
+    {% trans "Grading" as default_title %}
+    {% trans "Create exams, manage invitations, grade attempts, and inspect delivery history." as description %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title|default:default_title description=description %}
+    <section class="surface"><div class="section-header"><div>
+          <p class="eyebrow">{% trans "Grading" %}</p>
+          <h3>{% trans "Attempts to grade" %}</h3>
+        </div>
+      </div>
+      <div class="table-shell"><table>
+          <thead>
+            <tr>
+              <th>{% trans "Exam" %}</th>
+              <th>{% trans "Student" %}</th>
+              <th>{% trans "Status" %}</th>
+              <th>{% trans "Actions" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in page_obj %}
+              <tr>
+                <td>{{ item.exam }}</td>
+                <td>{{ item.student.full_name|default:item.student }}</td>
+                <td>{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
+                <td>
+                  <div class="inline-actions"><a class="button button-info"
+                       href="{% url 'entrance_exams:admin_grade_attempt' item.id %}">{% trans "Grade" %}</a>
+                  </div>
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="4">{% trans "No attempts to grade." %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+{% endblock %}

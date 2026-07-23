@@ -1,0 +1,39 @@
+{% extends "ui/layouts/student.html" %}
+{% load i18n %}
+{% block title %}
+  {% trans "Entrance exam results" %}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view"><section class="page-intro"><div>
+        <p class="eyebrow">{% trans "Admissions" %}</p>
+        <h2>{% trans "Entrance exam results" %}</h2>
+      </div>
+    </section>
+    <section class="surface"><div class="table-shell"><table>
+          <thead>
+            <tr>
+              <th>{% trans "Exam" %}</th>
+              <th>{% trans "Status" %}</th>
+              <th>{% trans "Result" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in exam_assignments %}
+              <tr>
+                <td>{{ item.exam }}</td>
+                <td>
+                  <span class="status-pill blue">{{ item.get_status_display|default:item.status }}</span>
+                </td>
+                <td>{{ item.result|default:"—" }}</td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="3">{% trans "No entrance exam results available." %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+{% endblock %}

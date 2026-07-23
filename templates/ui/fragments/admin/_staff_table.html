@@ -1,0 +1,65 @@
+{% load i18n ui_tags %}
+<section id="staff-results" class="table-section" aria-live="polite"><div class="section-header"><div>
+      <p class="eyebrow">{% trans "Directory" %}</p>
+      <h3>
+        {{ page_obj.paginator.count }}
+        {% trans "staff members" %}
+      </h3>
+    </div>
+    {% include "ui/components/_pagination.html" %}
+  </div>
+  {% if page_obj.object_list %}
+    <div class="table-shell"><table>
+        <thead>
+          <tr>
+            <th>{% trans "Staff member" %}</th>
+            <th>{% trans "Contact" %}</th>
+            <th>{% trans "Role" %}</th>
+            <th>{% trans "Status" %}</th>
+            <th>{% trans "Last sign-in" %}</th>
+            <th>{% trans "Actions" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for staff in page_obj %}
+            <tr>
+              <td>
+                <div class="student-cell"><span class="avatar avatar-sm">{{ staff.full_name|slice:":2"|upper }}</span>
+                  <span class="cell-stack"><strong>{{ staff.full_name }}</strong>
+                    <small>{{ staff.national_id|default:'—' }}</small></span>
+                </div>
+              </td>
+              <td class="cell-stack"><strong>{{ staff.email }}</strong>
+                <small>{{ staff.phone|default:'—' }}</small>
+              </td>
+              <td>
+                {% for g in staff.groups.all %}
+                  {{ g.name }}
+                  {% if not forloop.last %}
+                    ,
+                  {% endif %}
+                {% empty %}
+                  —
+                {% endfor %}
+              </td>
+              <td>{% include "ui/components/_status.html" with code=staff.status label=staff.get_status_display %}</td>
+              <td>{{ staff.last_login|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</td>
+              <td>
+                <div class="inline-actions"><a class="button button-info"
+                     href="{% url 'accounts:admin_user_detail' staff.id %}">{% trans "View" %}</a>
+                  <a class="button button-info"
+                     href="{% url 'accounts:admin_user_edit' staff.id %}">{% trans "Edit" %}</a>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state"><span>&#9679;</span>
+      <h3>{% trans "No staff found" %}</h3>
+      <p>{% trans "Try changing the search or filters." %}</p>
+    </div>
+  {% endif %}
+</section>

@@ -1,0 +1,56 @@
+{% load i18n %}<div id="payment-records" class="table-shell">
+  <table>
+    <thead>
+      <tr>
+        <th>{% trans "Reference" %}</th>
+        <th>{% trans "Student" %}</th>
+        <th>{% trans "Program / enrollment" %}</th>
+        <th>{% trans "Amount" %}</th>
+        <th>{% trans "Status / date" %}</th>
+        <th>{% trans "Actions" %}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in page_obj %}
+        <tr>
+          <td>{{ item.external_reference|default:item.id }}</td>
+          <td>{{ item.student.full_name|default:item.student }}</td>
+          <td>
+            {% if item.diploma_enrollment %}
+              {{ item.diploma_enrollment.cohort.diploma.title }}
+            {% elif item.course_enrollment %}
+              {{ item.course_enrollment.course_version.course.title }}
+            {% elif item.application.cohort %}
+              {{ item.application.cohort.diploma.title }}
+            {% elif item.application.course %}
+              {{ item.application.course.title }}
+            {% else %}
+              —
+            {% endif %}
+          </td>
+          <td>{{ item.amount|default:'—' }}{% if item.currency %} {{ item.currency }}{% endif %}</td>
+          <td class="cell-stack">
+            {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
+            <small>{{ item.paid_at|default:item.created_at|date:"SHORT_DATE_FORMAT"|default:'—' }}</small>
+          </td>
+          <td>
+            <div class="inline-actions">
+              <a class="button button-info" href="{% url 'payments:record_detail' item.id %}">{% trans "View" %}</a>
+            </div>
+          </td>
+        </tr>
+      {% empty %}
+        <tr class="empty-row">
+          <td colspan="6">
+            {% if current_status or current_student_q or current_date_from or current_date_to %}
+              {% include "ui/components/_empty_state.html" with title=_("No payments match these filters.") compact=True %}
+            {% else %}
+              {% include "ui/components/_empty_state.html" with title=_("No payment records yet.") message=_("Records appear after an enrollment is marked paid or a CSV import is confirmed.") compact=True %}
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% include "ui/components/_pagination.html" %}
+</div>

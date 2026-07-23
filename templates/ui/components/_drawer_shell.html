@@ -1,0 +1,25 @@
+{% load i18n %}
+<div id="global-drawer"
+     class="drawer-layer"
+     x-data="{open:false, trigger:null}"
+     x-show="open"
+     x-cloak
+     @open-drawer.window="trigger=$event.detail?.trigger || document.activeElement; open=true"
+     @close-drawer.window="open=false; trigger && trigger.focus()"
+     @keydown.escape.window="open=false; trigger && trigger.focus()"
+     x-init="$watch('open', value => value && $nextTick(() => $refs.panel.focus()))"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="drawer-title"><div class="drawer-backdrop"
+       @click="open=false; trigger && trigger.focus()"></div>
+  <aside class="drawer"
+         tabindex="-1"
+         x-ref="panel"
+         aria-labelledby="drawer-title"><h2 id="drawer-title" class="sr-only">{% trans "Drawer" %}</h2>
+    <button type="button"
+            class="icon-button"
+            @click="open=false"
+            aria-label="{% trans 'Close drawer' %}">×</button>
+    <div id="drawer-content"></div>
+  </aside>
+</div>

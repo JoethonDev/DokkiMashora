@@ -20,9 +20,12 @@ from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods
 
 from apps.academics.models import Cohort, Course, CourseVersion, Diploma, Lecture
+from apps.accounts.models import User
+from apps.applications.models import ProgramApplication
 from apps.core.forms import LandingPageSettingsForm
 from apps.core.models import LandingAnnouncement, LandingPageSettings
-from apps.core.permissions import ROLE_SENIOR_STAFF, role_required
+from apps.core.navigation import workspace_navigation
+from apps.core.permissions import ROLE_SENIOR_STAFF, is_admin, role_required
 from apps.students.services import get_open_apply_targets
 
 
@@ -35,71 +38,44 @@ def safe_next_url(request, default=""):
 
 def landing(request: HttpRequest) -> HttpResponse:
     """Public landing page."""
-    open_diploma_targets = get_open_apply_targets("diploma", page_size=1000)["items"]
-    open_course_targets = get_open_apply_targets("course", page_size=1000)["items"]
-    open_diploma_by_id = {}
+    open_diploma_targets = get_open_apply_targets("diploma", page_size=100)["items"]
+    open_course_targets = get_open_apply_targets("course", page_size=100)["items"]
+    program_items = []
     for target in open_diploma_targets:
-        open_diploma_by_id.setdefault(target.diploma_id, target)
-    open_course_ids = {course.pk for course in open_course_targets}
-    open_versions = {}
-    for version in CourseVersion.objects.filter(
-        course_id__in=open_course_ids, is_active=True
-    ).order_by("course_id", "-created_at"):
-        open_versions.setdefault(version.course_id, version)
-
-    active_diplomas = list(
-        Diploma.objects.filter(is_active=True)
-        .annotate(
-            historical_group_count=Count("cohorts", distinct=True),
-            published_lecture_count=Count(
-                "cohorts__lectures",
-                filter=Q(cohorts__lectures__is_published=True),
-                distinct=True,
-            ),
-        )
-        .order_by("title")[:6]
-    )
-    for diploma in active_diplomas:
-        diploma.open_target = open_diploma_by_id.get(diploma.pk)
-    courses = list(Course.objects.filter(is_active=True).order_by("title")[:6])
-    for course in courses:
-        course.open_version = open_versions.get(course.pk)
+        program_items.append({
+            "kind": "diploma",
+            "title": target.diploma.title,
+            "description": target.diploma.description or "",
+            "target_label": target.name,
+            "apply_url": reverse("students:apply") + f"?program_type=diploma&target_id={target.id}",
+        })
+    open_course_ids = {c.pk for c in open_course_targets}
+    courses_qs = list(Course.objects.filter(is_active=True, pk__in=open_course_ids).order_by("title")[:6])
+    for c in courses_qs:
+        program_items.append({
+            "kind": "course",
+            "title": c.title,
+            "description": c.description or "",
+            "target_label": "",
+            "apply_url": reverse("students:apply") + f"?program_type=course&target_id={c.id}",
+        })
     settings_page = LandingPageSettings.load()
     landing_content = settings_page.localized_content(request.LANGUAGE_CODE)
     announcement = LandingAnnouncement.current()
     if announcement and announcement.title == "Registration open":
         announcement.title = landing_content["announcement_title"]
         announcement.message = landing_content["announcement_body"]
-    live_stats = {
-        "active_diplomas": Diploma.objects.filter(is_active=True).count(),
-        "learning_groups": Cohort.objects.filter(diploma__is_active=True).count(),
-        "courses": Course.objects.filter(is_active=True).count(),
-        "published_lectures": Lecture.objects.filter(is_published=True).count(),
-    }
     context = {
-        "url_accounts_dashboard": reverse("accounts:dashboard"),
-        "url_accounts_login": reverse("accounts:login"),
-        "url_applications_register": reverse("applications:register"),
+        "SITE_NAME": settings.SITE_NAME,
+        "SITE_NAME_AR": settings.SITE_NAME_AR,
         "landing_announcement": announcement,
-        "active_diplomas": active_diplomas,
-        "courses": courses,
-        "url_student_apply": reverse("students:apply"),
+        "active_diplomas": [i for i in program_items if i["kind"] == "diploma"],
+        "courses": [i for i in program_items if i["kind"] == "course"],
+        "program_items": program_items,
         "landing_settings": settings_page,
         "landing_content": landing_content,
-        "landing_stats": zip(
-            [landing_content[f"stat_{number}"] for number in range(1, 5)],
-            list(live_stats.values())
-            if settings_page.show_live_stats
-            else [
-                settings_page.stat_value_1,
-                settings_page.stat_value_2,
-                settings_page.stat_value_3,
-                settings_page.stat_value_4,
-            ],
-            strict=True,
-        ),
     }
-    return render(request, "core/landing.html", context)
+    return render(request, "ui/pages/public/landing.html", context)
 
 
 @login_required
@@ -116,7 +92,111 @@ def landing_settings(request: HttpRequest) -> HttpResponse:
         form.save()
         messages.success(request, _("Landing page updated."))
         return redirect("core:landing_settings")
-    return render(request, "core/admin_landing_settings.html", {"form": form})
+    return render(request, "ui/pages/admin/landing_settings.html", {"form": form})
+
+
+@login_required
+@require_http_methods(["GET"])
+def workspace_search(request: HttpRequest) -> HttpResponse:
+    q = (request.GET.get("q", "") or "").strip()
+    user = request.user
+    nav = workspace_navigation(user)
+    can_search_all = is_admin(user)
+
+    if request.headers.get("HX-Request") != "true":
+        return redirect("accounts:dashboard")
+
+    results = []
+    no_results = False
+    search_error = False
+    nav_results = []
+
+    try:
+        # Navigation always included
+        for item in nav:
+            label_match = q.lower() in item["label"].lower() if q else True
+            kw_match = any(q.lower() in kw.lower() for kw in item["keywords"].split()) if q else False
+            if not q or label_match or kw_match:
+                nav_results.append({
+                    "label": item["label"],
+                    "subtitle": item["section"],
+                    "url": reverse(item["url_name"]),
+                    "icon": item["icon"],
+                })
+        if nav_results:
+            results.append({"name": "navigation", "label": _("Navigation"), "items": nav_results[:5]})
+
+        if len(q) >= 2 and can_search_all:
+            # Students
+            students = User.objects.filter(
+                Q(full_name__icontains=q) | Q(email__icontains=q) | Q(phone__icontains=q) | Q(national_id__icontains=q),
+                groups__name="Student",
+            )[:5]
+            if students:
+                student_items = []
+                for s in students:
+                    student_items.append({
+                        "label": s.full_name or s.email,
+                        "subtitle": s.email,
+                        "url": reverse("accounts:admin_user_detail", args=[s.pk]),
+                    })
+                results.append({"name": "students", "label": _("Students"), "items": student_items})
+
+            # Applications
+            apps = ProgramApplication.objects.filter(
+                Q(student__user__full_name__icontains=q) | Q(student__user__email__icontains=q),
+            ).select_related("student__user", "cohort__diploma", "course")[:5]
+            if apps:
+                app_items = []
+                for a in apps:
+                    app_items.append({
+                        "label": a.student.user.full_name or a.student.user.email,
+                        "subtitle": str(a.cohort.diploma if a.cohort else a.course or ""),
+                        "url": reverse("applications:program_detail", args=[a.pk]),
+                    })
+                results.append({"name": "applications", "label": _("Applications"), "items": app_items})
+
+            # Diplomas
+            diplomas = Diploma.objects.filter(
+                Q(title__icontains=q),
+            )[:5]
+            if diplomas:
+                diploma_items = []
+                for d in diplomas:
+                    diploma_items.append({
+                        "label": d.title,
+                        "subtitle": _("Active") if d.is_active else _("Inactive"),
+                        "url": reverse("academics:admin_diploma_detail", args=[d.pk]),
+                    })
+                results.append({"name": "diplomas", "label": _("Diplomas"), "items": diploma_items})
+
+            # Courses
+            courses = Course.objects.filter(
+                Q(title__icontains=q),
+            )[:5]
+            if courses:
+                course_items = []
+                for c in courses:
+                    course_items.append({
+                        "label": c.title,
+                        "subtitle": _("Active") if c.is_active else _("Inactive"),
+                        "url": reverse("academics:admin_course_detail", args=[c.pk]),
+                    })
+                results.append({"name": "courses", "label": _("Courses"), "items": course_items})
+
+        if not results and q:
+            no_results = True
+
+    except Exception:
+        search_error = True
+
+    return render(request, "ui/fragments/shared/_global_search_results.html", {
+        "q": q,
+        "results": results,
+        "no_results": no_results,
+        "search_error": search_error,
+        "navigation": nav_results if q and not can_search_all else [],
+    })
 
 
 @login_required
@@ -502,7 +582,7 @@ def design_showcase(request: HttpRequest) -> HttpResponse:
             },
         ],
     }
-    return render(request, "core/design_showcase.html", {"mock_system": mock_system})
+    return render(request, "ui/pages/admin/dashboard.html", {"mock_system": mock_system, "title": _("Design showcase")})
 
 
 @csrf_protect
@@ -555,18 +635,18 @@ def rewrite_language_url(url: str, new_language: str) -> str:
 
 @require_http_methods(["GET", "HEAD"])
 def bad_request(request: HttpRequest, exception=None) -> HttpResponse:
-    return render(request, "core/errors/400.html", status=400)
+    return render(request, "ui/errors/400.html", status=400)
 
 
 def permission_denied(request: HttpRequest, exception=None) -> HttpResponse:
-    return render(request, "core/errors/403.html", status=403)
+    return render(request, "ui/errors/403.html", status=403)
 
 
 @require_http_methods(["GET", "HEAD"])
 def page_not_found(request: HttpRequest, exception=None) -> HttpResponse:
-    return render(request, "core/errors/404.html", status=404)
+    return render(request, "ui/errors/404.html", status=404)
 
 
 @require_http_methods(["GET", "HEAD"])
 def server_error(request: HttpRequest) -> HttpResponse:
-    return render(request, "core/errors/500.html", status=500)
+    return render(request, "ui/errors/500.html", status=500)

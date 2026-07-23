@@ -11,7 +11,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import IntegrityError, transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -145,7 +145,7 @@ def student_list(request):
         latest_attempts.setdefault(attempt.assessment_id, attempt)
     return render(
         request,
-        "assessments/student_list.html",
+        "ui/pages/student/assessment_list.html",
         {
             "assessment_cards": [
                 {
@@ -174,7 +174,7 @@ def assessment_instructions(request, assessment_id):
     ).order_by("-created_at").first()
     return render(
         request,
-        "assessments/assessment_instructions.html",
+        "ui/pages/student/assessment_instructions.html",
         {"assessment": assessment, "attempt": attempt},
     )
 
@@ -231,7 +231,7 @@ def take_assessment(request, assessment_id):
             )
         return render(
             request,
-            "assessments/take_assessment.html",
+            "ui/pages/student/assessment_take.html",
             {
                 "assessment": assessment,
                 "existing_submissions": existing_submissions,
@@ -259,7 +259,7 @@ def take_assessment(request, assessment_id):
         snapshot_questions = attempt.snapshot_questions.order_by("order").prefetch_related("choices")
         return render(
             request,
-            "assessments/take_assessment.html",
+            "ui/pages/student/assessment_take.html",
             {
                 "assessment": assessment,
                 "attempt": attempt,
@@ -272,7 +272,7 @@ def take_assessment(request, assessment_id):
     questions = assessment.questions.prefetch_related("choices").all()
     return render(
         request,
-        "assessments/take_assessment.html",
+        "ui/pages/student/assessment_take.html",
         {
             "assessment": assessment,
             "attempt": attempt,
@@ -412,7 +412,7 @@ def assessment_results(request, assessment_id):
         ) if submission else None
         return render(
             request,
-            "assessments/assessment_results.html",
+            "ui/pages/student/assessment_results.html",
             {
                 "assessment": assessment,
                 "submission": submission,
@@ -437,7 +437,7 @@ def assessment_results(request, assessment_id):
         }
         return render(
             request,
-            "assessments/assessment_results.html",
+            "ui/pages/student/assessment_results.html",
             {
                 "assessment": assessment,
                 "attempt": attempt,
@@ -450,7 +450,7 @@ def assessment_results(request, assessment_id):
     answers = attempt.answers.select_related("question", "selected_choice").all()
     return render(
         request,
-        "assessments/assessment_results.html",
+        "ui/pages/student/assessment_results.html",
         {
             "assessment": assessment,
             "attempt": attempt,
@@ -494,7 +494,9 @@ def admin_list(request):
     q = request.GET.get("q", "")
     type_filter = request.GET.get("type", "")
     student_id = request.GET.get("student_id", "")
-    assessments = Assessment.objects.all().select_related("created_by")
+    assessments = Assessment.objects.all().select_related("created_by").annotate(
+        attempt_count=Count("attempts"),
+    ).order_by("-created_at")
     assessments = assessments.filter(assessment_scope_filter(request.user))
     if q:
         assessments = assessments.filter(Q(title__icontains=q) | Q(description__icontains=q))
@@ -517,8 +519,8 @@ def admin_list(request):
     page_obj, pagination_qs = paginate(request, assessments)
     ctx = {"page_obj": page_obj, "pagination_qs": pagination_qs, "search_value": q, "filters": filters, "is_admin_user": is_admin(request.user), "student_id": student_id}
     if is_htmx(request):
-        return render(request, "assessments/partials/_assessment_list_table.html", ctx)
-    return render(request, "assessments/admin_list.html", ctx)
+        return render(request, "ui/fragments/admin/_assessment_table.html", ctx)
+    return render(request, "ui/pages/admin/assessment_list.html", ctx)
 
 
 @login_required
@@ -540,7 +542,7 @@ def admin_detail(request, assessment_id):
             sections.append(s)
     return render(
         request,
-        "assessments/admin_detail.html",
+        "ui/pages/admin/assessment_detail.html",
         {
             "assessment": assessment,
             "sections": sections,
@@ -582,7 +584,7 @@ def admin_preview(request, assessment_id):
     if assessment.assessment_type == ASSESSMENT_TYPE_HOMEWORK:
         return render(
             request,
-            "assessments/take_assessment.html",
+            "ui/pages/student/assessment_take.html",
             {
                 "assessment": assessment,
                 "is_preview": True,
@@ -594,7 +596,7 @@ def admin_preview(request, assessment_id):
     questions = assessment.questions.prefetch_related("choices").all()
     return render(
         request,
-        "assessments/take_assessment.html",
+        "ui/pages/student/assessment_take.html",
         {
             "assessment": assessment,
             "is_preview": True,
@@ -616,7 +618,7 @@ def admin_scope_fields(request):
         data["semester"] = request.GET.get("semester", "")
         data["cohort"] = request.GET.get("cohort", "")
     form = AssessmentForm(data)
-    return render(request, "assessments/partials/_scope_fields.html", {
+    return render(request, "ui/fragments/admin/_assessment_scope.html", {
         "form": form,
         "semester_options": Semester.objects.filter(is_active=True).select_related("diploma"),
         "cohort_options": Cohort.objects.filter(is_active=True).select_related("diploma"),
@@ -646,7 +648,7 @@ def admin_create(request):
         form = AssessmentForm()
     return render(
         request,
-        "assessments/admin_assessment_form.html",
+        "ui/pages/admin/academic_form.html",
         {
             "form": form,
             "title": _("Create assessment"),
@@ -679,7 +681,7 @@ def admin_edit(request, assessment_id):
         form = AssessmentForm(instance=assessment)
     return render(
         request,
-        "assessments/admin_assessment_form.html",
+        "ui/pages/admin/academic_form.html",
         {
             "form": form,
             "title": _("Edit assessment"),
@@ -736,7 +738,7 @@ def _question_form_context(assessment, question=None, form=None, choices=None):
 def _render_question_form(request, assessment, question=None, form=None, choices=None):
     context = _question_form_context(assessment, question=question, form=form, choices=choices)
     context["full_page"] = not is_htmx(request)
-    template = "assessments/partials/question_form.html" if is_htmx(request) else "assessments/admin_question_form.html"
+    template = "ui/fragments/admin/_assessment_question_form.html" if is_htmx(request) else "ui/pages/admin/academic_form.html"
     return render(request, template, context)
 
 
@@ -896,7 +898,7 @@ def admin_grade_list(request):
     hw_page, _ = paginate(request, homework_queue)
     return render(
         request,
-        "assessments/admin_grade_list.html",
+        "ui/pages/admin/grading_list.html",
         {"queue_page": queue_page, "homework_queue_page": hw_page},
     )
 
@@ -908,7 +910,7 @@ def admin_homework_grade_list(request):
     page_obj, pagination_qs = paginate(request, submissions)
     return render(
         request,
-        "assessments/admin_homework_list.html",
+        "ui/pages/admin/grading_list.html",
         {"page_obj": page_obj, "pagination_qs": pagination_qs},
     )
 
@@ -949,7 +951,7 @@ def admin_homework_grade_detail(request, submission_id):
         return redirect("assessments:admin_homework_grade_detail", submission_id=submission_id)
     return render(
         request,
-        "assessments/admin_homework_grade_detail.html",
+        "ui/pages/admin/grading_detail.html",
         {"submission": submission, "download_url": download_url},
     )
 
@@ -1010,7 +1012,7 @@ def admin_grade_detail(request, attempt_id):
         snapshot_pairs = [(sq, snapshot_answers.get(sq.pk)) for sq in snapshot_questions]
         return render(
             request,
-            "assessments/admin_grade_detail.html",
+            "ui/pages/admin/grading_detail.html",
             {**ctx_base, "snapshot_pairs": snapshot_pairs, "is_diploma_random": True},
         )
 
@@ -1051,7 +1053,7 @@ def admin_grade_detail(request, attempt_id):
     question_answer_pairs = [(q, answers.get(q.id)) for q in questions]
     return render(
         request,
-        "assessments/admin_grade_detail.html",
+        "ui/pages/admin/grading_detail.html",
         {**ctx_base, "question_answer_pairs": question_answer_pairs},
     )
 
@@ -1243,7 +1245,7 @@ def admin_lecture_bank_list(request, diploma_id, cohort_id, semester_id, lecture
     semester = get_object_or_404(Semester, id=semester_id, diploma=diploma)
     lecture = get_object_or_404(DiplomaLecture, id=lecture_id, cohort=cohort, semester=semester)
     questions = lecture.question_bank.filter(active=True).prefetch_related("choices")
-    return render(request, "assessments/admin_lecture_bank_list.html", {
+    return render(request, "ui/pages/admin/assessment_tools.html", {
         "diploma": diploma, "cohort": cohort, "semester": semester, "lecture": lecture,
         "questions": questions,
     })
@@ -1278,7 +1280,7 @@ def admin_lecture_bank_question_create(request, diploma_id, cohort_id, semester_
     else:
         form = DiplomaLectureQuestionForm()
         choices = []
-    return render(request, "assessments/admin_lecture_bank_question_form.html", {
+    return render(request, "ui/pages/admin/academic_form.html", {
         "diploma": diploma, "cohort": cohort, "semester": semester, "lecture": lecture,
         "form": form, "choices": choices, "question": None,
     })
@@ -1313,7 +1315,7 @@ def admin_lecture_bank_question_edit(request, diploma_id, cohort_id, semester_id
     else:
         form = DiplomaLectureQuestionForm(instance=question)
         choices = _choices_for_template(None, question)
-    return render(request, "assessments/admin_lecture_bank_question_form.html", {
+    return render(request, "ui/pages/admin/academic_form.html", {
         "diploma": diploma, "cohort": cohort, "semester": semester, "lecture": lecture,
         "form": form, "choices": choices, "question": question,
     })
@@ -1360,7 +1362,7 @@ def admin_section_create(request, assessment_id):
                 return redirect("assessments:admin_detail", assessment_id=assessment.id)
     else:
         form = AssessmentLectureSectionForm(assessment=assessment)
-    return render(request, "assessments/admin_section_form.html", {
+    return render(request, "ui/pages/admin/academic_form.html", {
         "form": form, "assessment": assessment, "title": _("Add Section"),
     })
 
@@ -1389,7 +1391,7 @@ def admin_section_edit(request, assessment_id, section_id):
                 return redirect("assessments:admin_detail", assessment_id=assessment.id)
     else:
         form = AssessmentLectureSectionForm(instance=section, assessment=assessment)
-    return render(request, "assessments/admin_section_form.html", {
+    return render(request, "ui/pages/admin/academic_form.html", {
         "form": form, "assessment": assessment, "section": section, "title": _("Edit Section"),
     })
 
@@ -1429,7 +1431,7 @@ def admin_section_manual_question_create(request, assessment_id, section_id):
             return redirect("assessments:admin_detail", assessment_id=assessment.id)
     else:
         form = AssessmentSectionManualQuestionForm()
-    return render(request, "assessments/admin_manual_question_form.html", {
+    return render(request, "ui/pages/admin/academic_form.html", {
         "form": form, "assessment": assessment, "section": section, "title": _("Add Manual Question"),
     })
 
@@ -1452,7 +1454,7 @@ def admin_section_manual_question_edit(request, assessment_id, section_id, mq_id
             return redirect("assessments:admin_detail", assessment_id=assessment.id)
     else:
         form = AssessmentSectionManualQuestionForm(instance=mq)
-    return render(request, "assessments/admin_manual_question_form.html", {
+    return render(request, "ui/pages/admin/academic_form.html", {
         "form": form, "assessment": assessment, "section": section, "mq": mq, "title": _("Edit Manual Question"),
     })
 
@@ -1483,7 +1485,7 @@ def admin_section_manual_question_delete(request, assessment_id, section_id, mq_
 def admin_roster_list(request, assessment_id):
     assessment = get_object_or_404(Assessment.objects.prefetch_related("exam_codes__diploma_enrollment__student__user"), id=assessment_id)
     codes = assessment.exam_codes.select_related("diploma_enrollment__student__user__student_profile").all()
-    return render(request, "assessments/admin_roster_list.html", {
+    return render(request, "ui/pages/admin/assessment_tools.html", {
         "assessment": assessment, "codes": codes,
     })
 
@@ -1548,7 +1550,7 @@ def admin_offline_grade_entry(request, assessment_id):
             sections = list(assessment.lecture_sections.all())
             grade_qs = OfflineSectionGrade.objects.filter(exam_code=code)
             grades = {g.section_id: g for g in grade_qs}
-    return render(request, "assessments/admin_offline_grade_entry.html", {
+    return render(request, "ui/pages/admin/assessment_tools.html", {
         "assessment": assessment, "code": code, "sections": sections, "grades": grades,
     })
 
@@ -1589,7 +1591,7 @@ def reviewer_dashboard(request):
             groups[key] = {"cohort": a.cohort, "semester": a.semester, "assignments": []}
         ungraded = get_reviewer_ungraded_count(a)
         groups[key]["assignments"].append({"assignment": a, "ungraded": ungraded})
-    return render(request, "assessments/reviewer_dashboard.html", {"groups": groups})
+    return render(request, "ui/pages/admin/assessment_tools.html", {"groups": groups, "title": _("Reviewer dashboard")})
 
 
 @login_required
@@ -1651,7 +1653,7 @@ def reviewer_section_grading(request, assignment_id):
         if code and can_reviewer_grade_code(assignment, code):
             grade = OfflineSectionGrade.objects.filter(exam_code=code, section=section).first()
 
-    return render(request, "assessments/reviewer_section_grading.html", {
+    return render(request, "ui/pages/admin/assessment_tools.html", {
         "assignment": assignment,
         "section": section,
         "code": code,
@@ -1685,7 +1687,7 @@ def admin_reviewer_assignment_create(request):
             )
             messages.success(request, _("Reviewer assignment created."))
             return redirect("assessments:admin_reviewer_assignment_list")
-    return render(request, "assessments/admin_reviewer_assignment_form.html", {
+    return render(request, "ui/pages/admin/academic_form.html", {
         "reviewers": reviewers,
         "cohorts": cohorts,
         "semesters": semesters,
@@ -1699,7 +1701,7 @@ def admin_reviewer_assignment_list(request):
     assignments = ReviewerAssignment.objects.select_related(
         "reviewer", "cohort", "semester", "section", "section__lecture", "assigned_by",
     ).all()
-    return render(request, "assessments/admin_reviewer_assignment_list.html", {
+    return render(request, "ui/pages/admin/assessment_tools.html", {
         "assignments": assignments,
     })
 
@@ -1768,7 +1770,7 @@ def admin_exceptional_access(request, assessment_id):
         "student__user__student_profile__full_name",
     )
 
-    return render(request, "assessments/admin_exceptional_access.html", {
+    return render(request, "ui/pages/admin/assessment_tools.html", {
         "assessment": assessment,
         "overrides": overrides,
         "enrollments": enrollments,

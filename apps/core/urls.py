@@ -12,4 +12,5 @@ urlpatterns = [
     path("", views.landing, name="landing"),
     path("manage/landing/", views.landing_settings, name="landing_settings"),
     path("design-showcase/", views.design_showcase, name="design_showcase"),
+    path("workspace/search/", views.workspace_search, name="workspace_search"),
 ]

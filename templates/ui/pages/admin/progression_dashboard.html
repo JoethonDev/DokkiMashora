@@ -1,0 +1,73 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n ui_tags %}
+{% block title %}
+  {{ title|default:_("Progression") }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% trans "Academic operations" as eyebrow %}
+    {% trans "Progression" as title %}
+    {% trans "Review semester progress, decisions, evaluations, interviews, and rejoin plans." as description %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
+    <section class="surface"><form class="filter-toolbar" method="get"><label class="select-field"><span>{% trans "Diploma" %}</span>
+            <select name="diploma_id"><option value="">{% trans "All" %}</option>
+              {% for diploma in diplomas %}
+                <option value="{{ diploma.id }}"
+                        {% if selected_diploma_id == diploma.id|stringformat:'s' %} selected {% endif %}>
+                  {{ diploma.title }}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="select-field"><span>{% trans "Cohort" %}</span>
+            <input name="cohort_id"
+                   value="{{ selected_cohort_id|default:'' }}"
+                   placeholder=" {% if not selected_diploma_id %} {% trans 'Choose a diploma first' %} {% endif %} "
+                   {% if not selected_diploma_id %} disabled {% endif %}>
+          </label>
+          <button class="button button-info" type="submit">{% trans "Filter" %}</button>
+          <a class="button button-ghost"
+             href="{% url 'progression:admin_dashboard' %}">{% trans "Reset" %}</a>
+        </form>
+        <div class="table-shell"><table>
+            <thead>
+              <tr>
+                <th>{% trans "Student" %}</th>
+                <th>{% trans "Diploma / cohort" %}</th>
+                <th>{% trans "Current semester" %}</th>
+                <th>{% trans "Progress state" %}</th>
+                <th>{% trans "Last decision / update" %}</th>
+                <th>{% trans "Actions" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in students_data %}
+                <tr>
+                  <td class="cell-stack"><strong>{{ row.student.full_name|default:row.student }}</strong>
+                  </td>
+                  <td>{{ row.student.current_cohort|default:'—' }}</td>
+                  <td>{{ row.semesters|length }}</td>
+                  <td>
+                    {% include "ui/components/_status.html" with code=row.semesters.0.status|default:"unknown" label=row.semesters.0.get_status_display|default:"—" %}
+                  </td>
+                  <td>{{ row.semesters.0.updated_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</td>
+                  <td>
+                    <div class="inline-actions"><a class="button button-info"
+                         href="{% url 'progression:admin_student_detail' row.student.id %}">{% trans "Open" %}</a>
+                    </div>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="6"><div class="empty-state"><span>&#9679;</span>
+                      <h3>{% trans "No progression records found." %}</h3>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% include "ui/components/_pagination.html" %}
+      </section>
+  </div>
+{% endblock %}

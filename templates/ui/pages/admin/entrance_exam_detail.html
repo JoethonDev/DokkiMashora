@@ -1,0 +1,62 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n ui_tags %}
+{% block title %}
+  {{ title|default:_("Entrance exam") }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view">{% trans "Assessment operations" as eyebrow %}
+    {% trans "Entrance exam" as default_title %}
+    {% trans "Create exams, manage invitations, grade attempts, and inspect delivery history." as description %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title|default:default_title description=description %}
+    <section class="surface"><div class="section-header"><div>
+          <p class="eyebrow">{% trans "Exam" %}</p>
+          <h2>{{ exam.title }}</h2>
+        </div>
+      </div>
+      <p>{{ exam.description }}</p>
+      <p>
+        {% include "ui/components/_status.html" with code=exam.is_active|yesno:"active,inactive" label=exam.is_active|yesno:_("Active,Inactive") %}
+      </p>
+      <div class="inline-actions"><a class="button button-info"
+           href="{% url 'entrance_exams:admin_edit_exam' exam.id %}">{% trans "Edit" %}</a>
+        <a class="button button-info"
+           href="{% url 'entrance_exams:admin_preview' exam.id %}">{% trans "Preview" %}</a>
+        <a class="button button-info"
+           href="{% url 'entrance_exams:admin_cohort_email' exam.id %}">{% trans "Cohort emails" %}</a>
+        <form method="post"
+              action="{% url 'entrance_exams:admin_toggle_active' exam.id %}">{% csrf_token %}
+          <button class="button button-warning" type="submit">{% trans "Toggle active" %}</button>
+        </form>
+        <form method="post"
+              action="{% url 'entrance_exams:admin_finalize_pending' exam.id %}">{% csrf_token %}
+          <button class="button button-warning" type="submit">{% trans "Finalize pending" %}</button>
+        </form>
+      </div>
+    </section>
+    <section class="surface"><div class="section-header"><div>
+          <p class="eyebrow">{% trans "Content" %}</p>
+          <h3>{% trans "Questions" %}</h3>
+        </div>
+      </div>
+      {% for item in exam.questions.all %}
+        <div class="description-list"><strong>
+            {{ item.order }}
+            .
+            {{ item.text }}
+          </strong>
+          <div class="inline-actions"><a class="button button-info"
+               href="{% url 'entrance_exams:admin_edit_question' exam.id item.id %}">{% trans "Edit" %}</a>
+            <form method="post"
+                  action="{% url 'entrance_exams:admin_delete_question' exam.id item.id %}">{% csrf_token %}
+              <button class="button button-danger" type="submit">{% trans "Delete" %}</button>
+            </form>
+          </div>
+        </div>
+      {% empty %}
+        <p>{% trans "No questions." %}</p>
+      {% endfor %}
+      <a class="button button-primary"
+         href="{% url 'entrance_exams:admin_add_question' exam.id %}">{% trans "Add question" %}</a>
+    </section>
+  </div>
+{% endblock %}

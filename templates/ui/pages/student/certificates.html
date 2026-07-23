@@ -1,0 +1,22 @@
+{% extends "ui/layouts/student.html" %}
+{% load i18n %}
+{% block title %}
+  {% trans "Certificates" %}
+{% endblock %}
+{% block content %}
+  <div class="page-stack enter-view"><section class="page-intro"><div>
+        <p class="eyebrow">{% trans "Records" %}</p>
+        <h2>{% trans "Certificates" %}</h2>
+      </div>
+    </section>
+    <section class="program-grid">{% for certificate in certificates %}
+        <article class="surface"><h3>{{ certificate }}</h3>
+          <a class="button button-primary"
+             href="{% url 'certificates:student_certificate_download' certificate.id %}">{% trans "Download" %}</a></article>
+      {% empty %}
+        <div class="empty-state"><h3>{% trans "No certificates available." %}</h3>
+        </div>
+      {% endfor %}
+    </section>
+  </div>
+{% endblock %}

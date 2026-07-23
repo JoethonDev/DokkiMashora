@@ -21,6 +21,7 @@ from apps.audit.constants import (
 from apps.audit.services import record_audit_event
 from apps.communications.constants import TEMPLATE_PAYMENT_NOTIFICATION
 from apps.communications.services import send_templated_email
+from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import role_required, safe_date_str
 from apps.core.views import safe_next_url
@@ -62,10 +63,12 @@ def upload_list(request):
         date_to=date_to,
     )
     page_obj, pagination_qs = paginate(request, uploads)
+    template = "ui/fragments/admin/_payment_upload_table.html" if is_htmx(request) else "ui/pages/admin/payments.html"
     return render(
         request,
-        "payments/admin_upload_list.html",
+        template,
         {
+            "page_mode": "upload_list",
             "page_obj": page_obj,
             "pagination_qs": pagination_qs,
             "upload_status_choices": UPLOAD_STATUS_CHOICES,
@@ -135,7 +138,7 @@ def upload_create(request):
             except Exception:
                 logger.exception("Payment upload processing failed for %s", request.FILES["csv_file"].name)
                 messages.error(request, _("The file could not be processed. Check the format and try again."))
-    return render(request, "payments/admin_upload_form.html", {"form": form})
+    return render(request, "ui/pages/admin/payments.html", {"page_mode": "upload_create", "form": form, "title": _("Payment upload")})
 
 
 @login_required
@@ -144,7 +147,7 @@ def upload_detail(request, upload_id):
     upload = get_upload_detail(upload_id)
     if not upload:
         return redirect("payments:upload_list")
-    return render(request, "payments/admin_upload_detail.html", {"upload": upload})
+    return render(request, "ui/pages/admin/payments.html", {"page_mode": "upload_detail", "upload": upload, "title": _("Payment upload")})
 
 
 @require_POST
@@ -202,10 +205,12 @@ def payment_record_list(request):
         date_to=date_to,
     )
     page_obj, pagination_qs = paginate(request, records)
+    template = "ui/fragments/admin/_payment_record_table.html" if is_htmx(request) else "ui/pages/admin/payments.html"
     return render(
         request,
-        "payments/admin_record_list.html",
+        template,
         {
+            "page_mode": "record_list",
             "page_obj": page_obj,
             "pagination_qs": pagination_qs,
             "payment_status_choices": PAYMENT_STATUS_CHOICES,
@@ -229,7 +234,7 @@ def payment_record_detail(request, record_id):
         ),
         id=record_id,
     )
-    return render(request, "payments/admin_record_detail.html", {"record": record})
+    return render(request, "ui/pages/admin/payments.html", {"page_mode": "record_detail", "record": record, "title": _("Payment record")})
 
 
 @login_required
@@ -267,7 +272,7 @@ def payment_record_edit(request, record_id):
         )
         messages.success(request, _("Payment record updated."))
         return redirect("payments:record_detail", record_id=record.id)
-    return render(request, "payments/admin_record_edit.html", {"form": form, "record": record})
+    return render(request, "ui/pages/admin/payments.html", {"page_mode": "record_edit", "form": form, "record": record, "title": _("Payment record")})
 
 
 @require_POST

@@ -67,7 +67,7 @@ def bulk_email_create(request):
                    "recipient_search": recipient_search, "manual_emails": manual_emails}
             ctx.update(_bulk_email_form_context())
             messages.error(request, _("Subject and body are required."))
-            return render(request, "communications/bulk_email_create.html", ctx)
+            return render(request, "ui/pages/admin/communication_bulk_form.html", {**ctx, "bulk_form": True, "title": _("Create bulk email")})
 
         filter_criteria = {}
         diploma_val = safe_int(filter_diploma)
@@ -91,7 +91,7 @@ def bulk_email_create(request):
 
     ctx = {"templates": templates}
     ctx.update(_bulk_email_form_context())
-    return render(request, "communications/bulk_email_create.html", ctx)
+    return render(request, "ui/pages/admin/communication_bulk_form.html", {**ctx, "bulk_form": True, "title": _("Create bulk email")})
 
 
 @login_required
@@ -136,7 +136,7 @@ def bulk_email_preview(request):
                 request,
                 _("Email contains unresolved template variables (e.g. {{ variable }}). Resolve them before sending."),
             )
-            return render(request, "communications/bulk_email_preview.html", {
+            return render(request, "ui/pages/admin/communication_preview.html", {
                 "draft": draft,
                 "recipients": recipients,
                 "recipient_count": len(recipients),
@@ -177,7 +177,7 @@ def bulk_email_preview(request):
         )
         return redirect("communications:bulk_email_history")
 
-    return render(request, "communications/bulk_email_preview.html", {
+    return render(request, "ui/pages/admin/communication_preview.html", {
         "draft": draft,
         "recipients": recipients,
         "recipient_count": len(recipients),
@@ -192,7 +192,7 @@ def bulk_email_preview(request):
 def bulk_email_history(request):
     sends = BulkEmailSend.objects.filter(sent_by=request.user).select_related("template")
     page_obj, pagination_qs = paginate(request, sends)
-    return render(request, "communications/bulk_email_history.html", {
+    return render(request, "ui/pages/admin/communication_history.html", {
         "page_obj": page_obj,
         "pagination_qs": pagination_qs,
     })
@@ -207,7 +207,7 @@ def bulk_email_detail(request, send_id):
     )
     messages_list = send.messages.select_related("sent_by").all()
     page_obj, pagination_qs = paginate(request, messages_list)
-    return render(request, "communications/bulk_email_detail.html", {
+    return render(request, "ui/pages/admin/communication_detail.html", {
         "send": send,
         "page_obj": page_obj,
         "pagination_qs": pagination_qs,
@@ -230,7 +230,7 @@ def admin_template_list(request):
     """List all EmailTemplate records with preview links."""
     templates = EmailTemplate.objects.all().order_by("slug")
     footer = EmailFooter.objects.first()
-    return render(request, "communications/admin_template_list.html", {
+    return render(request, "ui/pages/admin/communication_template_list.html", {
         "templates": templates,
         "global_footer": footer.body if footer else "",
     })
@@ -270,7 +270,7 @@ def admin_template_edit(request, slug):
                         messages.error(request, _("%(field)s: %(error)s") % {"field": field, "error": err})
     avail = AVAILABLE_VARIABLES_BY_SLUG.get(slug, {})
     all_vars = avail.get("optional", []) + avail.get("required", [])
-    return render(request, "communications/admin_template_form.html", {
+    return render(request, "ui/pages/admin/communication_template_form.html", {
         "template": template,
         "available_vars": avail,
         "all_vars": all_vars,
@@ -302,7 +302,7 @@ def admin_template_preview(request, slug):
         {"content": rendered_body, "footer": footer_text},
         request=request,
     )
-    return render(request, "communications/admin_template_preview.html", {
+    return render(request, "ui/pages/admin/communication_template_form.html", {
         "template": template,
         "rendered_subject": rendered_subject,
         "rendered_body": rendered_body,
@@ -320,7 +320,7 @@ def admin_template_variables(request, slug: str):
     """HTMX partial: available variables for the given slug."""
     avail = AVAILABLE_VARIABLES_BY_SLUG.get(slug, {})
     all_vars = avail.get("optional", []) + avail.get("required", [])
-    return render(request, "communications/partials/_template_variables.html", {
+    return render(request, "ui/fragments/admin/_options.html", {
         "available_vars": avail,
         "all_vars": all_vars,
         "all_variable_samples": ALL_VARIABLE_SAMPLES,
@@ -368,7 +368,7 @@ def admin_template_create(request):
                 for field, errors in e.message_dict.items():
                     for err in errors:
                         messages.error(request, _("%(field)s: %(error)s") % {"field": field, "error": err})
-    return render(request, "communications/admin_template_create.html", {
+    return render(request, "ui/pages/admin/communication_resend.html", {
         "available_slugs": available,
         "all_slugs": TEMPLATE_SLUGS,
         "design_choices": DESIGN_CHOICES,
@@ -390,6 +390,6 @@ def admin_footer_edit(request):
         footer.save(update_fields=["body"])
         messages.success(request, _("Global footer updated."))
         return redirect("communications:admin_template_list")
-    return render(request, "communications/admin_footer_form.html", {
+    return render(request, "ui/pages/admin/communication_footer.html", {
         "footer": footer,
     })

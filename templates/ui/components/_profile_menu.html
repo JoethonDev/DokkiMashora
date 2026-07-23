@@ -1,0 +1,20 @@
+{% load i18n %}
+<div class="sidebar-footer" x-data="{open:false}">
+  <button class="profile-button"
+          type="button"
+          @click="open=!open"
+          :aria-expanded="open.toString()">
+    <span class="avatar avatar-sm">{{ user.get_full_name|slice:":2"|upper }}</span>
+    <span class="profile-copy">
+      <strong>{{ user.get_full_name|default:user.email }}</strong>
+      <small>{{ role_label|default:_("Staff") }}</small>
+    </span>
+    <span>&#8964;</span>
+  </button>
+  <div class="profile-menu" :class="{open:open}" x-cloak>
+    <a href="{% url 'accounts:profile' %}">{% trans "Profile" %}</a>
+    <form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}
+      <button class="button button-ghost" type="submit">{% trans "Log out" %}</button>
+    </form>
+  </div>
+</div>
