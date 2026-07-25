@@ -1,8 +1,8 @@
-<section class="empty-state" aria-live="polite"><h2>{{ title }}</h2>
+<section class="empty-state" aria-live="polite"><h2 class="m-0">{{ title }}</h2>
   {% if message %}
-    <p>{{ message }}</p>
+    <p class="m-0 text-muted">{{ message }}</p>
   {% endif %}
   {% if href %}
-    <a href="{{ href }}">{{ action_label }}</a>
+    <a class="text-brand no-underline font-extrabold hover:underline mt-2" href="{{ href }}">{{ action_label }}</a>
   {% endif %}
 </section>

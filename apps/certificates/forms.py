@@ -1,10 +1,11 @@
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
+from apps.core.forms import StyledFormMixin
 from .models import CertificateTemplate
 
 
-class CertificateTemplateForm(forms.ModelForm):
+class CertificateTemplateForm(StyledFormMixin, forms.ModelForm):
     class Meta:
         model = CertificateTemplate
         fields = [
@@ -12,7 +13,13 @@ class CertificateTemplateForm(forms.ModelForm):
             "body_html", "active", "is_placeholder",
         ]
         widgets = {
-            "body_html": forms.Textarea(attrs={"rows": 10, "class": ""}),
+            "name": forms.TextInput(attrs={}),
+            "diploma": forms.Select(attrs={}),
+            "language": forms.Select(attrs={}),
+            "template_type": forms.Select(attrs={}),
+            "body_html": forms.Textarea(attrs={"rows": 10}),
+            "active": forms.CheckboxInput(attrs={}),
+            "is_placeholder": forms.CheckboxInput(attrs={}),
         }
         help_texts = {
             "body_html": _(

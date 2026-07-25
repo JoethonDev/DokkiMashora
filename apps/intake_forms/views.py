@@ -16,7 +16,7 @@ from apps.applications.models import ProgramApplication
 from apps.core.pagination import paginate
 from apps.core.permissions import ROLE_SENIOR_STAFF, is_admin, role_required, student_required
 
-from .constants import FIELD_TYPE_BOOLEAN, INTAKE_REQUEST_STATUS_EXPIRED, INTAKE_REQUEST_STATUS_SUBMITTED
+from .constants import FIELD_TYPE_BOOLEAN, FIELD_TYPE_CHOICE, INTAKE_REQUEST_STATUS_EXPIRED, INTAKE_REQUEST_STATUS_SUBMITTED
 from .forms import IntakeFormBuildForm, IntakeFormFieldForm, IntakeFormSubmitForm
 from .models import IntakeForm, IntakeFormField, IntakeFormRequest, IntakeFormResponse
 from .selectors import get_intake_responses_for_target
@@ -110,8 +110,17 @@ def admin_intake_form_detail(request: HttpRequest, form_id: int) -> HttpResponse
         if action == "add_field":
             field_form = IntakeFormFieldForm(request.POST)
             if field_form.is_valid():
-                opts_raw = field_form.cleaned_data.get("options", "")
-                opts_list = [o.strip() for o in opts_raw.splitlines() if o.strip()]
+                field_type = field_form.cleaned_data["field_type"]
+                if field_type == FIELD_TYPE_CHOICE:
+                    opts_list = []
+                    for key in request.POST:
+                        if key.startswith("intake_choice_"):
+                            val = request.POST.get(key, "").strip()
+                            if val:
+                                opts_list.append(val)
+                else:
+                    opts_raw = field_form.cleaned_data.get("options", "")
+                    opts_list = [o.strip() for o in opts_raw.splitlines() if o.strip()]
                 field = IntakeFormField.objects.create(
                     form=intake_form,
                     label=field_form.cleaned_data["label"],

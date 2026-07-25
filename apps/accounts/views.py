@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from urllib.parse import quote
 
 from django.conf import settings as django_settings
@@ -63,7 +64,7 @@ from apps.audit.services import record_audit_event
 from apps.communications.email_message import EmailMessage as CommEmailMessage
 from apps.core.htmx import is_htmx
 from apps.core.models import LandingAnnouncement
-from apps.core.permissions import ROLE_ATTENDANCE_STAFF, ROLE_EXAM_STAFF, ROLE_SENIOR_STAFF, role_required
+from apps.core.permissions import ROLE_ATTENDANCE_STAFF, ROLE_EXAM_STAFF, ROLE_SENIOR_STAFF, is_student, role_required
 from apps.core.views import safe_next_url
 from apps.entrance_exams.models import EntranceAttempt
 from apps.payments.constants import (
@@ -130,7 +131,8 @@ def profile(request: HttpRequest) -> HttpResponse:
             return redirect("accounts:profile")
     else:
         form = ProfileForm(instance=request.user)
-    return render(request, "ui/pages/shared/profile.html", {"form": form})
+    template = "ui/pages/student/account_profile.html" if is_student(request.user) and not request.user.is_staff else "ui/pages/admin/profile.html"
+    return render(request, template, {"form": form})
 
 
 @login_required
@@ -319,7 +321,9 @@ def admin_student_list(request):
     q = request.GET.get("q", "")
     status_filter = request.GET.get("status", "")
 
-    users = User.objects.filter(groups__name=GROUP_STUDENT)
+    users = User.objects.filter(
+        Q(groups__name=GROUP_STUDENT) | Q(student_profile__isnull=False)
+    )
 
     users = users.prefetch_related("groups").distinct()
 
@@ -843,9 +847,12 @@ def admin_student_cluster_membership_add(request, cluster_id):
         target_id=str(cluster.id),
         metadata={"count": added, "cohort_id": str(cluster.cohort_id)},
     )
-    messages.success(request, _("%(count)d student(s) added to cluster.") % {"count": added})
+    msg = _("%(count)d student(s) added to cluster.") % {"count": added}
+    messages.success(request, msg)
     if is_htmx(request):
-        return render(request, "ui/fragments/admin/_cluster_members.html", {"cluster": cluster})
+        response = render(request, "ui/fragments/admin/_cluster_members.html", {"cluster": cluster})
+        response['HX-Trigger'] = json.dumps({'show-toast': {'message': msg, 'type': 'success'}})
+        return response
     return redirect("academics:admin_diploma_detail", diploma_id=cluster.cohort.diploma_id)
 
 
@@ -862,9 +869,12 @@ def admin_student_cluster_membership_remove(request, cluster_id, membership_id):
         target_id=str(membership.id),
         metadata={"cluster_id": str(cluster_id), "student_id": str(membership.student_id)},
     )
-    messages.success(request, _("Student removed from cluster."))
+    msg = _("Student removed from cluster.")
+    messages.success(request, msg)
     if is_htmx(request):
-        return render(request, "ui/fragments/admin/_cluster_members.html", {"cluster": membership.cluster})
+        response = render(request, "ui/fragments/admin/_cluster_members.html", {"cluster": membership.cluster})
+        response['HX-Trigger'] = json.dumps({'show-toast': {'message': msg, 'type': 'success'}})
+        return response
     return redirect("academics:admin_diploma_detail", diploma_id=membership.cluster.cohort.diploma_id)
 
 

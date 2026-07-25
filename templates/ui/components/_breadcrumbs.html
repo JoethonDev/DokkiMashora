@@ -1,14 +1,14 @@
 {% load i18n %}
 {% if items %}
-  <nav class="breadcrumbs" aria-label="{% trans 'Breadcrumb' %}">
+  <nav class="flex items-center gap-1.5 text-xs text-muted py-1" aria-label="{% trans 'Breadcrumb' %}">
     {% for item in items %}
       {% if item.href %}
-        <a class="breadcrumb-link" href="{{ item.href }}">{{ item.label }}</a>
+        <a class="text-brand no-underline hover:underline" href="{{ item.href }}">{{ item.label }}</a>
       {% else %}
-        <span class="breadcrumb-current" aria-current="page">{{ item.label }}</span>
+        <span class="text-text font-bold" aria-current="page">{{ item.label }}</span>
       {% endif %}
       {% if not forloop.last %}
-        <span class="breadcrumb-sep" aria-hidden="true">/</span>
+        <span class="text-line text-xs" aria-hidden="true">/</span>
       {% endif %}
     {% endfor %}
   </nav>

@@ -4,17 +4,17 @@
   {{ title|default:_("Global footer") }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% trans "Settings" as eyebrow %}
+  <div class="page-stack animate-enter-view">{% trans "Settings" as eyebrow %}
     {% trans "Global footer" as title %}
     {% trans "Edit the global email footer applied to all communications." as description %}
-    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    <form class="surface form-main" method="post">{% csrf_token %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description back_button=True %}
+    <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
       <label>
         {% trans "Global footer" %}
-        <textarea name="body" rows="10">{{ footer.body }}
+        <textarea name="body" class="form-input" rows="10">{{ footer.body }}
                               </textarea>
       </label>
-      <button class="button button-primary" type="submit">{% trans "Save footer" %}</button>
+      <button class="btn-primary" type="submit">{% trans "Save footer" %}</button>
     </form>
   </div>
 {% endblock %}

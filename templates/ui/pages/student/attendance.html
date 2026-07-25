@@ -4,14 +4,14 @@
   {% trans "My attendance" %}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view"><section class="page-intro"><div>
+  <div class="page-stack animate-enter-view"><section class="flex justify-between items-center gap-5 px-0.5 py-1.5"><div>
         <p class="eyebrow">{% trans "Learning" %}</p>
         <h2>{% trans "My attendance" %}</h2>
       </div>
     </section>
-    <section class="program-grid">{% for summary in summaries %}
-        <article class="surface"><h3>{{ summary.course_title|default:summary.semester }}</h3>
-          <p class="metric-card"><strong>
+    <section class="grid grid-cols-1 md:grid-cols-3 gap-4">{% for summary in summaries %}
+        <article class="card-surface"><h3>{{ summary.course_title|default:summary.semester }}</h3>
+          <p class="flex items-center gap-4"><strong>
               {{ summary.attendance_percent }}
             %</strong>
           </p>

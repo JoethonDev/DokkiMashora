@@ -1,8 +1,8 @@
 {% load i18n ui_tags %}
-<tr id="enrollment- {{ e.id }}"><td>
-    <div class="student-cell"><span class="avatar avatar-sm">{{ e.student.full_name|slice:":2"|upper }}</span>
-      <span class="cell-stack"><strong>{{ e.student.full_name }}</strong>
-        <small>{{ e.student.user.email }}</small></span>
+<tr id="enrollment-{{ e.id }}"><td>
+    <div class="flex items-center gap-2.5"><span class="rounded-full bg-brand-soft text-brand font-black grid place-items-center shrink-0 w-9 h-9 text-sm">{{ e.student.full_name|slice:":2"|upper }}</span>
+      <span class="flex flex-col"><strong>{{ e.student.full_name }}</strong>
+        <small><span dir="ltr" class="inline-block">{{ e.student.user.email }}</span></small></span>
     </div>
   </td>
   <td>
@@ -13,15 +13,15 @@
     {% endif %}
   </td>
   <td>{% include "ui/components/_status.html" with code=e.status label=e.get_status_display %}</td>
-  <td>{{ e.activated_at|date:"DATE_FORMAT"|default:'—' }}</td>
-  <td>{{ e.created_at|date:"DATE_FORMAT"|default:'—' }}</td>
+  <td><span dir="ltr" class="inline-block">{{ e.activated_at|date:"DATE_FORMAT"|default:'—' }}</span></td>
+  <td><span dir="ltr" class="inline-block">{{ e.created_at|date:"DATE_FORMAT"|default:'—' }}</span></td>
   <td>
     {% if enrollment_type == "course" %}
-      <a class="button button-info"
+      <a class="btn-secondary"
          href="{% url 'academics:admin_course_enrollment_list' course.id %}?q={{ e.student.full_name|urlencode }}">{% trans "View" %}
       </a>
     {% else %}
-      <a class="button button-info"
+      <a class="btn-secondary"
          href="{% url 'academics:admin_diploma_enrollment_list' diploma.id %}?q={{ e.student.full_name|urlencode }}">{% trans "View" %}
       </a>
     {% endif %}

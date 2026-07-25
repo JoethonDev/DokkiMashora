@@ -4,23 +4,23 @@
   {% trans "Grade submission" %}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% include "ui/components/_page_header.html" with title=_("Grade submission") %}
+  <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=_("Grade submission") back_button=True %}
     <p>{{ attempt.student|default:submission.student }}
-      ·
+      -
       {{ attempt.assessment|default:submission.assessment }}</p>
   {% if submission %}
-    <section class="card"><p>
+    <section class="card-surface"><p>
         {% trans "Submitted" %}
         :
         {{ submission.created_at }}
       </p>
       {% if download_url %}
-        <a class="button button-soft" href="{{ download_url }}">{% trans "Download submission" %}</a>
+        <a class="btn-soft" href="{{ download_url }}">{% trans "Download submission" %}</a>
       {% endif %}
-      <form method="post">{% csrf_token %}
+      <form class="max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
         <label>
           {% trans "Score" %}
-          <input name="score"
+          <input name="score" class="form-input"
                  type="number"
                  step="0.01"
                  value="{{ submission.score|default:'' }}"
@@ -28,45 +28,45 @@
         </label>
         <label>
           {% trans "Feedback" %}
-          <textarea name="feedback" rows="6">{{ submission.feedback|default:'' }}
+          <textarea name="feedback" class="form-input" rows="6">{{ submission.feedback|default:'' }}
         </textarea>
         </label>
-        <button class="button button-primary" type="submit">{% trans "Save grade" %}</button>
+        <button class="btn-primary" type="submit">{% trans "Save grade" %}</button>
       </form>
     </section>
   {% elif snapshot_pairs %}
-    <form method="post">{% csrf_token %}
+    <form class="max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
       {% for question,answer in snapshot_pairs %}
         <fieldset>
           <legend>{{ question.text_snapshot|default:question.text }}</legend>
           <label>
             {% trans "Score" %}
-            <input name="score_sq_{{ question.order }}"
+            <input name="score_sq_{{ question.order }}" class="form-input"
                    value="{{ answer.score|default:'' }}"
                    type="number"
                    step="0.01"></label>
-          <textarea name="feedback_sq_{{ question.order }}">{{ answer.feedback|default:'' }}
+          <textarea name="feedback_sq_{{ question.order }}" class="form-input">{{ answer.feedback|default:'' }}
           </textarea>
         </fieldset>
       {% endfor %}
-      <button class="button button-primary" type="submit">{% trans "Save grades" %}</button>
+      <button class="btn-primary" type="submit">{% trans "Save grades" %}</button>
     </form>
   {% else %}
-    <form method="post">{% csrf_token %}
+    <form class="max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
       {% for question,answer in question_answer_pairs %}
         <fieldset>
           <legend>{{ question.text }}</legend>
           <label>
             {% trans "Score" %}
-            <input name="score_{{ question.id }}"
+            <input name="score_{{ question.id }}" class="form-input"
                    value="{{ answer.score|default:'' }}"
                    type="number"
                    step="0.01"></label>
-          <textarea name="feedback_{{ question.id }}">{{ answer.feedback|default:'' }}
+          <textarea name="feedback_{{ question.id }}" class="form-input">{{ answer.feedback|default:'' }}
             </textarea>
         </fieldset>
       {% endfor %}
-      <button class="button button-primary" type="submit">{% trans "Save grades" %}</button>
+      <button class="btn-primary" type="submit">{% trans "Save grades" %}</button>
     </form>
   {% endif %}
   </div>

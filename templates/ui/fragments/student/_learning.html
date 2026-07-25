@@ -1,21 +1,21 @@
 {% load i18n %}
-<div id="student-content" class="page-stack enter-view"><section class="page-intro"><div>
+<div id="student-content" class="page-stack animate-enter-view"><section class="flex justify-between items-center gap-5 px-0.5 py-1.5"><div>
       <p class="eyebrow">{% trans "Learning" %}</p>
       <h2>{% trans "My programs and courses" %}</h2>
       <p>{% trans "Track completion and continue from your next available lesson or assessment." %}</p>
     </div>
-    <a class="button button-primary" href="{% url 'students:record' %}">{% trans "View record" %}</a>
+    <a class="btn-primary" href="{% url 'students:record' %}">{% trans "View record" %}</a>
   </section>
-  <section class="program-grid">{% for card in learning_cards %}
-      <article class="program-card"><div class="program-card-top"><span class="program-symbol">{% if card.type == 'diploma' %}
+  <section class="grid grid-cols-1 md:grid-cols-3 gap-4">{% for card in learning_cards %}
+      <article class="card-surface"><div class="flex justify-between items-center"><span class="w-12 h-12 rounded-md bg-brand-soft text-brand grid place-items-center font-black">{% if card.type == 'diploma' %}
               D
             {% else %}
               C
             {% endif %}
           </span>
           {% if card.expires_at %}
-            <span class="status-pill amber">{% trans "Expires" %}
-              {{ card.expires_at|date:"d M Y" }}
+            <span class="status-pill-warning">{% trans "Expires" %}
+              {{ card.expires_at|date:"d/m/Y" }}
             </span>
           {% endif %}
         </div>
@@ -27,25 +27,25 @@
           {% endif %}
         </h3>
         <p>{{ card.status|default:_("Active learning") |capfirst }}</p>
-        <div class="progress-info"><span>{% trans "Completion" %}</span>
+        <div class="flex justify-between my-4 mb-2"><span>{% trans "Completion" %}</span>
           <strong>
             {{ card.completed_count|default:0 }}
             /
             {{ card.lecture_count|default:0 }}
           </strong>
         </div>
-        <div class="progress-track"><span style="--progress: {% if card.lecture_count %} {% widthratio card.completed_count card.lecture_count 100 %} {% else %} 0 {% endif %}"></span>
+        <div class="progress-track"><span class="progress-bar" style="--progress: {% if card.lecture_count %}{% widthratio card.completed_count card.lecture_count 100 %}{% else %}0{% endif %}%"></span>
         </div>
-        <div class="inline-actions">{% if card.next_lecture_url %}
-            <a class="button button-primary" href="{{ card.next_lecture_url }}">{% trans "Continue" %}</a>
+        <div class="flex gap-2.5 items-center flex-wrap">{% if card.next_lecture_url %}
+            <a class="btn-primary" href="{{ card.next_lecture_url }}">{% trans "Continue" %}</a>
           {% endif %}
           {% if card.next_assessment_url %}
-            <a class="button button-soft" href="{{ card.next_assessment_url }}">{% trans "Assessment" %}</a>
+            <a class="btn-soft" href="{{ card.next_assessment_url }}">{% trans "Assessment" %}</a>
           {% endif %}
         </div>
       </article>
     {% empty %}
-      <div class="empty-state"><span>◫</span>
+      <div class="empty-state"><span>◉</span>
         <h3>{% trans "No learning content yet" %}</h3>
         <p>{% trans "Enrolments will appear here when they become available." %}</p>
       </div>

@@ -4,107 +4,88 @@
   {{ diploma.title }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% include "ui/components/_page_header.html" with title=diploma.title description=diploma.description eyebrow=_("Diploma") %}
-    <section class="surface"><div class="section-header"><div>
+  <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=diploma.title description=diploma.description eyebrow=_("Diploma") back_button=True %}
+    <section class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Structure" %}</p>
-          <h3>{% trans "Cohorts" %}</h3>
+          <h3>{% trans "Cohorts &amp; Semesters" %}</h3>
         </div>
-        <a class="button button-primary"
-           href="{% url 'academics:admin_cohort_create' diploma.id %}">{% trans "Add cohort" %}</a>
+        <div class="flex gap-2.5 items-center flex-wrap">
+          <a class="btn-ghost" href="{% url 'academics:admin_cohort_create' diploma.id %}">{% trans "Add cohort" %}</a>
+          <a class="btn-ghost" href="{% url 'academics:admin_semester_create' diploma.id %}">{% trans "Add semester" %}</a>
+        </div>
       </div>
-      {% if cohorts %}
-        <div class="table-shell"><table>
-            <thead>
-              <tr>
-                <th>{% trans "Cohort" %}</th>
-                <th>{% trans "Status" %}</th>
-                <th>{% trans "Lectures" %}</th>
-                <th>{% trans "Actions" %}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for cohort in cohorts %}
-                <tr>
-                  <td>{{ cohort }}</td>
-                  <td>{% include "ui/components/_status.html" with code=cohort.is_active|yesno:"active,inactive" label=cohort.is_active|yesno:_("Active,Inactive") %}</td>
-                  <td>{{ cohort.diploma_lecture_count }}</td>
-                  <td>
-                    <div class="inline-actions"><a class="button button-info"
-                         href="{% url 'academics:admin_cohort_edit' diploma.id cohort.id %}">{% trans "Edit" %}</a>
-                    </div>
-                  </td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+      {% if cohort_groups %}
+        <div class="divide-y divide-line">
+          {% for group in cohort_groups %}
+            <details class="group" {% if forloop.first %}open{% endif %}>
+              <summary class="flex items-center justify-between py-3 px-1 cursor-pointer list-none hover:bg-surface-soft rounded-sm transition-colors">
+                <div class="flex items-center gap-3">
+                  <span class="text-xs text-muted transition-transform group-open:rotate-90">&#9654;</span>
+                  <strong>{{ group.cohort.name }}</strong>
+                  {% include "ui/components/_status.html" with code=group.cohort.is_active|yesno:"active,inactive" label=group.cohort.is_active|yesno:_("Active,Inactive") %}
+                  <span class="text-xs text-muted">{{ group.semesters|length }} {% trans "semesters" %}</span>
+                </div>
+                <a class="btn-ghost text-xs py-1 px-2 min-h-0" href="{% url 'academics:admin_cohort_edit' diploma.id group.cohort.id %}">{% trans "Edit cohort" %}</a>
+              </summary>
+              <div class="pb-3 px-1">
+                {% if group.semesters %}
+                  <div class="table-wrap"><table class="table">
+                    <thead>
+                      <tr>
+                        <th class="table-th">{% trans "Semester" %}</th>
+                        <th class="table-th">{% trans "Lectures" %}</th>
+                        <th class="table-th">{% trans "Actions" %}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for item in group.semesters %}
+                        <tr>
+                          <td class="table-td">{{ item.semester.title }}</td>
+                          <td class="table-td">{{ item.lecture_count }}</td>
+                          <td class="table-td">
+                            <div class="flex gap-2.5 items-center flex-wrap">
+                              <a class="btn-ghost text-xs py-1 px-2 min-h-0" href="{% url 'academics:admin_semester_edit' diploma.id item.semester.id %}">{% trans "Edit" %}</a>
+                              <a class="btn-secondary text-xs py-1 px-2 min-h-0" href="{% url 'academics:admin_diploma_lecture_list' diploma.id group.cohort.id item.semester.id %}">{% trans "Lectures" %}</a>
+                            </div>
+                          </td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+                {% else %}
+                  <p class="text-sm text-muted py-2">{% trans "No semesters for this cohort." %}</p>
+                {% endif %}
+              </div>
+            </details>
+          {% endfor %}
         </div>
       {% else %}
-        {% include "ui/components/_empty_state.html" with title=_("No cohorts") message=_("No cohorts found for this diploma.") %}
+        {% include "ui/components/_empty_state.html" with title=_("No cohorts") message=_("No cohorts or semesters found for this diploma.") %}
       {% endif %}
     </section>
-    <section class="surface"><div class="section-header"><div>
-          <p class="eyebrow">{% trans "Structure" %}</p>
-          <h3>{% trans "Semesters" %}</h3>
-        </div>
-        <a class="button button-primary"
-           href="{% url 'academics:admin_semester_create' diploma.id %}">{% trans "Add semester" %}</a>
-      </div>
-      {% if cohort_rows %}
-        <div class="table-shell"><table>
-            <thead>
-              <tr>
-                <th>{% trans "Cohort" %}</th>
-                <th>{% trans "Semester" %}</th>
-                <th>{% trans "Lectures" %}</th>
-                <th>{% trans "Actions" %}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for row in cohort_rows %}
-                <tr>
-                  <td>{{ row.cohort }}</td>
-                  <td>{{ row.semester }}</td>
-                  <td>{{ row.lecture_count }}</td>
-                  <td>
-                    <div class="inline-actions"><a class="button button-info"
-                         href="{% url 'academics:admin_semester_edit' diploma.id row.semester.id %}">{% trans "Edit" %}
-                      </a>
-                      <a class="button button-info"
-                         href="{% url 'academics:admin_diploma_lecture_list' diploma.id row.cohort.id row.semester.id %}">{% trans "Lectures" %}
-                      </a>
-                    </div>
-                  </td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      {% else %}
-        {% include "ui/components/_empty_state.html" with title=_("No semesters") message=_("No semesters found for this diploma.") %}
-      {% endif %}
-    </section>
-    <section class="surface"><div class="section-header"><div>
+    <section class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Students" %}</p>
           <h3>{% trans "Enrollments" %}</h3>
         </div>
       </div>
       {% if enrollments %}
-        <div class="table-shell"><table>
+        <div class="table-wrap"><table class="table">
             <thead>
               <tr>
-                <th>{% trans "Student" %}</th>
-                <th>{% trans "Cohort" %}</th>
-                <th>{% trans "Status" %}</th>
-                <th>{% trans "Enrolled" %}</th>
+                <th class="table-th">{% trans "Student" %}</th>
+                <th class="table-th">{% trans "Cohort" %}</th>
+                <th class="table-th">{% trans "Status" %}</th>
+                <th class="table-th">{% trans "Enrolled" %}</th>
               </tr>
             </thead>
             <tbody>
               {% for enrollment in enrollments %}
                 <tr>
-                  <td>{{ enrollment.student }}</td>
-                  <td>{{ enrollment.cohort }}</td>
-                  <td>{% include "ui/components/_status.html" with code=enrollment.status label=enrollment.get_status_display %}</td>
-                  <td>{{ enrollment.created_at|date:"d M Y" }}</td>
+                  <td class="table-td">{{ enrollment.student }}</td>
+                  <td class="table-td">{{ enrollment.cohort }}</td>
+                  <td class="table-td">{% include "ui/components/_status.html" with code=enrollment.status label=enrollment.get_status_display %}</td>
+                  <td class="table-td">{{ enrollment.created_at|date:"d/m/Y" }}</td>
                 </tr>
               {% endfor %}
             </tbody>

@@ -1,0 +1,13 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n %}
+{% block title %}{% trans "Profile" %}{% endblock %}
+{% block content %}
+  <div class="page-stack animate-enter-view">
+    {% include "ui/components/_page_header.html" with eyebrow=_('Account') title=_('Profile') description=_('Update your staff account details.') %}
+    <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">
+      {% csrf_token %}
+      {% for field in form %}{% include "ui/components/_field.html" %}{% endfor %}
+      <div class="actions-row"><button class="btn-primary" type="submit">{% trans "Save" %}</button></div>
+    </form>
+  </div>
+{% endblock %}

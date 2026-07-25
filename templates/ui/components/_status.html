@@ -1,2 +1,4 @@
 {% load ui_tags %}
-<span class="status-pill {{ code|status_tone }}">{{ label|default:code }}</span>
+{% with tone=code|status_tone %}
+<span class="status-pill-{{ tone }}">{{ label|default:code }}</span>
+{% endwith %}

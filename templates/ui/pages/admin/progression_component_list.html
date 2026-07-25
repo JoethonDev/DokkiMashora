@@ -4,48 +4,48 @@
   {{ title|default:_("Progression") }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% trans "Academic operations" as eyebrow %}
+  <div class="page-stack animate-enter-view">{% trans "Academic operations" as eyebrow %}
     {% trans "Progression" as title %}
     {% trans "Review semester progress, decisions, evaluations, interviews, and rejoin plans." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    <section class="surface"><div class="table-shell"><table>
+    <section class="card-surface"><div class="table-wrap"><table class="table">
             <thead>
               <tr>
-                <th>{% trans "Name" %}</th>
-                <th>{% trans "Type" %}</th>
-                <th>{% trans "Weight" %}</th>
-                <th>{% trans "Actions" %}</th>
+                <th class="table-th">{% trans "Name" %}</th>
+                <th class="table-th">{% trans "Type" %}</th>
+                <th class="table-th">{% trans "Weight" %}</th>
+                <th class="table-th">{% trans "Actions" %}</th>
               </tr>
             </thead>
             <tbody>
               {% for item in components %}
                 <tr>
-                  <td>{{ item.name }}</td>
-                  <td>{{ item.get_component_type_display|default:item.component_type }}</td>
-                  <td>
+                  <td class="table-td">{{ item.name }}</td>
+                  <td class="table-td">{{ item.get_component_type_display|default:item.component_type }}</td>
+                  <td class="table-td">
                     {{ item.weight_percent }}
                     %
                   </td>
-                  <td>
-                    <div class="inline-actions"><a class="button button-info"
+                  <td class="table-td">
+                    <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-ghost"
                          href="{% url 'progression:admin_component_edit' item.id %}">{% trans "Edit" %}</a>
-                      <form class="inline-form"
+                      <form class="m-0"
                             method="post"
-                            action="{% url 'progression:admin_component_delete' item.id %}">{% csrf_token %}
-                        <button class="button button-danger" type="submit">{% trans "Deactivate" %}</button>
+                            action="{% url 'progression:admin_component_delete' item.id %}" data-confirm="{% trans 'Deactivate this component?' %}">{% csrf_token %}
+                        <button class="btn-danger" type="submit">{% trans "Deactivate" %}</button>
                       </form>
                     </div>
                   </td>
                 </tr>
               {% empty %}
                 <tr>
-                  <td colspan="4">{% trans "No components." %}</td>
+                  <td class="table-td" colspan="4">{% trans "No components." %}</td>
                 </tr>
               {% endfor %}
             </tbody>
           </table>
         </div>
-        <a class="button button-primary"
+        <a class="btn-primary"
            href="{% url 'progression:admin_component_create' cohort.id semester.id %}">{% trans "Create component" %}
         </a>
       </section>

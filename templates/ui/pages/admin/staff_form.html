@@ -9,12 +9,12 @@
   {{ title }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% include "ui/components/_page_header.html" with title=title|default:_("Staff member") eyebrow=_("Staff") %}
-    <form class="surface form-main" method="post">{% csrf_token %}
+  <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=title|default:_("Staff member") eyebrow=_("Staff") back_button=True %}
+    <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
       {% for field in form %}
         {% include "ui/components/_field.html" %}
       {% endfor %}
-      <button class="button button-primary" type="submit">{% trans "Save" %}</button>
+      <button class="btn-primary" type="submit">{% trans "Save" %}</button>
     </form>
   </div>
 {% endblock %}

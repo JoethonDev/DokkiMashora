@@ -1,5 +1,5 @@
 {% load i18n %}
-<span id="global-loading"
-      class="loading-indicator htmx-indicator"
-      role="status"
-      aria-live="polite">{% trans "Loading" %}</span>
+<div id="global-loading"
+     class="fixed end-4 bottom-4 z-toast p-2.5 rounded-sm bg-brand-strong text-white shadow-card htmx-indicator"
+     role="status"
+     aria-label="{% trans 'Loading' %}">{% trans "Loading..." %}</div>

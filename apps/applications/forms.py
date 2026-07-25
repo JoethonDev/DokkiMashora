@@ -16,6 +16,7 @@ from apps.academics.models import Cohort, Course
 from apps.applications.constants import PROGRAM_TYPE_CHOICES
 from apps.applications.documents import ATTACHMENT_ALLOWED_EXTENSIONS
 from apps.applications.services import RegistrationData, find_duplicate, normalize_phone
+from apps.core.forms import StyledFormMixin
 from apps.students.constants import EDUCATION_CHOICES, GENDER_CHOICES
 from apps.students.identity import (
     COUNTRY_CHOICES,
@@ -25,31 +26,32 @@ from apps.students.identity import (
 )
 
 
-class RegistrationForm(forms.Form):
+class RegistrationForm(StyledFormMixin, forms.Form):
     """Public registration form with mandatory personal fields and optional program selection."""
 
-    full_name = forms.CharField(label=_("Full name (4 parts)"), max_length=200)
+    full_name = forms.CharField(label=_("Full name (4 parts)"), max_length=200, widget=forms.TextInput(attrs={}))
     date_of_birth = forms.DateField(
         label=_("Date of birth"),
         widget=forms.DateInput(attrs={"type": "date", "max": date.today().isoformat()}),
     )
-    gender = forms.ChoiceField(label=_("Gender"), choices=GENDER_CHOICES)
-    address = forms.CharField(label=_("Address"), max_length=255)
-    phone = forms.CharField(label=_("Mobile number"), max_length=32)
-    email = forms.EmailField(label=_("Email"))
-    education = forms.ChoiceField(label=_("Education level"), choices=EDUCATION_CHOICES)
+    gender = forms.ChoiceField(label=_("Gender"), choices=GENDER_CHOICES, widget=forms.Select(attrs={}))
+    address = forms.CharField(label=_("Address"), max_length=255, widget=forms.TextInput(attrs={}))
+    phone = forms.CharField(label=_("Mobile number"), max_length=32, widget=forms.TextInput(attrs={}))
+    email = forms.EmailField(label=_("Email"), widget=forms.EmailInput(attrs={}))
+    education = forms.ChoiceField(label=_("Education level"), choices=EDUCATION_CHOICES, widget=forms.Select(attrs={}))
     country_code = forms.ChoiceField(
         label=_("Country"),
         choices=COUNTRY_CHOICES,
         initial="EG",
+        widget=forms.Select(attrs={}),
     )
-    national_id = forms.CharField(label=_("National ID"), max_length=32)
-    specialization = forms.CharField(label=_("Specialization"), max_length=120)
-    employer = forms.CharField(label=_("Employer"), max_length=120)
-    current_job = forms.CharField(label=_("Current job"), max_length=120)
-    church = forms.CharField(label=_("Church"), max_length=120)
-    priest_name = forms.CharField(label=_("Priest name"), max_length=120)
-    priest_contact = forms.CharField(label=_("Priest contact"), max_length=120)
+    national_id = forms.CharField(label=_("National ID"), max_length=32, widget=forms.TextInput(attrs={}))
+    specialization = forms.CharField(label=_("Specialization"), max_length=120, widget=forms.TextInput(attrs={}))
+    employer = forms.CharField(label=_("Employer"), max_length=120, widget=forms.TextInput(attrs={}))
+    current_job = forms.CharField(label=_("Current job"), max_length=120, widget=forms.TextInput(attrs={}))
+    church = forms.CharField(label=_("Church"), max_length=120, widget=forms.TextInput(attrs={}))
+    priest_name = forms.CharField(label=_("Priest name"), max_length=120, widget=forms.TextInput(attrs={}))
+    priest_contact = forms.CharField(label=_("Priest contact"), max_length=120, widget=forms.TextInput(attrs={}))
 
     # Optional program selection
     apply_program = forms.BooleanField(
@@ -67,10 +69,12 @@ class RegistrationForm(forms.Form):
         label=_("Diploma"),
         choices=[],
         required=False,
+        widget=forms.Select(attrs={}),
     )
     program_target = forms.CharField(
         label=_("Program"),
         required=False,
+        widget=forms.TextInput(attrs={}),
     )
 
     def __init__(self, *args, **kwargs) -> None:
@@ -231,7 +235,7 @@ class RegistrationForm(forms.Form):
         return result
 
 
-class AdminDocumentRequestForm(forms.Form):
+class AdminDocumentRequestForm(StyledFormMixin, forms.Form):
     """Admin form to request documents for an accepted diploma application."""
 
     expires_at = forms.DateTimeField(
@@ -262,6 +266,9 @@ class AdminDocumentRequestForm(forms.Form):
 class MultipleFileInput(forms.ClearableFileInput):
     allow_multiple_selected = True
 
+    def __init__(self, attrs=None):
+        super().__init__(attrs)
+
 
 class MultipleFileField(forms.FileField):
     def clean(self, data, initial=None):
@@ -270,12 +277,13 @@ class MultipleFileField(forms.FileField):
         return [forms.FileField.clean(self, data, initial)]
 
 
-class StudentDocumentUploadForm(forms.Form):
+class StudentDocumentUploadForm(StyledFormMixin, forms.Form):
     """Student upload form for persona image and attachments."""
 
     persona_image = forms.ImageField(
         label=_("Personal photo"),
         required=True,
+        widget=forms.FileInput(attrs={}),
     )
     attachments = MultipleFileField(
         label=_("Documents (one PDF or multiple images)"),

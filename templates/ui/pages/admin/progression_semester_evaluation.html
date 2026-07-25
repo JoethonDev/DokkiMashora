@@ -4,11 +4,11 @@
   {{ title|default:_("Progression") }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% trans "Academic operations" as eyebrow %}
+  <div class="page-stack animate-enter-view">{% trans "Academic operations" as eyebrow %}
     {% trans "Progression" as title %}
     {% trans "Review semester progress, decisions, evaluations, interviews, and rejoin plans." as description %}
-    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    <section class="surface"><div class="section-header"><div>
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description back_button=True %}
+    <section class="card-surface"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Evaluation" %}</p>
             <h3>
               {{ enrollment.student }}
@@ -21,14 +21,14 @@
           {% trans "Evaluation result" %}
           : <strong>{{ result }}</strong>
         </p>
-        <div class="inline-actions"><form method="post"
+        <div class="flex gap-2.5 items-center flex-wrap"><form method="post"
                 action="{% url 'progression:admin_grade_sync' enrollment.id semester.id %}">{% csrf_token %}
-            <button class="button button-info" type="submit">{% trans "Synchronize grade items" %}</button>
+            <button class="btn-secondary" type="submit">{% trans "Synchronize grade items" %}</button>
           </form>
-          <a class="button button-info"
+          <a class="btn-secondary"
              href="{% url 'progression:admin_request_interview' enrollment.id semester.id %}">{% trans "Request interview" %}
           </a>
-          <a class="button button-info"
+          <a class="btn-secondary"
              href="{% url 'progression:admin_interview_decision' enrollment.id semester.id %}">{% trans "Interview decision" %}
           </a>
         </div>

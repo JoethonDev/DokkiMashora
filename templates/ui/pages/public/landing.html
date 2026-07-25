@@ -1,32 +1,34 @@
-﻿{% extends "ui/layouts/public.html" %}
+{% extends "ui/layouts/public.html" %}
 {% load i18n static %}
 {% block title %}
   {% if LANGUAGE_CODE == 'ar' %}{{ SITE_NAME_AR }}{% else %}{{ SITE_NAME }}{% endif %}
 {% endblock %}
 {% block content %}
   {% if landing_announcement %}
-    <aside class="alert" aria-label="{% trans 'Announcement' %}"><strong>{{ landing_announcement.title }}</strong>
-      <p>{{ landing_announcement.message }}</p>
-    </aside>
+    <div class="page-container">
+      <aside class="card-surface" aria-label="{% trans 'Announcement' %}"><strong>{{ landing_announcement.title }}</strong>
+        <p class="m-0 text-muted">{{ landing_announcement.message }}</p>
+      </aside>
+    </div>
   {% endif %}
 
-  <section class="public-hero">
+  <section class="page-container grid grid-cols-1 lg:grid-cols-2 gap-8 items-center py-12 lg:py-16">
     {% if landing_settings.hero_image %}
-      <div class="public-hero-visual"><img src="{{ landing_settings.hero_image.url }}" alt="" loading="lazy"></div>
+      <div class="rounded-lg overflow-hidden"><img src="{{ landing_settings.hero_image.url }}" alt="" loading="lazy"></div>
     {% endif %}
-    <div class="public-hero-copy">
-      <span class="announcement-pill">{{ landing_content.hero_eyebrow }}</span>
-      <h1>{{ landing_content.hero_title }}</h1>
-      <p>{{ landing_content.hero_body }}</p>
-      <div class="inline-actions">
-        <a class="button button-primary" href="#programs">{{ landing_content.hero_primary|default:_("Explore our programs") }}</a>
+    <div>
+      <span class="eyebrow">{{ landing_content.hero_eyebrow }}</span>
+      <h1 class="display">{{ landing_content.hero_title }}</h1>
+      <p class="text-muted">{{ landing_content.hero_body }}</p>
+      <div class="actions-row mt-5">
+        <a class="btn-primary" href="#programs">{{ landing_content.hero_primary|default:_("Explore our programs") }}</a>
         {% if user.is_authenticated %}
-          <a class="button button-soft" href="{% url 'accounts:dashboard' %}">{% if is_student %}{% trans "My learning" %}{% else %}{% trans "Dashboard" %}{% endif %}</a>
+          <a class="btn-soft" href="{% url 'accounts:dashboard' %}">{% if is_student %}{% trans "My learning" %}{% else %}{% trans "Dashboard" %}{% endif %}</a>
         {% else %}
-          <a class="button button-soft" href="{% url 'accounts:login' %}">{% trans "Log in" %}</a>
+          <a class="btn-soft" href="{% url 'accounts:login' %}">{% trans "Log in" %}</a>
         {% endif %}
       </div>
-      <div class="trust-row">
+      <div class="flex gap-4 flex-wrap text-muted text-xs mt-5">
         <span>&#10003; {% trans "Structured learning" %}</span>
         <span>&#10003; {% trans "Real student support" %}</span>
         <span>&#10003; {% trans "Clear progress" %}</span>
@@ -34,38 +36,39 @@
     </div>
   </section>
 
-  <section id="programs" class="public-section">
-    <div class="page-intro"><div>
-      <p class="eyebrow">{{ landing_content.programs_eyebrow }}</p>
-      <h2>{{ landing_content.programs_title }}</h2>
-      <p>{{ landing_content.programs_body }}</p>
-    </div></div>
+  <section id="programs" class="page-container border-t border-line py-12">
+    <div class="section-head"><div>
+        <p class="eyebrow">{{ landing_content.programs_eyebrow }}</p>
+        <h2>{{ landing_content.programs_title }}</h2>
+        <p class="text-muted">{{ landing_content.programs_body }}</p>
+      </div>
+    </div>
     {% if active_diplomas %}
-      <h3>{% trans "Open diplomas" %}</h3>
-      <div class="program-grid">
+      <h3 class="mb-4">{% trans "Open diplomas" %}</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {% for item in program_items %}
           {% if item.kind == "diploma" %}
-            <article class="program-card">
+            <article class="card-surface-interactive">
               <h3>{{ item.title }}</h3>
-              <p>{{ item.description }}</p>
-              <span class="status-pill green">{% trans "Open" %}</span>
-              {% if item.target_label %}<small>{{ item.target_label }}</small>{% endif %}
-              <a class="button button-primary" href="{{ item.apply_url }}">{% trans "Apply" %}</a>
+              <p class="text-muted">{{ item.description }}</p>
+              <span class="status-pill-success">{% trans "Open" %}</span>
+              {% if item.target_label %}<small class="text-muted block">{{ item.target_label }}</small>{% endif %}
+              <a class="btn-primary" href="{{ item.apply_url }}">{% trans "Apply" %}</a>
             </article>
           {% endif %}
         {% endfor %}
       </div>
     {% endif %}
     {% if courses %}
-      <h3>{% trans "Open standalone courses" %}</h3>
-      <div class="program-grid">
+      <h3 class="mb-4">{% trans "Open standalone courses" %}</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {% for item in program_items %}
           {% if item.kind == "course" %}
-            <article class="program-card">
+            <article class="card-surface-interactive">
               <h3>{{ item.title }}</h3>
-              <p>{{ item.description }}</p>
-              <span class="status-pill green">{% trans "Open" %}</span>
-              <a class="button button-primary" href="{{ item.apply_url }}">{% trans "Apply" %}</a>
+              <p class="text-muted">{{ item.description }}</p>
+              <span class="status-pill-success">{% trans "Open" %}</span>
+              <a class="btn-primary" href="{{ item.apply_url }}">{% trans "Apply" %}</a>
             </article>
           {% endif %}
         {% endfor %}
@@ -76,36 +79,38 @@
     {% endif %}
   </section>
 
-  <footer class="public-footer">
-    <div class="public-footer-cols">
-      <div>
-        <h3>{{ landing_content.footer_about_title }}</h3>
-        <p>{{ landing_content.footer_tagline }}</p>
-        <address>
-          {{ landing_content.footer_address }}<br>
-          {% if landing_settings.contact_email %}<a href="mailto:{{ landing_settings.contact_email }}">{{ landing_settings.contact_email }}</a><br>{% endif %}
-          {% if landing_settings.contact_phone %}{{ landing_settings.contact_phone }}<br>{% endif %}
-          {{ landing_content.footer_hours }}
-        </address>
-      </div>
-      <div>
-        <h3>{{ landing_content.footer_links_title }}</h3>
-        <nav>
-          <a href="{% url 'core:landing' %}#programs">{{ landing_content.footer_programs_link }}</a>
-          <a href="{% url 'accounts:login' %}">{{ landing_content.footer_login_link }}</a>
-        </nav>
-      </div>
-      <div>
-        <h3>{{ landing_content.footer_follow_title }}</h3>
-        {% if landing_settings.facebook_url or landing_settings.instagram_url or landing_settings.youtube_url %}
-          <nav class="social-links">
-            {% if landing_settings.facebook_url %}<a href="{{ landing_settings.facebook_url }}" rel="noopener noreferrer" target="_blank" aria-label="Facebook">Facebook</a>{% endif %}
-            {% if landing_settings.instagram_url %}<a href="{{ landing_settings.instagram_url }}" rel="noopener noreferrer" target="_blank" aria-label="Instagram">Instagram</a>{% endif %}
-            {% if landing_settings.youtube_url %}<a href="{{ landing_settings.youtube_url }}" rel="noopener noreferrer" target="_blank" aria-label="YouTube">YouTube</a>{% endif %}
+  <footer class="bg-surface-inverse text-white/85">
+    <div class="page-container py-12">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div>
+          <h3 class="text-white m-0 mb-4">{{ landing_content.footer_about_title }}</h3>
+          <p class="text-white/70 text-xs m-0">{{ landing_content.footer_tagline }}</p>
+          <address class="not-italic text-white/70 text-xs">
+            {{ landing_content.footer_address }}<br>
+            {% if landing_settings.contact_email %}<a class="text-brand-200 no-underline hover:text-white" href="mailto:{{ landing_settings.contact_email }}">{{ landing_settings.contact_email }}</a><br>{% endif %}
+            {% if landing_settings.contact_phone %}<span class="text-white/70 text-xs">{{ landing_settings.contact_phone }}</span><br>{% endif %}
+            {{ landing_content.footer_hours }}
+          </address>
+        </div>
+        <div>
+          <h3 class="text-white m-0 mb-4">{{ landing_content.footer_links_title }}</h3>
+          <nav>
+            <a class="text-brand-200 no-underline hover:text-white" href="{% url 'core:landing' %}#programs">{{ landing_content.footer_programs_link }}</a><br>
+            <a class="text-brand-200 no-underline hover:text-white" href="{% url 'accounts:login' %}">{{ landing_content.footer_login_link }}</a>
           </nav>
-        {% endif %}
+        </div>
+        <div>
+          <h3 class="text-white m-0 mb-4">{{ landing_content.footer_follow_title }}</h3>
+          {% if landing_settings.facebook_url or landing_settings.instagram_url or landing_settings.youtube_url %}
+            <nav class="flex gap-3">
+              {% if landing_settings.facebook_url %}<a class="border border-white/20 rounded-sm px-3 py-1.5 text-xs text-brand-200 no-underline hover:border-brand-200 hover:bg-white/5" href="{{ landing_settings.facebook_url }}" rel="noopener noreferrer" target="_blank" aria-label="Facebook">{% trans "Facebook" %}</a>{% endif %}
+              {% if landing_settings.instagram_url %}<a class="border border-white/20 rounded-sm px-3 py-1.5 text-xs text-brand-200 no-underline hover:border-brand-200 hover:bg-white/5" href="{{ landing_settings.instagram_url }}" rel="noopener noreferrer" target="_blank" aria-label="Instagram">{% trans "Instagram" %}</a>{% endif %}
+              {% if landing_settings.youtube_url %}<a class="border border-white/20 rounded-sm px-3 py-1.5 text-xs text-brand-200 no-underline hover:border-brand-200 hover:bg-white/5" href="{{ landing_settings.youtube_url }}" rel="noopener noreferrer" target="_blank" aria-label="YouTube">{% trans "YouTube" %}</a>{% endif %}
+            </nav>
+          {% endif %}
+        </div>
       </div>
+      <div class="border-t border-white/20 pt-4 mt-5 text-center"><small class="text-white/50 text-xs">{{ landing_content.footer_note }}</small></div>
     </div>
-    <div class="public-footer-note"><small>{{ landing_content.footer_note }}</small></div>
   </footer>
 {% endblock %}

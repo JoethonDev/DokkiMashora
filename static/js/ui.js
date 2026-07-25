@@ -196,11 +196,31 @@
   // --- Assessment choice rows ---
   var choiceIdx = 100;
 
-  function initChoiceButtons(container) {
+  function initAssessmentChoices(container) {
     if (!container) container = document;
     var addBtn = container.querySelector("#add-assessment-choice-btn");
     var choicesEl = container.querySelector("#assessment-choices");
     if (!addBtn || !choicesEl) return;
+
+    // Remove stale listeners by cloning
+    var newBtn = addBtn.cloneNode(true);
+    addBtn.parentNode.replaceChild(newBtn, addBtn);
+
+    var typeSelect = container.querySelector("[name='question_type']");
+    if (typeSelect) {
+      var syncVisibility = function () {
+        var isMcq = typeSelect.value === "mcq";
+        choicesEl.classList.toggle("hidden", !isMcq);
+        var fieldset = choicesEl.closest("fieldset");
+        if (fieldset) fieldset.classList.toggle("hidden", !isMcq);
+        var inputs = choicesEl.querySelectorAll("input, select, textarea");
+        inputs.forEach(function (inp) { inp.disabled = !isMcq; });
+      };
+      typeSelect.removeEventListener("change", syncVisibility);
+      typeSelect.addEventListener("change", syncVisibility);
+      syncVisibility();
+    }
+
     // Re-read idx from existing rows
     var existing = choicesEl.querySelectorAll(".choice-row");
     choiceIdx = 100;
@@ -211,33 +231,46 @@
         if (num >= choiceIdx) choiceIdx = num + 1;
       }
     });
-    addBtn.addEventListener("click", function () {
+
+    newBtn.addEventListener("click", function () {
       var tpl = container.querySelector("#assessment-choice-template");
       if (!tpl) return;
       var html = tpl.innerHTML.replace(/__IDX__/g, "new_" + choiceIdx);
       var wrapper = document.createElement("div");
       wrapper.innerHTML = html;
-      choicesEl.appendChild(wrapper.firstElementChild);
+      var row = wrapper.firstElementChild;
+      choicesEl.appendChild(row);
       choiceIdx++;
     });
   }
 
-  // Remove choice row
+  // Remove choice row (delegated, works for both systems)
   document.addEventListener("click", function (e) {
     var btn = e.target.closest(".remove-choice-btn");
     if (!btn) return;
     var row = btn.closest(".choice-row");
-    var container = row && row.closest("#assessment-choices");
-    if (row && container && container.querySelectorAll(".choice-row").length > 1) {
+    if (!row) return;
+    var container = row.closest("#assessment-choices") || row.closest("#choice-forms");
+    if (!container) return;
+    if (container.querySelectorAll(".choice-row:not(.hidden)").length <= 1) return;
+    var deleteCheckbox = row.querySelector("[name$='-DELETE']");
+    if (deleteCheckbox) {
+      // Existing choice — mark for deletion, hide row, keep in DOM for form submission
+      deleteCheckbox.checked = true;
+      row.classList.add("hidden");
+    } else {
+      // New choice — remove from DOM and decrement TOTAL_FORMS
+      var totalInput = container.closest("form") && container.closest("form").querySelector("[name$='-TOTAL_FORMS']");
+      if (totalInput) totalInput.value = parseInt(totalInput.value, 10) - 1;
       row.remove();
     }
   });
 
   // Init on page load and after HTMX swaps
-  document.addEventListener("DOMContentLoaded", function () { initChoiceButtons(); });
-  document.addEventListener("htmx:afterSwap", function (e) { initChoiceButtons(e.detail.target); });
+  document.addEventListener("DOMContentLoaded", function () { initAssessmentChoices(); });
+  document.addEventListener("htmx:afterSwap", function (e) { initAssessmentChoices(e.detail.target); });
 
-  // --- Entrance exam choice add button ---
+  // --- Entrance exam choices ---
   function initEntranceChoices(container) {
     if (!container) container = document;
     var btn = container.querySelector("#add-choice-btn");
@@ -245,7 +278,28 @@
     var tpl = container.querySelector("#choice-template");
     var totalInput = container.querySelector("[name$='-TOTAL_FORMS']");
     if (!btn || !formContainer || !tpl || !totalInput) return;
-    btn.addEventListener("click", function () {
+
+    // Remove stale listeners
+    var newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+
+    // MCQ/Written toggle
+    var typeSelect = container.querySelector("[name='question_type']");
+    var fieldset = container.querySelector("#choices-fieldset");
+    if (typeSelect && fieldset) {
+      var syncVisibility = function () {
+        var isMcq = typeSelect.value === "mcq";
+        fieldset.classList.toggle("hidden", !isMcq);
+        // Disable inputs when hidden
+        var inputs = fieldset.querySelectorAll("input, select, textarea");
+        inputs.forEach(function (inp) { inp.disabled = !isMcq; });
+      };
+      typeSelect.removeEventListener("change", syncVisibility);
+      typeSelect.addEventListener("change", syncVisibility);
+      syncVisibility();
+    }
+
+    newBtn.addEventListener("click", function () {
       var idx = parseInt(totalInput.value, 10);
       var html = tpl.innerHTML.replace(/__prefix__/g, idx);
       var wrapper = document.createElement("div");
@@ -257,5 +311,165 @@
 
   document.addEventListener("DOMContentLoaded", function () { initEntranceChoices(); });
   document.addEventListener("htmx:afterSwap", function (e) { initEntranceChoices(e.detail.target); });
+
+  // --- Intake form choices ---
+  var intakeChoiceIdx = 1;
+
+  function initIntakeChoices(container) {
+    if (!container) container = document;
+    var typeSelect = container.querySelector("[name='field_type']");
+    var choicesSection = container.querySelector("#intake-choices-section");
+    if (!typeSelect || !choicesSection) return;
+
+    var syncVisibility = function () {
+      var isChoice = typeSelect.value === "choice";
+      choicesSection.classList.toggle("hidden", !isChoice);
+    };
+    typeSelect.removeEventListener("change", syncVisibility);
+    typeSelect.addEventListener("change", syncVisibility);
+    syncVisibility();
+
+    var addBtn = container.querySelector("#add-intake-choice-btn");
+    var choicesEl = container.querySelector("#intake-choices");
+    var tpl = container.querySelector("#intake-choice-template");
+    if (!addBtn || !choicesEl || !tpl) return;
+
+    // Remove stale listeners
+    var newBtn = addBtn.cloneNode(true);
+    addBtn.parentNode.replaceChild(newBtn, addBtn);
+
+    // Track existing choices
+    var existing = choicesEl.querySelectorAll(".choice-row");
+    intakeChoiceIdx = 1;
+    existing.forEach(function (r) {
+      var inp = r.querySelector("input");
+      if (inp) {
+        var match = inp.name.match(/intake_choice_(\d+)/);
+        if (match) {
+          var num = parseInt(match[1], 10);
+          if (num >= intakeChoiceIdx) intakeChoiceIdx = num + 1;
+        }
+      }
+    });
+
+    newBtn.addEventListener("click", function () {
+      var html = tpl.innerHTML.replace(/__IDX__/g, intakeChoiceIdx);
+      var wrapper = document.createElement("div");
+      wrapper.innerHTML = html;
+      choicesEl.appendChild(wrapper.firstElementChild);
+      intakeChoiceIdx++;
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", function () { initIntakeChoices(); });
+  document.addEventListener("htmx:afterSwap", function (e) { initIntakeChoices(e.detail.target); });
+
+  // Intake choice remove
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest(".intake-remove-btn");
+    if (!btn) return;
+    var row = btn.closest(".choice-row");
+    if (!row) return;
+    var container = row.closest("#intake-choices");
+    if (container && container.querySelectorAll(".choice-row").length > 1) {
+      row.remove();
+    }
+  });
+
+  // --- Auto-submit filter forms on change ---
+  document.addEventListener("change", function (e) {
+    var select = e.target.closest("select[data-auto-submit]");
+    if (!select) return;
+    var form = select.closest("form");
+    if (form) form.submit();
+  });
+
+  // Debounced search input submission
+  var searchTimers = {};
+  document.addEventListener("input", function (e) {
+    var input = e.target.closest("input[data-auto-search]");
+    if (!input) return;
+    var form = input.closest("form");
+    if (!form) return;
+    var key = form.id || Math.random();
+    if (searchTimers[key]) clearTimeout(searchTimers[key]);
+    searchTimers[key] = setTimeout(function () { form.submit(); }, 400);
+  });
+
+  // --- Confirm modal ---
+  var confirmModal = document.getElementById("confirm-modal");
+  var confirmMessage = document.getElementById("confirm-modal-message");
+  var confirmBtn = document.getElementById("confirm-modal-confirm");
+  var cancelBtn = document.getElementById("confirm-modal-cancel");
+  var backdrop = document.getElementById("confirm-modal-backdrop");
+  var pendingForm = null;
+
+  function showConfirmModal(message, label) {
+    if (!confirmModal) return;
+    if (confirmMessage) confirmMessage.textContent = message;
+    if (confirmBtn) confirmBtn.textContent = label || "Delete";
+    confirmModal.classList.remove("hidden");
+  }
+
+  function hideConfirmModal() {
+    if (!confirmModal) return;
+    confirmModal.classList.add("hidden");
+    pendingForm = null;
+  }
+
+  if (cancelBtn) cancelBtn.addEventListener("click", hideConfirmModal);
+  if (backdrop) backdrop.addEventListener("click", hideConfirmModal);
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") hideConfirmModal();
+  });
+
+  if (confirmBtn) {
+    confirmBtn.addEventListener("click", function () {
+      if (pendingForm) {
+        pendingForm.submit();
+      }
+      hideConfirmModal();
+    });
+  }
+
+  // Intercept form submits with data-confirm
+  document.addEventListener("submit", function (e) {
+    var form = e.target;
+    var msg = form.getAttribute("data-confirm");
+    if (!msg) return;
+    e.preventDefault();
+    pendingForm = form;
+    var label = form.getAttribute("data-confirm-label") || form.querySelector("[type='submit']")?.textContent?.trim() || "Delete";
+    showConfirmModal(msg, label);
+  });
+
+  // Intercept button clicks with data-confirm (for non-form use)
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-confirm]");
+    if (!btn) return;
+    if (btn.tagName === "BUTTON" && btn.type !== "submit") {
+      // Non-submit button with data-confirm - trigger via form
+      var form = btn.closest("form");
+      if (form) {
+        e.preventDefault();
+        var msg = btn.getAttribute("data-confirm") || form.getAttribute("data-confirm");
+        if (!msg) return;
+        e.stopPropagation();
+        pendingForm = form;
+        var label = btn.textContent?.trim() || "Delete";
+        showConfirmModal(msg, label);
+      }
+    }
+  });
+
+  // --- Lucide Icons (loaded via CDN) ---
+  function initLucide() {
+    if (typeof lucide !== "undefined") {
+      lucide.createIcons();
+    }
+  }
+  document.addEventListener("DOMContentLoaded", initLucide);
+  document.addEventListener("htmx:afterSettle", initLucide);
 
 })();

@@ -1,6 +1,12 @@
+{% load i18n %}
 {% if messages %}
-  <div class="alerts" aria-live="polite">{% for message in messages %}
-      <p class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</p>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    {% for message in messages %}
+      window.dispatchEvent(new CustomEvent('show-toast', {
+        detail: { message: '{{ message|escapejs }}', type: '{{ message.tags|default:"info" }}' }
+      }));
     {% endfor %}
-  </div>
+  });
+</script>
 {% endif %}

@@ -9,9 +9,10 @@ from django.utils.translation import gettext_lazy as _
 from apps.students.models import StudentProfile
 
 from .policies import EDITABLE_FIELDS
+from apps.core.forms import StyledFormMixin
 
 
-class StudentProfileUpdateForm(forms.ModelForm):
+class StudentProfileUpdateForm(StyledFormMixin, forms.ModelForm):
     """Form for editing student-allowed profile fields.
 
     Only fields listed in EDITABLE_FIELDS are included.  Restricted fields

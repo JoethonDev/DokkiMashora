@@ -1,66 +1,65 @@
 {% load i18n %}
-<div id="student-content" class="page-stack enter-view"><section class="student-welcome"><div>
+<div id="student-content" class="page-stack animate-enter-view"><section class="min-h-52 rounded-lg p-7 bg-gradient-to-br from-brand-soft to-surface-soft border border-line flex items-center justify-between shadow-card"><div>
       <p class="eyebrow">{% trans "Learning overview" %}</p>
       <h2>
         {% trans "Welcome back" %}
         ,
-        {{ user.get_full_name|default:user.email }}
+        <span dir="ltr" class="inline-block">{{ user.get_full_name|default:user.email }}</span>
       </h2>
       <p>{% trans "Your next steps, progress, and important records are collected here." %}</p>
-      <div class="inline-actions"><a class="button button-primary"
+      <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-primary"
            href="{% url 'students:diploma_course' %}">{% trans "Continue learning" %}</a>
-        <a class="button button-soft" href="{% url 'students:record' %}">{% trans "View my record" %}</a>
+        <a class="btn-soft" href="{% url 'students:record' %}">{% trans "View my record" %}</a>
       </div>
     </div>
-    <div class="student-progress-ring"
-         style="--progress: {% if summary.active_learning_count %} {{ summary.active_learning_count }} {% else %} 0 {% endif %}"><span><strong>{{ summary.active_learning_count|default:0 }}</strong>
+    <div class="w-32 h-32 rounded-full grid place-items-center relative"><span><strong>{{ summary.active_learning_count|default:0 }}</strong>
         <small>{% trans "active" %}</small></span>
     </div>
   </section>
-  <section class="metric-grid" aria-label="{% trans 'Summary' %}"><article class="metric-card"><div class="metric-icon tone-blue">◫</div>
-    <div>
+  <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" aria-label="{% trans 'Summary' %}"><article class="stat-card"><div class="stat-icon bg-info-soft text-info-text">◉</div>
+    <div class="stat-body">
       <span>{% trans "Active learning" %}</span>
       <strong>{{ summary.active_learning_count|default:0 }}</strong>
       <small>{% trans "Programs and courses" %}</small>
     </div>
   </article>
-  <article class="metric-card"><div class="metric-icon tone-purple">✓</div>
-    <div>
+  <article class="stat-card"><div class="stat-icon bg-info-soft text-info-text">✓</div>
+    <div class="stat-body">
       <span>{% trans "Assessments" %}</span>
       <strong>{{ summary.actionable_assessment_count|default:0 }}</strong>
       <small>{% trans "Ready for action" %}</small>
     </div>
   </article>
-  <article class="metric-card"><div class="metric-icon tone-amber">◇</div>
-    <div>
+  <article class="stat-card"><div class="stat-icon bg-warning-soft text-warning-text">◇</div>
+    <div class="stat-body">
       <span>{% trans "Entrance exams" %}</span>
       <strong>{{ summary.open_entrance_exam_count|default:0 }}</strong>
       <small>{% trans "Open assignments" %}</small>
     </div>
   </article>
-  <article class="metric-card"><div class="metric-icon tone-green">▣</div>
-    <div>
+  <article class="stat-card"><div class="stat-icon bg-success-soft text-success-text">▣</div>
+    <div class="stat-body">
       <span>{% trans "Certificates" %}</span>
       <strong>{{ summary.available_certificate_count|default:0 }}</strong>
       <small>{% trans "Available to download" %}</small>
     </div>
   </article>
 </section>
-<section class="student-grid"><article class="surface"><div class="section-header"><div>
+<section class="grid grid-cols-1 md:grid-cols-2 gap-4"><article class="card-surface"><div class="section-head"><div>
         <p class="eyebrow">{% trans "Priority" %}</p>
         <h3>{% trans "Next actions" %}</h3>
       </div>
-      <a class="text-button" href="{% url 'students:record' %}">{% trans "View record" %}</a>
+      <a class="btn-ghost" href="{% url 'students:record' %}">{% trans "View record" %}</a>
     </div>
-    <div class="task-list">{% for action in next_actions|slice:":5" %}
-        <a href="{{ action.url }}"><span class="priority-dot {% if action.priority == 'urgent' %} critical {% else %} warning {% endif %}"></span>
+    <div class="flex flex-col">{% for action in next_actions|slice:":5" %}
+        <a href="{{ action.url }}"><span class="w-2.5 h-2.5 rounded-full {% if action.priority == 'urgent' %} bg-red {% else %} bg-amber {% endif %}"></span>
           <span><strong>{{ action.title }}</strong>
             <small>
               {{ action.description }}
               {% if action.due_at %}
                 ·
                 {% trans "Due" %}
-                {{ action.due_at }}
+                <span dir="ltr" class="inline-block">{{ action.due_at }}</span>
               {% endif %}
             </small></span>
             <b>→</b></a>
@@ -72,44 +71,44 @@
       {% endfor %}
     </div>
   </article>
-  <article class="surface"><div class="section-header"><div>
+  <article class="card-surface"><div class="section-head"><div>
         <p class="eyebrow">{% trans "Account" %}</p>
         <h3>{% trans "Current application" %}</h3>
       </div>
     </div>
     {% if current_application %}
-      <div class="student-preview"><span class="avatar avatar-lg">{{ user.get_full_name|slice:":2"|upper }}</span>
+      <div class="text-center p-5 bg-surface-soft rounded-md"><span class="rounded-full bg-brand-soft text-brand font-black grid place-items-center shrink-0 w-16 h-16 text-xl">{{ user.get_full_name|slice:":2"|upper }}</span>
         <strong>{{ current_application.title }}</strong>
         <small>{{ current_application.status_label }}</small>
-        <span class="status-pill blue">{{ current_application.status_label }}</span>
+        <span class="status-pill-info">{{ current_application.status_label }}</span>
       </div>
-      <div class="inline-actions"><a class="button button-soft" href="{% url 'students:applications' %}">{% trans "Open applications" %}</a>
+      <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-soft" href="{% url 'students:applications' %}">{% trans "Open applications" %}</a>
       </div>
     {% else %}
-      <div class="empty-state"><span>＋</span>
+      <div class="empty-state"><span>+</span>
         <h3>{% trans "No active application" %}</h3>
         <p>{% trans "Explore available programs and submit an application when you are ready." %}</p>
-        <a class="button button-primary" href="{% url 'students:apply' %}">{% trans "Browse programs" %}</a>
+        <a class="btn-primary" href="{% url 'students:apply' %}">{% trans "Browse programs" %}</a>
       </div>
     {% endif %}
   </article>
 </section>
-<section class="surface"><div class="section-header"><div>
+<section class="card-surface"><div class="section-head"><div>
       <p class="eyebrow">{% trans "Learning" %}</p>
       <h3>{% trans "Your programs and courses" %}</h3>
     </div>
-    <a class="text-button" href="{% url 'students:diploma_course' %}">{% trans "Open learning" %}</a>
+    <a class="btn-ghost" href="{% url 'students:diploma_course' %}">{% trans "Open learning" %}</a>
   </div>
-  <div class="program-grid">{% for card in learning_cards %}
-      <article class="program-card"><div class="program-card-top"><span class="program-symbol">{% if card.type == 'diploma' %}
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">{% for card in learning_cards %}
+      <article class="card-surface"><div class="flex justify-between items-center"><span class="w-12 h-12 rounded-md bg-brand-soft text-brand grid place-items-center font-black">{% if card.type == 'diploma' %}
               D
             {% else %}
               C
             {% endif %}
           </span>
           {% if card.expires_at %}
-            <span class="status-pill amber">{% trans "Expires" %}
-              {{ card.expires_at|date:"d M Y" }}
+            <span class="status-pill-warning">{% trans "Expires" %}
+              <span dir="ltr" class="inline-block">{{ card.expires_at|date:"d/m/Y" }}</span>
             </span>
           {% endif %}
         </div>
@@ -127,25 +126,25 @@
             {% trans "Active course" %}
           {% endif %}
         </p>
-        <div class="progress-info"><span>{% trans "Completion" %}</span>
+        <div class="flex justify-between my-4 mb-2"><span>{% trans "Completion" %}</span>
           <strong>
             {{ card.completed_count|default:0 }}
             /
             {{ card.lecture_count|default:0 }}
           </strong>
         </div>
-        <div class="progress-track"><span style="--progress: {% if card.lecture_count %} {% widthratio card.completed_count card.lecture_count 100 %} {% else %} 0 {% endif %}"></span>
+        <div class="progress-track"><span class="progress-bar" style="--progress: {% if card.lecture_count %}{% widthratio card.completed_count card.lecture_count 100 %}{% else %}0{% endif %}%"></span>
         </div>
-        <div class="inline-actions">{% if card.next_lecture_url %}
-            <a class="button button-primary" href="{{ card.next_lecture_url }}">{% trans "Continue" %}</a>
+        <div class="flex gap-2.5 items-center flex-wrap">{% if card.next_lecture_url %}
+            <a class="btn-primary" href="{{ card.next_lecture_url }}">{% trans "Continue" %}</a>
           {% endif %}
           {% if card.next_assessment_url %}
-            <a class="button button-soft" href="{{ card.next_assessment_url }}">{% trans "Assessment" %}</a>
+            <a class="btn-soft" href="{{ card.next_assessment_url }}">{% trans "Assessment" %}</a>
           {% endif %}
         </div>
       </article>
     {% empty %}
-      <div class="empty-state"><span>◫</span>
+      <div class="empty-state"><span>◉</span>
         <h3>{% trans "No learning enrolments yet" %}</h3>
         <p>{% trans "Your active programs and courses will appear here." %}</p>
       </div>

@@ -4,18 +4,18 @@
   {{ title|default:_("Progression") }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% trans "Academic operations" as eyebrow %}
+  <div class="page-stack animate-enter-view">{% trans "Academic operations" as eyebrow %}
     {% trans "Progression" as title %}
     {% trans "Review semester progress, decisions, evaluations, interviews, and rejoin plans." as description %}
-    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    <form class="surface form-main" method="post">{% csrf_token %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description back_button=True %}
+    <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
       <label>
         {% trans "Name" %}
-        <input name="name" value="{{ component.name|default:'' }}" required>
+        <input name="name" class="form-input" value="{{ component.name|default:'' }}" required>
       </label>
       <label>
         {% trans "Type" %}
-        <select name="component_type" required>
+        <select name="component_type" class="form-select" required>
           {% for value,label in component_type_choices %}
             <option value="{{ value }}"
                     {% if component.component_type == value %} selected {% endif %}>{{ label }}</option>
@@ -24,34 +24,35 @@
       </label>
       <label>
         {% trans "Weight percent" %}
-        <input name="weight_percent"
+        <input name="weight_percent" class="form-input"
                value="{{ component.weight_percent|default:'' }}"
                required>
       </label>
       <label>
         {% trans "Required minimum percent" %}
-        <input name="required_min_percent"
+        <input name="required_min_percent" class="form-input"
                value="{{ component.required_min_percent|default:0 }}"></label>
       <label>
         {% trans "Order" %}
-        <input name="order" value="{{ component.order|default:'' }}" required>
+        <input name="order" class="form-input" value="{{ component.order|default:'' }}" required>
       </label>
-      <div class="grid grid-2"><label>
-          <input type="checkbox"
+      <div class="flex items-center gap-4 pt-4 border-t border-line"><label class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" class="form-checkbox"
                  name="required_to_pass"
                  value="1"
                  {% if component.required_to_pass %} checked {% endif %}>
           {% trans "Required to pass" %}
         </label>
-        <label>
-          <input type="checkbox"
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" class="form-checkbox"
                  name="active"
                  value="1"
                  {% if component.active or not component %} checked {% endif %}>
           {% trans "Active" %}
         </label>
       </div>
-      <button class="button button-primary" type="submit">{% trans "Save component" %}</button>
+      <div class="actions-row"><button class="btn-primary" type="submit">{% trans "Save component" %}</button>
+      </div>
     </form>
   </div>
 {% endblock %}

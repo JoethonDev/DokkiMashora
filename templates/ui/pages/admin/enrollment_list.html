@@ -7,7 +7,7 @@
   {% trans "Enrollments" %}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% if enrollment_type == "course" %}
+  <div class="page-stack animate-enter-view">{% if enrollment_type == "course" %}
       {% trans "Academics" as eyebrow %}
       {{ course.title }}
       —
@@ -21,23 +21,25 @@
       {% trans "Manage diploma enrollment records." as description %}
     {% endif %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    <section class="surface"><form class="filter-toolbar"
+    <section class="card-surface"><form class="actions-row items-end mb-4"
       method="get"
       {% if enrollment_type == "course" %} hx-get="{% url 'academics:admin_course_enrollment_list' course.id %}" {% else %} hx-get="{% url 'academics:admin_diploma_enrollment_list' diploma.id %}" {% endif %}
-      hx-trigger="input changed delay:250ms from:#enrollment-search, change from:select, submit"
+      hx-trigger="input changed delay:300ms from:#enrollment-search, change from:select, submit"
       hx-target="#enrollment-results-boundary"
       hx-swap="outerHTML"
       hx-push-url="true"
-      hx-sync="this:replace"><label class="search-input"><span>&#8981;</span>
+       hx-sync="this:replace"><div class="relative flex-1 min-w-[210px]"><span class="absolute inset-y-0 start-0 grid place-items-center ps-3 text-muted pointer-events-none">&#8981;</span>
       <input id="enrollment-search"
              name="q"
              value="{{ search_value }}"
              type="search"
-             placeholder="{% trans 'Search by name or email…' %}"></label>
+              placeholder="{% trans 'Search by name or email…' %}"
+               class="form-input ps-10"></div>
     {% for filter in filters %}
-      <label class="select-field"><span>{{ filter.label }}</span>
+      <label class="min-w-40"><span class="field-label">{{ filter.label }}</span>
         <select id="filter-{{ filter.name }}"
-                name="{{ filter.name }}"><option value="">{% trans "All" %}</option>
+                name="{{ filter.name }}"
+                class="form-select"><option value="">{% trans "All" %}</option>
           {% for option in filter.options %}
             <option value="{{ option.value }}"
                     {% if option.selected %} selected {% endif %}>{{ option.label }}</option>
@@ -45,12 +47,12 @@
         </select>
       </label>
     {% endfor %}
-    <button class="button button-info filter-button" type="submit">{% trans "Filter" %}</button>
+    <button class="btn-secondary" type="submit">{% trans "Filter" %}</button>
     {% if enrollment_type == "course" %}
-      <a class="button button-ghost"
+      <a class="btn-ghost"
          href="{% url 'academics:admin_course_enrollment_list' course.id %}">{% trans "Reset" %}</a>
     {% else %}
-      <a class="button button-ghost"
+      <a class="btn-ghost"
          href="{% url 'academics:admin_diploma_enrollment_list' diploma.id %}">{% trans "Reset" %}</a>
     {% endif %}
   </form>

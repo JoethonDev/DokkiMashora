@@ -18,11 +18,18 @@ from .models import (
     DiplomaLectureQuestion,
 )
 
+from apps.core.forms import StyledFormMixin
 
-class AssessmentLectureSectionForm(forms.ModelForm):
+
+class AssessmentLectureSectionForm(StyledFormMixin, forms.ModelForm):
     class Meta:
         model = AssessmentLectureSection
         fields = ["lecture", "order", "mcq_count"]
+        widgets = {
+            "lecture": forms.Select(attrs={}),
+            "order": forms.NumberInput(attrs={}),
+            "mcq_count": forms.NumberInput(attrs={}),
+        }
 
     def __init__(self, *args, assessment=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -67,7 +74,7 @@ class AssessmentLectureSectionForm(forms.ModelForm):
         return cleaned
 
 
-class AssessmentSectionManualQuestionForm(forms.ModelForm):
+class AssessmentSectionManualQuestionForm(StyledFormMixin, forms.ModelForm):
     question_type = forms.CharField(widget=forms.HiddenInput(), initial=QUESTION_TYPE_WRITTEN)
 
     class Meta:
@@ -76,6 +83,8 @@ class AssessmentSectionManualQuestionForm(forms.ModelForm):
         widgets = {
             "text": forms.Textarea(attrs={"rows": 3}),
             "rubric": forms.Textarea(attrs={"rows": 2}),
+            "points": forms.NumberInput(attrs={}),
+            "order": forms.NumberInput(attrs={}),
         }
 
 SCOPE_COURSE = "course"
@@ -87,7 +96,7 @@ SCOPE_CHOICES = [
 ]
 
 
-class AssessmentForm(forms.ModelForm):
+class AssessmentForm(StyledFormMixin, forms.ModelForm):
     scope_type = forms.ChoiceField(choices=SCOPE_CHOICES, label=_("Scope"))
     course = forms.ModelChoiceField(
         queryset=Course.objects.filter(is_active=True),
@@ -100,9 +109,12 @@ class AssessmentForm(forms.ModelForm):
     class Meta:
         model = Assessment
         fields = [
+            "scope_type",
             "title",
             "description",
             "assessment_type",
+            "course",
+            "diploma",
             "course_version",
             "semester",
             "cohort",
@@ -121,9 +133,21 @@ class AssessmentForm(forms.ModelForm):
             "penalty_percent",
         ]
         widgets = {
+            "title": forms.TextInput(attrs={}),
+            "description": forms.Textarea(attrs={"rows": 3}),
+            "assessment_type": forms.Select(attrs={}),
+            "course_version": forms.Select(attrs={}),
+            "semester": forms.Select(attrs={}),
+            "cohort": forms.Select(attrs={}),
             "open_at": forms.DateTimeInput(attrs={"type": "datetime-local"}),
             "close_at": forms.DateTimeInput(attrs={"type": "datetime-local"}),
-            "description": forms.Textarea(attrs={"rows": 3}),
+            "duration_minutes": forms.NumberInput(attrs={}),
+            "total_points": forms.NumberInput(attrs={}),
+            "passing_score": forms.NumberInput(attrs={}),
+            "max_attempts": forms.NumberInput(attrs={}),
+            "max_upload_files": forms.NumberInput(attrs={}),
+            "grade_visibility": forms.Select(attrs={}),
+            "penalty_percent": forms.NumberInput(attrs={}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -209,12 +233,14 @@ class AssessmentForm(forms.ModelForm):
         return cleaned
 
 
-class QuestionForm(forms.ModelForm):
+class QuestionForm(StyledFormMixin, forms.ModelForm):
     class Meta:
         model = AssessmentQuestion
         fields = ["text", "question_type", "points", "required", "rubric"]
         widgets = {
             "text": forms.Textarea(attrs={"rows": 3}),
+            "question_type": forms.Select(attrs={}),
+            "points": forms.NumberInput(attrs={}),
             "rubric": forms.Textarea(attrs={"rows": 2}),
         }
 
@@ -233,10 +259,13 @@ def _choices_for_template(parsed_choices, question):
     ]
 
 
-class DiplomaLectureQuestionForm(forms.ModelForm):
+class DiplomaLectureQuestionForm(StyledFormMixin, forms.ModelForm):
     class Meta:
         model = DiplomaLectureQuestion
         fields = ["text", "question_type", "points", "active"]
         widgets = {
             "text": forms.Textarea(attrs={"rows": 3}),
+            "question_type": forms.Select(attrs={}),
+            "points": forms.NumberInput(attrs={}),
+            "active": forms.CheckboxInput(attrs={}),
         }

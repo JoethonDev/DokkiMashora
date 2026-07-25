@@ -4,19 +4,32 @@
   {{ title|default:_("Entrance exam") }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% trans "Assessment operations" as eyebrow %}
+  <div class="page-stack animate-enter-view">{% trans "Assessment operations" as eyebrow %}
     {% trans "Entrance exam" as default_title %}
     {% trans "Create exams, manage invitations, grade attempts, and inspect delivery history." as description %}
-    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title|default:default_title description=description %}
-    <form method="post">{% csrf_token %}
-      {% for field in form %}
-        {% include "ui/components/_field.html" %}
-      {% endfor %}
-      <button class="button button-primary" type="submit">{% trans "Save exam" %}</button>
-    </form>
     {% if exam %}
-      <a class="button button-secondary"
-         href="{% url 'entrance_exams:admin_detail' exam.id %}">{% trans "Back" %}</a>
+      {% url 'entrance_exams:admin_detail' exam.id as back_url %}
+    {% else %}
+      {% url 'entrance_exams:admin_list' as back_url %}
     {% endif %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title|default:default_title description=description back_button=True back_url=back_url %}
+    <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
+      <div class="form-grid">
+        {% for field in form %}
+          {% if field.name == "description" or field.name == "auto_send_results" %}
+            <div class="form-grid-full">{% include "ui/components/_field.html" %}</div>
+          {% else %}
+            <div>{% include "ui/components/_field.html" %}</div>
+          {% endif %}
+        {% endfor %}
+      </div>
+      <div class="actions-row pt-4 border-t border-line mt-5">
+        <button class="btn-primary" type="submit">{% trans "Save exam" %}</button>
+        {% if exam %}
+          <a class="btn-ghost"
+             href="{% url 'entrance_exams:admin_detail' exam.id %}">{% trans "Cancel" %}</a>
+        {% endif %}
+      </div>
+    </form>
   </div>
 {% endblock %}

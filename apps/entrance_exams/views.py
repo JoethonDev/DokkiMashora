@@ -22,6 +22,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods, require_POST
+from django.forms.models import inlineformset_factory
 
 from apps.academics.models import Cohort
 from apps.applications.constants import (
@@ -60,7 +61,7 @@ from .constants import (
     RESULT_FAIL,
     RESULT_PASS,
 )
-from .forms import EntranceChoiceFormSet, EntranceExamForm, EntranceQuestionForm
+from .forms import EntranceChoiceForm, EntranceChoiceFormSet, EntranceExamForm, EntranceQuestionForm
 from .models import EntranceAttempt, EntranceChoice, EntranceExam, EntranceQuestion
 from .services import (
     AnswerData,
@@ -266,17 +267,22 @@ def admin_list(request):
     if not is_admin(request.user):
         raise PermissionDenied
     student_id = request.GET.get("student_id", "")
+    q = request.GET.get("q", "").strip()
     exams = EntranceExam.objects.select_related("diploma", "cohort", "created_by")
     if student_id.isdigit():
         exams = exams.filter(attempts__student_id=int(student_id)).distinct()
+    if q:
+        exams = exams.filter(Q(title__icontains=q) | Q(description__icontains=q))
     page_obj, pagination_qs = paginate(request, exams)
-    return render(request, "ui/pages/admin/entrance_exam_list.html", {"page_obj": page_obj, "pagination_qs": pagination_qs, "student_id": student_id, "page_kind": "exams", "title": _("Entrance exams")})
+    return render(request, "ui/pages/admin/entrance_exam_list.html", {"page_obj": page_obj, "pagination_qs": pagination_qs, "student_id": student_id, "q": q, "page_kind": "exams", "title": _("Entrance exams")})
 
 
 @login_required
 @role_required(*ROLE_EXAM_STAFF)
 def admin_cohorts_for_diploma(request):
     """Return cohort <option>s filtered by diploma (HTMX)."""
+    if not request.headers.get("HX-Request"):
+        raise Http404
     if not is_admin(request.user):
         raise PermissionDenied
     diploma_id = request.GET.get("diploma", "")
@@ -305,7 +311,7 @@ def admin_detail(request, exam_id):
 @login_required
 @role_required(*ROLE_EXAM_STAFF)
 def admin_preview(request, exam_id):
-    """Render the student-facing take page for admin preview (no attempt)."""
+    """Render an admin-facing preview of the entrance exam."""
     if not is_admin(request.user):
         raise PermissionDenied
     exam = get_object_or_404(
@@ -315,14 +321,10 @@ def admin_preview(request, exam_id):
     questions = exam.questions.all()
     return render(
         request,
-        "ui/pages/student/exam.html",
+        "ui/pages/admin/entrance_exam_preview.html",
         {
             "exam": exam,
-            "is_preview": True,
-            "attempt": None,
             "questions": questions,
-            "remaining_seconds": 0,
-            "access_token": exam.access_token,
         },
     )
 
@@ -487,7 +489,12 @@ def _question_form_context(exam, question=None, form=None, formset=None):
     if form is None:
         form = EntranceQuestionForm(instance=question)
     if formset is None:
-        formset = EntranceChoiceFormSet(instance=question or EntranceQuestion())
+        extra = 0 if question and question.pk else 2
+        fs_cls = inlineformset_factory(
+            EntranceQuestion, EntranceChoice,
+            form=EntranceChoiceForm, extra=extra, can_delete=True,
+        )
+        formset = fs_cls(instance=question or EntranceQuestion())
     return {
         "exam": exam,
         "question": question,
@@ -500,7 +507,7 @@ def _question_form_context(exam, question=None, form=None, formset=None):
 
 def _render_question_form(request, exam, question=None, form=None, formset=None):
     context = _question_form_context(exam, question=question, form=form, formset=formset)
-    template = "ui/fragments/admin/_question_form.html" if is_htmx(request) else "ui/pages/admin/entrance_exams.html"
+    template = "ui/fragments/admin/_question_form.html" if is_htmx(request) else "ui/pages/admin/entrance_exam_question_form.html"
     return render(request, template, context)
 
 
@@ -517,16 +524,22 @@ def admin_add_question(request, exam_id):
             question = form.save(commit=False)
             question.exam = exam
             question.save()
-            formset = EntranceChoiceFormSet(request.POST, instance=question)
-            if formset.is_valid():
-                formset.save()
-                messages.success(request, _("Question added."))
-                if is_htmx(request):
-                    response = HttpResponse()
-                    response["HX-Redirect"] = reverse("entrance_exams:admin_detail", args=[exam.id])
-                    return response
-                return redirect("entrance_exams:admin_detail", exam_id=exam.id)
-            question.delete()
+            if question.question_type == QUESTION_TYPE_MCQ:
+                formset = EntranceChoiceFormSet(request.POST, instance=question)
+                if formset.is_valid():
+                    formset.save()
+                else:
+                    question.delete()
+                    formset = EntranceChoiceFormSet(request.POST, instance=EntranceQuestion())
+                    return _render_question_form(request, exam, form=form, formset=formset)
+            else:
+                EntranceChoice.objects.filter(question=question).delete()
+            messages.success(request, _("Question added."))
+            if is_htmx(request):
+                response = HttpResponse()
+                response["HX-Redirect"] = reverse("entrance_exams:admin_detail", args=[exam.id])
+                return response
+            return redirect("entrance_exams:admin_detail", exam_id=exam.id)
         formset = EntranceChoiceFormSet(request.POST, instance=EntranceQuestion())
     else:
         last = exam.questions.order_by("order").last()
@@ -548,19 +561,29 @@ def admin_edit_question(request, exam_id, question_id):
     question = get_object_or_404(EntranceQuestion, id=question_id, exam=exam)
     if request.method == "POST":
         form = EntranceQuestionForm(request.POST, instance=question)
-        formset = EntranceChoiceFormSet(request.POST, instance=question)
-        if form.is_valid() and formset.is_valid():
-            form.save()
-            formset.save()
+        if form.is_valid():
+            question = form.save(commit=False)
+            question.exam = exam
+            question.save()
+            if question.question_type == QUESTION_TYPE_MCQ:
+                formset = EntranceChoiceFormSet(request.POST, instance=question)
+                if formset.is_valid():
+                    formset.save()
+                else:
+                    return _render_question_form(request, exam, question=question, form=form, formset=formset)
+            else:
+                EntranceChoice.objects.filter(question=question).delete()
             messages.success(request, _("Question updated."))
             if is_htmx(request):
                 response = HttpResponse()
                 response["HX-Redirect"] = reverse("entrance_exams:admin_detail", args=[exam.id])
                 return response
             return redirect("entrance_exams:admin_detail", exam_id=exam.id)
+        formset = EntranceChoiceFormSet(request.POST, instance=question)
     else:
         form = EntranceQuestionForm(instance=question)
         formset = EntranceChoiceFormSet(instance=question)
+        formset.extra = 0
     return _render_question_form(request, exam, question=question, form=form, formset=formset)
 
 
@@ -574,10 +597,14 @@ def admin_delete_question(request, exam_id, question_id):
     exam = get_object_or_404(EntranceExam, id=exam_id)
     question = get_object_or_404(EntranceQuestion, id=question_id, exam=exam)
     question.delete()
-    messages.success(request, _("Question deleted."))
+    msg = _("Question deleted.")
+    messages.success(request, msg)
     if is_htmx(request):
         response = HttpResponse(status=204)
-        response["HX-Trigger"] = json.dumps({"question-saved": None})
+        response["HX-Trigger"] = json.dumps({
+            "question-saved": None,
+            "show-toast": {"message": msg, "type": "success"},
+        })
         return response
     return redirect("entrance_exams:admin_detail", exam_id=exam.id)
 

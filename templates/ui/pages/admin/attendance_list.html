@@ -7,34 +7,42 @@
   {% trans "Attendance sessions" %}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% trans "Learning" as eyebrow %}
+  <div class="page-stack animate-enter-view">{% trans "Learning" as eyebrow %}
     {% trans "Attendance sessions" as title %}
     {% trans "Create, open, and monitor attendance sessions." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    <section class="surface"><form class="filter-toolbar" method="get"><label class="select-field"><span>{% trans "Cohort" %}</span>
-          <select id="cohort-filter" name="cohort_id"><option value="">{% trans "All cohorts" %}</option>
-            {% for c in cohorts %}
-              <option value="{{ c.id }}"
-                      {% if selected_cohort_id == c.id %} selected {% endif %}>{{ c.name }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <label class="select-field"><span>{% trans "From" %}</span>
-          <input id="date-from" name="date_from" value="{{ date_from }}" type="date"></label>
-        <label class="select-field"><span>{% trans "To" %}</span>
-          <input id="date-to" name="date_to" value="{{ date_to }}" type="date"></label>
-        <label class="select-field"><span>{% trans "Exception" %}</span>
-          <select id="exception-filter" name="exception"><option value="">{% trans "None" %}</option>
-            <option value="overdue" {% if exception == "overdue" %} selected {% endif %}>{% trans "Overdue" %}</option>
-          </select>
-        </label>
-        <button class="button button-info filter-button" type="submit">{% trans "Filter" %}</button>
-        <a class="button button-ghost"
-           href="{% url 'attendance:attendance_session_list' %}">{% trans "Reset" %}</a>
-      </form>
+     <section class="card-surface"><form class="actions-row items-end mb-4"
+             method="get"
+             hx-get="{% url 'attendance:attendance_session_list' %}"
+             hx-trigger="change from:select, input changed delay:500ms from:input"
+             hx-target="#attendance-results"
+             hx-swap="outerHTML"
+             hx-push-url="true"
+             hx-indicator="#global-loading"><label class="min-w-40"><span class="field-label">{% trans "Cohort" %}</span>
+           <select id="cohort-filter" name="cohort_id" class="form-select"><option value="">{% trans "All cohorts" %}</option>
+             {% for c in cohorts %}
+               <option value="{{ c.id }}"
+                       {% if selected_cohort_id == c.id %} selected {% endif %}>{{ c.name }}</option>
+             {% endfor %}
+           </select>
+         </label>
+         <label class="min-w-40"><span class="field-label">{% trans "From" %}</span>
+           <input id="date-from" name="date_from" value="{{ date_from }}" type="date" class="form-input"></label>
+         <label class="min-w-40"><span class="field-label">{% trans "To" %}</span>
+           <input id="date-to" name="date_to" value="{{ date_to }}" type="date" class="form-input"></label>
+         <label class="min-w-40"><span class="field-label">{% trans "Exception" %}</span>
+           <select id="exception-filter" name="exception" class="form-select"><option value="">{% trans "None" %}</option>
+             <option value="overdue" {% if exception == "overdue" %} selected {% endif %}>{% trans "Overdue" %}</option>
+           </select>
+         </label>
+         <button class="btn-secondary" type="submit">{% trans "Filter" %}</button>
+         <a class="btn-ghost"
+            href="{% url 'attendance:attendance_session_list' %}">{% trans "Reset" %}</a>
+       </form>
+       <div id="attendance-results">
       {% include "ui/fragments/admin/_attendance_records.html" %}
     </section>
-    <div class="inline-actions"><a class="button button-primary"
+    <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-primary"
          href="{% url 'attendance:attendance_session_create' %}">{% trans "Create session" %}</a>
     </div>
   </div>

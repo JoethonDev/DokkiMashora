@@ -5,6 +5,7 @@ from datetime import datetime
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -48,6 +49,8 @@ ADMIN_ONLY = (GROUP_SUPER_ADMIN, GROUP_ADMIN)
 @login_required
 @role_required(*ROLE_ATTENDANCE_STAFF)
 def semester_options_by_cohort(request):
+    if not request.headers.get("HX-Request"):
+        raise Http404
     cohort_id = request.GET.get("cohort_id")
     semesters = Semester.objects.none()
     if cohort_id:

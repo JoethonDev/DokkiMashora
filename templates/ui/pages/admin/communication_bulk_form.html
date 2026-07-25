@@ -4,26 +4,26 @@
   {{ title|default:_("Create bulk email") }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% trans "Messaging" as eyebrow %}
+  <div class="page-stack animate-enter-view">{% trans "Messaging" as eyebrow %}
     {% trans "Create bulk email" as title %}
     {% trans "Compose and send a bulk email to selected recipients." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    <form class="surface form-main"
+    <form class="card-surface max-w-form mx-auto w-full page-stack"
           method="post"
           action="{% url 'communications:bulk_email_create' %}">{% csrf_token %}
       <label>
         {% trans "Subject" %}
-        <input name="subject" value="{{ subject|default:'' }}" required>
+        <input name="subject" class="form-input" value="{{ subject|default:'' }}" required>
       </label>
       <label>
         {% trans "Body" %}
-        <textarea name="body" rows="12" required>
+        <textarea name="body" class="form-input" rows="12" required>
       {{ body|default:'' }}
       </textarea>
       </label>
       <label>
         {% trans "Template" %}
-        <select name="template_id"><option value="">{% trans "No template" %}</option>
+        <select name="template_id" class="form-select"><option value="">{% trans "No template" %}</option>
           {% for item in templates %}
             <option value="{{ item.id }}"
                     {% if template_id|stringformat:'s' == item.id|stringformat:'s' %} selected {% endif %}>
@@ -32,9 +32,9 @@
           {% endfor %}
         </select>
       </label>
-      <div class="grid grid-2"><label>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4"><label>
           {% trans "Diploma" %}
-          <select name="filter_diploma"><option value="">{% trans "All diplomas" %}</option>
+          <select name="filter_diploma" class="form-select"><option value="">{% trans "All diplomas" %}</option>
             {% for item in diplomas %}
               <option value="{{ item.id }}"
                       {% if filter_diploma|stringformat:'s' == item.id|stringformat:'s' %} selected {% endif %}>
@@ -45,7 +45,7 @@
         </label>
         <label>
           {% trans "Cohort" %}
-          <select name="filter_cohort"><option value="">{% trans "All cohorts" %}</option>
+          <select name="filter_cohort" class="form-select"><option value="">{% trans "All cohorts" %}</option>
             {% for item in cohorts %}
               <option value="{{ item.id }}"
                       {% if filter_cohort|stringformat:'s' == item.id|stringformat:'s' %} selected {% endif %}>
@@ -56,7 +56,7 @@
         </label>
         <label>
           {% trans "Enrollment status" %}
-          <select name="filter_status"><option value="">{% trans "Any status" %}</option>
+          <select name="filter_status" class="form-select"><option value="">{% trans "Any status" %}</option>
             {% for value,label in status_choices %}
               <option value="{{ value }}"
                       {% if filter_status == value %} selected {% endif %}>{{ label }}</option>
@@ -65,16 +65,16 @@
         </label>
         <label>
           {% trans "Recipient search" %}
-          <input name="recipient_search"
+          <input name="recipient_search" class="form-input"
                  value="{{ recipient_search|default:'' }}"
                  placeholder="{% trans 'Name or email' %}"></label>
       </div>
       <label>
         {% trans "Manual recipients" %}
-        <textarea name="manual_emails" rows="4" placeholder="{% trans 'One email per line or comma separated' %}">{{ manual_emails|default:'' }}
+        <textarea name="manual_emails" class="form-input" rows="4" placeholder="{% trans 'One email per line or comma separated' %}">{{ manual_emails|default:'' }}
                     </textarea>
       </label>
-      <button class="button button-primary" type="submit">{% trans "Preview recipients" %}</button>
+      <button class="btn-primary" type="submit">{% trans "Preview recipients" %}</button>
     </form>
   </div>
 {% endblock %}

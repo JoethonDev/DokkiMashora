@@ -1,53 +1,52 @@
 {% load i18n %}
 <div id="question-form">
-  <form method="post">{% csrf_token %}
+  <form method="post" class="card-surface max-w-form mx-auto w-full page-stack">{% csrf_token %}
     {% for field in form %}
       {% include "ui/components/_field.html" %}
     {% endfor %}
-    <fieldset class="choices-section" data-visible-for="mcq">
-      <legend>{% trans "Choices" %}</legend>
+    <fieldset class="form-group border border-line rounded-sm p-4{% if form.question_type.value != 'mcq' %} hidden{% endif %}" id="choices-fieldset">
+      <legend class="font-bold text-sm px-1">{% trans "Choices" %}</legend>
       {{ formset.management_form }}
-      <div id="choice-forms">
+      <div id="choice-forms" class="flex flex-col gap-2.5">
         {% for choice_form in formset %}
-          <div class="choice-row">
+          <div class="choice-row p-3 border border-line rounded-sm flex items-start gap-3" data-choice-id="{% if choice_form.instance.pk %}{{ choice_form.instance.id }}{% else %}new{% endif %}">
             {% for hidden in choice_form.hidden_fields %}
               {{ hidden }}
             {% endfor %}
-            <div class="form-grid">
+            <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3">
               {% include "ui/components/_field.html" with field=choice_form.text %}
               {% include "ui/components/_field.html" with field=choice_form.score %}
               {% include "ui/components/_field.html" with field=choice_form.order %}
             </div>
-            {% if choice_form.instance.pk %}
-              <label class="delete-radio">
-                {{ choice_form.DELETE }}
-                {% trans "Remove choice" %}
-              </label>
-            {% endif %}
+            <div class="shrink-0 pt-6">
+              {% if choice_form.instance.pk %}
+                <span class="sr-only">{{ choice_form.DELETE }}</span>
+              {% endif %}
+              <button type="button" class="btn-danger px-2.5 py-1.5 text-xs remove-choice-btn">{% trans "Remove" %}</button>
+            </div>
             {% if choice_form.non_field_errors %}
-              <div class="field-error" role="alert">{{ choice_form.non_field_errors }}</div>
+              <div class="text-red text-xs mt-0" role="alert">{{ choice_form.non_field_errors }}</div>
             {% endif %}
           </div>
         {% endfor %}
       </div>
-      <button type="button" class="button button-ghost" id="add-choice-btn">{% trans "Add choice" %}</button>
+      <button type="button" class="btn-ghost mt-2" id="add-choice-btn">{% trans "Add choice" %}</button>
     </fieldset>
-    <div class="form-actions">
-      <button class="button button-primary" type="submit">{% trans "Save question" %}</button>
-      <a class="button button-ghost" href="{% url 'entrance_exams:admin_detail' exam.id %}">{% trans "Cancel" %}</a>
+    <div class="actions-row pt-4 border-t border-line">
+      <button class="btn-primary" type="submit">{% trans "Save question" %}</button>
+      <a class="btn-ghost" href="{% url 'entrance_exams:admin_detail' exam.id %}">{% trans "Cancel" %}</a>
     </div>
   </form>
 </div>
 <template id="choice-template">
-  <div class="choice-row">
-    <div class="form-grid">
+  <div class="choice-row p-3 border border-line rounded-sm flex items-start gap-3">
+    <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3">
       {% include "ui/components/_field.html" with field=formset.empty_form.text %}
       {% include "ui/components/_field.html" with field=formset.empty_form.score %}
       {% include "ui/components/_field.html" with field=formset.empty_form.order %}
     </div>
-    <label class="delete-radio">
-      <input type="checkbox" name="choices-__prefix__-DELETE" id="id_choices-__prefix__-DELETE">
-      {% trans "Remove choice" %}
-    </label>
+    <div class="shrink-0 pt-6">
+      <button type="button" class="btn-danger px-2.5 py-1.5 text-xs remove-choice-btn">{% trans "Remove" %}</button>
+    </div>
   </div>
 </template>

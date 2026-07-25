@@ -4,34 +4,34 @@
   {{ course.title }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% include "ui/components/_page_header.html" with title=course.title description=course.description eyebrow=_("Course") %}
-    <section class="surface"><div class="section-header"><div>
+  <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=course.title description=course.description eyebrow=_("Course") back_button=True %}
+    <section class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Versions" %}</p>
           <h3>{% trans "Course versions" %}</h3>
         </div>
-        <a class="button button-primary"
+        <a class="btn-primary"
            href="{% url 'academics:admin_version_create' course.id %}">{% trans "Create version" %}</a>
       </div>
       {% if versions %}
-        <div class="table-shell"><table>
+        <div class="table-wrap"><table class="table">
             <thead>
               <tr>
-                <th>{% trans "Version" %}</th>
-                <th>{% trans "Cohort" %}</th>
-                <th>{% trans "Semester" %}</th>
-                <th>{% trans "Lectures" %}</th>
-                <th>{% trans "Actions" %}</th>
+                <th class="table-th">{% trans "Version" %}</th>
+                <th class="table-th">{% trans "Cohort" %}</th>
+                <th class="table-th">{% trans "Semester" %}</th>
+                <th class="table-th">{% trans "Lectures" %}</th>
+                <th class="table-th">{% trans "Actions" %}</th>
               </tr>
             </thead>
             <tbody>
               {% for version in versions %}
                 <tr>
-                  <td>{{ version.label }}</td>
-                  <td>{{ version.cohort }}</td>
-                  <td>{{ version.semester }}</td>
-                  <td>{{ version.lectures|length }}</td>
-                  <td>
-                    <a class="button button-info"
+                  <td class="table-td">{{ version.label }}</td>
+                  <td class="table-td">{{ version.cohort }}</td>
+                  <td class="table-td">{{ version.semester }}</td>
+                  <td class="table-td">{{ version.lectures|length }}</td>
+                  <td class="table-td">
+                    <a class="btn-secondary"
                        href="{% url 'academics:admin_version_detail' course.id version.id %}">{% trans "Open" %}</a>
                   </td>
                 </tr>
@@ -43,29 +43,29 @@
         {% include "ui/components/_empty_state.html" with title=_("No versions") message=_("No versions found for this course.") %}
       {% endif %}
     </section>
-    <section class="surface"><div class="section-header"><div>
+    <section class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Content" %}</p>
           <h3>{% trans "Lectures" %}</h3>
         </div>
       </div>
       {% if lectures %}
-        <div class="table-shell"><table>
+        <div class="table-wrap"><table class="table">
             <thead>
               <tr>
-                <th>{% trans "Order" %}</th>
-                <th>{% trans "Title" %}</th>
-                <th>{% trans "Version" %}</th>
-                <th>{% trans "Actions" %}</th>
+                <th class="table-th">{% trans "Order" %}</th>
+                <th class="table-th">{% trans "Title" %}</th>
+                <th class="table-th">{% trans "Version" %}</th>
+                <th class="table-th">{% trans "Actions" %}</th>
               </tr>
             </thead>
             <tbody>
               {% for lecture in lectures %}
                 <tr>
-                  <td>{{ lecture.order }}</td>
-                  <td>{{ lecture.title }}</td>
-                  <td>{{ lecture.course_version.label }}</td>
-                  <td>
-                    <a class="button button-info"
+                  <td class="table-td">{{ lecture.order }}</td>
+                  <td class="table-td">{{ lecture.title }}</td>
+                  <td class="table-td">{{ lecture.course_version.label }}</td>
+                  <td class="table-td">
+                    <a class="btn-ghost"
                        href="{% url 'academics:admin_lecture_edit' course.id lecture.course_version.id lecture.id %}">{% trans "Edit" %}
                     </a>
                   </td>
@@ -78,28 +78,28 @@
         {% include "ui/components/_empty_state.html" with title=_("No lectures") message=_("No lectures found for this course.") %}
       {% endif %}
     </section>
-    <section class="surface"><div class="section-header"><div>
+    <section class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Students" %}</p>
           <h3>{% trans "Enrollments" %}</h3>
         </div>
       </div>
       {% if enrollments %}
-        <div class="table-shell"><table>
+        <div class="table-wrap"><table class="table">
             <thead>
               <tr>
-                <th>{% trans "Student" %}</th>
-                <th>{% trans "Version" %}</th>
-                <th>{% trans "Status" %}</th>
-                <th>{% trans "Enrolled" %}</th>
+                <th class="table-th">{% trans "Student" %}</th>
+                <th class="table-th">{% trans "Version" %}</th>
+                <th class="table-th">{% trans "Status" %}</th>
+                <th class="table-th">{% trans "Enrolled" %}</th>
               </tr>
             </thead>
             <tbody>
               {% for enrollment in enrollments %}
                 <tr>
-                  <td>{{ enrollment.student }}</td>
-                  <td>{{ enrollment.course_version }}</td>
-                  <td>{% include "ui/components/_status.html" with code=enrollment.status label=enrollment.get_status_display %}</td>
-                  <td>{{ enrollment.created_at|date:"d M Y" }}</td>
+                  <td class="table-td">{{ enrollment.student }}</td>
+                  <td class="table-td">{{ enrollment.course_version }}</td>
+                  <td class="table-td">{% include "ui/components/_status.html" with code=enrollment.status label=enrollment.get_status_display %}</td>
+                  <td class="table-td">{{ enrollment.created_at|date:"d/m/Y" }}</td>
                 </tr>
               {% endfor %}
             </tbody>

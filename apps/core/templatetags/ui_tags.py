@@ -71,11 +71,11 @@ def status_tone(code):
         return "neutral"
     code = str(code).lower().replace(" ", "_")
     if code in _SUCCESS:
-        return "green"
+        return "success"
     if code in _INFO:
-        return "blue"
+        return "info"
     if code in _WARNING:
-        return "amber"
+        return "warning"
     if code in _DANGER:
-        return "red"
+        return "danger"
     return "neutral"

@@ -4,17 +4,18 @@
   {% trans "Entrance exam results" %}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view"><section class="page-intro"><div>
+  <div class="page-stack animate-enter-view"><section class="flex justify-between items-center gap-5 px-0.5 py-1.5"><div>
         <p class="eyebrow">{% trans "Admissions" %}</p>
         <h2>{% trans "Entrance exam results" %}</h2>
       </div>
+      <div class="actions-row"><a class="btn-ghost" href="{% url 'students:record' %}">{% trans "Back to record" %}</a></div>
     </section>
-    <section class="surface"><div class="table-shell"><table>
+    <section class="card-surface"><div class="table-wrap"><table class="table">
           <thead>
             <tr>
-              <th>{% trans "Exam" %}</th>
-              <th>{% trans "Status" %}</th>
-              <th>{% trans "Result" %}</th>
+              <th class="table-th">{% trans "Exam" %}</th>
+              <th class="table-th">{% trans "Status" %}</th>
+              <th class="table-th">{% trans "Result" %}</th>
             </tr>
           </thead>
           <tbody>
@@ -22,7 +23,7 @@
               <tr>
                 <td>{{ item.exam }}</td>
                 <td>
-                  <span class="status-pill blue">{{ item.get_status_display|default:item.status }}</span>
+                  <span class="status-pill-info">{{ item.get_status_display|default:item.status }}</span>
                 </td>
                 <td>{{ item.result|default:"—" }}</td>
               </tr>

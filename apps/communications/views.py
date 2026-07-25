@@ -5,6 +5,7 @@ from __future__ import annotations
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -318,6 +319,8 @@ def admin_template_preview(request, slug):
 @role_required(*ROLE_SENIOR_STAFF)
 def admin_template_variables(request, slug: str):
     """HTMX partial: available variables for the given slug."""
+    if not request.headers.get("HX-Request"):
+        raise Http404
     avail = AVAILABLE_VARIABLES_BY_SLUG.get(slug, {})
     all_vars = avail.get("optional", []) + avail.get("required", [])
     return render(request, "ui/fragments/admin/_options.html", {

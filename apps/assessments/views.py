@@ -537,6 +537,9 @@ def admin_detail(request, assessment_id):
         sections_qs = assessment.lecture_sections.select_related("lecture").prefetch_related("manual_questions").all()
         for s in sections_qs:
             s.available_count = get_available_bank_mcq_count(s.lecture)
+            s.preview_bank = list(s.lecture.question_bank.filter(
+                active=True, question_type=QUESTION_TYPE_MCQ,
+            ).order_by("-points", "id").prefetch_related("choices")[:s.mcq_count])
             calculated = s.calculated_max_grade()
             section_total += calculated
             sections.append(s)
@@ -1282,7 +1285,10 @@ def admin_lecture_bank_question_create(request, diploma_id, cohort_id, semester_
         choices = []
     return render(request, "ui/pages/admin/academic_form.html", {
         "diploma": diploma, "cohort": cohort, "semester": semester, "lecture": lecture,
-        "form": form, "choices": choices, "question": None,
+        "form": form, "choices": choices, "question": None, "question_choices": True,
+        "title": _("Add lecture question"),
+        "back_url": reverse("assessments:admin_lecture_bank_list", args=[diploma.id, cohort.id, semester.id, lecture.id]),
+        "back_label": _("Back to questions"),
     })
 
 
@@ -1317,7 +1323,10 @@ def admin_lecture_bank_question_edit(request, diploma_id, cohort_id, semester_id
         choices = _choices_for_template(None, question)
     return render(request, "ui/pages/admin/academic_form.html", {
         "diploma": diploma, "cohort": cohort, "semester": semester, "lecture": lecture,
-        "form": form, "choices": choices, "question": question,
+        "form": form, "choices": choices, "question": question, "question_choices": True,
+        "title": _("Edit lecture question"),
+        "back_url": reverse("assessments:admin_lecture_bank_list", args=[diploma.id, cohort.id, semester.id, lecture.id]),
+        "back_label": _("Back to questions"),
     })
 
 

@@ -1,52 +1,51 @@
 {% load i18n %}
-<section id="student-content" class="page-stack enter-view"><section class="page-intro"><div>
+<section id="student-content" class="page-stack animate-enter-view"><section class="flex justify-between items-center gap-5 px-0.5 py-1.5"><div>
       <p class="eyebrow">{% trans "Assessment" %}</p>
       <h2>{% trans "Entrance exams" %}</h2>
       <p>{% trans "See assigned exams, open attempts, and released results." %}</p>
     </div>
-    <span class="status-pill blue">{{ exam_assignments|length }}
+    <span class="status-pill-info">{{ exam_assignments|length }}
       {% trans "assignments" %}
     </span>
   </section>
-  <section class="surface"><div class="table-shell"><table>
+  <section class="card-surface"><div class="table-wrap"><table class="table">
         <thead>
           <tr>
-            <th>{% trans "Exam" %}</th>
-            <th>{% trans "Assigned" %}</th>
-            <th>{% trans "Status" %}</th>
-            <th>{% trans "Result" %}</th>
-            <th></th>
+            <th class="table-th">{% trans "Exam" %}</th>
+            <th class="table-th">{% trans "Assigned" %}</th>
+            <th class="table-th">{% trans "Status" %}</th>
+            <th class="table-th">{% trans "Result" %}</th>
+            <th class="table-th"></th>
           </tr>
         </thead>
         <tbody>
           {% for item in exam_assignments %}
             <tr>
-              <td>
+              <td class="table-td">
                 <strong>{{ item.exam.title }}</strong>
                 <small>{{ item.exam.description|truncatewords:12 }}</small>
               </td>
-              <td>{{ item.created_at|date:"d M Y"|default:'—' }}</td>
-              <td>
-                <span class="status-pill {% if item.status == attempt_status_graded %} green {% elif item.status == 'in_progress' %} amber {% else %} blue {% endif %}">{{ item.get_status_display|default:item.status }}
-                </span>
+              <td class="table-td">{{ item.created_at|date:"d/m/Y"|default:'—' }}</td>
+              <td class="table-td">
+                {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:item.status %}
               </td>
-              <td>
+              <td class="table-td">
                 {% if item.result %}
                   {{ item.result }}
                 {% else %}
                   —
                 {% endif %}
               </td>
-              <td>
+              <td class="table-td">
                 {% if item.status == 'assigned' or item.status == 'in_progress' %}
-                  <a class="button button-primary"
+                  <a class="btn-primary"
                      href="{% url 'entrance_exams:student_list' %}">{% trans "Open" %}</a>
                 {% endif %}
               </td>
             </tr>
           {% empty %}
             <tr>
-              <td colspan="5"><div class="empty-state"><span>◇</span>
+              <td colspan="5" class="table-td"><div class="empty-state"><span>◇</span>
                   <h3>{% trans "No entrance exams" %}</h3>
                   <p>{% trans "Assigned entrance exams and released results will appear here." %}</p>
                 </div>

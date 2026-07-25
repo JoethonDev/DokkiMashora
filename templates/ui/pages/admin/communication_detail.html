@@ -4,61 +4,61 @@
   {{ title|default:_("Message detail") }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% trans "Messaging" as eyebrow %}
+  <div class="page-stack animate-enter-view">{% trans "Messaging" as eyebrow %}
     {% trans "Message detail" as title %}
     {% trans "Delivery details for a sent bulk email." as description %}
-    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    <section class="surface"><div class="section-header"><div>
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description back_button=True %}
+    <section class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Sent" %}</p>
           <h3>{{ send.subject }}</h3>
         </div>
       </div>
-      <dl class="description-list"><div>
-          <dt>{% trans "Created" %}</dt>
-          <dd>
+      <dl class="dl"><div>
+          <dt class="dt">{% trans "Created" %}</dt>
+          <dd class="dd">
             {{ send.created_at|date:"SHORT_DATETIME_FORMAT" }}
           </dd>
         </div>
         <div>
-          <dt>{% trans "Recipients" %}</dt>
-          <dd>
+          <dt class="dt">{% trans "Recipients" %}</dt>
+          <dd class="dd">
             {{ send.recipient_count }}
           </dd>
         </div>
         <div>
-          <dt>{% trans "Succeeded" %}</dt>
-          <dd>
+          <dt class="dt">{% trans "Succeeded" %}</dt>
+          <dd class="dd">
             {{ send.success_count }}
           </dd>
         </div>
         <div>
-          <dt>{% trans "Failed" %}</dt>
-          <dd>
+          <dt class="dt">{% trans "Failed" %}</dt>
+          <dd class="dd">
             {{ send.failure_count }}
           </dd>
         </div>
       </dl>
     </section>
-    <div class="table-shell"><table>
+    <div class="table-wrap"><table class="table">
         <thead>
           <tr>
-            <th>{% trans "Recipient" %}</th>
-            <th>{% trans "Status" %}</th>
-            <th>{% trans "Error" %}</th>
+            <th class="table-th">{% trans "Recipient" %}</th>
+            <th class="table-th">{% trans "Status" %}</th>
+            <th class="table-th">{% trans "Error" %}</th>
           </tr>
         </thead>
         <tbody>
           {% for item in page_obj %}
             <tr>
-              <td>{{ item.to_email|default:item.recipient_email }}</td>
-              <td>
+              <td class="table-td">{{ item.to_email|default:item.recipient_email }}</td>
+              <td class="table-td">
                 {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:item.status %}
               </td>
-              <td>{{ item.error_message|default:'—' }}</td>
+              <td class="table-td">{{ item.error_message|default:'—' }}</td>
             </tr>
           {% empty %}
             <tr>
-              <td colspan="3">{% trans "No delivery messages." %}</td>
+              <td class="table-td" colspan="3">{% trans "No delivery messages." %}</td>
             </tr>
           {% endfor %}
         </tbody>

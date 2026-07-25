@@ -4,58 +4,75 @@
   {{ title|default:_("Entrance exam") }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% trans "Assessment operations" as eyebrow %}
+  <div class="page-stack animate-enter-view">{% trans "Assessment operations" as eyebrow %}
     {% trans "Entrance exam" as default_title %}
     {% trans "Create exams, manage invitations, grade attempts, and inspect delivery history." as description %}
-    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title|default:default_title description=description %}
-    <section class="surface"><div class="section-header"><div>
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title|default:default_title description=description back_button=True %}
+    <section class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Exam" %}</p>
           <h2>{{ exam.title }}</h2>
         </div>
       </div>
       <p>{{ exam.description }}</p>
-      <p>
+      <div class="py-3">
         {% include "ui/components/_status.html" with code=exam.is_active|yesno:"active,inactive" label=exam.is_active|yesno:_("Active,Inactive") %}
-      </p>
-      <div class="inline-actions"><a class="button button-info"
+      </div>
+      <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-ghost"
            href="{% url 'entrance_exams:admin_edit_exam' exam.id %}">{% trans "Edit" %}</a>
-        <a class="button button-info"
+        <a class="btn-secondary"
            href="{% url 'entrance_exams:admin_preview' exam.id %}">{% trans "Preview" %}</a>
-        <a class="button button-info"
+        <a class="btn-secondary"
            href="{% url 'entrance_exams:admin_cohort_email' exam.id %}">{% trans "Cohort emails" %}</a>
         <form method="post"
               action="{% url 'entrance_exams:admin_toggle_active' exam.id %}">{% csrf_token %}
-          <button class="button button-warning" type="submit">{% trans "Toggle active" %}</button>
+          <button class="btn-warning" type="submit">{% if exam.is_active %}{% trans "Deactivate" %}{% else %}{% trans "Activate" %}{% endif %}</button>
         </form>
         <form method="post"
               action="{% url 'entrance_exams:admin_finalize_pending' exam.id %}">{% csrf_token %}
-          <button class="button button-warning" type="submit">{% trans "Finalize pending" %}</button>
+          <button class="btn-warning" type="submit">{% trans "Finalize pending" %}</button>
         </form>
       </div>
     </section>
-    <section class="surface"><div class="section-header"><div>
+    <section class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Content" %}</p>
           <h3>{% trans "Questions" %}</h3>
         </div>
       </div>
       {% for item in exam.questions.all %}
-        <div class="description-list"><strong>
-            {{ item.order }}
-            .
-            {{ item.text }}
-          </strong>
-          <div class="inline-actions"><a class="button button-info"
-               href="{% url 'entrance_exams:admin_edit_question' exam.id item.id %}">{% trans "Edit" %}</a>
-            <form method="post"
-                  action="{% url 'entrance_exams:admin_delete_question' exam.id item.id %}">{% csrf_token %}
-              <button class="button button-danger" type="submit">{% trans "Delete" %}</button>
-            </form>
+        <div class="border border-line rounded-sm p-4 mb-3 last:mb-0">
+          <div class="flex items-start justify-between gap-4">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="text-xs font-bold text-muted uppercase">#{{ item.order }}</span>
+                <span class="px-2 py-0.5 text-xs font-bold rounded-full {% if item.question_type == 'mcq' %}bg-info-soft text-info-text{% else %}bg-warning-soft text-warning-text{% endif %}">{{ item.get_question_type_display }}</span>
+              </div>
+              <p class="text-sm font-medium m-0">{{ item.text }}</p>
+              {% if item.choices.exists %}
+                <div class="flex flex-col gap-1.5 mt-3 ps-2 border-s-2 border-line">
+                  {% for choice in item.choices.all %}
+                    <label class="flex items-center gap-2 text-sm">
+                      <input type="radio" class="form-radio" disabled{% if choice.is_correct %} checked{% endif %}>
+                      <span>{{ choice.text }}</span>
+                      <span class="text-xs text-muted">({{ choice.score }} {% trans "pts" %})</span>
+                    </label>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            <div class="flex gap-2 shrink-0">
+              <a class="btn-ghost text-xs py-1.5 px-2.5 min-h-0" href="{% url 'entrance_exams:admin_edit_question' exam.id item.id %}">{% trans "Edit" %}</a>
+              <form method="post" action="{% url 'entrance_exams:admin_delete_question' exam.id item.id %}" data-confirm="{% trans 'Delete this question?' %}">{% csrf_token %}
+                <button class="btn-danger text-xs py-1.5 px-2.5 min-h-0" type="submit">{% trans "Delete" %}</button>
+              </form>
+            </div>
           </div>
         </div>
       {% empty %}
-        <p>{% trans "No questions." %}</p>
+        <div class="border border-dashed border-line rounded-sm p-6 text-center">
+          <p class="text-muted m-0">{% trans "No questions yet." %}</p>
+        </div>
       {% endfor %}
-      <a class="button button-primary"
+      <a class="btn-primary mt-4"
          href="{% url 'entrance_exams:admin_add_question' exam.id %}">{% trans "Add question" %}</a>
     </section>
   </div>

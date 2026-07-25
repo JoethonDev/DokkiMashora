@@ -4,15 +4,15 @@
   {{ application.student.full_name }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% include "ui/components/_page_header.html" with title=application.student.full_name eyebrow=_("Application review") %}
-    <section class="detail-layout"><article class="surface"><div class="section-header"><div>
+  <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=application.student.full_name eyebrow=_("Application review") back_button=True %}
+    <section class="grid grid-cols-1 md:grid-cols-2 gap-4"><article class="card-surface"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Submitted request" %}</p>
             <h3>{% trans "Application details" %}</h3>
           </div>
         </div>
-        <dl class="description-list"><div>
-            <dt>{% trans "Program" %}</dt>
-            <dd>
+        <dl class="dl"><div>
+            <dt class="dt">{% trans "Program" %}</dt>
+            <dd class="dd">
               {% if application.cohort %}
                 {{ application.cohort.diploma }}
               {% else %}
@@ -22,49 +22,49 @@
           </div>
           {% if application.cohort %}
             <div>
-              <dt>{% trans "Cohort" %}</dt>
-              <dd>
+              <dt class="dt">{% trans "Cohort" %}</dt>
+              <dd class="dd">
                 {{ application.cohort }}
               </dd>
             </div>
           {% endif %}
           <div>
-            <dt>{% trans "Submitted" %}</dt>
-            <dd>
-              {{ application.created_at|date:"d M Y H:i" }}
+            <dt class="dt">{% trans "Submitted" %}</dt>
+            <dd class="dd">
+              {{ application.created_at|date:"d/m/Y H:i" }}
             </dd>
           </div>
           <div>
-            <dt>{% trans "Status" %}</dt>
-            <dd>
+            <dt class="dt">{% trans "Status" %}</dt>
+            <dd class="dd">
               {% include "ui/components/_status.html" with code=application.status label=application.get_status_display %}
             </dd>
           </div>
           <div>
-            <dt>{% trans "Applicant email" %}</dt>
-            <dd>
+            <dt class="dt">{% trans "Applicant email" %}</dt>
+            <dd class="dd">
               {{ application.student.user.email }}
             </dd>
           </div>
           {% if application.reviewed_by %}
             <div>
-              <dt>{% trans "Reviewed by" %}</dt>
-              <dd>
+              <dt class="dt">{% trans "Reviewed by" %}</dt>
+              <dd class="dd">
                 {{ application.reviewed_by.full_name }}
               </dd>
             </div>
           {% endif %}
           {% if application.reviewed_at %}
             <div>
-              <dt>{% trans "Reviewed at" %}</dt>
-              <dd>
-                {{ application.reviewed_at|date:"d M Y H:i" }}
+              <dt class="dt">{% trans "Reviewed at" %}</dt>
+              <dd class="dd">
+                {{ application.reviewed_at|date:"d/m/Y H:i" }}
               </dd>
             </div>
           {% endif %}
         </dl>
       </article>
-      <article class="surface"><div class="section-header"><div>
+      <article class="card-surface"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Workflow" %}</p>
             <h3>{% trans "Decision" %}</h3>
           </div>
@@ -74,13 +74,13 @@
               hx-indicator="#global-loading"
               hx-disabled-elt="find button, find textarea">{% csrf_token %}
           {% if form and form.non_field_errors %}
-            <div class="alert alert-error" role="alert">{% for error in form.non_field_errors %}
+            <div class="py-4 px-5 border border-red rounded-md bg-red-soft text-red" role="alert">{% for error in form.non_field_errors %}
                 <p>{{ error }}</p>
               {% endfor %}
             </div>
           {% endif %}
           <div class="field"><label for="admin-notes">{% trans "Reviewer notes" %}</label>
-            <textarea id="admin-notes" name="admin_notes" rows="5">{% if admin_notes %}
+            <textarea id="admin-notes" name="admin_notes" class="form-input min-h-32 resize-y" rows="5">{% if admin_notes %}
                   {{ admin_notes }}
                 {% endif %}
                   </textarea>
@@ -88,16 +88,16 @@
           <div class="field"><label for="rejection-reason">{% trans "Rejection reason" %}
               <span aria-hidden="true">*</span>
             </label>
-            <textarea id="rejection-reason" name="rejection_reason" rows="3" aria-required="true">{% if rejection_reason %}
+            <textarea id="rejection-reason" name="rejection_reason" class="form-input min-h-32 resize-y" rows="3" aria-required="true">{% if rejection_reason %}
                     {{ rejection_reason }}
                   {% endif %}
                     </textarea>
           </div>
-          <div class="inline-actions"><button class="button button-success"
+          <div class="flex gap-2.5 items-center flex-wrap"><button class="btn-success"
                     name="action"
                     value="accept"
                     type="submit">{% trans "Accept application" %}</button>
-            <button class="button button-danger"
+            <button class="btn-danger"
                     name="action"
                     value="reject"
                     type="submit">{% trans "Reject application" %}</button>
@@ -105,34 +105,38 @@
         </form>
       </article>
     </section>
-    <section class="surface"><div class="section-header"><div>
+    <section class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Audit" %}</p>
           <h3>{% trans "Decision history" %}</h3>
         </div>
       </div>
       {% if decision_display_rows %}
-        <div class="timeline">{% for decision, old_status, new_status in decision_display_rows %}
-            <div>
-              <i></i>
-              <p>
-                <strong>
-                  {{ old_status }}
-                  →
-                  {{ new_status }}
-                </strong>
-                <small>
-                  {{ decision.actor }}
-                  ·
-                  {{ decision.created_at|date:"d M Y H:i" }}
-                  {% if decision.reason %}
-                    ·
-                    {{ decision.reason }}
-                  {% endif %}
-                </small>
-              </p>
+        <div class="divide-y divide-line">{% for decision, action_label, action_tone, old_status, new_status in decision_display_rows %}
+            <div class="flex gap-3 py-4 first:pt-0 last:pb-0">
+              <div class="flex flex-col items-center shrink-0">
+                <span class="w-2.5 h-2.5 rounded-full border-2 border-line bg-surface mt-1.5"></span>
+                {% if not forloop.last %}
+                  <span class="w-px flex-1 bg-line mt-1.5"></span>
+                {% endif %}
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="status-pill-{{ action_tone }}">{{ action_label }}</span>
+                  <span class="text-xs text-muted">{{ old_status }} → {{ new_status }}</span>
+                </div>
+                <p class="text-xs text-muted mt-1 m-0 flex flex-wrap gap-x-2 items-center">
+                  <span>{% trans "by" %} {{ decision.actor|default:_("System") }}</span>
+                  <span class="bidi" dir="ltr">{{ decision.created_at|date:"d/m/Y" }}</span>
+                  <span class="bidi" dir="ltr">{{ decision.created_at|date:"H:i" }}</span>
+                </p>
+                {% if decision.reason %}
+                  <p class="text-sm mt-1 m-0 text-text">{{ decision.reason }}</p>
+                {% endif %}
+              </div>
             </div>
           {% endfor %}
         </div>
+        {% include "ui/components/_pagination.html" %}
       {% else %}
         {% include "ui/components/_empty_state.html" with title=_("No decisions recorded") message=_("Workflow activity will appear here.") %}
       {% endif %}

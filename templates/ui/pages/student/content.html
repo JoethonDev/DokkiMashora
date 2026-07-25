@@ -7,14 +7,23 @@
   {% trans "Course learning" %}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view"><section class="page-intro"><div>
+  <div class="page-stack animate-enter-view">{% if lecture %}
+    <section class="flex justify-between items-center gap-5 px-0.5 py-1.5"><div>
+      <p class="eyebrow">{% trans "Learning" %}</p><h2>{{ lecture.title }}</h2>
+    </div><a class="btn-soft" href="{% url 'students:diploma_course' %}">{% trans "Back to learning" %}</a></section>
+    <section class="card-surface">
+      {% if lecture.description %}<p>{{ lecture.description }}</p>{% endif %}
+      {% if lecture.youtube_video_id %}<div class="aspect-video overflow-hidden rounded-md bg-surface-inverse"><iframe class="w-full h-full" src="https://www.youtube.com/embed/{{ lecture.youtube_video_id }}?rel=0&modestbranding=1&origin={{ request.scheme }}://{{ request.get_host }}" title="{{ lecture.title }}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe></div>
+      {% elif lecture.youtube_url %}<a class="btn-primary" href="{{ lecture.youtube_url }}" target="_blank" rel="noopener noreferrer">{% trans "Open video" %}</a>{% endif %}
+    </section>
+  {% else %}<section class="flex justify-between items-center gap-5 px-0.5 py-1.5"><div>
         <p class="eyebrow">{% trans "Learning" %}</p>
         <h2>{{ course_version.course.title }}</h2>
         <p>{{ course_version.label|default:'' }}</p>
       </div>
-      <a class="button button-soft" href="{% url 'students:diploma_course' %}">{% trans "Back to learning" %}</a>
+      <a class="btn-soft" href="{% url 'students:diploma_course' %}">{% trans "Back to learning" %}</a>
     </section>
-    <section class="learning-layout"><aside class="surface lesson-sidebar"><div class="section-header"><div>
+    <section class="flex flex-col lg:flex-row gap-4"><aside class="card-surface self-start w-80 shrink-0"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Course content" %}</p>
             <h3>
               {{ lectures|length }}
@@ -23,8 +32,8 @@
           </div>
         </div>
         {% for item in lectures %}
-          <a class=" {% if item.id in completed_lecture_ids %} complete {% endif %} "
-             href="#lecture- {{ item.id }}"><span class="avatar avatar-sm">{% if item.id in completed_lecture_ids %}
+          <a class="flex items-center gap-3 py-2.5 no-underline text-inherit{% if item.id in completed_lecture_ids %} font-bold text-brand{% endif %}"
+             href="#lecture-{{ item.id }}"><span class="avatar">{% if item.id in completed_lecture_ids %}
               ✓
             {% else %}
               {{ item.order }}
@@ -39,16 +48,16 @@
               {% endif %}
             </small></span></a>
         {% empty %}
-          <p class="muted">{% trans "No published lessons yet." %}</p>
+          <p class="text-muted">{% trans "No published lessons yet." %}</p>
         {% endfor %}
       </aside>
-      <article class="surface"><div class="section-header"><div>
+      <article class="card-surface"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Course team" %}</p>
             <h3>{% trans "Teachers and moderators" %}</h3>
           </div>
         </div>
         {% for assignment in teachers %}
-          <div class="activity-feed"><div>
+          <div class="flex flex-col"><div>
               <span class="avatar">{{ assignment.teacher.get_full_name|slice:":2"|upper }}</span>
               <p>
                 <strong>{{ assignment.teacher.get_full_name }}</strong>
@@ -57,17 +66,17 @@
             </div>
           </div>
         {% empty %}
-          <p class="muted">{% trans "No course team listed." %}</p>
+          <p class="text-muted">{% trans "No course team listed." %}</p>
         {% endfor %}
       </article>
     </section>
-    <section class="surface"><div class="section-header"><div>
+    <section class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Lessons" %}</p>
           <h3>{% trans "Published content" %}</h3>
         </div>
       </div>
       {% for item in lectures %}
-        <article id="lecture- {{ item.id }} " class="lesson-copy"><div class="section-header"><div>
+        <article id="lecture-{{ item.id }}" class="py-4 border-t border-line"><div class="section-head"><div>
               <h3>
                 {{ item.order }}
                 .
@@ -75,14 +84,14 @@
               </h3>
             </div>
             {% if item.id in completed_lecture_ids %}
-              <span class="status-pill green">{% trans "Completed" %}</span>
+              <span class="status-pill-success">{% trans "Completed" %}</span>
             {% endif %}
           </div>
           {% if item.description %}
             <p>{{ item.description }}</p>
           {% endif %}
           {% if item.youtube_url %}
-            <a class="button button-soft"
+            <a class="btn-soft"
                href="{{ item.youtube_url }}"
                target="_blank"
                rel="noreferrer">{% trans "Open video" %}</a>
@@ -95,5 +104,6 @@
         </div>
       {% endfor %}
     </section>
+  {% endif %}
   </div>
 {% endblock %}

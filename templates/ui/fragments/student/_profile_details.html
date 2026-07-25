@@ -1,46 +1,46 @@
 {% load i18n form_tags %}
-<section id="student-content" class="page-stack enter-view"><section class="profile-card"><div class="profile-main"><span class="avatar avatar-xl">{{ user.get_full_name|slice:":2"|upper }}</span>
+<section id="student-content" class="page-stack animate-enter-view"><section class="bg-gradient-to-br from-white to-surface-soft border border-line rounded-lg p-6 flex items-center justify-between gap-5 shadow-2xs"><div class="flex items-center gap-4"><span class="rounded-full bg-brand-soft text-brand font-black grid place-items-center shrink-0 w-20 h-20 text-2xl">{{ user.get_full_name|slice:":2"|upper }}</span>
       <div>
         <p class="eyebrow">{% trans "Account" %}</p>
         <h2>{{ student.full_name|default:user.get_full_name }}</h2>
-        <div class="profile-meta"><span>{{ user.email }}</span>
-          <span class="status-pill green">{% trans "Student" %}</span>
+        <div class="flex items-center gap-2.5 flex-wrap text-muted text-xs"><span><span dir="ltr" class="inline-block">{{ user.email }}</span></span>
+          <span class="status-pill-success">{% trans "Student" %}</span>
         </div>
       </div>
     </div>
-    <a class="button button-primary"
+    <a class="btn-primary"
        href="{% url 'students:edit_profile' %}">{% trans "Edit profile" %}</a>
   </section>
-  <section class="detail-layout"><article class="surface"><div class="section-header"><div>
+  <section class="grid grid-cols-1 md:grid-cols-2 gap-4"><article class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Identity" %}</p>
           <h3>{% trans "Personal details" %}</h3>
         </div>
       </div>
-      <dl class="description-list">{% for field in editable_fields %}
-          <div>
-            <dt>{{ field_labels|get_item:field|default:field|title }}</dt>
-            <dd>
-              {{ identity|get_item:field|default:'—' }}
+      <dl class="dl">{% for field in editable_fields %}
+          <div class="flex gap-4 py-2.5 border-b border-line">
+            <dt class="w-36 shrink-0">{{ field_labels|get_item:field|default:field|title }}</dt>
+            <dd class="dd">
+              <span dir="ltr" class="inline-block">{{ identity|get_item:field|default:'—' }}</span>
             </dd>
           </div>
         {% endfor %}
       </dl>
     </article>
-    <article class="surface"><div class="section-header"><div>
+    <article class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Protected" %}</p>
           <h3>{% trans "Restricted details" %}</h3>
         </div>
       </div>
-      <dl class="description-list">{% for field in restricted_fields %}
-          <div>
-            <dt>{{ field_labels|get_item:field|default:field|title }}</dt>
-            <dd>
-              {{ identity|get_item:field|default:'—' }}
+      <dl class="dl">{% for field in restricted_fields %}
+          <div class="flex gap-4 py-2.5 border-b border-line">
+            <dt class="w-36 shrink-0">{{ field_labels|get_item:field|default:field|title }}</dt>
+            <dd class="dd">
+              <span dir="ltr" class="inline-block">{{ identity|get_item:field|default:'—' }}</span>
             </dd>
           </div>
         {% empty %}
-          <div>
-            <dd>
+          <div class="flex gap-4 py-2.5 border-b border-line">
+            <dd class="dd">
               {% trans "No restricted fields are available." %}
             </dd>
           </div>

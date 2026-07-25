@@ -4,17 +4,18 @@
   {% trans "Assessment history" %}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view"><section class="page-intro"><div>
+  <div class="page-stack animate-enter-view"><section class="flex justify-between items-center gap-5 px-0.5 py-1.5"><div>
         <p class="eyebrow">{% trans "Learning" %}</p>
         <h2>{% trans "Assessment history" %}</h2>
       </div>
+      <div class="actions-row"><a class="btn-ghost" href="{% url 'assessments:student_list' %}">{% trans "Back to assessments" %}</a></div>
     </section>
-    <section class="surface"><div class="table-shell"><table>
+    <section class="card-surface"><div class="table-wrap"><table class="table">
           <thead>
             <tr>
-              <th>{% trans "Assessment" %}</th>
-              <th>{% trans "Status" %}</th>
-              <th>{% trans "Score" %}</th>
+              <th class="table-th">{% trans "Assessment" %}</th>
+              <th class="table-th">{% trans "Status" %}</th>
+              <th class="table-th">{% trans "Score" %}</th>
             </tr>
           </thead>
           <tbody>
@@ -22,7 +23,7 @@
               <tr>
                 <td>{{ item.assessment }}</td>
                 <td>
-                  <span class="status-pill blue">{{ item.get_status_display }}</span>
+                  <span class="status-pill-info">{{ item.get_status_display }}</span>
                 </td>
                 <td>{{ item.score|default:"—" }}</td>
               </tr>

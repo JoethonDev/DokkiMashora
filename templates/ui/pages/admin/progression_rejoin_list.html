@@ -4,52 +4,52 @@
   {{ title|default:_("Progression") }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% trans "Academic operations" as eyebrow %}
+  <div class="page-stack animate-enter-view">{% trans "Academic operations" as eyebrow %}
     {% trans "Progression" as title %}
     {% trans "Review semester progress, decisions, evaluations, interviews, and rejoin plans." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    <section class="surface"><form class="filter-toolbar" method="get"><label class="select-field"><span>{% trans "Status" %}</span>
-            <select name="status"><option value="">{% trans "All" %}</option>
+    <section class="card-surface"><form class="actions-row items-end mb-4" method="get"><label class="min-w-40"><span class="field-label">{% trans "Status" %}</span>
+            <select name="status" class="form-select"><option value="">{% trans "All" %}</option>
               {% for value,label in rejoin_status_choices %}
                 <option value="{{ value }}"
                         {% if current_status == value %} selected {% endif %}>{{ label }}</option>
               {% endfor %}
             </select>
           </label>
-          <button class="button button-info" type="submit">{% trans "Filter" %}</button>
+          <button class="btn-secondary" type="submit">{% trans "Filter" %}</button>
         </form>
-        <div class="table-shell"><table>
+        <div class="table-wrap"><table class="table">
             <thead>
               <tr>
-                <th>{% trans "Student" %}</th>
-                <th>{% trans "Status" %}</th>
-                <th>{% trans "Actions" %}</th>
+                <th class="table-th">{% trans "Student" %}</th>
+                <th class="table-th">{% trans "Status" %}</th>
+                <th class="table-th">{% trans "Actions" %}</th>
               </tr>
             </thead>
             <tbody>
               {% for item in plans %}
                 <tr>
-                  <td>{{ item.student.full_name|default:item.student }}</td>
-                  <td>
+                  <td class="table-td">{{ item.student.full_name|default:item.student }}</td>
+                  <td class="table-td">
                     {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:item.status %}
                   </td>
-                  <td>
-                    <div class="inline-actions">{% if item.status != 'active' %}
+                  <td class="table-td">
+                    <div class="flex gap-2.5 items-center flex-wrap">{% if item.status != 'active' %}
                         <form method="post"
                               action="{% url 'progression:admin_activate_rejoin_plan' item.id %}">{% csrf_token %}
-                          <button class="button button-success" type="submit">{% trans "Activate" %}</button>
+                          <button class="btn-success" type="submit">{% trans "Activate" %}</button>
                         </form>
                       {% endif %}
                       <form method="post"
                             action="{% url 'progression:admin_cancel_rejoin_plan' item.id %}">{% csrf_token %}
-                        <input name="reason" placeholder="{% trans 'Reason' %}"><button class="button button-danger" type="submit">{% trans "Cancel" %}</button>
+                        <input name="reason" class="form-input" placeholder="{% trans 'Reason' %}"><button class="btn-danger" type="submit">{% trans "Cancel" %}</button>
                       </form>
                     </div>
                   </td>
                 </tr>
               {% empty %}
                 <tr>
-                  <td colspan="3">{% trans "No rejoin plans." %}</td>
+                  <td class="table-td" colspan="3">{% trans "No rejoin plans." %}</td>
                 </tr>
               {% endfor %}
             </tbody>

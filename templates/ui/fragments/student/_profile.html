@@ -1,8 +1,8 @@
 {% load i18n %}
-<div id="student-content"><form method="post" action="{% url 'students:edit_profile' %}">{% csrf_token %}
+<div id="student-content"><form method="post" action="{% url 'students:edit_profile' %}" class="max-w-2xl mx-auto">{% csrf_token %}
     {% for field in form %}
       {% include "ui/components/_field.html" %}
     {% endfor %}
-    <button class="button button-primary" type="submit">{% trans "Save changes" %}</button>
+    <button class="btn-primary" type="submit">{% trans "Save changes" %}</button>
   </form>
 </div>

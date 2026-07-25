@@ -4,38 +4,38 @@
   {{ title|default:_("Sent messages") }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% trans "Communications" as eyebrow %}
+  <div class="page-stack animate-enter-view">{% trans "Communications" as eyebrow %}
     {% trans "Sent messages" as title %}
     {% trans "View sent bulk email messages and their delivery status." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    <section class="surface"><div class="table-shell"><table>
+    <section class="card-surface"><div class="table-wrap"><table class="table">
           <thead>
             <tr>
-              <th>{% trans "Subject" %}</th>
-              <th>{% trans "Audience" %}</th>
-              <th>{% trans "Success / failed" %}</th>
-              <th>{% trans "Status" %}</th>
-              <th>{% trans "Created" %}</th>
-              <th>{% trans "Actions" %}</th>
+              <th class="table-th">{% trans "Subject" %}</th>
+              <th class="table-th">{% trans "Audience" %}</th>
+              <th class="table-th">{% trans "Success / failed" %}</th>
+              <th class="table-th">{% trans "Status" %}</th>
+              <th class="table-th">{% trans "Created" %}</th>
+              <th class="table-th">{% trans "Actions" %}</th>
             </tr>
           </thead>
           <tbody>
             {% for item in page_obj %}
               <tr>
-                <td>{{ item.subject }}</td>
-                <td>{{ item.recipient_count|default:'—' }}</td>
-                <td>
+                <td class="table-td">{{ item.subject }}</td>
+                <td class="table-td">{{ item.recipient_count|default:'—' }}</td>
+                <td class="table-td">
                   {{ item.success_count|default:0 }}
                   /
                   {{ item.failure_count|default:0 }}
                 </td>
-                <td>
+                <td class="table-td">
                   {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:item.status %}
                 </td>
-                <td>{{ item.created_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</td>
-                <td>
-                  <div class="inline-actions">{% if item.id %}
-                      <a class="button button-info"
+                <td class="table-td">{{ item.created_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</td>
+                <td class="table-td">
+                  <div class="flex gap-2.5 items-center flex-wrap">{% if item.id %}
+                      <a class="btn-secondary"
                          href="{% url 'communications:bulk_email_detail' item.id %}">{% trans "View" %}</a>
                     {% endif %}
                   </div>
@@ -43,7 +43,7 @@
               </tr>
             {% empty %}
               <tr>
-                <td colspan="6"><div class="empty-state"><span>&#9679;</span>
+                <td class="table-td" colspan="6"><div class="empty-state"><span>&#9679;</span>
                     <h3>{% trans "No messages have been sent." %}</h3>
                   </div>
                 </td>
@@ -54,7 +54,7 @@
       </div>
       {% include "ui/components/_pagination.html" %}
     </section>
-    <div class="inline-actions"><a class="button button-primary"
+    <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-primary"
          href="{% url 'communications:bulk_email_create' %}">{% trans "Create message" %}</a>
     </div>
   </div>

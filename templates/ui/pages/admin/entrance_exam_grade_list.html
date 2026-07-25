@@ -4,39 +4,39 @@
   {% trans "Grading" %}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% trans "Assessment operations" as eyebrow %}
+  <div class="page-stack animate-enter-view">{% trans "Assessment operations" as eyebrow %}
     {% trans "Grading" as default_title %}
     {% trans "Create exams, manage invitations, grade attempts, and inspect delivery history." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title|default:default_title description=description %}
-    <section class="surface"><div class="section-header"><div>
+    <section class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Grading" %}</p>
           <h3>{% trans "Attempts to grade" %}</h3>
         </div>
       </div>
-      <div class="table-shell"><table>
+      <div class="table-wrap"><table class="table">
           <thead>
             <tr>
-              <th>{% trans "Exam" %}</th>
-              <th>{% trans "Student" %}</th>
-              <th>{% trans "Status" %}</th>
-              <th>{% trans "Actions" %}</th>
+              <th class="table-th">{% trans "Exam" %}</th>
+              <th class="table-th">{% trans "Student" %}</th>
+              <th class="table-th">{% trans "Status" %}</th>
+              <th class="table-th">{% trans "Actions" %}</th>
             </tr>
           </thead>
           <tbody>
             {% for item in page_obj %}
               <tr>
-                <td>{{ item.exam }}</td>
-                <td>{{ item.student.full_name|default:item.student }}</td>
-                <td>{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
-                <td>
-                  <div class="inline-actions"><a class="button button-info"
+                <td class="table-td">{{ item.exam }}</td>
+                <td class="table-td">{{ item.student.full_name|default:item.student }}</td>
+                <td class="table-td">{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
+                <td class="table-td">
+                  <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-secondary"
                        href="{% url 'entrance_exams:admin_grade_attempt' item.id %}">{% trans "Grade" %}</a>
                   </div>
                 </td>
               </tr>
             {% empty %}
               <tr>
-                <td colspan="4">{% trans "No attempts to grade." %}</td>
+                <td class="table-td" colspan="4">{% trans "No attempts to grade." %}</td>
               </tr>
             {% endfor %}
           </tbody>

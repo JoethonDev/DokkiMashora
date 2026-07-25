@@ -4,49 +4,49 @@
   {{ title|default:_("Templates") }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% trans "Communications" as eyebrow %}
+  <div class="page-stack animate-enter-view">{% trans "Communications" as eyebrow %}
     {% trans "Templates" as title %}
     {% trans "Manage email templates for system actions." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    <section class="surface"><div class="table-shell"><table>
+    <section class="card-surface"><div class="table-wrap"><table class="table">
           <thead>
             <tr>
-              <th>{% trans "Template" %}</th>
-              <th>{% trans "Slug" %}</th>
-              <th>{% trans "Design" %}</th>
-              <th>{% trans "Actions" %}</th>
+              <th class="table-th">{% trans "Template" %}</th>
+              <th class="table-th">{% trans "Slug" %}</th>
+              <th class="table-th">{% trans "Design" %}</th>
+              <th class="table-th">{% trans "Actions" %}</th>
             </tr>
           </thead>
           <tbody>
             {% for item in templates %}
               <tr>
-                <td>{{ item.name }}</td>
-                <td>
+                <td class="table-td">{{ item.name }}</td>
+                <td class="table-td">
                   <code>
                     {{ item.slug }}
                   </code>
                 </td>
-                <td>{{ item.get_design_display|default:item.design }}</td>
-                <td>
-                  <div class="inline-actions"><a class="button button-info"
+                <td class="table-td">{{ item.get_design_display|default:item.design }}</td>
+                <td class="table-td">
+                  <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-ghost"
                        href="{% url 'communications:admin_template_edit' item.slug %}">{% trans "Edit" %}</a>
-                    <a class="button button-info"
+                    <a class="btn-secondary"
                        href="{% url 'communications:admin_template_preview' item.slug %}">{% trans "Preview" %}</a>
                   </div>
                 </td>
               </tr>
             {% empty %}
               <tr>
-                <td colspan="4">{% trans "No templates." %}</td>
+                <td class="table-td" colspan="4">{% trans "No templates." %}</td>
               </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
     </section>
-    <div class="inline-actions"><a class="button button-primary"
+    <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-primary"
          href="{% url 'communications:admin_template_create' %}">{% trans "Create template" %}</a>
-      <a class="button button-info"
+      <a class="btn-ghost"
          href="{% url 'communications:admin_footer_edit' %}">{% trans "Edit footer" %}</a>
     </div>
   </div>

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.http import Http404, HttpRequest, HttpResponse
@@ -271,40 +273,58 @@ def apply(request: HttpRequest) -> HttpResponse:
         context.update({"selected_program_type": program_type, "selected_target_id": target_id})
         if not program_type or not target_id:
             messages.error(request, _("Please select a program."))
-            return _render_profile(request, "ui/pages/student/apply.html", context)
+            response = _render_profile(request, "ui/pages/student/apply.html", context)
+            response['HX-Trigger'] = json.dumps({'show-toast': {'message': 'Please select a program.', 'type': 'error'}})
+            return response
 
         if program_type == "diploma":
             cohort = Cohort.objects.filter(pk=target_id).select_related("diploma").first()
             if not cohort:
                 messages.error(request, _("Invalid cohort selected."))
-                return _render_profile(request, "ui/pages/student/apply.html", context)
+                response = _render_profile(request, "ui/pages/student/apply.html", context)
+                response['HX-Trigger'] = json.dumps({'show-toast': {'message': 'Invalid cohort selected.', 'type': 'error'}})
+                return response
             target_eligibility = check_apply_eligibility(profile, cohort=cohort)
             if not target_eligibility["allowed"]:
-                messages.error(request, target_eligibility["reason"] or _("You are not eligible to apply."))
-                return _render_profile(request, "ui/pages/student/apply.html", context)
+                reason = target_eligibility["reason"] or _("You are not eligible to apply.")
+                messages.error(request, reason)
+                response = _render_profile(request, "ui/pages/student/apply.html", context)
+                response['HX-Trigger'] = json.dumps({'show-toast': {'message': str(reason), 'type': 'error'}})
+                return response
             try:
                 submit_apply_application(profile, cohort=cohort)
             except ValueError as exc:
                 messages.error(request, str(exc))
-                return _render_profile(request, "ui/pages/student/apply.html", context)
+                response = _render_profile(request, "ui/pages/student/apply.html", context)
+                response['HX-Trigger'] = json.dumps({'show-toast': {'message': str(exc), 'type': 'error'}})
+                return response
         elif program_type == "course":
             course_id = target_id.removeprefix("course_")
             course = Course.objects.filter(pk=course_id, is_active=True).first()
             if not course:
                 messages.error(request, _("Invalid course selected."))
-                return _render_profile(request, "ui/pages/student/apply.html", context)
+                response = _render_profile(request, "ui/pages/student/apply.html", context)
+                response['HX-Trigger'] = json.dumps({'show-toast': {'message': 'Invalid course selected.', 'type': 'error'}})
+                return response
             target_eligibility = check_apply_eligibility(profile, course=course)
             if not target_eligibility["allowed"]:
-                messages.error(request, target_eligibility["reason"] or _("You are not eligible to apply."))
-                return _render_profile(request, "ui/pages/student/apply.html", context)
+                reason = target_eligibility["reason"] or _("You are not eligible to apply.")
+                messages.error(request, reason)
+                response = _render_profile(request, "ui/pages/student/apply.html", context)
+                response['HX-Trigger'] = json.dumps({'show-toast': {'message': str(reason), 'type': 'error'}})
+                return response
             try:
                 submit_apply_application(profile, course=course)
             except ValueError as exc:
                 messages.error(request, str(exc))
-                return _render_profile(request, "ui/pages/student/apply.html", context)
+                response = _render_profile(request, "ui/pages/student/apply.html", context)
+                response['HX-Trigger'] = json.dumps({'show-toast': {'message': str(exc), 'type': 'error'}})
+                return response
         else:
             messages.error(request, _("Invalid program type."))
-            return _render_profile(request, "ui/pages/student/apply.html", context)
+            response = _render_profile(request, "ui/pages/student/apply.html", context)
+            response['HX-Trigger'] = json.dumps({'show-toast': {'message': 'Invalid program type.', 'type': 'error'}})
+            return response
 
         messages.success(request, _("Your application has been submitted."))
         return redirect("students:applications")

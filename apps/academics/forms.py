@@ -13,13 +13,20 @@ from apps.academics.models import (
     Semester,
 )
 
+from apps.core.forms import StyledFormMixin
 
-class DiplomaForm(forms.ModelForm):
+
+class DiplomaForm(StyledFormMixin, forms.ModelForm):
     class Meta:
         model = Diploma
         fields = ["title", "description", "total_semesters", "is_active", "video_tracking_enabled", "video_completion_percent"]
         widgets = {
+            "title": forms.TextInput(attrs={}),
             "description": forms.Textarea(attrs={"rows": 4}),
+            "total_semesters": forms.NumberInput(attrs={}),
+            "is_active": forms.CheckboxInput(attrs={}),
+            "video_tracking_enabled": forms.CheckboxInput(attrs={}),
+            "video_completion_percent": forms.NumberInput(attrs={}),
         }
 
     def clean_total_semesters(self):
@@ -32,10 +39,15 @@ class DiplomaForm(forms.ModelForm):
                 )
         return total
 
-class SemesterForm(forms.ModelForm):
+class SemesterForm(StyledFormMixin, forms.ModelForm):
     class Meta:
         model = Semester
         fields = ["order", "title", "is_active"]
+        widgets = {
+            "order": forms.NumberInput(attrs={}),
+            "title": forms.TextInput(attrs={}),
+            "is_active": forms.CheckboxInput(attrs={}),
+        }
 
     def __init__(self, *args, **kwargs):
         self.diploma = kwargs.pop("diploma", None)
@@ -50,12 +62,16 @@ class SemesterForm(forms.ModelForm):
         return order
 
 
-class CourseForm(forms.ModelForm):
+class CourseForm(StyledFormMixin, forms.ModelForm):
     class Meta:
         model = Course
         fields = ["title", "description", "is_active", "video_tracking_enabled", "video_completion_percent"]
         widgets = {
+            "title": forms.TextInput(attrs={}),
             "description": forms.Textarea(attrs={"rows": 4}),
+            "is_active": forms.CheckboxInput(attrs={}),
+            "video_tracking_enabled": forms.CheckboxInput(attrs={}),
+            "video_completion_percent": forms.NumberInput(attrs={}),
         }
 
     def save(self, commit=True):
@@ -66,17 +82,18 @@ class CourseForm(forms.ModelForm):
         return course
 
 
-class CohortForm(forms.ModelForm):
+class CohortForm(StyledFormMixin, forms.ModelForm):
     class Meta:
         model = Cohort
         fields = ["name", "start_date", "end_date", "is_active"]
         widgets = {
+            "name": forms.TextInput(attrs={}),
             "start_date": forms.DateInput(attrs={"type": "date"}),
             "end_date": forms.DateInput(attrs={"type": "date"}),
         }
 
 
-class CourseVersionForm(forms.ModelForm):
+class CourseVersionForm(StyledFormMixin, forms.ModelForm):
     class Meta:
         model = CourseVersion
         fields = [
@@ -84,9 +101,14 @@ class CourseVersionForm(forms.ModelForm):
             "access_duration_days",
             "is_active",
         ]
+        widgets = {
+            "label": forms.TextInput(attrs={}),
+            "access_duration_days": forms.NumberInput(attrs={}),
+            "is_active": forms.CheckboxInput(attrs={}),
+        }
 
-class LectureForm(forms.ModelForm):
-    audio_file = forms.FileField(required=False, label=_("Audio file (upload)"))
+class LectureForm(StyledFormMixin, forms.ModelForm):
+    audio_file = forms.FileField(required=False, label=_("Audio file (upload)"), widget=forms.FileInput(attrs={}))
 
     class Meta:
         model = Lecture
@@ -100,7 +122,11 @@ class LectureForm(forms.ModelForm):
             "is_published",
         ]
         widgets = {
+            "order": forms.NumberInput(attrs={}),
+            "title": forms.TextInput(attrs={}),
             "description": forms.Textarea(attrs={"rows": 3}),
+            "youtube_url": forms.URLInput(attrs={}),
+            "audio_url": forms.URLInput(attrs={}),
             "release_at": forms.DateTimeInput(
                 attrs={"type": "datetime-local"},
                 format="%Y-%m-%dT%H:%M",
@@ -108,8 +134,8 @@ class LectureForm(forms.ModelForm):
         }
 
 
-class DiplomaLectureForm(forms.ModelForm):
-    audio_file = forms.FileField(required=False, label=_("Audio file (upload)"))
+class DiplomaLectureForm(StyledFormMixin, forms.ModelForm):
+    audio_file = forms.FileField(required=False, label=_("Audio file (upload)"), widget=forms.FileInput(attrs={}))
 
     class Meta:
         model = DiplomaLecture
@@ -123,7 +149,11 @@ class DiplomaLectureForm(forms.ModelForm):
             "is_published",
         ]
         widgets = {
+            "order": forms.NumberInput(attrs={}),
+            "title": forms.TextInput(attrs={}),
             "description": forms.Textarea(attrs={"rows": 3}),
+            "youtube_url": forms.URLInput(attrs={}),
+            "audio_url": forms.URLInput(attrs={}),
             "release_at": forms.DateTimeInput(
                 attrs={"type": "datetime-local"},
                 format="%Y-%m-%dT%H:%M",

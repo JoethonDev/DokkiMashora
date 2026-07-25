@@ -1,51 +1,55 @@
 {% extends "ui/base.html" %}
 {% load i18n %}
 {% block shell %}
-  <div class="app-shell" x-data="{sidebarOpen:false}"><div class="mobile-backdrop"
-         :class="{open:sidebarOpen}"
-         @click="sidebarOpen=false"></div>
-    <aside id="student-sidebar"
-           class="sidebar"
+  <div class="fixed inset-0 top-14 bg-slate-900/40 z-backdrop opacity-0 pointer-events-none transition-opacity"
+       x-data="{sidebarOpen:false}"
+       :class="{open:sidebarOpen}"
+       @click="sidebarOpen=false"></div>
+  <div class="grid min-h-screen grid-cols-shell"
+       x-data="{sidebarOpen:false}"><aside id="student-sidebar"
+            class="fixed -start-72 top-14 w-72 shadow-modal bg-surface-inverse text-white flex flex-col z-sidebar transition-all duration-300 ease lg:h-screen lg:sticky lg:top-0 lg:start-auto lg:w-sidebar lg:p-5 lg:shadow-none"
            :class="{open:sidebarOpen}"
-           aria-label="{% trans 'Main navigation' %}"><a class="brand" href="{% url 'students:dashboard' %}"><span class="brand-mark">DM</span>
-      <span><strong>DokkiMashora</strong>
-        <small>{% trans "Student portal" %}</small></span></a>
-      <nav class="main-nav" aria-label="{% trans 'Student navigation' %}"><div class="nav-label">{% trans "My workspace" %}</div>
-        <a class="nav-link{% if request.resolver_match.url_name == 'dashboard' %} active{% endif %}"
-           href="{% url 'students:dashboard' %}"><span class="nav-icon">⌂</span>
+           aria-label="{% trans 'Main navigation' %}"><a class="flex items-center gap-2.5 no-underline text-inherit p-2.5 pb-5" href="{% url 'students:dashboard' %}"><span class="w-10 h-10 rounded-md bg-gradient-to-br from-brand-50 to-brand-soft text-brand-strong grid place-items-center font-black shadow-card">DM</span>
+      <span><strong class="block text-sm">DokkiMashora</strong><small class="block text-xs mt-0.5 text-white/60">{% trans "Student portal" %}</small></span>
+    </a>
+      <nav class="overflow-y-auto scrollbar-none py-2 lg:block hidden" aria-label="{% trans 'Student navigation' %}"><div class="sidebar-section">{% trans "My workspace" %}</div>
+        <a class="sidebar-link{% if request.resolver_match.url_name == 'dashboard' %} active{% endif %}"
+           href="{% url 'students:dashboard' %}"><span class="w-5 text-center shrink-0">⌂</span>
           {% trans "Dashboard" %}
         </a>
-        <a class="nav-link{% if request.resolver_match.url_name == 'learning' or request.resolver_match.url_name == 'diploma_course' or request.resolver_match.url_name == 'diploma_course_detail' %} active{% endif %}"
-           href="{% url 'students:diploma_course' %}"><span class="nav-icon">◫</span>
+        <a class="sidebar-link{% if request.resolver_match.url_name == 'learning' or request.resolver_match.url_name == 'diploma_course' or request.resolver_match.url_name == 'diploma_course_detail' %} active{% endif %}"
+           href="{% url 'students:diploma_course' %}"><span class="w-5 text-center shrink-0">◉</span>
           {% trans "My learning" %}
         </a>
-        <a class="nav-link{% if request.resolver_match.url_name == 'applications' or request.resolver_match.url_name == 'application_history' or request.resolver_match.url_name == 'apply' %} active{% endif %}"
-           href="{% url 'students:applications' %}"><span class="nav-icon">▤</span>
+        <a class="sidebar-link{% if request.resolver_match.url_name == 'applications' or request.resolver_match.url_name == 'application_history' or request.resolver_match.url_name == 'apply' %} active{% endif %}"
+           href="{% url 'students:applications' %}"><span class="w-5 text-center shrink-0">▤</span>
           {% trans "Applications" %}
         </a>
-        <a class="nav-link" href="{% url 'assessments:student_list' %}"><span class="nav-icon">✓</span>
+        <a class="sidebar-link{% if request.resolver_match.url_name == 'student_assessment_list' %} active{% endif %}"
+           href="{% url 'assessments:student_list' %}"><span class="w-5 text-center shrink-0">✓</span>
           {% trans "Assessments" %}
         </a>
-        <a class="nav-link{% if request.resolver_match.url_name == 'progression_history' %} active{% endif %}"
-           href="{% url 'students:progression_history' %}"><span class="nav-icon">↗</span>
+        <a class="sidebar-link{% if request.resolver_match.url_name == 'progression_history' %} active{% endif %}"
+            href="{% url 'students:progression_history' %}"><span class="w-5 text-center shrink-0">↗</span>
           {% trans "Progression" %}
         </a>
-        <a class="nav-link{% if request.resolver_match.url_name == 'record' %} active{% endif %}"
-           href="{% url 'students:record' %}"><span class="nav-icon">▥</span>
+        <a class="sidebar-link{% if request.resolver_match.url_name == 'record' %} active{% endif %}"
+           href="{% url 'students:record' %}"><span class="w-5 text-center shrink-0">▥</span>
           {% trans "My record" %}
         </a>
-        <div class="nav-label">{% trans "Account" %}</div>
-        <a class="nav-link{% if request.resolver_match.url_name == 'details' or request.resolver_match.url_name == 'edit_profile' %} active{% endif %}"
-           href="{% url 'students:details' %}"><span class="nav-icon">♙</span>
+        <div class="sidebar-section">{% trans "Account" %}</div>
+        <a class="sidebar-link{% if request.resolver_match.url_name == 'details' or request.resolver_match.url_name == 'edit_profile' %} active{% endif %}"
+            href="{% url 'students:details' %}"><span class="w-5 text-center shrink-0">♙</span>
           {% trans "Profile" %}
         </a>
       </nav>
       {% include "ui/components/_profile_menu.html" with role_label=_("Student") %}
     </aside>
-    <section class="application">
+    <section class="min-w-0 lg:col-start-2">
       {% include "ui/components/_workspace_topbar.html" with show_global_search=False profile_url="students:details" profile_icon="&#9813;" %}
-      <main id="main" class="view-root"><h1 class="sr-only">{% block page_title %}{{ title|default:request.resolver_match.url_name|capfirst }}{% endblock %}</h1>
+      <main id="main" class="pt-3 px-5 pb-9 lg:pt-3.5 lg:px-8 lg:pb-12 max-w-7xl mx-auto w-full"><h1 class="sr-only">{% block page_title %}{{ title|default:request.resolver_match.url_name|capfirst }}{% endblock %}</h1>
         {% block content %}{% endblock %}</main>
     </section>
+    <footer class="col-span-2 flex-shrink-0 bg-white border-t border-line py-4 px-5 lg:px-8 text-center text-xs text-muted">{% block footer %}{% now "Y" as current_year %}&copy; {{ current_year }} DokkiMashora. {% trans "All rights reserved." %}{% endblock %}</footer>
   </div>
 {% endblock %}

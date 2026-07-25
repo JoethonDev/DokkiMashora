@@ -4,23 +4,23 @@
   {{ title|default:_("Progression") }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% trans "Academic operations" as eyebrow %}
+  <div class="page-stack animate-enter-view">{% trans "Academic operations" as eyebrow %}
     {% trans "Progression" as title %}
     {% trans "Review semester progress, decisions, evaluations, interviews, and rejoin plans." as description %}
-    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    <form class="surface form-main" method="post">{% csrf_token %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description back_button=True %}
+    <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
       <label>
         {% trans "Decision" %}
-        <select name="decision" required>
+        <select name="decision" class="form-select" required>
           <option value="pass">{% trans "Pass" %}</option>
           <option value="fail">{% trans "Fail" %}</option>
         </select>
       </label>
       <label>
         {% trans "Notes" %}
-        <textarea name="notes"></textarea>
+        <textarea name="notes" class="form-input"></textarea>
       </label>
-      <button class="button button-primary" type="submit">{% trans "Save decision" %}</button>
+      <button class="btn-primary" type="submit">{% trans "Save decision" %}</button>
     </form>
   </div>
 {% endblock %}

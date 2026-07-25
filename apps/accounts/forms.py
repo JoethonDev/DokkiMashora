@@ -26,9 +26,10 @@ from .constants import (
     USER_STATUS_SUSPENDED,
 )
 from .models import User
+from apps.core.forms import StyledFormMixin
 
 
-class EmailAuthenticationForm(AuthenticationForm):
+class EmailAuthenticationForm(StyledFormMixin, AuthenticationForm):
     """Authenticate using email rather than username."""
 
     username = forms.EmailField(
@@ -42,7 +43,7 @@ class EmailAuthenticationForm(AuthenticationForm):
     )
 
 
-class ProfileForm(forms.ModelForm):
+class ProfileForm(StyledFormMixin, forms.ModelForm):
     """Allow the user to update their own basic profile fields."""
 
     class Meta:
@@ -55,14 +56,14 @@ class ProfileForm(forms.ModelForm):
         }
 
 
-class AdminUserCreationForm(UserCreationForm):
+class AdminUserCreationForm(StyledFormMixin, UserCreationForm):
     class Meta:
         model = User
         fields = ("email",)
         labels = {"email": _("Email")}
 
 
-class AdminUserChangeForm(UserChangeForm):
+class AdminUserChangeForm(StyledFormMixin, UserChangeForm):
     class Meta:
         model = User
         fields = (
@@ -77,31 +78,32 @@ class AdminUserChangeForm(UserChangeForm):
         )
 
 
-class UserEditForm(forms.ModelForm):
-    email = forms.EmailField(label=_("Email"))
-    full_name = forms.CharField(label=_("Full name"), max_length=150, required=False)
-    full_name_ar = forms.CharField(label=_("Full name (Arabic)"), max_length=150, required=False)
-    phone = forms.CharField(label=_("Phone number"), max_length=32, required=False)
+class UserEditForm(StyledFormMixin, forms.ModelForm):
+    email = forms.EmailField(label=_("Email"), widget=forms.EmailInput())
+    full_name = forms.CharField(label=_("Full name"), max_length=150, required=False, widget=forms.TextInput())
+    full_name_ar = forms.CharField(label=_("Full name (Arabic)"), max_length=150, required=False, widget=forms.TextInput())
+    phone = forms.CharField(label=_("Phone number"), max_length=32, required=False, widget=forms.TextInput())
     country_code = forms.ChoiceField(
         label=_("Country"),
         choices=[],
         required=False,
+        widget=forms.Select(),
     )
-    national_id = forms.CharField(label=_("National ID"), max_length=32, required=False)
-    status = forms.ChoiceField(label=_("Status"), choices=User._meta.get_field("status").choices)
+    national_id = forms.CharField(label=_("National ID"), max_length=32, required=False, widget=forms.TextInput())
+    status = forms.ChoiceField(label=_("Status"), choices=User._meta.get_field("status").choices, widget=forms.Select())
     is_active = forms.BooleanField(label=_("Account active"), required=False)
     date_of_birth = forms.DateField(label=_("Date of birth"), required=False, widget=forms.DateInput(attrs={"type": "date"}))
-    gender = forms.ChoiceField(label=_("Gender"), choices=StudentProfile._meta.get_field("gender").choices, required=False)
-    address = forms.CharField(label=_("Address"), required=False)
-    education = forms.ChoiceField(label=_("Education"), choices=StudentProfile._meta.get_field("education").choices, required=False)
-    specialization = forms.CharField(label=_("Specialization"), required=False)
-    employer = forms.CharField(label=_("Employer"), required=False)
-    current_job = forms.CharField(label=_("Current job"), required=False)
-    church = forms.CharField(label=_("Church"), required=False)
-    priest_name = forms.CharField(label=_("Priest name"), required=False)
-    priest_contact = forms.CharField(label=_("Priest contact"), required=False)
+    gender = forms.ChoiceField(label=_("Gender"), choices=StudentProfile._meta.get_field("gender").choices, required=False, widget=forms.Select())
+    address = forms.CharField(label=_("Address"), required=False, widget=forms.TextInput())
+    education = forms.ChoiceField(label=_("Education"), choices=StudentProfile._meta.get_field("education").choices, required=False, widget=forms.Select())
+    specialization = forms.CharField(label=_("Specialization"), required=False, widget=forms.TextInput())
+    employer = forms.CharField(label=_("Employer"), required=False, widget=forms.TextInput())
+    current_job = forms.CharField(label=_("Current job"), required=False, widget=forms.TextInput())
+    church = forms.CharField(label=_("Church"), required=False, widget=forms.TextInput())
+    priest_name = forms.CharField(label=_("Priest name"), required=False, widget=forms.TextInput())
+    priest_contact = forms.CharField(label=_("Priest contact"), required=False, widget=forms.TextInput())
     new_password = forms.CharField(label=_("New password"), required=False, strip=False, widget=forms.PasswordInput())
-    role = forms.ChoiceField(label=_("Role"), choices=[(role, _(role)) for role in ALL_ROLE_GROUPS], required=False)
+    role = forms.ChoiceField(label=_("Role"), choices=[(role, _(role)) for role in ALL_ROLE_GROUPS], required=False, widget=forms.Select())
 
     class Meta:
         model = User
@@ -285,7 +287,7 @@ class UserEditForm(forms.ModelForm):
         return user
 
 
-class UserUploadForm(forms.Form):
+class UserUploadForm(StyledFormMixin, forms.Form):
     csv_file = forms.FileField(
         label=_("CSV file"),
         help_text=_("Upload a CSV file with columns: email, full_name"),

@@ -4,31 +4,31 @@
   {{ title|default:_("Preview") }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% trans "Messaging" as eyebrow %}
+  <div class="page-stack animate-enter-view">{% trans "Messaging" as eyebrow %}
     {% trans "Preview" as title %}
     {% trans "Review your draft before sending." as description %}
-    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    <section class="surface"><div class="section-header"><div>
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description back_button=True %}
+    <section class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Preview" %}</p>
           <h3>{{ draft.subject }}</h3>
         </div>
       </div>
-      <dl class="description-list"><div>
-          <dt>{% trans "Recipients" %}</dt>
-          <dd>
+      <dl class="dl"><div>
+          <dt class="dt">{% trans "Recipients" %}</dt>
+          <dd class="dd">
             {{ recipient_count }}
           </dd>
         </div>
         <div>
-          <dt>{% trans "Design" %}</dt>
-          <dd>
+          <dt class="dt">{% trans "Design" %}</dt>
+          <dd class="dd">
             {{ design_label|default:_("Branded") }}
           </dd>
         </div>
       </dl>
       <p>
         {% for source,count in source_counts.items %}
-          <span class="status-pill blue">{{ source }}
+          <span class="status-pill-info">{{ source }}
             :
             {{ count }}
           </span>
@@ -38,11 +38,11 @@
         <div class="preview">{{ rendered_html|safe }}</div>
       {% endif %}
     </section>
-    <div class="inline-actions"><form method="post" action="{% url 'communications:bulk_email_preview' %}">{% csrf_token %}
-        <button class="button button-primary" type="submit">{% trans "Send" %}</button>
+    <div class="flex gap-2.5 items-center flex-wrap"><form method="post" action="{% url 'communications:bulk_email_preview' %}">{% csrf_token %}
+        <button class="btn-primary" type="submit">{% trans "Send" %}</button>
       </form>
-      <form method="post" action="{% url 'communications:bulk_email_discard' %}">{% csrf_token %}
-        <button class="button button-secondary" type="submit">{% trans "Discard" %}</button>
+      <form method="post" action="{% url 'communications:bulk_email_discard' %}" data-confirm="{% trans 'Discard this email draft?' %}">{% csrf_token %}
+        <button class="btn-secondary" type="submit">{% trans "Discard" %}</button>
       </form>
     </div>
   </div>

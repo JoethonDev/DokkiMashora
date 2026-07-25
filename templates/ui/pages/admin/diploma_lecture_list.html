@@ -1,45 +1,47 @@
 {% extends "ui/layouts/admin.html" %}
 {% load i18n %}
 {% block title %}
-  {{ semester.title }} — {{ cohort.name }}
+  {{ semester.title }} - {{ cohort.name }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">
+  <div class="page-stack animate-enter-view">
     {% include "ui/components/_breadcrumbs.html" with items=breadcrumb_items %}
-    <div class="page-header"><div>
+    <div class="flex justify-between items-start gap-5"><div>
         <p class="eyebrow">{{ diploma.title }}</p>
-        <h1>{{ semester.title }} — {{ cohort.name }}</h1>
+        <h1>{{ semester.title }} - {{ cohort.name }}</h1>
       </div>
-      <div class="inline-actions end">
-        <a class="button button-primary"
+      <div class="flex gap-2.5 items-center flex-wrap end">
+        <a class="btn-primary"
            href="{% url 'academics:admin_diploma_lecture_create' diploma.id cohort.id semester.id %}">{% trans "Add lecture" %}</a>
       </div>
     </div>
-    <section class="surface"><div class="section-header"><div>
+    <section class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Lectures" %}</p>
           <h3>{% trans "Lecture list" %}</h3>
         </div>
       </div>
       {% if lectures %}
-        <div class="table-shell"><table>
+        <div class="table-wrap"><table class="table">
             <thead>
               <tr>
-                <th>{% trans "Order" %}</th>
-                <th>{% trans "Title" %}</th>
-                <th>{% trans "Actions" %}</th>
+                <th class="table-th">{% trans "Order" %}</th>
+                <th class="table-th">{% trans "Title" %}</th>
+                <th class="table-th">{% trans "Actions" %}</th>
               </tr>
             </thead>
             <tbody>
               {% for item in lectures %}
                 <tr>
-                  <td>{{ item.order }}</td>
-                  <td>{{ item.title }}</td>
-                  <td>
-                    <div class="inline-actions">
-                      <a class="text-button"
+                  <td class="table-td">{{ item.order }}</td>
+                  <td class="table-td">{{ item.title }}</td>
+                  <td class="table-td">
+                    <div class="flex gap-2.5 items-center flex-wrap">
+                      <a class="btn-ghost"
                          href="{% url 'academics:admin_diploma_lecture_edit' diploma.id cohort.id semester.id item.id %}">{% trans "Edit" %}</a>
-                      <a class="button button-info"
+                      <a class="btn-secondary"
                          href="{% url 'academics:admin_diploma_lecture_preview' diploma.id cohort.id semester.id item.id %}">{% trans "Preview" %}</a>
+                      <a class="btn-ghost"
+                         href="{% url 'assessments:admin_lecture_bank_list' diploma.id cohort.id semester.id item.id %}">{% trans "Questions" %}</a>
                     </div>
                   </td>
                 </tr>
@@ -51,8 +53,8 @@
         {% include "ui/components/_empty_state.html" with title=_("No lectures") message=_("No lectures found for this cohort and semester.") %}
       {% endif %}
     </section>
-    <div class="inline-actions">
-      <a class="button button-soft"
+    <div class="flex gap-2.5 items-center flex-wrap">
+      <a class="btn-soft"
          href="{% url 'academics:admin_diploma_detail' diploma.id %}">{% trans "Back to diploma" %}</a>
     </div>
   </div>

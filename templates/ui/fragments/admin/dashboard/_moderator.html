@@ -1,32 +1,32 @@
 {% load i18n %}
-<section class="surface"><div class="section-header"><div>
+<section class="card-surface"><div class="section-head"><div>
       <p class="eyebrow">{{ user_role }}</p>
-      <h2 class="dashboard-heading">
+      <h2>
         {% trans "Welcome back" %}
         ,
-        {{ user.get_full_name|default:user.email }}
+        <span dir="ltr" class="inline-block">{{ user.get_full_name|default:user.email }}</span>
       </h2>
     </div>
   </div>
   <p>{% trans "Your moderation assignments and review queue." %}</p>
 </section>
-<section class="metric-grid"><div class="metric-card"><div class="metric-icon tone-blue">&#9679;</div>
-    <div>
+<section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"><div class="stat-card"><div class="stat-icon bg-info-soft text-info-text">&#9679;</div>
+    <div class="stat-body">
       <span>{% trans "Active assignments" %}</span>
       <strong>{{ assignment_count|default:0 }}</strong>
-      <small>{% trans "Student clusters" %}</small>
+      <small>{% if assignment_count %}{% trans "Student clusters" %}{% else %}{% trans "No active assignments" %}{% endif %}</small>
     </div>
   </div>
 </section>
-<section class="surface"><div class="section-header"><div>
+<section class="card-surface"><div class="section-head"><div>
       <p class="eyebrow">{% trans "Review" %}</p>
       <h3>{% trans "Grading queue" %}</h3>
     </div>
   </div>
-  <div class="inline-actions"><a class="button button-info"
+  <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-secondary"
        href="{% url 'assessments:admin_grade_list' %}">{% trans "Open grading queue" %}</a>
-    <a class="button button-info" href="{% url 'assessments:admin_list' %}">{% trans "Assessments" %}</a>
-    <a class="button button-info"
+    <a class="btn-secondary" href="{% url 'assessments:admin_list' %}">{% trans "Assessments" %}</a>
+    <a class="btn-secondary"
        href="{% url 'progression:admin_rejoin_plan_list' %}">{% trans "Progression" %}</a>
   </div>
 </section>

@@ -1,20 +1,35 @@
 {% load i18n static %}
+{% get_current_language as LANGUAGE_CODE %}
+{% get_available_languages as LANGUAGES %}
 <!DOCTYPE html>
 <html lang="{{ LANGUAGE_CODE|default:'ar' }}"
-      dir="{% if LANGUAGE_BIDI %}rtl{% else %}ltr{% endif %}"><head>
-    <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{% block title %}DokkiMashora{% endblock %}</title>
+      dir="{% if LANGUAGE_BIDI %}rtl{% else %}ltr{% endif %}"
+      x-data="{ dir: '{% if LANGUAGE_BIDI %}rtl{% else %}ltr{% endif %}', lang: '{{ LANGUAGE_CODE|default:'ar' }}' }"
+      :dir="dir"
+      :lang="lang">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}DokkiMashora{% endblock %}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800;900&family=Inter:wght@400;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'css/styles.css' %}"><script src="{% static 'js/htmx.min.js' %}" defer></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;800;900&family=Tajawal:wght@400;700;800;900&family=Inter:wght@400;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'css/tailwind.css' %}">
+    <script src="{% static 'js/htmx.min.js' %}" defer></script>
     <script src="{% static 'js/alpine.min.js' %}" defer></script>
     <script src="{% static 'js/ui.js' %}" defer></script>
+    <script src="https://unpkg.com/lucide@latest" defer></script>
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <script>document.addEventListener('htmx:configRequest', function(e) { e.detail.headers['X-CSRFToken'] = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'); });</script>
+    <script>document.addEventListener('alpine:init', function() { Alpine.store('ui', { modalOpen: false, toggleModal(state) { this.modalOpen = state; document.body.classList.toggle('overflow-hidden', state); } }); });</script>
   </head>
-  <body hx-indicator="#global-loading">
+  <body hx-indicator="#global-loading" class="antialiased">
     {% include "ui/components/_alert.html" %}
+    {% include "ui/components/_toast_region.html" %}
     <div id="request-feedback" class="request-feedback" role="alert" aria-live="assertive" data-msg-error="{% trans 'Request failed. Please try again.' %}"></div>
     {% include "ui/components/_loading_indicator.html" %}
+    {% include "ui/components/_modal_shell.html" %}
+    {% include "ui/components/_confirm_modal.html" %}
     {% block shell %}{% endblock %}
-    {% include "ui/components/_toast_region.html" %}
   </body>
 </html>

@@ -4,70 +4,84 @@
   {{ user_obj.full_name }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% include "ui/components/_page_header.html" with title=user_obj.full_name eyebrow=_("Student profile") %}
-    <section class="surface"><div class="section-header"><div>
+  <div class="page-stack">{% include "ui/components/_page_header.html" with title=user_obj.full_name eyebrow=_("Student profile") back_button=True %}
+    <section class="card-surface">
+      <div class="section-head"><div>
           <p class="eyebrow">{% trans "Identity" %}</p>
           <h3>{% trans "Account summary" %}</h3>
         </div>
-        <a class="button button-primary"
+        <a class="btn-primary"
            href="{% url 'accounts:admin_user_edit' user_obj.id %}">{% trans "Edit student" %}</a>
       </div>
-      <dl class="description-list"><div>
-          <dt>{% trans "Status" %}</dt>
-          <dd>
+      <dl class="dl"><div>
+          <dt class="dt">{% trans "Status" %}</dt>
+          <dd class="dd">
             {% include "ui/components/_status.html" with code=user_obj.status label=user_obj.get_status_display %}
           </dd>
         </div>
         <div>
-          <dt>{% trans "Email" %}</dt>
-          <dd>
-            {{ user_obj.email }}
+          <dt class="dt">{% trans "Email" %}</dt>
+          <dd class="dd">
+            <span class="bidi">{{ user_obj.email }}</span>
           </dd>
         </div>
         <div>
-          <dt>{% trans "Phone" %}</dt>
-          <dd>
-            {{ user_obj.phone|default:'—' }}
+          <dt class="dt">{% trans "Phone" %}</dt>
+          <dd class="dd">
+            <span class="bidi">{{ user_obj.phone|default:'—' }}</span>
           </dd>
         </div>
         <div>
-          <dt>{% trans "Role" %}</dt>
-          <dd>
+          <dt class="dt">{% trans "Role" %}</dt>
+          <dd class="dd">
             {{ user_obj.primary_role }}
           </dd>
         </div>
       </dl>
     </section>
     {% if student_profile %}
-      <section class="detail-layout"><article class="surface"><div class="section-header"><div>
+      <section class="card-surface">
+        <div class="section-head"><div><p class="eyebrow">{% trans "Student record" %}</p><h3>{% trans "Personal details" %}</h3></div></div>
+        <dl class="dl">
+          <div><dt class="dt">{% trans "Full name" %}</dt><dd class="dd">{{ student_profile.full_name }}</dd></div>
+          <div><dt class="dt">{% trans "National ID" %}</dt><dd class="dd">{{ student_profile.national_id|default:'-' }}</dd></div>
+          <div><dt class="dt">{% trans "Date of birth" %}</dt><dd class="dd">{{ student_profile.date_of_birth|default:'-' }}</dd></div>
+          <div><dt class="dt">{% trans "Education" %}</dt><dd class="dd">{{ student_profile.get_education_display|default:'-' }}</dd></div>
+          <div><dt class="dt">{% trans "Specialization" %}</dt><dd class="dd">{{ student_profile.specialization|default:'-' }}</dd></div>
+          <div><dt class="dt">{% trans "Address" %}</dt><dd class="dd">{{ student_profile.address|default:'-' }}</dd></div>
+        </dl>
+      </section>
+      <section class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <article class="card-surface">
+          <div class="section-head"><div>
               <p class="eyebrow">{% trans "Admissions" %}</p>
               <h3>{% trans "Applications" %}</h3>
             </div>
           </div>
           {% if applications %}
-            <div class="table-shell"><table>
+            <div class="table-wrap"><table class="table">
                 <thead>
                   <tr>
-                    <th>{% trans "Program" %}</th>
-                    <th>{% trans "Submitted" %}</th>
-                    <th>{% trans "Status" %}</th>
-                    <th>{% trans "Actions" %}</th>
+                    <th class="table-th">{% trans "Program" %}</th>
+                    <th class="table-th">{% trans "Submitted" %}</th>
+                    <th class="table-th">{% trans "Status" %}</th>
+                    <th class="table-th">{% trans "Actions" %}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {% for item in applications %}
                     <tr>
-                      <td>
+                      <td class="table-td">
                         {% if item.cohort %}
                           {{ item.cohort.diploma }}
                         {% else %}
                           {{ item.course }}
                         {% endif %}
                       </td>
-                      <td>{{ item.created_at|date:"d M Y" }}</td>
-                      <td>{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
-                      <td>
-                        <a class="button button-info"
+                      <td class="table-td"><span class="bidi">{{ item.created_at|date:"d/m/Y" }}</span></td>
+                      <td class="table-td">{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
+                      <td class="table-td">
+                        <a class="btn-secondary"
                            href="{% url 'applications:program_detail' item.id %}">{% trans "Review" %}</a>
                       </td>
                     </tr>
@@ -79,33 +93,34 @@
             {% include "ui/components/_empty_state.html" with title=_("No applications") message=_("This student has not submitted any applications.") %}
           {% endif %}
         </article>
-        <article class="surface"><div class="section-header"><div>
+        <article class="card-surface">
+          <div class="section-head"><div>
               <p class="eyebrow">{% trans "Learning" %}</p>
               <h3>{% trans "Enrollments" %}</h3>
             </div>
           </div>
           {% if diploma_enrollments or course_enrollments %}
-            <div class="table-shell"><table>
+            <div class="table-wrap"><table class="table">
                 <thead>
                   <tr>
-                    <th>{% trans "Program" %}</th>
-                    <th>{% trans "Type" %}</th>
-                    <th>{% trans "Status" %}</th>
+                    <th class="table-th">{% trans "Program" %}</th>
+                    <th class="table-th">{% trans "Type" %}</th>
+                    <th class="table-th">{% trans "Status" %}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {% for item in diploma_enrollments %}
                     <tr>
-                      <td>{{ item.cohort.diploma }}</td>
-                      <td>{% trans "Diploma" %}</td>
-                      <td>{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
+                      <td class="table-td">{{ item.cohort.diploma }}</td>
+                      <td class="table-td">{% trans "Diploma" %}</td>
+                      <td class="table-td">{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
                     </tr>
                   {% endfor %}
                   {% for item in course_enrollments %}
                     <tr>
-                      <td>{{ item.course_version.course }}</td>
-                      <td>{% trans "Course" %}</td>
-                      <td>{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
+                      <td class="table-td">{{ item.course_version.course }}</td>
+                      <td class="table-td">{% trans "Course" %}</td>
+                      <td class="table-td">{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
                     </tr>
                   {% endfor %}
                 </tbody>
@@ -116,36 +131,37 @@
           {% endif %}
         </article>
       </section>
-      <section class="surface"><div class="section-header"><div>
+      <section class="card-surface">
+        <div class="section-head"><div>
             <p class="eyebrow">{% trans "Finance and results" %}</p>
             <h3>{% trans "Recent records" %}</h3>
           </div>
         </div>
         {% if payments or assessment_attempts %}
-          <div class="table-shell"><table>
+          <div class="table-wrap"><table class="table">
               <thead>
                 <tr>
-                  <th>{% trans "Record" %}</th>
-                  <th>{% trans "Detail" %}</th>
-                  <th>{% trans "Status" %}</th>
+                  <th class="table-th">{% trans "Record" %}</th>
+                  <th class="table-th">{% trans "Detail" %}</th>
+                  <th class="table-th">{% trans "Status" %}</th>
                 </tr>
               </thead>
               <tbody>
                 {% for item in payments %}
                   <tr>
-                    <td>{% trans "Payment" %}</td>
-                    <td>
+                    <td class="table-td">{% trans "Payment" %}</td>
+                    <td class="table-td">
                       {{ item.amount }}
                       {{ item.currency }}
                     </td>
-                    <td>{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
+                    <td class="table-td">{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
                   </tr>
                 {% endfor %}
                 {% for item in assessment_attempts %}
                   <tr>
-                    <td>{% trans "Assessment" %}</td>
-                    <td>{{ item.assessment.title }}</td>
-                    <td>{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
+                    <td class="table-td">{% trans "Assessment" %}</td>
+                    <td class="table-td">{{ item.assessment.title }}</td>
+                    <td class="table-td">{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
                   </tr>
                 {% endfor %}
               </tbody>

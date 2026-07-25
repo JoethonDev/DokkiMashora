@@ -1,34 +1,36 @@
 {% extends "ui/base.html" %}
 {% load i18n %}
 {% block shell %}
-  <div class="app-shell" x-data="{sidebarOpen:false, sidebarTrigger:null}"
+  <div class="fixed inset-0 top-14 bg-slate-900/40 z-backdrop opacity-0 pointer-events-none transition-opacity"
+       x-data="{sidebarOpen:false, sidebarTrigger:null}"
+       :class="{open:sidebarOpen}"
+       @click="sidebarOpen=false; $dispatch('sidebar-close')"></div>
+  <div class="grid min-h-screen grid-cols-shell"
+       x-data="{sidebarOpen:false, sidebarTrigger:null}"
        @keydown.escape.window="sidebarOpen=false; $nextTick(() => { if (sidebarTrigger) sidebarTrigger.focus(); })"
        @sidebar-open.window="sidebarOpen=true; sidebarTrigger=$event.detail?.trigger || $event.target; $nextTick(() => document.body.classList.add('overflow-hidden'))"
        @sidebar-close.window="sidebarOpen=false; $nextTick(() => { document.body.classList.remove('overflow-hidden'); if (sidebarTrigger) sidebarTrigger.focus(); })"
-       x-init="$watch('sidebarOpen', val => { document.body.classList.toggle('overflow-hidden', val); if (!val && sidebarTrigger) { $nextTick(() => sidebarTrigger.focus()); } })"><div class="mobile-backdrop"
-         :class="{open:sidebarOpen}"
-         @click="sidebarOpen=false; $dispatch('sidebar-close')"></div>
-    <aside id="admin-sidebar"
-           class="sidebar"
+       x-init="$watch('sidebarOpen', val => { document.body.classList.toggle('overflow-hidden', val); if (!val && sidebarTrigger) { $nextTick(() => sidebarTrigger.focus()); } })"><aside id="admin-sidebar"
+             class="fixed -start-72 top-14 w-72 shadow-modal bg-surface-inverse text-white flex flex-col z-sidebar transition-all duration-300 ease lg:h-screen lg:sticky lg:top-0 lg:start-auto lg:w-sidebar lg:p-5 lg:shadow-none"
            :class="{open:sidebarOpen}"
-           aria-label="{% trans 'Main navigation' %}"><a class="brand" href="{% url 'accounts:dashboard' %}"><span class="brand-mark">DM</span>
-        <span><strong>DokkiMashora</strong><small>{% trans "Learning Management" %}</small></span>
+            aria-label="{% trans 'Main navigation' %}"><a class="flex items-center gap-3 no-underline text-inherit p-2.5 pb-5" href="{% url 'accounts:dashboard' %}"><span class="w-10 h-10 rounded-md bg-gradient-to-br from-brand-50 to-brand-soft text-brand-strong grid place-items-center font-black shadow-card">DM</span>
+        <span><strong class="block text-sm">DokkiMashora</strong><small class="block text-xs mt-0.5 text-white/60">{% trans "Learning Management" %}</small></span>
       </a>
-      <nav class="main-nav" aria-label="{% trans 'Admin navigation' %}">{% regroup WORKSPACE_NAVIGATION by section_key as nav_sections %}
+      <nav class="overflow-y-auto scrollbar-none py-2 lg:block hidden" aria-label="{% trans 'Admin navigation' %}">{% regroup WORKSPACE_NAVIGATION by section_key as nav_sections %}
         {% for section in nav_sections %}
           {% if section.grouper == "administration" or section.grouper == "system" %}
             <details class="nav-group"
                      {% if section.grouper == "administration" %} open {% endif %}>
-              <summary class="nav-label">{{ section.list.0.section }}</summary>
+              <summary class="sidebar-section list-none cursor-pointer">{{ section.list.0.section }}</summary>
           {% else %}
-            <div class="nav-label">{{ section.list.0.section }}</div>
+            <div class="sidebar-section">{{ section.list.0.section }}</div>
           {% endif %}
           {% for item in section.list %}
-            <a class="nav-link{% if request.resolver_match.view_name == item.url_name or request.resolver_match.view_name in item.active_urls %} active{% endif %}"
+            <a class="sidebar-link{% if request.resolver_match.view_name == item.url_name or request.resolver_match.view_name in item.active_urls %} active{% endif %}"
                href="{% url item.url_name %}"
                {% if request.resolver_match.view_name == item.url_name %}aria-current="page"{% endif %}
                @click="sidebarOpen=false; $dispatch('sidebar-close')">
-              <span class="nav-icon">{{ item.icon|safe }}</span>
+              <span class="w-5 text-center shrink-0">{{ item.icon|safe }}</span>
               {{ item.label }}
             </a>
           {% endfor %}
@@ -39,9 +41,11 @@
       </nav>
       {% include "ui/components/_profile_menu.html" with role_label=user.primary_role|default:_("Staff") %}
     </aside>
-    <section class="application">
+    <section class="min-w-0 lg:col-start-2">
       {% include "ui/components/_workspace_topbar.html" with show_global_search=True profile_url="accounts:profile" profile_icon="&#9813;" section_label=section_label|default:_("Workspace") %}
-      <main id="main" class="view-root">{% block content %}{% endblock %}{% block extra %}{% endblock %}</main>
+      <main id="main" class="pt-3 px-5 pb-9 lg:pt-3.5 lg:px-8 lg:pb-12 max-w-7xl mx-auto w-full">{% block content %}{% endblock %}{% block extra %}{% endblock %}</main>
     </section>
+    <footer class="col-span-2 flex-shrink-0 bg-white border-t border-line py-4 px-5 lg:px-8 text-center text-xs text-muted">{% block footer %}{% now "Y" as current_year %}&copy; {{ current_year }} DokkiMashora. {% trans "All rights reserved." %}{% endblock %}</footer>
   </div>
+  {% include "ui/components/_confirm_modal.html" %}
 {% endblock %}

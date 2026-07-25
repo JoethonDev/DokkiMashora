@@ -1,29 +1,48 @@
 {% extends "ui/layouts/admin.html" %}
-{% load i18n ui_tags %}
+{% load i18n ui_tags form_tags %}
 {% block title %}
   {{ title|default:_("Intake") }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% trans "Admissions" as eyebrow %}
+  <div class="page-stack animate-enter-view">{% trans "Admissions" as eyebrow %}
     {% trans "Intake forms" as title %}
     {% trans "Create and manage intake forms, fields, and responses." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
     {% if form %}
-      <form class="surface form-main" method="post">{% csrf_token %}
-        {% for field in form %}
-          {% include "ui/components/_field.html" %}
-        {% endfor %}
-        <button class="button button-primary" type="submit">{% trans "Save" %}</button>
+      <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
+        <div class="form-grid">
+          {% for field in form %}
+            {% if field.name == "is_required" or field.name == "is_active" %}
+            {% elif field.name == "description" %}
+              <div class="form-grid-full">{% include "ui/components/_field.html" %}</div>
+            {% else %}
+              <div>{% include "ui/components/_field.html" %}</div>
+            {% endif %}
+          {% endfor %}
+        </div>
+        <div class="flex items-center gap-4 pt-4 border-t border-line">
+          {% for field in form %}
+            {% if field.name == "is_required" or field.name == "is_active" %}
+              <label class="flex items-center gap-2 cursor-pointer" for="{{ field.id_for_label }}">
+                {{ field|widget_class }}
+                <span class="text-sm font-bold text-text">{{ field.label }}</span>
+              </label>
+            {% endif %}
+          {% endfor %}
+        </div>
+        <div class="actions-row">
+          <button class="btn-primary" type="submit">{% trans "Save" %}</button>
+        </div>
       </form>
     {% elif intake_form %}
-      <section class="surface"><div class="section-header"><div>
+      <section class="card-surface"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Form" %}</p>
             <h3>{{ intake_form.title }}</h3>
           </div>
         </div>
         <p>{{ intake_form.description }}</p>
-        <div class="inline-actions"><form method="post"><input type="hidden" name="action" value="toggle_active">{% csrf_token %}
-            <button class="button button-warning" type="submit">{% if intake_form.is_active %}
+        <div class="flex gap-2.5 items-center flex-wrap"><form method="post"><input type="hidden" name="action" value="toggle_active">{% csrf_token %}
+            <button class="btn-warning" type="submit">{% if intake_form.is_active %}
                 {% trans "Deactivate" %}
               {% else %}
                 {% trans "Activate" %}
@@ -31,7 +50,7 @@
             </button>
           </form>
           <form method="post"><input type="hidden" name="action" value="toggle_required">{% csrf_token %}
-            <button class="button button-warning" type="submit">{% if intake_form.is_required %}
+            <button class="btn-warning" type="submit">{% if intake_form.is_required %}
                 {% trans "Make optional" %}
               {% else %}
                 {% trans "Make required" %}
@@ -40,58 +59,119 @@
           </form>
         </div>
       </section>
-      <section class="surface"><div class="section-header"><div>
+      <section class="card-surface"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Fields" %}</p>
             <h3>{% trans "Form fields" %}</h3>
           </div>
         </div>
-        {% for field in fields %}
-          <dl class="description-list">
-            <div>
-              <dt>{{ field.label }}</dt>
-              <dd>{{ field.get_field_type_display }}</dd>
-            </div>
-          </dl>
-          <form class="field-form"
-                method="post"
-                action="{% url 'intake_forms:admin_intake_form_field_delete' intake_form.id field.id %}">{% csrf_token %}
-            <button class="button button-danger" type="submit">{% trans "Delete" %}</button>
-          </form>
-        {% empty %}
-          <p>{% trans "No fields yet." %}</p>
-        {% endfor %}
-        {% if field_form %}
-          <form method="post">{% csrf_token %}
-            <input type="hidden" name="action" value="add_field">{% for field in field_form %}
-              {% include "ui/components/_field.html" %}
+        {% if fields %}
+          <div class="flex flex-col divide-y divide-line">
+            {% for field in fields %}
+              <div class="flex items-start justify-between py-4 gap-2 first:pt-0 last:pb-0">
+                <div class="flex flex-col gap-1.5 min-w-0">
+                  <strong>{{ field.label }}</strong>
+                  <div class="flex flex-wrap items-center gap-1.5">
+                    <span class="text-xs font-bold text-muted uppercase tracking-wider">{{ field.get_field_type_display }}</span>
+                    <span class="text-xs text-muted">·</span>
+                    <span class="text-xs text-muted">{% trans "Order" %}: {{ field.order }}</span>
+                    {% if field.required %}<span class="status-pill-info">{% trans "Required" %}</span>{% endif %}
+                  </div>
+                  {% if field.help_text %}<small class="text-muted">{{ field.help_text }}</small>{% endif %}
+                  {% if field.options %}
+                    <div class="flex flex-wrap gap-1 mt-1">{% for opt in field.options %}
+                      <span class="px-2 py-0.5 text-xs rounded-full bg-surface-soft border border-line">{{ opt }}</span>
+                    {% endfor %}</div>
+                  {% endif %}
+                </div>
+                <form method="post" action="{% url 'intake_forms:admin_intake_form_field_delete' intake_form.id field.id %}" data-confirm="{% trans 'Delete this field?' %}">{% csrf_token %}
+                  <button class="btn-danger px-2.5 py-1 text-xs shrink-0" type="submit">{% trans "Delete" %}</button>
+                </form>
+              </div>
             {% endfor %}
-            <button class="button button-primary" type="submit">{% trans "Add field" %}</button>
+          </div>
+        {% else %}
+          {% include "ui/components/_empty_state.html" with title=_("No fields yet.") message=_("Add fields below to build this intake form.") %}
+        {% endif %}
+        {% if field_form %}
+          <hr class="my-5">
+          <div class="section-head"><div>
+              <p class="eyebrow">{% trans "Builder" %}</p>
+              <h3>{% trans "Add a field" %}</h3>
+            </div>
+          </div>
+          <form class="page-stack" method="post">{% csrf_token %}
+            <input type="hidden" name="action" value="add_field"><div class="form-grid">{% for field in field_form %}
+                {% if field.name == "required" %}
+                {% elif field.name == "options" %}
+                  <div id="intake-choices-section" class="form-grid-full">
+                    <label class="field-label">{% trans "Choices" %}</label>
+                    <div id="intake-choices" class="flex flex-col gap-2">
+                      <div class="choice-row flex items-center gap-2" data-idx="1">
+                        <input type="text" class="form-input flex-1" name="intake_choice_1" placeholder="{% trans 'Choice text' %}">
+                        <button type="button" class="btn-danger px-2 py-1 text-xs intake-remove-btn">{% trans "Remove" %}</button>
+                      </div>
+                    </div>
+                    <button type="button" class="btn-ghost text-sm mt-1" id="add-intake-choice-btn">+ {% trans "Add choice" %}</button>
+                  </div>
+                {% else %}
+                  <div>{% include "ui/components/_field.html" %}</div>
+                {% endif %}
+              {% endfor %}
+            </div>
+            <div class="flex items-center gap-4 pt-4 border-t border-line">
+              {% for field in field_form %}
+                {% if field.name == "required" %}
+                  <label class="flex items-center gap-2 cursor-pointer" for="{{ field.id_for_label }}">
+                    {{ field|widget_class }}
+                    <span class="text-sm font-bold text-text">{{ field.label }}</span>
+                  </label>
+                {% endif %}
+              {% endfor %}
+            </div>
+            <div class="actions-row">
+              <button class="btn-primary" type="submit">{% trans "Add field" %}</button>
+            </div>
           </form>
+          <template id="intake-choice-template">
+            <div class="choice-row flex items-center gap-2" data-idx="__IDX__">
+              <input type="text" class="form-input flex-1" name="intake_choice___IDX__" placeholder="{% trans 'Choice text' %}">
+              <button type="button" class="btn-danger px-2 py-1 text-xs intake-remove-btn">{% trans "Remove" %}</button>
+            </div>
+          </template>
         {% endif %}
       </section>
-      <section class="surface"><div class="section-header"><div>
+      <section class="card-surface"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Responses" %}</p>
             <h3>{% trans "Form responses" %}</h3>
           </div>
         </div>
-        {% for item in responses %}
-          <p>
-            <a class="text-button" href="{% url 'intake_forms:admin_intake_response_detail' intake_form.id item.id %}">{{ item.student.full_name|default:item.student }}
-              ·
-              {{ item.submitted_at|date:"SHORT_DATETIME_FORMAT"|default:_("Not submitted") }}
-            </a>
-          </p>
-        {% empty %}
-          <p>{% trans "No responses." %}</p>
-        {% endfor %}
+        {% if responses %}
+          <div class="divide-y divide-line">{% for item in responses %}
+            <div class="flex gap-3 py-4 first:pt-0 last:pb-0">
+              <div class="flex flex-col items-center shrink-0">
+                <span class="w-2.5 h-2.5 rounded-full border-2 border-line bg-surface mt-1.5"></span>
+                {% if not forloop.last %}<span class="w-px flex-1 bg-line mt-1.5"></span>{% endif %}
+              </div>
+              <div class="min-w-0 flex-1">
+                <strong><a class="no-underline text-text hover:text-brand" href="{% url 'intake_forms:admin_intake_response_detail' intake_form.id item.id %}">{{ item.student.full_name|default:item.student }}</a></strong>
+                <p class="text-xs text-muted mt-0.5 m-0 flex flex-wrap gap-x-2 items-center">
+                  <span class="bidi" dir="ltr">{{ item.submitted_at|date:"d/m/Y"|default:_("Not submitted") }}</span>
+                  {% if item.submitted_at %}<span class="bidi" dir="ltr">{{ item.submitted_at|date:"H:i" }}</span>{% endif %}
+                </p>
+              </div>
+            </div>
+          {% endfor %}</div>
+        {% else %}
+          {% include "ui/components/_empty_state.html" with title=_("No responses yet.") %}
+        {% endif %}
       </section>
     {% elif target %}
-      <section class="surface"><div class="section-header"><div>
+      <section class="card-surface"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Target" %}</p>
             <h3>{{ target.name|default:target|default:_("Intake target") }}</h3>
           </div>
         </div>
-        <p class="muted">{% trans "Responses for this target" %}</p>
+        <p class="text-muted">{% trans "Responses for this target" %}</p>
         {% for item in responses %}
           <p>
             {{ item.student.full_name|default:item.student }}
@@ -103,16 +183,16 @@
         {% endfor %}
       </section>
     {% elif response %}
-      <section class="surface"><div class="section-header"><div>
+      <section class="card-surface"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Response" %}</p>
             <h3>{{ form_obj.title|default:_("Intake response") }}</h3>
           </div>
         </div>
         <p>{{ response.student }}</p>
-        <dl class="description-list">{% for answer in response.answers.all %}
+        <dl class="dl">{% for answer in response.answers.all %}
             <div>
-              <dt>{{ answer.field.label }}</dt>
-              <dd>
+              <dt class="dt">{{ answer.field.label }}</dt>
+              <dd class="dd">
                 {{ answer.value|default:'—' }}
               </dd>
             </div>
@@ -120,24 +200,24 @@
         </dl>
       </section>
     {% elif page_obj %}
-      <section class="surface"><div class="table-shell"><table>
+      <section class="card-surface"><div class="table-wrap"><table class="table">
             <thead>
               <tr>
-                <th>{% trans "Form" %}</th>
-                <th>{% trans "Target type" %}</th>
-                <th>{% trans "Target name" %}</th>
-                <th>{% trans "Required / optional" %}</th>
-                <th>{% trans "Status" %}</th>
-                <th>{% trans "Actions" %}</th>
+                <th class="table-th">{% trans "Form" %}</th>
+                <th class="table-th">{% trans "Target type" %}</th>
+                <th class="table-th">{% trans "Target name" %}</th>
+                <th class="table-th">{% trans "Required / optional" %}</th>
+                <th class="table-th">{% trans "Status" %}</th>
+                <th class="table-th">{% trans "Actions" %}</th>
               </tr>
             </thead>
             <tbody>
               {% for item in page_obj %}
                 <tr>
-                  <td class="cell-stack"><strong>{{ item.title }}</strong>
-                    <small>{{ item.description|truncatewords:8|default:'—' }}</small>
+                  <td class="table-td"><div class="flex flex-col"><strong>{{ item.title }}</strong>
+                    <small>{{ item.description|truncatewords:8|default:'—' }}</small></div>
                   </td>
-                  <td>
+                  <td class="table-td">
                     {% if item.course_version %}
                       {% trans "Course" %}
                     {% elif item.cohort %}
@@ -146,7 +226,7 @@
                       —
                     {% endif %}
                   </td>
-                  <td class="cell-stack"><strong>
+                  <td class="table-td"><div class="flex flex-col"><strong>
                       {% if item.course_version %}
                         {{ item.course_version.course }}
                       {% elif item.cohort %}
@@ -159,27 +239,23 @@
                       {% elif item.cohort %}
                         {{ item.cohort }}
                       {% endif %}
-                    </small>
+                    </small></div>
                   </td>
-                  <td>
+                  <td class="table-td">
                     {% include "ui/components/_status.html" with code=item.is_required|yesno:"required,optional" label=item.is_required|yesno:_("Required,Optional") %}
                   </td>
-                  <td>
+                  <td class="table-td">
                     {% include "ui/components/_status.html" with code=item.is_active|yesno:"active,inactive" label=item.is_active|yesno:_("Active,Inactive") %}
                   </td>
-                  <td>
-                    <div class="inline-actions"><a class="button button-info"
+                  <td class="table-td">
+                    <div class="table-actions"><a class="btn-secondary"
                          href="{% url 'intake_forms:admin_intake_form_detail' item.id %}">{% trans "Manage" %}</a>
                     </div>
                   </td>
                 </tr>
               {% empty %}
                 <tr>
-                  <td colspan="6"><div class="empty-state"><span>&#9679;</span>
-                      <h3>{% trans "No intake forms found." %}</h3>
-                      <a class="button button-primary"
-                         href="{% url 'intake_forms:admin_intake_form_create' %}">{% trans "Create form" %}</a>
-                    </div>
+                     <td class="table-td" colspan="6">{% url 'intake_forms:admin_intake_form_create' as create_form_url %}{% include "ui/components/_empty_state.html" with title=_("No intake forms found.") action_label=_("Create form") href=create_form_url %}
                   </td>
                 </tr>
               {% endfor %}
@@ -188,7 +264,7 @@
         </div>
         {% include "ui/components/_pagination.html" %}
       </section>
-      <div class="inline-actions"><a class="button button-primary"
+      <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-primary"
            href="{% url 'intake_forms:admin_intake_form_create' %}">{% trans "Create form" %}</a>
       </div>
     {% endif %}

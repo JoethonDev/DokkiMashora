@@ -1,21 +1,20 @@
-{% load i18n %}<div id="payment-records" class="table-shell">
-  <table>
+{% load i18n %}<div id="payment-records" class="table-wrap"><table class="table">
     <thead>
       <tr>
-        <th>{% trans "Reference" %}</th>
-        <th>{% trans "Student" %}</th>
-        <th>{% trans "Program / enrollment" %}</th>
-        <th>{% trans "Amount" %}</th>
-        <th>{% trans "Status / date" %}</th>
-        <th>{% trans "Actions" %}</th>
+        <th class="table-th">{% trans "Reference" %}</th>
+        <th class="table-th">{% trans "Student" %}</th>
+        <th class="table-th">{% trans "Program / enrollment" %}</th>
+        <th class="table-th">{% trans "Amount" %}</th>
+        <th class="table-th">{% trans "Status / date" %}</th>
+        <th class="table-th">{% trans "Actions" %}</th>
       </tr>
     </thead>
     <tbody>
       {% for item in page_obj %}
         <tr>
-          <td>{{ item.external_reference|default:item.id }}</td>
-          <td>{{ item.student.full_name|default:item.student }}</td>
-          <td>
+          <td class="table-td"><span dir="ltr" class="inline-block">{{ item.external_reference|default:item.id }}</span></td>
+          <td class="table-td">{{ item.student.full_name|default:item.student }}</td>
+          <td class="table-td">
             {% if item.diploma_enrollment %}
               {{ item.diploma_enrollment.cohort.diploma.title }}
             {% elif item.course_enrollment %}
@@ -28,20 +27,20 @@
               —
             {% endif %}
           </td>
-          <td>{{ item.amount|default:'—' }}{% if item.currency %} {{ item.currency }}{% endif %}</td>
-          <td class="cell-stack">
+          <td class="table-td"><span dir="ltr" class="inline-block">{{ item.amount|default:'—' }}</span>{% if item.currency %} <span dir="ltr" class="inline-block">{{ item.currency }}</span>{% endif %}</td>
+          <td class="table-td"><div class="flex flex-col">
             {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
-            <small>{{ item.paid_at|default:item.created_at|date:"SHORT_DATE_FORMAT"|default:'—' }}</small>
+            <small><span dir="ltr" class="inline-block">{{ item.paid_at|default:item.created_at|date:"SHORT_DATE_FORMAT"|default:'—' }}</span></small></div>
           </td>
-          <td>
-            <div class="inline-actions">
-              <a class="button button-info" href="{% url 'payments:record_detail' item.id %}">{% trans "View" %}</a>
+          <td class="table-td">
+            <div class="flex gap-2.5 items-center flex-wrap">
+              <a class="btn-secondary" href="{% url 'payments:record_detail' item.id %}">{% trans "View" %}</a>
             </div>
           </td>
         </tr>
       {% empty %}
         <tr class="empty-row">
-          <td colspan="6">
+          <td colspan="6" class="table-td">
             {% if current_status or current_student_q or current_date_from or current_date_to %}
               {% include "ui/components/_empty_state.html" with title=_("No payments match these filters.") compact=True %}
             {% else %}

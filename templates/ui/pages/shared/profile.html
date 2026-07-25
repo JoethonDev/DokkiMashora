@@ -5,10 +5,10 @@
 {% endblock %}
 {% block content %}
   <h1>{% trans "Profile" %}</h1>
-  <form method="post">{% csrf_token %}
+  <div class="max-w-2xl mx-auto"><form method="post">{% csrf_token %}
     {% for field in form %}
       {% include "ui/components/_field.html" %}
     {% endfor %}
-    <button class="button button-primary" type="submit">{% trans "Save" %}</button>
-  </form>
+    <button class="btn-primary" type="submit">{% trans "Save" %}</button>
+  </form></div>
 {% endblock %}

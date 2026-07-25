@@ -4,18 +4,19 @@
   {% trans "Assessment results" %}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view"><section class="page-intro"><div>
+  <div class="page-stack animate-enter-view"><section class="flex justify-between items-center gap-5 px-0.5 py-1.5"><div>
         <p class="eyebrow">{% trans "Assessment" %}</p>
         <h2>{% trans "Assessment results" %}</h2>
       </div>
+      <div class="actions-row"><a class="btn-ghost" href="{% url 'assessments:student_list' %}">{% trans "Back to assessments" %}</a></div>
     </section>
-    <section class="surface">{% if attempts %}
-        <div class="table-shell"><table>
+    <section class="card-surface">{% if attempts %}
+        <div class="table-wrap"><table class="table">
             <thead>
               <tr>
-                <th>{% trans "Assessment" %}</th>
-                <th>{% trans "Score" %}</th>
-                <th>{% trans "Status" %}</th>
+                <th class="table-th">{% trans "Assessment" %}</th>
+                <th class="table-th">{% trans "Score" %}</th>
+                <th class="table-th">{% trans "Status" %}</th>
               </tr>
             </thead>
             <tbody>
@@ -24,7 +25,7 @@
                   <td>{{ attempt.assessment }}</td>
                   <td>{{ attempt.score|default:'—' }}</td>
                   <td>
-                    <span class="status-pill blue">{{ attempt.get_status_display }}</span>
+                    <span class="status-pill-info">{{ attempt.get_status_display }}</span>
                   </td>
                 </tr>
               {% endfor %}

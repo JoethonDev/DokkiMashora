@@ -4,7 +4,7 @@
   {{ assessment.title }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view"><section class="page-intro"><div>
+  <div class="page-stack animate-enter-view"><section class="flex justify-between items-center gap-5 px-0.5 py-1.5"><div>
         <p class="eyebrow">{% trans "Assessment" %}</p>
         <h2>{{ assessment.title }}</h2>
         {% if remaining_seconds %}
@@ -16,20 +16,21 @@
           </p>
         {% endif %}
       </div>
+      <div class="actions-row"><a class="btn-ghost" href="{% url 'assessments:student_list' %}">{% trans "Leave assessment" %}</a></div>
     </section>
-    <section class="surface"><form method="post" action="{% url 'assessments:submit' assessment.id %}">{% csrf_token %}
+    <section class="card-surface"><div class="max-w-2xl mx-auto"><form method="post" action="{% url 'assessments:submit' assessment.id %}">{% csrf_token %}
         {% for question in questions %}
           <fieldset class="field"><legend>{{ question.text }}</legend>
             {% for choice in question.choices.all %}
-              <label class="radio-label"><input type="radio" name="q_ {{ question.id }} " value="{{ choice.id }}">{{ choice.text }}
+              <label class="flex items-start gap-2 cursor-pointer"><input type="radio" name="q_{{ question.id }}" value="{{ choice.id }}" class="form-radio">{{ choice.text }}
               </label>
             {% endfor %}
           </fieldset>
         {% empty %}
           <p>{% trans "No questions available." %}</p>
         {% endfor %}
-        <button class="button button-primary" type="submit">{% trans "Submit assessment" %}</button>
-      </form>
+        <button class="btn-primary" type="submit">{% trans "Submit assessment" %}</button>
+      </form></div>
     </section>
   </div>
 {% endblock %}

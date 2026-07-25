@@ -1,17 +1,17 @@
 {% load i18n %}
-<div id="student-content" class="page-stack enter-view"><section class="profile-card"><div class="profile-main"><span class="avatar avatar-xl">{{ user.get_full_name|slice:":2"|upper }}</span>
+<div id="student-content" class="page-stack animate-enter-view"><section class="bg-gradient-to-br from-white to-surface-soft border border-line rounded-lg p-6 flex items-center justify-between gap-5 shadow-2xs"><div class="flex items-center gap-4"><span class="rounded-full bg-brand-soft text-brand font-black grid place-items-center shrink-0 w-20 h-20 text-2xl">{{ user.get_full_name|slice:":2"|upper }}</span>
       <div>
         <p class="eyebrow">{% trans "Student record" %}</p>
         <h2>{{ student.full_name|default:user.get_full_name }}</h2>
-        <div class="profile-meta"><span>{{ user.email }}</span>
-          <span class="status-pill green">{% trans "Released information" %}</span>
+        <div class="flex items-center gap-2.5 flex-wrap text-muted text-xs"><span><span dir="ltr" class="inline-block">{{ user.email }}</span></span>
+          <span class="status-pill-success">{% trans "Released information" %}</span>
         </div>
       </div>
     </div>
-    <a class="button button-soft" href="{% url 'students:details' %}">{% trans "Profile details" %}</a>
+    <a class="btn-soft" href="{% url 'students:details' %}">{% trans "Profile details" %}</a>
   </section>
-  <section class="metric-grid"><article class="metric-card"><div class="metric-icon tone-blue">◫</div>
-      <div>
+  <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"><article class="stat-card"><div class="stat-icon bg-info-soft text-info-text">◉</div>
+      <div class="stat-body">
         <span>{% trans "Attendance rate" %}</span>
         <strong>
           {{ attendance.attendance_percent|default:0 }}
@@ -22,44 +22,43 @@
         </small>
       </div>
     </article>
-    <article class="metric-card"><div class="metric-icon tone-purple">✓</div>
-      <div>
+    <article class="stat-card"><div class="stat-icon bg-info-soft text-info-text">✓</div>
+      <div class="stat-body">
         <span>{% trans "Released grades" %}</span>
         <strong>{{ grade_items|length }}</strong>
         <small>{% trans "Visible grade items" %}</small>
       </div>
     </article>
-    <article class="metric-card"><div class="metric-icon tone-amber">¤</div>
-      <div>
+    <article class="stat-card"><div class="stat-icon bg-warning-soft text-warning-text">¤</div>
+      <div class="stat-body">
         <span>{% trans "Payments" %}</span>
         <strong>{{ payments.records|length }}</strong>
         <small>
           {% trans "Total paid" %}
           :
-          {{ payments.total_paid|default:0 }}
+          <span dir="ltr" class="inline-block">{{ payments.total_paid|default:0 }}</span>
         </small>
       </div>
     </article>
-    <article class="metric-card"><div class="metric-icon tone-green">▣</div>
-      <div>
+    <article class="stat-card"><div class="stat-icon bg-success-soft text-success-text">▣</div>
+      <div class="stat-body">
         <span>{% trans "Certificates" %}</span>
         <strong>{{ certificates|length }}</strong>
         <small>{% trans "Available records" %}</small>
       </div>
     </article>
   </section>
-  <section class="detail-layout"><article class="surface"><div class="section-header"><div>
+  <section class="grid grid-cols-1 md:grid-cols-2 gap-4"><article class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Attendance" %}</p>
           <h3>{% trans "Attendance history" %}</h3>
         </div>
       </div>
-      <div class="record-list">{% for item in attendance.records|slice:":6" %}
+      <div class="flex flex-col">{% for item in attendance.records|slice:":6" %}
           <div>
-            <span class="avatar avatar-sm">◷</span>
-            <span><strong>{{ item.session.date }}</strong>
+            <span class="rounded-full bg-brand-soft text-brand font-black grid place-items-center shrink-0 w-9 h-9 text-sm">◷</span>
+            <span><strong><span dir="ltr" class="inline-block">{{ item.session.date }}</span></strong>
               <small>{{ item.session|default:'' }}</small></span>
-            <span class="status-pill {% if item.status == 'present' %} green {% else %} neutral {% endif %}">{{ item.get_status_display|default:item.status }}
-            </span>
+            {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:item.status %}
           </div>
         {% empty %}
           <div class="empty-state"><span>◷</span>
@@ -69,19 +68,19 @@
         {% endfor %}
       </div>
     </article>
-    <article class="surface"><div class="section-header"><div>
+    <article class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Assessments" %}</p>
           <h3>{% trans "Released assessment history" %}</h3>
         </div>
-        <a class="text-button" href="{% url 'students:assessment_history' %}">{% trans "View all" %}</a>
+        <a class="btn-ghost" href="{% url 'students:assessment_history' %}">{% trans "View all" %}</a>
       </div>
-      <div class="record-list">{% for item in assessment_attempts %}
+      <div class="flex flex-col">{% for item in assessment_attempts %}
           {% if item.status == attempt_status_graded and item.grade_visibility != grade_visibility_hidden %}
             <div>
-              <span class="avatar avatar-sm">✓</span>
+              <span class="rounded-full bg-brand-soft text-brand font-black grid place-items-center shrink-0 w-9 h-9 text-sm">✓</span>
               <span><strong>{{ item.assessment.title }}</strong>
                 <small>{{ item.get_status_display }}</small></span>
-              <span class="record-meta">{{ item.score|default:'—' }}</span>
+              <span class="text-end">{{ item.score|default:'—' }}</span>
             </div>
           {% endif %}
         {% empty %}
@@ -93,13 +92,13 @@
       </div>
     </article>
   </section>
-  <section class="detail-layout"><article class="surface"><div class="section-header"><div>
+  <section class="grid grid-cols-1 md:grid-cols-2 gap-4"><article class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Progression" %}</p>
           <h3>{% trans "Academic history" %}</h3>
         </div>
-        <a class="text-button" href="{% url 'students:progression_history' %}">{% trans "View progression" %}</a>
+        <a class="btn-ghost" href="{% url 'students:progression_history' %}">{% trans "View progression" %}</a>
       </div>
-      <div class="timeline">{% for item in semester_progress %}
+      <div class="flex flex-col">{% for item in semester_progress %}
           <div>
             <i></i>
             <p>
@@ -112,7 +111,7 @@
             </p>
           </div>
         {% empty %}
-          <p class="muted">{% trans "No progression records." %}</p>
+          <p class="text-muted">{% trans "No progression records." %}</p>
         {% endfor %}
         {% for item in promotion_decisions %}
           <div>
@@ -129,20 +128,20 @@
         {% endfor %}
       </div>
     </article>
-    <article class="surface"><div class="section-header"><div>
+    <article class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Payments" %}</p>
           <h3>{% trans "Payment records" %}</h3>
         </div>
       </div>
-      <div class="record-list">{% for item in payments.records %}
+      <div class="flex flex-col">{% for item in payments.records %}
           <div>
-            <span class="avatar avatar-sm">¤</span>
+            <span class="rounded-full bg-brand-soft text-brand font-black grid place-items-center shrink-0 w-9 h-9 text-sm">¤</span>
             <span><strong>
-              {{ item.amount }}
+              <span dir="ltr" class="inline-block">{{ item.amount }}</span>
               {{ item.currency }}
             </strong>
-            <small>{{ item.paid_at|date:"d M Y"|default:'—' }}</small></span>
-          <span class="status-pill neutral">{{ item.get_status_display|default:item.status }}</span>
+            <small><span dir="ltr" class="inline-block">{{ item.paid_at|date:"d/m/Y"|default:'—' }}</span></small></span>
+          <span class="status-pill-neutral">{{ item.get_status_display|default:item.status }}</span>
           </div>
         {% empty %}
           <div class="empty-state"><span>¤</span>
@@ -153,16 +152,16 @@
       </div>
     </article>
   </section>
-  <section class="surface"><div class="section-header"><div>
+  <section class="card-surface"><div class="section-head"><div>
         <p class="eyebrow">{% trans "Credentials" %}</p>
         <h3>{% trans "Certificates" %}</h3>
       </div>
     </div>
-    <div class="program-grid">{% for item in certificates %}
-        <article class="program-card"><div class="program-symbol">▣</div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">{% for item in certificates %}
+        <article class="card-surface"><div class="w-12 h-12 rounded-md bg-brand-soft text-brand grid place-items-center font-black">▣</div>
           <h3>{{ item.diploma_enrollment.cohort.diploma|default:item }}</h3>
-          <p>{{ item.issued_at|date:"d M Y"|default:'' }}</p>
-          <a class="button button-primary"
+          <p><span dir="ltr" class="inline-block">{{ item.issued_at|date:"d/m/Y"|default:'' }}</span></p>
+          <a class="btn-primary"
              href="{% url 'certificates:student_certificate_download' item.id %}">{% trans "Download certificate" %}
           </a></article>
       {% empty %}
@@ -173,14 +172,14 @@
       {% endfor %}
     </div>
   </section>
-  <section class="detail-layout"><article class="surface"><div class="section-header"><div>
+  <section class="grid grid-cols-1 md:grid-cols-2 gap-4"><article class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Entrance exams" %}</p>
           <h3>{% trans "Exam assignments" %}</h3>
         </div>
       </div>
       {% for item in exam_assignments %}
-        <div class="activity-feed"><div>
-            <span class="avatar avatar-sm">◇</span>
+        <div class="flex flex-col"><div>
+            <span class="rounded-full bg-brand-soft text-brand font-black grid place-items-center shrink-0 w-9 h-9 text-sm">◇</span>
             <p>
               <strong>{{ item.exam.title }}</strong>
               <small>{{ item.get_status_display|default:item.status }}</small>
@@ -188,25 +187,25 @@
           </div>
         </div>
       {% empty %}
-        <p class="muted">{% trans "No entrance exam records." %}</p>
+        <p class="text-muted">{% trans "No entrance exam records." %}</p>
       {% endfor %}
     </article>
-    <article class="surface"><div class="section-header"><div>
+    <article class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Communications" %}</p>
           <h3>{% trans "Notifications" %}</h3>
         </div>
       </div>
       {% for item in notifications %}
-        <div class="activity-feed"><div>
-            <span class="avatar avatar-sm">✉</span>
+        <div class="flex flex-col"><div>
+            <span class="rounded-full bg-brand-soft text-brand font-black grid place-items-center shrink-0 w-9 h-9 text-sm">✉</span>
             <p>
               <strong>{{ item.title|default:item.subject }}</strong>
-              <small>{{ item.created_at|date:"d M Y" }}</small>
+              <small><span dir="ltr" class="inline-block">{{ item.created_at|date:"d/m/Y" }}</span></small>
             </p>
           </div>
         </div>
       {% empty %}
-        <p class="muted">{% trans "No communications released." %}</p>
+        <p class="text-muted">{% trans "No communications released." %}</p>
       {% endfor %}
     </article>
   </section>

@@ -4,11 +4,12 @@ from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
+from apps.core.forms import StyledFormMixin
 from .constants import MAX_FILE_SIZE_BYTES
 from .models import PaymentRecord
 
 
-class PaymentUploadForm(forms.Form):
+class PaymentUploadForm(StyledFormMixin, forms.Form):
     csv_file = forms.FileField(
         label=_("CSV file"),
         help_text=_("Upload a CSV file with columns: national_id, amount, payment_date"),
@@ -31,18 +32,16 @@ class PaymentUploadForm(forms.Form):
         return file
 
 
-class PaymentRecordEditForm(forms.ModelForm):
+class PaymentRecordEditForm(StyledFormMixin, forms.ModelForm):
     class Meta:
         model = PaymentRecord
         fields = ["amount", "currency", "status", "paid_at", "due_at", "external_reference", "notes"]
         widgets = {
+            "amount": forms.NumberInput(attrs={}),
+            "currency": forms.Select(attrs={}),
+            "status": forms.Select(attrs={}),
             "paid_at": forms.DateTimeInput(attrs={"type": "datetime-local"}),
             "due_at": forms.DateTimeInput(attrs={"type": "datetime-local"}),
+            "external_reference": forms.TextInput(attrs={}),
             "notes": forms.Textarea(attrs={"rows": 3}),
         }
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        input_class = ""
-        for field in self.fields.values():
-            field.widget.attrs["class"] = input_class

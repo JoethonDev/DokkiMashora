@@ -4,49 +4,49 @@
   {% trans "Landing page settings" %}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view surface form-main">{% include "ui/components/_page_header.html" with title=_("Landing page settings") eyebrow=_("Site content") %}
+  <div class="page-stack animate-enter-view card-surface max-w-form mx-auto w-full">{% include "ui/components/_page_header.html" with title=_("Landing page settings") eyebrow=_("Site content") %}
     <form method="post" enctype="multipart/form-data">{% csrf_token %}
       {% if form.non_field_errors %}
-        <div class="alert alert-error" role="alert">{% for error in form.non_field_errors %}
+        <div class="py-4 px-5 border border-red rounded-md bg-red-soft text-red" role="alert">{% for error in form.non_field_errors %}
             <p>{{ error }}</p>
           {% endfor %}
         </div>
       {% endif %}
-      <nav class="tab-bar" role="tablist" aria-label="{% trans 'Language' %}"
+      <nav class="flex gap-1 p-1 bg-surface-soft rounded-md w-max max-w-full overflow-auto" role="tablist" aria-label="{% trans 'Language' %}"
            x-data="{tab:'en'}"
-           @click.outside="tab='en'"><button class="tab-button"
+           @click.outside="tab='en'"><button class="border-0 bg-transparent rounded-sm px-4 py-2.5 text-muted cursor-pointer font-bold"
                 role="tab"
                 :aria-selected="tab==='en'"
                 aria-controls="panel-en"
                 id="tab-en"
                 type="button"
-                @click="tab='en'">English</button>
-        <button class="tab-button"
+                @click="tab='en'">{% trans "English" %}</button>
+        <button class="border-0 bg-transparent rounded-sm px-4 py-2.5 text-muted cursor-pointer font-bold"
                 role="tab"
                 :aria-selected="tab==='ar'"
                 aria-controls="panel-ar"
                 id="tab-ar"
                 type="button"
-                @click="tab='ar'">العربية</button>
+                @click="tab='ar'">{% trans "Arabic" %}</button>
       </nav>
-      <div class="tab-panel" id="panel-en" x-show="tab==='en'" x-cloak>{% for section, fields in form.content_sections %}
-          <section class="form-section"><div class="form-section-heading"><div>
+      <div id="panel-en" x-show="tab==='en'" x-cloak>{% for section, fields in form.content_sections %}
+          <section><div class="section-head"><div>
                 <h3>{{ section }}</h3>
               </div>
             </div>
-            <div class="form-grid">{% for en_field, ar_field in fields %}
-                <div class="field {% if en_field.errors %} invalid {% endif %}"><label for="{{ en_field.id_for_label }}">{{ en_field.label }}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">{% for en_field, ar_field in fields %}
+                <div class="form-group{% if en_field.errors %} form-group-error{% endif %}"><span class="field-label"><label for="{{ en_field.id_for_label }}">{{ en_field.label }}
                     {% if en_field.field.required %}
                       <span aria-hidden="true">*</span>
                     {% endif %}
-                  </label>
+                  </label></span>
                   {{ en_field }}
                   {% if en_field.help_text %}
-                    <p id="{{ en_field.id_for_label }}-help" class="field-help">{{ en_field.help_text }}</p>
+                    <p id="{{ en_field.id_for_label }}-help" class="basis-full ms-0 -mt-1 text-muted text-xs">{{ en_field.help_text }}</p>
                   {% endif %}
                   {% for error in en_field.errors %}
                     <p id="{{ en_field.id_for_label }}-error"
-                       class="field-error"
+                       class="basis-full ms-0 -mt-1 text-red text-xs"
                        role="alert">{{ error }}</p>
                   {% endfor %}
                 </div>
@@ -55,23 +55,23 @@
           </section>
         {% endfor %}
       </div>
-      <div class="tab-panel" id="panel-ar" x-show="tab==='ar'" x-cloak>
+      <div id="panel-ar" x-show="tab==='ar'" x-cloak>
         {% for section, fields in form.content_sections %}
-          <section class="form-section"><div class="form-section-heading"><div>
+          <section><div class="section-head"><div>
                 <h3>{{ section }}</h3>
               </div>
             </div>
-            <div class="form-grid">{% for en_field, ar_field in fields %}
-                <div class="field {% if ar_field.errors %} invalid {% endif %}"><label for="{{ ar_field.id_for_label }}">{{ ar_field.label }}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">{% for en_field, ar_field in fields %}
+                <div class="form-group{% if ar_field.errors %} form-group-error{% endif %}"><span class="field-label"><label for="{{ ar_field.id_for_label }}">{{ ar_field.label }}
                     {% if ar_field.field.required %}<span aria-hidden="true">*</span>{% endif %}
-                  </label>
+                  </label></span>
                   {{ ar_field }}
                   {% if ar_field.help_text %}
-                    <p id="{{ ar_field.id_for_label }}-help" class="field-help">{{ ar_field.help_text }}</p>
+                    <p id="{{ ar_field.id_for_label }}-help" class="basis-full ms-0 -mt-1 text-muted text-xs">{{ ar_field.help_text }}</p>
                   {% endif %}
                   {% for error in ar_field.errors %}
                     <p id="{{ ar_field.id_for_label }}-error"
-                       class="field-error"
+                       class="basis-full ms-0 -mt-1 text-red text-xs"
                        role="alert">{{ error }}</p>
                   {% endfor %}
                 </div>
@@ -80,70 +80,70 @@
           </section>
         {% endfor %}
       </div>
-      <section class="form-section"><div class="form-section-heading"><div>
+      <section><div class="section-head"><div>
             <h3>{% trans "Images" %}</h3>
           </div>
         </div>
-        <div class="form-grid">{% for field in form.image_fields %}
-            <div class="field {% if field.errors %} invalid {% endif %}"><label for="{{ field.id_for_label }}">{{ field.label }}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">{% for field in form.image_fields %}
+            <div class="form-group{% if field.errors %} form-group-error{% endif %}"><span class="field-label"><label for="{{ field.id_for_label }}">{{ field.label }}
                 {% if field.field.required %}
                   <span aria-hidden="true">*</span>
                 {% endif %}
-              </label>
+              </label></span>
               {{ field }}
               {% if field.help_text %}
-                <p id="{{ field.id_for_label }}-help" class="field-help">{{ field.help_text }}</p>
+                <p id="{{ field.id_for_label }}-help" class="basis-full ms-0 -mt-1 text-muted text-xs">{{ field.help_text }}</p>
               {% endif %}
               {% for error in field.errors %}
                 <p id="{{ field.id_for_label }}-error"
-                   class="field-error"
+                   class="basis-full ms-0 -mt-1 text-red text-xs"
                    role="alert">{{ error }}</p>
               {% endfor %}
             </div>
           {% endfor %}
         </div>
       </section>
-      <section class="form-section"><div class="form-section-heading"><div>
+      <section><div class="section-head"><div>
             <h3>{% trans "Stats, contact & social" %}</h3>
           </div>
         </div>
-        <div class="form-grid">{% for field in form.stat_fields %}
-            <div class="field {% if field.errors %} invalid {% endif %}"><label for="{{ field.id_for_label }}">{{ field.label }}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">{% for field in form.stat_fields %}
+            <div class="form-group{% if field.errors %} form-group-error{% endif %}"><span class="field-label"><label for="{{ field.id_for_label }}">{{ field.label }}
                 {% if field.field.required %}
                   <span aria-hidden="true">*</span>
                 {% endif %}
-              </label>
+              </label></span>
               {{ field }}
               {% for error in field.errors %}
                 <p id="{{ field.id_for_label }}-error"
-                   class="field-error"
+                   class="basis-full ms-0 -mt-1 text-red text-xs"
                    role="alert">{{ error }}</p>
               {% endfor %}
             </div>
           {% endfor %}
-          <div class="field"><label class="checkbox-row">{{ form.show_live_stats }}
-              <span>{% trans "Show live stats" %}</span>
-            </label>
+          <div class="form-group flex-nowrap"><label class="flex items-start gap-2">{{ form.show_live_stats }}
+              <span class="font-extrabold text-xs text-muted">{% trans "Show live stats" %}</span>
+          </label>
           </div>
           {% for field in form.contact_fields %}
-            <div class="field {% if field.errors %} invalid {% endif %}"><label for="{{ field.id_for_label }}">{{ field.label }}
+            <div class="form-group{% if field.errors %} form-group-error{% endif %}"><span class="field-label"><label for="{{ field.id_for_label }}">{{ field.label }}
                 {% if field.field.required %}<span aria-hidden="true">*</span>{% endif %}
-              </label>
+              </label></span>
               {{ field }}
               {% for error in field.errors %}
                 <p id="{{ field.id_for_label }}-error"
-                   class="field-error"
+                   class="basis-full ms-0 -mt-1 text-red text-xs"
                    role="alert">{{ error }}</p>
               {% endfor %}
             </div>
           {% endfor %}
         </div>
       </section>
-      <div class="inline-actions sticky-actions"><button class="button button-primary" type="submit">{% trans "Save settings" %}</button>
-        <a class="button button-info"
+      <div class="actions-row"><button class="btn-primary" type="submit">{% trans "Save settings" %}</button>
+        <a class="btn-secondary"
            href="{% url 'core:landing' %}"
            target="_blank">{% trans "Preview landing page" %}</a>
-        <button class="button button-warning"
+        <button class="btn-warning"
                 type="submit"
                 name="action"
                 value="reset"

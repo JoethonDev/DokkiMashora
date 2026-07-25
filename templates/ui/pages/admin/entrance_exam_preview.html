@@ -1,0 +1,34 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n %}
+{% block title %}{{ exam.title|default:_("Entrance exam") }}{% endblock %}
+{% block content %}
+  <div class="page-stack animate-enter-view">
+    {% include "ui/components/_page_header.html" with eyebrow=_("Entrance exam preview") title=exam.title description=exam.description back_button=True %}
+    <section class="card-surface">
+      {% if questions %}
+        <div class="max-w-2xl mx-auto">
+          {% for question in questions %}
+            <div class="border border-line rounded-sm p-4 mb-4 last:mb-0 bg-surface-soft">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="text-xs font-bold text-muted uppercase">#{{ question.order }}</span>
+                <span class="px-2 py-0.5 text-xs font-bold rounded-full {% if question.question_type == 'mcq' %}bg-info-soft text-info-text{% else %}bg-warning-soft text-warning-text{% endif %}">{{ question.get_question_type_display }}</span>
+              </div>
+              <fieldset class="border-0 p-0 m-0">
+                <legend class="text-sm font-bold mb-3">{{ question.text }}</legend>
+                {% for choice in question.choices.all %}
+                  <label class="flex items-center gap-2 text-sm py-1.5 cursor-pointer">
+                    <input type="radio" class="form-radio" disabled{% if choice.is_correct %} checked{% endif %}>
+                    <span>{{ choice.text }}</span>
+                    {% if choice.score %}<span class="text-xs text-muted">({{ choice.score }} {% trans "pts" %})</span>{% endif %}
+                  </label>
+                {% endfor %}
+              </fieldset>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="text-muted m-0">{% trans "No questions have been added to this exam yet." %}</p>
+      {% endif %}
+    </section>
+  </div>
+{% endblock %}

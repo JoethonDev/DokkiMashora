@@ -2,16 +2,17 @@
 {% if breadcrumb_items %}
   {% include "ui/components/_breadcrumbs.html" with items=breadcrumb_items %}
 {% endif %}
-<div class="page-header"><div>
+<div class="flex justify-between items-start gap-5"><div>
     {% if eyebrow %}
       <p class="eyebrow">{{ eyebrow }}</p>
     {% endif %}
     <h1>{{ title }}</h1>
     {% if description %}
-      <p>{{ description }}</p>
+      <p class="text-muted mt-1 mb-0">{{ description }}</p>
     {% endif %}
   </div>
-  {% if actions_template %}
-    <div class="inline-actions end">{% include actions_template %}</div>
-  {% endif %}
+  <div class="actions-row justify-end">
+    {% if back_button or back_url %}<a class="btn-ghost" href="{{ back_url|default:PAGE_BACK_URL }}">{{ back_label|default:_('Back') }}</a>{% endif %}
+    {% if actions_template %}{% include actions_template %}{% endif %}
+  </div>
 </div>

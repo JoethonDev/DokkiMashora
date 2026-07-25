@@ -1,20 +1,25 @@
 {
   "name": "dokkimashora",
   "version": "1.0.0",
-  "description": "A Django-based Learning Management System (LMS) for **DokkiMashora**, an Arabic-first platform that handles registration, entrance exams, learning content, assessments, grading, and certificates.",
-  "main": "index.js",
+  "description": "A Django-based Learning Management System (LMS) for DokkiMashora, an Arabic-first platform.",
   "directories": {
     "doc": "docs"
   },
   "scripts": {
-    "build:css": "tailwindcss -i ./static/css/tailwind-input.css -o ./static/css/tailwind.css --minify",
-    "build": "npm run build:css",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "python -m pytest",
+    "build:css": "tailwindcss -i ./static/css/input.css -o ./static/css/tailwind.css --minify",
+    "watch:css": "tailwindcss -i ./static/css/input.css -o ./static/css/tailwind.css --watch"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@tailwindcss/aspect-ratio": "^0.4.2",
+
+    "@tailwindcss/forms": "^0.5.9",
+    "@tailwindcss/typography": "^0.5.15",
+    "autoprefixer": "^10.5.4",
+    "postcss": "^8.5.22",
     "tailwindcss": "^3.4.19"
   }
 }

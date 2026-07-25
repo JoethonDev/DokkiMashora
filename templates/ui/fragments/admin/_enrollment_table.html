@@ -1,34 +1,36 @@
 {% load i18n ui_tags %}
 <section id="enrollment-results-boundary"
-         class="table-section"
-         aria-live="polite"><div class="section-header"><div>
+         class="mt-3"
+         aria-live="polite">    <div class="section-head"><div>
       <p class="eyebrow">{% trans "Enrollments" %}</p>
-      <h3>
-        {{ page_obj.paginator.count }}
-        {% trans "enrollments" %}
-      </h3>
+      <h3>{% trans "Enrollments" %}</h3>
     </div>
-    {% include "ui/components/_pagination.html" %}
+    <div class="flex items-center gap-3">
+      <span class="text-sm font-medium text-muted">{% blocktranslate with count=page_obj.paginator.count %}total: {{ count }}{% endblocktranslate %}</span>
+      {% include "ui/components/_pagination.html" %}
+    </div>
   </div>
   {% if page_obj.object_list %}
-    <div class="table-shell"><table>
+    <div class="table-wrap"><table class="table">
         <thead>
           <tr>
-            <th>{% trans "Student" %}</th>
-            <th>{% trans "Program" %}</th>
-            <th>{% trans "Status" %}</th>
-            <th>{% trans "Activated" %}</th>
-            <th>{% trans "Enrolled" %}</th>
-            <th>{% trans "Actions" %}</th>
+            <th class="table-th">#</th>
+            <th class="table-th">{% trans "Student" %}</th>
+            <th class="table-th">{% trans "Program" %}</th>
+            <th class="table-th">{% trans "Status" %}</th>
+            <th class="table-th">{% trans "Activated" %}</th>
+            <th class="table-th">{% trans "Enrolled" %}</th>
+            <th class="table-th">{% trans "Actions" %}</th>
           </tr>
         </thead>
         <tbody>
           {% for e in page_obj %}
             <tr>
+              <td class="table-td text-muted">{{ page_obj.start_index|add:forloop.counter0 }}</td>
               <td>
-                <div class="student-cell"><span class="avatar avatar-sm">{{ e.student.full_name|slice:":2"|upper }}</span>
-                  <span class="cell-stack"><strong>{{ e.student.full_name }}</strong>
-                    <small>{{ e.student.user.email }}</small></span>
+                <div class="flex items-center gap-2.5"><span class="rounded-full bg-brand-soft text-brand font-black grid place-items-center shrink-0 w-9 h-9 text-sm">{{ e.student.full_name|slice:":2"|upper }}</span>
+                  <span class="flex flex-col"><strong>{{ e.student.full_name }}</strong>
+                    <small><span dir="ltr" class="inline-block">{{ e.student.user.email }}</span></small></span>
                 </div>
               </td>
               <td>
@@ -39,15 +41,15 @@
                 {% endif %}
               </td>
               <td>{% include "ui/components/_status.html" with code=e.status label=e.get_status_display %}</td>
-              <td>{{ e.activated_at|date:"DATE_FORMAT"|default:'—' }}</td>
-              <td>{{ e.created_at|date:"DATE_FORMAT"|default:'—' }}</td>
+              <td><span dir="ltr" class="inline-block">{{ e.activated_at|date:"DATE_FORMAT"|default:'—' }}</span></td>
+              <td><span dir="ltr" class="inline-block">{{ e.created_at|date:"DATE_FORMAT"|default:'—' }}</span></td>
               <td>
                 {% if enrollment_type == "course" %}
-                  <a class="button button-info"
+                  <a class="btn-secondary"
                      href="{% url 'academics:admin_course_enrollment_list' course.id %}?q={{ e.student.full_name|urlencode }}">{% trans "View" %}
                   </a>
                 {% else %}
-                  <a class="button button-info"
+                  <a class="btn-secondary"
                      href="{% url 'academics:admin_diploma_enrollment_list' diploma.id %}?q={{ e.student.full_name|urlencode }}">{% trans "View" %}
                   </a>
                 {% endif %}
@@ -64,3 +66,4 @@
     </div>
   {% endif %}
 </section>
+

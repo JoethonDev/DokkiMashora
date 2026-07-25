@@ -4,38 +4,38 @@
   {{ title|default:_("Academic detail") }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">
+  <div class="page-stack animate-enter-view">
     {% include "ui/components/_breadcrumbs.html" with items=breadcrumb_items %}
     {% include "ui/components/_page_header.html" with title=title|default:_("Academic detail") description=description eyebrow=_("Academic") %}
   {% if version %}
-    <section class="surface"><h2>{{ version.label }}</h2>
-      <dl>
-        <dt>{% trans "Course" %}</dt>
-        <dd>
+    <section class="card-surface"><h2>{{ version.label }}</h2>
+      <dl class="dl">
+        <dt class="dt">{% trans "Course" %}</dt>
+        <dd class="dd">
           {{ course }}
         </dd>
-        <dt>{% trans "Semester" %}</dt>
-        <dd>
+        <dt class="dt">{% trans "Semester" %}</dt>
+        <dd class="dd">
           {{ version.semester }}
         </dd>
-        <dt>{% trans "Cohort" %}</dt>
-        <dd>
+        <dt class="dt">{% trans "Cohort" %}</dt>
+        <dd class="dd">
           {{ version.cohort }}
         </dd>
       </dl>
-      <a class="button"
+      <a class="btn-primary"
          href="{% url 'academics:admin_lecture_create' course.id version.id %}">{% trans "Add lecture" %}</a>
     </section>
   {% endif %}
   {% if versions %}
-    <section class="surface"><h2>{% trans "Versions" %}</h2>
-      <div class="table-shell"><table>
+    <section class="card-surface"><h2>{% trans "Versions" %}</h2>
+      <div class="table-wrap"><table class="table">
           <tbody>
             {% for item in versions %}
               <tr>
-                <td>{{ item.label }}</td>
-                <td>{{ item.semester }}</td>
-                <td>{{ item.cohort }}</td>
+                <td class="table-td">{{ item.label }}</td>
+                <td class="table-td">{{ item.semester }}</td>
+                <td class="table-td">{{ item.cohort }}</td>
               </tr>
             {% endfor %}
           </tbody>
@@ -44,15 +44,15 @@
     </section>
   {% endif %}
   {% if lectures %}
-    <section class="surface"><h2>{% trans "Lectures" %}</h2>
-      <div class="table-shell"><table>
+    <section class="card-surface"><h2>{% trans "Lectures" %}</h2>
+      <div class="table-wrap"><table class="table">
           <tbody>
             {% for item in lectures %}
               <tr>
-                <td>{{ item.order }}</td>
-                <td>{{ item.title }}</td>
-                <td>
-                  <a class="text-button" href="{% url 'academics:admin_lecture_edit' course.id version.id item.id %}">{% trans "Edit" %}</a>
+                <td class="table-td">{{ item.order }}</td>
+                <td class="table-td">{{ item.title }}</td>
+                <td class="table-td">
+                  <a class="btn-ghost" href="{% url 'academics:admin_lecture_edit' course.id version.id item.id %}">{% trans "Edit" %}</a>
                 </td>
               </tr>
             {% endfor %}
@@ -62,11 +62,11 @@
     </section>
   {% endif %}
   {% if intake_forms %}
-    <section class="surface"><h2>{% trans "Intake forms" %}</h2>
+    <section class="card-surface"><h2>{% trans "Intake forms" %}</h2>
       {% for item in intake_forms %}
         <p>
           {{ item.title }}
-          —
+          -
           {{ item.responses_count }}
           {% trans "responses" %}
         </p>

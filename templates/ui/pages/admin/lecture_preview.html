@@ -1,0 +1,31 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n %}
+{% block title %}{{ lecture.title }}{% endblock %}
+{% block content %}
+  <div class="page-stack animate-enter-view">
+    {% include "ui/components/_page_header.html" with eyebrow=_('Lecture preview') title=lecture.title description=lecture.description breadcrumb_items=breadcrumb_items %}
+    <section class="card-surface">
+      {% if youtube_video_id %}
+        <div class="aspect-video overflow-hidden rounded-md bg-surface-inverse">
+          <iframe 
+  class="w-full h-full" 
+  src="https://www.youtube-nocookie.com/embed/{{ youtube_video_id }}?rel=0&modestbranding=1&origin={{ request.scheme }}://{{ request.get_host }}" 
+  title="{{ lecture.title }}" 
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+  referrerpolicy="strict-origin-when-cross-origin"
+  allowfullscreen>
+</iframe>
+        </div>
+      {% elif lecture.youtube_url %}
+        <a class="btn-primary" href="{{ lecture.youtube_url }}" target="_blank" rel="noopener noreferrer">{% trans "Open YouTube video" %}</a>
+      {% else %}
+        <p class="text-muted">{% trans "No YouTube video has been added to this lecture." %}</p>
+      {% endif %}
+      {% if lecture.audio_url %}<audio class="w-full mt-4" controls src="{{ lecture.audio_url }}"></audio>{% endif %}
+    </section>
+    <div class="actions-row">
+      <a class="btn-secondary" href="{% url 'academics:admin_diploma_lecture_edit' diploma.id cohort.id semester.id lecture.id %}">{% trans "Edit lecture" %}</a>
+      <a class="btn-ghost" href="{% url 'academics:admin_diploma_lecture_list' diploma.id cohort.id semester.id %}">{% trans "Back to lectures" %}</a>
+    </div>
+  </div>
+{% endblock %}

@@ -7,46 +7,47 @@
   {% trans "Staff" %}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% trans "Accounts" as eyebrow %}
+  <div class="page-stack animate-enter-view">{% trans "Accounts" as eyebrow %}
     {% trans "Staff" as title %}
     {% trans "Search, filter, and manage staff accounts." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    <section class="surface"><form class="filter-toolbar"
+    <section class="card-surface"><form class="actions-row items-end mb-4"
       method="get"
       hx-get="{% url 'accounts:admin_staff_list' %}"
-      hx-trigger="input changed delay:250ms from:#staff-search, change from:select, submit"
+      hx-trigger="input changed delay:300ms from:#staff-search, change from:select, submit"
       hx-target="#staff-results"
       hx-swap="outerHTML"
       hx-push-url="true"
-      hx-sync="this:replace"><label class="search-input"><span>&#8981;</span>
-      <input id="staff-search"
+       hx-sync="this:replace"><div class="relative flex-1 min-w-[210px]"><span class="absolute inset-y-0 start-0 grid place-items-center ps-3 text-muted pointer-events-none">&#8981;</span>
+       <input id="staff-search"
              name="q"
              value="{{ search_value }}"
              type="search"
-             placeholder="{% trans 'Name, email, phone, or national ID' %}"></label>
-    <label class="select-field"><span>{% trans "Role" %}</span>
-      <select id="staff-role" name="role"><option value="">{% trans "All roles" %}</option>
+             placeholder="{% trans 'Name, email, phone, or national ID' %}"
+              class="form-input ps-10"></div>
+    <label class="min-w-40"><span class="field-label">{% trans "Role" %}</span>
+      <select id="staff-role" name="role" class="form-select"><option value="">{% trans "All roles" %}</option>
         {% for option in filters.0.options %}
           <option value="{{ option.value }}"
                   {% if option.selected %} selected {% endif %}>{{ option.label }}</option>
         {% endfor %}
       </select>
     </label>
-    <label class="select-field"><span>{% trans "Status" %}</span>
-      <select id="staff-status" name="status"><option value="">{% trans "All statuses" %}</option>
+    <label class="min-w-40"><span class="field-label">{% trans "Status" %}</span>
+      <select id="staff-status" name="status" class="form-select"><option value="">{% trans "All statuses" %}</option>
         {% for option in filters.1.options %}
           <option value="{{ option.value }}"
                   {% if option.selected %} selected {% endif %}>{{ option.label }}</option>
         {% endfor %}
       </select>
     </label>
-    <button class="button button-info filter-button" type="submit">{% trans "Filter" %}</button>
-    <a class="button button-ghost"
+    <button class="btn-secondary" type="submit">{% trans "Filter" %}</button>
+    <a class="btn-ghost"
        href="{% url 'accounts:admin_staff_list' %}">{% trans "Reset" %}</a>
   </form>
   {% include "ui/fragments/admin/_staff_table.html" %}
   </section>
-  <div class="inline-actions"><a class="button button-primary"
+  <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-primary"
        href="{% url 'accounts:admin_staff_create' %}">{% trans "Create staff member" %}</a>
   </div>
   </div>

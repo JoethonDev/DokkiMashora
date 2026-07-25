@@ -7,7 +7,7 @@
   {% trans "Dashboard" %}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">
+  <div class="page-stack animate-enter-view">
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
     {% if dashboard_kind == "admin" %}
       {% include "ui/fragments/admin/dashboard/_admin.html" %}
@@ -18,7 +18,7 @@
     {% elif dashboard_kind == "secretary" %}
       {% include "ui/fragments/admin/dashboard/_secretary.html" %}
     {% else %}
-      <section class="surface"><div class="section-header"><div>
+      <section class="card-surface"><div class="section-head"><div>
             <p class="eyebrow">{{ user_role|default:_("Staff") }}</p>
             <h2>{% trans "Workspace" %}</h2>
           </div>

@@ -4,17 +4,17 @@
   {{ title|default:_("Assessment operations") }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% include "ui/components/_page_header.html" with title=title|default:_("Assessment operations") eyebrow=_("Assessments") %}
+  <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=title|default:_("Assessment operations") eyebrow=_("Assessments") %}
   {% if groups %}
-    <div class="grid grid-2">{% for key,group in groups.items %}
-        <section class="surface"><h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">{% for key,group in groups.items %}
+      <section class="card-surface"><h2>
             {{ group.cohort }}
             ·
             {{ group.semester }}
           </h2>
           {% for item in group.assignments %}
             <p>
-              <a class="text-button" href="{% url 'assessments:reviewer_section_grading' item.assignment.id %}">{{ item.assignment.section|default:item.assignment }}
+              <a class="btn-ghost" href="{% url 'assessments:reviewer_section_grading' item.assignment.id %}">{{ item.assignment.section|default:item.assignment }}
               </a>
               <span class="status">{{ item.ungraded }}</span>
             </p>
@@ -23,35 +23,35 @@
       {% endfor %}
     </div>
   {% elif codes %}
-    <section class="surface"><h2>{{ assessment }}</h2>
+    <section class="card-surface"><h2>{{ assessment }}</h2>
       <div class="actions"><form method="post"
               action="{% url 'assessments:admin_generate_codes' assessment.id %}">{% csrf_token %}
-          <button class="button button-ghost" type="submit">{% trans "Generate missing codes" %}</button>
+          <button class="btn-ghost" type="submit">{% trans "Generate missing codes" %}</button>
         </form>
-        <a class="button button-secondary"
+        <a class="btn-secondary"
            href="{% url 'assessments:admin_export_offline_codes' assessment.id %}">{% trans "Export offline codes" %}
         </a>
       </div>
     </section>
-    <div class="table-shell"><table>
+    <div class="table-wrap"><table class="table">
         <thead>
           <tr>
-            <th>{% trans "Code" %}</th>
-            <th>{% trans "Student" %}</th>
-            <th>{% trans "Mode" %}</th>
-            <th></th>
+            <th class="table-th">{% trans "Code" %}</th>
+            <th class="table-th">{% trans "Student" %}</th>
+            <th class="table-th">{% trans "Mode" %}</th>
+            <th class="table-th"></th>
           </tr>
         </thead>
         <tbody>
           {% for code in codes %}
             <tr>
-              <td>{{ code.code_number }}</td>
-              <td>{{ code.diploma_enrollment.student }}</td>
-              <td>{{ code.get_delivery_mode_display|default:code.delivery_mode }}</td>
-              <td>
+              <td class="table-td">{{ code.code_number }}</td>
+              <td class="table-td">{{ code.diploma_enrollment.student }}</td>
+              <td class="table-td">{{ code.get_delivery_mode_display|default:code.delivery_mode }}</td>
+              <td class="table-td">
                 <form method="post"
                       action="{% url 'assessments:admin_toggle_delivery_mode' assessment.id code.id %}">{% csrf_token %}
-                  <button class="button button-ghost" type="submit">{% trans "Toggle" %}</button>
+                  <button class="btn-ghost" type="submit">{% trans "Toggle" %}</button>
                 </form>
               </td>
             </tr>
@@ -60,147 +60,186 @@
       </table>
     </div>
   {% elif sections %}
-    <section class="surface"><h2>
+    <section class="card-surface"><h2>
         {% trans "Offline grade entry" %}
         :
         {{ assessment }}
       </h2>
-      <form method="post">{% csrf_token %}
+      <form class="max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
         <label>
           {% trans "Exam code" %}
-          <input name="code_number" value="{{ code.code_number|default:'' }}" required>
+          <input name="code_number" class="form-input" value="{{ code.code_number|default:'' }}" required>
         </label>
-        <button class="button button-ghost" type="submit">{% trans "Load code" %}</button>
+        <button class="btn-ghost" type="submit">{% trans "Load code" %}</button>
       </form>
       {% if code %}
         {% for section in sections %}
-          <form class="inline-form"
+          <form class="page-stack"
                 method="post"
                 action="{% url 'assessments:admin_offline_grade_section' assessment.id code.id section.id %}">{% csrf_token %}
             <label>
               {{ section }}
-              <input name="score" type="number" step="0.01"></label>
-            <button class="button button-primary" type="submit">{% trans "Save" %}</button>
+              <input name="score" class="form-input" type="number" step="0.01"></label>
+            <button class="btn-primary" type="submit">{% trans "Save" %}</button>
           </form>
         {% endfor %}
       {% endif %}
     </section>
   {% elif assignment %}
-    <section class="surface"><h2>{{ assignment.section }}</h2>
-      <form method="post">{% csrf_token %}
+    <section class="card-surface"><h2>{{ assignment.section }}</h2>
+        <form class="max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
         <label>
           {% trans "Exam code" %}
-          <input name="code_number" value="{{ code_number }}" required>
+          <input name="code_number" class="form-input" value="{{ code_number }}" required>
         </label>
         <label>
           {% trans "Score" %}
-          <input name="score"
+          <input name="score" class="form-input"
                  value="{{ grade.score|default:'' }}"
                  type="number"
                  step="0.01"></label>
-        <button class="button button-primary" type="submit">{% trans "Save grade" %}</button>
+        <button class="btn-primary" type="submit">{% trans "Save grade" %}</button>
       </form>
     </section>
   {% elif overrides %}
-    <section class="surface"><h2>
+    <section class="card-surface"><h2>
         {% trans "Exceptional access" %}
         :
         {{ assessment }}
       </h2>
-      <form method="post">{% csrf_token %}
+      <form class="max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
         <label>
           {% trans "Open at" %}
-          <input type="datetime-local" name="open_at" required>
+          <input type="datetime-local" name="open_at" class="form-input" required>
         </label>
         <label>
           {% trans "Close at" %}
-          <input type="datetime-local" name="close_at" required>
+          <input type="datetime-local" name="close_at" class="form-input" required>
         </label>
         <label>
           {% trans "Reason" %}
-          <textarea name="reason" required></textarea>
+          <textarea name="reason" class="form-input" required></textarea>
         </label>
+        <div class="flex flex-col gap-2 pt-4 border-t border-line">
         {% for enrollment in enrollments %}
-          <label>
-            <input type="checkbox" name="enrollments" value="{{ enrollment.id }}">{{ enrollment.student }}
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" class="form-checkbox" name="enrollments" value="{{ enrollment.id }}">{{ enrollment.student }}
           </label>
         {% endfor %}
-        <button class="button button-primary" type="submit">{% trans "Create overrides" %}</button>
+        </div>
+        <div class="actions-row"><button class="btn-primary" type="submit">{% trans "Create overrides" %}</button></div>
       </form>
     </section>
-    <div class="table-shell"><table>
+    <div class="table-wrap"><table class="table">
         <thead>
           <tr>
-            <th>{% trans "Student" %}</th>
-            <th>{% trans "Window" %}</th>
-            <th>{% trans "Status" %}</th>
+            <th class="table-th">{% trans "Student" %}</th>
+            <th class="table-th">{% trans "Window" %}</th>
+            <th class="table-th">{% trans "Status" %}</th>
           </tr>
         </thead>
         <tbody>
           {% for item in overrides %}
             <tr>
-              <td>{{ item.diploma_enrollment.student }}</td>
-              <td>
+              <td class="table-td">{{ item.diploma_enrollment.student }}</td>
+              <td class="table-td">
                 {{ item.open_at }}
-                –
+                -
                 {{ item.close_at }}
               </td>
-              <td>{{ item.get_status_display|default:item.status }}</td>
+              <td class="table-td">{{ item.get_status_display|default:item.status }}</td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   {% elif questions %}
-    <section class="surface"><h2>
-        {% trans "Question bank" %}
-        :
-        {{ lecture }}
-      </h2>
+    <section class="card-surface"><div class="section-head"><div>
+          <p class="eyebrow">{% trans "Question bank" %}</p>
+          <h2>{{ lecture.title }}</h2>
+          <p class="text-muted">{{ cohort }} · {{ semester }}</p>
+        </div>
+      </div>
       {% for question in questions %}
-        <article>
-          <h3>
-            {{ question.order }}
-            .
-            {{ question.text }}
-          </h3>
-          <p>{{ question.get_question_type_display|default:question.question_type }}</p>
-        </article>
+        <div class="border border-line rounded-sm p-4 mb-3 last:mb-0">
+          <div class="flex items-start justify-between gap-4">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="text-xs font-bold text-muted uppercase">#{{ question.order }}</span>
+                <span class="px-2 py-0.5 text-xs font-bold rounded-full {% if question.question_type == 'mcq' %}bg-info-soft text-info-text{% else %}bg-warning-soft text-warning-text{% endif %}">{{ question.get_question_type_display }}</span>
+              </div>
+              <p class="text-sm font-medium m-0">{{ question.text }}</p>
+              {% if question.choices.exists %}
+                <div class="flex flex-col gap-1.5 mt-3 ps-2 border-s-2 border-line">
+                  {% for choice in question.choices.all %}
+                    <label class="flex items-center gap-2 text-sm">
+                      <input type="radio" class="form-radio" disabled{% if choice.is_correct %} checked{% endif %}>
+                      <span>{{ choice.text }}</span>
+                      <span class="text-xs text-muted">({{ choice.score }} {% trans "pts" %})</span>
+                    </label>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            <div class="flex gap-2 shrink-0">
+              <a class="btn-ghost text-xs py-1.5 px-2.5 min-h-0" href="{% url 'assessments:admin_lecture_bank_question_edit' diploma.id cohort.id semester.id lecture.id question.id %}">{% trans "Edit" %}</a>
+              <form method="post" action="{% url 'assessments:admin_lecture_bank_question_delete' diploma.id cohort.id semester.id lecture.id question.id %}" data-confirm="{% trans 'Delete this question?' %}">{% csrf_token %}
+                <button class="btn-danger text-xs py-1.5 px-2.5 min-h-0" type="submit">{% trans "Delete" %}</button>
+              </form>
+            </div>
+          </div>
+        </div>
       {% empty %}
-        <p>{% trans "No questions found." %}</p>
+        <div class="border border-dashed border-line rounded-sm p-6 text-center">
+          <p class="text-muted m-0">{% trans "No questions yet." %}</p>
+        </div>
       {% endfor %}
+      <div class="flex gap-2.5 items-center flex-wrap mt-4">
+        <a class="btn-primary" href="{% url 'assessments:admin_lecture_bank_question_create' diploma.id cohort.id semester.id lecture.id %}">{% trans "Add question" %}</a>
+        <a class="btn-ghost" href="{% url 'academics:admin_diploma_lecture_list' diploma.id cohort.id semester.id %}">{% trans "Back to lectures" %}</a>
+      </div>
+    </section>
+  {% elif lecture %}
+    <section class="card-surface"><div class="section-head"><div><p class="eyebrow">{% trans "Question bank" %}</p><h2>{{ lecture.title }}</h2><p class="text-muted">{{ cohort }} · {{ semester }}</p></div></div>
+      <div class="border border-dashed border-line rounded-sm p-6 text-center">
+        <p class="text-muted m-0">{% trans "No questions yet." %}</p>
+      </div>
+      <div class="flex gap-2.5 items-center flex-wrap mt-4">
+        <a class="btn-primary" href="{% url 'assessments:admin_lecture_bank_question_create' diploma.id cohort.id semester.id lecture.id %}">{% trans "Add question" %}</a>
+        <a class="btn-ghost" href="{% url 'academics:admin_diploma_lecture_list' diploma.id cohort.id semester.id %}">{% trans "Back to lectures" %}</a>
+      </div>
     </section>
   {% elif assignments %}
-    <div class="table-shell"><table>
+    <div class="table-wrap"><table class="table">
         <thead>
           <tr>
-            <th>{% trans "Reviewer" %}</th>
-            <th>{% trans "Cohort" %}</th>
-            <th>{% trans "Semester" %}</th>
-            <th>{% trans "Section" %}</th>
+            <th class="table-th">{% trans "Reviewer" %}</th>
+            <th class="table-th">{% trans "Cohort" %}</th>
+            <th class="table-th">{% trans "Semester" %}</th>
+            <th class="table-th">{% trans "Section" %}</th>
           </tr>
         </thead>
         <tbody>
           {% for item in assignments %}
             <tr>
-              <td>{{ item.reviewer }}</td>
-              <td>{{ item.cohort }}</td>
-              <td>{{ item.semester }}</td>
-              <td>{{ item.section|default:'—' }}</td>
+              <td class="table-td">{{ item.reviewer }}</td>
+              <td class="table-td">{{ item.cohort }}</td>
+              <td class="table-td">{{ item.semester }}</td>
+              <td class="table-td">{{ item.section|default:'-' }}</td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   {% elif form %}
-    <form method="post">{% csrf_token %}
+    <form class="max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
       {% for field in form %}
         {% include "ui/components/_field.html" %}
       {% endfor %}
-      <button class="button button-primary" type="submit">{% trans "Save" %}</button>
+      <button class="btn-primary" type="submit">{% trans "Save" %}</button>
     </form>
   {% elif page_obj %}
-    <section class="surface"><div class="section-header"><div>
+    <section class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Results" %}</p>
           <h3>
             {{ page_obj.paginator.count }}
@@ -209,27 +248,27 @@
         </div>
       </div>
       {% include "ui/components/_pagination.html" %}
-      <div class="table-shell"><table>
+      <div class="table-wrap"><table class="table">
           <thead>
             <tr>
-              <th>{% trans "Student or assessment" %}</th>
-              <th>{% trans "Status" %}</th>
+              <th class="table-th">{% trans "Student or assessment" %}</th>
+              <th class="table-th">{% trans "Status" %}</th>
             </tr>
           </thead>
           <tbody>
             {% for item in page_obj %}
               <tr>
-                <td>
+                <td class="table-td">
                   <strong>{{ item.student|default:item.assessment|default:item.title|default:_("Assessment record") }}</strong>
                   <small>{{ item.created_at|default:'' }}</small>
                 </td>
-                <td>
-                  <span class="status-pill blue">{{ item.get_status_display|default:item.status|default:'—' }}</span>
+                <td class="table-td">
+                  <span class="status-pill-info">{{ item.get_status_display|default:item.status|default:'-' }}</span>
                 </td>
               </tr>
             {% empty %}
               <tr>
-                <td colspan="2">{% trans "No records found." %}</td>
+                <td class="table-td" colspan="2">{% trans "No records found." %}</td>
               </tr>
             {% endfor %}
           </tbody>

@@ -4,19 +4,19 @@
   {% trans "Assessments" %}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view"><section class="page-intro"><div>
+  <div class="page-stack animate-enter-view"><section class="flex justify-between items-center gap-5 px-0.5 py-1.5"><div>
         <p class="eyebrow">{% trans "Learning" %}</p>
         <h2>{% trans "Assessments" %}</h2>
         <p>{% trans "Open available assessments and review your current attempt status." %}</p>
       </div>
     </section>
-    <section class="program-grid">{% for card in assessment_cards %}
-        <article class="surface"><h3>{{ card.assessment.title }}</h3>
-          <p class="muted">{{ card.assessment.get_assessment_type_display }}</p>
+    <section class="grid grid-cols-1 md:grid-cols-3 gap-4">{% for card in assessment_cards %}
+        <article class="card-surface"><h3>{{ card.assessment.title }}</h3>
+          <p class="text-muted">{{ card.assessment.get_assessment_type_display }}</p>
           {% if card.latest_attempt %}
-            <span class="status-pill blue">{{ card.latest_attempt.get_status_display }}</span>
+            <span class="status-pill-info">{{ card.latest_attempt.get_status_display }}</span>
           {% endif %}
-          <div class="inline-actions"><a class="button button-primary"
+          <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-primary"
                href="{% url 'assessments:instructions' card.assessment.id %}">{% trans "Open" %}</a>
           </div>
         </article>

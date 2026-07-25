@@ -1,0 +1,9 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+  <div class="page-stack animate-enter-view">
+    {% include "ui/components/_page_header.html" with eyebrow=exam.title title=title description="" %}
+    {% include "ui/fragments/admin/_question_form.html" %}
+  </div>
+{% endblock %}

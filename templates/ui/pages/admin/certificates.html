@@ -4,71 +4,72 @@
   {{ title|default:_("Certificates") }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% trans "Records" as eyebrow %}
+  <div class="page-stack animate-enter-view">{% trans "Records" as eyebrow %}
     {% trans "Certificates" as title %}
     {% trans "Generate, download, and manage student certificates." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
     {% if form %}
-      <form class="surface form-main" method="post" enctype="multipart/form-data">{% csrf_token %}
+      <form class="card-surface max-w-form mx-auto w-full page-stack" method="post" enctype="multipart/form-data">{% csrf_token %}
         {% for field in form %}
           {% include "ui/components/_field.html" %}
         {% endfor %}
-        <button class="button button-primary" type="submit">{% trans "Save" %}</button>
+        <button class="btn-primary" type="submit">{% trans "Save" %}</button>
       </form>
     {% elif template %}
-      <section class="surface"><div class="section-header"><div>
+      <section class="card-surface"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Template" %}</p>
             <h3>{{ template }}</h3>
           </div>
         </div>
         <p>{{ template.description }}</p>
-        <a class="button button-info"
+        <a class="btn-ghost"
            href="{% url 'certificates:admin_template_edit' template.id %}">{% trans "Edit" %}</a>
       </section>
     {% elif page_obj %}
-      <section class="surface"><div class="table-shell"><table>
+      <section class="card-surface"><div class="table-wrap"><table class="table">
             <thead>
               <tr>
-                <th>{% trans "Certificate number" %}</th>
-                <th>{% trans "Student" %}</th>
-                <th>{% trans "Program" %}</th>
-                <th>{% trans "Status" %}</th>
-                <th>{% trans "Issued" %}</th>
-                <th>{% trans "Actions" %}</th>
+                <th class="table-th">{% trans "Certificate number" %}</th>
+                <th class="table-th">{% trans "Student" %}</th>
+                <th class="table-th">{% trans "Program" %}</th>
+                <th class="table-th">{% trans "Status" %}</th>
+                <th class="table-th">{% trans "Issued" %}</th>
+                <th class="table-th">{% trans "Actions" %}</th>
               </tr>
             </thead>
             <tbody>
               {% for item in page_obj %}
                 <tr>
-                  <td>{{ item.certificate_number|default:item.id }}</td>
-                  <td>{{ item.student.full_name|default:item.student }}</td>
-                  <td>{{ item.student.current_cohort.diploma|default:'—' }}</td>
-                  <td>{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
-                  <td>{{ item.issued_at|default:item.created_at|date:"DATE_FORMAT"|default:'—' }}</td>
-                  <td>
-                    <div class="inline-actions">{% if item.id and item.student_id %}
-                        <a class="button button-info"
+                  <td class="table-td">{{ item.certificate_number|default:item.id }}</td>
+                  <td class="table-td">{{ item.student.full_name|default:item.student }}</td>
+                  <td class="table-td">{{ item.student.current_cohort.diploma|default:'—' }}</td>
+                  <td class="table-td">{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
+                  <td class="table-td">{{ item.issued_at|default:item.created_at|date:"DATE_FORMAT"|default:'—' }}</td>
+                  <td class="table-td">
+                    <div class="flex gap-2.5 items-center flex-wrap">{% if item.id and item.student_id %}
+                        <a class="btn-secondary"
                            href="{% url 'certificates:admin_download_certificate' item.id %}">{% trans "Download" %}
                         </a>
                         <form method="post"
                               action="{% url 'certificates:admin_regenerate_certificate' item.id %}"
-                              class="inline-form">{% csrf_token %}
-                          <button class="button button-warning" type="submit">{% trans "Regenerate" %}</button>
+                              class="m-0">{% csrf_token %}
+                          <button class="btn-warning" type="submit">{% trans "Regenerate" %}</button>
                         </form>
-                        <form method="post"
-                              action="{% url 'certificates:admin_revoke_certificate' item.id %}"
-                              class="inline-form">{% csrf_token %}
-                          <input type="hidden"
-                                 name="reason"
-                                 value="{% trans 'Revoked by administrator' %}"><button class="button button-danger" type="submit">{% trans "Revoke" %}</button>
-                        </form>
+      <form method="post"
+              action="{% url 'certificates:admin_revoke_certificate' item.id %}"
+              class="m-0"
+              data-confirm="{% trans 'Revoke this certificate?' %}">{% csrf_token %}
+          <input type="hidden"
+                 name="reason"
+                 value="{% trans 'Revoked by administrator' %}"><button class="btn-danger" type="submit">{% trans "Revoke" %}</button>
+        </form>
                       {% endif %}
                     </div>
                   </td>
                 </tr>
               {% empty %}
                 <tr>
-                  <td colspan="6"><div class="empty-state"><span>&#9679;</span>
+                  <td class="table-td" colspan="6"><div class="empty-state"><span>&#9679;</span>
                       <h3>{% trans "No certificates have been generated." %}</h3>
                     </div>
                   </td>
@@ -80,7 +81,7 @@
         {% include "ui/components/_pagination.html" %}
       </section>
     {% endif %}
-    <div class="inline-actions"><a class="button button-info"
+    <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-secondary"
          href="{% url 'certificates:admin_template_list' %}">{% trans "Certificate templates" %}</a>
     </div>
   </div>

@@ -1,7 +1,7 @@
 {% load i18n %}
-<header class="topbar">
-  <div class="topbar-left">
-    <button class="icon-button mobile-only"
+<header class="min-h-14 px-5 py-3 flex items-center justify-between">
+  <div class="flex items-center gap-3">
+    <button class="btn-icon md:hidden"
             type="button"
             @click="sidebarOpen=true; $dispatch('sidebar-open', {trigger: $el})"
             aria-controls="admin-sidebar"
@@ -11,19 +11,19 @@
       <p class="eyebrow">{{ section_label|default:_("Workspace") }}</p>
     </div>
   </div>
-  <div class="topbar-actions">
+  <div class="flex items-center gap-2">
     {% if show_global_search %}
       <button type="button"
-              class="search-command"
+              class="relative flex-1 min-w-[210px]"
               id="global-search-trigger"
-              aria-label="{% trans 'Quick search' %}"><span>&#8981;</span>
-        <span>{% trans "Quick search" %}</span>
-        <kbd>Ctrl+K</kbd>
+              aria-label="{% trans 'Quick search' %}">
+        <span class="absolute inset-y-0 start-0 grid place-items-center ps-3 text-muted pointer-events-none">&#8981;</span>
+        <span class="form-input ps-10 flex items-center text-muted cursor-pointer">{% trans "Quick search" %}</span>
       </button>
       {% include "ui/components/_global_search.html" %}
     {% endif %}
     {% include "ui/components/_language_switcher.html" %}
-    <a class="icon-button"
+    <a class="btn-icon"
        href="{% url profile_url %}"
        aria-label="{% trans 'Profile' %}">{{ profile_icon|default:'&#9813;'|safe }}</a>
   </div>

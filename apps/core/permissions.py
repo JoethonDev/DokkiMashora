@@ -71,6 +71,10 @@ def _user_in_any_group(user, group_names: tuple[str, ...]) -> bool:
         return False
     if user.is_superuser:
         return True
+    # Django staff accounts are the administrative accounts created outside
+    # the application role form, so they must still reach the admin workspace.
+    if user.is_staff and {GROUP_SUPER_ADMIN, GROUP_ADMIN}.intersection(group_names):
+        return True
     return user.groups.filter(name__in=group_names).exists()
 
 

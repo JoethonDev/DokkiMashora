@@ -25,6 +25,20 @@ from apps.storage.services import StorageError, storage_service
 from apps.students.services import get_open_apply_targets
 
 from .constants import (
+    DECISION_ACTION_ACCEPT,
+    DECISION_ACTION_ACCOUNT_ACTIVATED,
+    DECISION_ACTION_ACTIVATE,
+    DECISION_ACTION_ENTRANCE_SUBMITTED,
+    DECISION_ACTION_INVITED_TO_ENTRANCE,
+    DECISION_ACTION_NOTE,
+    DECISION_ACTION_PAYMENT_PENDING,
+    DECISION_ACTION_REJECT,
+    DECISION_ACTION_REQUEST_DOCUMENTS,
+    DECISION_ACTION_REQUEST_INTERVIEW,
+    DECISION_ACTION_REQUEST_SURVEY,
+    DECISION_ACTION_REVERT,
+    DECISION_ACTION_SUBMIT_DOCUMENTS,
+    DECISION_ACTION_SUBMIT_SURVEY,
     PROGRAM_APP_STATUS_ACCEPTED,
     PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED,
     PROGRAM_APP_STATUS_DOCUMENTS_REQUESTED,
@@ -63,6 +77,8 @@ PUBLIC_REGISTRATION_SESSION_KEY = "registration_email"
 @require_http_methods(["GET"])
 def program_targets(request: HttpRequest) -> HttpResponse:
     """Return program target fragments for HTMX."""
+    if not request.headers.get("HX-Request"):
+        raise Http404
     profile = getattr(request.user, "student_profile", None)
     kind = str(request.GET.get("kind", "diploma")).strip()
     page = int(request.GET.get("page", 1) or 1)
@@ -415,6 +431,23 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
 
         messages.error(request, _("Action not allowed for the current status."))
 
+    DECISION_ACTION_TONES = {
+        DECISION_ACTION_ACCOUNT_ACTIVATED: "success",
+        DECISION_ACTION_PAYMENT_PENDING: "warning",
+        DECISION_ACTION_INVITED_TO_ENTRANCE: "info",
+        DECISION_ACTION_ENTRANCE_SUBMITTED: "info",
+        DECISION_ACTION_REQUEST_INTERVIEW: "info",
+        DECISION_ACTION_ACCEPT: "success",
+        DECISION_ACTION_REJECT: "danger",
+        DECISION_ACTION_REVERT: "warning",
+        DECISION_ACTION_NOTE: "neutral",
+        DECISION_ACTION_REQUEST_DOCUMENTS: "warning",
+        DECISION_ACTION_SUBMIT_DOCUMENTS: "success",
+        DECISION_ACTION_REQUEST_SURVEY: "warning",
+        DECISION_ACTION_SUBMIT_SURVEY: "success",
+        DECISION_ACTION_ACTIVATE: "success",
+    }
+
     decisions, decisions_qs = paginate(
         request,
         application.decisions.select_related("actor").order_by("-created_at"),
@@ -422,7 +455,13 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
     )
     status_labels = dict(ProgramApplication._meta.get_field("status").choices)
     decision_display_rows = [
-        (decision, status_labels.get(decision.old_status, _("Unknown")), status_labels.get(decision.new_status, _("Unknown")))
+        (
+            decision,
+            decision.get_action_display(),
+            DECISION_ACTION_TONES.get(decision.action, "neutral"),
+            status_labels.get(decision.old_status, _("Unknown")),
+            status_labels.get(decision.new_status, _("Unknown")),
+        )
         for decision in decisions
     ]
     notes = application.notes.all()[:20]

@@ -4,13 +4,13 @@
   {% trans "Profile" %}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view"><section class="page-intro"><div>
+  <div class="page-stack animate-enter-view"><section class="flex justify-between items-center gap-5 px-0.5 py-1.5"><div>
         <p class="eyebrow">{% trans "Account" %}</p>
         <h2>{% trans "Profile" %}</h2>
       </div>
-      <a class="button button-soft" href="{% url 'students:details' %}">{% trans "View details" %}</a>
+      <a class="btn-soft" href="{% url 'students:details' %}">{% trans "View details" %}</a>
     </section>
-    <form class="surface form-main"
+    <form class="card-surface max-w-form mx-auto w-full page-stack"
           method="post"
           action="{% url 'students:edit_profile' %}"
           hx-target="#main"
@@ -19,7 +19,7 @@
       {% for field in form %}
         {% include "ui/components/_field.html" %}
       {% endfor %}
-      <button class="button button-primary" type="submit">{% trans "Save changes" %}</button>
+      <button class="btn-primary" type="submit">{% trans "Save changes" %}</button>
     </form>
   </div>
 {% endblock %}

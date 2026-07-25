@@ -4,11 +4,11 @@
   {{ title|default:_("Progression") }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% trans "Academic operations" as eyebrow %}
+  <div class="page-stack animate-enter-view">{% trans "Academic operations" as eyebrow %}
     {% trans "Progression" as title %}
     {% trans "Review semester progress, decisions, evaluations, interviews, and rejoin plans." as description %}
-    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    <section class="surface"><div class="section-header"><div>
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description back_button=True %}
+    <section class="card-surface"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Activity" %}</p>
             <h3>
               {{ enrollment.student }}
@@ -20,20 +20,20 @@
         <form method="post">{% csrf_token %}
           <label>
             {% trans "Score" %}
-            <input name="score" value="{{ grade_item.score|default:'' }}" required>
+            <input name="score" class="form-input" value="{{ grade_item.score|default:'' }}" required>
           </label>
           <label>
             {% trans "Maximum score" %}
-            <input name="max_score"
+            <input name="max_score" class="form-input"
                    value="{{ grade_item.max_score|default:'' }}"
                    required>
           </label>
           <label>
             {% trans "Notes" %}
-            <textarea name="notes">{{ grade_item.notes|default:'' }}
+            <textarea name="notes" class="form-input">{{ grade_item.notes|default:'' }}
                                         </textarea>
           </label>
-          <button class="button button-primary" type="submit">{% trans "Save grade" %}</button>
+          <button class="btn-primary" type="submit">{% trans "Save grade" %}</button>
         </form>
       </section>
   </div>

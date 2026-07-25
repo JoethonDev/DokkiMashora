@@ -1,6 +1,6 @@
 {% load i18n %}
 {% if page_obj.has_other_pages %}
-  <nav class="pagination" aria-label="{% trans 'Pagination' %}"><p>
+  <nav class="flex items-center justify-between pt-4" aria-label="{% trans 'Pagination' %}"><p class="text-muted text-xs m-0">
       {% blocktranslate with first=page_obj.start_index last=page_obj.end_index total=page_obj.paginator.count %}
   {{ first }}
   –
@@ -9,25 +9,21 @@
   {{ total }}
 {% endblocktranslate %}
     </p>
-    <div>
+    <div class="flex gap-1.5">
       {% if page_obj.has_previous %}
-        <a class="button button-secondary"
-           href="?{% if pagination_qs %}{{ pagination_qs }}&amp;{% endif %}page={{ page_obj.previous_page_number }}">{% trans "Previous" %}
-        </a>
+        <a class="btn-secondary" href="?{% if pagination_qs %}{{ pagination_qs }}&amp;{% endif %}page={{ page_obj.previous_page_number }}">{% trans "Previous" %}</a>
       {% else %}
-        <span class="button button-secondary disabled">{% trans "Previous" %}</span>
+        <span class="btn-secondary opacity-50 pointer-events-none">{% trans "Previous" %}</span>
       {% endif %}
-      <span>
+      <span class="px-2.5 py-1.5">
         {{ page_obj.number }}
         /
         {{ page_obj.paginator.num_pages }}
       </span>
       {% if page_obj.has_next %}
-        <a class="button button-secondary"
-           href="?{% if pagination_qs %}{{ pagination_qs }}&amp;{% endif %}page={{ page_obj.next_page_number }}">{% trans "Next" %}
-        </a>
+        <a class="btn-secondary" href="?{% if pagination_qs %}{{ pagination_qs }}&amp;{% endif %}page={{ page_obj.next_page_number }}">{% trans "Next" %}</a>
       {% else %}
-        <span class="button button-secondary disabled">{% trans "Next" %}</span>
+        <span class="btn-secondary opacity-50 pointer-events-none">{% trans "Next" %}</span>
       {% endif %}
     </div>
   </nav>

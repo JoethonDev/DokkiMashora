@@ -4,43 +4,43 @@
   {% trans "Create attendance session" %}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% include "ui/components/_page_header.html" with title=_("Create attendance session") eyebrow=_("Attendance") %}
-    <form class="surface form-main" method="post">{% csrf_token %}
+  <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=_("Create attendance session") eyebrow=_("Attendance") back_button=True %}
+    <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
     <div class="field"><label for="target_type">{% trans "Target type" %}</label>
-      <select id="target_type" name="target_type"><option value="diploma">{% trans "Diploma" %}</option>
+      <select id="target_type" name="target_type" class="form-select"><option value="diploma">{% trans "Diploma" %}</option>
         <option value="course">{% trans "Course" %}</option>
       </select>
     </div>
     <div class="field"><label for="cohort_id">{% trans "Cohort" %}</label>
-      <select id="cohort_id" name="cohort_id"><option value="">{% trans "Select" %}</option>
+      <select id="cohort_id" name="cohort_id" class="form-select"><option value="">{% trans "Select" %}</option>
         {% for cohort in cohorts %}
           <option value="{{ cohort.id }}">{{ cohort }}</option>
         {% endfor %}
       </select>
     </div>
     <div class="field"><label for="course_version_id">{% trans "Course version" %}</label>
-      <select id="course_version_id" name="course_version_id"><option value="">{% trans "Select" %}</option>
+      <select id="course_version_id" name="course_version_id" class="form-select"><option value="">{% trans "Select" %}</option>
         {% for version in course_versions %}
           <option value="{{ version.id }}">{{ version }}</option>
         {% endfor %}
       </select>
     </div>
     <div class="field"><label for="semester_id">{% trans "Semester" %}</label>
-      <select id="semester_id" name="semester_id"><option value="">{% trans "Select" %}</option>
+      <select id="semester_id" name="semester_id" class="form-select"><option value="">{% trans "Select" %}</option>
         {% for semester in semesters %}
           <option value="{{ semester.id }}">{{ semester }}</option>
         {% endfor %}
       </select>
     </div>
     <div class="field"><label for="title">{% trans "Title" %}</label>
-      <input id="title" name="title"></div>
+      <input id="title" name="title" class="form-input"></div>
     <div class="field"><label for="open_at">{% trans "Opens" %}</label>
-      <input id="open_at" name="open_at" type="datetime-local" required>
+      <input id="open_at" name="open_at" type="datetime-local" class="form-input" required>
     </div>
     <div class="field"><label for="close_at">{% trans "Closes" %}</label>
-      <input id="close_at" name="close_at" type="datetime-local" required>
+      <input id="close_at" name="close_at" type="datetime-local" class="form-input" required>
     </div>
-    <button class="button button-primary" type="submit">{% trans "Create" %}</button>
+    <button class="btn-primary" type="submit">{% trans "Create" %}</button>
   </form>
   </div>
 {% endblock %}

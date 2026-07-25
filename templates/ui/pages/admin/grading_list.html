@@ -4,36 +4,36 @@
   {% trans "Grading" %}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% trans "Assessment operations" as eyebrow %}
+  <div class="page-stack animate-enter-view">{% trans "Assessment operations" as eyebrow %}
     {% trans "Grading" as title %}
     {% trans "Review and score assessment attempts and homework submissions." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    <section class="surface"><div class="section-header"><div>
+    <section class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Queue" %}</p>
           <h3>{% trans "Assessment attempts" %}</h3>
         </div>
       </div>
       {% if queue_page %}
         {% include "ui/components/_pagination.html" with page_obj=queue_page %}
-        <div class="table-shell"><table>
+        <div class="table-wrap"><table class="table">
             <thead>
               <tr>
-                <th>{% trans "Student" %}</th>
-                <th>{% trans "Assessment" %}</th>
-                <th>{% trans "Status" %}</th>
-                <th>{% trans "Actions" %}</th>
+                <th class="table-th">{% trans "Student" %}</th>
+                <th class="table-th">{% trans "Assessment" %}</th>
+                <th class="table-th">{% trans "Status" %}</th>
+                <th class="table-th">{% trans "Actions" %}</th>
               </tr>
             </thead>
             <tbody>
               {% for item in queue_page %}
                 <tr>
-                  <td class="cell-stack"><strong>{{ item.student.full_name|default:item.student }}</strong>
-                    <small>{{ item.student.email|default:'' }}</small>
+                  <td class="table-td"><div class="flex flex-col"><strong>{{ item.student.full_name|default:item.student }}</strong>
+                    <small>{{ item.student.email|default:'' }}</small></div>
                   </td>
-                  <td>{{ item.assessment.title|default:item.assessment }}</td>
-                  <td>{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
-                  <td>
-                    <div class="inline-actions"><a class="button button-info"
+                  <td class="table-td">{{ item.assessment.title|default:item.assessment }}</td>
+                  <td class="table-td">{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
+                  <td class="table-td">
+                    <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-secondary"
                          href="{% url 'assessments:admin_grade_detail' item.id %}">{% trans "Grade" %}</a>
                     </div>
                   </td>
@@ -48,7 +48,7 @@
         </div>
       {% endif %}
     </section>
-    <section class="surface"><div class="section-header"><div>
+    <section class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Queue" %}</p>
           <h3>{% trans "Homework submissions" %}</h3>
         </div>
@@ -56,25 +56,25 @@
       {% if homework_queue_page %}
         {% with rows=homework_queue_page %}
           {% include "ui/components/_pagination.html" with page_obj=rows %}
-          <div class="table-shell"><table>
+          <div class="table-wrap"><table class="table">
               <thead>
                 <tr>
-                  <th>{% trans "Student" %}</th>
-                  <th>{% trans "Assessment" %}</th>
-                  <th>{% trans "Submitted" %}</th>
-                  <th>{% trans "Actions" %}</th>
+                  <th class="table-th">{% trans "Student" %}</th>
+                  <th class="table-th">{% trans "Assessment" %}</th>
+                  <th class="table-th">{% trans "Submitted" %}</th>
+                  <th class="table-th">{% trans "Actions" %}</th>
                 </tr>
               </thead>
               <tbody>
                 {% for item in rows %}
                   <tr>
-                    <td class="cell-stack"><strong>{{ item.student.full_name|default:item.student }}</strong>
-                      <small>{{ item.student.email|default:'' }}</small>
+                    <td class="table-td"><div class="flex flex-col"><strong>{{ item.student.full_name|default:item.student }}</strong>
+                      <small>{{ item.student.email|default:'' }}</small></div>
                     </td>
-                    <td>{{ item.assessment.title|default:item.assessment }}</td>
-                    <td>{{ item.created_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</td>
-                    <td>
-                      <div class="inline-actions"><a class="button button-info"
+                    <td class="table-td">{{ item.assessment.title|default:item.assessment }}</td>
+                    <td class="table-td">{{ item.created_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</td>
+                    <td class="table-td">
+                      <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-secondary"
                            href="{% url 'assessments:admin_homework_grade_detail' item.id %}">{% trans "Review" %}</a>
                       </div>
                     </td>
@@ -87,25 +87,25 @@
       {% elif page_obj %}
         {% with rows=page_obj %}
           {% include "ui/components/_pagination.html" with page_obj=rows %}
-          <div class="table-shell"><table>
+          <div class="table-wrap"><table class="table">
               <thead>
                 <tr>
-                  <th>{% trans "Student" %}</th>
-                  <th>{% trans "Assessment" %}</th>
-                  <th>{% trans "Submitted" %}</th>
-                  <th>{% trans "Actions" %}</th>
+                  <th class="table-th">{% trans "Student" %}</th>
+                  <th class="table-th">{% trans "Assessment" %}</th>
+                  <th class="table-th">{% trans "Submitted" %}</th>
+                  <th class="table-th">{% trans "Actions" %}</th>
                 </tr>
               </thead>
               <tbody>
                 {% for item in rows %}
                   <tr>
-                    <td class="cell-stack"><strong>{{ item.student.full_name|default:item.student }}</strong>
-                      <small>{{ item.student.email|default:'' }}</small>
+                    <td class="table-td"><div class="flex flex-col"><strong>{{ item.student.full_name|default:item.student }}</strong>
+                      <small>{{ item.student.email|default:'' }}</small></div>
                     </td>
-                    <td>{{ item.assessment.title|default:item.assessment }}</td>
-                    <td>{{ item.created_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</td>
-                    <td>
-                      <div class="inline-actions"><a class="button button-info"
+                    <td class="table-td">{{ item.assessment.title|default:item.assessment }}</td>
+                    <td class="table-td">{{ item.created_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</td>
+                    <td class="table-td">
+                      <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-secondary"
                            href="{% url 'assessments:admin_homework_grade_detail' item.id %}">{% trans "Review" %}</a>
                       </div>
                     </td>

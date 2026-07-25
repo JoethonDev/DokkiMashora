@@ -4,8 +4,38 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.core.models import LANDING_CONTENT_DEFAULTS, LandingPageSettings
 
+WIDGET_CLASSES = {
+    "Select": "form-select",
+    "SelectMultiple": "form-select",
+    "NullBooleanSelect": "form-select",
+    "CheckboxInput": "form-checkbox",
+    "RadioSelect": "form-radio",
+    "CheckboxSelectMultiple": "form-checkbox",
+    "FileInput": "form-file",
+    "ClearableFileInput": "form-file",
+}
+DEFAULT_WIDGET_CLASS = "form-input"
+CANONICAL_WIDGET_CLASSES = {"form-input", "form-select", "form-checkbox", "form-radio", "form-file"}
+
+
+class StyledFormMixin:
+    """R1 layer 1: assigns the canonical widget class to every field.
+
+    Must be the FIRST base class of every form in the project.
+    Corrects wrong legacy classes (e.g. Select + form-input) and is idempotent.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            widget = field.widget
+            canonical = WIDGET_CLASSES.get(type(widget).__name__, DEFAULT_WIDGET_CLASS)
+            existing = set(widget.attrs.get("class", "").split()) - CANONICAL_WIDGET_CLASSES
+            widget.attrs["class"] = " ".join(sorted(existing | {canonical}))
+
+
 CONTENT_SECTIONS = {
-    "Hero": (
+    _("Hero"): (
         "hero_eyebrow",
         "hero_title",
         "hero_body",
@@ -14,8 +44,8 @@ CONTENT_SECTIONS = {
         "announcement_title",
         "announcement_body",
     ),
-    "Introduction": ("intro_eyebrow", "intro_title", "intro_body"),
-    "Benefits": (
+    _("Introduction"): ("intro_eyebrow", "intro_title", "intro_body"),
+    _("Benefits"): (
         "benefits_eyebrow",
         "benefits_title",
         "benefits_body",
@@ -28,9 +58,9 @@ CONTENT_SECTIONS = {
         "benefit_4_title",
         "benefit_4_body",
     ),
-    "Parenting": ("parenting_eyebrow", "parenting_title", "parenting_body"),
-    "Diploma": ("diploma_eyebrow", "diploma_title", "diploma_body"),
-    "Programs": (
+    _("Parenting"): ("parenting_eyebrow", "parenting_title", "parenting_body"),
+    _("Diploma"): ("diploma_eyebrow", "diploma_title", "diploma_body"),
+    _("Programs"): (
         "programs_eyebrow",
         "programs_title",
         "programs_body",
@@ -48,9 +78,9 @@ CONTENT_SECTIONS = {
         "entrance_note",
         "apply_now",
     ),
-    "Quote": ("quote", "quote_name", "quote_role"),
-    "Call to action": ("cta_eyebrow", "cta_title", "cta_body", "cta_label"),
-    "Footer": (
+    _("Quote"): ("quote", "quote_name", "quote_role"),
+    _("Call to action"): ("cta_eyebrow", "cta_title", "cta_body", "cta_label"),
+    _("Footer"): (
         "footer_tagline",
         "footer_address",
         "footer_about_title",
@@ -72,7 +102,7 @@ CONTENT_SECTIONS = {
 }
 
 
-class LandingPageSettingsForm(forms.ModelForm):
+class LandingPageSettingsForm(StyledFormMixin, forms.ModelForm):
     class Meta:
         model = LandingPageSettings
         fields = (
@@ -94,6 +124,16 @@ class LandingPageSettingsForm(forms.ModelForm):
             "hero_image": forms.FileInput(attrs={"accept": "image/webp"}),
             "parenting_image": forms.FileInput(attrs={"accept": "image/webp"}),
             "diploma_image": forms.FileInput(attrs={"accept": "image/webp"}),
+            "show_live_stats": forms.CheckboxInput(),
+            "stat_value_1": forms.TextInput(),
+            "stat_value_2": forms.TextInput(),
+            "stat_value_3": forms.TextInput(),
+            "stat_value_4": forms.TextInput(),
+            "contact_email": forms.EmailInput(),
+            "contact_phone": forms.TextInput(),
+            "facebook_url": forms.URLInput(),
+            "instagram_url": forms.URLInput(),
+            "youtube_url": forms.URLInput(),
         }
 
     def __init__(self, *args, **kwargs):
@@ -103,7 +143,7 @@ class LandingPageSettingsForm(forms.ModelForm):
                 value = (
                     self.instance.content.get(language, {}).get(key, default) if self.instance.pk else default
                 )
-                self.fields[f"{key}_{language}"] = forms.CharField(
+                field = forms.CharField(
                     label=_("%(key)s (%(language)s)")
                     % {"key": key.replace("_", " ").title(), "language": language.upper()},
                     initial=value,
@@ -111,8 +151,10 @@ class LandingPageSettingsForm(forms.ModelForm):
                     if key.endswith(("body", "quote", "tagline"))
                     else forms.TextInput(),
                 )
-        for field in self.fields.values():
-            field.widget.attrs.pop("class", None)
+                self.fields[f"{key}_{language}"] = field
+                widget = field.widget
+                canonical = WIDGET_CLASSES.get(type(widget).__name__, DEFAULT_WIDGET_CLASS)
+                widget.attrs["class"] = canonical
 
     def clean(self):
         cleaned = super().clean()

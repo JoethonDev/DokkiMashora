@@ -4,29 +4,30 @@
   {{ assessment.title }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view"><section class="page-intro"><div>
+  <div class="page-stack animate-enter-view"><section class="flex justify-between items-center gap-5 px-0.5 py-1.5"><div>
         <p class="eyebrow">{% trans "Assessment" %}</p>
         <h2>{{ assessment.title }}</h2>
         <p>{{ assessment.description }}</p>
       </div>
-    </section>
-    <section class="surface"><dl class="description-list"><div>
-          <dt>{% trans "Duration" %}</dt>
-          <dd>
+        <div class="actions-row"><a class="btn-ghost" href="{% url 'assessments:student_list' %}">{% trans "Back to assessments" %}</a></div>
+      </section>
+    <section class="card-surface"><dl class="dl"><div>
+          <dt class="dt">{% trans "Duration" %}</dt>
+          <dd class="dd">
             {{ assessment.duration_minutes }}
             {% trans "minutes" %}
           </dd>
         </div>
         <div>
-          <dt>{% trans "Total points" %}</dt>
-          <dd>
+          <dt class="dt">{% trans "Total points" %}</dt>
+          <dd class="dd">
             {{ assessment.total_points }}
           </dd>
         </div>
       </dl>
-      <form method="post" action="{% url 'assessments:start' assessment.id %}">{% csrf_token %}
-        <button class="button button-primary" type="submit">{% trans "Start assessment" %}</button>
-      </form>
+      <div class="max-w-2xl mx-auto"><form method="post" action="{% url 'assessments:start' assessment.id %}">{% csrf_token %}
+        <button class="btn-primary" type="submit">{% trans "Start assessment" %}</button>
+      </form></div>
     </section>
   </div>
 {% endblock %}

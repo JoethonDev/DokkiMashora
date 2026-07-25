@@ -1,14 +1,18 @@
 {% load i18n %}
 <div id="toast-region"
-     class="toast-region"
+     class="fixed end-4 top-16 z-toast flex flex-col gap-2.5"
      aria-live="polite"
      aria-atomic="true"
      x-data="{toasts:[]}"
-     @toast.window="toasts.push($event.detail); setTimeout(() => toasts.shift(), 5000)"><template x-for="(toast, index) in toasts" :key="index"><div class="toast"
+      @show-toast.window="let idx = toasts.length; toasts.push({...$event.detail, visible: true}); setTimeout(() => { if (toasts[idx]) { toasts[idx].visible = false; setTimeout(() => { if (toasts[idx]) toasts.splice(idx, 1); }, 300); } }, 5000)">
+  <template x-for="(toast, index) in toasts" :key="index">
+    <div class="min-w-72 max-w-96 p-4 border border-line rounded-sm bg-surface shadow-modal flex items-start gap-2.5 transition-all duration-300"
          role="status"
-         :class="'toast-' + (toast.type || 'info')"><span x-text="toast.message || toast.detail || ''"></span>
+         :class="(toast.visible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-full') + ' ' + (toast.type === 'success' ? 'border-green' : toast.type === 'warning' ? 'border-amber' : toast.type === 'error' ? 'border-red' : 'border-blue')">
+      <span class="flex-1 min-w-0 truncate" x-text="toast.message || toast.detail || ''"></span>
       <button type="button"
-              @click="toasts.splice(index, 1)"
+              @click="toasts[index].visible = false; setTimeout(() => toasts.splice(index, 1), 300)"
+              class="border-0 bg-transparent text-muted cursor-pointer font-extrabold shrink-0"
               aria-label="{% trans 'Dismiss notification' %}">x</button>
     </div>
   </template>

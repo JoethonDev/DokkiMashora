@@ -4,19 +4,19 @@
   {% trans "Scan attendance" %}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% include "ui/components/_page_header.html" with title=_("Scan attendance") eyebrow=_("Attendance") %}
-    <form class="surface form-main" method="post">{% csrf_token %}
-      <div class="field"><span>{% trans "Session" %}</span>
-        <select id="session_id" name="session_id">
+  <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=_("Scan attendance") eyebrow=_("Attendance") %}
+    <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
+      <div class="field"><label for="session_id">{% trans "Session" %}</label>
+        <select id="session_id" name="session_id" class="form-select">
           <option value="">{% trans "Select" %}</option>{% for session in open_sessions %}
             <option value="{{ session.id }}">{{ session }}</option>
           {% endfor %}
         </select>
       </div>
       <div class="field"><label for="qr_payload">{% trans "QR payload" %}</label>
-        <input id="qr_payload" name="qr_payload" required>
+        <input id="qr_payload" name="qr_payload" class="form-input" required>
       </div>
-      <button class="button button-primary" type="submit">{% trans "Record attendance" %}</button>
+      <button class="btn-primary" type="submit">{% trans "Record attendance" %}</button>
     </form>
     {% if result %}
       <p role="status">{{ result.student_name }}

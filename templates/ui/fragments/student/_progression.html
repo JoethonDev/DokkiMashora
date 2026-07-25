@@ -1,50 +1,50 @@
 {% load i18n %}
-<div id="student-content" class="page-stack enter-view"><section class="page-intro"><div>
+<div id="student-content" class="page-stack animate-enter-view"><section class="flex justify-between items-center gap-5 px-0.5 py-1.5"><div>
       <p class="eyebrow">{% trans "Academic journey" %}</p>
       <h2>{% trans "Progression" %}</h2>
       <p>{% trans "Track semester decisions, completion, eligibility, released grades, and certificates." %}</p>
     </div>
-    <a class="button button-soft" href="{% url 'students:record' %}">{% trans "Open full record" %}</a>
+    <a class="btn-soft" href="{% url 'students:record' %}">{% trans "Open full record" %}</a>
   </section>
-  <section class="surface"><div class="section-header"><div>
+  <section class="card-surface"><div class="section-head"><div>
         <p class="eyebrow">{% trans "Progress" %}</p>
         <h3>{% trans "Semester progress" %}</h3>
       </div>
     </div>
-    <div class="table-shell"><table>
+    <div class="table-wrap"><table class="table">
         <thead>
           <tr>
-            <th>{% trans "Semester" %}</th>
-            <th>{% trans "Status" %}</th>
-            <th>{% trans "Average score" %}</th>
+            <th class="table-th">{% trans "Semester" %}</th>
+            <th class="table-th">{% trans "Status" %}</th>
+            <th class="table-th">{% trans "Average score" %}</th>
           </tr>
         </thead>
         <tbody>
           {% for item in semester_progress %}
             <tr>
-              <td>
+              <td class="table-td">
                 <strong>{{ item.semester }}</strong>
               </td>
-              <td>
-                <span class="status-pill blue">{{ item.get_status_display|default:item.status }}</span>
+              <td class="table-td">
+                <span class="status-pill-info">{{ item.get_status_display|default:item.status }}</span>
               </td>
-              <td>{{ item.average_score|default:item.score|default:'—' }}</td>
+              <td class="table-td">{{ item.average_score|default:item.score|default:'—' }}</td>
             </tr>
           {% empty %}
             <tr>
-              <td colspan="3">{% trans "No semester progress available." %}</td>
+              <td colspan="3" class="table-td">{% trans "No semester progress available." %}</td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   </section>
-  <section class="detail-layout"><article class="surface"><div class="section-header"><div>
+  <section class="grid grid-cols-1 md:grid-cols-2 gap-4"><article class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Decisions" %}</p>
           <h3>{% trans "Promotion decisions" %}</h3>
         </div>
       </div>
-      <div class="timeline">{% for item in promotion_decisions %}
+      <div class="flex flex-col">{% for item in promotion_decisions %}
           <div>
             <i></i>
             <p>
@@ -56,59 +56,59 @@
               <small>
                 {{ item.get_decision_display|default:item.decision }}
                 ·
-                {{ item.decided_at|date:"d M Y" }}
+                {{ item.decided_at|date:"d/m/Y" }}
               </small>
             </p>
           </div>
         {% empty %}
-          <p class="muted">{% trans "No promotion decisions recorded." %}</p>
+          <p class="text-muted">{% trans "No promotion decisions recorded." %}</p>
         {% endfor %}
       </div>
     </article>
-    <article class="surface"><div class="section-header"><div>
+    <article class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Completion" %}</p>
           <h3>{% trans "Eligibility and certificates" %}</h3>
         </div>
       </div>
       {% for item in completions %}
         <p>
-          <span class="status-pill green">{{ item.get_status_display|default:item.status }}</span>
+          <span class="status-pill-success">{{ item.get_status_display|default:item.status }}</span>
           {{ item.diploma_enrollment.cohort.diploma }}
         </p>
       {% endfor %}
       {% for item in eligibilities %}
         <p>
-          <span class="status-pill blue">{{ item.get_status_display|default:item.status }}</span>
+          <span class="status-pill-info">{{ item.get_status_display|default:item.status }}</span>
           {{ item.diploma_enrollment.cohort.diploma }}
         </p>
       {% empty %}
-        <p class="muted">{% trans "No final-exam eligibility records." %}</p>
+        <p class="text-muted">{% trans "No final-exam eligibility records." %}</p>
       {% endfor %}
     </article>
   </section>
-  <section class="surface"><div class="section-header"><div>
+  <section class="card-surface"><div class="section-head"><div>
         <p class="eyebrow">{% trans "Released results" %}</p>
         <h3>{% trans "Grade items" %}</h3>
       </div>
     </div>
-    <div class="table-shell"><table>
+    <div class="table-wrap"><table class="table">
         <thead>
           <tr>
-            <th>{% trans "Component" %}</th>
-            <th>{% trans "Score" %}</th>
-            <th>{% trans "Feedback" %}</th>
+            <th class="table-th">{% trans "Component" %}</th>
+            <th class="table-th">{% trans "Score" %}</th>
+            <th class="table-th">{% trans "Feedback" %}</th>
           </tr>
         </thead>
         <tbody>
           {% for item in grade_items %}
             <tr>
-              <td>{{ item.component }}</td>
-              <td>{{ item.score }}</td>
-              <td>{{ item.feedback|default:'—' }}</td>
+              <td class="table-td">{{ item.component }}</td>
+              <td class="table-td">{{ item.score }}</td>
+              <td class="table-td">{{ item.feedback|default:'—' }}</td>
             </tr>
           {% empty %}
             <tr>
-              <td colspan="3">{% trans "No released grades available." %}</td>
+              <td colspan="3" class="table-td">{% trans "No released grades available." %}</td>
             </tr>
           {% endfor %}
         </tbody>

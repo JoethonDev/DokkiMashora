@@ -1,22 +1,27 @@
 {% load i18n %}
 <div id="global-modal"
-     class="modal-layer"
-     x-data="{open:false, trigger:null}"
-     x-show="open"
+     class="fixed inset-0 z-modal pointer-events-auto"
+     x-show="$store.ui.modalOpen"
      x-cloak
      role="dialog"
      aria-modal="true"
      aria-labelledby="modal-title"
-     @open-modal.window="trigger=$event.detail?.trigger || document.activeElement; open=true"
-     @close-modal.window="open=false; trigger && trigger.focus()"
-     @keydown.escape.window="open=false; trigger && trigger.focus()"
-     x-init="$watch('open', value => value && $nextTick(() => $refs.panel.focus()))"><div class="modal-backdrop"
-       @click="open=false; trigger && trigger.focus()"></div>
-  <section class="modal" tabindex="-1" x-ref="panel"><h2 id="modal-title" class="sr-only">{% trans "Dialog" %}</h2>
-    <button type="button"
-            class="icon-button"
-            @click="open=false; trigger && trigger.focus()"
-            aria-label="{% trans 'Close dialog' %}">×</button>
-    <div id="modal-content"></div>
+     @keydown.escape.window="$store.ui.toggleModal(false)"
+     x-init="$watch('$store.ui.modalOpen', value => value && $nextTick(() => $refs.panel.focus()))">
+  <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm opacity-0 transition-opacity duration-200 ease"
+       :class="{'opacity-100':$store.ui.modalOpen}"
+       @click="$store.ui.toggleModal(false)"></div>
+  <section class="w-full max-w-lg absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface rounded-md shadow-modal overflow-hidden opacity-0 transition-all duration-200 ease scale-95"
+           tabindex="-1"
+           x-ref="panel"
+           :class="{'opacity-100 scale-100':$store.ui.modalOpen}">
+    <div class="flex items-center justify-between p-5 border-b border-line">
+      <h2 class="mt-1 mb-0 text-text" id="modal-title">{% trans "Dialog" %}</h2>
+      <button type="button"
+              class="btn-icon"
+              @click="$store.ui.toggleModal(false)"
+              aria-label="{% trans 'Close dialog' %}">&times;</button>
+    </div>
+    <div class="p-5 text-muted" id="modal-content"></div>
   </section>
 </div>

@@ -7,38 +7,39 @@
   {% trans "Diplomas" %}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% trans "Academics" as eyebrow %}
+  <div class="page-stack animate-enter-view">{% trans "Academics" as eyebrow %}
     {% trans "Diplomas" as title %}
     {% trans "Manage diploma programs, semesters, and cohorts." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    <section class="surface"><form class="filter-toolbar"
+    <section class="card-surface"><form class="actions-row items-end mb-4"
       method="get"
       hx-get="{% url 'academics:admin_diploma_list' %}"
-      hx-trigger="input changed delay:250ms from:#diploma-search, change from:select, submit"
+      hx-trigger="input changed delay:300ms from:#diploma-search, change from:select, submit"
       hx-target="#diploma-results"
       hx-swap="outerHTML"
       hx-push-url="true"
-      hx-sync="this:replace"><label class="search-input"><span>&#8981;</span>
-      <input id="diploma-search"
-             name="q"
-             value="{{ search_value }}"
-             type="search"
-             placeholder="{% trans 'Search diplomas…' %}"></label>
-    <label class="select-field"><span>{% trans "Status" %}</span>
-      <select id="diploma-status" name="is_active"><option value="">{% trans "All" %}</option>
+       hx-sync="this:replace"><div class="relative flex-1 min-w-[210px]"><span class="absolute inset-y-0 start-0 grid place-items-center ps-3 text-muted pointer-events-none">&#8981;</span>
+       <input id="diploma-search"
+              name="q"
+              value="{{ search_value }}"
+              type="search"
+               placeholder="{% trans 'Search diplomas…' %}"
+               class="form-input ps-10"></div>
+     <label class="min-w-40"><span class="field-label">{% trans "Status" %}</span>
+      <select id="diploma-status" name="is_active" class="form-select"><option value="">{% trans "All" %}</option>
         {% for option in filters.0.options %}
           <option value="{{ option.value }}"
                   {% if option.selected %} selected {% endif %}>{{ option.label }}</option>
         {% endfor %}
       </select>
     </label>
-    <button class="button button-info filter-button" type="submit">{% trans "Filter" %}</button>
-    <a class="button button-ghost"
+    <button class="btn-secondary" type="submit">{% trans "Filter" %}</button>
+    <a class="btn-ghost"
        href="{% url 'academics:admin_diploma_list' %}">{% trans "Reset" %}</a>
   </form>
   {% include "ui/fragments/admin/_diploma_table.html" %}
   </section>
-  <div class="inline-actions"><a class="button button-primary"
+  <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-primary"
        href="{% url 'academics:admin_diploma_create' %}">{% trans "Create diploma" %}</a>
   </div>
   </div>

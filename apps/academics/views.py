@@ -60,6 +60,7 @@ from apps.academics.services import (
     record_lecture_checkpoint,
     start_diploma_lecture_watch,
     start_lecture_watch,
+    extract_youtube_video_id,
 )
 from apps.attendance.models import AttendanceCode
 from apps.attendance.services import build_attendance_qr_payload, get_attendance_summary
@@ -146,12 +147,18 @@ def admin_diploma_detail(request, diploma_id):
         .annotate(count=Count("id"))
     )
     count_lookup = {(item["cohort_id"], item["semester_id"]): item["count"] for item in lecture_counts}
-    # Build flat cohort-semester rows so one value is not positional
-    cohort_rows = []
+    # Build cohort-grouped structure
+    cohort_groups = []
     for cohort in cohorts:
+        semesters_list = []
         for semester in semesters:
             l_count = count_lookup.get((cohort.id, semester.id), 0)
-            cohort_rows.append({"cohort": cohort, "semester": semester, "lecture_count": l_count})
+            semesters_list.append({"semester": semester, "lecture_count": l_count})
+        cohort_groups.append({"cohort": cohort, "semesters": semesters_list})
+    # Fetch recent enrollments for display
+    enrollments = DiplomaEnrollment.objects.filter(cohort__in=cohorts).select_related(
+        "student__user", "cohort"
+    ).order_by("-created_at")[:20]
     return render(
         request,
         "ui/pages/admin/diploma_detail.html",
@@ -159,7 +166,8 @@ def admin_diploma_detail(request, diploma_id):
             "diploma": diploma,
             "semesters": semesters,
             "cohorts": cohorts,
-            "cohort_rows": cohort_rows,
+            "cohort_groups": cohort_groups,
+            "enrollments": enrollments,
             "breadcrumb_items": _diploma_breadcrumbs(diploma),
         },
     )
@@ -892,8 +900,18 @@ def admin_lecture_preview(request, course_id, version_id, lecture_id):
     lecture = get_object_or_404(Lecture, id=lecture_id, course_version=version)
     return render(
         request,
-        "ui/pages/student/content.html",
-        {"version": version, "lecture": lecture, "is_preview": True},
+        "ui/pages/admin/course_lecture_preview.html",
+        {
+            "version": version,
+            "lecture": lecture,
+            "is_preview": True,
+            "youtube_video_id": lecture.youtube_video_id or extract_youtube_video_id(lecture.youtube_url),
+            "breadcrumb_items": [
+                {"label": _("Academics"), "href": reverse("academics:admin_course_list")},
+                {"label": version.course.title, "href": reverse("academics:admin_course_detail", args=[course_id])},
+                {"label": lecture.title},
+            ],
+        },
     )
 
 
@@ -997,7 +1015,7 @@ def admin_diploma_lecture_preview(request, diploma_id, cohort_id, semester_id, l
     lecture = get_object_or_404(DiplomaLecture, id=lecture_id, cohort=cohort, semester=semester)
     return render(
         request,
-        "ui/pages/student/content.html",
+        "ui/pages/admin/lecture_preview.html",
         {
             "lecture": lecture,
             "version": None,
@@ -1005,6 +1023,12 @@ def admin_diploma_lecture_preview(request, diploma_id, cohort_id, semester_id, l
             "diploma": diploma,
             "cohort": cohort,
             "semester": semester,
+            "youtube_video_id": lecture.youtube_video_id or extract_youtube_video_id(lecture.youtube_url),
+            "breadcrumb_items": [
+                {"label": _("Academics"), "href": reverse("academics:admin_diploma_list")},
+                {"label": diploma.title, "href": reverse("academics:admin_diploma_detail", args=[diploma.id])},
+                {"label": semester.title}, {"label": lecture.title},
+            ],
         },
     )
 
@@ -1169,12 +1193,16 @@ def admin_diploma_enrollment_update(request, diploma_id, enrollment_id):
         if new_cohort_id != str(enrollment.cohort_id):
             enrollment.cohort = new_cohort
             enrollment.save(update_fields=["cohort", "updated_at"])
+    msg = _("Enrollment updated.")
+    messages.success(request, msg)
     if is_htmx(request):
         cohorts = diploma.cohorts.all()
         enrollment.refresh_from_db()
-        return render(request, "ui/fragments/admin/_enrollment_row.html", {
+        response = render(request, "ui/fragments/admin/_enrollment_row.html", {
             "e": enrollment, "diploma": diploma, "cohorts": cohorts, "enrollment_type": "diploma",
         })
+        response['HX-Trigger'] = json.dumps({'show-toast': {'message': msg, 'type': 'success'}})
+        return response
     return redirect("academics:admin_diploma_enrollment_list", diploma_id=diploma.id)
 
 
@@ -1388,6 +1416,7 @@ def student_diploma_lecture_view(request, enrollment_id, semester_id, lecture_id
         "semester": semester,
         "diploma": diploma,
         "version": None,
+        "youtube_video_id": lecture.youtube_video_id or extract_youtube_video_id(lecture.youtube_url),
         "navigation": navigation,
         "watch_progress": watch_progress,
     })

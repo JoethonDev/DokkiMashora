@@ -4,125 +4,125 @@
   {% trans "Settings" %}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% trans "System" as eyebrow %}
+  <div class="page-stack animate-enter-view">{% trans "System" as eyebrow %}
     {% trans "Settings" as title %}
     {% trans "Site configuration, email health, AI review settings, and announcements." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    <section class="surface"><div class="section-header"><div>
+    <section class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "General" %}</p>
           <h3>{% trans "Site configuration" %}</h3>
         </div>
       </div>
-      <dl class="description-list"><div>
-          <dt>{% trans "Site name (EN)" %}</dt>
-          <dd>
+      <dl class="dl"><div>
+          <dt class="dt">{% trans "Site name (EN)" %}</dt>
+          <dd class="dd">
             {{ site_config.SITE_NAME|default:'—' }}
           </dd>
         </div>
         <div>
-          <dt>{% trans "Site name (AR)" %}</dt>
-          <dd>
+          <dt class="dt">{% trans "Site name (AR)" %}</dt>
+          <dd class="dd">
             {{ site_config.SITE_NAME_AR|default:'—' }}
           </dd>
         </div>
         <div>
-          <dt>{% trans "Timezone" %}</dt>
-          <dd>
+          <dt class="dt">{% trans "Timezone" %}</dt>
+          <dd class="dd">
             {{ site_config.TIME_ZONE|default:'—' }}
           </dd>
         </div>
         <div>
-          <dt>{% trans "Language" %}</dt>
-          <dd>
+          <dt class="dt">{% trans "Language" %}</dt>
+          <dd class="dd">
             {{ site_config.LANGUAGE_CODE|default:'—' }}
           </dd>
         </div>
         <div>
-          <dt>{% trans "Storage backend" %}</dt>
-          <dd>
+          <dt class="dt">{% trans "Storage backend" %}</dt>
+          <dd class="dd">
             {{ site_config.STORAGE|default:_("Local") }}
           </dd>
         </div>
       </dl>
     </section>
-    <section class="surface"><div class="section-header"><div>
+    <section class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Email" %}</p>
           <h3>{% trans "Email health" %}</h3>
         </div>
       </div>
-      <dl class="description-list"><div>
-          <dt>{% trans "Total sent" %}</dt>
-          <dd>
+      <dl class="dl"><div>
+          <dt class="dt">{% trans "Total sent" %}</dt>
+          <dd class="dd">
             {{ email_stats.total|default:0 }}
           </dd>
         </div>
         <div>
-          <dt>{% trans "Succeeded" %}</dt>
-          <dd>
+          <dt class="dt">{% trans "Succeeded" %}</dt>
+          <dd class="dd">
             {{ email_stats.sent|default:0 }}
           </dd>
         </div>
         <div>
-          <dt>{% trans "Failed" %}</dt>
-          <dd>
+          <dt class="dt">{% trans "Failed" %}</dt>
+          <dd class="dd">
             {{ email_stats.failed|default:0 }}
           </dd>
         </div>
         <div>
-          <dt>{% trans "Last status" %}</dt>
-          <dd>
+          <dt class="dt">{% trans "Last status" %}</dt>
+          <dd class="dd">
             {{ email_stats.last_status|default:'—' }}
           </dd>
         </div>
         <div>
-          <dt>{% trans "Last attempt" %}</dt>
-          <dd>
+          <dt class="dt">{% trans "Last attempt" %}</dt>
+          <dd class="dd">
             {{ email_stats.last_time|default:'—' }}
           </dd>
         </div>
       </dl>
     </section>
-    <section class="surface"><div class="section-header"><div>
+    <section class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "AI" %}</p>
           <h3>{% trans "AI review" %}</h3>
         </div>
       </div>
-      <dl class="description-list"><div>
-          <dt>{% trans "Enabled" %}</dt>
-          <dd>
+      <dl class="dl"><div>
+          <dt class="dt">{% trans "Enabled" %}</dt>
+          <dd class="dd">
             {{ ai_config.enabled|yesno:_("Yes,No") }}
           </dd>
         </div>
         <div>
-          <dt>{% trans "Provider / model" %}</dt>
-          <dd>
+          <dt class="dt">{% trans "Provider / model" %}</dt>
+          <dd class="dd">
             {{ ai_config.provider|default:'—' }}
             /
             {{ ai_config.model|default:'—' }}
           </dd>
         </div>
         <div>
-          <dt>{% trans "Timeout" %}</dt>
-          <dd>
+          <dt class="dt">{% trans "Timeout" %}</dt>
+          <dd class="dd">
             {{ ai_config.timeout|default:'—' }}
           </dd>
         </div>
         <div>
-          <dt>{% trans "Prompt version" %}</dt>
-          <dd>
+          <dt class="dt">{% trans "Prompt version" %}</dt>
+          <dd class="dd">
             {{ ai_config.prompt_version|default:'—' }}
           </dd>
         </div>
         <div>
-          <dt>{% trans "Reviews triggered" %}</dt>
-          <dd>
+          <dt class="dt">{% trans "Reviews triggered" %}</dt>
+          <dd class="dd">
             {{ ai_config.review_count|default:0 }}
           </dd>
         </div>
       </dl>
     </section>
     {% if active_announcement %}
-      <section class="surface"><div class="section-header"><div>
+      <section class="card-surface"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Notice" %}</p>
             <h3>{% trans "Active announcement" %}</h3>
           </div>

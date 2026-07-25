@@ -1,12 +1,12 @@
 {% load i18n %}
 {% if not q %}
-  <div class="search-hint"><p>{% trans "Search screens and records" %}</p>
+  <div class="text-center py-8 px-5 text-muted"><p>{% trans "Search screens and records" %}</p>
     {% if navigation %}
-      <div class="search-group"><div class="search-group-label">{% trans "Navigation" %}</div>
+      <div class="mb-2"><div class="text-xs font-extrabold uppercase text-muted px-2.5 pb-1 pt-2 flex items-center gap-1.5">{% trans "Navigation" %}</div>
         {% for item in navigation %}
-          <a class="search-result-item" href="{{ item.url }}"><span class="search-result-icon">{{ item.icon|safe }}</span>
-            <span class="search-result-text"><strong>{{ item.label }}</strong>
-              <small>{{ item.section }}</small>
+          <a class="flex items-center gap-2.5 p-2.5 rounded-sm no-underline text-text hover:bg-brand-soft" href="{{ item.url }}"><span class="w-8 h-8 rounded-sm bg-brand-soft text-brand grid place-items-center shrink-0">{{ item.icon|safe }}</span>
+            <span class="flex-1 min-w-0"><strong>{{ item.label }}</strong>
+              <small class="block text-muted text-xs mt-0.5">{{ item.section }}</small>
             </span>
           </a>
         {% endfor %}
@@ -14,14 +14,14 @@
     {% endif %}
   </div>
 {% elif search_error %}
-  <div class="search-error" role="alert"><p>{% trans "Something went wrong. Please try again." %}</p>
+  <div class="text-center py-8 px-5 text-red" role="alert"><p>{% trans "Something went wrong. Please try again." %}</p>
     <button type="button"
-            class="button button-soft"
+            class="btn-soft"
             id="search-retry-btn">{% trans "Retry" %}
     </button>
   </div>
 {% elif no_results %}
-  <div class="search-empty"><p>
+  <div class="text-center py-8 px-5 text-muted"><p>
       {% trans "No results for" %}
       "
       {{ q }}
@@ -31,16 +31,16 @@
   </div>
 {% else %}
   {% for group in results %}
-    <div class="search-group"><div class="search-group-label">{{ group.label }}
-        <span class="search-count">{{ group.items|length }}</span>
+    <div class="mb-2"><div class="text-xs font-extrabold uppercase text-muted px-2.5 pb-1 pt-2 flex items-center gap-1.5">{{ group.label }}
+        <span class="bg-surface-soft rounded-full px-1.5 py-px text-xs">{{ group.items|length }}</span>
       </div>
       {% for item in group.items %}
-        <a class="search-result-item" href="{{ item.url }}">{% if group.name == "navigation" %}
-            <span class="search-result-icon">{{ item.icon|safe }}</span>
+        <a class="flex items-center gap-2.5 p-2.5 rounded-sm no-underline text-text hover:bg-brand-soft" href="{{ item.url }}">{% if group.name == "navigation" %}
+            <span class="w-8 h-8 rounded-sm bg-brand-soft text-brand grid place-items-center shrink-0">{{ item.icon|safe }}</span>
           {% endif %}
-          <span class="search-result-text"><strong>{{ item.label }}</strong>
+          <span class="flex-1 min-w-0"><strong>{{ item.label }}</strong>
             {% if item.subtitle %}
-              <small>{{ item.subtitle }}</small>
+              <small class="block text-muted text-xs mt-0.5">{{ item.subtitle }}</small>
             {% endif %}
           </span>
         </a>

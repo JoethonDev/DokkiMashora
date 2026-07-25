@@ -5,6 +5,8 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.academics.models import Cohort, CourseVersion
 
+from apps.core.forms import StyledFormMixin
+
 from .constants import (
     FIELD_TYPE_BOOLEAN,
     FIELD_TYPE_CHOICE,
@@ -14,24 +16,25 @@ from .constants import (
 )
 
 
-class IntakeFormBuildForm(forms.Form):
-    title = forms.CharField(max_length=255, label=_("Title"))
+class IntakeFormBuildForm(StyledFormMixin, forms.Form):
+    title = forms.CharField(max_length=255, label=_("Title"), widget=forms.TextInput(attrs={}))
     description = forms.CharField(
-        widget=forms.Textarea, required=False, label=_("Description"),
+        widget=forms.Textarea(attrs={}), required=False, label=_("Description"),
     )
     target_type = forms.ChoiceField(
         choices=[("course_version", _("Course")), ("cohort", _("Diploma"))],
         label=_("Target type"),
+        widget=forms.Select(attrs={}),
     )
     course_version = forms.ModelChoiceField(
         queryset=CourseVersion.objects.filter(is_active=True).select_related("course"),
         required=False, label=_("Course version"),
-        widget=forms.Select(attrs={"class": ""}),
+        widget=forms.Select(attrs={}),
     )
     cohort = forms.ModelChoiceField(
         queryset=Cohort.objects.filter(is_active=True).select_related("diploma"),
         required=False, label=_("Diploma cohort"),
-        widget=forms.Select(attrs={"class": ""}),
+        widget=forms.Select(attrs={}),
     )
     is_required = forms.BooleanField(required=False, label=_("Required"))
     is_active = forms.BooleanField(required=False, label=_("Active"))
@@ -43,12 +46,6 @@ class IntakeFormBuildForm(forms.Form):
         required=False, label=_("Close at"),
         widget=forms.DateTimeInput(attrs={"type": "datetime-local"}),
     )
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        select_class = ""
-        self.fields["course_version"].widget.attrs["class"] = select_class
-        self.fields["cohort"].widget.attrs["class"] = select_class
 
     def clean(self):
         cleaned = super().clean()
@@ -66,19 +63,19 @@ class IntakeFormBuildForm(forms.Form):
         return cleaned
 
 
-class IntakeFormFieldForm(forms.Form):
-    label = forms.CharField(max_length=255, label=_("Label"))
-    help_text = forms.CharField(max_length=500, required=False, label=_("Help text"))
-    field_type = forms.ChoiceField(choices=FIELD_TYPE_CHOICES, label=_("Field type"))
+class IntakeFormFieldForm(StyledFormMixin, forms.Form):
+    label = forms.CharField(max_length=255, label=_("Label"), widget=forms.TextInput(attrs={}))
+    help_text = forms.CharField(max_length=500, required=False, label=_("Help text"), widget=forms.TextInput(attrs={}))
+    field_type = forms.ChoiceField(choices=FIELD_TYPE_CHOICES, label=_("Field type"), widget=forms.Select(attrs={}))
     required = forms.BooleanField(required=False, label=_("Required"))
     options = forms.CharField(
-        widget=forms.Textarea, required=False, label=_("Options (one per line)"),
+        widget=forms.Textarea(attrs={}), required=False, label=_("Options (one per line)"),
         help_text=_("Only for choice fields"),
     )
-    order = forms.IntegerField(label=_("Order"))
+    order = forms.IntegerField(label=_("Order"), widget=forms.NumberInput(attrs={}))
 
 
-class IntakeFormSubmitForm(forms.Form):
+class IntakeFormSubmitForm(StyledFormMixin, forms.Form):
     """Dynamic intake form submission validated server-side."""
 
     def __init__(self, form_instance, *args, **kwargs):
@@ -97,6 +94,7 @@ class IntakeFormSubmitForm(forms.Form):
                 self.fields[key] = forms.FloatField(
                     required=field.required, label=field.label,
                     help_text=field.help_text,
+                    widget=forms.NumberInput(attrs={}),
                 )
             elif field.field_type == FIELD_TYPE_DATE:
                 self.fields[key] = forms.DateField(
@@ -110,10 +108,12 @@ class IntakeFormSubmitForm(forms.Form):
                 self.fields[key] = forms.ChoiceField(
                     required=field.required, label=field.label,
                     choices=choices, help_text=field.help_text,
+                    widget=forms.Select(attrs={}),
                 )
             else:
                 self.fields[key] = forms.CharField(
                     required=field.required, label=field.label,
                     help_text=field.help_text,
                     max_length=500,
+                    widget=forms.TextInput(attrs={}),
                 )

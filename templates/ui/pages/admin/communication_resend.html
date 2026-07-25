@@ -4,14 +4,14 @@
   {{ title|default:_("Create template") }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack enter-view">{% trans "Templates" as eyebrow %}
+  <div class="page-stack animate-enter-view">{% trans "Templates" as eyebrow %}
     {% trans "Create template" as title %}
     {% trans "Create a new email template for a system action." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    <form class="surface form-main" method="post">{% csrf_token %}
+    <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
       <label>
         {% trans "Action" %}
-        <select name="slug" required>
+        <select name="slug" class="form-select" required>
           {% for slug in available_slugs %}
             <option value="{{ slug }}">{{ slug }}</option>
           {% endfor %}
@@ -19,27 +19,28 @@
       </label>
       <label>
         {% trans "Name" %}
-        <input name="name" required>
+        <input name="name" class="form-input" required>
       </label>
       <label>
         {% trans "Subject" %}
-        <input name="subject" required>
+        <input name="subject" class="form-input" required>
       </label>
       <label>
         {% trans "Body" %}
-        <textarea name="body" rows="12" required></textarea>
+        <textarea name="body" class="form-input" rows="12" required></textarea>
       </label>
       <label>
         {% trans "Design" %}
-        <select name="design">{% for value,label in design_choices %}
+        <select name="design" class="form-select">{% for value,label in design_choices %}
             <option value="{{ value }}">{{ label }}</option>
           {% endfor %}
         </select>
       </label>
-      <label>
-        <input type="checkbox" name="is_enabled_for_action">{% trans "Enabled for actions" %}
-      </label>
-      <button class="button button-primary" type="submit">{% trans "Create template" %}</button>
+      <div class="flex items-center gap-2 pt-4 border-t border-line"><label class="flex items-center gap-2 cursor-pointer">
+        <input type="checkbox" class="form-checkbox" name="is_enabled_for_action">{% trans "Enabled for actions" %}
+      </label></div>
+      <div class="actions-row"><button class="btn-primary" type="submit">{% trans "Create template" %}</button>
+      </div>
     </form>
   </div>
 {% endblock %}

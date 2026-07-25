@@ -1,39 +1,40 @@
 {% load i18n %}
 <dialog id="global-search-dialog"
-        class="search-dialog"
+        class="relative border-0 rounded-md shadow-modal p-0 w-full max-w-lg max-h-dvh overflow-hidden"
         aria-labelledby="search-dialog-title"><button type="button"
-          class="search-dialog-close"
+          class="absolute top-2.5 start-2.5 rtl:end-auto rtl:start-2.5 btn-icon z-10"
           id="search-dialog-close-btn"
-          aria-label="{% trans 'Close' %}">&#10005;</button><form class="search-dialog-form"
+          aria-label="{% trans 'Close' %}">&#10005;</button><form class="p-4 border-b border-line"
         method="get"
         action="{% url 'core:workspace_search' %}"
         hx-get="{% url 'core:workspace_search' %}"
-        hx-trigger="input changed delay:250ms from:#global-search-input, search from:#global-search-input"
+        hx-trigger="input changed delay:300ms from:#global-search-input, search from:#global-search-input"
         hx-target="#global-search-results"
         hx-swap="innerHTML"
-        hx-sync="this:replace"><div class="search-dialog-input"><span>&#8981;</span>
+        hx-sync="this:replace"><div class="flex items-center gap-2.5"><span>&#8981;</span>
       <input type="search"
              name="q"
              id="global-search-input"
              placeholder="{% trans 'Search screens and records' %}"
              autocomplete="off"
+             class="form-input border-0 outline-0 w-full text-base bg-transparent"
               aria-label="{% trans 'Search query' %}">
     </div>
   </form>
   <div id="global-search-results"
-       class="search-dialog-results"
+       class="p-2 max-h-96 overflow-y-auto"
        role="region"
        aria-live="polite"
        aria-label="{% trans 'Search results' %}">{% include "ui/fragments/shared/_global_search_results.html" %}
   </div>
-  <footer class="search-dialog-footer"><span><kbd>&uarr;</kbd>
-      <kbd>&darr;</kbd>
+  <footer class="flex gap-4 p-2.5 bg-surface-soft border-t border-line text-xs text-muted"><span><kbd class="bg-surface-soft border border-line rounded-sm px-1.5 py-0.5 text-xs text-text">&uarr;</kbd>
+      <kbd class="bg-surface-soft border border-line rounded-sm px-1.5 py-0.5 text-xs text-text">&darr;</kbd>
       {% trans "Navigate" %}
     </span>
-    <span><kbd>Enter</kbd>
+    <span><kbd class="bg-surface-soft border border-line rounded-sm px-1.5 py-0.5 text-xs text-text">Enter</kbd>
       {% trans "Open" %}
     </span>
-    <span><kbd>Esc</kbd>
+    <span><kbd class="bg-surface-soft border border-line rounded-sm px-1.5 py-0.5 text-xs text-text">Esc</kbd>
       {% trans "Close" %}
     </span>
   </footer>

@@ -4,10 +4,11 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.academics.models import Cohort, Diploma
 
+from apps.core.forms import StyledFormMixin
 from .models import EntranceChoice, EntranceExam, EntranceQuestion
 
 
-class EntranceExamForm(forms.ModelForm):
+class EntranceExamForm(StyledFormMixin, forms.ModelForm):
     class Meta:
         model = EntranceExam
         fields = (
@@ -22,9 +23,14 @@ class EntranceExamForm(forms.ModelForm):
             "auto_send_results",
         )
         widgets = {
+            "title": forms.TextInput(attrs={}),
+            "description": forms.Textarea(attrs={}),
+            "diploma": forms.Select(attrs={}),
+            "cohort": forms.Select(attrs={}),
+            "duration_minutes": forms.NumberInput(attrs={}),
+            "pass_percentage": forms.NumberInput(attrs={}),
             "open_at": forms.DateTimeInput(attrs={"type": "datetime-local"}),
             "close_at": forms.DateTimeInput(attrs={"type": "datetime-local"}),
-            "cohort": forms.Select(attrs={"class": ""}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -51,13 +57,16 @@ class EntranceExamForm(forms.ModelForm):
         return cleaned_data
 
 
-class EntranceQuestionForm(forms.ModelForm):
+class EntranceQuestionForm(StyledFormMixin, forms.ModelForm):
     class Meta:
         model = EntranceQuestion
         fields = ("text", "question_type", "max_score", "rubric", "order")
         widgets = {
             "text": forms.Textarea(attrs={"rows": 4}),
+            "question_type": forms.Select(attrs={}),
+            "max_score": forms.NumberInput(attrs={}),
             "rubric": forms.Textarea(attrs={"rows": 3}),
+            "order": forms.NumberInput(attrs={}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -66,12 +75,14 @@ class EntranceQuestionForm(forms.ModelForm):
         self.fields["order"].help_text = _("Display order (lower = first)")
 
 
-class EntranceChoiceForm(forms.ModelForm):
+class EntranceChoiceForm(StyledFormMixin, forms.ModelForm):
     class Meta:
         model = EntranceChoice
         fields = ("text", "score", "order")
         widgets = {
             "text": forms.TextInput(attrs={"placeholder": _("Choice text")}),
+            "score": forms.NumberInput(attrs={}),
+            "order": forms.NumberInput(attrs={}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -89,15 +100,16 @@ EntranceChoiceFormSet = inlineformset_factory(
 )
 
 
-class EntranceGradeForm(forms.Form):
+class EntranceGradeForm(StyledFormMixin, forms.Form):
     score = forms.DecimalField(
         label=_("Score"),
         max_digits=5,
         decimal_places=2,
         required=True,
+        widget=forms.NumberInput(attrs={}),
     )
     feedback = forms.CharField(
         label=_("Feedback"),
-        widget=forms.Textarea,
+        widget=forms.Textarea(attrs={}),
         required=False,
     )
