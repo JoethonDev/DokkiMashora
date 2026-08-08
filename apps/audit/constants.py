@@ -38,6 +38,8 @@ ACTION_USER_IMPORT_CONFIRMED = "user_import.confirmed"
 ACTION_EXAM_ACCESS_OVERRIDE_CREATED = "exam_access_override.created"
 ACTION_EXAM_ACCESS_OVERRIDE_CANCELLED = "exam_access_override.cancelled"
 ACTION_EXAM_ACCESS_OVERRIDE_USED = "exam_access_override.used"
+ACTION_RULE_REEVALUATION = "progression.rule_reevaluation"
+ACTION_SEMESTER_FINALIZED = "progression.semester_finalized"
 ACTION_STAFF_ASSIGNMENT_CREATED = "staff_assignment.created"
 ACTION_STAFF_ASSIGNMENT_REVOKED = "staff_assignment.revoked"
 ACTION_CLUSTER_CREATED = "cluster.created"
@@ -76,6 +78,8 @@ AUDIT_ACTION_CHOICES = (
     (ACTION_LOCK, _("Lock")),
     (ACTION_UNLOCK, _("Unlock")),
     (ACTION_RETAKE, _("Retake")),
+    (ACTION_RULE_REEVALUATION, _("Progression rule re-evaluation")),
+    (ACTION_SEMESTER_FINALIZED, _("Semester finalized")),
     (ACTION_CERTIFICATE_GENERATED, _("Certificate generated")),
     (ACTION_CERTIFICATE_REVOKED, _("Certificate revoked")),
     (ACTION_CERTIFICATE_REGENERATED, _("Certificate regenerated")),

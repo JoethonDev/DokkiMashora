@@ -5,6 +5,7 @@ import secrets
 
 from django.core.signing import TimestampSigner
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
@@ -181,9 +182,18 @@ def scan_attendance_token(
 
 
 def get_attendance_summary(diploma_enrollment, semester) -> dict:
+    """Attendance summary for one enrollment/semester.
+
+    The denominator counts only sessions whose attendance window has ended
+    (close_at passed) or that are already closed (L4); scheduled and open
+    future sessions must not lower attendance before they happen.
+    """
+    now = timezone.now()
     sessions = AttendanceSession.objects.filter(
         cohort=diploma_enrollment.cohort,
         semester=semester,
+    ).filter(
+        Q(status=SESSION_STATUS_CLOSED) | Q(close_at__lte=now),
     )
 
     total_sessions = sessions.count()

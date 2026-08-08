@@ -4,13 +4,8 @@
   {% trans "Assessment history" %}
 {% endblock %}
 {% block content %}
-  <div class="page-stack animate-enter-view"><section class="flex justify-between items-center gap-5 px-0.5 py-1.5"><div>
-        <p class="eyebrow">{% trans "Learning" %}</p>
-        <h2>{% trans "Assessment history" %}</h2>
-      </div>
-      <div class="actions-row"><a class="btn-ghost" href="{% url 'assessments:student_list' %}">{% trans "Back to assessments" %}</a></div>
-    </section>
-    <section class="card-surface"><div class="table-wrap"><table class="table">
+  <div class="page-stack animate-enter-view">{% url 'assessments:student_list' as student_assessment_list_url %}{% include "ui/components/_page_header.html" with eyebrow=_("Learning") title=_("Assessment history") back_url=student_assessment_list_url back_label=_("Back to assessments") %}
+    <section class="card-surface"><div class="table-wrap hidden lg:block"><table class="table">
           <thead>
             <tr>
               <th class="table-th">{% trans "Assessment" %}</th>
@@ -25,15 +20,28 @@
                 <td>
                   <span class="status-pill-info">{{ item.get_status_display }}</span>
                 </td>
-                <td>{{ item.score|default:"—" }}</td>
+                <td>{{ item.score_percent|default:"—" }}</td>
               </tr>
             {% empty %}
               <tr>
-                <td colspan="3">{% trans "No assessment history available." %}</td>
+                <td class="table-td" colspan="3">{% include "ui/components/_empty_state.html" with title=_("No assessment history available.") %}</td>
               </tr>
             {% endfor %}
           </tbody>
         </table>
+      </div>
+      <div class="card-stack lg:hidden">
+        {% for item in assessment_attempts %}
+          <div class="mobile-card">
+            <div class="flex-1 min-w-0">
+              <strong class="block truncate">{{ item.assessment }}</strong>
+              <span class="status-pill-info">{{ item.get_status_display }}</span>
+              <small class="block text-muted">{% trans "Score" %}: {{ item.score_percent|default:"—" }}</small>
+            </div>
+          </div>
+        {% empty %}
+          <div class="border border-line rounded-sm p-4 text-center">{% include "ui/components/_empty_state.html" with title=_("No assessment history available.") %}</div>
+        {% endfor %}
       </div>
     </section>
   </div>

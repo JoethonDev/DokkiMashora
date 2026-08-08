@@ -43,17 +43,80 @@ class EmailAuthenticationForm(StyledFormMixin, AuthenticationForm):
     )
 
 
-class ProfileForm(StyledFormMixin, forms.ModelForm):
-    """Allow the user to update their own basic profile fields."""
+class ProfileForm(StyledFormMixin, forms.Form):
+    """Edit the current user's own identity and contact fields.
 
-    class Meta:
-        model = User
-        fields = ("full_name", "full_name_ar", "phone")
-        labels = {
-            "full_name": _("Full name"),
-            "full_name_ar": _("Full name (Arabic)"),
-            "phone": _("Phone number"),
-        }
+    StudentProfile is the authoritative source for a student's name and phone
+    (dashboards and detail pages read it); the User copies are kept in sync
+    because admin lists and the student header still read them. Email remains
+    on User only and is not editable here.
+    """
+
+    full_name = forms.CharField(label=_("Full name"), max_length=150, widget=forms.TextInput())
+    full_name_ar = forms.CharField(label=_("Full name (Arabic)"), max_length=150, required=False, widget=forms.TextInput())
+    phone = forms.CharField(label=_("Phone number"), max_length=32, widget=forms.TextInput())
+
+    def __init__(self, *args, user=None, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+
+    def clean_phone(self):
+        phone = (self.cleaned_data.get("phone") or "").strip()
+        if not phone:
+            raise ValidationError(_("Phone number is required."))
+        normalized = application_normalize_phone(phone)
+        if len(normalized) < 7:
+            raise ValidationError(_("Enter a valid mobile number."))
+        profile = getattr(self.user, "student_profile", None)
+        profile_pk = profile.pk if profile is not None else None
+        for other in User.objects.exclude(pk=self.user.pk).exclude(phone=""):
+            if application_normalize_phone(other.phone) == normalized:
+                raise ValidationError(_("This phone number is already in use."))
+        if profile is not None:
+            for other in StudentProfile.objects.exclude(pk=profile_pk).exclude(phone=""):
+                if application_normalize_phone(other.phone) == normalized:
+                    raise ValidationError(_("This phone number is already in use."))
+        elif StudentProfile.objects.exclude(phone="").filter(phone=phone).exists():
+            raise ValidationError(_("This phone number is already in use."))
+        return phone
+
+
+class ActivationConfirmForm(StyledFormMixin, forms.Form):
+    """Set the initial password during the one-time account activation step.
+
+    The activation link is the one-time token; the initial password is a
+    random secret that was never delivered, so it is established here with the
+    full Django password validators before the user reaches any dashboard.
+    """
+
+    new_password1 = forms.CharField(
+        label=_("New password"),
+        strip=False,
+        widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}),
+    )
+    new_password2 = forms.CharField(
+        label=_("Confirm password"),
+        strip=False,
+        widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}),
+    )
+
+    def __init__(self, *args, user=None, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+
+    def clean(self):
+        cleaned = super().clean()
+        password1 = cleaned.get("new_password1")
+        password2 = cleaned.get("new_password2")
+        if password1 and password2 and password1 != password2:
+            self.add_error("new_password2", _("The two password fields didn't match."))
+        return cleaned
+
+    def clean_new_password1(self):
+        password = self.cleaned_data.get("new_password1", "")
+        if password:
+            validate_password(password, user=self.user)
+        return password
 
 
 class AdminUserCreationForm(StyledFormMixin, UserCreationForm):

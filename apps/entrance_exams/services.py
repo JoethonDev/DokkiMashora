@@ -12,6 +12,9 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.applications.constants import (
     EMAIL_ACTION_NOTE,
+    PROGRAM_APP_STATUS_ACCEPTED,
+    PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
+    PROGRAM_APP_STATUS_REJECTED,
     PROGRAM_TYPE_DIPLOMA,
 )
 from apps.applications.models import ProgramApplicationEmailLog as PAEL  # noqa: N817
@@ -49,6 +52,23 @@ class AnswerData:
     question_id: int
     selected_choice_id: int | None = None
     written_text: str = ""
+
+
+def attempt_decision(attempt: EntranceAttempt) -> dict | None:
+    """Return the admin's decision on an attempt's application, or None.
+
+    The decision is derived from the ProgramApplication status (accepted,
+    rejected, or interview requested). Grades are never exposed to students,
+    so this is the only outcome shown on the results page.
+    """
+    status = attempt.program_application.status
+    if status == PROGRAM_APP_STATUS_ACCEPTED:
+        return {"code": "accepted", "label": _("Accepted"), "tone": "success"}
+    if status == PROGRAM_APP_STATUS_REJECTED:
+        return {"code": "rejected", "label": _("Rejected"), "tone": "danger"}
+    if status == PROGRAM_APP_STATUS_INTERVIEW_REQUESTED:
+        return {"code": "interview_requested", "label": _("Interview requested"), "tone": "info"}
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -103,6 +123,17 @@ def submit_attempt(
             raise ValueError(_("Exam duration has expired."))
     questions = list(exam.questions.all())
     question_map = {q.id: q for q in questions}
+    # Answer coverage: every exam question must be answered exactly once,
+    # otherwise the attempt is not finalized and nothing is auto-graded (E4).
+    answered_ids = {answer_data.question_id for answer_data in answers}
+    unknown_ids = answered_ids - set(question_map)
+    if unknown_ids:
+        raise ValueError(_("Unknown question in submission."))
+    if len(answers) != len(answered_ids):
+        raise ValueError(_("Each exam question can only be answered once."))
+    missing_ids = [q.id for q in questions if q.id not in answered_ids]
+    if missing_ids:
+        raise ValueError(_("Please answer all exam questions before submitting."))
     with transaction.atomic():
         for answer_data in answers:
             question = question_map[answer_data.question_id]
@@ -249,7 +280,7 @@ def assign_exam_for_application(program_application: ProgramApplication) -> Entr
     exam = EntranceExam.objects.filter(cohort=cohort, is_active=True).first()
     if not exam:
         return None
-    attempt, _ = EntranceAttempt.objects.get_or_create(
+    attempt, _created = EntranceAttempt.objects.get_or_create(
         exam=exam,
         program_application=program_application,
         student=program_application.student,
@@ -304,7 +335,7 @@ def save_snapshot(attempt: EntranceAttempt, question_id: int, choice_id: int | N
     question = attempt.exam.questions.filter(id=question_id).first()
     if not question:
         return
-    snapshot, _ = EntranceSnapshot.objects.update_or_create(
+    snapshot, _created = EntranceSnapshot.objects.update_or_create(
         attempt=attempt,
         question=question,
         defaults={

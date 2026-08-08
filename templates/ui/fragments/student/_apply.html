@@ -1,36 +1,43 @@
 {% load i18n %}
-<div id="student-content"><header class="flex justify-between items-center gap-5"><h1>{% trans "Apply" %}</h1>
-  </header>
+<div id="student-content" class="page-stack animate-enter-view">{% url 'students:applications' as student_applications_url %}{% include "ui/components/_page_header.html" with eyebrow=_("Admissions") title=_("Apply") description=_("Start a new application for a diploma or a standalone course.") back_url=student_applications_url back_label=_("Back to my applications") %}
   {% if not eligibility.allowed %}
     <div class="py-4 px-5 border border-amber rounded-md bg-warning-soft text-warning-text" role="alert">{{ eligibility.reason|default:_("No eligible programs are currently available.") }}
     </div>
   {% endif %}
-  <form method="post" action="{% url 'students:apply' %}" class="max-w-2xl mx-auto"><div class="form-group flex flex-wrap gap-3 items-center"><label for="program-type">{% trans "Program type" %}</label>
-      <select id="program-type" name="program_type" class="form-select" required>
+  <form method="post" action="{% url 'students:apply' %}" class="card-surface max-w-form mx-auto w-full page-stack">{% csrf_token %}<div class="form-group">
+      <label class="field-label" for="program-type">{% trans "Program type" %}</label>
+      <select id="program-type" name="program_type" class="form-select" required
+              hx-get="{% url 'applications:program_targets' %}"
+              hx-trigger="change"
+              hx-target="#target-host"
+              hx-swap="innerHTML"
+              hx-vals='{"field_name": "target_id", "select_id": "target-id"}'>
         <option value="diploma"
                 {% if selected_program_type == 'diploma' %} selected {% endif %}>{% trans "Diploma" %}</option>
         <option value="course"
                 {% if selected_program_type == 'course' %} selected {% endif %}>{% trans "Course" %}</option>
       </select>
     </div>
-    <div class="form-group flex flex-wrap gap-3 items-center"><label for="target-id">{% trans "Program" %}</label>
-      <select id="target-id" name="target_id" class="form-select" required>
-        <option value="">{% trans "Select a program" %}</option>
-        {% for item in cohorts %}
-          <option value="{{ item.id }}"
-                  {% if selected_target_id == item.id|stringformat:'s' %} selected {% endif %}>
-            {{ item.diploma.title }}
-            ·
-            {{ item.name }}
-          </option>
-        {% endfor %}
-        {% for item in courses %}
-          <option value="course_{{ item.id }}"
-                  {% if selected_target_id == 'course_'|add:item.id|stringformat:'s' %} selected {% endif %}>
-            {{ item.title }}
-          </option>
-        {% endfor %}
-      </select>
+    <div class="form-group">
+      <label class="field-label" for="target-id">{% trans "Program" %}</label>
+      <div id="target-host"><select id="target-id" name="target_id" class="form-select" required>
+          <option value="">{% trans "Select a program" %}</option>
+          {% for item in cohorts %}
+            <option value="{{ item.id }}"
+                    {% if selected_target_id == item.id|stringformat:'s' %} selected {% endif %}>
+              {{ item.diploma.title }}
+              ·
+              {{ item.name }}
+            </option>
+          {% endfor %}
+          {% for item in courses %}
+            <option value="course_{{ item.id }}"
+                    {% if selected_target_id == 'course_'|add:item.id|stringformat:'s' %} selected {% endif %}>
+              {{ item.title }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
     </div>
     <button class="btn-primary" type="submit">{% trans "Submit application" %}</button>
   </form>

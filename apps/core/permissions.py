@@ -71,10 +71,6 @@ def _user_in_any_group(user, group_names: tuple[str, ...]) -> bool:
         return False
     if user.is_superuser:
         return True
-    # Django staff accounts are the administrative accounts created outside
-    # the application role form, so they must still reach the admin workspace.
-    if user.is_staff and {GROUP_SUPER_ADMIN, GROUP_ADMIN}.intersection(group_names):
-        return True
     return user.groups.filter(name__in=group_names).exists()
 
 
@@ -153,6 +149,11 @@ def is_moderator_for_student(user, student, cohort=None) -> bool:
         return False
     if is_admin(user):
         return True
+    # A missing cohort must never widen into an unrestricted match (S2-14).
+    # Moderators are scoped to explicit assignments; cohort-less callers must
+    # pass the cohort they derived from the object being authorized.
+    if cohort is None:
+        return False
     student_profile = _student_profile(student)
     if student_profile is None:
         return False
@@ -168,9 +169,13 @@ def is_moderator_for_student(user, student, cohort=None) -> bool:
     mod_qs = ModeratorAssignment.objects.filter(moderator=user, active=True)
     if cohort is not None:
         mod_qs = mod_qs.filter(cohort=cohort)
+    # Cluster or wide-cohort coverage requires an active enrollment in the
+    # cohort; completed/expired/pending/restricted students stay out of scope.
     return mod_qs.filter(
-        Q(cluster__memberships__student=student_profile)
-        | (Q(cluster__isnull=True) & Q(cohort__enrollments__student=student_profile))
+        cohort__enrollments__student=student_profile,
+        cohort__enrollments__status=ENROLLMENT_STATUS_ACTIVE,
+    ).filter(
+        Q(cluster__memberships__student=student_profile) | Q(cluster__isnull=True)
     ).exists()
 
 
@@ -179,6 +184,16 @@ def can_grade_attempt(user, attempt) -> bool:
         return False
     if is_admin(user):
         return True
+    assessment = _assessment_for_staff_object(attempt)
+    if assessment is not None and assessment.course_version_id:
+        # Course-version assessments have no cohort: grant the exact
+        # course-version teacher assignment predicate the queue filter uses.
+        return TeacherAssignment.objects.filter(
+            teacher=user,
+            scope_type=SCOPE_COURSE_VERSION,
+            course_version_id=assessment.course_version_id,
+            active=True,
+        ).exists()
     cohort = _cohort_for_staff_object(attempt)
     student = _student_for_staff_object(attempt)
     return is_teacher_of_cohort(user, cohort) or is_moderator_for_student(user, student, cohort)
@@ -244,14 +259,21 @@ def assessment_staff_scope_filter(user, prefix: str = "") -> Q:
     mod_cluster_cohorts = list(ModeratorAssignment.objects.filter(
         moderator=user, active=True, cluster__isnull=False,
     ).values_list("cohort_id", flat=True))
+    # Cluster coverage applies only to students with an active enrollment in
+    # the cluster's cohort (S2-15).
+    active_cluster_students = list(DiplomaEnrollment.objects.filter(
+        student_id__in=mod_cluster_students,
+        cohort_id__in=mod_cluster_cohorts,
+        status=ENROLLMENT_STATUS_ACTIVE,
+    ).values_list("student_id", flat=True))
     mod_filter = Q()
     if mod_wide_cohorts:
         mod_filter |= Q(**{f"{filter_prefix}assessment__cohort_id__in": mod_wide_cohorts})
     if mod_wide_cvs:
         mod_filter |= Q(**{f"{filter_prefix}assessment__course_version_id__in": mod_wide_cvs})
-    if mod_cluster_students:
+    if active_cluster_students:
         mod_filter |= (
-            Q(**{f"{filter_prefix}student__student_profile_id__in": mod_cluster_students})
+            Q(**{f"{filter_prefix}student__student_profile_id__in": active_cluster_students})
             & Q(**{f"{filter_prefix}assessment__cohort_id__in": mod_cluster_cohorts})
         )
     return teacher_filter | moderator_filter | mod_filter
@@ -271,13 +293,21 @@ def _student_for_staff_object(obj):
     return None
 
 
+def _assessment_for_staff_object(obj):
+    exam = getattr(obj, "exam", None)
+    if exam is not None:
+        return None
+    assessment = getattr(obj, "assessment", None)
+    if assessment is None and hasattr(obj, "attempt"):
+        assessment = getattr(obj.attempt, "assessment", None)
+    return assessment
+
+
 def _cohort_for_staff_object(obj):
     exam = getattr(obj, "exam", None)
     if exam is not None:
         return getattr(exam, "cohort", None)
-    assessment = getattr(obj, "assessment", None)
-    if assessment is None and hasattr(obj, "attempt"):
-        assessment = getattr(obj.attempt, "assessment", None)
+    assessment = _assessment_for_staff_object(obj)
     if assessment is None:
         return None
     if assessment.cohort_id:

@@ -415,17 +415,16 @@ def confirm_upload(upload_id: int, confirmed_by) -> UserUpload:
     return upload
 
 
-def send_activation_email(user, password: str | None = None) -> None:
-    from apps.applications.services import normalize_phone as application_normalize_phone
-
+def send_activation_email(user) -> None:
     from .tokens import generate_activation_token
 
     uidb64, token = generate_activation_token(user)
     activation_url = settings.SITE_URL + reverse("accounts:activate", kwargs={"uidb64": uidb64, "token": token})
     full_name = getattr(user, "full_name", "") or ""
-    password = password or application_normalize_phone(user.phone or "")
+    # The initial password is never delivered by email (S2-24); the activation
+    # link is the one-time token and the password is set during activation.
     send_templated_email(
         TEMPLATE_ACTIVATION, user.email,
-        {"full_name": full_name, "activation_url": activation_url, "email": user.email, "password": password},
+        {"full_name": full_name, "activation_url": activation_url, "email": user.email},
         sent_by=None,
     )

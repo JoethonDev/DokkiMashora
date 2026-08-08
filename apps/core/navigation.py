@@ -64,7 +64,7 @@ def workspace_navigation(user):
               "accounts:admin_student_cluster_membership_add",
               "accounts:admin_student_cluster_membership_remove"], "staff")
 
-    if can_admin or can_moderator or can_teacher or is_super:
+    if can_admin or is_super:
         _add(_("Learning"), _("Academics"), "academics:admin_diploma_list", "&#9707;",
              ["academics:admin_diploma_create", "academics:admin_diploma_detail",
               "academics:admin_diploma_edit", "academics:admin_diploma_delete",
@@ -111,7 +111,7 @@ def workspace_navigation(user):
               "assessments:admin_toggle_grades",
               "entrance_exams:admin_grade_list",
               "entrance_exams:admin_grade_attempt"], "grade")
-    if can_admin or can_moderator or is_super:
+    if can_admin or is_super:
         _add(_("Learning"), _("Progression"), "progression:admin_dashboard", "&#8599;",
              ["progression:admin_student_detail",
               "progression:admin_evaluate_semester",

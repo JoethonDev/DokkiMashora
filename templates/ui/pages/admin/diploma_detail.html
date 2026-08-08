@@ -5,6 +5,9 @@
 {% endblock %}
 {% block content %}
   <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=diploma.title description=diploma.description eyebrow=_("Diploma") back_button=True %}
+    <div class="flex gap-2.5 items-center flex-wrap mb-4">
+      <a class="btn-primary" href="{% url 'academics:admin_diploma_edit' diploma.id %}">{% trans "Edit diploma" %}</a>
+    </div>
     <section class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Structure" %}</p>
           <h3>{% trans "Cohorts &amp; Semesters" %}</h3>
@@ -25,11 +28,11 @@
                   {% include "ui/components/_status.html" with code=group.cohort.is_active|yesno:"active,inactive" label=group.cohort.is_active|yesno:_("Active,Inactive") %}
                   <span class="text-xs text-muted">{{ group.semesters|length }} {% trans "semesters" %}</span>
                 </div>
-                <a class="btn-ghost text-xs py-1 px-2 min-h-0" href="{% url 'academics:admin_cohort_edit' diploma.id group.cohort.id %}">{% trans "Edit cohort" %}</a>
+                <a class="btn-ghost btn-sm" href="{% url 'academics:admin_cohort_edit' diploma.id group.cohort.id %}">{% trans "Edit cohort" %}</a>
               </summary>
               <div class="pb-3 px-1">
                 {% if group.semesters %}
-                  <div class="table-wrap"><table class="table">
+                  <div class="table-wrap hidden lg:block"><table class="table">
                     <thead>
                       <tr>
                         <th class="table-th">{% trans "Semester" %}</th>
@@ -44,7 +47,7 @@
                           <td class="table-td">{{ item.lecture_count }}</td>
                           <td class="table-td">
                             <div class="flex gap-2.5 items-center flex-wrap">
-                              <a class="btn-ghost text-xs py-1 px-2 min-h-0" href="{% url 'academics:admin_semester_edit' diploma.id item.semester.id %}">{% trans "Edit" %}</a>
+                              <a class="btn-ghost btn-sm" href="{% url 'academics:admin_semester_edit' diploma.id item.semester.id %}">{% trans "Edit" %}</a>
                               <a class="btn-secondary text-xs py-1 px-2 min-h-0" href="{% url 'academics:admin_diploma_lecture_list' diploma.id group.cohort.id item.semester.id %}">{% trans "Lectures" %}</a>
                             </div>
                           </td>
@@ -53,9 +56,73 @@
                     </tbody>
                   </table>
                 </div>
+                <div class="card-stack lg:hidden">
+                  {% for item in group.semesters %}
+                    <div class="mobile-card">
+                      <div class="flex-1 min-w-0">
+                        <strong class="block truncate">{{ item.semester.title }}</strong>
+                        <small class="block text-muted">{{ item.lecture_count }} {% trans "lectures" %}</small>
+                      </div>
+                      <div class="flex gap-2 shrink-0">
+                        <a class="btn-ghost btn-sm" href="{% url 'academics:admin_semester_edit' diploma.id item.semester.id %}">{% trans "Edit" %}</a>
+                        <a class="btn-soft-primary shrink-0" href="{% url 'academics:admin_diploma_lecture_list' diploma.id group.cohort.id item.semester.id %}">{% trans "Lectures" %}</a>
+                      </div>
+                    </div>
+                  {% endfor %}
+                </div>
                 {% else %}
-                  <p class="text-sm text-muted py-2">{% trans "No semesters for this cohort." %}</p>
+                  {% include "ui/components/_empty_state.html" with title=_("No semesters for this cohort.") %}
                 {% endif %}
+                <section class="mt-4 border-t border-line pt-4">
+                  <div class="section-head">
+                    <div>
+                      <p class="eyebrow">{% trans "Student clusters" %}</p>
+                      <h4>{% trans "Manage cohort groups" %}</h4>
+                    </div>
+                  </div>
+                  <form class="actions-row items-end mb-3" method="post" action="{% url 'accounts:admin_student_cluster_create' group.cohort.id %}">{% csrf_token %}
+                    <label class="min-w-60"><span class="field-label">{% trans "Cluster name" %}</span>
+                      <input class="form-input" type="text" name="name" required maxlength="255">
+                    </label>
+                    <button class="btn-primary" type="submit">{% trans "Create cluster" %}</button>
+                  </form>
+                  <div class="space-y-3">
+                    {% for cluster in group.cohort.clusters.all %}
+                      <div class="border border-line rounded-sm p-3">
+                        <div class="flex items-center justify-between gap-3 mb-3">
+                          <strong>{{ cluster.name }}</strong>
+                          <span class="text-xs text-muted">{{ cluster.member_count }} {% trans "members" %}</span>
+                        </div>
+                        <form class="actions-row items-end" method="post" action="{% url 'accounts:admin_student_cluster_membership_add' cluster.id %}">{% csrf_token %}
+                          <label class="min-w-60"><span class="field-label">{% trans "Add enrolled students" %}</span>
+                            <select class="form-select" name="students" multiple size="3">
+                              {% for enrollment in group.cohort.enrollments.all %}
+                                <option value="{{ enrollment.student.id }}">{{ enrollment.student.full_name|default:enrollment.student }}</option>
+                              {% endfor %}
+                            </select>
+                          </label>
+                          <button class="btn-secondary" type="submit">{% trans "Add to cluster" %}</button>
+                        </form>
+                        {% if cluster.memberships.all %}
+                          <div class="flex flex-wrap gap-2 mt-3">
+                            {% for membership in cluster.memberships.all %}
+                              <span class="inline-flex items-center gap-2 px-2 py-1 rounded-full bg-surface-soft text-xs">
+                                {{ membership.student.full_name|default:membership.student }}
+                                <form method="post" action="{% url 'accounts:admin_student_cluster_membership_remove' cluster.id membership.id %}" data-confirm="{% trans 'Remove this student from the cluster?' %}" data-confirm-label="{% trans 'Remove' %}" class="m-0">{% csrf_token %}
+                                  <button class="text-red font-bold" type="submit" aria-label="{% trans 'Remove student' %}">×</button>
+                                </form>
+                              </span>
+                            {% endfor %}
+                          </div>
+                        {% else %}
+                          {% include "ui/components/_empty_state.html" with title=_("No students in this cluster.") %}
+                        {% endif %}
+                      </div>
+                    {% empty %}
+                      {% include "ui/components/_empty_state.html" with title=_("No clusters yet.") %}
+                    {% endfor %}
+                  </div>
+                </section>
               </div>
             </details>
           {% endfor %}
@@ -65,12 +132,37 @@
       {% endif %}
     </section>
     <section class="card-surface"><div class="section-head"><div>
+          <p class="eyebrow">{% trans "Rules" %}</p>
+          <h3>{% trans "Progression Rules" %}</h3>
+        </div>
+        <div class="flex gap-2.5 items-center flex-wrap">
+          <a class="btn-ghost" href="{% url 'progression:admin_diploma_rule_edit' diploma.id %}">{% trans "Edit rule" %}</a>
+        </div>
+      </div>
+      {% with rule=diploma.progression_rules.first %}
+        {% if rule %}
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 p-4">
+            <div><span class="text-xs text-muted">{% trans "Semester pass %" %}</span><p class="font-semibold">{{ rule.semester_pass_percent }}%</p></div>
+            <div><span class="text-xs text-muted">{% trans "Final exam pass %" %}</span><p class="font-semibold">{{ rule.final_exam_pass_percent }}%</p></div>
+            <div><span class="text-xs text-muted">{% trans "Require all semesters" %}</span><p class="font-semibold">{% if rule.require_all_semesters_passed %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</p></div>
+            <div><span class="text-xs text-muted">{% trans "Require final exam" %}</span><p class="font-semibold">{% if rule.require_final_exam %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</p></div>
+            <div><span class="text-xs text-muted">{% trans "Auto promote" %}</span><p class="font-semibold">{% if rule.auto_promote_enabled %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</p></div>
+            <div><span class="text-xs text-muted">{% trans "Admin override" %}</span><p class="font-semibold">{% if rule.allow_admin_override %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</p></div>
+            <div><span class="text-xs text-muted">{% trans "Allow retake" %}</span><p class="font-semibold">{% if rule.allow_retake %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</p></div>
+            <div><span class="text-xs text-muted">{% trans "Max retakes" %}</span><p class="font-semibold">{{ rule.max_retake_count }}</p></div>
+          </div>
+        {% else %}
+          {% include "ui/components/_empty_state.html" with title=_("No progression rule set.") %}
+        {% endif %}
+      {% endwith %}
+    </section>
+    <section class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Students" %}</p>
           <h3>{% trans "Enrollments" %}</h3>
         </div>
       </div>
       {% if enrollments %}
-        <div class="table-wrap"><table class="table">
+        <div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>
                 <th class="table-th">{% trans "Student" %}</th>
@@ -90,6 +182,17 @@
               {% endfor %}
             </tbody>
           </table>
+        </div>
+        <div class="card-stack lg:hidden">
+          {% for enrollment in enrollments %}
+            <div class="mobile-card">
+              <div class="flex-1 min-w-0">
+                <strong class="block truncate">{{ enrollment.student }}</strong>
+                {% include "ui/components/_status.html" with code=enrollment.status label=enrollment.get_status_display %}
+                <small class="block text-muted">{{ enrollment.cohort }} &middot; {{ enrollment.created_at|date:"d/m/Y" }}</small>
+              </div>
+            </div>
+          {% endfor %}
         </div>
       {% else %}
         {% include "ui/components/_empty_state.html" with title=_("No enrollments") message=_("No student enrollments for this diploma.") %}

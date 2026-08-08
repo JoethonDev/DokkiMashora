@@ -1,17 +1,11 @@
 {% load i18n %}
-<div id="student-content" class="page-stack animate-enter-view"><section class="flex justify-between items-center gap-5 px-0.5 py-1.5"><div>
-      <p class="eyebrow">{% trans "Academic journey" %}</p>
-      <h2>{% trans "Progression" %}</h2>
-      <p>{% trans "Track semester decisions, completion, eligibility, released grades, and certificates." %}</p>
-    </div>
-    <a class="btn-soft" href="{% url 'students:record' %}">{% trans "Open full record" %}</a>
-  </section>
+<div id="student-content" class="page-stack animate-enter-view">{% url 'students:record' as student_record_url %}{% include "ui/components/_page_header.html" with eyebrow=_("Academic journey") title=_("Progression") description=_("Track semester decisions, completion, eligibility, released grades, and certificates.") back_url=student_record_url back_label=_("Open full record") %}
   <section class="card-surface"><div class="section-head"><div>
         <p class="eyebrow">{% trans "Progress" %}</p>
         <h3>{% trans "Semester progress" %}</h3>
       </div>
     </div>
-    <div class="table-wrap"><table class="table">
+    <div class="table-wrap hidden lg:block"><table class="table">
         <thead>
           <tr>
             <th class="table-th">{% trans "Semester" %}</th>
@@ -28,15 +22,28 @@
               <td class="table-td">
                 <span class="status-pill-info">{{ item.get_status_display|default:item.status }}</span>
               </td>
-              <td class="table-td">{{ item.average_score|default:item.score|default:'—' }}</td>
+              <td class="table-td">{{ item.calculated_score|default:'—' }}</td>
             </tr>
           {% empty %}
             <tr>
-              <td colspan="3" class="table-td">{% trans "No semester progress available." %}</td>
+              <td colspan="3" class="table-td">{% include "ui/components/_empty_state.html" with title=_("No semester progress available.") %}</td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
+    </div>
+    <div class="card-stack lg:hidden">
+      {% for item in semester_progress %}
+        <div class="mobile-card">
+          <div class="flex-1 min-w-0">
+            <strong class="block truncate">{{ item.semester }}</strong>
+            <span class="status-pill-info">{{ item.get_status_display|default:item.status }}</span>
+            <small class="block text-muted">{% trans "Average score" %}: {{ item.calculated_score|default:'—' }}</small>
+          </div>
+        </div>
+      {% empty %}
+        <div class="border border-line rounded-sm p-4 text-center">{% include "ui/components/_empty_state.html" with title=_("No semester progress available.") %}</div>
+      {% endfor %}
     </div>
   </section>
   <section class="grid grid-cols-1 md:grid-cols-2 gap-4"><article class="card-surface"><div class="section-head"><div>
@@ -54,14 +61,14 @@
                 {{ item.to_semester }}
               </strong>
               <small>
-                {{ item.get_decision_display|default:item.decision }}
+                {{ item.get_decision_type_display|default:item.decision_type }}
                 ·
                 {{ item.decided_at|date:"d/m/Y" }}
               </small>
             </p>
           </div>
         {% empty %}
-          <p class="text-muted">{% trans "No promotion decisions recorded." %}</p>
+          {% include "ui/components/_empty_state.html" with title=_("No promotion decisions recorded.") %}
         {% endfor %}
       </div>
     </article>
@@ -82,7 +89,7 @@
           {{ item.diploma_enrollment.cohort.diploma }}
         </p>
       {% empty %}
-        <p class="text-muted">{% trans "No final-exam eligibility records." %}</p>
+        {% include "ui/components/_empty_state.html" with title=_("No final-exam eligibility records.") %}
       {% endfor %}
     </article>
   </section>
@@ -91,7 +98,7 @@
         <h3>{% trans "Grade items" %}</h3>
       </div>
     </div>
-    <div class="table-wrap"><table class="table">
+    <div class="table-wrap hidden lg:block"><table class="table">
         <thead>
           <tr>
             <th class="table-th">{% trans "Component" %}</th>
@@ -108,11 +115,24 @@
             </tr>
           {% empty %}
             <tr>
-              <td colspan="3" class="table-td">{% trans "No released grades available." %}</td>
+              <td colspan="3" class="table-td">{% include "ui/components/_empty_state.html" with title=_("No released grades available.") %}</td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
+    </div>
+    <div class="card-stack lg:hidden">
+      {% for item in grade_items %}
+        <div class="mobile-card">
+          <div class="flex-1 min-w-0">
+            <strong class="block truncate">{{ item.component }}</strong>
+            <small class="block text-muted">{% trans "Score" %}: {{ item.score }}</small>
+            <small class="block text-muted">{% trans "Feedback" %}: {{ item.feedback|default:'—' }}</small>
+          </div>
+        </div>
+      {% empty %}
+        <div class="border border-line rounded-sm p-4 text-center">{% include "ui/components/_empty_state.html" with title=_("No released grades available.") %}</div>
+      {% endfor %}
     </div>
   </section>
 </div>

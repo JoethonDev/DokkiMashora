@@ -3,6 +3,7 @@ from __future__ import annotations
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, render
+from django.utils.translation import gettext_lazy as _
 
 from apps.accounts.constants import GROUP_ADMIN, GROUP_SUPER_ADMIN
 from apps.core.pagination import paginate

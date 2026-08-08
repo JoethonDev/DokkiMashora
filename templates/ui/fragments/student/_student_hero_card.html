@@ -1,0 +1,11 @@
+<section class="bg-gradient-to-br from-white to-surface-soft border border-line rounded-lg p-6 flex items-center justify-between gap-5 shadow-2xs"><div class="flex items-center gap-4"><span class="rounded-full bg-brand-soft text-brand font-black grid place-items-center shrink-0 w-20 h-20 text-2xl">{{ user.get_full_name|slice:":2"|upper }}</span>
+    <div>
+      <p class="eyebrow">{{ eyebrow }}</p>
+      <h2>{{ title }}</h2>
+      <div class="flex items-center gap-2.5 flex-wrap text-muted text-xs"><span><span dir="ltr" class="inline-block">{{ email }}</span></span>
+        <span class="status-pill-success">{{ pill_label }}</span>
+      </div>
+    </div>
+  </div>
+  <a class="{{ action_class }}" href="{{ action_url }}">{{ action_label }}</a>
+</section>

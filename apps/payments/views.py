@@ -27,7 +27,12 @@ from apps.core.permissions import role_required, safe_date_str
 from apps.core.views import safe_next_url
 from apps.students.models import StudentProfile
 
-from .constants import PAYMENT_STATUS_CHOICES, UPLOAD_STATUS_CHOICES, UPLOAD_STATUS_PREVIEWED
+from .constants import (
+    PAYMENT_STATUS_CHOICES,
+    UPLOAD_STATUS_CHOICES,
+    UPLOAD_STATUS_FAILED,
+    UPLOAD_STATUS_PREVIEWED,
+)
 from .forms import PaymentRecordEditForm, PaymentUploadForm
 from .models import PaymentRecord, PaymentUpload
 from .selectors import (
@@ -160,18 +165,25 @@ def upload_confirm(request, upload_id):
         return redirect("payments:upload_detail", upload_id=upload.id)
     try:
         upload = confirm_upload(upload.id, confirmed_by=request.user)
-        messages.success(
-            request,
-            _(
-                "Import completed: %(created)d created, %(updated)d updated, "
-                "%(failed)d failed."
+        if upload.status == UPLOAD_STATUS_FAILED:
+            messages.error(
+                request,
+                _("Import rejected: %(count)d row(s) failed. No payments were applied.")
+                % {"count": upload.failed_rows},
             )
-            % {
-                "created": upload.created_rows,
-                "updated": upload.updated_rows,
-                "failed": upload.failed_rows,
-            },
-        )
+        else:
+            messages.success(
+                request,
+                _(
+                    "Import completed: %(created)d created, %(updated)d updated, "
+                    "%(failed)d failed."
+                )
+                % {
+                    "created": upload.created_rows,
+                    "updated": upload.updated_rows,
+                    "failed": upload.failed_rows,
+                },
+            )
         record_audit_event(
             actor=request.user,
             action=ACTION_PAYMENT_UPLOAD_CONFIRMED,
@@ -299,7 +311,8 @@ def enrollment_payment_toggle(request, student_id, enrollment_type, enrollment_i
         )
         messages.success(request, _("Enrollment marked as paid."))
     elif action == "mark_unpaid":
-        count = mark_enrollment_unpaid(student, enrollment_type, enrollment_id)
+        reason = request.POST.get("reason", "").strip() or _("Marked unpaid from the enrollment payment toggle")
+        count = mark_enrollment_unpaid(student, enrollment_type, enrollment_id, actor=request.user, reason=reason)
         if count:
             messages.info(request, _("Enrollment marked as unpaid."))
         else:

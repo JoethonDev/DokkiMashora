@@ -22,13 +22,19 @@ Usage:
 from __future__ import annotations
 
 import hashlib
+import hmac
 import logging
+import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlencode
 
 from django.conf import settings
+from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
+
+from .models import DeferredStorageDeletion
 
 try:
     import boto3
@@ -115,24 +121,73 @@ class LocalStorageBackend:
     def __init__(self):
         self.base_path = Path(settings.MEDIA_ROOT) / "storage"
 
+    def resolve_path(self, key: str) -> Path:
+        """Resolve a storage key to a path guaranteed to stay inside base_path.
+
+        Rejects absolute keys, dot segments, and any resolved path that
+        escapes the storage root (S2-22). Every key-handling operation goes
+        through this containment check.
+        """
+        if not key or "\x00" in key:
+            raise StorageError(_("Invalid storage key."))
+        relative = Path(key)
+        if relative.is_absolute() or ".." in relative.parts or "." in relative.parts:
+            raise StorageError(_("Invalid storage key."))
+        base = self.base_path.resolve()
+        full = (base / relative).resolve()
+        if not full.is_relative_to(base):
+            raise StorageError(_("Invalid storage key."))
+        return full
+
     def upload(self, key: str, data: bytes, content_type: str) -> None:
-        full_path = self.base_path / key
+        full_path = self.resolve_path(key)
         full_path.parent.mkdir(parents=True, exist_ok=True)
         full_path.write_bytes(data)
 
-    def delete(self, key: str) -> None:
-        full_path = self.base_path / key
+    def delete(self, key: str) -> bool:
+        """Delete a file; returns True when the backend completed the call."""
+        full_path = self.resolve_path(key)
         if full_path.exists():
             full_path.unlink()
+        return True
+
+    def delete_prefix(self, prefix: str) -> bool:
+        """Delete every file under a key prefix (used for HLS output cleanup)."""
+        root = self.resolve_path(prefix)
+        if not root.is_dir():
+            return True
+        for child in root.rglob("*"):
+            if child.is_file():
+                child.unlink()
+        for child in sorted(root.rglob("*"), reverse=True):
+            if child.is_dir():
+                try:
+                    child.rmdir()
+                except OSError:
+                    pass
+        return True
 
     def get_download_url(self, key: str, expires_in: int | None = None) -> str:
-        return f"{settings.MEDIA_URL}storage/{key}"
+        """Return a short-lived, signed proxy URL served by the app.
+
+        Local files are never exposed through an unsigned media URL (S2-21);
+        the signature authenticates the key and expiry, mirroring the R2
+        presigned-URL bearer semantics.
+        """
+        self.resolve_path(key)
+        expires = int(time.time()) + (expires_in or 3600)
+        payload = f"{key}|{expires}"
+        sig = hmac.new(settings.SECRET_KEY.encode(), payload.encode(), hashlib.sha256).hexdigest()
+        return f"{reverse('storage:protected_download')}?{urlencode({'key': key, 'expires': str(expires), 'sig': sig})}"
 
     def exists(self, key: str) -> bool:
-        return (self.base_path / key).exists()
+        try:
+            return self.resolve_path(key).exists()
+        except StorageError:
+            return False
 
     def download(self, key: str) -> bytes:
-        full_path = self.base_path / key
+        full_path = self.resolve_path(key)
         if not full_path.exists():
             raise StorageError(_("File not found: {key}").format(key=key))
         return full_path.read_bytes()
@@ -170,12 +225,55 @@ class R2StorageBackend:
             logger.error("R2 upload failed for key=%s: %s", key, exc)
             raise StorageError(_("File upload failed. Please try again.")) from exc
 
-    def delete(self, key: str) -> None:
+    def delete(self, key: str) -> bool:
+        """Delete an object; returns True when the backend completed the call.
+
+        S3 DELETE is idempotent, so a success here means the object is gone or
+        already absent. Failures are logged with a reconciliation marker so the
+        caller can persist a deferred deletion for retry (S2-33).
+        """
         client = self._get_client()
         try:
             client.delete_object(Bucket=settings.R2_BUCKET_NAME, Key=key)
+            return True
         except Exception as exc:
             logger.error("R2 delete failed for key=%s: %s", key, exc)
+            logger.warning(
+                "STORAGE_RECONCILIATION: R2 delete failed for key=%s; "
+                "the physical object remains and needs manual cleanup: %s",
+                key, exc,
+            )
+            return False
+
+    def delete_prefix(self, prefix: str) -> bool:
+        """Delete every object under a key prefix in bounded pages.
+
+        Returns True only when every page was deleted without error.
+        """
+        client = self._get_client()
+        try:
+            paginator = client.get_paginator("list_objects_v2")
+            for page in paginator.paginate(
+                Bucket=settings.R2_BUCKET_NAME,
+                Prefix=prefix,
+                PaginationConfig={"PageSize": 1000},
+            ):
+                keys = [{"Key": obj["Key"]} for obj in page.get("Contents", [])]
+                if not keys:
+                    continue
+                client.delete_objects(
+                    Bucket=settings.R2_BUCKET_NAME,
+                    Delete={"Objects": keys, "Quiet": True},
+                )
+            return True
+        except Exception as exc:
+            logger.error("R2 prefix delete failed for prefix=%s: %s", prefix, exc)
+            logger.warning(
+                "STORAGE_RECONCILIATION: R2 prefix delete failed for prefix=%s; "
+                "objects under this prefix remain and need manual cleanup: %s",
+                prefix, exc,
+            )
+            return False
 
     def get_download_url(self, key: str, expires_in: int | None = None) -> str:
         client = self._get_client()
@@ -246,8 +344,20 @@ class StorageService:
             backend="r2" if settings.USE_R2_STORAGE else "local",
         )
 
-    def delete_file(self, key: str) -> None:
-        self.backend.delete(key)
+    def delete_file(self, key: str) -> bool:
+        """Delete a stored object; returns True when the backend completed it."""
+        return self.backend.delete(key)
+
+    def delete_prefix(self, prefix: str) -> bool:
+        """Delete every stored object under a key prefix.
+
+        Intended for post-commit cleanup of replaced lecture audio and HLS
+        output (S2-33). Returns True only when the backend completed the
+        deletion; on failure callers should record a deferred deletion via
+        ``record_deferred_storage_deletion`` so reconciliation can retry it.
+        The database history is never touched here.
+        """
+        return self.backend.delete_prefix(prefix)
 
     def get_download_url(self, key: str, *, expires_in: int | None = None) -> str:
         return self.backend.get_download_url(key, expires_in=expires_in)
@@ -275,6 +385,31 @@ class StorageService:
 
     def download_file(self, key: str) -> bytes:
         return self.backend.download(key)
+
+
+def record_deferred_storage_deletion(*, key: str = "", prefix: str = "", error: str = "") -> DeferredStorageDeletion | None:
+    """Persist a failed storage deletion so reconciliation can retry it (S2-33).
+
+    Either ``key`` or ``prefix`` must be supplied. Repeated failures increment
+    ``attempts`` and refresh ``last_error`` so operators can see the retry
+    history; the row is removed by the reconciliation command once the backend
+    accepts the deletion.
+    """
+    if key:
+        obj, created = DeferredStorageDeletion.objects.get_or_create(
+            key=key, defaults={"prefix": "", "last_error": error[:500]},
+        )
+    elif prefix:
+        obj, created = DeferredStorageDeletion.objects.get_or_create(
+            prefix=prefix, defaults={"key": "", "last_error": error[:500]},
+        )
+    else:
+        return None
+    if not created:
+        obj.attempts += 1
+        obj.last_error = error[:500]
+        obj.save(update_fields=["attempts", "last_error", "updated_at"])
+    return obj
 
 
 storage_service = StorageService()

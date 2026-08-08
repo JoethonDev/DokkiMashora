@@ -94,7 +94,15 @@ def landing_settings(request: HttpRequest) -> HttpResponse:
         form.save()
         messages.success(request, _("Landing page updated."))
         return redirect("core:landing_settings")
-    return render(request, "ui/pages/admin/landing_settings.html", {"form": form})
+    return render(
+        request,
+        "ui/pages/admin/landing_settings.html",
+        {
+            "form": form,
+            "course_versions": CourseVersion.objects.select_related("course").order_by("course__title", "label"),
+            "diploma_cohorts": Cohort.objects.select_related("diploma").order_by("diploma__title", "name"),
+        },
+    )
 
 
 @login_required
@@ -635,7 +643,6 @@ def rewrite_language_url(url: str, new_language: str) -> str:
     return path
 
 
-@require_http_methods(["GET", "HEAD"])
 def bad_request(request: HttpRequest, exception=None) -> HttpResponse:
     return render(request, "ui/errors/400.html", status=400)
 
@@ -644,11 +651,9 @@ def permission_denied(request: HttpRequest, exception=None) -> HttpResponse:
     return render(request, "ui/errors/403.html", status=403)
 
 
-@require_http_methods(["GET", "HEAD"])
 def page_not_found(request: HttpRequest, exception=None) -> HttpResponse:
     return render(request, "ui/errors/404.html", status=404)
 
 
-@require_http_methods(["GET", "HEAD"])
 def server_error(request: HttpRequest) -> HttpResponse:
     return render(request, "ui/errors/500.html", status=500)

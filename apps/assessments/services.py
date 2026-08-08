@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Q
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -94,13 +95,20 @@ class GradingResult:
 
 
 def has_active_enrollment(student, assessment: Assessment) -> bool:
-    """Check student has active enrollment for the assessment's scope."""
+    """Check student has an active, unexpired enrollment for the assessment's scope (E5).
+
+    Mirrors the canonical academic predicate: the exact enrollment must be
+    active and its access window must not have expired.
+    """
+    now = timezone.now()
     cv = assessment.course_version
     if cv:
         return CourseEnrollment.objects.filter(
             student__user=student,
             course_version=cv,
             status=ENROLLMENT_STATUS_ACTIVE,
+        ).filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gt=now),
         ).exists()
     # Diploma-scoped assessment (no course_version, has cohort+semester)
     if assessment.cohort and assessment.semester:
@@ -108,6 +116,8 @@ def has_active_enrollment(student, assessment: Assessment) -> bool:
             student__user=student,
             cohort=assessment.cohort,
             status=ENROLLMENT_STATUS_ACTIVE,
+        ).filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gt=now),
         ).exists()
     return True
 
@@ -142,6 +152,8 @@ def check_assessment_access(student, assessment: Assessment) -> None:
             student__user=student,
             cohort_id=assessment.cohort_id,
             status=ENROLLMENT_STATUS_ACTIVE,
+        ).filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gt=now),
         ).first()
         if not enrollment or assessment.semester_id not in {
             semester.id for semester in get_student_diploma_access(enrollment)["visible_semesters"]
@@ -335,6 +347,9 @@ def submit_assessment(attempt: AssessmentAttempt, answers: list[AssessmentAnswer
             raise ValueError(_("Assessment duration has expired."))
 
     questions = list(assessment.questions.select_related("assessment").prefetch_related("choices"))
+    if not questions:
+        # An empty question set must never be finalized as a zero-point grade (E8).
+        raise ValueError(_("This assessment has no questions available."))
     question_map = {q.id: q for q in questions}
     answered_question_ids = {answer_data.question_id for answer_data in answers}
     missing_required = [q for q in questions if q.required and q.id not in answered_question_ids]
@@ -419,6 +434,10 @@ def submit_diploma_assessment(attempt: AssessmentAttempt, answer_data: dict) -> 
     with transaction.atomic():
         attempt_ref = AssessmentAttempt.objects.select_for_update().get(pk=attempt.pk)
 
+        if not attempt_ref.snapshot_questions.exists():
+            # An empty question set must never be finalized as a zero-point grade (E8).
+            raise ValueError(_("This assessment has no questions available."))
+
         has_written = False
         total_earned = Decimal("0")
         total_possible = Decimal("0")
@@ -486,7 +505,7 @@ def diploma_autosave_attempt(attempt: AssessmentAttempt, answer_data: dict) -> N
         order_key = f"q_{sq.order}"
         if order_key not in answer_data:
             continue
-        answer, _ = AssessmentAttemptSnapshotAnswer.objects.get_or_create(
+        answer, _created = AssessmentAttemptSnapshotAnswer.objects.get_or_create(
             attempt_question=sq,
         )
         raw = answer_data[order_key]
@@ -824,14 +843,72 @@ def hide_all_released(assessment: Assessment) -> int:
 # ---------------------------------------------------------------------------
 
 
-def get_student_assessments(student):
-    """Return assessments visible to the student (enrolled + open or active override)."""
+def get_assessment_readiness(student, assessment: Assessment, latest_attempt=None) -> dict:
+    """Project one assessment into a student-facing state (E6).
+
+    Returns ``state`` (ready / continue / scheduled / closed / max-attempts /
+    awaiting-release / completed), a translated ``state_label``, and an
+    ``action_url``/``action_label`` pair that only exists when the student can
+    act right now. The list page and the instructions page must both use it so
+    they stay equivalent.
+    """
     now = timezone.now()
+    if not assessment.is_active:
+        return {"state": "closed", "state_label": _("Closed"), "action_url": None, "action_label": None}
+    if not has_active_enrollment(student, assessment):
+        return {"state": "closed", "state_label": _("No active enrollment"), "action_url": None, "action_label": None}
+
+    attempt = latest_attempt
+    if attempt is not None:
+        if attempt.status == ATTEMPT_STATUS_IN_PROGRESS:
+            return {
+                "state": "continue", "state_label": _("In progress"),
+                "action_url": reverse("assessments:take", args=[assessment.id]),
+                "action_label": _("Continue"),
+            }
+        if attempt.status in (ATTEMPT_STATUS_SUBMITTED, ATTEMPT_STATUS_UNDER_REVIEW) or (
+            attempt.status == ATTEMPT_STATUS_GRADED and not attempt.visible_to_student
+        ):
+            return {"state": "awaiting-release", "state_label": _("Awaiting release"), "action_url": None, "action_label": None}
+        if attempt.status == ATTEMPT_STATUS_RELEASED:
+            return {
+                "state": "completed", "state_label": _("Completed"),
+                "action_url": reverse("assessments:results", args=[assessment.id]),
+                "action_label": _("View result"),
+            }
+
+    if assessment.open_at and now < assessment.open_at:
+        return {"state": "scheduled", "state_label": _("Scheduled"), "action_url": None, "action_label": None}
+    if assessment.close_at and now > assessment.close_at:
+        return {"state": "closed", "state_label": _("Closed"), "action_url": None, "action_label": None}
+    attempt_count = AssessmentAttempt.objects.filter(
+        assessment=assessment, student=student,
+    ).exclude(
+        status__in=[ATTEMPT_STATUS_CANCELLED, ATTEMPT_STATUS_EXPIRED],
+    ).count()
+    if attempt_count >= assessment.max_attempts:
+        return {"state": "max-attempts", "state_label": _("Maximum attempts reached"), "action_url": None, "action_label": None}
+    return {
+        "state": "ready", "state_label": _("Ready"),
+        "action_url": reverse("assessments:instructions", args=[assessment.id]),
+        "action_label": _("Open"),
+    }
+
+
+def get_student_assessments(student):
+    """Return assessments visible to the student (active unexpired enrollment + open or active override)."""
+    now = timezone.now()
+    active_enrollment_q = (
+        Q(course_version__enrollments__student__user=student, course_version__enrollments__status=ENROLLMENT_STATUS_ACTIVE)
+        & (Q(course_version__enrollments__expires_at__isnull=True) | Q(course_version__enrollments__expires_at__gt=now))
+    )
     enrolled_cohort_ids = DiplomaEnrollment.objects.filter(
         student__user=student, status=ENROLLMENT_STATUS_ACTIVE,
+    ).filter(
+        Q(expires_at__isnull=True) | Q(expires_at__gt=now),
     ).values_list("cohort_id", flat=True)
     base_qs = Assessment.objects.filter(is_active=True).filter(
-        Q(course_version__enrollments__student__user=student, course_version__enrollments__status=ENROLLMENT_STATUS_ACTIVE)
+        active_enrollment_q
         | Q(cohort_id__in=list(enrolled_cohort_ids), course_version__isnull=True)
     )
     open_assessments = list(
@@ -844,13 +921,18 @@ def get_student_assessments(student):
         .distinct()
     )
     # Filter out diploma assessments whose semester isn't visible yet
-    diploma_assessments = [a for a in open_assessments if a.cohort_id and a.semester_id]
+    diploma_assessments = [
+        a for a in open_assessments
+        if a.course_version_id is None and a.cohort_id and a.semester_id
+    ]
     if diploma_assessments:
         enrollments = {
             e.cohort_id: e
             for e in DiplomaEnrollment.objects.filter(
                 student__user=student, status=ENROLLMENT_STATUS_ACTIVE,
                 cohort_id__in={a.cohort_id for a in diploma_assessments},
+            ).filter(
+                Q(expires_at__isnull=True) | Q(expires_at__gt=now),
             ).select_related("cohort__diploma")
         }
         visible_by_enrollment = get_visible_semester_ids_by_enrollment(enrollments.values())
@@ -860,12 +942,12 @@ def get_student_assessments(student):
         }
         open_assessments = [
             a for a in open_assessments
-            if not (a.cohort_id and a.semester_id)
+            if not (a.course_version_id is None and a.cohort_id and a.semester_id)
             or (a.cohort_id in visible_by_cohort and a.semester_id in visible_by_cohort[a.cohort_id])
         ]
     override_ids = SemesterExamAccessOverride.objects.filter(
-        diploma_enrollment__student__user=student,
-        diploma_enrollment__status=ENROLLMENT_STATUS_ACTIVE,
+        Q(diploma_enrollment__student__user=student, diploma_enrollment__status=ENROLLMENT_STATUS_ACTIVE)
+        & (Q(diploma_enrollment__expires_at__isnull=True) | Q(diploma_enrollment__expires_at__gt=now)),
         status=EXAM_OVERRIDE_ACTIVE,
         open_at__lte=now,
         close_at__gte=now,
@@ -1012,7 +1094,7 @@ def finalize_offline_attempt(exam_code_id: int) -> AssessmentAttempt:
     exam_code = SemesterExamCode.objects.select_related("assessment", "diploma_enrollment__student__user").get(pk=exam_code_id)
     assessment = exam_code.assessment
     with transaction.atomic():
-        attempt, _ = AssessmentAttempt.objects.get_or_create(
+        attempt, _created = AssessmentAttempt.objects.get_or_create(
             assessment=assessment, student=exam_code.diploma_enrollment.student.user,
             attempt_number=1,
             defaults={"status": ATTEMPT_STATUS_GRADED, "submitted_at": timezone.now()},
@@ -1192,6 +1274,8 @@ def get_active_semester_exam_override(student, assessment, now=None) -> Semester
         student__user=student,
         cohort=assessment.cohort,
         status=ENROLLMENT_STATUS_ACTIVE,
+    ).filter(
+        Q(expires_at__isnull=True) | Q(expires_at__gt=now),
     ).first()
     if not enrollment:
         return None

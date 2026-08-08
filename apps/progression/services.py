@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
+from itertools import islice
 
 from django.db import transaction
 from django.utils import timezone
@@ -190,6 +191,83 @@ def aggregate_semester_scores(student_profile: StudentProfile, semester: Semeste
 # ---------------------------------------------------------------------------
 
 
+from apps.audit.constants import ACTION_RULE_REEVALUATION, ACTION_SEMESTER_FINALIZED
+from apps.audit.services import record_audit_event
+
+REEVALUATION_CHUNK_SIZE = 100
+
+
+def save_progression_rule(rule, actor):
+    """Persist a progression rule and re-evaluate affected semesters atomically.
+
+    S2-19/S2-27: rule save and the bounded re-evaluation are one transaction
+    with the real actor (never ``None``) so a failure rolls back the rule too.
+    ``rule`` is a ``SemesterProgressionRule`` or ``DiplomaProgressionRule``;
+    a diploma-level rule re-evaluates every semester that has no active own rule.
+    """
+    if actor is None:
+        raise ValueError(_("An actor is required to save a progression rule."))
+    with transaction.atomic():
+        rule.full_clean()
+        rule.save()
+        if isinstance(rule, SemesterProgressionRule):
+            reevaluate_semester_for_rule_change(rule.semester, actor)
+        elif isinstance(rule, DiplomaProgressionRule):
+            for semester in Semester.objects.filter(diploma=rule.diploma, is_active=True):
+                has_own_rule = SemesterProgressionRule.objects.filter(
+                    semester=semester, is_active=True,
+                ).exists()
+                if not has_own_rule:
+                    reevaluate_semester_for_rule_change(semester, actor)
+    return rule
+
+
+def reevaluate_semester_for_rule_change(semester, actor=None):
+    """Re-evaluate non-finalized progress rows for a semester in bounded chunks.
+
+    Rows are updated with one ``bulk_update`` per chunk (S2-27); the immutable
+    per-row audit events are written as required, inside the caller's
+    transaction.
+    """
+    non_finalized = StudentSemesterProgress.objects.filter(
+        semester=semester,
+        status__in=[
+            SEMESTER_PROGRESS_PASSED_PENDING_CONFIRMATION,
+            SEMESTER_PROGRESS_FAILED,
+            SEMESTER_PROGRESS_UNDER_REVIEW,
+            SEMESTER_PROGRESS_IN_PROGRESS,
+        ],
+        diploma_enrollment__cohort__diploma=semester.diploma,
+    ).select_related("diploma_enrollment", "student", "diploma_enrollment__cohort")
+
+    stream = non_finalized.iterator(chunk_size=REEVALUATION_CHUNK_SIZE)
+    while True:
+        chunk = list(islice(stream, REEVALUATION_CHUNK_SIZE))
+        if not chunk:
+            break
+        for progress in chunk:
+            enrollment = progress.diploma_enrollment
+            result = evaluate_semester_components(enrollment, enrollment.cohort, semester)
+            progress.status = result.status
+            progress.calculated_score = result.total_percent
+            progress.calculated_at = timezone.now()
+            record_audit_event(
+                actor=actor,
+                action=ACTION_RULE_REEVALUATION,
+                target_type="enrollment",
+                target_id=str(enrollment.id),
+                metadata={
+                    "semester_id": semester.id,
+                    "status": result.status,
+                    "total_percent": str(result.total_percent),
+                    "reason": "rule_change",
+                },
+            )
+        StudentSemesterProgress.objects.bulk_update(
+            chunk, ["status", "calculated_score", "calculated_at"],
+        )
+
+
 def evaluate_semester_progress(
     student_profile: StudentProfile,
     diploma_enrollment: DiplomaEnrollment,
@@ -197,6 +275,7 @@ def evaluate_semester_progress(
     *,
     is_override: bool = False,
 ) -> StudentSemesterProgress:
+    # DEPRECATED — use evaluate_semester_components + finalize_semester instead
     if not is_override:
         if diploma_enrollment.status != ENROLLMENT_STATUS_ACTIVE:
             raise ValueError(_("Enrollment is not active."))
@@ -259,6 +338,9 @@ def evaluate_semester_components(
     cohort: Cohort,
     semester: Semester,
 ) -> ComponentEvaluationResult:
+    # S2-16/L6: never evaluate a semester from another diploma.
+    if semester.diploma_id != cohort.diploma_id:
+        raise ValueError(_("Semester does not belong to the cohort's diploma."))
     components = list(
         SemesterGradeComponent.objects.filter(
             cohort=cohort,
@@ -273,11 +355,17 @@ def evaluate_semester_components(
     if total_weight != Decimal("100"):
         raise ValueError(_("Active component weights must sum to 100."))
 
-    rule = DiplomaProgressionRule.objects.filter(
-        diploma=diploma_enrollment.cohort.diploma,
-        is_active=True,
-    ).first()
-    pass_threshold = rule.semester_pass_percent if rule else Decimal("50.00")
+    semester_rule = SemesterProgressionRule.objects.filter(
+        semester=semester, is_active=True,
+    ).select_related("diploma_rule").first()
+    if semester_rule:
+        pass_threshold = semester_rule.pass_percent
+    else:
+        rule = DiplomaProgressionRule.objects.filter(
+            diploma=diploma_enrollment.cohort.diploma,
+            is_active=True,
+        ).first()
+        pass_threshold = rule.semester_pass_percent if rule else Decimal("50.00")
 
     component_results = []
     under_review = False
@@ -350,6 +438,45 @@ def evaluate_semester_components(
         under_review=under_review,
         status=status,
     )
+
+
+# ---------------------------------------------------------------------------
+# Finalization (one-step)
+# ---------------------------------------------------------------------------
+
+
+def finalize_semester(
+    enrollment: DiplomaEnrollment,
+    semester: Semester,
+    actor=None,
+) -> StudentSemesterProgress:
+    if semester.diploma_id != enrollment.cohort.diploma_id:
+        raise ValueError(_("Semester does not belong to the enrollment's diploma."))
+    sync_all_grade_items(enrollment, semester, actor=actor)
+    result = evaluate_semester_components(enrollment, enrollment.cohort, semester)
+    progress, _created = StudentSemesterProgress.objects.update_or_create(
+        diploma_enrollment=enrollment,
+        semester=semester,
+        defaults={
+            "student": enrollment.student,
+            "cohort": enrollment.cohort,
+            "status": result.status,
+            "calculated_score": result.total_percent,
+            "calculated_at": timezone.now(),
+        },
+    )
+    record_audit_event(
+        actor=actor,
+        action=ACTION_SEMESTER_FINALIZED,
+        target_type="enrollment",
+        target_id=str(enrollment.id),
+        metadata={
+            "semester_id": semester.id,
+            "status": result.status,
+            "total_percent": str(result.total_percent),
+        },
+    )
+    return progress
 
 
 # ---------------------------------------------------------------------------
@@ -592,6 +719,10 @@ def promote_academic_year(
         raise ValueError(_("Reason is required for academic-year promotion."))
     if from_semester.diploma_id != enrollment.cohort.diploma_id or to_semester.diploma_id != from_semester.diploma_id:
         raise ValueError(_("Semesters must belong to the enrollment diploma."))
+    # L7: only the next ordered semester of the SAME diploma may be the target,
+    # mirroring manual_promote's forward-ordering rule.
+    if to_semester.order != from_semester.order + 1:
+        raise ValueError(_("Promotion must target the next semester in order."))
     with transaction.atomic():
         PromotionDecision.objects.create(
             student=student_profile,
@@ -723,6 +854,9 @@ def override_student_progress(
 ) -> StudentSemesterProgress:
     if not reason:
         raise ValueError(_("Reason is required for override."))
+    # L6: a mutation must never accept a semester from another diploma.
+    if semester.diploma_id != enrollment.cohort.diploma_id:
+        raise ValueError(_("Semester does not belong to the enrollment's diploma."))
 
     progress, __ = StudentSemesterProgress.objects.get_or_create(
         diploma_enrollment=enrollment,
@@ -872,6 +1006,9 @@ def assign_retake(
 ) -> StudentSemesterProgress:
     if not reason:
         raise ValueError(_("Reason is required for assigning retake."))
+    # L6: a mutation must never accept a semester from another diploma.
+    if semester.diploma_id != enrollment.cohort.diploma_id:
+        raise ValueError(_("Semester does not belong to the enrollment's diploma."))
 
     rule = DiplomaProgressionRule.objects.filter(
         diploma=enrollment.cohort.diploma,
@@ -927,6 +1064,9 @@ def clear_retake(
     actor=None,
     reason: str = "",
 ) -> StudentSemesterProgress:
+    # L6: a mutation must never accept a semester from another diploma.
+    if semester.diploma_id != enrollment.cohort.diploma_id:
+        raise ValueError(_("Semester does not belong to the enrollment's diploma."))
     progress = StudentSemesterProgress.objects.get(
         diploma_enrollment=enrollment,
         semester=semester,
@@ -1187,7 +1327,7 @@ def sync_semester_exam_grade_item(diploma_enrollment, semester, actor=None) -> S
     if best is None:
         return None
 
-    item, _ = StudentGradeItem.objects.update_or_create(
+    item, _created = StudentGradeItem.objects.update_or_create(
         component=component,
         diploma_enrollment=diploma_enrollment,
         defaults={
@@ -1208,7 +1348,7 @@ def sync_attendance_grade_item(diploma_enrollment, semester, actor=None) -> Stud
     summary = get_attendance_summary(diploma_enrollment, semester)
     attendance_percent = Decimal(str(summary["attendance_percent"]))
 
-    item, _ = StudentGradeItem.objects.update_or_create(
+    item, _created = StudentGradeItem.objects.update_or_create(
         component=component,
         diploma_enrollment=diploma_enrollment,
         defaults={
@@ -1255,7 +1395,7 @@ def sync_homework_assessment_grade_item(diploma_enrollment, semester, actor=None
 
     score_percent = (total_earned / total_max * Decimal("100.00")) if total_max > 0 else None
 
-    item, _ = StudentGradeItem.objects.update_or_create(
+    item, _created = StudentGradeItem.objects.update_or_create(
         component=component,
         diploma_enrollment=diploma_enrollment,
         defaults={
@@ -1298,6 +1438,8 @@ def set_custom_activity_grade(component, diploma_enrollment, *, score, max_score
 
 
 def sync_all_grade_items(diploma_enrollment, semester, actor=None) -> dict:
+    if semester.diploma_id != diploma_enrollment.cohort.diploma_id:
+        raise ValueError(_("Semester does not belong to the enrollment's diploma."))
     with transaction.atomic():
         return {
             "semester_exam": sync_semester_exam_grade_item(diploma_enrollment, semester, actor=actor),
@@ -1510,6 +1652,17 @@ def create_rejoin_plan(
         raise ValueError(_("Target cohort must belong to the same diploma as the enrollment."))
     if failed_semester.diploma_id != target_cohort.diploma_id:
         raise ValueError(_("Failed semester must belong to the same diploma as the target cohort."))
+    # L8: a rejoin plan requires failed/retake-eligible progress for the
+    # semester — never a passing or untouched semester.
+    failed_progress = StudentSemesterProgress.objects.filter(
+        diploma_enrollment=from_enrollment,
+        semester=failed_semester,
+    ).first()
+    if failed_progress is None or failed_progress.status not in (
+        SEMESTER_PROGRESS_FAILED,
+        SEMESTER_PROGRESS_RETAKE_REQUIRED,
+    ):
+        raise ValueError(_("Rejoin requires a failed or retake-required semester progress."))
     if SemesterRejoinPlan.objects.filter(
         from_enrollment=from_enrollment,
         failed_semester=failed_semester,

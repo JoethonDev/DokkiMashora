@@ -41,6 +41,7 @@
        </form>
        <div id="attendance-results">
       {% include "ui/fragments/admin/_attendance_records.html" %}
+        </div>
     </section>
     <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-primary"
          href="{% url 'attendance:attendance_session_create' %}">{% trans "Create session" %}</a>

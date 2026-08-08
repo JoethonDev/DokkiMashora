@@ -1,59 +1,66 @@
 {% load i18n %}
-<div id="student-content" class="page-stack animate-enter-view"><section class="flex justify-between items-center gap-5 px-0.5 py-1.5"><div>
-      <p class="eyebrow">{% trans "Admissions" %}</p>
-      <h2>{% trans "My applications" %}</h2>
-      <p>{% trans "Follow submitted applications, requested documents, and decisions." %}</p>
-    </div>
-    <a class="btn-primary" href="{% url 'students:apply' %}">{% trans "Start an application" %}</a>
-  </section>
+<div id="student-content" class="page-stack animate-enter-view">{% url 'students:apply' as student_apply_url %}{% include "ui/components/_page_header.html" with eyebrow=_("Admissions") title=_("My applications") description=_("Follow submitted applications, requested documents, and decisions.") actions_template="ui/fragments/student/_page_header_actions.html" header_action_url=student_apply_url header_action_label=_("Start an application") header_action_class="btn-primary" %}
   <section class="card-surface"><div class="actions-row"><a class="btn-soft" href="{% url 'students:apply' %}">{% trans "Apply to a program" %}</a>
     </div>
-    <div class="table-wrap"><table class="table">
+    <div class="table-wrap hidden lg:block"><table class="table">
         <thead>
           <tr>
             <th class="table-th">{% trans "Program" %}</th>
             <th class="table-th">{% trans "Submitted" %}</th>
             <th class="table-th">{% trans "Status" %}</th>
-            <th class="table-th">{% trans "Documents" %}</th>
-            <th class="table-th"></th>
+            <th class="table-th">{% trans "Next step" %}</th>
           </tr>
         </thead>
         <tbody>
-          {% for item in applications %}
+          {% for item in application_rows %}
             <tr>
               <td class="table-td">
-                <strong>
-                  {% if item.cohort_id %}
-                    {{ item.cohort.diploma.title }}
-                  {% elif item.course_id %}
-                    {{ item.course.title }}
-                  {% else %}
-                    {% trans "Program application" %}
-                  {% endif %}
-                </strong>
-                <small>{{ item.program_type|default:'' }}</small>
+                <strong>{{ item.program_title }}</strong>
+                <small>{{ item.program_type_label }}</small>
               </td>
-              <td class="table-td">{{ item.created_at|date:"d/m/Y" }}</td>
+              <td class="table-td">{{ item.submitted_at|date:"d/m/Y" }}</td>
               <td class="table-td">
-                <span class="status-pill-info">{{ item.get_status_display }}</span>
+                <span class="status-pill-info">{{ item.status_label }}</span>
               </td>
-              <td class="table-td">{{ item.document_requests.all|length|default:0 }}</td>
               <td class="table-td">
-                <a class="btn-secondary" href="{% url 'students:details' %}">{% trans "View" %}</a>
+                {% if item.action_url %}
+                  <a class="btn-secondary" href="{{ item.action_url }}">{{ item.action_label }}</a>
+                {% elif item.next_step %}
+                  <span class="text-muted">{{ item.next_step }}</span>
+                {% else %}
+                  <span class="text-muted">{{ item.status_label }}</span>
+                {% endif %}
               </td>
             </tr>
           {% empty %}
             <tr>
-              <td colspan="5" class="table-td"><div class="empty-state"><span>▤</span>
-                  <h3>{% trans "No applications yet" %}</h3>
-                  <p>{% trans "Your submitted applications will appear here." %}</p>
-                  <a class="btn-primary" href="{% url 'students:apply' %}">{% trans "Explore programs" %}</a>
-                </div>
+              <td colspan="4" class="table-td">{% url 'students:apply' as student_apply_url %}{% include "ui/components/_empty_state.html" with icon="▤" title=_("No applications yet") message=_("Your submitted applications will appear here.") href=student_apply_url action_label=_("Explore programs") %}
               </td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
+    </div>
+    <div class="card-stack lg:hidden">
+      {% for item in application_rows %}
+        <div class="mobile-card">
+          <div class="flex-1 min-w-0">
+            <strong class="block truncate">{{ item.program_title }}</strong>
+            <small class="block text-muted">{{ item.program_type_label }}</small>
+            <span class="status-pill-info">{{ item.status_label }}</span>
+            <small class="block text-muted">{{ item.submitted_at|date:"d/m/Y" }}</small>
+            {% if item.action_url %}
+              <a class="btn-soft-primary shrink-0 mt-2" href="{{ item.action_url }}">{{ item.action_label }}</a>
+            {% elif item.next_step %}
+              <small class="block text-muted mt-2">{{ item.next_step }}</small>
+            {% endif %}
+          </div>
+        </div>
+      {% empty %}
+        <div class="border border-line rounded-sm p-4 text-center">
+          {% include "ui/components/_empty_state.html" with icon="▤" title=_("No applications yet") message=_("Your submitted applications will appear here.") href=student_apply_url action_label=_("Explore programs") %}
+        </div>
+      {% endfor %}
     </div>
     {% include "ui/components/_pagination.html" %}
   </section>

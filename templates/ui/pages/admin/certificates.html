@@ -25,8 +25,22 @@
         <a class="btn-ghost"
            href="{% url 'certificates:admin_template_edit' template.id %}">{% trans "Edit" %}</a>
       </section>
-    {% elif page_obj %}
-      <section class="card-surface"><div class="table-wrap"><table class="table">
+    {% elif templates is not None %}
+      <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {% for item in templates %}
+          <article class="card-surface">
+            <h3>{{ item }}</h3>
+            {% if item.description %}<p>{{ item.description }}</p>{% endif %}
+            {% if item.diploma %}<p class="text-muted">{{ item.diploma }}</p>{% endif %}
+            <a class="btn-ghost" href="{% url 'certificates:admin_template_edit' item.id %}">{% trans "Edit" %}</a>
+          </article>
+        {% empty %}
+          {% include "ui/components/_empty_state.html" with title=_("No certificate templates yet.") fill=True %}
+        {% endfor %}
+      </section>
+      {% include "ui/components/_pagination.html" %}
+    {% elif page_obj is not None %}
+      <section class="card-surface"><div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>
                 <th class="table-th">{% trans "Certificate number" %}</th>
@@ -42,7 +56,7 @@
                 <tr>
                   <td class="table-td">{{ item.certificate_number|default:item.id }}</td>
                   <td class="table-td">{{ item.student.full_name|default:item.student }}</td>
-                  <td class="table-td">{{ item.student.current_cohort.diploma|default:'—' }}</td>
+                  <td class="table-td">{{ item.diploma_enrollment.cohort.diploma|default:'—' }}</td>
                   <td class="table-td">{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
                   <td class="table-td">{{ item.issued_at|default:item.created_at|date:"DATE_FORMAT"|default:'—' }}</td>
                   <td class="table-td">
@@ -69,19 +83,40 @@
                 </tr>
               {% empty %}
                 <tr>
-                  <td class="table-td" colspan="6"><div class="empty-state"><span>&#9679;</span>
-                      <h3>{% trans "No certificates have been generated." %}</h3>
-                    </div>
+                  <td class="table-td" colspan="6">{% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No certificates have been generated.") %}
                   </td>
                 </tr>
               {% endfor %}
             </tbody>
           </table>
         </div>
+        <div class="card-stack lg:hidden">
+          {% for item in page_obj %}
+            <div class="mobile-card">
+              <div class="flex-1 min-w-0">
+                <strong class="block truncate">{{ item.student.full_name|default:item.student }}</strong>
+                <small class="block text-muted truncate">{{ item.diploma_enrollment.cohort.diploma|default:'—' }}</small>
+                <small class="block text-muted">{{ item.certificate_number|default:item.id }}</small>
+                {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
+                <small class="block text-muted">{% trans "Issued" %}: {{ item.issued_at|default:item.created_at|date:"DATE_FORMAT"|default:'—' }}</small>
+              </div>
+              {% if item.id and item.student_id %}
+                <a class="btn-soft-primary shrink-0" href="{% url 'certificates:admin_download_certificate' item.id %}">{% trans "Download" %}</a>
+              {% endif %}
+            </div>
+          {% empty %}
+            <div class="border border-line rounded-sm p-4 text-center">
+              {% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No certificates have been generated.") fill=True %}
+            </div>
+          {% endfor %}
+        </div>
         {% include "ui/components/_pagination.html" %}
       </section>
     {% endif %}
-    <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-secondary"
+    <div class="flex gap-2.5 items-center flex-wrap">{% if templates is not None %}
+        <a class="btn-primary"
+           href="{% url 'certificates:admin_template_create' %}">{% trans "Create template" %}</a>
+      {% endif %}<a class="btn-secondary"
          href="{% url 'certificates:admin_template_list' %}">{% trans "Certificate templates" %}</a>
     </div>
   </div>

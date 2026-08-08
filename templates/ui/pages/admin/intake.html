@@ -200,7 +200,7 @@
         </dl>
       </section>
     {% elif page_obj %}
-      <section class="card-surface"><div class="table-wrap"><table class="table">
+      <section class="card-surface"><div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>
                 <th class="table-th">{% trans "Form" %}</th>
@@ -261,6 +261,24 @@
               {% endfor %}
             </tbody>
           </table>
+        </div>
+        <div class="card-stack lg:hidden">
+          {% for item in page_obj %}
+            <div class="mobile-card">
+              <div class="flex-1 min-w-0">
+                <strong class="block truncate">{{ item.title }}</strong>
+                <small class="block text-muted truncate">{{ item.description|truncatewords:8|default:'—' }}</small>
+                <small class="block text-muted">{% if item.course_version %}{% trans "Course" %}{% elif item.cohort %}{% trans "Diploma" %}{% else %}—{% endif %} &middot; {% if item.course_version %}{{ item.course_version.course }}{% elif item.cohort %}{{ item.cohort.diploma }}{% endif %}</small>
+                {% include "ui/components/_status.html" with code=item.is_required|yesno:"required,optional" label=item.is_required|yesno:_("Required,Optional") %}
+                {% include "ui/components/_status.html" with code=item.is_active|yesno:"active,inactive" label=item.is_active|yesno:_("Active,Inactive") %}
+              </div>
+              <a class="btn-soft-primary shrink-0" href="{% url 'intake_forms:admin_intake_form_detail' item.id %}">{% trans "Manage" %}</a>
+            </div>
+          {% empty %}
+            <div class="border border-line rounded-sm p-4 text-center">
+              {% url 'intake_forms:admin_intake_form_create' as create_form_url %}{% include "ui/components/_empty_state.html" with title=_("No intake forms found.") action_label=_("Create form") href=create_form_url %}
+            </div>
+          {% endfor %}
         </div>
         {% include "ui/components/_pagination.html" %}
       </section>

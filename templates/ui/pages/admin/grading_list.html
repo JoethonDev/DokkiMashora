@@ -15,7 +15,7 @@
       </div>
       {% if queue_page %}
         {% include "ui/components/_pagination.html" with page_obj=queue_page %}
-        <div class="table-wrap"><table class="table">
+        <div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>
                 <th class="table-th">{% trans "Student" %}</th>
@@ -42,10 +42,21 @@
             </tbody>
           </table>
         </div>
-      {% else %}
-        <div class="empty-state"><span>&#9679;</span>
-          <h3>{% trans "No submissions are waiting for grading." %}</h3>
+        <div class="card-stack lg:hidden">
+          {% for item in queue_page %}
+            <div class="mobile-card">
+              <div class="flex-1 min-w-0">
+                <strong class="block truncate">{{ item.student.full_name|default:item.student }}</strong>
+                <small class="block text-muted truncate">{{ item.student.email|default:'' }}</small>
+                <small class="block text-muted">{{ item.assessment.title|default:item.assessment }}</small>
+                {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
+              </div>
+              <a class="btn-soft-primary shrink-0" href="{% url 'assessments:admin_grade_detail' item.id %}">{% trans "Grade" %}</a>
+            </div>
+          {% endfor %}
         </div>
+      {% else %}
+        {% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No submissions are waiting for grading.") %}
       {% endif %}
     </section>
     <section class="card-surface"><div class="section-head"><div>
@@ -56,7 +67,7 @@
       {% if homework_queue_page %}
         {% with rows=homework_queue_page %}
           {% include "ui/components/_pagination.html" with page_obj=rows %}
-          <div class="table-wrap"><table class="table">
+          <div class="table-wrap hidden lg:block"><table class="table">
               <thead>
                 <tr>
                   <th class="table-th">{% trans "Student" %}</th>
@@ -82,12 +93,24 @@
                 {% endfor %}
               </tbody>
             </table>
+          </div>
+          <div class="card-stack lg:hidden">
+            {% for item in rows %}
+              <div class="mobile-card">
+                <div class="flex-1 min-w-0">
+                  <strong class="block truncate">{{ item.student.full_name|default:item.student }}</strong>
+                  <small class="block text-muted truncate">{{ item.student.email|default:'' }}</small>
+                  <small class="block text-muted">{{ item.assessment.title|default:item.assessment }} &middot; {{ item.created_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</small>
+                </div>
+                <a class="btn-soft-primary shrink-0" href="{% url 'assessments:admin_homework_grade_detail' item.id %}">{% trans "Review" %}</a>
+              </div>
+            {% endfor %}
           </div>
         {% endwith %}
       {% elif page_obj %}
         {% with rows=page_obj %}
           {% include "ui/components/_pagination.html" with page_obj=rows %}
-          <div class="table-wrap"><table class="table">
+          <div class="table-wrap hidden lg:block"><table class="table">
               <thead>
                 <tr>
                   <th class="table-th">{% trans "Student" %}</th>
@@ -114,11 +137,21 @@
               </tbody>
             </table>
           </div>
+          <div class="card-stack lg:hidden">
+            {% for item in rows %}
+              <div class="mobile-card">
+                <div class="flex-1 min-w-0">
+                  <strong class="block truncate">{{ item.student.full_name|default:item.student }}</strong>
+                  <small class="block text-muted truncate">{{ item.student.email|default:'' }}</small>
+                  <small class="block text-muted">{{ item.assessment.title|default:item.assessment }} &middot; {{ item.created_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</small>
+                </div>
+                <a class="btn-soft-primary shrink-0" href="{% url 'assessments:admin_homework_grade_detail' item.id %}">{% trans "Review" %}</a>
+              </div>
+            {% endfor %}
+          </div>
         {% endwith %}
       {% else %}
-        <div class="empty-state"><span>&#9679;</span>
-          <h3>{% trans "No submissions are waiting for grading." %}</h3>
-        </div>
+        {% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No submissions are waiting for grading.") %}
       {% endif %}
     </section>
   </div>

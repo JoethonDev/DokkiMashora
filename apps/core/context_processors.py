@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from django.conf import settings
 
 from apps.accounts.constants import (
@@ -18,6 +20,8 @@ from django.contrib.auth.models import AnonymousUser
 
 from apps.core.permissions import is_admin, is_student
 from django.urls import reverse
+
+logger = logging.getLogger(__name__)
 
 
 def site_meta(request) -> dict[str, object]:
@@ -60,9 +64,8 @@ def site_meta(request) -> dict[str, object]:
         "academics:admin_student_detail": "academics:admin_student_list",
         "academics:admin_student_edit": "academics:admin_student_detail",
         "intake_forms:admin_intake_form_detail": "intake_forms:admin_intake_form_list",
-        "communications:bulk_email_detail": "communications:bulk_email_list",
-        "communications:bulk_email_edit": "communications:bulk_email_detail",
-        "communications:template_edit": "communications:template_list",
+        "communications:bulk_email_detail": "communications:bulk_email_history",
+        "communications:admin_template_edit": "communications:admin_template_list",
         "assessments:admin_section_create": "assessments:admin_detail",
         "assessments:admin_section_edit": "assessments:admin_detail",
     }
@@ -82,7 +85,7 @@ def site_meta(request) -> dict[str, object]:
         try:
             page_back_url = reverse(parent_name, kwargs=kwargs)
         except Exception:
-            pass
+            logger.warning("PAGE_BACK_URL reverse failed for %s -> %s", view_name, parent_name)
 
     landing_settings = LandingPageSettings.load()
     return {

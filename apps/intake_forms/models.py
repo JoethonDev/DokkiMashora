@@ -12,6 +12,7 @@ from apps.students.models import StudentProfile
 from .constants import (
     FIELD_TYPE_CHOICE,
     FIELD_TYPE_CHOICES,
+    FIELD_TYPE_MULTI_CHOICE,
     INTAKE_REQUEST_STATUS_CHOICES,
     INTAKE_REQUEST_STATUS_REQUESTED,
 )
@@ -95,7 +96,7 @@ class IntakeFormField(models.Model):
         super().save(*args, **kwargs)
 
     def clean(self):
-        if self.field_type == FIELD_TYPE_CHOICE:
+        if self.field_type in (FIELD_TYPE_CHOICE, FIELD_TYPE_MULTI_CHOICE):
             if not self.options or not isinstance(self.options, list) or len(self.options) == 0:
                 raise ValidationError(_("Choice fields must have at least one option."))
         else:

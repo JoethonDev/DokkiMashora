@@ -1,6 +1,9 @@
 """Restore the database from a backup file.
 
-Postgres: pipe the file into psql. SQLite: copy file over db.sqlite3.
+Postgres: a plain-SQL dump is piped into psql; a custom-format dump (pg_dump
+--format=custom) is restored with pg_restore so both management-command and
+Compose-produced artifacts are supported (S2-26). SQLite: copy file over
+db.sqlite3.
 """
 
 from __future__ import annotations
@@ -13,6 +16,8 @@ from urllib.parse import unquote, urlparse
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
+
+OPERATION_TIMEOUT_SECONDS = 1200
 
 
 class Command(BaseCommand):
@@ -44,8 +49,18 @@ class Command(BaseCommand):
                 raise CommandError("Aborted.")
 
         if backend == "postgres":
-            cmd = ["psql", database_url, "-f", str(backup)]
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            if _is_custom_format(backup):
+                # S2-26: Compose produces custom-format dumps; pg_restore is the
+                # only reader that understands them.
+                cmd = ["pg_restore", "--no-owner", "--no-privileges", "--dbname", database_url, str(backup)]
+            else:
+                cmd = ["psql", database_url, "-f", str(backup)]
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=OPERATION_TIMEOUT_SECONDS)
+            except subprocess.TimeoutExpired as exc:
+                raise CommandError(
+                    f"Restore timed out after {OPERATION_TIMEOUT_SECONDS}s and was terminated."
+                ) from exc
             if result.returncode != 0:
                 raise CommandError(result.stderr.strip() or "psql restore failed.")
         elif backend == "sqlite":
@@ -56,3 +71,17 @@ class Command(BaseCommand):
             raise CommandError(f"Unsupported database backend: {backend}")
 
         self.stdout.write(self.style.SUCCESS(f"Restored from {backup}"))
+
+
+def _is_custom_format(backup: Path) -> bool:
+    """Detect a pg_dump custom-format archive by its magic header.
+
+    Custom format archives begin with ``PGDMP``; plain SQL dumps start with
+    ``--``. A read of the first bytes is bounded and never loads the file.
+    """
+    try:
+        with backup.open("rb") as fh:
+            header = fh.read(5)
+    except OSError:
+        return False
+    return header == b"PGDMP"

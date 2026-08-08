@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 def get_next_certificate_number(diploma_id: int, student_id: int) -> str:
     year = date.today().year
     with transaction.atomic():
-        counter, _ = CertificateCounter.objects.get_or_create(
+        counter, _created = CertificateCounter.objects.get_or_create(
             diploma_id=diploma_id,
             year=year,
         )
@@ -106,56 +106,68 @@ def generate_certificate_pdf(
     if not template:
         template = _create_placeholder_template(enrollment, actor)
 
-    existing_active = GeneratedCertificate.objects.filter(
-        diploma_enrollment=enrollment,
-        status__in=[CERTIFICATE_STATUS_GENERATED, CERTIFICATE_STATUS_AVAILABLE],
-    ).first()
-    if existing_active:
-        raise ValueError(_("An active certificate already exists for this enrollment."))
-
-    certificate_number = get_next_certificate_number(
-        enrollment.cohort.diploma_id, student.id,
-    )
-
+    # Reserve the immutable record with its final number in a short transaction;
+    # slow PDF render and storage work run outside it (T6). A previously failed
+    # certificate is reused as-is so a retry never allocates a second number.
     with transaction.atomic():
-        cert = GeneratedCertificate.objects.create(
-            student=student,
+        existing_active = GeneratedCertificate.objects.select_for_update().filter(
             diploma_enrollment=enrollment,
-            certificate_template=template,
-            certificate_number=certificate_number,
-            status=CERTIFICATE_STATUS_GENERATED,
-            generated_by=actor,
-            metadata_snapshot={
-                "student_name": student.user.full_name,
-                "diploma": enrollment.cohort.diploma.title,
-                "cohort": enrollment.cohort.name,
-                "completed_at": str(completion.completed_at) if completion.completed_at else None,
-            },
-        )
+            status__in=[CERTIFICATE_STATUS_GENERATED, CERTIFICATE_STATUS_AVAILABLE],
+        ).first()
+        if existing_active:
+            raise ValueError(_("An active certificate already exists for this enrollment."))
 
-        try:
-            html = render_certificate_html(student, template, completion, certificate_number)
-            pdf_bytes = _html_to_pdf(html)
-
-            result = storage_service.upload_file(
-                data=pdf_bytes,
-                key_prefix=f"certificates/{enrollment.id}",
-                content_type="application/pdf",
-                max_size=10 * 1024 * 1024,
-                allowed_types=[".pdf"],
-                original_filename=f"certificate_{certificate_number}.pdf",
+        cert = GeneratedCertificate.objects.select_for_update().filter(
+            diploma_enrollment=enrollment,
+            status=CERTIFICATE_STATUS_FAILED,
+        ).first()
+        if cert is None:
+            certificate_number = get_next_certificate_number(
+                enrollment.cohort.diploma_id, student.id,
+            )
+            cert = GeneratedCertificate.objects.create(
+                student=student,
+                diploma_enrollment=enrollment,
+                certificate_template=template,
+                certificate_number=certificate_number,
+                status=CERTIFICATE_STATUS_GENERATED,
+                generated_by=actor,
+                metadata_snapshot={
+                    "student_name": student.user.full_name,
+                    "diploma": enrollment.cohort.diploma.title,
+                    "cohort": enrollment.cohort.name,
+                    "completed_at": str(completion.completed_at) if completion.completed_at else None,
+                },
             )
 
-            cert.pdf_storage_key = result.key
-            cert.pdf_file_size = result.byte_size
-            cert.status = CERTIFICATE_STATUS_AVAILABLE
-            cert.save(update_fields=["pdf_storage_key", "pdf_file_size", "status"])
+    try:
+        html = render_certificate_html(student, template, completion, cert.certificate_number)
+        pdf_bytes = _html_to_pdf(html)
 
-        except (OSError, ValueError) as exc:
-            logger.exception("PDF generation failed for cert %s", certificate_number)
-            cert.status = CERTIFICATE_STATUS_FAILED
-            cert.metadata_snapshot["error"] = str(exc)
-            cert.save(update_fields=["status", "metadata_snapshot"])
+        result = storage_service.upload_file(
+            data=pdf_bytes,
+            key_prefix=f"certificates/{enrollment.id}",
+            content_type="application/pdf",
+            max_size=10 * 1024 * 1024,
+            allowed_types=[".pdf"],
+            original_filename=f"certificate_{cert.certificate_number}.pdf",
+        )
+
+        snapshot = dict(cert.metadata_snapshot or {})
+        snapshot.pop("error", None)
+        cert.pdf_storage_key = result.key
+        cert.pdf_file_size = result.byte_size
+        cert.status = CERTIFICATE_STATUS_AVAILABLE
+        cert.metadata_snapshot = snapshot
+        cert.save(update_fields=["pdf_storage_key", "pdf_file_size", "status", "metadata_snapshot"])
+
+    except (OSError, ValueError) as exc:
+        logger.exception("PDF generation failed for cert %s", cert.certificate_number)
+        snapshot = dict(cert.metadata_snapshot or {})
+        snapshot["error"] = str(exc)
+        cert.status = CERTIFICATE_STATUS_FAILED
+        cert.metadata_snapshot = snapshot
+        cert.save(update_fields=["status", "metadata_snapshot"])
 
     # ponytail: broad Exception replaced with OSError/ValueError; any other error propagates to caller
 
@@ -185,10 +197,10 @@ def _create_placeholder_template(enrollment: DiplomaEnrollment, actor) -> Certif
         <h3>{{ cohort_name }}</h3>
         <p>التاريخ: {{ completion_date }}</p>
         <p>تاريخ الإصدار: {{ issue_date }}</p>
-        <p style="margin-top: 30px; font-size: 12px; color: #999;">هذه شهادة مؤقتة لحين إعداد النموذج الرسمي.</p>
+        <p style="margin-top: 30px; font-size: 12px; color: #667582;">هذه شهادة مؤقتة لحين إعداد النموذج الرسمي.</p>
     </div>
     """
-    template, _ = CertificateTemplate.objects.update_or_create(
+    template, _created = CertificateTemplate.objects.update_or_create(
         diploma=enrollment.cohort.diploma,
         language="ar",
         template_type="completion",

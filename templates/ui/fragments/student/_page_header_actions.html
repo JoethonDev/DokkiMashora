@@ -1,0 +1,5 @@
+{% if header_pill_text %}
+  <span class="status-pill-info">{{ header_pill_text }}</span>
+{% elif header_action_url %}
+  <a class="{{ header_action_class }}" href="{{ header_action_url }}">{{ header_action_label }}</a>
+{% endif %}

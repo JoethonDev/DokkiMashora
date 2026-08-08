@@ -13,14 +13,14 @@
           <div class="flex gap-2.5 items-center flex-wrap">{% if session.status == 'scheduled' %}
               <form method="post"
                     action="{% url 'attendance:attendance_session_open' session.id %}"
-                    class="form-inline">{% csrf_token %}
+                    >{% csrf_token %}
                 <button class="btn-primary" type="submit">{% trans "Open session" %}</button>
               </form>
             {% endif %}
             {% if session.status == 'open' %}
               <form method="post"
                     action="{% url 'attendance:attendance_session_close' session.id %}"
-                    class="form-inline">{% csrf_token %}
+                    >{% csrf_token %}
                 <button class="btn-warning" type="submit">{% trans "Close session" %}</button>
               </form>
             {% endif %}
@@ -105,7 +105,7 @@
         </div>
       </div>
       {% if records %}
-        <div class="table-wrap"><table class="table">
+        <div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>
                 <th class="table-th">{% trans "Student" %}</th>
@@ -127,6 +127,18 @@
               {% endfor %}
             </tbody>
           </table>
+        </div>
+        <div class="card-stack lg:hidden">
+          {% for record in records %}
+            <div class="mobile-card">
+              <div class="flex-1 min-w-0">
+                <strong class="block truncate">{{ record.student.full_name }}</strong>
+                {% include "ui/components/_status.html" with code=record.status label=record.get_status_display %}
+                <small class="block text-muted">{% trans "Scanned at" %}: {{ record.scanned_at|date:"d/m/Y H:i"|default:'—' }} &middot; {% trans "by" %} {{ record.scanned_by.full_name|default:'—' }}</small>
+                <small class="block text-muted">{{ record.notes|default:'—' }}</small>
+              </div>
+            </div>
+          {% endfor %}
         </div>
       {% else %}
         {% include "ui/components/_empty_state.html" with title=_("No records") message=_("No attendance records for this session.") %}

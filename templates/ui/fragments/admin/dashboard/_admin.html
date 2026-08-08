@@ -18,7 +18,7 @@
      href="{% url 'applications:program_list' %}?action_needed=review"><div class="stat-icon bg-info-soft text-info-text">&#9679;</div>
     <div class="stat-body">
       <span>{% trans "Awaiting review" %}</span>
-      <strong>{{ application_review_count|default:prog_under_review_count }}</strong>
+      <strong>{{ application_review_count }}</strong>
       <small>{% trans "Applications needing decision" %}</small>
     </div>
   </a>
@@ -52,16 +52,11 @@
       </div>
       <a class="text-brand font-bold no-underline hover:underline" href="{% url 'applications:program_list' %}">{% trans "Open all" %}</a>
     </div>
-    {% with max_count=prog_submitted_count|default:0|add:prog_under_review_count|default:0|add:prog_accepted_count|default:0|add:prog_activated_count|default:0 %}
+    {% with max_count=application_review_count|default:0|add:prog_accepted_count|default:0|add:prog_activated_count|default:0 %}
       <div class="bar-chart"><div>
-          <span class="bar" style="--bar: {% if max_count > 0 %}{% widthratio prog_submitted_count|default:0 max_count 86 %}{% else %}0{% endif %}%"></span>
-          <strong>{{ prog_submitted_count|default:0 }}</strong>
-          <small>{% trans "Submitted" %}</small>
-        </div>
-        <div>
-          <span class="bar" style="--bar: {% if max_count > 0 %}{% widthratio prog_under_review_count|default:0 max_count 86 %}{% else %}0{% endif %}%"></span>
-          <strong>{{ prog_under_review_count|default:0 }}</strong>
-          <small>{% trans "In review" %}</small>
+          <span class="bar" style="--bar: {% if max_count > 0 %}{% widthratio application_review_count|default:0 max_count 86 %}{% else %}0{% endif %}%"></span>
+          <strong>{{ application_review_count|default:0 }}</strong>
+          <small>{% trans "Awaiting review" %}</small>
         </div>
         <div>
           <span class="bar" style="--bar: {% if max_count > 0 %}{% widthratio prog_accepted_count|default:0 max_count 86 %}{% else %}0{% endif %}%"></span>
@@ -130,10 +125,7 @@
           {% endif %}
         </div>
       {% else %}
-        <div class="empty-state"><span>&#10003;</span>
-          <h3>{% trans "No urgent items" %}</h3>
-          <p>{% trans "Everything is up to date." %}</p>
-        </div>
+        {% include "ui/components/_empty_state.html" with icon="&#10003;" title=_("No urgent items") message=_("Everything is up to date.") fill=True %}
       {% endif %}
     {% endwith %}
   </article>
@@ -149,7 +141,7 @@
           <p>
             <strong>{{ item.student.full_name }}</strong>
             <small>
-              <span dir="ltr" class="inline-block">{{ item.student.email }}</span>
+              <span dir="ltr" class="inline-block">{% if item.student.user %}{{ item.student.user.email }}{% endif %}</span>
               &middot;
               {{ item.cohort.diploma|default:item.course }}
               {% if item.cohort %}

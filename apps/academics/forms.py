@@ -12,7 +12,6 @@ from apps.academics.models import (
     Lecture,
     Semester,
 )
-
 from apps.core.forms import StyledFormMixin
 
 
@@ -59,6 +58,12 @@ class SemesterForm(StyledFormMixin, forms.ModelForm):
             raise forms.ValidationError(
                 _("Order cannot exceed diploma total of %(max)s semesters.") % {"max": self.diploma.total_semesters}
             )
+        if self.diploma:
+            existing = Semester.objects.filter(diploma=self.diploma, order=order)
+            if self.instance.pk:
+                existing = existing.exclude(pk=self.instance.pk)
+            if existing.exists():
+                raise forms.ValidationError(_("A semester with this order already exists for the diploma."))
         return order
 
 
@@ -91,6 +96,14 @@ class CohortForm(StyledFormMixin, forms.ModelForm):
             "start_date": forms.DateInput(attrs={"type": "date"}),
             "end_date": forms.DateInput(attrs={"type": "date"}),
         }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        start_date = cleaned_data.get("start_date")
+        end_date = cleaned_data.get("end_date")
+        if start_date and end_date and end_date < start_date:
+            self.add_error("end_date", _("End date must be on or after the start date."))
+        return cleaned_data
 
 
 class CourseVersionForm(StyledFormMixin, forms.ModelForm):

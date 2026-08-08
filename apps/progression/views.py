@@ -1,14 +1,22 @@
 """Views for progression management (admin and student)."""
 
+import csv
+import logging
+from decimal import Decimal
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ObjectDoesNotExist, PermissionDenied, ValidationError
-from django.db.models import Q
+from django.db import transaction
+from django.db.models import Count, Q
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_POST
 
+from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE
 from apps.academics.models import (
     Cohort,
     Diploma,
@@ -36,13 +44,22 @@ from apps.core.permissions import (
 )
 from apps.students.models import StudentProfile
 
-from .constants import CERTIFICATE_STATUS_AVAILABLE, COMPONENT_TYPE_CHOICES, REJOIN_STATUS_CHOICES
+from .constants import (
+    CERTIFICATE_STATUS_AVAILABLE,
+    COMPONENT_TYPE_CHOICES,
+    REJOIN_STATUS_CHOICES,
+    SEMESTER_PROGRESS_LOCKED,
+    SEMESTER_PROGRESS_PASSED_PENDING_CONFIRMATION,
+)
 from .models import (
+    DiplomaProgressionRule,
     FinalExamEligibility,
+    PromotionDecision,
     SemesterGradeComponent,
     SemesterRejoinPlan,
     StudentDiplomaCompletion,
     StudentGradeItem,
+    StudentSemesterProgress,
 )
 from .services import (
     activate_rejoin_plan,
@@ -56,24 +73,33 @@ from .services import (
     create_rejoin_plan,
     demote_student,
     evaluate_semester_components,
-    evaluate_semester_progress,
+    finalize_semester,
     get_progression_dashboard_data,
     get_student_progress_detail,
     lock_student,
     manual_promote,
-    promote_academic_year,
     mark_completed,
     mark_graduated,
     override_student_progress,
+    promote_academic_year,
     request_interview,
+    save_progression_rule,
     set_custom_activity_grade,
     sync_all_grade_items,
     unlock_student,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def _get_student_or_404(student_id):
     return get_object_or_404(StudentProfile, id=student_id)
+
+
+def _safe_redirect_url(request, url):
+    if url and url_has_allowed_host_and_scheme(url, allowed_hosts={request.get_host()}):
+        return url
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -84,7 +110,9 @@ def _get_student_or_404(student_id):
 @login_required
 @role_required(*ROLE_SENIOR_STAFF)
 def admin_dashboard(request):
-    diplomas = Diploma.objects.filter(is_active=True).prefetch_related("cohorts")
+    diplomas = Diploma.objects.filter(is_active=True).annotate(
+        cohort_count=Count("cohorts"),
+    ).prefetch_related("cohorts")
     diploma_id = request.GET.get("diploma_id")
     cohort_id = request.GET.get("cohort_id")
 
@@ -115,6 +143,255 @@ def admin_dashboard(request):
 
 
 # ---------------------------------------------------------------------------
+# Admin navigation: diploma → cohort → semester
+# ---------------------------------------------------------------------------
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+def admin_cohort_list(request, diploma_id):
+    diploma = get_object_or_404(Diploma, id=diploma_id)
+    cohorts = diploma.cohorts.annotate(
+        enrollment_count=Count("enrollments"),
+        semester_count=Count("diploma__semesters", distinct=True),
+    ).order_by("-start_date")
+    ctx = {
+        "diploma": diploma,
+        "cohorts": cohorts,
+        "breadcrumb_items": [
+            {"label": _("Progression Dashboard"), "href": reverse("progression:admin_dashboard")},
+            {"label": diploma.title},
+        ],
+    }
+    return render(request, "ui/pages/admin/progression_cohort_list.html", {**ctx, "title": diploma.title})
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+def admin_semester_list(request, diploma_id, cohort_id):
+    diploma = get_object_or_404(Diploma, id=diploma_id)
+    cohort = get_object_or_404(Cohort, id=cohort_id, diploma=diploma)
+    semesters = Semester.objects.filter(diploma=diploma).order_by("order")
+    enrollment_count = DiplomaEnrollment.objects.filter(cohort=cohort, status="active").count()
+    semesters_data = []
+    for semester in semesters:
+        semesters_data.append({
+            "semester": semester,
+            "enrollment_count": enrollment_count,
+        })
+    ctx = {
+        "diploma": diploma,
+        "cohort": cohort,
+        "semesters_data": semesters_data,
+        "breadcrumb_items": [
+            {"label": _("Progression Dashboard"), "href": reverse("progression:admin_dashboard")},
+            {"label": diploma.title, "href": reverse("progression:admin_cohort_list", args=[diploma.id])},
+            {"label": cohort.name},
+        ],
+    }
+    return render(request, "ui/pages/admin/progression_semester_list.html", {**ctx, "title": cohort.name})
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+def admin_cohort_semester_progression(request, diploma_id, cohort_id, semester_id):
+    diploma = get_object_or_404(Diploma, id=diploma_id)
+    cohort = get_object_or_404(Cohort, id=cohort_id, diploma=diploma)
+    semester = get_object_or_404(Semester, id=semester_id, diploma=diploma)
+    enrollments = DiplomaEnrollment.objects.filter(
+        cohort=cohort, status="active",
+    ).select_related("student__user").order_by("student__user__full_name")
+
+    progress_map = {}
+    for p in StudentSemesterProgress.objects.filter(
+        diploma_enrollment__in=enrollments, semester=semester,
+    ):
+        progress_map[p.diploma_enrollment_id] = p
+
+    component_results_map = {}
+    for enrollment in enrollments:
+        try:
+            result = evaluate_semester_components(enrollment, cohort, semester)
+            component_results_map[enrollment.id] = result
+        except ValueError:
+            component_results_map[enrollment.id] = None
+
+    grade_items = StudentGradeItem.objects.filter(
+        diploma_enrollment__in=enrollments,
+        component__semester=semester,
+        component__cohort=cohort,
+    ).select_related("component")
+
+    gi_by_enrollment = {}
+    for gi in grade_items:
+        gi_by_enrollment.setdefault(gi.diploma_enrollment_id, {})[gi.component.component_type] = gi
+
+    interview_decisions = PromotionDecision.objects.filter(
+        diploma_enrollment__in=enrollments,
+        from_semester=semester,
+        decision_type__in=[
+            "request_interview",
+            "interview_pass",
+            "interview_fail",
+        ],
+    ).order_by("diploma_enrollment_id", "-decided_at")
+
+    latest_interview = {}
+    for d in interview_decisions:
+        eid = d.diploma_enrollment_id
+        if eid not in latest_interview:
+            latest_interview[eid] = d
+
+    table_rows = []
+    for enrollment in enrollments:
+        progress = progress_map.get(enrollment.id)
+        result = component_results_map.get(enrollment.id)
+        items = gi_by_enrollment.get(enrollment.id, {})
+        interview = latest_interview.get(enrollment.id)
+        row = {
+            "enrollment": enrollment,
+            "student": enrollment.student,
+            "progress": progress,
+            "result": result,
+            "semester_exam": items.get("semester_exam"),
+            "attendance": items.get("attendance"),
+            "homework_assessment": items.get("homework_assessment"),
+            "interview": interview,
+        }
+        table_rows.append(row)
+
+    ctx = {
+        "diploma": diploma,
+        "cohort": cohort,
+        "semester": semester,
+        "table_rows": table_rows,
+        "breadcrumb_items": [
+            {"label": _("Progression Dashboard"), "href": reverse("progression:admin_dashboard")},
+            {"label": diploma.title, "href": reverse("progression:admin_cohort_list", args=[diploma.id])},
+            {"label": cohort.name, "href": reverse("progression:admin_semester_list", args=[diploma.id, cohort.id])},
+            {"label": semester.title},
+        ],
+    }
+    return render(request, "ui/pages/admin/progression_semester_table.html", {**ctx, "title": semester.title})
+
+
+# ---------------------------------------------------------------------------
+# Bulk semester actions
+# ---------------------------------------------------------------------------
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_POST
+def admin_semester_sync_all(request, cohort_id, semester_id):
+    cohort = get_object_or_404(Cohort, id=cohort_id)
+    semester = get_object_or_404(Semester, id=semester_id, diploma_id=cohort.diploma_id)
+    enrollments = list(DiplomaEnrollment.objects.filter(cohort=cohort, status="active"))
+    ok = 0
+    fail = 0
+    with transaction.atomic():
+        for enrollment in enrollments:
+            try:
+                sync_all_grade_items(enrollment, semester, actor=request.user)
+                ok += 1
+            except (ValueError, ValidationError) as exc:
+                logger.warning("Sync failed for enrollment %s: %s", enrollment.id, exc)
+                fail += 1
+    messages.success(request, _("Synced {ok} student(s). {fail} failed.").format(ok=ok, fail=fail))
+    return redirect("progression:admin_cohort_semester_progression", diploma_id=cohort.diploma_id, cohort_id=cohort.id, semester_id=semester.id)
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_POST
+def admin_semester_evaluate_all(request, cohort_id, semester_id):
+    cohort = get_object_or_404(Cohort, id=cohort_id)
+    semester = get_object_or_404(Semester, id=semester_id, diploma_id=cohort.diploma_id)
+    enrollments = list(DiplomaEnrollment.objects.filter(cohort=cohort, status="active").select_related("student"))
+    ok = 0
+    fail = 0
+    with transaction.atomic():
+        for enrollment in enrollments:
+            try:
+                finalize_semester(enrollment, semester, actor=request.user)
+                ok += 1
+            except (ValueError, ValidationError) as exc:
+                logger.warning("Evaluation failed for enrollment %s: %s", enrollment.id, exc)
+                fail += 1
+    messages.success(request, _("Evaluated {ok} student(s). {fail} failed.").format(ok=ok, fail=fail))
+    return redirect("progression:admin_cohort_semester_progression", diploma_id=cohort.diploma_id, cohort_id=cohort.id, semester_id=semester.id)
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_POST
+def admin_semester_auto_promote(request, cohort_id, semester_id):
+    cohort = get_object_or_404(Cohort, id=cohort_id)
+    semester = get_object_or_404(Semester, id=semester_id, diploma_id=cohort.diploma_id)
+    enrollments = list(DiplomaEnrollment.objects.filter(cohort=cohort, status="active").select_related("student"))
+    promoted = 0
+    fail = 0
+    with transaction.atomic():
+        for enrollment in enrollments:
+            try:
+                progress = StudentSemesterProgress.objects.filter(
+                    diploma_enrollment=enrollment, semester=semester,
+                ).first()
+                if progress and progress.status == SEMESTER_PROGRESS_PASSED_PENDING_CONFIRMATION:
+                    manual_promote(enrollment.student, enrollment, semester, actor=request.user, reason="Bulk auto-promote")
+                    promoted += 1
+            except (ValueError, ValidationError) as exc:
+                logger.warning("Auto-promote failed for enrollment %s: %s", enrollment.id, exc)
+                fail += 1
+    messages.success(request, _("{promoted} student(s) promoted. {fail} failed.").format(promoted=promoted, fail=fail))
+    return redirect("progression:admin_cohort_semester_progression", diploma_id=cohort.diploma_id, cohort_id=cohort.id, semester_id=semester.id)
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+def admin_semester_export_csv(request, cohort_id, semester_id):
+    cohort = get_object_or_404(Cohort, id=cohort_id)
+    semester = get_object_or_404(Semester, id=semester_id, diploma_id=cohort.diploma_id)
+    enrollments = list(DiplomaEnrollment.objects.filter(cohort=cohort, status="active").select_related("student__user"))
+
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="semester_{semester.id}_progression.csv"'
+    writer = csv.writer(response)
+    writer.writerow(["Student", "Semester Exam %", "Attendance %", "Homework/Assessment %", "Weighted Total %", "Status"])
+
+    grade_items = StudentGradeItem.objects.filter(
+        diploma_enrollment__in=enrollments,
+        component__semester=semester,
+        component__cohort=cohort,
+    ).select_related("component")
+    gi_by_enrollment = {}
+    for gi in grade_items:
+        gi_by_enrollment.setdefault(gi.diploma_enrollment_id, {})[gi.component.component_type] = gi
+
+    for enrollment in enrollments:
+        items = gi_by_enrollment.get(enrollment.id, {})
+        exam = items.get("semester_exam")
+        att = items.get("attendance")
+        hw = items.get("homework_assessment")
+        try:
+            result = evaluate_semester_components(enrollment, cohort, semester)
+            total = result.total_percent
+        except ValueError:
+            total = None
+        progress = StudentSemesterProgress.objects.filter(diploma_enrollment=enrollment, semester=semester).first()
+        status = progress.get_status_display() if progress else "Not started"
+        writer.writerow([
+            str(enrollment.student),
+            exam.score_percent if exam else "",
+            att.score_percent if att else "",
+            hw.score_percent if hw else "",
+            f"{total:.2f}%" if total is not None else "",
+            status,
+        ])
+    return response
+
+
+# ---------------------------------------------------------------------------
 # Admin student detail
 # ---------------------------------------------------------------------------
 
@@ -123,8 +400,6 @@ def admin_dashboard(request):
 @role_required(*ROLE_GRADING_STAFF)
 def admin_student_detail(request, student_id):
     student = _get_student_or_404(student_id)
-    if not can_view_student_progress(request.user, student):
-        raise PermissionDenied
     enrollments = DiplomaEnrollment.objects.filter(student=student).select_related(
         "cohort__diploma",
     )
@@ -144,10 +419,31 @@ def admin_student_detail(request, student_id):
         ).exists()
         if not mod_wide and not mod_cohorts_qs and not mod_students:
             enrollments = DiplomaEnrollment.objects.none()
+        # S2-14: pass the moderator's assigned cohort for this student so the
+        # shared helper stays scoped (a missing cohort must never be an
+        # unrestricted match); admins and teachers retain prior behavior. The
+        # cohort comes from the moderator's explicit assignment rows and must
+        # match one of this student's scoped enrollments.
+        assigned_cohort_ids = set(mod_cohorts_qs.values_list("cohort_id", flat=True))
+        assigned_cohort_ids.update(
+            ModeratorStudentAssignment.objects.filter(
+                moderator=request.user, student=student, active=True,
+            ).values_list("cohort_id", flat=True)
+        )
+        scoped_cohort = (
+            enrollments.filter(cohort_id__in=assigned_cohort_ids)
+            .order_by("id")
+            .values_list("cohort_id", flat=True)
+            .first()
+        )
+    else:
+        scoped_cohort = None
+    if not can_view_student_progress(request.user, student, cohort=scoped_cohort):
+        raise PermissionDenied
     allowed_cohort_ids = list(enrollments.values_list("cohort_id", flat=True).distinct())
     cohort_filter = {"diploma_enrollment__cohort_id__in": allowed_cohort_ids} if not is_admin(request.user) and allowed_cohort_ids else {}
     progress_detail = get_student_progress_detail(student, cohort_ids=allowed_cohort_ids if not is_admin(request.user) else None)
-    current_progress = progress_detail["semesters"][-1] if progress_detail["semesters"] else None
+    current_progress = progress_detail["semesters"].last()
     eligibility_qs = FinalExamEligibility.objects.filter(student=student)
     if cohort_filter:
         eligibility_qs = eligibility_qs.filter(**cohort_filter)
@@ -163,7 +459,48 @@ def admin_student_detail(request, student_id):
         certificates = certificates.filter(**cohort_filter)
     certificates = certificates.order_by("-generated_at")
 
-    semesters = Semester.objects.all().order_by("diploma", "order")
+    # L6: offer only the enrollment's own diploma semesters and only the
+    # action buttons that match the enrollment's current state.
+    diploma_ids = list(enrollments.values_list("cohort__diploma_id", flat=True).distinct())
+    semesters_by_diploma = {}
+    for sem in Semester.objects.filter(diploma_id__in=diploma_ids).order_by("diploma_id", "order"):
+        semesters_by_diploma.setdefault(sem.diploma_id, []).append(sem)
+
+    enrollment_ids = list(enrollments.values_list("id", flat=True))
+    progress_flags = StudentSemesterProgress.objects.filter(
+        diploma_enrollment_id__in=enrollment_ids,
+    ).values_list("diploma_enrollment_id", "status", "retake_required")
+    locked_by_enrollment = {}
+    retake_by_enrollment = {}
+    for eid, status, retake_required in progress_flags:
+        if status == SEMESTER_PROGRESS_LOCKED:
+            locked_by_enrollment[eid] = True
+        if retake_required:
+            retake_by_enrollment[eid] = True
+
+    semesters_by_enrollment = {
+        enrollment.id: semesters_by_diploma.get(enrollment.cohort.diploma_id, [])
+        for enrollment in enrollments
+    }
+    allowed_actions = {}
+    for enrollment in enrollments:
+        active = enrollment.status == ENROLLMENT_STATUS_ACTIVE
+        locked = locked_by_enrollment.get(enrollment.id, False)
+        retake_required = retake_by_enrollment.get(enrollment.id, False)
+        allowed_actions[enrollment.id] = {
+            "can_evaluate": active,
+            "can_promote": active,
+            "can_demote": active,
+            "can_lock": active and not locked,
+            "can_unlock": active and locked,
+            "can_assign_retake": active,
+            "can_clear_retake": active and retake_required,
+            "can_override": active,
+            "can_mark_complete": active,
+            "can_mark_graduate": active,
+            "can_generate_certificate": active,
+            "can_create_rejoin_plan": active,
+        }
 
     # Compute requirement summaries per progress semester
     requirement_summaries = {}
@@ -191,6 +528,8 @@ def admin_student_detail(request, student_id):
         "student": student,
         "is_admin_user": is_admin(request.user),
         "enrollments": enrollments,
+        "semesters_by_enrollment": semesters_by_enrollment,
+        "allowed_actions": allowed_actions,
         "progress_semesters": progress_detail["semesters"],
         "current_progress": current_progress,
         "requirement_summaries": requirement_summaries,
@@ -198,7 +537,6 @@ def admin_student_detail(request, student_id):
         "eligibility": eligibility,
         "completion": completion,
         "certificates": certificates,
-        "semesters": semesters,
         "grade_components": grade_components,
         "grade_items": grade_items,
         "rejoin_plans": rejoin_plans,
@@ -227,11 +565,14 @@ def admin_evaluate_semester(request, student_id):
     semester = get_object_or_404(Semester, id=semester_id)
 
     try:
-        evaluate_semester_progress(student, enrollment, semester)
+        finalize_semester(enrollment, semester, actor=request.user)
         messages.success(request, _("Semester evaluated."))
     except ValueError as exc:
         messages.error(request, str(exc))
 
+    next_url = _safe_redirect_url(request, request.POST.get("next"))
+    if next_url:
+        return redirect(next_url)
     return redirect("progression:admin_student_detail", student_id=student.id)
 
 
@@ -266,6 +607,9 @@ def admin_promote(request, student_id):
     except ValueError as exc:
         messages.error(request, str(exc))
 
+    next_url = _safe_redirect_url(request, request.POST.get("next"))
+    if next_url:
+        return redirect(next_url)
     return redirect("progression:admin_student_detail", student_id=student.id)
 
 
@@ -543,6 +887,88 @@ def admin_mark_graduate(request, student_id):
 
 
 # ---------------------------------------------------------------------------
+# Diploma Progression Rule CRUD
+# ---------------------------------------------------------------------------
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+def admin_diploma_rule_edit(request, diploma_id):
+    diploma = get_object_or_404(Diploma, id=diploma_id)
+    rule, _created = DiplomaProgressionRule.objects.get_or_create(
+        diploma=diploma,
+        defaults={
+            "is_active": True,
+            "semester_pass_percent": Decimal("50.00"),
+            "final_exam_pass_percent": Decimal("50.00"),
+            "require_all_semesters_passed": True,
+            "require_final_exam": True,
+            "auto_promote_enabled": False,
+            "allow_admin_override": True,
+            "allow_retake": True,
+            "max_retake_count": 0,
+            "created_by": request.user,
+        },
+    )
+    if request.method == "POST":
+        errors = []
+        semester_pass = request.POST.get("semester_pass_percent", "").strip()
+        final_pass = request.POST.get("final_exam_pass_percent", "").strip()
+        max_retake = request.POST.get("max_retake_count", "0").strip()
+        try:
+            parsed = Decimal(semester_pass) if semester_pass else Decimal("50.00")
+            if not parsed.is_finite() or parsed < 0 or parsed > 100:
+                errors.append(_("Semester pass percent must be between 0 and 100."))
+            else:
+                rule.semester_pass_percent = parsed
+        except (ValueError, TypeError):
+            errors.append(_("Invalid semester pass percent."))
+        try:
+            parsed = Decimal(final_pass) if final_pass else Decimal("50.00")
+            if not parsed.is_finite() or parsed < 0 or parsed > 100:
+                errors.append(_("Final exam pass percent must be between 0 and 100."))
+            else:
+                rule.final_exam_pass_percent = parsed
+        except (ValueError, TypeError):
+            errors.append(_("Invalid final exam pass percent."))
+        try:
+            parsed = int(max_retake) if max_retake else 0
+            if parsed < 0:
+                errors.append(_("Max retake count cannot be negative."))
+            else:
+                rule.max_retake_count = parsed
+        except (ValueError, TypeError):
+            errors.append(_("Invalid max retake count."))
+        rule.require_all_semesters_passed = request.POST.get("require_all_semesters_passed") == "1"
+        rule.require_final_exam = request.POST.get("require_final_exam") == "1"
+        rule.auto_promote_enabled = request.POST.get("auto_promote_enabled") == "1"
+        rule.allow_admin_override = request.POST.get("allow_admin_override") == "1"
+        rule.allow_retake = request.POST.get("allow_retake") == "1"
+        if not errors:
+            try:
+                # S2-18/S2-19: save + full_clean() + bounded reevaluation are
+                # one atomic, actor-attributed step (never a hidden signal).
+                save_progression_rule(rule, request.user)
+                messages.success(request, _("Progression rule updated."))
+                return redirect("academics:admin_diploma_detail", diploma_id=diploma.id)
+            except (ValueError, ValidationError) as exc:
+                errors.append(str(exc))
+        for err in errors:
+            messages.error(request, err)
+    ctx = {
+        "workflow": "diploma_rule_edit",
+        "diploma": diploma,
+        "rule": rule,
+        "breadcrumb_items": [
+            {"label": _("Academics"), "href": reverse("academics:admin_diploma_list")},
+            {"label": diploma.title, "href": reverse("academics:admin_diploma_detail", args=[diploma.id])},
+            {"label": _("Progression Rule")},
+        ],
+    }
+    return render(request, "ui/pages/admin/progression_rule_form.html", {**ctx, "title": _("Progression rule")})
+
+
+# ---------------------------------------------------------------------------
 # Admin grade component management
 # ---------------------------------------------------------------------------
 
@@ -728,6 +1154,9 @@ def admin_grade_sync(request, enrollment_id, semester_id):
         messages.success(request, _("Synced {count} grade item(s).").format(count=synced))
     except Exception as exc:
         messages.error(request, str(exc))
+    next_url = _safe_redirect_url(request, request.POST.get("next"))
+    if next_url:
+        return redirect(next_url)
     return redirect("progression:admin_student_detail", student_id=enrollment.student.id)
 
 
@@ -812,6 +1241,11 @@ def admin_request_interview(request, enrollment_id, semester_id):
             messages.success(request, _("Interview requested."))
         except ValueError as exc:
             messages.error(request, str(exc))
+        if request.headers.get("HX-Request"):
+            return _render_semester_row(request, enrollment, semester)
+        next_url = _safe_redirect_url(request, request.POST.get("next") or request.GET.get("next"))
+        if next_url:
+            return redirect(next_url)
         return redirect("progression:admin_student_detail", student_id=enrollment.student.id)
 
     try:
@@ -851,6 +1285,9 @@ def admin_confirm_pass(request, enrollment_id, semester_id):
     except ValueError as exc:
         messages.error(request, str(exc))
 
+    next_url = _safe_redirect_url(request, request.POST.get("next"))
+    if next_url:
+        return redirect(next_url)
     return redirect("progression:admin_student_detail", student_id=enrollment.student.id)
 
 
@@ -881,6 +1318,9 @@ def admin_interview_decision(request, enrollment_id, semester_id):
                 return redirect("progression:admin_interview_decision", enrollment_id=enrollment.id, semester_id=semester.id)
         except ValueError as exc:
             messages.error(request, str(exc))
+        next_url = _safe_redirect_url(request, request.POST.get("next") or request.GET.get("next"))
+        if next_url:
+            return redirect(next_url)
         return redirect("progression:admin_student_detail", student_id=enrollment.student.id)
 
     ctx = {
@@ -893,6 +1333,80 @@ def admin_interview_decision(request, enrollment_id, semester_id):
         ],
     }
     return render(request, "ui/pages/admin/progression_interview_decision.html", {**ctx, "title": _("Interview decision")})
+
+
+# ---------------------------------------------------------------------------
+# HTMX inline interview actions
+# ---------------------------------------------------------------------------
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_POST
+def admin_interview_inline_pass(request, enrollment_id, semester_id):
+    enrollment = get_object_or_404(DiplomaEnrollment, id=enrollment_id)
+    semester = get_object_or_404(Semester, id=semester_id)
+    try:
+        confirm_interview_pass(enrollment.student, enrollment, semester, actor=request.user)
+        messages.success(request, _("Interview passed."))
+    except ValueError as exc:
+        messages.error(request, str(exc))
+    if request.headers.get("HX-Request"):
+        return _render_semester_row(request, enrollment, semester)
+    return redirect("progression:admin_cohort_semester_progression", diploma_id=enrollment.cohort.diploma_id, cohort_id=enrollment.cohort_id, semester_id=semester.id)
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_POST
+def admin_interview_inline_fail(request, enrollment_id, semester_id):
+    enrollment = get_object_or_404(DiplomaEnrollment, id=enrollment_id)
+    semester = get_object_or_404(Semester, id=semester_id)
+    try:
+        confirm_interview_fail(enrollment.student, enrollment, semester, actor=request.user)
+        messages.success(request, _("Interview failed."))
+    except ValueError as exc:
+        messages.error(request, str(exc))
+    if request.headers.get("HX-Request"):
+        return _render_semester_row(request, enrollment, semester)
+    return redirect("progression:admin_cohort_semester_progression", diploma_id=enrollment.cohort.diploma_id, cohort_id=enrollment.cohort_id, semester_id=semester.id)
+
+
+def _render_semester_row(request, enrollment, semester):
+    cohort = enrollment.cohort
+    try:
+        result = evaluate_semester_components(enrollment, cohort, semester)
+    except ValueError:
+        result = None
+    progress = StudentSemesterProgress.objects.filter(diploma_enrollment=enrollment, semester=semester).first()
+    grade_items = StudentGradeItem.objects.filter(
+        diploma_enrollment=enrollment,
+        component__semester=semester,
+        component__cohort=cohort,
+    ).select_related("component")
+    gi_by_type = {gi.component.component_type: gi for gi in grade_items}
+    interview = PromotionDecision.objects.filter(
+        diploma_enrollment=enrollment,
+        from_semester=semester,
+        decision_type__in=["request_interview", "interview_pass", "interview_fail"],
+    ).order_by("-decided_at").first()
+    row = {
+        "enrollment": enrollment,
+        "student": enrollment.student,
+        "progress": progress,
+        "result": result,
+        "semester_exam": gi_by_type.get("semester_exam"),
+        "attendance": gi_by_type.get("attendance"),
+        "homework_assessment": gi_by_type.get("homework_assessment"),
+        "interview": interview,
+    }
+    ctx = {
+        "row": row,
+        "diploma": cohort.diploma,
+        "cohort": cohort,
+        "semester": semester,
+    }
+    return render(request, "ui/fragments/admin/_semester_table_row.html", ctx)
 
 
 # ---------------------------------------------------------------------------

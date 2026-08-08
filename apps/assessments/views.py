@@ -66,6 +66,7 @@ from apps.assessments.services import (
     diploma_autosave_attempt,
     enter_offline_section_grade,
     generate_exam_codes,
+    get_assessment_readiness,
     get_available_bank_mcq_count,
     get_grading_queue,
     get_homework_pending_grading,
@@ -151,6 +152,9 @@ def student_list(request):
                 {
                     "assessment": assessment,
                     "latest_attempt": latest_attempts.get(assessment.id),
+                    "readiness": get_assessment_readiness(
+                        request.user, assessment, latest_attempts.get(assessment.id)
+                    ),
                 }
                 for assessment in assessments
             ],
@@ -172,10 +176,11 @@ def assessment_instructions(request, assessment_id):
     attempt = AssessmentAttempt.objects.filter(
         assessment=assessment, student=request.user,
     ).order_by("-created_at").first()
+    readiness = get_assessment_readiness(request.user, assessment, attempt)
     return render(
         request,
         "ui/pages/student/assessment_instructions.html",
-        {"assessment": assessment, "attempt": attempt},
+        {"assessment": assessment, "attempt": attempt, "readiness": readiness},
     )
 
 
@@ -725,15 +730,21 @@ def _question_form_context(assessment, question=None, form=None, choices=None):
         form = QuestionForm(instance=question)
     if choices is None:
         choices = list(question.choices.all()) if question else []
+    save_name = "assessments:admin_question_edit_save" if question and question.id else "assessments:admin_question_save"
     return {
         "assessment": assessment,
         "question": question,
         "form": form,
         "choices": choices,
+        "question_choices": True,
+        "form_action": reverse(
+            save_name,
+            args=[assessment.id] + ([question.id] if question and question.id else []),
+        ),
         "full_page": False,
         "question_save_url": reverse(
-            "assessments:admin_question_save",
-            args=[assessment.id] + ([question.id] if question else []),
+            save_name,
+            args=[assessment.id] + ([question.id] if question and question.id else []),
         ),
     }
 
@@ -767,22 +778,23 @@ def admin_question_save(request, assessment_id, question_id=None):
             if error:
                 form.add_error(None, error)
         if not form.errors:
-            question = form.save(commit=False)
-            question.assessment = assessment
-            if not question_id:
-                question.order = assessment.questions.count() + 1
-            question.save()
-            if question.question_type == "mcq":
-                _save_choices_from_parsed(question, parsed_choices)
-            elif question.question_type == "written":
-                AssessmentChoice.objects.filter(question=question).delete()
-            record_audit_event(
-                actor=request.user,
-                action=ACTION_QUESTION_CREATED if not question_id else ACTION_QUESTION_UPDATED,
-                target_type="assessment_question",
-                target_id=str(question.id),
-                metadata={"assessment_id": assessment_id, "question_type": question.question_type},
-            )
+            with transaction.atomic():
+                question = form.save(commit=False)
+                question.assessment = assessment
+                if not question_id:
+                    question.order = assessment.questions.count() + 1
+                question.save()
+                if question.question_type == "mcq":
+                    _save_choices_from_parsed(question, parsed_choices)
+                elif question.question_type == "written":
+                    AssessmentChoice.objects.filter(question=question).delete()
+                record_audit_event(
+                    actor=request.user,
+                    action=ACTION_QUESTION_CREATED if not question_id else ACTION_QUESTION_UPDATED,
+                    target_type="assessment_question",
+                    target_id=str(question.id),
+                    metadata={"assessment_id": assessment_id, "question_type": question.question_type},
+                )
             messages.success(request, _("Question saved."))
             if is_htmx(request):
                 response = HttpResponse()
@@ -829,7 +841,9 @@ def _parse_inline_choices(request):
         try:
             order = int(order_raw)
         except (TypeError, ValueError):
-            order = 0
+            order = len(choices) + 1
+        if order < 1:
+            order = len(choices) + 1
         choices.append({
             "suffix": suffix,
             "text": text,
@@ -842,6 +856,9 @@ def _parse_inline_choices(request):
 def _validate_mcq_choices(choices):
     if len(choices) < 2:
         return _("MCQ questions must have at least two choices.")
+    orders = [choice["order"] for choice in choices]
+    if len(orders) != len(set(orders)):
+        return _("Choice orders must be unique.")
     correct_count = sum(1 for choice in choices if choice["is_correct"])
     if correct_count == 0:
         return _("Please mark exactly one choice as correct.")
@@ -897,8 +914,8 @@ def _save_choices_from_parsed(question, parsed_choices):
 def admin_grade_list(request):
     queue = get_grading_queue(request.user)
     homework_queue = get_homework_pending_grading(request.user)
-    queue_page, _ = paginate(request, queue)
-    hw_page, _ = paginate(request, homework_queue)
+    queue_page, _ignored = paginate(request, queue)
+    hw_page, _ignored = paginate(request, homework_queue)
     return render(
         request,
         "ui/pages/admin/grading_list.html",
@@ -1783,6 +1800,7 @@ def admin_exceptional_access(request, assessment_id):
         "assessment": assessment,
         "overrides": overrides,
         "enrollments": enrollments,
+        "exceptional_access": True,
     })
 
 

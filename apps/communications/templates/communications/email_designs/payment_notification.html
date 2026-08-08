@@ -1,7 +1,7 @@
 {% load i18n %}
 <p style="font-size:18px;font-weight:700;margin:0 0 12px">{% blocktrans with name=full_name %}Dear {{ name }},{% endblocktrans %}</p>
 {{ content|safe }}
-<p style="margin:12px 0;padding:16px;background:#f8fafc;border-radius:8px">
+<p style="margin:12px 0;padding:16px;background:#f8fafb;border-radius:8px">
   <strong>{% trans "Amount" %}:</strong> {{ amount }} {{ currency }}<br>
   <strong>{% trans "Date" %}:</strong> {{ due_at }}<br>
   <strong>{% trans "Reference" %}:</strong> {{ reference }}<br>

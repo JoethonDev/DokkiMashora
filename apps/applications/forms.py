@@ -15,7 +15,12 @@ from django.utils.translation import gettext_lazy as _
 from apps.academics.models import Cohort, Course
 from apps.applications.constants import PROGRAM_TYPE_CHOICES
 from apps.applications.documents import ATTACHMENT_ALLOWED_EXTENSIONS
-from apps.applications.services import RegistrationData, find_duplicate, normalize_phone
+from apps.applications.services import (
+    RegistrationData,
+    find_duplicate,
+    is_apply_target_open,
+    normalize_phone,
+)
 from apps.core.forms import StyledFormMixin
 from apps.students.constants import EDUCATION_CHOICES, GENDER_CHOICES
 from apps.students.identity import (
@@ -63,7 +68,7 @@ class RegistrationForm(StyledFormMixin, forms.Form):
         label=_("Program type"),
         choices=[],
         required=False,
-        widget=forms.RadioSelect,
+        widget=forms.Select,
     )
     diploma = forms.ChoiceField(
         label=_("Diploma"),
@@ -95,12 +100,25 @@ class RegistrationForm(StyledFormMixin, forms.Form):
 
     def _load_program_choices(self) -> None:
         self.fields["program_type"].choices = PROGRAM_TYPE_CHOICES
+        today = timezone.now().date()
         cohorts = Cohort.objects.filter(
-            is_active=True, entrance_exams__is_active=True,
+            is_active=True,
+            entrance_exams__is_active=True,
+            end_date__isnull=False,
+            end_date__gte=today,
         ).select_related("diploma").order_by("-start_date")
         self.fields["diploma"].choices = [("", _("Select a diploma"))] + [
             (str(c.pk), f"{c.diploma.title} — {c.name}") for c in cohorts
         ]
+        courses = (
+            Course.objects.filter(is_active=True, versions__is_active=True)
+            .distinct()
+            .order_by("title")
+        )
+        self.fields["program_target"].widget = forms.Select(
+            choices=[("", _("Select a course"))]
+            + [(f"course_{course.pk}", course.title) for course in courses]
+        )
 
     def clean_date_of_birth(self) -> date:
         value: date = self.cleaned_data["date_of_birth"]
@@ -195,11 +213,8 @@ class RegistrationForm(StyledFormMixin, forms.Form):
                     if not diploma:
                         self.add_error("diploma", _("Please select a diploma."))
                     else:
-                        cohort = Cohort.objects.filter(
-                            pk=diploma, is_active=True,
-                            entrance_exams__is_active=True,
-                        ).select_related("diploma").first()
-                        if not cohort:
+                        cohort = Cohort.objects.filter(pk=diploma).select_related("diploma").first()
+                        if not cohort or not is_apply_target_open(cohort=cohort):
                             self.add_error("diploma", _("No active cohort with an entrance exam found for this diploma."))
                         else:
                             self._auto_cohort_id = cohort.pk
@@ -210,8 +225,8 @@ class RegistrationForm(StyledFormMixin, forms.Form):
                         self.add_error("program_target", _("Invalid course selection."))
                     else:
                         course_id = str(program_target).split("_", 1)[1]
-                        course = Course.objects.filter(pk=course_id, is_active=True).first()
-                        if not course:
+                        course = Course.objects.filter(pk=course_id).first()
+                        if not course or not is_apply_target_open(course=course):
                             self.add_error("program_target", _("Invalid course selection."))
 
         return cleaned

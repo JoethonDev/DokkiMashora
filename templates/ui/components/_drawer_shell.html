@@ -1,7 +1,7 @@
 {% load i18n %}
 <div id="global-drawer"
      class="fixed inset-0 z-modal pointer-events-none"
-     x-data="{open:false, trigger:null}"
+      x-data="{open:false, trigger:null, isRtl:document.dir==='rtl'}"
      x-show="open"
      x-cloak
      @open-drawer.window="trigger=$event.detail?.trigger || document.activeElement; open=true"
@@ -14,15 +14,15 @@
       :class="{'pointer-events-auto':open}"><div class="absolute inset-0 bg-surface-inverse/40 backdrop-blur-sm opacity-0 transition-opacity duration-200"
         :class="{'opacity-100':open}"
         @click="open=false; trigger && trigger.focus()"></div>
-  <aside class="absolute end-0 top-0 bottom-0 w-full max-w-lg bg-surface shadow-modal translate-x-full transition-transform duration-300 flex flex-col"
+  <aside class="absolute end-0 top-0 bottom-0 w-full max-w-lg bg-surface shadow-modal transition-transform duration-300 flex flex-col"
          tabindex="-1"
          x-ref="panel"
          aria-labelledby="drawer-title"
-         :class="{'translate-x-0':open}"><div class="flex items-center justify-between p-5 border-b border-line"><h2 id="drawer-title" class="mt-1 mb-0 sr-only">{% trans "Drawer" %}</h2>
+         :class="{'translate-x-0':open, 'translate-x-full':!open && !isRtl, '-translate-x-full':!open && isRtl}"><div class="flex items-center justify-between p-5 border-b border-line"><h2 id="drawer-title" class="mt-1 mb-0 sr-only">{% trans "Drawer" %}</h2>
       <button type="button"
                class="btn-icon bg-surface text-text border border-line"
               @click="open=false"
-              aria-label="{% trans 'Close drawer' %}">Ã—</button>
+               aria-label="{% trans 'Close drawer' %}">&times;</button>
     </div>
     <div class="overflow-y-auto h-full p-5" id="drawer-content"></div>
   </aside>

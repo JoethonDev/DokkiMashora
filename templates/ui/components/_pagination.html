@@ -1,6 +1,6 @@
 {% load i18n %}
 {% if page_obj.has_other_pages %}
-  <nav class="flex items-center justify-between pt-4" aria-label="{% trans 'Pagination' %}"><p class="text-muted text-xs m-0">
+  <nav class="flex items-center justify-between pt-4 flex-wrap gap-2" aria-label="{% trans 'Pagination' %}"><p class="text-muted text-xs m-0">
       {% blocktranslate with first=page_obj.start_index last=page_obj.end_index total=page_obj.paginator.count %}
   {{ first }}
   –

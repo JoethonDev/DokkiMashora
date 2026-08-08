@@ -13,7 +13,7 @@
           <h3>{% trans "Attempts to grade" %}</h3>
         </div>
       </div>
-      <div class="table-wrap"><table class="table">
+      <div class="table-wrap hidden lg:block"><table class="table">
           <thead>
             <tr>
               <th class="table-th">{% trans "Exam" %}</th>
@@ -41,6 +41,20 @@
             {% endfor %}
           </tbody>
         </table>
+      </div>
+      <div class="card-stack lg:hidden">
+        {% for item in page_obj %}
+          <div class="mobile-card">
+            <div class="flex-1 min-w-0">
+              <strong class="block truncate">{{ item.exam }}</strong>
+              <small class="block text-muted">{{ item.student.full_name|default:item.student }}</small>
+              {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
+            </div>
+            <a class="btn-soft-primary shrink-0" href="{% url 'entrance_exams:admin_grade_attempt' item.id %}">{% trans "Grade" %}</a>
+          </div>
+        {% empty %}
+          <div class="border border-line rounded-sm p-4 text-center">{% include "ui/components/_empty_state.html" with title=_("No attempts to grade.") %}</div>
+        {% endfor %}
       </div>
     </section>
   </div>

@@ -8,10 +8,10 @@
      aria-labelledby="modal-title"
      @keydown.escape.window="$store.ui.toggleModal(false)"
      x-init="$watch('$store.ui.modalOpen', value => value && $nextTick(() => $refs.panel.focus()))">
-  <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm opacity-0 transition-opacity duration-200 ease"
+   <div class="absolute inset-0 bg-surface-inverse/40 backdrop-blur-sm opacity-0 transition-opacity duration-200 ease"
        :class="{'opacity-100':$store.ui.modalOpen}"
        @click="$store.ui.toggleModal(false)"></div>
-  <section class="w-full max-w-lg absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface rounded-md shadow-modal overflow-hidden opacity-0 transition-all duration-200 ease scale-95"
+  <section class="w-full max-w-lg mx-4 max-h-[90dvh] overflow-y-auto absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface rounded-md shadow-modal opacity-0 transition-all duration-200 scale-95"
            tabindex="-1"
            x-ref="panel"
            :class="{'opacity-100 scale-100':$store.ui.modalOpen}">
@@ -22,6 +22,6 @@
               @click="$store.ui.toggleModal(false)"
               aria-label="{% trans 'Close dialog' %}">&times;</button>
     </div>
-    <div class="p-5 text-muted" id="modal-content"></div>
+    <div class="p-5 text-text" id="modal-content"></div>
   </section>
 </div>

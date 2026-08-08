@@ -1,4 +1,4 @@
-{% load i18n %}<div id="upload-results" class="table-wrap"><table class="table">
+{% load i18n %}<div id="upload-results" class="table-wrap hidden lg:block"><table class="table">
     <thead>
       <tr>
         <th class="table-th">{% trans "File" %}</th>
@@ -22,7 +22,7 @@
           </td>
         </tr>
       {% empty %}
-        <tr class="empty-row">
+        <tr>
           <td colspan="6" class="table-td">
             {% if current_status %}
               {% include "ui/components/_empty_state.html" with title=_("No imports match these filters.") compact=True %}
@@ -35,4 +35,25 @@
     </tbody>
   </table>
   {% include "ui/components/_pagination.html" %}
+</div>
+<div class="card-stack lg:hidden">
+  {% for item in page_obj %}
+    <div class="mobile-card">
+      <div class="flex-1 min-w-0">
+        <strong class="block truncate">{{ item.original_filename }}</strong>
+        <small class="block text-muted">{{ item.uploaded_by|default:'—' }}</small>
+        <small class="block text-muted">{{ item.total_rows|default:0 }} / {{ item.matched_rows|default:0 }} / {{ item.unmatched_rows|default:0 }} / {{ item.failed_rows|default:0 }}</small>
+        {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
+      </div>
+      <a class="btn-soft-primary shrink-0" href="{% url 'payments:upload_detail' item.id %}">{% trans "Open" %}</a>
+    </div>
+  {% empty %}
+    <div class="border border-line rounded-sm p-4 text-center">
+      {% if current_status %}
+        {% include "ui/components/_empty_state.html" with title=_("No imports match these filters.") compact=True %}
+      {% else %}
+        {% include "ui/components/_empty_state.html" with title=_("No imports yet.") message=_("Upload a CSV file to begin.") compact=True %}
+      {% endif %}
+    </div>
+  {% endfor %}
 </div>

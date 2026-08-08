@@ -12,6 +12,7 @@ from .constants import (
     FIELD_TYPE_CHOICE,
     FIELD_TYPE_CHOICES,
     FIELD_TYPE_DATE,
+    FIELD_TYPE_MULTI_CHOICE,
     FIELD_TYPE_NUMBER,
 )
 
@@ -109,6 +110,13 @@ class IntakeFormSubmitForm(StyledFormMixin, forms.Form):
                     required=field.required, label=field.label,
                     choices=choices, help_text=field.help_text,
                     widget=forms.Select(attrs={}),
+                )
+            elif field.field_type == FIELD_TYPE_MULTI_CHOICE:
+                choices = [(str(o), str(o)) for o in field.options]
+                self.fields[key] = forms.MultipleChoiceField(
+                    required=field.required, label=field.label,
+                    choices=choices, help_text=field.help_text,
+                    widget=forms.CheckboxSelectMultiple,
                 )
             else:
                 self.fields[key] = forms.CharField(

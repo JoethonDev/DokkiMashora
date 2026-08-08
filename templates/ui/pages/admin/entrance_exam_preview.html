@@ -15,19 +15,23 @@
               </div>
               <fieldset class="border-0 p-0 m-0">
                 <legend class="text-sm font-bold mb-3">{{ question.text }}</legend>
-                {% for choice in question.choices.all %}
-                  <label class="flex items-center gap-2 text-sm py-1.5 cursor-pointer">
-                    <input type="radio" class="form-radio" disabled{% if choice.is_correct %} checked{% endif %}>
-                    <span>{{ choice.text }}</span>
-                    {% if choice.score %}<span class="text-xs text-muted">({{ choice.score }} {% trans "pts" %})</span>{% endif %}
-                  </label>
-                {% endfor %}
+                {% if question.question_type == 'mcq' %}
+                  {% for choice in question.choices.all %}
+                    <label class="flex items-center gap-2 text-sm py-1.5 cursor-pointer">
+                      <input type="radio" class="form-radio" disabled{% if choice.is_correct %} checked{% endif %}>
+                      <span>{{ choice.text }}</span>
+                      {% if choice.score %}<span class="text-xs text-muted">({{ choice.score }} {% trans "pts" %})</span>{% endif %}
+                    </label>
+                  {% endfor %}
+                {% else %}
+                  <textarea class="form-textarea" rows="5" disabled placeholder="{% trans 'Written answer' %}"></textarea>
+                {% endif %}
               </fieldset>
             </div>
           {% endfor %}
         </div>
       {% else %}
-        <p class="text-muted m-0">{% trans "No questions have been added to this exam yet." %}</p>
+        {% include "ui/components/_empty_state.html" with title=_("No questions have been added to this exam yet.") %}
       {% endif %}
     </section>
   </div>

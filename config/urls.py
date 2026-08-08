@@ -10,16 +10,23 @@ from django.urls import include, path
 
 from apps.core import health
 from apps.core import views as core_views
+from apps.deployment import views as deployment_views
 
 # try:
 #     import debug_toolbar  # type: ignore[import-untyped]  # noqa: F401
 # except ImportError:
 #     debug_toolbar = None
 
+# S2-12: /healthz (apps.core.health) stays the canonical liveness probe and
+# keeps its {"status","database"} contract. The richer db/cache/storage health
+# view from apps.deployment is wired at /deployment/health/ as a documented
+# secondary probe for operators who need the deeper checks.
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("i18n/setlang/", core_views.set_language, name="set_language"),
     path("healthz", health.healthz, name="healthz"),
+    path("deployment/health/", deployment_views.health_view, name="deployment_health"),
+    path("storage/", include("apps.storage.urls")),
 ]
 
 # Optional: Django debug toolbar (dev only).
@@ -46,7 +53,8 @@ urlpatterns += i18n_patterns(
 )
 
 if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    # Private storage is NEVER served from MEDIA_ROOT (S2-21): local files are
+    # served through the signed-URL protected_download endpoint instead.
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
 handler400 = "apps.core.views.bad_request"

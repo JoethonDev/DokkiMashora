@@ -2,6 +2,6 @@
 <div id="cluster-members">{% for member in cluster.members.all %}
     <p>{{ member }}</p>
   {% empty %}
-    <p>{% trans "No members found." %}</p>
+    {% include "ui/components/_empty_state.html" with title=_("No members found.") %}
   {% endfor %}
 </div>

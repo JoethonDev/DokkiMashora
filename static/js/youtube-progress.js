@@ -1,4 +1,3 @@
-/* ponytail: YouTube IFrame API progress tracker — no framework, vanilla JS only */
 (function () {
   "use strict";
 
@@ -47,7 +46,13 @@
     function showError(msg) {
       stopHeartbeat();
       if (violationEl) {
-        violationEl.innerHTML = msg + ' <button onclick="location.reload()" class="ml-2 underline font-medium">Refresh</button>';
+        violationEl.textContent = msg;
+        var refreshButton = document.createElement("button");
+        refreshButton.type = "button";
+        refreshButton.className = "ml-2 underline font-medium";
+        refreshButton.textContent = "Refresh";
+        refreshButton.addEventListener("click", function () { location.reload(); });
+        violationEl.appendChild(refreshButton);
         violationEl.classList.remove("hidden");
       }
       if (statusEl) statusEl.textContent = "Paused";
@@ -110,14 +115,14 @@
           return;
         }
         if (b.progress !== undefined && progressEl) {
-          progressEl.style.width = Math.min(b.progress, 100) + "%";
+          progressEl.style.setProperty("--progress", Math.min(b.progress, 100) + "%");
         }
         if (b.progress !== undefined && progressText) {
           progressText.textContent = Math.round(b.progress) + "%";
         }
         if (b.status === "completed" && statusEl) {
           statusEl.textContent = "Completed";
-          statusEl.classList.add("text-emerald-600");
+          statusEl.classList.add("text-success-text");
         }
       });
     }

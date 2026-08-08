@@ -6,11 +6,7 @@ Each method returns structured data — never rendered HTML.
 
 from __future__ import annotations
 
-import logging
-
 from typing import TYPE_CHECKING
-
-logger = logging.getLogger(__name__)
 
 from django.db.models import Count, Q
 from django.urls import reverse
@@ -33,18 +29,31 @@ from apps.academics.models import (
     Lecture,
     LectureWatchProgress,
 )
+from apps.academics.services import (
+    course_progress_for_enrollment,
+    diploma_progress_for_enrollment,
+    get_visible_semester_ids_by_enrollment,
+)
 from apps.applications.models import ProgramApplication
 from apps.applications.constants import (
     DOCUMENT_REQUEST_STATUS_REQUESTED,
+    PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
+    PROGRAM_APP_STATUS_INVITED,
     PROGRAM_APP_STATUS_PAYMENT_PENDING,
     PROGRAM_APP_STATUS_REJECTED,
 )
 from apps.assessments.models import AssessmentAttempt, HomeworkSubmission
 from apps.assessments.services import get_student_assessments, get_student_attempts
-from apps.academics.services import get_visible_semester_ids_by_enrollment
 from apps.certificates.models import GeneratedCertificate
 from apps.communications.email_message import EmailMessage
+from apps.entrance_exams.constants import (
+    ATTEMPT_STATUS_ASSIGNED,
+    ATTEMPT_STATUS_COMPLETED,
+    ATTEMPT_STATUS_GRADED,
+    ATTEMPT_STATUS_IN_PROGRESS,
+)
 from apps.entrance_exams.models import EntranceAttempt
+from apps.entrance_exams.services import attempt_decision
 from apps.intake_forms.models import IntakeFormRequest
 from apps.payments.selectors import get_enrollment_payment_status, get_student_payment_summary
 from apps.progression.constants import (
@@ -146,34 +155,45 @@ def _home_context(data: dict) -> dict:
                 actions.append({
                     "kind": "document", "priority": "urgent" if (request.expires_at - now).days < 7 else "normal",
                     "title": _("Upload requested documents"),
-                    "description": target, "url": reverse("students:applications"),
-                    "cta_label": _("Open application"), "due_at": request.expires_at, "blocked_reason": None,
+                    "description": _("Waiting for your documents — use the secure upload link you received by email."),
+                    "url": reverse("students:applications"), "cta_label": _("Open applications"),
+                    "due_at": request.expires_at, "blocked_reason": None,
                 })
         for request in application.intake_requests.all():
             if request.status == "requested" and request.expires_at > now:
                 actions.append({
                     "kind": "intake", "priority": "urgent" if (request.expires_at - now).days < 7 else "normal",
-                    "title": _("Complete the intake form"), "description": target,
-                    "url": reverse("students:applications"), "cta_label": _("Open application"),
+                    "title": _("Complete the intake form"),
+                    "description": _("Waiting for your intake form — use the secure link you received by email."),
+                    "url": reverse("students:applications"), "cta_label": _("Open applications"),
                     "due_at": request.expires_at, "blocked_reason": None,
                 })
         if application.status == PROGRAM_APP_STATUS_PAYMENT_PENDING:
             actions.append({
                 "kind": "payment", "priority": "urgent", "title": _("Complete application payment"),
-                "description": target, "url": reverse("students:applications"),
-                "cta_label": _("Open application"), "due_at": None, "blocked_reason": None,
+                "description": _("Awaiting payment confirmation by the admissions office."),
+                "url": reverse("students:applications"), "cta_label": _("Open applications"),
+                "due_at": None, "blocked_reason": None,
             })
 
-    for attempt in data.get("exam_assignments", []):
-        if attempt.status in {"assigned", "in_progress"}:
+    for entry in data.get("exam_assignments", []):
+        attempt = entry["attempt"]
+        readiness = entry["readiness"]
+        if readiness["state"] in ("ready", "in_progress") and readiness["action_url"]:
             actions.append({
-                "kind": "entrance_exam", "priority": "urgent", "title": attempt.exam.title,
+                "kind": "entrance_exam", "priority": "urgent", "title": entry["exam"].title,
                 "description": _("Your entrance exam is ready."),
-                "url": reverse("entrance_exams:exam_access_token", args=[attempt.exam.access_token]),
-                "cta_label": _("Continue exam"), "due_at": None, "blocked_reason": None,
+                "url": readiness["action_url"],
+                "cta_label": readiness["action_label"], "due_at": None, "blocked_reason": None,
             })
 
-    for attempt in data.get("assessment_attempts", []):
+    user = data["user"]
+    all_attempts = list(get_student_attempts(user))
+    attempted_ids = {attempt.assessment_id for attempt in all_attempts}
+    actionable_assessment_count = sum(
+        attempt.status in {"assigned", "in_progress"} for attempt in all_attempts
+    )
+    for attempt in all_attempts:
         if attempt.status in {"assigned", "in_progress"}:
             close_at = getattr(attempt.assessment, "close_at", None)
             actions.append({
@@ -214,7 +234,6 @@ def _home_context(data: dict) -> dict:
     open_assessments = data.get("open_assessments", [])
     open_by_cohort = {a.cohort_id: a for a in open_assessments if a.cohort_id}
     open_by_cv = {a.course_version_id: a for a in open_assessments if a.course_version_id}
-    attempted_ids = {att.assessment_id for att in data.get("assessment_attempts", [])}
 
     diploma_cards = []
     enrollments = data.get("diploma_enrollments", [])
@@ -256,16 +275,19 @@ def _home_context(data: dict) -> dict:
         if lectures:
             completed_ids = progress_by_enrollment.get(enrollment.id, set()) & {lec.id for lec in lectures}
         next_lecture = next((lec for lec in lectures if lec.id not in completed_ids), None)
-        diploma_attempt = next((attempt for attempt in data.get("assessment_attempts", []) if attempt.status in {"assigned", "in_progress"} and attempt.assessment.cohort_id == enrollment.cohort_id), None)
+        progress = diploma_progress_for_enrollment(student, enrollment)
+        diploma_attempt = next((attempt for attempt in all_attempts if attempt.status in {"assigned", "in_progress"} and attempt.assessment.cohort_id == enrollment.cohort_id), None)
         if not diploma_attempt and enrollment.cohort_id in open_by_cohort:
             a = open_by_cohort[enrollment.cohort_id]
             if a.id not in attempted_ids:
                 diploma_attempt = SimpleNamespace(assessment=a)
         diploma_cards.append({
             "type": "diploma", "title": enrollment.cohort.diploma.title,
-            "status": enrollment.status, "enrollment_id": enrollment.id,
+            "status": enrollment.status, "status_label": enrollment.get_status_display(),
+            "enrollment_id": enrollment.id,
             "expires_at": enrollment.expires_at,
-            "lecture_count": len(lectures), "completed_count": len(completed_ids),
+            "lecture_count": progress["total_lectures"], "completed_count": progress["completed_count"],
+            "progress_percent": progress["percent"],
             "next_lecture": next_lecture,
             "next_lecture_url": reverse("academics:student_diploma_lecture_view", args=[enrollment.id, next_lecture.semester_id, next_lecture.id]) if next_lecture else None,
             "next_assessment": diploma_attempt,
@@ -287,8 +309,11 @@ def _home_context(data: dict) -> dict:
         "current_application": current_application,
         "summary": {
             "active_learning_count": len(data.get("active_courses", [])),
-            "actionable_assessment_count": sum(a.status in {"assigned", "in_progress"} for a in data.get("assessment_attempts", [])),
-            "open_entrance_exam_count": sum(a.status in {"assigned", "in_progress"} for a in data.get("exam_assignments", [])),
+            "actionable_assessment_count": actionable_assessment_count,
+            "open_entrance_exam_count": sum(
+                entry["readiness"]["state"] in ("ready", "in_progress")
+                for entry in data.get("exam_assignments", [])
+            ),
             "available_certificate_count": len(data.get("certificates", [])),
         },
     }
@@ -381,17 +406,7 @@ def _get_course_enrollments(student_profile: StudentProfile) -> list[CourseEnrol
 def _get_active_courses(student_profile: StudentProfile) -> list[dict]:
     now = timezone.now()
     qs = (
-        CourseVersion.objects.annotate(
-            lecture_count=Count("lectures", filter=Q(lectures__is_published=True)),
-            completed_count=Count(
-                "lectures__watch_progress",
-                filter=Q(
-                    lectures__watch_progress__student=student_profile,
-                    lectures__watch_progress__status="completed",
-                ),
-            ),
-        )
-        .filter(
+        CourseVersion.objects.filter(
             enrollments__student=student_profile,
             enrollments__status=ENROLLMENT_STATUS_ACTIVE,
             is_active=True,
@@ -429,21 +444,25 @@ def _get_active_courses(student_profile: StudentProfile) -> list[dict]:
             status__in={"assigned", "in_progress"},
         ).select_related("assessment").order_by("assessment__close_at")
     }
-    return [
-        {
+    cards = []
+    for cv in versions:
+        enrollment = enrollments_map.get(cv.pk)
+        progress = course_progress_for_enrollment(student_profile, cv)
+        cards.append({
             "course_version": cv,
             "course": cv.course,
-            "lecture_count": cv.lecture_count,
-            "completed_count": cv.completed_count,
-            "expires_at": enrollments_map[cv.pk].expires_at if cv.pk in enrollments_map else None,
+            "lecture_count": progress["total_lectures"],
+            "completed_count": progress["completed_count"],
+            "progress_percent": progress["percent"],
+            "expires_at": enrollment.expires_at if enrollment else None,
             "status": ENROLLMENT_STATUS_ACTIVE,
+            "status_label": enrollment.get_status_display() if enrollment else _("Active"),
             "next_lecture": next_lectures.get(cv.pk),
             "next_lecture_url": reverse("academics:student_lecture_view", args=[cv.pk, next_lectures[cv.pk].pk]) if cv.pk in next_lectures else None,
             "next_assessment": next_assessments.get(cv.pk),
             "next_assessment_url": reverse("assessments:instructions", args=[next_assessments[cv.pk].assessment_id]) if cv.pk in next_assessments else None,
-        }
-        for cv in versions
-    ]
+        })
+    return cards
 
 
 # ---------------------------------------------------------------------------
@@ -464,6 +483,7 @@ def _get_expired_courses(student_profile: StudentProfile) -> list[dict]:
             "course_version": e.course_version,
             "course": e.course_version.course,
             "status": e.status,
+            "status_label": e.get_status_display(),
         }
         for e in qs
     ]
@@ -474,12 +494,111 @@ def _get_expired_courses(student_profile: StudentProfile) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-def _get_exam_assignments(profile) -> list[EntranceAttempt]:
-    return list(
-        EntranceAttempt.objects.filter(student=profile)
-        .select_related("exam", "graded_by")
-        .order_by("-assigned_at")
-    )
+def _exam_readiness(attempt: EntranceAttempt, now=None) -> dict:
+    """Project one entrance attempt into a student-facing state (E2).
+
+    Returns ``state`` (ready / in_progress / scheduled / closed / completed),
+    a translated ``state_label``, a ``decision`` dict (None until the admin
+    decides), and an ``action_url``/``action_label`` pair that only exists when
+    the student can act right now. Grades are never exposed: a submitted or
+    graded attempt offers no action until the admin makes a decision.
+    """
+    now = now or timezone.now()
+    exam = attempt.exam
+    access_url = reverse("entrance_exams:exam_access_token", args=[exam.access_token]) if exam.access_token else None
+    decision = attempt_decision(attempt)
+    if attempt.status in (ATTEMPT_STATUS_COMPLETED, ATTEMPT_STATUS_GRADED):
+        if decision:
+            state_label = decision["label"]
+            tone = decision["tone"]
+        else:
+            state_label = _("Submitted — awaiting review")
+            tone = "info"
+        return {"state": "completed", "state_label": state_label, "decision": decision, "tone": tone, "action_url": None, "action_label": None}
+    if attempt.status == ATTEMPT_STATUS_IN_PROGRESS:
+        return {"state": "in_progress", "state_label": _("In progress"), "decision": None, "tone": "info", "action_url": access_url, "action_label": _("Continue exam")}
+    if attempt.program_application.status == PROGRAM_APP_STATUS_REJECTED:
+        return {"state": "closed", "state_label": _("Closed"), "decision": None, "tone": "neutral", "action_url": None, "action_label": None}
+    if not exam.is_active:
+        return {"state": "closed", "state_label": _("Closed"), "decision": None, "tone": "neutral", "action_url": None, "action_label": None}
+    if exam.open_at and now < exam.open_at:
+        return {"state": "scheduled", "state_label": _("Scheduled"), "decision": None, "tone": "info", "action_url": None, "action_label": None}
+    if exam.close_at and now > exam.close_at:
+        return {"state": "closed", "state_label": _("Closed"), "decision": None, "tone": "neutral", "action_url": None, "action_label": None}
+    return {"state": "ready", "state_label": _("Ready"), "decision": None, "tone": "info", "action_url": access_url, "action_label": _("Open exam")}
+
+
+def _get_exam_assignments(profile) -> list[dict]:
+    attempts = EntranceAttempt.objects.filter(student=profile).select_related(
+        "exam", "graded_by", "program_application",
+    ).order_by("-assigned_at")
+    return [
+        {
+            "attempt": attempt,
+            "exam": attempt.exam,
+            "assigned_at": attempt.assigned_at,
+            "status": attempt.status,
+            "status_label": attempt.get_status_display(),
+            "readiness": _exam_readiness(attempt),
+        }
+        for attempt in attempts
+    ]
+
+
+def get_application_row(application: ProgramApplication) -> dict:
+    """Project one application into a status-focused portal row (A1/A2).
+
+    Only server-derivable safe actions are exposed: an open entrance exam or
+    its result link. Document, intake, and payment steps show a clear pending
+    state instead of a dead CTA, because their secure tokens are stored hashed
+    and cannot be reconstructed from the portal.
+    """
+    now = timezone.now()
+    row = {
+        "program_title": (
+            application.cohort.diploma.title if application.cohort_id and application.cohort.diploma_id
+            else getattr(application.course, "title", _("Program application"))
+        ),
+        "program_type_label": application.get_program_type_display(),
+        "submitted_at": application.created_at,
+        "status": application.status,
+        "status_label": application.get_status_display(),
+        "documents_count": application.document_requests.count(),
+        "next_step": None,
+        "action_url": None,
+        "action_label": None,
+    }
+
+    if application.status == PROGRAM_APP_STATUS_INVITED:
+        attempt = application.entrance_attempts.select_related("exam").first()
+        exam = attempt.exam if attempt else None
+        if exam and exam.is_active and exam.access_token:
+            if (not exam.open_at or exam.open_at <= now) and (not exam.close_at or exam.close_at > now):
+                row["action_url"] = reverse("entrance_exams:exam_access_token", args=[exam.access_token])
+                row["action_label"] = _("Open exam")
+            else:
+                row["next_step"] = _("Your entrance assessment is scheduled. Use the link you received by email when it opens.")
+        else:
+            row["next_step"] = _("Your entrance assessment has not been assigned yet.")
+    elif application.status == PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED:
+        row["next_step"] = _("Your entrance exam has been submitted. Awaiting the admissions office decision.")
+
+    if application.status == PROGRAM_APP_STATUS_PAYMENT_PENDING:
+        row["next_step"] = _("Awaiting payment confirmation by the admissions office.")
+
+    doc_request = application.document_requests.filter(
+        status=DOCUMENT_REQUEST_STATUS_REQUESTED, expires_at__gt=now,
+    ).first()
+    if doc_request:
+        row["next_step"] = _("Waiting for your documents — use the secure upload link you received by email.")
+
+    intake_request = application.intake_requests.filter(
+        status="requested", expires_at__gt=now,
+    ).first()
+    if intake_request:
+        row["next_step"] = _("Waiting for your intake form — use the secure link you received by email.")
+
+    return row
 
 
 # ---------------------------------------------------------------------------
@@ -489,7 +608,9 @@ def _get_exam_assignments(profile) -> list[EntranceAttempt]:
 
 def _get_assessment_attempts(user: User) -> list[AssessmentAttempt]:
     return list(
-        get_student_attempts(user).select_related(
+        get_student_attempts(user)
+        .filter(visible_to_student=True)
+        .select_related(
             "assessment__course_version__course",
             "graded_by",
         )[:50]
@@ -627,14 +748,12 @@ def _get_grade_items(student_profile: StudentProfile) -> list[StudentGradeItem]:
 
 
 def _get_payments(student_profile: StudentProfile) -> dict:
-    try:
-        summary = get_student_payment_summary(student_profile)
-        enrollments = get_enrollment_payment_status(student_profile)
-        summary.update(enrollments)
-        return summary
-    except Exception:
-        logger.exception("_get_payments failed")
-        return {"total_paid": 0, "record_count": 0, "records": [], "diploma_enrollments": [], "course_enrollments": []}
+    # Payment data is authoritative: an infrastructure failure must surface as
+    # an error, never as a false "nothing paid" (S2-23).
+    summary = get_student_payment_summary(student_profile)
+    enrollments = get_enrollment_payment_status(student_profile)
+    summary.update(enrollments)
+    return summary
 
 
 # ---------------------------------------------------------------------------

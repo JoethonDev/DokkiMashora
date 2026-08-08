@@ -8,7 +8,7 @@
     {% trans "Progression" as title %}
     {% trans "Review semester progress, decisions, evaluations, interviews, and rejoin plans." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    <section class="card-surface"><div class="table-wrap"><table class="table">
+    <section class="card-surface"><div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>
                 <th class="table-th">{% trans "Name" %}</th>
@@ -44,6 +44,24 @@
               {% endfor %}
             </tbody>
           </table>
+        </div>
+        <div class="card-stack lg:hidden">
+          {% for item in components %}
+            <div class="mobile-card">
+              <div class="flex-1 min-w-0">
+                <strong class="block truncate">{{ item.name }}</strong>
+                <small class="block text-muted">{{ item.get_component_type_display|default:item.component_type }} &middot; {{ item.weight_percent }}%</small>
+              </div>
+              <div class="flex gap-2 shrink-0">
+                <a class="btn-ghost btn-sm" href="{% url 'progression:admin_component_edit' item.id %}">{% trans "Edit" %}</a>
+                <form class="m-0" method="post" action="{% url 'progression:admin_component_delete' item.id %}" data-confirm="{% trans 'Deactivate this component?' %}">{% csrf_token %}
+                  <button class="btn-danger text-xs py-1 px-2 min-h-0" type="submit">{% trans "Deactivate" %}</button>
+                </form>
+              </div>
+            </div>
+          {% empty %}
+            <div class="border border-line rounded-sm p-4 text-center">{% include "ui/components/_empty_state.html" with title=_("No components.") %}</div>
+          {% endfor %}
         </div>
         <a class="btn-primary"
            href="{% url 'progression:admin_component_create' cohort.id semester.id %}">{% trans "Create component" %}

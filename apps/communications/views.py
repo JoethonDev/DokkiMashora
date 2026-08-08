@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
@@ -9,6 +11,7 @@ from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils.html import escape
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods, require_POST
 
@@ -22,6 +25,7 @@ from apps.core.permissions import ROLE_SENIOR_STAFF, role_required, safe_int
 from .constants import (
     ALL_VARIABLE_SAMPLES,
     AVAILABLE_VARIABLES_BY_SLUG,
+    BULK_STATUS_FAILED,
     DESIGN_BRANDED,
     DESIGN_CHOICES,
     SAMPLE_CONTEXT_BY_SLUG,
@@ -31,11 +35,13 @@ from .models import BulkEmailSend, EmailFooter, EmailTemplate
 from .services import (
     _wrap_in_design,
     create_bulk_draft,
+    enqueue_bulk_email_send,
     get_global_footer,
     has_unresolved_variables,
     resolve_recipients,
-    send_bulk_email,
 )
+
+logger = logging.getLogger("apps.communications.views")
 
 
 def _bulk_email_form_context():
@@ -155,7 +161,18 @@ def bulk_email_preview(request):
             resolved_recipients=recipients,
             sent_by=request.user,
         )
-        send_bulk_email(bulk_send)
+        try:
+            enqueue_bulk_email_send(bulk_send)
+        except Exception:  # noqa: BLE001 - broker outage must not 500 the request; the draft is retained for retry
+            logger.exception("Bulk email enqueue failed for bulk_send=%s", bulk_send.id)
+            bulk_send.status = BULK_STATUS_FAILED
+            bulk_send.save(update_fields=["status", "updated_at"])
+            messages.error(
+                request,
+                _("The email could not be queued because the background worker is unavailable. "
+                  "The draft was kept so you can retry sending."),
+            )
+            return redirect("communications:bulk_email_history")
 
         record_audit_event(
             actor=request.user,
@@ -165,16 +182,15 @@ def bulk_email_preview(request):
             metadata={
                 "subject": draft["subject"],
                 "recipient_count": len(recipients),
-                "success_count": bulk_send.success_count,
-                "failure_count": bulk_send.failure_count,
+                "status": "queued",
             },
         )
 
         del request.session["bulk_email_draft"]
         messages.success(
             request,
-            _("Bulk email sent to %(count)d recipients (%(success)d succeeded, %(failure)d failed).")
-            % {"count": len(recipients), "success": bulk_send.success_count, "failure": bulk_send.failure_count},
+            _("Bulk email queued for %(count)d recipients. Sending will continue in the background.")
+            % {"count": len(recipients)},
         )
         return redirect("communications:bulk_email_history")
 
@@ -287,7 +303,13 @@ def admin_template_edit(request, slug):
 @login_required
 @role_required(*ROLE_SENIOR_STAFF)
 def admin_template_preview(request, slug):
-    """Preview an EmailTemplate rendered with sample context."""
+    """Preview an EmailTemplate rendered with sample context.
+
+    The body is rendered through the model's engine-aware ``render()`` and
+    then escaped at this preview boundary: editable staff HTML must not
+    execute inside the admin page, even though the live email design keeps
+    the engine-rendered body.
+    """
     template = get_object_or_404(EmailTemplate, slug=slug)
     design = request.GET.get("design", template.design)
     if design not in dict(DESIGN_CHOICES):
@@ -300,7 +322,7 @@ def admin_template_preview(request, slug):
     footer_text = get_global_footer()
     rendered_html = render_to_string(
         f"communications/email_designs/{design}.html",
-        {"content": rendered_body, "footer": footer_text},
+        {"content": escape(rendered_body), "footer": footer_text},
         request=request,
     )
     return render(request, "ui/pages/admin/communication_template_form.html", {

@@ -10,7 +10,7 @@ from django.conf import settings
 from django.core.mail import EmailMessage as DjangoEmailMessage
 from django.core.mail import get_connection
 from django.core.validators import validate_email
-from django.db.models import Q
+from django.db.models import F, Q
 from django.template.exceptions import TemplateDoesNotExist
 from django.template.loader import render_to_string
 from django.utils import timezone
@@ -71,8 +71,8 @@ def send_templated_email(
     """Render a template, wrap in design, send via SMTP, and record the result.
 
     Returns None silently if no active/enabled template exists for the slug.
-    Raises ValueError if the rendered subject or body still contains
-    unresolved {{ variable }} placeholders.
+    Raises ValueError if a template variable has no matching context key, so
+    email content cannot silently lose values.
     """
     try:
         template = EmailTemplate.objects.get(slug=slug, is_active=True, is_enabled_for_action=True)
@@ -80,17 +80,17 @@ def send_templated_email(
         logger.warning("No active/enabled template found for slug=%s, skipping send", slug)
         return None
     subject, body = template.render(context)
+    missing = [v for v in template.variable_names() if v not in context]
+    if missing:
+        raise ValueError(
+            _("Template '%(slug)s' is missing context variables: %(missing)s")
+            % {"slug": slug, "missing": ", ".join(sorted(missing))}
+        )
     static_template = f"communications/email_designs/{slug}.html"
     try:
         body = render_to_string(static_template, {**context, "content": body})
     except TemplateDoesNotExist:
         pass
-    if has_unresolved_variables(subject) or has_unresolved_variables(body):
-        missing = VARIABLE_PATTERN.findall(subject) + VARIABLE_PATTERN.findall(body)
-        raise ValueError(
-            _("Template '%(slug)s' has unresolved variables after rendering: %(missing)s")
-            % {"slug": slug, "missing": set(missing)}
-        )
     footer = get_global_footer()
     html_body = _wrap_in_design(body, template.design, footer)
     return send_email(
@@ -241,26 +241,70 @@ def create_bulk_draft(
     )
 
 
-def send_bulk_email(bulk_send: BulkEmailSend) -> BulkEmailSend:
-    """Send all emails for a bulk send operation. Returns updated BulkEmailSend."""
+_BULK_EMAIL_CHUNK_SIZE = 100
+
+
+def enqueue_bulk_email_send(bulk_send: BulkEmailSend) -> int:
+    """Enqueue a bulk email send as bounded, idempotent chunk tasks.
+
+    Returns the number of chunk tasks enqueued. The web request never blocks on
+    SMTP delivery (T5); each chunk task sends at most ``_BULK_EMAIL_CHUNK_SIZE``
+    recipients and skips recipients that already have a terminal send record.
+    """
+    from apps.communications.tasks import send_bulk_email_chunk_task
+
     recipients = bulk_send.resolved_recipients if bulk_send.resolved_recipients else resolve_recipients(
         filter_criteria=bulk_send.recipient_filter if bulk_send.recipient_filter else None,
         manual_emails=bulk_send.recipient_emails,
     )
-    if not recipients:
+    total = len(recipients)
+    if total == 0:
         bulk_send.status = BULK_STATUS_SENT
         bulk_send.sent_at = timezone.now()
         bulk_send.save(update_fields=["status", "sent_at", "updated_at"])
-        return bulk_send
+        return 0
+    chunk_count = 0
+    for offset in range(0, total, _BULK_EMAIL_CHUNK_SIZE):
+        chunk_emails = [entry["email"] for entry in recipients[offset:offset + _BULK_EMAIL_CHUNK_SIZE]]
+        send_bulk_email_chunk_task.delay(bulk_send.id, chunk_emails, total)
+        chunk_count += 1
+    return chunk_count
+
+
+def process_bulk_email_chunk(bulk_send_id: int, recipient_emails: list[str], total: int) -> tuple[int, int]:
+    """Send one bounded chunk of recipients for a bulk send. Returns (success, failure).
+
+    Idempotent per recipient: an email that already has a terminal EmailMessage
+    record (sent/failed) for this bulk send is skipped, so a task retry or
+    manual re-run never double-sends. Per-recipient SMTP failures are recorded
+    on the EmailMessage row by ``send_email`` and do not abort the remaining
+    recipients in the chunk.
+    """
+    try:
+        bulk_send = BulkEmailSend.objects.get(id=bulk_send_id)
+    except BulkEmailSend.DoesNotExist:
+        logger.warning("Bulk send %s no longer exists; chunk skipped", bulk_send_id)
+        return 0, 0
+    if not recipient_emails:
+        return 0, 0
+    already_processed = set(
+        EmailMessage.objects.filter(
+            bulk_send=bulk_send,
+            to_email__in=recipient_emails,
+            status__in=[EMAIL_STATUS_SENT, EMAIL_STATUS_FAILED],
+        ).values_list("to_email", flat=True)
+    )
     design = bulk_send.template.design if bulk_send.template else DESIGN_BRANDED
     footer = get_global_footer()
     success = 0
     failure = 0
-    for entry in recipients:
+    for email in recipient_emails:
+        if email in already_processed:
+            continue
         html_body = _wrap_in_design(bulk_send.body, design, footer)
         record = send_email(
             template_slug=bulk_send.template.slug if bulk_send.template else "",
-            to_email=entry["email"],
+            to_email=email,
             subject=bulk_send.subject,
             body=bulk_send.body,
             html_body=html_body,
@@ -271,11 +315,36 @@ def send_bulk_email(bulk_send: BulkEmailSend) -> BulkEmailSend:
             success += 1
         else:
             failure += 1
-    bulk_send.success_count = success
-    bulk_send.failure_count = failure
-    bulk_send.status = BULK_STATUS_SENT if failure == 0 else BULK_STATUS_PARTIAL
-    bulk_send.sent_at = timezone.now()
-    bulk_send.save(update_fields=[
-        "success_count", "failure_count", "status", "sent_at", "updated_at",
-    ])
-    return bulk_send
+    _accumulate_bulk_send_progress(bulk_send_id, success, failure, total)
+    return success, failure
+
+
+def _accumulate_bulk_send_progress(bulk_send_id: int, success: int, failure: int, total: int) -> None:
+    """Accumulate chunk results into the bulk send using atomic F() counters.
+
+    Counters are monotonic, so concurrent chunk tasks cannot overwrite a
+    failure with a later success: ``partial`` is set once any failure exists and
+    ``sent`` only once every recipient has been processed with zero failures.
+    """
+    BulkEmailSend.objects.filter(id=bulk_send_id).update(
+        success_count=F("success_count") + success,
+        failure_count=F("failure_count") + failure,
+        updated_at=timezone.now(),
+    )
+    row = BulkEmailSend.objects.filter(id=bulk_send_id).values(
+        "success_count", "failure_count",
+    ).first()
+    if row is None:
+        return
+    processed = row["success_count"] + row["failure_count"]
+    if row["failure_count"] > 0:
+        new_status = BULK_STATUS_PARTIAL
+    elif processed >= total:
+        new_status = BULK_STATUS_SENT
+    else:
+        return
+    BulkEmailSend.objects.filter(id=bulk_send_id).update(
+        status=new_status,
+        sent_at=timezone.now(),
+        updated_at=timezone.now(),
+    )

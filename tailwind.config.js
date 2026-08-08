@@ -11,7 +11,7 @@ module.exports = {
     'card-surface','card-surface-interactive','form-input','form-select','form-checkbox','form-radio',
     'field-label','field-help','field-error','form-group','form-group-error','form-grid','form-grid-full','eyebrow','display',
     'btn-primary','btn-secondary','btn-soft','btn-soft-primary','btn-ghost','btn-danger','btn-info',
-    'btn-success','btn-warning','btn-accent','btn-icon','kbd','bidi',
+    'btn-success','btn-warning','btn-accent','btn-icon','btn-sm','kbd','bidi',
     'status-pill-success','status-pill-warning','status-pill-danger','status-pill-info','status-pill-neutral',
     'table-wrap','table','table-th','table-td','table-actions',
     'page-container','page-stack','section-head','actions-row','auth-hero',
@@ -19,6 +19,7 @@ module.exports = {
     'dir-ltr','dir-rtl','max-w-form','max-w-auth','z-backdrop','z-modal','z-header','z-sidebar','z-toast',
     'shadow-btn','shadow-card-hover','shadow-2xs','animate-enter-view',
     'stat-card','stat-icon','stat-body','avatar','bar-chart','bar','progress-track','progress-bar','empty-state',
+    'empty-state-fill','search-field','tab-track','tab','tab-active',
   ],
   theme: {
     screens: {
@@ -131,6 +132,5 @@ module.exports = {
       strategy: 'class',
     }),
     require('@tailwindcss/typography'),
-    require('@tailwindcss/aspect-ratio'),
   ],
 }

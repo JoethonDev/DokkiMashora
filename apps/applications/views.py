@@ -18,7 +18,8 @@ from django.views.decorators.http import require_http_methods
 from apps.core.htmx import is_htmx
 from apps.academics.models import Cohort
 from apps.core.pagination import paginate
-from apps.core.permissions import ROLE_SENIOR_STAFF, is_admin, role_required
+from apps.core.permissions import ROLE_SENIOR_STAFF, is_admin, role_required, safe_int
+from apps.intake_forms.constants import INTAKE_REQUESTABLE_STATUSES  # noqa: E402
 from apps.intake_forms.selectors import get_application_intake_state  # noqa: E402
 from apps.intake_forms.services import request_intake_form_for_application  # noqa: E402
 from apps.storage.services import StorageError, storage_service
@@ -41,12 +42,17 @@ from .constants import (
     DECISION_ACTION_SUBMIT_SURVEY,
     PROGRAM_APP_STATUS_ACCEPTED,
     PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED,
+    PROGRAM_APP_STATUS_ACTIVATED,
     PROGRAM_APP_STATUS_DOCUMENTS_REQUESTED,
+    PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED,
     PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
     PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
     PROGRAM_APP_STATUS_PAYMENT_PENDING,
+    PROGRAM_APP_STATUS_READY_FOR_ACTIVATION,
     PROGRAM_APP_STATUS_REJECTED,
     PROGRAM_APP_STATUS_SUBMITTED,
+    PROGRAM_APP_STATUS_SURVEY_REQUESTED,
+    PROGRAM_APP_STATUS_SURVEY_SUBMITTED,
     PROGRAM_TYPE_COURSE,
 )
 from .documents import (
@@ -73,6 +79,33 @@ from .services import activate_application_if_ready, invite_to_entrance_exam, se
 
 PUBLIC_REGISTRATION_SESSION_KEY = "registration_email"
 
+REGISTRATION_STEPS = (
+    {
+        "title": _("Personal"),
+        "fields": ("full_name", "date_of_birth", "gender", "address", "country_code", "national_id"),
+    },
+    {
+        "title": _("Contact & Work"),
+        "fields": ("phone", "email", "education", "specialization", "employer", "current_job"),
+    },
+    {
+        "title": _("Church & Program"),
+        "fields": ("church", "priest_name", "priest_contact"),
+    },
+)
+
+REGISTRATION_PROGRAM_FIELDS = ("apply_program", "program_type", "diploma", "program_target")
+
+
+def _registration_error_step(error_fields: set) -> int:
+    """Return the 1-based step that contains the first error field."""
+    for index, step in enumerate(REGISTRATION_STEPS, start=1):
+        if error_fields & set(step["fields"]):
+            return index
+    if error_fields & set(REGISTRATION_PROGRAM_FIELDS):
+        return len(REGISTRATION_STEPS)
+    return 1
+
 
 @require_http_methods(["GET"])
 def program_targets(request: HttpRequest) -> HttpResponse:
@@ -80,9 +113,16 @@ def program_targets(request: HttpRequest) -> HttpResponse:
     if not request.headers.get("HX-Request"):
         raise Http404
     profile = getattr(request.user, "student_profile", None)
-    kind = str(request.GET.get("kind", "diploma")).strip()
-    page = int(request.GET.get("page", 1) or 1)
+    kind = str(request.GET.get("kind") or request.GET.get("program_type") or "diploma").strip()
+    page = safe_int(request.GET.get("page", ""), default=1) or 1
+    page = max(page, 1)
     targets = get_open_apply_targets(kind, profile=profile, page=page, page_size=10)
+    field_name = request.GET.get("field_name", "program_target")
+    select_id = request.GET.get("select_id", "program-option")
+    if field_name not in ("target_id", "program_target"):
+        field_name = "program_target"
+    if select_id not in ("target-id", "program-option"):
+        select_id = "program-option"
     if kind == "course":
         options = [(f"course_{c.pk}", c.title) for c in targets["items"]]
         placeholder = _("Select a course")
@@ -93,6 +133,8 @@ def program_targets(request: HttpRequest) -> HttpResponse:
         placeholder = _("Select a diploma")
         loader_id = "diploma-loader"
         load_url = f"{request.path}?kind=diploma&page={targets['next_page']}" if targets["has_more"] and targets["next_page"] else ""
+    if load_url and (field_name != "program_target" or select_id != "program-option"):
+        load_url = f"{load_url}&field_name={field_name}&select_id={select_id}"
     return render(
         request,
         "ui/fragments/shared/_program_options.html",
@@ -103,6 +145,8 @@ def program_targets(request: HttpRequest) -> HttpResponse:
             "loader_id": loader_id,
             "load_url": load_url,
             "has_more": targets["has_more"],
+            "field_name": field_name,
+            "select_id": select_id,
         },
     )
 
@@ -152,8 +196,17 @@ def register(request: HttpRequest) -> HttpResponse:
             initial = {"apply_program": True, "program_type": "course", "program_target": target_id}
         form = RegistrationForm(initial=initial)
     error_fields = set(form.errors)
-    registration_error_step = 3 if error_fields & {"apply_program", "program_type", "diploma", "program_target"} else 2 if error_fields & {"phone", "email", "specialization", "employer", "current_job", "church", "priest_name", "priest_contact"} else 1
-    return render(request, "ui/pages/public/register.html", {"form": form, "registration_error_step": registration_error_step})
+    registration_error_step = _registration_error_step(error_fields)
+    return render(
+        request,
+        "ui/pages/public/register.html",
+        {
+            "form": form,
+            "registration_error_step": registration_error_step,
+            "registration_steps": REGISTRATION_STEPS,
+            "registration_program_fields": REGISTRATION_PROGRAM_FIELDS,
+        },
+    )
 
 
 @require_http_methods(["GET"])
@@ -165,6 +218,22 @@ def registration_success(request: HttpRequest) -> HttpResponse:
 # ---------------------------------------------------------------------------
 # Program Application admin
 # ---------------------------------------------------------------------------
+
+
+REVIEW_QUEUE_STATUSES = (
+    PROGRAM_APP_STATUS_SUBMITTED,
+    PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
+    PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
+)
+
+
+def review_queue_applications():
+    """Applications awaiting a staff decision (shared queue predicate, A8).
+
+    Both the admin review queue and the dashboard count must use this exact
+    queryset so the number on the dashboard matches the queue it links to.
+    """
+    return ProgramApplication.objects.filter(status__in=REVIEW_QUEUE_STATUSES)
 
 
 def _accept_allowed(status, program_type=None):
@@ -179,6 +248,28 @@ def _reject_allowed(status, program_type=None):
     if program_type == PROGRAM_TYPE_COURSE:
         base |= {PROGRAM_APP_STATUS_SUBMITTED, PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED, PROGRAM_APP_STATUS_PAYMENT_PENDING}
     return status in base
+
+
+def _decision_unavailable_reason(application) -> str | None:
+    """Explain why no accept/reject decision is possible right now (A10)."""
+    if application.status == PROGRAM_APP_STATUS_ACCEPTED:
+        return _("This application has already been accepted.")
+    if application.status == PROGRAM_APP_STATUS_REJECTED:
+        return _("This application has already been rejected.")
+    if application.status == PROGRAM_APP_STATUS_READY_FOR_ACTIVATION:
+        return _("This application is ready for activation.")
+    if application.status == PROGRAM_APP_STATUS_ACTIVATED:
+        return _("This application has already been activated.")
+    if application.status in {
+        PROGRAM_APP_STATUS_DOCUMENTS_REQUESTED,
+        PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED,
+        PROGRAM_APP_STATUS_SURVEY_REQUESTED,
+        PROGRAM_APP_STATUS_SURVEY_SUBMITTED,
+    }:
+        return _("The application must complete its requested documents and survey steps first.")
+    if application.status == PROGRAM_APP_STATUS_PAYMENT_PENDING:
+        return _("The application is awaiting payment confirmation.")
+    return _("No decision is available for the current application status.")
 
 
 @require_http_methods(["GET"])
@@ -209,7 +300,7 @@ def program_application_list(request: HttpRequest) -> HttpResponse:
     if student_filter and student_filter.isdigit():
         applications = applications.filter(student_id=int(student_filter))
     if action_filter == "review":
-        applications = applications.filter(status__in=(PROGRAM_APP_STATUS_SUBMITTED, PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED, PROGRAM_APP_STATUS_INTERVIEW_REQUESTED))
+        applications = applications.filter(status__in=REVIEW_QUEUE_STATUSES)
     elif action_filter == "payment":
         applications = applications.filter(status=PROGRAM_APP_STATUS_PAYMENT_PENDING)
     elif action_filter == "documents":
@@ -356,12 +447,15 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
             return redirect("applications:program_detail", application_id=application.id)
 
         if action == "request_intake" and is_admin(request.user):
-            try:
-                request_intake_form_for_application(application, request.user, send_email=True)
-            except ValueError as exc:
-                messages.error(request, str(exc))
+            if application.status not in INTAKE_REQUESTABLE_STATUSES:
+                messages.error(request, _("Intake forms can only be requested for applications that are not yet rejected or activated."))
             else:
-                messages.success(request, _("Intake request sent."))
+                try:
+                    request_intake_form_for_application(application, request.user, send_email=True)
+                except ValueError as exc:
+                    messages.error(request, str(exc))
+                else:
+                    messages.success(request, _("Intake request sent."))
             return redirect("applications:program_detail", application_id=application.id)
 
         if action == "request_interview" and application.status == PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED:
@@ -491,6 +585,12 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
             "doc_upload": doc_upload,
             "request_doc_form": request_doc_form,
             "intake_state": intake_state,
+            "can_accept": _accept_allowed(application.status, application.program_type),
+            "can_reject": _reject_allowed(application.status, application.program_type),
+            "decision_reason": _decision_unavailable_reason(application)
+            if not (_accept_allowed(application.status, application.program_type)
+                    or _reject_allowed(application.status, application.program_type))
+            else None,
         },
     )
 

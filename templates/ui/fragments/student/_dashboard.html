@@ -64,10 +64,7 @@
             </small></span>
             <b>→</b></a>
       {% empty %}
-        <div class="empty-state"><span>✓</span>
-          <h3>{% trans "You are all caught up" %}</h3>
-          <p>{% trans "There are no outstanding actions right now." %}</p>
-        </div>
+        {% include "ui/components/_empty_state.html" with icon="✓" title=_("You are all caught up") message=_("There are no outstanding actions right now.") fill=True %}
       {% endfor %}
     </div>
   </article>
@@ -85,11 +82,7 @@
       <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-soft" href="{% url 'students:applications' %}">{% trans "Open applications" %}</a>
       </div>
     {% else %}
-      <div class="empty-state"><span>+</span>
-        <h3>{% trans "No active application" %}</h3>
-        <p>{% trans "Explore available programs and submit an application when you are ready." %}</p>
-        <a class="btn-primary" href="{% url 'students:apply' %}">{% trans "Browse programs" %}</a>
-      </div>
+      {% url 'students:apply' as student_apply_url %}{% include "ui/components/_empty_state.html" with icon="+" title=_("No active application") message=_("Explore available programs and submit an application when you are ready.") href=student_apply_url action_label=_("Browse programs") fill=True %}
     {% endif %}
   </article>
 </section>
@@ -120,8 +113,8 @@
           {% endif %}
         </h3>
         <p>
-          {% if card.status %}
-            {{ card.status|capfirst }}
+          {% if card.status_label %}
+            {{ card.status_label }}
           {% else %}
             {% trans "Active course" %}
           {% endif %}
@@ -133,7 +126,7 @@
             {{ card.lecture_count|default:0 }}
           </strong>
         </div>
-        <div class="progress-track"><span class="progress-bar" style="--progress: {% if card.lecture_count %}{% widthratio card.completed_count card.lecture_count 100 %}{% else %}0{% endif %}%"></span>
+        <div class="progress-track"><span class="progress-bar" style="--progress: {{ card.progress_percent|default:0 }}%"></span>
         </div>
         <div class="flex gap-2.5 items-center flex-wrap">{% if card.next_lecture_url %}
             <a class="btn-primary" href="{{ card.next_lecture_url }}">{% trans "Continue" %}</a>
@@ -144,10 +137,7 @@
         </div>
       </article>
     {% empty %}
-      <div class="empty-state"><span>◉</span>
-        <h3>{% trans "No learning enrolments yet" %}</h3>
-        <p>{% trans "Your active programs and courses will appear here." %}</p>
-      </div>
+      {% include "ui/components/_empty_state.html" with icon="◉" title=_("No learning enrolments yet") message=_("Your active programs and courses will appear here.") fill=True %}
     {% endfor %}
   </div>
 </section>

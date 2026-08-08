@@ -4,29 +4,98 @@
   {{ exam.title|default:_("Entrance exam") }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack animate-enter-view"><section class="flex justify-between items-center gap-5 px-0.5 py-1.5"><div>
-        <p class="eyebrow">{% trans "Entrance exam" %}</p>
-        <h2>{{ exam.title|default:_("Entrance exam") }}</h2>
-        {% if exam.description %}
-          <p>{{ exam.description }}</p>
-        {% endif %}
-      </div>
-      <div class="actions-row"><a class="btn-ghost" href="{% url 'students:exam_results' %}">{% trans "Back to exam results" %}</a></div>
-    </section>
+  <div class="page-stack animate-enter-view">{% if exam.description %}{% blocktrans asvar exam_description %}{{ exam.description }}{% endblocktrans %}{% endif %}
+    {% url 'students:exam_results' as student_exam_results_url %}
+    {% include "ui/components/_page_header.html" with eyebrow=_("Entrance exam") title=exam.title|default:_("Entrance exam") description=exam_description back_url=student_exam_results_url back_label=_("Back to exam results") %}
     <section class="card-surface">{% if questions %}
-        <div class="max-w-2xl mx-auto"><form method="post">{% csrf_token %}
+        <div class="max-w-2xl mx-auto"><form method="post" action="{% url 'entrance_exams:submit_exam' token=access_token %}" id="exam-take-form" data-snapshot-url="{% url 'entrance_exams:save_exam_snapshot' token=access_token %}">{% csrf_token %}
           {% for question in questions %}
-            <fieldset class="field"><legend>{{ question.text }}</legend>
-              {% for choice in question.choices.all %}
-                <label class="flex items-start gap-2 cursor-pointer"><input type="radio" name="q_{{ question.id }}" value="{{ choice.id }}" class="form-radio">{{ choice.text }}
-                </label>
-              {% endfor %}
-            </fieldset>
+            <div class="border border-line rounded-sm p-4 mb-3 last:mb-0">
+              <div class="flex items-start justify-between gap-4">
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 mb-2">
+                    <span class="text-xs font-bold text-muted uppercase">#{{ question.order }}</span>
+                    <span class="px-2 py-0.5 text-xs font-bold rounded-full {% if question.question_type == 'mcq' %}bg-info-soft text-info-text{% else %}bg-warning-soft text-warning-text{% endif %}">{{ question.get_question_type_display }}</span>
+                  </div>
+                  <p class="text-sm font-medium m-0">{{ question.text }}</p>
+                  {% if question.question_type == 'mcq' %}
+                    <div class="flex flex-col gap-1.5 mt-3 ps-2 border-s-2 border-line">
+                      {% for choice in question.choices.all %}
+                        <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="radio" name="question_{{ question.id }}" value="{{ choice.id }}" class="form-radio"><span>{{ choice.text }}</span>
+                        </label>
+                      {% endfor %}
+                    </div>
+                  {% else %}
+                    <label class="sr-only" for="question_written_{{ question.id }}">{% blocktrans with question_text=question.text %}Answer for question: {{ question_text }}{% endblocktrans %}</label>
+                    <textarea id="question_written_{{ question.id }}" name="question_{{ question.id }}" class="form-textarea" rows="5" required aria-label="{% blocktrans with question_text=question.text %}Answer for question: {{ question_text }}{% endblocktrans %}"></textarea>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
           {% endfor %}
           <button class="btn-primary" type="submit">{% trans "Submit exam" %}</button>
+          <p class="text-sm text-muted mt-3">{% blocktrans with interval=60 %}Your answers are saved automatically every {{ interval }} seconds.{% endblocktrans %}</p>
         </form></div>
+      {% elif is_results %}
+        <div class="max-w-2xl mx-auto text-center">
+          <div class="flex flex-col items-center gap-3 py-4">
+            <span class="text-4xl" aria-hidden="true">✓</span>
+            <h2 class="text-lg font-bold m-0">{% trans "Exam submitted" %}</h2>
+            <p class="text-muted m-0">{% trans "Your answers have been received. The admissions office will review them and make a decision." %}</p>
+            <div class="flex flex-wrap gap-2 justify-center mt-2">
+              {% if decision %}
+                <span class="status-pill-{{ decision.tone }}">{{ decision.label }}</span>
+              {% else %}
+                <span class="status-pill-info">{{ state_label }}</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
       {% else %}
-        <p>{% trans "Follow the instructions to continue." %}</p>
+        <div class="max-w-2xl mx-auto">
+          <h2 class="text-lg font-bold mb-3">{% trans "Exam rules" %}</h2>
+          <dl class="dl">
+            <div>
+              <dt class="dt">{% trans "Duration" %}</dt>
+              <dd class="dd">{{ exam.duration_minutes }} {% trans "minutes" %}</dd>
+            </div>
+            <div>
+              <dt class="dt">{% trans "Questions" %}</dt>
+              <dd class="dd">{{ question_count }}</dd>
+            </div>
+            {% if exam.open_at %}
+              <div>
+                <dt class="dt">{% trans "Opens at" %}</dt>
+                <dd class="dd"><span dir="ltr" class="inline-block">{{ exam.open_at }}</span></dd>
+              </div>
+            {% endif %}
+            {% if exam.close_at %}
+              <div>
+                <dt class="dt">{% trans "Closes at" %}</dt>
+                <dd class="dd"><span dir="ltr" class="inline-block">{{ exam.close_at }}</span></dd>
+              </div>
+            {% endif %}
+          </dl>
+          <ul class="mt-4 space-y-2 text-sm">
+            <li>{% blocktrans with interval=60 %}Your answers are saved automatically every {{ interval }} seconds.{% endblocktrans %}</li>
+            <li>{% trans "You may leave the page and return to continue from where you stopped." %}</li>
+            <li>{% trans "You must answer all questions before submitting." %}</li>
+            <li>{% trans "Once submitted, your answers cannot be changed." %}</li>
+          </ul>
+          {% if exam_readiness == 'scheduled' %}
+            <p class="mt-4">{% trans "This exam has not opened yet." %}</p>
+            {% if exam.open_at %}<p class="text-muted">{% trans "Opens at" %}: <span dir="ltr" class="inline-block">{{ exam.open_at }}</span></p>{% endif %}
+          {% elif exam_readiness == 'closed' %}
+            <p class="mt-4">{% trans "This exam has closed." %}</p>
+          {% else %}
+            <p class="mt-4">{% trans "Follow the instructions to continue." %}</p>
+            {% if attempt %}
+              <form method="post" action="{% url 'entrance_exams:start_exam' token=access_token %}">{% csrf_token %}
+                <button class="btn-primary" type="submit">{% trans "Start exam" %}</button>
+              </form>
+            {% endif %}
+          {% endif %}
+        </div>
       {% endif %}
     </section>
   </div>

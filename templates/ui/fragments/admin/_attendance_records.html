@@ -8,7 +8,7 @@
     </div>
   </div>
   {% if sessions %}
-    <div class="table-wrap"><table class="table">
+    <div class="table-wrap hidden lg:block"><table class="table">
         <thead>
           <tr>
             <th class="table-th">{% trans "Session" %}</th>
@@ -50,10 +50,22 @@
         </tbody>
       </table>
     </div>
-  {% else %}
-    <div class="empty-state"><span>&#9679;</span>
-      <h3>{% trans "No sessions found" %}</h3>
-      <p>{% trans "Try changing the filters." %}</p>
+    <div class="card-stack lg:hidden">
+      {% for s in sessions %}
+        <div class="mobile-card">
+          <div class="flex-1 min-w-0">
+            <strong class="block truncate">{{ s.title|default:_("Attendance") }}</strong>
+            <small class="block text-muted">{% trans "by" %} {{ s.created_by.full_name }}</small>
+            <small class="block text-muted">{{ s.date|date:"DATE_FORMAT"|default:'—' }}</small>
+            {% include "ui/components/_status.html" with code=s.status label=s.get_status_display %}
+            <small class="block text-muted">{{ s.record_count }} {% trans "records" %}</small>
+          </div>
+          <a class="btn-soft-primary shrink-0" href="{% url 'attendance:attendance_session_detail' s.id %}">{% trans "Open" %}</a>
+        </div>
+      {% endfor %}
     </div>
+    {% include "ui/components/_pagination.html" %}
+  {% else %}
+    {% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No sessions found") message=_("Try changing the filters.") %}
   {% endif %}
 </section>

@@ -4,7 +4,7 @@ from datetime import datetime
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -15,6 +15,7 @@ from django.views.decorators.http import require_http_methods, require_POST
 from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE
 from apps.academics.models import Cohort, CourseVersion, Semester
 from apps.academics.services import get_student_diploma_access
+from apps.core.pagination import paginate
 from apps.core.permissions import (
     GROUP_ADMIN,
     GROUP_SUPER_ADMIN,
@@ -30,13 +31,13 @@ from .constants import (
     ATTENDANCE_STATUS_EXCUSED,
     ATTENDANCE_STATUS_LATE,
     ATTENDANCE_STATUS_PRESENT,
+    SESSION_STATUS_CLOSED,
     SESSION_STATUS_OPEN,
     SESSION_STATUS_SCHEDULED,
 )
 from .models import AttendanceRecord, AttendanceSession
 from .services import (
     close_attendance_session,
-    get_attendance_summary,
     open_attendance_session,
     open_session,
     scan_attendance_token,
@@ -86,9 +87,12 @@ def attendance_session_list(request):
         sessions = sessions.filter(status="scheduled", date__lt=timezone.localdate())
 
     sessions = sessions.order_by("-date", "-created_at")
+    page_obj, pagination_qs = paginate(request, sessions, per_page=25)
 
     ctx = {
-        "sessions": sessions,
+        "sessions": page_obj,
+        "page_obj": page_obj,
+        "pagination_qs": pagination_qs,
         "cohorts": Cohort.objects.filter(is_active=True),
         "selected_cohort_id": cohort_id,
         "date_from": date_from,
@@ -354,43 +358,82 @@ def my_attendance(request):
         messages.error(request, _("Student profile not found."))
         return redirect("core:home")
 
+    now = timezone.now()
+    ended_or_closed = Q(status=SESSION_STATUS_CLOSED) | Q(close_at__lte=now)
+
     enrollments = student_profile.diploma_enrollments.filter(
         status=ENROLLMENT_STATUS_ACTIVE,
     ).select_related("cohort__diploma")
 
     summaries = []
     for enrollment in enrollments:
-        for semester in get_student_diploma_access(enrollment)["visible_semesters"]:
-            summary = get_attendance_summary(enrollment, semester)
-            if summary["total_sessions"] > 0:
-                summary["enrollment"] = enrollment
-                summary["semester"] = semester
-                summaries.append(summary)
+        visible_semesters = get_student_diploma_access(enrollment)["visible_semesters"]
+        if not visible_semesters:
+            continue
+        semester_ids = [semester.id for semester in visible_semesters]
+        session_totals = {
+            row["semester_id"]: row["total"]
+            for row in AttendanceSession.objects.filter(
+                cohort=enrollment.cohort,
+                semester_id__in=semester_ids,
+            ).filter(ended_or_closed).values("semester_id").annotate(total=Count("id"))
+        }
+        record_counts = {}
+        for row in AttendanceRecord.objects.filter(
+            diploma_enrollment=enrollment,
+            session__semester_id__in=semester_ids,
+        ).filter(
+            Q(session__status=SESSION_STATUS_CLOSED) | Q(session__close_at__lte=now),
+        ).values("session__semester_id", "status").annotate(count=Count("id")):
+            record_counts.setdefault(row["session__semester_id"], {})[row["status"]] = row["count"]
+        for semester in visible_semesters:
+            total_sessions = session_totals.get(semester.id, 0)
+            if total_sessions == 0:
+                continue
+            counts = record_counts.get(semester.id, {})
+            present_count = counts.get(ATTENDANCE_STATUS_PRESENT, 0)
+            late_count = counts.get(ATTENDANCE_STATUS_LATE, 0)
+            excused_count = counts.get(ATTENDANCE_STATUS_EXCUSED, 0)
+            total_attended = present_count + late_count
+            summaries.append({
+                "enrollment": enrollment,
+                "semester": semester,
+                "total_sessions": total_sessions,
+                "present_count": present_count,
+                "late_count": late_count,
+                "excused_count": excused_count,
+                "total_attended": total_attended,
+                "attendance_percent": round(total_attended / total_sessions * 100, 2),
+            })
 
     course_enrollments = student_profile.course_enrollments.filter(
         status=ENROLLMENT_STATUS_ACTIVE,
     ).select_related("course_version__course")
     for ce in course_enrollments:
-        sessions = AttendanceSession.objects.filter(
+        session_qs = AttendanceSession.objects.filter(
             course_version=ce.course_version,
-        )
-        total = sessions.count()
-        records = AttendanceRecord.objects.filter(
-            session__in=sessions, course_enrollment=ce,
-        )
-        present = records.filter(status=ATTENDANCE_STATUS_PRESENT).count()
-        late = records.filter(status=ATTENDANCE_STATUS_LATE).count()
-        if total > 0:
-            summaries.append({
-                "enrollment": ce,
-                "course_title": str(ce.course_version.course.title),
-                "total_sessions": total,
-                "present_count": present,
-                "late_count": late,
-                "excused_count": records.filter(status=ATTENDANCE_STATUS_EXCUSED).count(),
-                "total_attended": present + late,
-                "attendance_percent": round(((present + late) / total) * 100, 2),
-            })
+        ).filter(ended_or_closed)
+        total = session_qs.count()
+        if total == 0:
+            continue
+        record_counts = {}
+        for row in AttendanceRecord.objects.filter(
+            course_enrollment=ce,
+            session__in=session_qs,
+        ).values("status").annotate(count=Count("id")):
+            record_counts[row["status"]] = row["count"]
+        present = record_counts.get(ATTENDANCE_STATUS_PRESENT, 0)
+        late = record_counts.get(ATTENDANCE_STATUS_LATE, 0)
+        summaries.append({
+            "enrollment": ce,
+            "course_title": str(ce.course_version.course.title),
+            "total_sessions": total,
+            "present_count": present,
+            "late_count": late,
+            "excused_count": record_counts.get(ATTENDANCE_STATUS_EXCUSED, 0),
+            "total_attended": present + late,
+            "attendance_percent": round((present + late) / total * 100, 2),
+        })
 
     ctx = {
         "summaries": summaries,

@@ -1,0 +1,40 @@
+{% extends "ui/layouts/public.html" %}
+{% load i18n %}
+{% block public_header %}{% endblock %}
+{% block title %}
+  {% trans "Confirm account activation" %}
+{% endblock %}
+{% block content %}
+  <section class="grid grid-cols-1 md:grid-cols-2 min-h-screen">
+    <div class="auth-hero hidden md:flex">
+      <a class="flex items-center gap-2.5 no-underline text-inherit" href="{% url 'core:landing' %}"><span class="w-10 h-10 rounded-md bg-brand-soft text-brand-strong grid place-items-center font-black shadow-card">DM</span>
+        <span><strong class="block">DokkiMashora</strong>
+          <small class="block text-white/60">{% trans "Learning Management" %}</small></span></a>
+      <div><p class="eyebrow">{% trans "Account" %}</p>
+        <h2 class="display">{% trans "Activate your account." %}</h2>
+        <p class="text-white/70">{% trans "Confirm the activation and choose your password to finish." %}</p>
+      </div>
+    </div>
+    <div class="grid place-items-center p-6 sm:p-10">
+      <section class="w-full max-w-auth page-stack">
+        <p class="eyebrow">{% trans "Activation" %}</p>
+        <h1>{% trans "Confirm account activation" %}</h1>
+        <p class="text-muted">{% trans "Your account is ready. Set your password to complete the activation." %}</p>
+        <form method="post" action="{% url 'accounts:activate' uidb64=uidb64 token=token %}" class="page-stack">{% csrf_token %}
+          {% if form.non_field_errors %}
+            <div class="bg-red-soft text-red rounded-sm p-4" role="alert">{% for error in form.non_field_errors %}
+                <p>{{ error }}</p>
+              {% endfor %}
+            </div>
+          {% endif %}
+          {% for field in form %}
+            {% include "ui/components/_field.html" %}
+          {% endfor %}
+          <button class="btn-primary w-full" type="submit">{% trans "Activate my account" %}</button>
+        </form>
+        <p class="text-center text-xs"><a class="text-brand no-underline font-extrabold hover:underline" href="{% url 'accounts:login' %}">{% trans "Back to login" %}</a>
+        </p>
+      </section>
+    </div>
+  </section>
+{% endblock %}

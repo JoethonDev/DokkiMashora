@@ -8,6 +8,7 @@ from apps.academics.models import Cohort, CourseVersion
 from apps.applications.constants import PROGRAM_TYPE_COURSE, PROGRAM_TYPE_DIPLOMA
 from apps.applications.models import ProgramApplication
 
+from .constants import INTAKE_REQUESTABLE_STATUSES
 from .models import IntakeForm, IntakeFormRequest, IntakeFormResponse
 
 if TYPE_CHECKING:
@@ -104,7 +105,7 @@ def get_application_intake_state(application: ProgramApplication) -> dict:
     """Return intake form state for an application (used in admin detail)."""
     form = get_required_intake_form_for_application(application)
     if form is None:
-        return {"required_form": None, "has_response": True, "form_open": False}
+        return {"required_form": None, "has_response": True, "form_open": False, "can_request": False}
     has_response = IntakeFormResponse.objects.filter(
         form=form, program_application=application,
     ).exists()
@@ -116,4 +117,5 @@ def get_application_intake_state(application: ProgramApplication) -> dict:
         "has_response": has_response,
         "form_open": form.is_open(),
         "latest_request": latest_request,
+        "can_request": application.status in INTAKE_REQUESTABLE_STATUSES,
     }

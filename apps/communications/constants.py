@@ -52,11 +52,13 @@ EMAIL_STATUS_CHOICES = (
 BULK_STATUS_DRAFT = "draft"
 BULK_STATUS_SENT = "sent"
 BULK_STATUS_PARTIAL = "partial"
+BULK_STATUS_FAILED = "failed"
 
 BULK_STATUS_CHOICES = (
     (BULK_STATUS_DRAFT, _("Draft")),
     (BULK_STATUS_SENT, _("Sent")),
     (BULK_STATUS_PARTIAL, _("Partial")),
+    (BULK_STATUS_FAILED, _("Failed")),
 )
 
 REQUIRED_VARIABLES_BY_SLUG: dict[str, list[str]] = {

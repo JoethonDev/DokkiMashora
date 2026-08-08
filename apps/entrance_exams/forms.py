@@ -1,10 +1,11 @@
 from django import forms
 from django.forms import inlineformset_factory
+from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
 from apps.academics.models import Cohort, Diploma
-
 from apps.core.forms import StyledFormMixin
+
 from .models import EntranceChoice, EntranceExam, EntranceQuestion
 
 
@@ -36,6 +37,14 @@ class EntranceExamForm(StyledFormMixin, forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["diploma"].queryset = Diploma.objects.all()
+        self.fields["diploma"].widget.attrs.update(
+            {
+                "hx-get": reverse("entrance_exams:admin_cohorts_for_diploma"),
+                "hx-target": "#id_cohort",
+                "hx-swap": "innerHTML",
+                "hx-trigger": "change",
+            }
+        )
         cohort_qs = Cohort.objects.none()
         cohort_val = self.data.get("cohort") or self.initial.get("cohort")
         if cohort_val:

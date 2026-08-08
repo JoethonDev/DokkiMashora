@@ -4,36 +4,50 @@
   {% trans "Entrance exam results" %}
 {% endblock %}
 {% block content %}
-  <div class="page-stack animate-enter-view"><section class="flex justify-between items-center gap-5 px-0.5 py-1.5"><div>
-        <p class="eyebrow">{% trans "Admissions" %}</p>
-        <h2>{% trans "Entrance exam results" %}</h2>
-      </div>
-      <div class="actions-row"><a class="btn-ghost" href="{% url 'students:record' %}">{% trans "Back to record" %}</a></div>
-    </section>
-    <section class="card-surface"><div class="table-wrap"><table class="table">
+  <div class="page-stack animate-enter-view">{% url 'students:record' as student_record_url %}{% include "ui/components/_page_header.html" with eyebrow=_("Admissions") title=_("Entrance exam results") back_url=student_record_url back_label=_("Back to record") %}
+    <section class="card-surface"><div class="table-wrap hidden lg:block"><table class="table">
           <thead>
             <tr>
               <th class="table-th">{% trans "Exam" %}</th>
               <th class="table-th">{% trans "Status" %}</th>
-              <th class="table-th">{% trans "Result" %}</th>
+              <th class="table-th"></th>
             </tr>
           </thead>
           <tbody>
             {% for item in exam_assignments %}
               <tr>
-                <td>{{ item.exam }}</td>
-                <td>
-                  <span class="status-pill-info">{{ item.get_status_display|default:item.status }}</span>
+                <td class="table-td"><strong>{{ item.exam.title }}</strong></td>
+                <td class="table-td">
+                  <span class="status-pill-{{ item.readiness.tone|default:'info' }}">{{ item.readiness.state_label }}</span>
                 </td>
-                <td>{{ item.result|default:"—" }}</td>
+                <td class="table-td">
+                  {% if item.readiness.action_url %}
+                    <a class="btn-primary" href="{{ item.readiness.action_url }}">{{ item.readiness.action_label }}</a>
+                  {% endif %}
+                </td>
               </tr>
             {% empty %}
               <tr>
-                <td colspan="3">{% trans "No entrance exam results available." %}</td>
+                <td class="table-td" colspan="3">{% include "ui/components/_empty_state.html" with title=_("No entrance exam results available.") %}</td>
               </tr>
             {% endfor %}
           </tbody>
         </table>
+      </div>
+      <div class="card-stack lg:hidden">
+        {% for item in exam_assignments %}
+          <div class="mobile-card">
+            <div class="flex-1 min-w-0">
+              <strong class="block truncate">{{ item.exam.title }}</strong>
+              <span class="status-pill-{{ item.readiness.tone|default:'info' }}">{{ item.readiness.state_label }}</span>
+            </div>
+            {% if item.readiness.action_url %}
+              <a class="btn-soft-primary shrink-0" href="{{ item.readiness.action_url }}">{{ item.readiness.action_label }}</a>
+            {% endif %}
+          </div>
+        {% empty %}
+          <div class="border border-line rounded-sm p-4 text-center">{% include "ui/components/_empty_state.html" with title=_("No entrance exam results available.") %}</div>
+        {% endfor %}
       </div>
     </section>
   </div>

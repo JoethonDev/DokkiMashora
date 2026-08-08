@@ -1,0 +1,56 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="page-stack animate-enter-view">
+  {% include "ui/components/_page_header.html" with eyebrow=_("Diploma") title=diploma.title description=_("Progression Rule") back_button=True %}
+  <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
+    <div class="form-group">
+      <label class="field-label" for="semester_pass_percent">{% trans "Semester pass percent" %}</label>
+      <input class="form-input" type="number" id="semester_pass_percent" name="semester_pass_percent" value="{{ rule.semester_pass_percent }}" min="0" max="100" step="0.01" required>
+    </div>
+    <div class="form-group">
+      <label class="field-label" for="final_exam_pass_percent">{% trans "Final exam pass percent" %}</label>
+      <input class="form-input" type="number" id="final_exam_pass_percent" name="final_exam_pass_percent" value="{{ rule.final_exam_pass_percent }}" min="0" max="100" step="0.01" required>
+    </div>
+    <div class="form-group">
+      <label class="flex items-center gap-2 cursor-pointer">
+        <input class="form-checkbox" type="checkbox" name="require_all_semesters_passed" value="1" {% if rule.require_all_semesters_passed %}checked{% endif %}>
+        <span>{% trans "Require all semesters passed" %}</span>
+      </label>
+    </div>
+    <div class="form-group">
+      <label class="flex items-center gap-2 cursor-pointer">
+        <input class="form-checkbox" type="checkbox" name="require_final_exam" value="1" {% if rule.require_final_exam %}checked{% endif %}>
+        <span>{% trans "Require final exam" %}</span>
+      </label>
+    </div>
+    <div class="form-group">
+      <label class="flex items-center gap-2 cursor-pointer">
+        <input class="form-checkbox" type="checkbox" name="auto_promote_enabled" value="1" {% if rule.auto_promote_enabled %}checked{% endif %}>
+        <span>{% trans "Auto promote enabled" %}</span>
+      </label>
+    </div>
+    <div class="form-group">
+      <label class="flex items-center gap-2 cursor-pointer">
+        <input class="form-checkbox" type="checkbox" name="allow_admin_override" value="1" {% if rule.allow_admin_override %}checked{% endif %}>
+        <span>{% trans "Allow admin override" %}</span>
+      </label>
+    </div>
+    <div class="form-group">
+      <label class="flex items-center gap-2 cursor-pointer">
+        <input class="form-checkbox" type="checkbox" name="allow_retake" value="1" {% if rule.allow_retake %}checked{% endif %}>
+        <span>{% trans "Allow retake" %}</span>
+      </label>
+    </div>
+    <div class="form-group">
+      <label class="field-label" for="max_retake_count">{% trans "Max retake count" %}</label>
+      <input class="form-input" type="number" id="max_retake_count" name="max_retake_count" value="{{ rule.max_retake_count }}" min="0" required>
+    </div>
+    <div class="flex gap-2.5 items-center flex-wrap pt-4 border-t border-line mt-5">
+      <button class="btn-primary" type="submit">{% trans "Save" %}</button>
+      <a class="btn-ghost" href="{% url 'academics:admin_diploma_detail' diploma.id %}">{% trans "Cancel" %}</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

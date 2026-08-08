@@ -4,33 +4,77 @@
   {{ assessment.title }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack animate-enter-view"><section class="flex justify-between items-center gap-5 px-0.5 py-1.5"><div>
-        <p class="eyebrow">{% trans "Assessment" %}</p>
-        <h2>{{ assessment.title }}</h2>
-        {% if remaining_seconds %}
-          <p>
-            {% trans "Time remaining" %}
-            :
-            {{ remaining_seconds }}
-            {% trans "seconds" %}
-          </p>
+  <div class="page-stack animate-enter-view">{% if remaining_seconds %}{% blocktrans asvar timer_description %}Time remaining: {{ remaining_seconds }} seconds{% endblocktrans %}{% endif %}
+    {% url 'assessments:student_list' as student_assessment_list_url %}
+    {% include "ui/components/_page_header.html" with eyebrow=_("Assessment") title=assessment.title description=timer_description back_url=student_assessment_list_url back_label=_("Leave assessment") %}
+    <section class="card-surface"><div class="max-w-2xl mx-auto">
+      {% if assessment.assessment_type == "homework" %}
+        {% if remaining_uploads == 0 %}
+          {% include "ui/components/_empty_state.html" with title=_("No more uploads available") message=_("You have reached the maximum number of homework uploads for this assessment.") %}
+        {% else %}
+        <form method="post" action="{% url 'assessments:submit_homework' assessment.id %}" enctype="multipart/form-data">
+          {% csrf_token %}
+          <label class="field-label" for="homework-files">{% trans "Homework files" %}</label>
+          <input id="homework-files" name="homework_files" type="file" accept=".pdf,.docx" multiple required>
+          <p class="text-sm text-muted mt-2">{% trans "Upload PDF or DOCX files. Each file is checked for type and size before storage." %}</p>
+          {% if remaining_uploads is not None %}
+            <p class="text-sm text-muted mt-1">{% blocktrans with count=remaining_uploads %}{{ count }} upload(s) remaining.{% endblocktrans %}</p>
+          {% endif %}
+          <button class="btn-primary mt-4" type="submit">{% trans "Submit homework" %}</button>
+        </form>
         {% endif %}
-      </div>
-      <div class="actions-row"><a class="btn-ghost" href="{% url 'assessments:student_list' %}">{% trans "Leave assessment" %}</a></div>
-    </section>
-    <section class="card-surface"><div class="max-w-2xl mx-auto"><form method="post" action="{% url 'assessments:submit' assessment.id %}">{% csrf_token %}
-        {% for question in questions %}
-          <fieldset class="field"><legend>{{ question.text }}</legend>
-            {% for choice in question.choices.all %}
-              <label class="flex items-start gap-2 cursor-pointer"><input type="radio" name="q_{{ question.id }}" value="{{ choice.id }}" class="form-radio">{{ choice.text }}
-              </label>
+        {% if existing_submissions %}
+          <div class="mt-6">
+            <h3>{% trans "Submitted files" %}</h3>
+            <ul class="mt-2 space-y-2">
+              {% for submission in existing_submissions %}
+                <li class="flex items-center justify-between gap-3 border-b border-line py-2">
+                  <span>{{ submission.original_filename }}</span>
+                  <span class="text-sm text-muted">{{ submission.get_status_display }}</span>
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+      {% else %}
+        <form method="post" action="{% url 'assessments:submit' assessment.id %}">{% csrf_token %}
+          {% if is_diploma_random %}
+            {% for question in snapshot_questions %}
+              <fieldset class="field"><legend>{{ question.text_snapshot }}</legend>
+                {% if question.question_type == "written" %}
+                  <textarea class="form-input" name="q_{{ question.order }}" rows="5" {% if question.required %}required{% endif %}></textarea>
+                {% else %}
+                  {% for choice in question.choices.all %}
+                    <label class="flex items-start gap-2 cursor-pointer"><input type="radio" name="q_{{ question.order }}" value="{{ choice.id }}" class="form-radio">{{ choice.text_snapshot }}</label>
+                  {% endfor %}
+                {% endif %}
+              </fieldset>
+            {% empty %}
+              {% include "ui/components/_empty_state.html" with title=_("No questions available.") %}
             {% endfor %}
-          </fieldset>
-        {% empty %}
-          <p>{% trans "No questions available." %}</p>
-        {% endfor %}
-        <button class="btn-primary" type="submit">{% trans "Submit assessment" %}</button>
-      </form></div>
+          {% else %}
+            {% for question in questions %}
+              <fieldset class="field"><legend>{{ question.text }}</legend>
+                {% if question.question_type == "written" %}
+                  <textarea class="form-input" name="question_{{ question.id }}" rows="5" {% if question.required %}required{% endif %}></textarea>
+                {% else %}
+                  {% for choice in question.choices.all %}
+                    <label class="flex items-start gap-2 cursor-pointer"><input type="radio" name="question_{{ question.id }}" value="{{ choice.id }}" class="form-radio">{{ choice.text }}</label>
+                  {% endfor %}
+                {% endif %}
+              </fieldset>
+            {% empty %}
+              {% include "ui/components/_empty_state.html" with title=_("No questions available.") %}
+            {% endfor %}
+          {% endif %}
+          {% if is_diploma_random %}
+            {% if snapshot_questions %}<button class="btn-primary" type="submit">{% trans "Submit assessment" %}</button>{% endif %}
+          {% else %}
+            {% if questions %}<button class="btn-primary" type="submit">{% trans "Submit assessment" %}</button>{% endif %}
+          {% endif %}
+        </form>
+      {% endif %}
+      </div>
     </section>
   </div>
 {% endblock %}

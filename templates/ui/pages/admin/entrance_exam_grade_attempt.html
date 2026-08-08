@@ -1,5 +1,5 @@
 {% extends "ui/layouts/admin.html" %}
-{% load i18n ui_tags %}
+{% load i18n l10n ui_tags %}
 {% block title %}
   {{ title|default:_("Grade attempt") }}
 {% endblock %}
@@ -24,7 +24,7 @@
             <label>
               {% trans "Score" %}
               <input name="score_{{ question.id }}" class="form-input"
-                     value="{{ answer.score|default:'' }}"
+                     value="{{ answer.score|unlocalize }}"
                      type="number"
                      min="0"
                      max="{{ max_score }}"

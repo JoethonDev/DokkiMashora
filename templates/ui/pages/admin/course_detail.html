@@ -13,12 +13,12 @@
            href="{% url 'academics:admin_version_create' course.id %}">{% trans "Create version" %}</a>
       </div>
       {% if versions %}
-        <div class="table-wrap"><table class="table">
+        <div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>
                 <th class="table-th">{% trans "Version" %}</th>
-                <th class="table-th">{% trans "Cohort" %}</th>
-                <th class="table-th">{% trans "Semester" %}</th>
+                <th class="table-th">{% trans "Access" %}</th>
+                <th class="table-th">{% trans "Status" %}</th>
                 <th class="table-th">{% trans "Lectures" %}</th>
                 <th class="table-th">{% trans "Actions" %}</th>
               </tr>
@@ -27,8 +27,8 @@
               {% for version in versions %}
                 <tr>
                   <td class="table-td">{{ version.label }}</td>
-                  <td class="table-td">{{ version.cohort }}</td>
-                  <td class="table-td">{{ version.semester }}</td>
+                  <td class="table-td">{% if version.access_duration_days %}{{ version.access_duration_days }} {% trans "days" %}{% else %}{% trans "Unlimited" %}{% endif %}</td>
+                  <td class="table-td">{% include "ui/components/_status.html" with code=version.is_active|yesno:"active,inactive" label=version.is_active|yesno:_("Active,Inactive") %}</td>
                   <td class="table-td">{{ version.lectures|length }}</td>
                   <td class="table-td">
                     <a class="btn-secondary"
@@ -38,6 +38,18 @@
               {% endfor %}
             </tbody>
           </table>
+        </div>
+        <div class="card-stack lg:hidden">
+          {% for version in versions %}
+            <div class="mobile-card">
+              <div class="flex-1 min-w-0">
+                <strong class="block truncate">{{ version.label }}</strong>
+                <small class="block text-muted">{{ version.is_active|yesno:_("Active,Inactive") }} &middot; {% if version.access_duration_days %}{{ version.access_duration_days }} {% trans "days" %}{% else %}{% trans "Unlimited" %}{% endif %}</small>
+                <small class="block text-muted">{{ version.lectures|length }} {% trans "lectures" %}</small>
+              </div>
+              <a class="btn-soft-primary shrink-0" href="{% url 'academics:admin_version_detail' course.id version.id %}">{% trans "Open" %}</a>
+            </div>
+          {% endfor %}
         </div>
       {% else %}
         {% include "ui/components/_empty_state.html" with title=_("No versions") message=_("No versions found for this course.") %}
@@ -49,7 +61,7 @@
         </div>
       </div>
       {% if lectures %}
-        <div class="table-wrap"><table class="table">
+        <div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>
                 <th class="table-th">{% trans "Order" %}</th>
@@ -74,6 +86,17 @@
             </tbody>
           </table>
         </div>
+        <div class="card-stack lg:hidden">
+          {% for lecture in lectures %}
+            <div class="mobile-card">
+              <div class="flex-1 min-w-0">
+                <strong class="block truncate">{{ lecture.title }}</strong>
+                <small class="block text-muted">#{{ lecture.order }} &middot; {{ lecture.course_version.label }}</small>
+              </div>
+              <a class="btn-ghost btn-sm" href="{% url 'academics:admin_lecture_edit' course.id lecture.course_version.id lecture.id %}">{% trans "Edit" %}</a>
+            </div>
+          {% endfor %}
+        </div>
       {% else %}
         {% include "ui/components/_empty_state.html" with title=_("No lectures") message=_("No lectures found for this course.") %}
       {% endif %}
@@ -84,7 +107,7 @@
         </div>
       </div>
       {% if enrollments %}
-        <div class="table-wrap"><table class="table">
+        <div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>
                 <th class="table-th">{% trans "Student" %}</th>
@@ -104,6 +127,17 @@
               {% endfor %}
             </tbody>
           </table>
+        </div>
+        <div class="card-stack lg:hidden">
+          {% for enrollment in enrollments %}
+            <div class="mobile-card">
+              <div class="flex-1 min-w-0">
+                <strong class="block truncate">{{ enrollment.student }}</strong>
+                {% include "ui/components/_status.html" with code=enrollment.status label=enrollment.get_status_display %}
+                <small class="block text-muted">{{ enrollment.course_version }} &middot; {{ enrollment.created_at|date:"d/m/Y" }}</small>
+              </div>
+            </div>
+          {% endfor %}
         </div>
       {% else %}
         {% include "ui/components/_empty_state.html" with title=_("No enrollments") message=_("No student enrollments for this course.") %}

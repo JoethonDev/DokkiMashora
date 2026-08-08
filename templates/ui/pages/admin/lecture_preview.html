@@ -19,7 +19,7 @@
       {% elif lecture.youtube_url %}
         <a class="btn-primary" href="{{ lecture.youtube_url }}" target="_blank" rel="noopener noreferrer">{% trans "Open YouTube video" %}</a>
       {% else %}
-        <p class="text-muted">{% trans "No YouTube video has been added to this lecture." %}</p>
+        {% include "ui/components/_empty_state.html" with title=_("No YouTube video has been added to this lecture.") %}
       {% endif %}
       {% if lecture.audio_url %}<audio class="w-full mt-4" controls src="{{ lecture.audio_url }}"></audio>{% endif %}
     </section>

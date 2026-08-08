@@ -11,6 +11,7 @@
   html {
     scroll-behavior: smooth;
     -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
     scrollbar-gutter: stable;
   }
   body {
@@ -34,7 +35,7 @@
   :where(legend) { @apply px-2 font-extrabold; }
   input[type="radio"],input[type="checkbox"] {
     accent-color: #2b675f;
-    @apply w-4 h-4 m-0 shrink-0;
+    @apply w-5 h-5 sm:w-4 sm:h-4 m-0 shrink-0;
   }
   :focus-visible {
     @apply outline-none ring-2 ring-brand ring-offset-2 ring-offset-white;
@@ -57,13 +58,16 @@
 
 @layer components {
   .card-surface {
-    @apply bg-white border border-line rounded-2xl p-5 sm:p-6 shadow-card transition-shadow duration-200;
+    @apply bg-white border border-line rounded-2xl p-4 sm:p-6 shadow-card transition-shadow duration-200;
   }
   .card-surface-interactive {
-    @apply card-surface hover:shadow-card-hover hover:border-slate-300 cursor-pointer transition-all duration-200;
+    @apply card-surface hover:shadow-card-hover hover:border-surface-300 cursor-pointer transition-all duration-200;
   }
   .form-group {
-    @apply flex flex-col gap-1.5 w-full;
+    @apply flex flex-col gap-2.5 w-full;
+  }
+  .form-step {
+    @apply flex flex-col gap-4 w-full;
   }
   .form-group-error .form-input,
   .form-group-error .form-select { @apply border-red; }
@@ -78,13 +82,19 @@
   .field-error {
     @apply text-xs font-bold text-red mt-1 flex items-center gap-1;
   }
+  /* text-base (16px) + min-h-11 (44px) on mobile: prevents iOS focus auto-zoom and meets touch-target size */
   .form-input {
-    @apply w-full rounded-sm border border-surface-300 bg-surface px-3.5 py-2.5 text-sm text-text outline-none transition
+    @apply w-full rounded-sm border border-surface-300 bg-surface px-3.5 py-2.5 text-base sm:text-sm min-h-11 text-text outline-none transition
+           placeholder:text-muted/70 focus:border-brand focus:ring-2 focus:ring-brand/15
+           disabled:bg-surface-soft disabled:text-muted disabled:cursor-not-allowed;
+  }
+  .form-textarea {
+    @apply w-full rounded-sm border border-surface-300 bg-surface px-3.5 py-2.5 text-base sm:text-sm text-text outline-none transition resize-y
            placeholder:text-muted/70 focus:border-brand focus:ring-2 focus:ring-brand/15
            disabled:bg-surface-soft disabled:text-muted disabled:cursor-not-allowed;
   }
   .form-file {
-    @apply w-full rounded-sm border border-surface-300 bg-surface px-3 py-2 text-sm text-text outline-none transition
+    @apply w-full rounded-sm border border-surface-300 bg-surface px-3 py-2 text-base sm:text-sm min-h-11 text-text outline-none transition
            file:me-3 file:py-1.5 file:px-4 file:rounded-sm file:border-0 file:text-sm file:font-bold file:bg-brand-soft file:text-brand
            hover:file:bg-brand-100 focus:border-brand focus:ring-2 focus:ring-brand/15
            disabled:bg-surface-soft disabled:text-muted disabled:cursor-not-allowed;
@@ -99,23 +109,25 @@
     background-position: left 0.75rem center;
   }
   .form-checkbox {
-    @apply w-4 h-4 m-0 shrink-0 rounded-sm;
+    @apply w-5 h-5 sm:w-4 sm:h-4 m-0 shrink-0 rounded-sm;
     accent-color: #2b675f;
   }
   .form-radio {
-    @apply w-4 h-4 m-0 shrink-0 rounded-full;
+    @apply w-5 h-5 sm:w-4 sm:h-4 m-0 shrink-0 rounded-full;
     accent-color: #2b675f;
   }
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold
-           no-underline cursor-pointer select-none transition-all duration-150 min-h-[44px]
+           no-underline cursor-pointer select-none transition-all duration-150 min-h-[44px] max-w-full
            active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none disabled:transform-none;
   }
   .btn-primary {
     @apply btn text-white bg-brand-800 shadow-btn hover:bg-brand-900 hover:shadow-card-hover;
   }
-  .btn-accent {
-    @apply btn bg-amber-500 text-white shadow-sm hover:bg-amber-600;
+  /* Compact action for dense table/tool rows (replaces repeated btn-ghost text-xs py-1 px-2 min-h-0 overrides).
+     Desktop-only by definition: keeps a 44px tap target on touch screens. */
+  .btn-sm {
+    @apply text-xs py-1.5 px-2.5 min-h-9 md:py-1 md:px-2 md:min-h-0;
   }
   .btn-soft-primary {
     @apply btn bg-brand-50 text-brand-800 border border-brand-100 hover:bg-brand-100;
@@ -139,10 +151,10 @@
     @apply btn bg-red-soft text-red border-transparent;
   }
   .btn-ghost {
-    @apply btn bg-transparent border-transparent text-muted;
+    @apply btn bg-surface-soft border border-line text-text;
   }
   .btn-ghost:hover {
-    @apply bg-surface-soft;
+    @apply bg-surface-strong;
   }
   .btn-secondary {
     @apply btn bg-surface-strong border-line text-text;
@@ -174,35 +186,47 @@
   }
 
   /* §3.2 new primitives */
-  .page-container { @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8; }
-  .page-stack     { @apply flex flex-col gap-5; }
+  .page-container { @apply w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8; }
+  .page-stack     { @apply flex flex-col gap-4 sm:gap-5; }
   .aspect-video   { aspect-ratio: 16 / 9; }
   .section-head   { @apply flex items-center justify-between gap-4 mb-4 flex-wrap; }
   .actions-row    { @apply flex items-center gap-2.5 flex-wrap; }
   .form-grid      { @apply grid grid-cols-1 md:grid-cols-2 gap-4; }
   .form-grid-full { @apply md:col-span-2; }
-  .table-wrap { @apply overflow-x-auto border border-line rounded-sm; }
+  .table-wrap {
+    @apply overflow-x-auto border border-line rounded-sm;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
   .table      { @apply w-full text-sm text-text; }
   .table tbody tr { @apply transition-colors; }
   .table tbody tr:hover { @apply bg-surface-soft/60; }
-  .table-th   { @apply bg-surface-soft text-muted text-xs font-bold uppercase tracking-wide text-start px-3 py-3.5 border-b border-line whitespace-nowrap; }
-  .table-td   { @apply px-3 py-3.5 border-b border-line align-middle; }
+  .table-th   { @apply bg-surface-soft text-muted text-xs font-bold uppercase tracking-wide text-start px-2.5 py-2.5 sm:px-3 sm:py-3.5 border-b border-line whitespace-nowrap; }
+  .table-td   { @apply px-2.5 py-3 sm:px-3 sm:py-3.5 border-b border-line align-middle; }
   .table-actions { @apply flex items-center gap-2 whitespace-nowrap; }
   .bidi { direction: ltr; unicode-bidi: isolate; display: inline-block; }
-  .btn-icon { @apply h-10 min-w-10 inline-grid place-items-center border border-line rounded-sm bg-surface text-text transition hover:-translate-y-px hover:shadow-2xs; }
+  /* 44px touch target on mobile, compact 40px on desktop */
+  .btn-icon { @apply h-11 min-w-11 md:h-10 md:min-w-10 inline-grid place-items-center border border-line rounded-sm bg-surface text-text transition hover:-translate-y-px hover:shadow-2xs; }
   .kbd      { @apply ms-auto bg-surface-soft border border-line rounded px-1.5 py-0.5 text-xs; }
-  .display  { @apply text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-balance; }
-  .request-feedback { @apply fixed top-3 left-1/2 -translate-x-1/2 z-toast px-4 py-2.5 rounded-sm bg-red-soft text-red font-bold text-sm shadow-card opacity-0 transition-opacity pointer-events-none; }
+  /* Keyboard-active search result (wired to ui.js dialog ArrowUp/Down/Enter nav) */
+  .search-result-item.active { @apply bg-brand-soft; }
+  .display  { @apply text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-balance; overflow-wrap: break-word; }
+  .request-feedback { @apply fixed top-3 left-1/2 -translate-x-1/2 z-toast w-[calc(100%-2rem)] max-w-md text-center px-4 py-2.5 rounded-sm bg-red-soft text-red font-bold text-sm shadow-card opacity-0 transition-opacity pointer-events-none; }
+  /* JS reveals the element by toggling `.visible`; override the hidden defaults so it actually appears */
+  .request-feedback.visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
   .dl { @apply grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 m-0; }
   .dt { @apply text-xs font-bold text-muted uppercase tracking-wider; }
-  .dd { @apply m-0 text-sm font-medium text-text; }
+  .dd { @apply m-0 text-sm font-medium text-text; flex: 1 1 0%; min-width: 0; overflow-wrap: anywhere; }
   .auth-hero { @apply relative overflow-hidden flex flex-col justify-between p-10 lg:p-12 text-white bg-gradient-to-br from-surface-inverse to-brand-strong; }
   .auth-hero::before, .auth-hero::after { content: ""; position: absolute; border-radius: 9999px; background: rgba(255,255,255,.06); }
   .auth-hero::before { width: 380px; height: 380px; inset-inline-end: -150px; top: -120px; }
   .auth-hero::after  { width: 260px; height: 260px; inset-inline-start: -110px; bottom: -80px; }
   .auth-hero > * { position: relative; z-index: 1; }
   .sidebar-section { @apply px-3 pb-2 pt-4 text-brand-200/60 uppercase text-xs tracking-widest font-extrabold; }
-  .sidebar-link { @apply flex items-center gap-2.5 px-3 py-2.5 rounded-sm text-white/80 no-underline transition-colors hover:bg-white/10 hover:text-white; }
+  .sidebar-link { @apply flex items-center gap-2.5 px-3 py-2.5 min-h-11 rounded-sm text-white/80 no-underline transition-colors hover:bg-white/10 hover:text-white; }
   .sidebar-link.active, .sidebar-link[aria-current="page"] { @apply bg-white/15 text-white border-s-[3px] border-brand-200; }
 
   /* Stat cards (dashboards) */
@@ -215,22 +239,72 @@
   /* Avatar chip */
   .avatar { @apply w-9 h-9 rounded-full bg-brand-soft text-brand font-black text-sm grid place-items-center shrink-0; }
 
-  /* Bar chart (height driven by inline --bar percentage) */
-  .bar-chart { @apply grid grid-cols-2 lg:grid-cols-4 gap-4 items-end h-48 pt-3; }
-  .bar-chart > div { @apply h-full flex flex-col justify-end gap-1; }
+  /* Bar chart (height driven by inline --bar percentage). Height lives on each
+     cell so the mobile 2-col wrap keeps full bar height instead of halving it. */
+  .bar-chart { @apply grid grid-cols-2 lg:grid-cols-4 gap-4 items-end pt-3; }
+  .bar-chart > div { @apply h-40 lg:h-48 flex flex-col justify-end gap-1; }
   .bar { @apply block w-full bg-brand rounded-t-sm; height: var(--bar, 0%); min-height: 3px; }
 
   /* Progress bars (width driven by inline --progress percentage) */
   .progress-track { @apply h-2 rounded-full bg-line overflow-hidden; }
   .progress-bar { @apply block h-full bg-brand rounded-full; width: var(--progress, 0%); }
   .empty-state { @apply grid justify-items-center gap-2 min-h-40 content-center text-center; }
+  /* Stretches an empty state to fill its flex parent, and spans the full track of a grid parent */
+  .empty-state-fill { @apply empty-state flex-1 min-h-60 col-span-full; }
+
+  /* Search/filter input wrapper (replaces repeated min-w-[210px] utility) */
+  .search-field { @apply relative flex-1 min-w-[210px] max-sm:min-w-0 max-sm:w-full; }
+
+  /* Segmented tab strip (shared by entrance exams, payments, landing settings) */
+  .tab-track {
+    @apply inline-flex flex-wrap items-center gap-1 rounded-sm bg-surface-soft p-1;
+  }
+  .tab {
+    @apply inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-sm font-bold text-muted no-underline transition-colors hover:text-text hover:bg-surface/50 cursor-pointer min-h-9;
+  }
+  .tab-active, .tab[aria-current="page"] {
+    @apply bg-surface text-text shadow-sm;
+  }
+
+  /* Mobile card-stack for data tables (replaces horizontal table on small screens) */
+  .card-stack { @apply flex flex-col gap-4 w-full; }
+  .mobile-card { @apply flex items-center gap-2.5 border border-line rounded-sm p-4 w-full overflow-hidden; }
+
+  /* Landing page — decorative hero circles */
+  .landing-hero-deco { position: absolute; border-radius: 9999px; background: radial-gradient(circle, rgba(43, 103, 95, 0.08) 0%, transparent 70%); pointer-events: none; }
+  .landing-hero-deco--1 { width: 500px; height: 500px; inset-inline-end: -200px; top: -200px; }
+  .landing-hero-deco--2 { width: 350px; height: 350px; inset-inline-start: -120px; bottom: -150px; }
+  .landing-hero-deco--3 { width: 200px; height: 200px; inset-inline-end: 30%; top: 10%; animation: float 6s ease-in-out infinite; }
+  /* Shrink decorative circles on phones to reduce paint cost and visual noise */
+  @media (max-width: 639.98px) {
+    .landing-hero-deco--1 { width: 300px; height: 300px; inset-inline-end: -160px; top: -160px; }
+    .landing-hero-deco--2 { width: 220px; height: 220px; inset-inline-start: -110px; bottom: -110px; }
+    .landing-hero-deco--3 { display: none; }
+  }
+
+  /* Landing page — hero heading accent */
+  .hero-heading { @apply text-brand; }
+  .hero-heading strong { color: inherit; }
+
+  /* Landing page — section connector accent bar */
+  .section-accent { @apply w-12 h-1 rounded-full bg-gradient-to-r from-brand to-brand-strong mx-auto mb-4; }
+
+  /* Landing page — card hover lift */
+  .card-hover-lift { @apply transition-all duration-300 hover:-translate-y-1 hover:shadow-card-hover; }
+  /* Disable lift on touch devices so cards don't stick in a "hovered" state after tap */
+  @media (hover: none) {
+    .card-hover-lift:hover { transform: none; box-shadow: none; }
+  }
+
+  /* Landing page — staggered entrance delays */
+  .animate-delay-1 { animation-delay: 0.08s; }
+  .animate-delay-2 { animation-delay: 0.16s; }
+  .animate-delay-3 { animation-delay: 0.24s; }
+  .animate-delay-4 { animation-delay: 0.32s; }
 }
 
 @layer utilities {
   .ps-3 { padding-inline-start: 0.75rem; }
-  .pe-3 { padding-inline-end: 0.75rem; }
-  .me-1 { margin-inline-end: 0.25rem; }
-  .me-2 { margin-inline-end: 0.5rem; }
   .scrollbar-none {
     scrollbar-width: none;
     -ms-overflow-style: none;
@@ -238,8 +312,6 @@
   .scrollbar-none::-webkit-scrollbar {
     display: none;
   }
-  .dir-ltr { direction: ltr !important; text-align: left !important; }
-  .dir-rtl { direction: rtl !important; text-align: right !important; }
   .htmx-indicator {
     opacity: 0;
     transition: opacity 200ms ease-in-out;
@@ -259,6 +331,29 @@
     body { background: white !important; color: black !important; }
     .card-surface { border: none !important; box-shadow: none !important; padding: 0 !important; }
     @page { margin: 2cm; }
+  }
+}
+
+/* ── Mobile off-canvas sidebar & backdrop (below lg / 1024px) ────────────────
+   Alpine toggles the `open` class on #admin-sidebar / #student-sidebar and the
+   `.z-backdrop` scrim. These rules are intentionally UNLAYERED: CSS layer order
+   beats specificity, so layered rules would lose to utilities like `-start-72`
+   and `opacity-0`. Unlayered styles win without !important. */
+@media (max-width: 1023.98px) {
+  #admin-sidebar,
+  #student-sidebar {
+    bottom: 0;
+    padding: 1rem 1.25rem calc(1rem + env(safe-area-inset-bottom, 0px));
+    box-shadow: none; /* shadow-modal would bleed a strip onto the viewport edge while hidden off-canvas */
+  }
+  #admin-sidebar.open,
+  #student-sidebar.open {
+    inset-inline-start: 0;
+    box-shadow: 0 25px 50px -12px rgba(10, 46, 47, 0.25);
+  }
+  .z-backdrop.open {
+    opacity: 1;
+    pointer-events: auto;
   }
 }
 

@@ -124,7 +124,7 @@
                   {% endif %}
                 </div>
                 <div class="flex gap-2 shrink-0">
-                  <a class="btn-ghost text-xs py-1 px-2 min-h-0" href="{% url 'assessments:admin_section_edit' assessment.id section.id %}">{% trans "Edit" %}</a>
+                  <a class="btn-ghost btn-sm" href="{% url 'assessments:admin_section_edit' assessment.id section.id %}">{% trans "Edit" %}</a>
                   <form method="post" action="{% url 'assessments:admin_section_delete' assessment.id section.id %}" data-confirm="{% trans 'Delete this section?' %}" class="inline m-0">{% csrf_token %}
                     <button class="btn-danger text-xs py-1 px-2 min-h-0" type="submit">{% trans "Delete" %}</button>
                   </form>
@@ -137,15 +137,19 @@
                     {% for bq in section.preview_bank %}
                       <div class="border border-line rounded-sm p-3 mb-2 bg-surface-soft ms-1">
                         <div class="flex items-center gap-2 mb-1">
-                          <span class="px-1.5 py-0.5 text-xs font-bold rounded-full bg-info-soft text-info-text">{% trans "MCQ" %}</span>
+                          <span class="px-1.5 py-0.5 text-xs font-bold rounded-full {% if bq.question_type == 'mcq' %}bg-info-soft text-info-text{% else %}bg-warning-soft text-warning-text{% endif %}">{{ bq.get_question_type_display }}</span>
                           <span class="text-xs text-muted">({% trans "from bank" %})</span>
                           <span class="text-xs text-muted ms-auto">{{ bq.points }} {% trans "pts" %}</span>
                         </div>
                         <p class="text-sm m-0">{{ bq.text }}</p>
-                        {% if bq.choices.exists %}
-                          <div class="flex flex-col gap-1 mt-2 ps-2 border-s-2 border-line">{% for c in bq.choices.all %}
-                            <label class="flex items-center gap-2 text-sm"><input type="radio" class="form-radio" disabled{% if c.is_correct %} checked{% endif %}><span>{{ c.text }}</span></label>
-                          {% endfor %}</div>
+                        {% if bq.question_type == 'mcq' %}
+                          {% if bq.choices.exists %}
+                            <div class="flex flex-col gap-1 mt-2 ps-2 border-s-2 border-line">{% for c in bq.choices.all %}
+                              <label class="flex items-center gap-2 text-sm"><input type="radio" class="form-radio" disabled{% if c.is_correct %} checked{% endif %}><span>{{ c.text }}</span></label>
+                            {% endfor %}</div>
+                          {% endif %}
+                        {% else %}
+                          <textarea class="form-textarea" rows="5" disabled placeholder="{% trans 'Written answer' %}"></textarea>
                         {% endif %}
                       </div>
                     {% endfor %}
@@ -162,23 +166,32 @@
                           </form>
                         </div>
                         <p class="text-sm m-0">{{ mq.text }}</p>
+                        {% if mq.question_type == 'mcq' %}
+                          {% if mq.choices.exists %}
+                            <div class="flex flex-col gap-1 mt-2 ps-2 border-s-2 border-line">{% for c in mq.choices.all %}
+                              <label class="flex items-center gap-2 text-sm"><input type="radio" class="form-radio" disabled{% if c.is_correct %} checked{% endif %}><span>{{ c.text }}</span></label>
+                            {% endfor %}</div>
+                          {% endif %}
+                        {% else %}
+                          <textarea class="form-textarea" rows="5" disabled placeholder="{% trans 'Written answer' %}"></textarea>
+                        {% endif %}
                         {% if mq.rubric %}<details class="mt-1"><summary class="text-xs text-muted cursor-pointer">{% trans "Rubric" %}</summary><p class="text-xs text-muted mt-1 mb-0">{{ mq.rubric }}</p></details>{% endif %}
                       </div>
                     {% endfor %}
                   </div>
                 {% else %}
-                  <p class="text-sm text-muted mb-3 ms-1">{% trans "No questions in this section yet." %}</p>
+                  {% include "ui/components/_empty_state.html" with title=_("No questions in this section yet.") %}
                 {% endif %}
                 <div class="flex gap-2 flex-wrap pb-2">
-                  <a class="btn-ghost text-xs py-1 px-2 min-h-0" href="{% url 'assessments:admin_section_manual_create' assessment.id section.id %}">+ {% trans "Add manual question" %}</a>
-                  <a class="btn-ghost text-xs py-1 px-2 min-h-0" href="{% url 'assessments:admin_lecture_bank_list' assessment.cohort.diploma.id assessment.cohort.id assessment.semester.id section.lecture.id %}">{% trans "Manage question bank" %}</a>
+                  <a class="btn-ghost btn-sm" href="{% url 'assessments:admin_section_manual_create' assessment.id section.id %}">+ {% trans "Add manual question" %}</a>
+                  <a class="btn-ghost btn-sm" href="{% url 'assessments:admin_lecture_bank_list' assessment.cohort.diploma.id assessment.cohort.id assessment.semester.id section.lecture.id %}">{% trans "Manage question bank" %}</a>
                 </div>
               </div>
             </details>
           {% endfor %}
         </div>
       {% else %}
-        <p class="text-muted m-0">{% trans "No sections yet." %}</p>
+        {% include "ui/components/_empty_state.html" with title=_("No sections yet.") %}
       {% endif %}
     </section>
     <section class="card-surface"><div class="section-head"><div>
@@ -187,7 +200,7 @@
         </div>
       </div>
       {% if attempts %}
-        <div class="table-wrap"><table class="table">
+        <div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>
                 <th class="table-th">{% trans "Student" %}</th>
@@ -216,6 +229,18 @@
               {% endfor %}
             </tbody>
           </table>
+        </div>
+        <div class="card-stack lg:hidden">
+          {% for attempt in attempts %}
+            <div class="mobile-card">
+              <div class="flex-1 min-w-0">
+                <strong class="block truncate">{{ attempt.student }}</strong>
+                {% include "ui/components/_status.html" with code=attempt.status label=attempt.get_status_display %}
+                <small class="block text-muted">{% trans "Score" %}: {{ attempt.score|default:'—' }} / {{ attempt.assessment.total_points }} &middot; {{ attempt.submitted_at|date:"d/m/Y H:i"|default:'—' }}</small>
+              </div>
+              <a class="btn-soft-primary shrink-0" href="{% url 'assessments:admin_grade_detail' attempt.id %}">{% trans "Grade" %}</a>
+            </div>
+          {% endfor %}
         </div>
       {% else %}
         {% include "ui/components/_empty_state.html" with title=_("No attempts") message=_("No student attempts for this assessment.") %}

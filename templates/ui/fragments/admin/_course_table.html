@@ -9,7 +9,7 @@
     </div>
   </div>
   {% if page_obj.object_list %}
-    <div class="table-wrap"><table class="table">
+    <div class="table-wrap hidden lg:block"><table class="table">
         <thead>
           <tr>
             <th class="table-th">#</th>
@@ -50,11 +50,21 @@
         </tbody>
       </table>
     </div>
-  {% else %}
-    <div class="empty-state"><span>&#9679;</span>
-      <h3>{% trans "No courses found" %}</h3>
-      <p>{% trans "Try changing the search or filters." %}</p>
+    <div class="card-stack lg:hidden">
+      {% for c in page_obj %}
+        <div class="mobile-card">
+          <div class="flex-1 min-w-0">
+            <strong class="block truncate">{{ c.title }}</strong>
+            <small class="block text-muted truncate">{{ c.description|truncatewords:12|default:'—' }}</small>
+            <small class="block text-muted">{{ c.version_count }} {% trans "versions" %} / {{ c.lecture_count }} {% trans "lectures" %} &middot; {{ c.enrollment_count }} {% trans "enrollments" %}</small>
+            {% include "ui/components/_status.html" with code=c.is_active|yesno:"active,inactive" label=c.is_active|yesno:_("Active,Inactive") %}
+          </div>
+          <a class="btn-soft-primary shrink-0" href="{% url 'academics:admin_course_detail' c.id %}">{% trans "Open" %}</a>
+        </div>
+      {% endfor %}
     </div>
+  {% else %}
+    {% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No courses found") message=_("Try changing the search or filters.") %}
   {% endif %}
 </section>
 

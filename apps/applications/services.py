@@ -173,6 +173,26 @@ def find_duplicate(data: RegistrationData) -> str | None:
     return None
 
 
+def is_apply_target_open(cohort=None, course=None) -> bool:
+    """Shared open-target predicate for registration and apply flows (A5/S2-08).
+
+    A diploma cohort is open when it is active, its application window has
+    not ended, and it has an active entrance exam. A course is open when it
+    is active and has an active version. The registration form, the apply
+    selectors, and the submission services must all use this single rule.
+    """
+    today = timezone.now().date()
+    if cohort is not None:
+        if not cohort.is_active:
+            return False
+        if cohort.end_date is None or cohort.end_date < today:
+            return False
+        return cohort.entrance_exams.filter(is_active=True).exists()
+    if course is not None:
+        return bool(course.is_active and course.versions.filter(is_active=True).exists())
+    return False
+
+
 @transaction.atomic
 def submit_registration(
     data: RegistrationData,
@@ -186,7 +206,9 @@ def submit_registration(
     if duplicate_on:
         raise ValueError(duplicate_on)
 
-    user_password = normalize_phone(data.phone) or secrets.token_urlsafe(8)
+    # Random, never-derived initial password: it is never delivered to the
+    # user (S2-24); the password is established during account activation.
+    user_password = secrets.token_urlsafe(16)
     normalized_id = normalize_identity_number(data.country_code, data.national_id)
     user = User.objects.create_user(
         email=data.email,
@@ -221,7 +243,9 @@ def submit_registration(
 
     program_application = None
     if data.program_type == PROGRAM_TYPE_DIPLOMA and data.cohort_id:
-        cohort = Cohort.objects.get(pk=data.cohort_id)
+        cohort = Cohort.objects.filter(pk=data.cohort_id).first()
+        if cohort is None or not is_apply_target_open(cohort=cohort):
+            raise ValueError(_("This program is no longer accepting applications."))
         program_application = ProgramApplication.objects.create(
             student=profile,
             program_type=PROGRAM_TYPE_DIPLOMA,
@@ -229,7 +253,9 @@ def submit_registration(
             status=PROGRAM_APP_STATUS_SUBMITTED,
         )
     elif data.program_type == PROGRAM_TYPE_COURSE and data.course_id:
-        course = Course.objects.get(pk=data.course_id)
+        course = Course.objects.filter(pk=data.course_id).first()
+        if course is None or not is_apply_target_open(course=course):
+            raise ValueError(_("This course is no longer accepting applications."))
         program_application = ProgramApplication.objects.create(
             student=profile,
             program_type=PROGRAM_TYPE_COURSE,
@@ -237,7 +263,7 @@ def submit_registration(
             status=PROGRAM_APP_STATUS_SUBMITTED,
         )
 
-    transaction.on_commit(lambda: send_activation_email(user, user_password))
+    transaction.on_commit(lambda: send_activation_email(user))
 
     return profile, program_application
 
@@ -250,8 +276,11 @@ def submit_program_application(
 ) -> ProgramApplication:
     """Create a new program application for an existing student."""
     if program_type == PROGRAM_TYPE_COURSE:
-        if course is None or not course.is_active or not course.versions.filter(is_active=True).exists():
+        if course is None or not is_apply_target_open(course=course):
             raise ValueError(_("This course has no active version available for enrollment."))
+    elif program_type == PROGRAM_TYPE_DIPLOMA:
+        if cohort is None or not is_apply_target_open(cohort=cohort):
+            raise ValueError(_("This program is no longer accepting applications."))
     _check_duplicate_program_application(profile, program_type, cohort=cohort, course=course)
 
     return ProgramApplication.objects.create(
@@ -302,7 +331,7 @@ def _check_duplicate_program_application(
 
 
 def _student_group():
-    group, _ = Group.objects.get_or_create(name=GROUP_STUDENT)
+    group, _created = Group.objects.get_or_create(name=GROUP_STUDENT)
     return group
 
 
@@ -441,6 +470,7 @@ def _send_diploma_entrance_schedule_email(prog_app, actor=None) -> None:
 
 
 def _log_email_send(application, action, template_slug, recipient, actor=None) -> None:
+    is_resend = _has_non_resend_email_log(application, action)
     ProgramApplicationEmailLog.objects.create(
         program_application=application,
         action=action,
@@ -449,6 +479,7 @@ def _log_email_send(application, action, template_slug, recipient, actor=None) -
         sent_by=actor,
         sent_at=timezone.now(),
         status="sent",
+        is_resend=is_resend,
     )
 
 
@@ -684,13 +715,14 @@ def handle_user_account_activated(user, actor=None) -> None:
     """Find open submitted applications and advance them after account activation.
 
     Idempotent: if application is already past submitted, does nothing.
-    Wrapped in a single transaction so a failure in one application's
-    transition rolls back all.
+    Runs inside the caller's activation transaction (S2-31); the submitted
+    rows are locked so a concurrent application update cannot race the
+    transition, and a failure in one application's transition rolls back all.
     """
     if not hasattr(user, "student_profile"):
         return
     profile = user.student_profile
-    applications = ProgramApplication.objects.filter(
+    applications = ProgramApplication.objects.select_for_update().filter(
         student=profile,
         status=PROGRAM_APP_STATUS_SUBMITTED,
     )

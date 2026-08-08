@@ -12,7 +12,7 @@ from django.contrib.auth import login as auth_login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView, LogoutView
 from django.core.paginator import Paginator
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
 from django.db.models import Count, Q
 from django.http import Http404, HttpRequest, HttpResponse
@@ -22,11 +22,12 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods
 
-from apps.academics.constants import SCOPE_COURSE_VERSION, SCOPE_DIPLOMA_COHORT
+from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE, SCOPE_COURSE_VERSION, SCOPE_DIPLOMA_COHORT
 from apps.academics.models import (
     Cohort,
     Course,
     CourseVersion,
+    DiplomaEnrollment,
     Diploma,
     Lecture,
     ModeratorAssignment,
@@ -47,6 +48,7 @@ from apps.applications.constants import (
 )
 from apps.applications.models import ProgramApplication, ProgramApplicationDecision
 from apps.applications.models import ProgramApplicationEmailLog
+from apps.applications.views import review_queue_applications
 from apps.assessments.constants import ATTEMPT_STATUS_SUBMITTED, ATTEMPT_STATUS_UNDER_REVIEW
 from apps.assessments.models import AssessmentAttempt
 from apps.audit.constants import (
@@ -94,7 +96,7 @@ from .constants import (
     STAFF_ROLE_GROUPS,
     USER_STATUS_CHOICES,
 )
-from .forms import EmailAuthenticationForm, ProfileForm, UserEditForm, UserUploadForm
+from .forms import ActivationConfirmForm, EmailAuthenticationForm, ProfileForm, UserEditForm, UserUploadForm
 from .models import User, UserUpload
 from .services import confirm_upload, create_upload, preview_upload, send_activation_email
 from .tokens import validate_activation_token
@@ -122,15 +124,35 @@ def post_login(request: HttpRequest) -> HttpResponse:
 @login_required
 @require_http_methods(["GET", "POST"])
 def profile(request: HttpRequest) -> HttpResponse:
-    """View and edit the current user's basic profile."""
+    """View and edit the current user's basic profile.
+
+    StudentProfile is the authoritative source for student identity and
+    contact fields; the User copies are mirrored so admin lists and the
+    student header keep showing the same values. Email stays on User only.
+    """
+    profile = getattr(request.user, "student_profile", None)
+    initial = {
+        "full_name": profile.full_name if profile else request.user.full_name,
+        "full_name_ar": request.user.full_name_ar,
+        "phone": profile.phone if profile else request.user.phone,
+    }
     if request.method == "POST":
-        form = ProfileForm(request.POST, instance=request.user)
+        form = ProfileForm(request.POST, user=request.user)
         if form.is_valid():
-            form.save()
+            full_name = form.cleaned_data["full_name"]
+            phone = form.cleaned_data["phone"]
+            if profile is not None:
+                profile.full_name = full_name
+                profile.phone = phone
+                profile.save(update_fields=["full_name", "phone", "updated_at"])
+            request.user.full_name = full_name
+            request.user.full_name_ar = form.cleaned_data.get("full_name_ar", "")
+            request.user.phone = phone
+            request.user.save(update_fields=["full_name", "full_name_ar", "phone", "updated_at"])
             messages.success(request, _("Profile updated."))
             return redirect("accounts:profile")
     else:
-        form = ProfileForm(instance=request.user)
+        form = ProfileForm(initial=initial, user=request.user)
     template = "ui/pages/student/account_profile.html" if is_student(request.user) and not request.user.is_staff else "ui/pages/admin/profile.html"
     return render(request, template, {"form": form})
 
@@ -299,6 +321,7 @@ def _admin_dashboard_data() -> dict:
     return {
         "prog_submitted_count": prog_app_status_counts.get(PROGRAM_APP_STATUS_SUBMITTED, 0),
         "prog_under_review_count": prog_app_status_counts.get(PROGRAM_APP_STATUS_UNDER_REVIEW, 0),
+        "application_review_count": review_queue_applications().count(),
         "prog_accepted_count": prog_app_status_counts.get(PROGRAM_APP_STATUS_ACCEPTED, 0),
         "prog_activated_count": prog_app_status_counts.get(PROGRAM_APP_STATUS_ACTIVATED, 0),
         "unmatched_upload_count": unmatched_upload_count,
@@ -616,6 +639,7 @@ def admin_student_import(request):
             except Exception as e:
                 messages.error(request, _("Failed to process file: %(error)s") % {"error": str(e)})
         return render(request, "ui/pages/admin/import.html", {"form": form})
+    return render(request, "ui/pages/admin/import.html", {"form": form})
 
 
 @login_required
@@ -833,12 +857,27 @@ def admin_student_cluster_membership_add(request, cluster_id):
         messages.error(request, _("Select at least one student."))
         return redirect(reverse("academics:admin_diploma_detail", kwargs={"diploma_id": cluster.cohort.diploma_id}))
     added = 0
+    duplicate_count = 0
+    outside_cohort_count = 0
     for sid in student_ids:
         profile = get_object_or_404(StudentProfile, id=sid)
-        __, created = StudentClusterMembership.objects.get_or_create(
-            cluster=cluster, student=profile, defaults={"assigned_by": request.user}
-        )
-        if created:
+        if not DiplomaEnrollment.objects.filter(
+            student=profile, cohort=cluster.cohort, status=ENROLLMENT_STATUS_ACTIVE,
+        ).exists():
+            outside_cohort_count += 1
+            continue
+        if StudentClusterMembership.objects.filter(
+            student=profile, cohort=cluster.cohort,
+        ).exists():
+            duplicate_count += 1
+            continue
+        try:
+            StudentClusterMembership.objects.create(
+                cluster=cluster, student=profile, assigned_by=request.user,
+            )
+        except IntegrityError:
+            duplicate_count += 1
+        else:
             added += 1
     record_audit_event(
         actor=request.user,
@@ -848,6 +887,10 @@ def admin_student_cluster_membership_add(request, cluster_id):
         metadata={"count": added, "cohort_id": str(cluster.cohort_id)},
     )
     msg = _("%(count)d student(s) added to cluster.") % {"count": added}
+    if duplicate_count:
+        messages.warning(request, _("%(count)d student(s) were already in a cluster.") % {"count": duplicate_count})
+    if outside_cohort_count:
+        messages.warning(request, _("%(count)d student(s) are not enrolled in this cohort.") % {"count": outside_cohort_count})
     messages.success(request, msg)
     if is_htmx(request):
         response = render(request, "ui/fragments/admin/_cluster_members.html", {"cluster": cluster})
@@ -895,26 +938,50 @@ def _dashboard_url_name(user: User) -> str:
     return "core:landing"
 
 
-@require_http_methods(["GET"])
+@require_http_methods(["GET", "POST"])
 def activate_account(request, uidb64, token):
+    """Activate an account via the emailed link.
+
+    GET renders a confirmation page (no state changes). POST performs the
+    activation, dependent application state, and initial password setting in
+    one transaction, then logs the user in.
+    """
     pk = validate_activation_token(uidb64, token)
     if pk is None:
         messages.error(request, _("Activation link is invalid or expired."))
         return redirect("core:landing")
+    if request.method == "GET":
+        return render(request, "ui/pages/public/activation_confirm.html", {
+            "uidb64": uidb64,
+            "token": token,
+        })
+    # POST — perform the activation mutation inside ONE transaction.
+    from apps.applications.services import handle_user_account_activated
+
+    form = ActivationConfirmForm(request.POST, user=User.objects.filter(pk=pk).first())
+    if not form.is_valid():
+        return render(request, "ui/pages/public/activation_confirm.html", {
+            "uidb64": uidb64,
+            "token": token,
+            "form": form,
+        }, status=400)
     with transaction.atomic():
         user = User.objects.select_for_update().filter(pk=pk).first()
         if not user:
             messages.error(request, _("Activation link is invalid or expired."))
             return redirect("core:landing")
         if user.email_activated_at is not None:
+            # Already activated: reconcile any applications still stuck at
+            # submitted (idempotent), then send the user to login. The link is
+            # not a perpetual passwordless login, so no session is created.
+            handle_user_account_activated(user)
             messages.info(request, _("Account is already activated. Please log in."))
             return redirect("accounts:login")
         user.is_active = True
         user.email_activated_at = timezone.now()
-        user.save(update_fields=["is_active", "email_activated_at", "updated_at"])
-    # handle post-activation application state machine
-    from apps.applications.services import handle_user_account_activated
-    handle_user_account_activated(user)
+        user.set_password(form.cleaned_data["new_password1"])
+        user.save(update_fields=["is_active", "email_activated_at", "password", "updated_at"])
+        handle_user_account_activated(user)
     auth_login(request, user)
     messages.success(request, _("Account activated successfully. Welcome!"))
     return redirect(_dashboard_url_name(user))

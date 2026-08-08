@@ -20,17 +20,74 @@
         <p class="eyebrow">{% trans "Registration" %}</p>
         <h1>{% trans "Create your account" %}</h1>
         <p class="text-muted">{% trans "Complete the form to begin your application." %}</p>
-        <form method="post" class="page-stack">{% csrf_token %}
+        <form method="post" class="page-stack" novalidate>{% csrf_token %}
           {% if form.non_field_errors %}
             <div class="bg-red-soft text-red rounded-sm p-4" role="alert">{% for error in form.non_field_errors %}
                 <p>{{ error }}</p>
               {% endfor %}
             </div>
           {% endif %}
-          {% for field in form %}
-            {% include "ui/components/_field.html" %}
-          {% endfor %}
-          <button class="btn-primary w-full" type="submit">{% trans "Create account" %}</button>
+          {% if registration_steps %}
+            <div id="registration-wizard" data-initial-step="{{ registration_error_step }}">
+              <ol class="flex flex-wrap items-center gap-2 mb-6 list-none p-0" aria-label="{% trans 'Registration steps' %}">
+                {% for step in registration_steps %}
+                  <li class="text-xs font-bold px-3 py-1.5 rounded-full bg-line text-muted" data-wizard-step-index="{{ forloop.counter0 }}" data-wizard-step-target="{{ forloop.counter0 }}">
+                    <span>{{ forloop.counter }}. </span>{{ step.title }}
+                  </li>
+                {% endfor %}
+              </ol>
+              {% for step in registration_steps %}
+                <div class="form-step{% if not forloop.first %} hidden{% endif %}" data-step="{{ forloop.counter0 }}">
+                  {% for field in form %}
+                    {% if field.name in step.fields and field.name not in registration_program_fields %}
+                      {% include "ui/components/_field.html" %}
+                    {% endif %}
+                  {% endfor %}
+                  {% if forloop.last and form.apply_program %}
+                    <div id="program-selection" class="page-stack">
+                      {% include "ui/components/_field.html" with field=form.apply_program %}
+                      <div id="program-details" class="page-stack hidden">
+                        {% include "ui/components/_field.html" with field=form.program_type %}
+                        <div id="diploma-field" class="hidden">
+                          {% include "ui/components/_field.html" with field=form.diploma %}
+                        </div>
+                        <div id="course-field" class="hidden">
+                          {% include "ui/components/_field.html" with field=form.program_target %}
+                        </div>
+                      </div>
+                    </div>
+                  {% endif %}
+                </div>
+              {% endfor %}
+              <div class="flex items-center justify-between gap-3 mt-6">
+                <button type="button" class="btn-ghost" data-wizard-prev hidden>{% trans "Back" %}</button>
+                <div class="flex-1"></div>
+                <button type="button" class="btn-primary" data-wizard-next>{% trans "Next" %}</button>
+                <button type="submit" class="btn-primary" data-wizard-submit hidden>{% trans "Create account" %}</button>
+              </div>
+            </div>
+          {% else %}
+            {% for field in form %}
+              {% if field.name not in registration_program_fields %}
+                {% include "ui/components/_field.html" %}
+              {% endif %}
+            {% endfor %}
+            {% if form.apply_program %}
+              <div id="program-selection" class="page-stack">
+                {% include "ui/components/_field.html" with field=form.apply_program %}
+                <div id="program-details" class="page-stack hidden">
+                  {% include "ui/components/_field.html" with field=form.program_type %}
+                  <div id="diploma-field" class="hidden">
+                    {% include "ui/components/_field.html" with field=form.diploma %}
+                  </div>
+                  <div id="course-field" class="hidden">
+                    {% include "ui/components/_field.html" with field=form.program_target %}
+                  </div>
+                </div>
+              </div>
+            {% endif %}
+            <button class="btn-primary w-full" type="submit">{% trans "Create account" %}</button>
+          {% endif %}
         </form>
         <p class="text-center text-muted">{% trans "Already registered?" %}
           <a class="text-brand no-underline font-extrabold hover:underline" href="{% url 'accounts:login' %}">{% trans "Log in" %}</a>

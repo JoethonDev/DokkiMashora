@@ -59,7 +59,7 @@
             </div>
           </div>
           {% if applications %}
-            <div class="table-wrap"><table class="table">
+            <div class="table-wrap hidden lg:block"><table class="table">
                 <thead>
                   <tr>
                     <th class="table-th">{% trans "Program" %}</th>
@@ -89,6 +89,18 @@
                 </tbody>
               </table>
             </div>
+            <div class="card-stack lg:hidden">
+              {% for item in applications %}
+                <div class="mobile-card">
+                  <div class="flex-1 min-w-0">
+                    <strong class="block truncate">{% if item.cohort %}{{ item.cohort.diploma }}{% else %}{{ item.course }}{% endif %}</strong>
+                    {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
+                    <small class="block text-muted">{{ item.created_at|date:"d/m/Y" }}</small>
+                  </div>
+                  <a class="btn-soft-primary shrink-0" href="{% url 'applications:program_detail' item.id %}">{% trans "Review" %}</a>
+                </div>
+              {% endfor %}
+            </div>
           {% else %}
             {% include "ui/components/_empty_state.html" with title=_("No applications") message=_("This student has not submitted any applications.") %}
           {% endif %}
@@ -100,7 +112,7 @@
             </div>
           </div>
           {% if diploma_enrollments or course_enrollments %}
-            <div class="table-wrap"><table class="table">
+            <div class="table-wrap hidden lg:block"><table class="table">
                 <thead>
                   <tr>
                     <th class="table-th">{% trans "Program" %}</th>
@@ -126,6 +138,26 @@
                 </tbody>
               </table>
             </div>
+            <div class="card-stack lg:hidden">
+              {% for item in diploma_enrollments %}
+                <div class="mobile-card">
+                  <div class="flex-1 min-w-0">
+                    <strong class="block truncate">{{ item.cohort.diploma }}</strong>
+                    <small class="block text-muted">{% trans "Diploma" %}</small>
+                    {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
+                  </div>
+                </div>
+              {% endfor %}
+              {% for item in course_enrollments %}
+                <div class="mobile-card">
+                  <div class="flex-1 min-w-0">
+                    <strong class="block truncate">{{ item.course_version.course }}</strong>
+                    <small class="block text-muted">{% trans "Course" %}</small>
+                    {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
           {% else %}
             {% include "ui/components/_empty_state.html" with title=_("No enrollments") message=_("This student is not enrolled in any programs.") %}
           {% endif %}
@@ -138,7 +170,7 @@
           </div>
         </div>
         {% if payments or assessment_attempts %}
-          <div class="table-wrap"><table class="table">
+          <div class="table-wrap hidden lg:block"><table class="table">
               <thead>
                 <tr>
                   <th class="table-th">{% trans "Record" %}</th>
@@ -166,6 +198,26 @@
                 {% endfor %}
               </tbody>
             </table>
+          </div>
+          <div class="card-stack lg:hidden">
+            {% for item in payments %}
+              <div class="mobile-card">
+                <div class="flex-1 min-w-0">
+                  <strong class="block truncate">{% trans "Payment" %}</strong>
+                  {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
+                  <small class="block text-muted">{{ item.amount }} {{ item.currency }}</small>
+                </div>
+              </div>
+            {% endfor %}
+            {% for item in assessment_attempts %}
+              <div class="mobile-card">
+                <div class="flex-1 min-w-0">
+                  <strong class="block truncate">{% trans "Assessment" %}</strong>
+                  {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
+                  <small class="block text-muted">{{ item.assessment.title }}</small>
+                </div>
+              </div>
+            {% endfor %}
           </div>
         {% else %}
           {% include "ui/components/_empty_state.html" with title=_("No records") message=_("No payments or assessment records available.") %}

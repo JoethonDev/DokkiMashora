@@ -16,6 +16,7 @@ from django.core.management.base import BaseCommand, CommandError
 
 BACKUPS_DIR = Path(settings.BASE_DIR) / "backups"
 PROBE_NAME = "__deployment_backup_probe__"
+OPERATION_TIMEOUT_SECONDS = 1200
 
 
 class Command(BaseCommand):
@@ -53,7 +54,14 @@ class Command(BaseCommand):
             raise CommandError(f"Unsupported database backend: {backend}")
 
         self.stdout.write(f"Running: {' '.join(cmd)}")
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=OPERATION_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired as exc:
+            # subprocess.run terminates the child on timeout; surface a FAILED
+            # backup instead of leaving the operator hanging (S2-34).
+            raise CommandError(
+                f"Backup timed out after {OPERATION_TIMEOUT_SECONDS}s and was terminated."
+            ) from exc
         if result.returncode != 0:
             raise CommandError(result.stderr.strip() or "Backup command failed.")
         self.stdout.write(self.style.SUCCESS(f"Backup written to {out_file}"))

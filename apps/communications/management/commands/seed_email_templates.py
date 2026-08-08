@@ -106,10 +106,9 @@ DEFAULT_TEMPLATES = {
         "subject": "Activate your account",
         "body": (
             "Hello {{ full_name }},\n\n"
-            "Your account has been created. Your login email is {{ email }} and your initial password is {{ password }}.\n\n"
-            "Please activate your account using the link below:\n\n"
+            "Your account has been created. Your login email is {{ email }}.\n\n"
+            "Please activate your account using the link below and choose your password:\n\n"
             "{{ activation_url }}\n\n"
-            "You can change your password after logging in.\n\n"
             "Welcome aboard!\nDokkiMashora admissions"
         ),
     },

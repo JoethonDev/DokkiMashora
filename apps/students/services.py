@@ -14,14 +14,22 @@ from apps.academics.constants import (
     ENROLLMENT_STATUS_COMPLETED,
     ENROLLMENT_STATUS_PENDING,
 )
-from apps.academics.models import Cohort, Course, CourseVersion
+from apps.academics.models import (
+    Cohort,
+    Course,
+    CourseEnrollment,
+    DiplomaEnrollment,
+)
 from apps.applications.constants import (
     PROGRAM_APP_STATUS_REJECTED,
     PROGRAM_TYPE_COURSE,
     PROGRAM_TYPE_DIPLOMA,
 )
 from apps.applications.models import ProgramApplication
-from apps.applications.services import submit_program_application
+from apps.applications.services import (
+    is_apply_target_open,
+    submit_program_application,
+)
 from apps.progression.constants import (
     DIPLOMA_COMPLETION_COMPLETED,
     DIPLOMA_COMPLETION_GRADUATED,
@@ -71,6 +79,13 @@ def check_apply_eligibility(
             cohort = Cohort.objects.get(pk=cohort)
         diploma = cohort.diploma
 
+        if not is_apply_target_open(cohort=cohort):
+            return {
+                "allowed": False,
+                "reason_code": "target_closed",
+                "reason": _("This program is no longer accepting applications."),
+            }
+
         # Completed/graduated diploma
         from apps.progression.models import StudentDiplomaCompletion
         if StudentDiplomaCompletion.objects.filter(
@@ -116,7 +131,7 @@ def check_apply_eligibility(
             return {"allowed": True, "reason_code": None, "reason": None}
         if not isinstance(course, Course):
             course = Course.objects.get(pk=course)
-        if not course.is_active or not course.versions.filter(is_active=True).exists():
+        if not is_apply_target_open(course=course):
             return {
                 "allowed": False,
                 "reason_code": "no_active_version",
@@ -171,48 +186,92 @@ def get_open_apply_targets(
     page: int = 1,
     page_size: int = 10,
 ) -> dict:
-    """Return currently open targets for one program type."""
+    """Return currently open targets for one program type.
+
+    The open-target rule is the shared predicate ``is_apply_target_open``;
+    per-profile exclusions (completed/enrolled/pending) are applied as
+    set-based queryset filters, never per-target Python eligibility loops.
+    """
     now = timezone.now()
     today = now.date()
 
     if program_type == PROGRAM_TYPE_DIPLOMA:
         cohorts_qs = (
-        Cohort.objects.filter(
-            is_active=True,
-            end_date__gte=today,
+            Cohort.objects.filter(
+                is_active=True,
+                end_date__isnull=False,
+                end_date__gte=today,
+                entrance_exams__is_active=True,
+            )
+            .select_related("diploma")
+            .order_by("-start_date")
+            .distinct()
         )
-        .select_related("diploma")
-        .order_by("-start_date")
-        .distinct()
-        )
-        cohorts = list(cohorts_qs)
         if profile is not None:
-            cohorts = [cohort for cohort in cohorts if check_apply_eligibility(profile, cohort=cohort)["allowed"]]
-        paginator = Paginator(cohorts, page_size)
+            blocked_diploma_ids = _blocked_diploma_ids(profile)
+            if blocked_diploma_ids:
+                cohorts_qs = cohorts_qs.exclude(diploma_id__in=blocked_diploma_ids)
+        paginator = Paginator(cohorts_qs, page_size)
         page_obj = paginator.get_page(page)
         return {"items": list(page_obj.object_list), "has_more": page_obj.has_next(), "next_page": page_obj.next_page_number() if page_obj.has_next() else None}
 
     if program_type == PROGRAM_TYPE_COURSE:
-        course_versions = (
-            CourseVersion.objects.filter(is_active=True, course__is_active=True)
-            .select_related("course")
-            .order_by("course__title", "-created_at", "-id")
+        courses_qs = (
+            Course.objects.filter(is_active=True, versions__is_active=True)
+            .distinct()
+            .order_by("title")
         )
-        courses = []
-        seen_course_ids: set[int] = set()
-        for version in course_versions:
-            course = version.course
-            if course.pk in seen_course_ids:
-                continue
-            if profile is not None and not check_apply_eligibility(profile, course=course)["allowed"]:
-                continue
-            seen_course_ids.add(course.pk)
-            courses.append(course)
-        paginator = Paginator(courses, page_size)
+        if profile is not None:
+            blocked_course_ids = _blocked_course_ids(profile)
+            if blocked_course_ids:
+                courses_qs = courses_qs.exclude(id__in=blocked_course_ids)
+        paginator = Paginator(courses_qs, page_size)
         page_obj = paginator.get_page(page)
         return {"items": list(page_obj.object_list), "has_more": page_obj.has_next(), "next_page": page_obj.next_page_number() if page_obj.has_next() else None}
 
     return {"items": [], "has_more": False, "next_page": None}
+
+
+def _blocked_diploma_ids(profile: StudentProfile) -> set[int]:
+    """Diploma ids the profile can no longer apply to (set-based equivalent of check_apply_eligibility)."""
+    from apps.progression.models import StudentDiplomaCompletion
+
+    blocked = set(
+        StudentDiplomaCompletion.objects.filter(
+            student=profile,
+            status__in=(DIPLOMA_COMPLETION_COMPLETED, DIPLOMA_COMPLETION_GRADUATED),
+        ).values_list("diploma_enrollment__cohort__diploma_id", flat=True)
+    )
+    blocked |= set(
+        DiplomaEnrollment.objects.filter(
+            student=profile,
+            status__in=(ENROLLMENT_STATUS_ACTIVE, ENROLLMENT_STATUS_PENDING),
+        ).values_list("cohort__diploma_id", flat=True)
+    )
+    blocked |= set(
+        ProgramApplication.objects.filter(
+            student=profile,
+            program_type=PROGRAM_TYPE_DIPLOMA,
+        ).exclude(status=PROGRAM_APP_STATUS_REJECTED).values_list("cohort__diploma_id", flat=True)
+    )
+    return blocked
+
+
+def _blocked_course_ids(profile: StudentProfile) -> set[int]:
+    """Course ids the profile can no longer apply to (set-based equivalent of check_apply_eligibility)."""
+    blocked = set(
+        CourseEnrollment.objects.filter(
+            student=profile,
+            status__in=(ENROLLMENT_STATUS_ACTIVE, ENROLLMENT_STATUS_PENDING, ENROLLMENT_STATUS_COMPLETED),
+        ).values_list("course_version__course_id", flat=True)
+    )
+    blocked |= set(
+        ProgramApplication.objects.filter(
+            student=profile,
+            program_type=PROGRAM_TYPE_COURSE,
+        ).exclude(status=PROGRAM_APP_STATUS_REJECTED).values_list("course_id", flat=True)
+    )
+    return blocked
 
 
 def submit_apply_application(profile: StudentProfile, cohort=None, course=None) -> ProgramApplication:

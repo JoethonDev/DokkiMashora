@@ -4,7 +4,7 @@
     {% if navigation %}
       <div class="mb-2"><div class="text-xs font-extrabold uppercase text-muted px-2.5 pb-1 pt-2 flex items-center gap-1.5">{% trans "Navigation" %}</div>
         {% for item in navigation %}
-          <a class="flex items-center gap-2.5 p-2.5 rounded-sm no-underline text-text hover:bg-brand-soft" href="{{ item.url }}"><span class="w-8 h-8 rounded-sm bg-brand-soft text-brand grid place-items-center shrink-0">{{ item.icon|safe }}</span>
+          <a class="search-result-item flex items-center gap-2.5 p-2.5 rounded-sm no-underline text-text hover:bg-brand-soft" href="{{ item.url }}"><span class="w-8 h-8 rounded-sm bg-brand-soft text-brand grid place-items-center shrink-0">{{ item.icon|safe }}</span>
             <span class="flex-1 min-w-0"><strong>{{ item.label }}</strong>
               <small class="block text-muted text-xs mt-0.5">{{ item.section }}</small>
             </span>
@@ -21,21 +21,15 @@
     </button>
   </div>
 {% elif no_results %}
-  <div class="text-center py-8 px-5 text-muted"><p>
-      {% trans "No results for" %}
-      "
-      {{ q }}
-      "
-    </p>
-    <small>{% trans "Try a name, email, program, or screen name." %}</small>
-  </div>
+  {% blocktrans asvar no_results_title %}No results for "{{ q }}"{% endblocktrans %}
+  {% include "ui/components/_empty_state.html" with title=no_results_title message=_("Try a name, email, program, or screen name.") %}
 {% else %}
   {% for group in results %}
     <div class="mb-2"><div class="text-xs font-extrabold uppercase text-muted px-2.5 pb-1 pt-2 flex items-center gap-1.5">{{ group.label }}
         <span class="bg-surface-soft rounded-full px-1.5 py-px text-xs">{{ group.items|length }}</span>
       </div>
       {% for item in group.items %}
-        <a class="flex items-center gap-2.5 p-2.5 rounded-sm no-underline text-text hover:bg-brand-soft" href="{{ item.url }}">{% if group.name == "navigation" %}
+        <a class="search-result-item flex items-center gap-2.5 p-2.5 rounded-sm no-underline text-text hover:bg-brand-soft" href="{{ item.url }}">{% if group.name == "navigation" %}
             <span class="w-8 h-8 rounded-sm bg-brand-soft text-brand grid place-items-center shrink-0">{{ item.icon|safe }}</span>
           {% endif %}
           <span class="flex-1 min-w-0"><strong>{{ item.label }}</strong>

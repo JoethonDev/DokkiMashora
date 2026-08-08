@@ -6,10 +6,36 @@
 {% block content %}
   <div class="page-stack animate-enter-view">
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow|default:_("Academic") title=title description=description back_button=True back_url=back_url back_label=back_label %}
-    <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
-      {% for field in form %}
-        <div class="scope-field" data-field-name="{{ field.name }}">{% include "ui/components/_field.html" %}</div>
-      {% endfor %}
+    <form class="card-surface max-w-form mx-auto w-full page-stack" method="post" enctype="multipart/form-data"{% if form_action %} action="{{ form_action }}"{% endif %}>{% csrf_token %}
+      {% if reviewers %}
+        <label>{% trans "Reviewer" %}<select class="form-select" name="reviewer" required><option value="">{% trans "Select" %}</option>{% for reviewer in reviewers %}<option value="{{ reviewer.id }}">{{ reviewer.get_full_name|default:reviewer.email }}</option>{% endfor %}</select></label>
+        <label>{% trans "Cohort" %}<select class="form-select" name="cohort" required><option value="">{% trans "Select" %}</option>{% for cohort in cohorts %}<option value="{{ cohort.id }}">{{ cohort }}</option>{% endfor %}</select></label>
+        <label>{% trans "Semester" %}<select class="form-select" name="semester" required><option value="">{% trans "Select" %}</option>{% for semester in semesters %}<option value="{{ semester.id }}">{{ semester }}</option>{% endfor %}</select></label>
+        <label>{% trans "Section" %}<select class="form-select" name="section"><option value="">{% trans "All sections" %}</option>{% for section in sections %}<option value="{{ section.id }}">{{ section }}</option>{% endfor %}</select></label>
+      {% else %}
+        {% for field in form %}
+          <div class="scope-field" data-field-name="{{ field.name }}">{% include "ui/components/_field.html" %}</div>
+        {% endfor %}
+      {% endif %}
+      {% if semester_pass_percent_override is not None %}
+        <div class="form-group">
+          <label class="field-label" for="semester_pass_percent_override">{% trans "Semester pass percent override" %}</label>
+          <input class="form-input" type="number" id="semester_pass_percent_override" name="semester_pass_percent_override" value="{{ semester_pass_percent_override }}" min="0" max="100" step="0.01" placeholder="{% trans 'Inherits from diploma rule' %}">
+          <p class="field-help">{% trans "Leave empty to inherit the pass percent from the diploma progression rule." %}</p>
+        </div>
+        <div class="form-group">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input class="form-checkbox" type="checkbox" name="semester_require_all_required" value="1" {% if semester_require_all_required %}checked{% endif %}>
+            <span>{% trans "Require all required assessments" %}</span>
+          </label>
+        </div>
+        <div class="form-group">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input class="form-checkbox" type="checkbox" name="semester_allow_missing_optional" value="1" {% if semester_allow_missing_optional %}checked{% endif %}>
+            <span>{% trans "Allow missing optional assessments" %}</span>
+          </label>
+        </div>
+      {% endif %}
       {% if question_choices %}
         <fieldset class="form-group border border-line rounded-sm p-4" id="assessment-choices-fieldset">
           <legend class="font-bold text-sm px-1">{% trans "Choices" %}</legend>

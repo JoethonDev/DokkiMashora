@@ -9,7 +9,7 @@
     </div>
   </div>
   {% if page_obj.object_list %}
-    <div class="table-wrap"><table class="table">
+    <div class="table-wrap hidden lg:block"><table class="table">
         <thead>
           <tr>
             <th class="table-th">#</th>
@@ -51,6 +51,8 @@
                      href="{% url 'accounts:admin_user_detail' staff.id %}">{% trans "View" %}</a>
                   <a class="btn-ghost"
                      href="{% url 'accounts:admin_user_edit' staff.id %}">{% trans "Edit" %}</a>
+                  <a class="btn-ghost"
+                     href="{% url 'accounts:admin_staff_assignments' staff.id %}">{% trans "Assignments" %}</a>
                 </div>
               </td>
             </tr>
@@ -58,11 +60,23 @@
         </tbody>
       </table>
     </div>
-  {% else %}
-    <div class="empty-state"><span>&#9679;</span>
-      <h3>{% trans "No staff found" %}</h3>
-      <p>{% trans "Try changing the search or filters." %}</p>
+    <div class="card-stack lg:hidden">
+      {% for staff in page_obj %}
+        <div class="mobile-card">
+          <span class="rounded-full bg-brand-soft text-brand font-black grid place-items-center shrink-0 w-9 h-9 text-sm">{{ staff.full_name|slice:":2"|upper }}</span>
+          <div class="flex-1 min-w-0">
+            <strong class="block truncate">{{ staff.full_name }}</strong>
+            <small class="block text-muted truncate">{% for g in staff.groups.all %}{{ g.name }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</small>
+            {% include "ui/components/_status.html" with code=staff.status label=staff.get_status_display %}
+          </div>
+          <div class="flex gap-2 shrink-0">
+            <a class="btn-soft-primary" href="{% url 'accounts:admin_user_detail' staff.id %}">{% trans "View" %}</a>
+            <a class="btn-ghost" href="{% url 'accounts:admin_staff_assignments' staff.id %}">{% trans "Assignments" %}</a>
+          </div>
+        </div>
+      {% endfor %}
     </div>
+  {% else %}
+    {% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No staff found") message=_("Try changing the search or filters.") %}
   {% endif %}
 </section>
-

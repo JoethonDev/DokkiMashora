@@ -10,7 +10,7 @@ class CertificateTemplateForm(StyledFormMixin, forms.ModelForm):
         model = CertificateTemplate
         fields = [
             "name", "diploma", "language", "template_type",
-            "body_html", "active", "is_placeholder",
+            "background_file", "body_html", "active", "is_placeholder",
         ]
         widgets = {
             "name": forms.TextInput(attrs={}),

@@ -5,9 +5,24 @@
 {% endblock %}
 {% block content %}
   <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=_("Grade submission") back_button=True %}
-    <p>{{ attempt.student|default:submission.student }}
-      -
-      {{ attempt.assessment|default:submission.assessment }}</p>
+    {% if attempt %}
+      <p>{{ attempt.student }} - {{ attempt.assessment }}</p>
+    {% elif submission %}
+      <p>{{ submission.student }} - {{ submission.assessment }}</p>
+    {% endif %}
+    {% if attempt %}
+      <div class="flex gap-2.5 items-center flex-wrap mb-4">
+        {% if attempt.status == "graded" %}
+          <form method="post" action="{% url 'assessments:admin_release_grades' attempt.id %}">{% csrf_token %}
+            <button class="btn-success" type="submit">{% trans "Release grades" %}</button>
+          </form>
+        {% elif attempt.status == "released" %}
+          <form method="post" action="{% url 'assessments:admin_hide_grades' attempt.id %}">{% csrf_token %}
+            <button class="btn-warning" type="submit">{% trans "Hide grades" %}</button>
+          </form>
+        {% endif %}
+      </div>
+    {% endif %}
   {% if submission %}
     <section class="card-surface"><p>
         {% trans "Submitted" %}

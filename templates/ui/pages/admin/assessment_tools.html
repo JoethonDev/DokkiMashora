@@ -33,7 +33,7 @@
         </a>
       </div>
     </section>
-    <div class="table-wrap"><table class="table">
+    <div class="table-wrap hidden lg:block"><table class="table">
         <thead>
           <tr>
             <th class="table-th">{% trans "Code" %}</th>
@@ -58,6 +58,19 @@
           {% endfor %}
         </tbody>
       </table>
+    </div>
+    <div class="card-stack lg:hidden">
+      {% for code in codes %}
+        <div class="mobile-card">
+          <div class="flex-1 min-w-0">
+            <strong class="block truncate">{{ code.code_number }}</strong>
+            <small class="block text-muted">{{ code.diploma_enrollment.student }} &middot; {{ code.get_delivery_mode_display|default:code.delivery_mode }}</small>
+          </div>
+          <form method="post" action="{% url 'assessments:admin_toggle_delivery_mode' assessment.id code.id %}" class="shrink-0 m-0">{% csrf_token %}
+            <button class="btn-ghost btn-sm" type="submit">{% trans "Toggle" %}</button>
+          </form>
+        </div>
+      {% endfor %}
     </div>
   {% elif sections %}
     <section class="card-surface"><h2>
@@ -101,7 +114,7 @@
         <button class="btn-primary" type="submit">{% trans "Save grade" %}</button>
       </form>
     </section>
-  {% elif overrides %}
+  {% elif exceptional_access %}
     <section class="card-surface"><h2>
         {% trans "Exceptional access" %}
         :
@@ -130,7 +143,7 @@
         <div class="actions-row"><button class="btn-primary" type="submit">{% trans "Create overrides" %}</button></div>
       </form>
     </section>
-    <div class="table-wrap"><table class="table">
+    <div class="table-wrap hidden lg:block"><table class="table">
         <thead>
           <tr>
             <th class="table-th">{% trans "Student" %}</th>
@@ -148,10 +161,37 @@
                 {{ item.close_at }}
               </td>
               <td class="table-td">{{ item.get_status_display|default:item.status }}</td>
+              <td class="table-td">
+                {% if item.status == "active" %}
+                  <form method="post" action="{% url 'assessments:admin_cancel_exceptional_access' assessment.id item.id %}">
+                    {% csrf_token %}
+                    <input name="reason" required placeholder="{% trans 'Cancellation reason' %}">
+                    <button class="btn-danger" type="submit">{% trans "Cancel" %}</button>
+                  </form>
+                {% endif %}
+              </td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
+    </div>
+    <div class="card-stack lg:hidden">
+      {% for item in overrides %}
+        <div class="mobile-card">
+          <div class="flex-1 min-w-0">
+            <strong class="block truncate">{{ item.diploma_enrollment.student }}</strong>
+            <small class="block text-muted">{{ item.open_at }} — {{ item.close_at }}</small>
+            <small class="block text-muted">{{ item.get_status_display|default:item.status }}</small>
+            {% if item.status == "active" %}
+              <form method="post" action="{% url 'assessments:admin_cancel_exceptional_access' assessment.id item.id %}">
+                {% csrf_token %}
+                <input name="reason" required placeholder="{% trans 'Cancellation reason' %}">
+                <button class="btn-danger" type="submit">{% trans "Cancel" %}</button>
+              </form>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
     </div>
   {% elif questions %}
     <section class="card-surface"><div class="section-head"><div>
@@ -169,20 +209,24 @@
                 <span class="px-2 py-0.5 text-xs font-bold rounded-full {% if question.question_type == 'mcq' %}bg-info-soft text-info-text{% else %}bg-warning-soft text-warning-text{% endif %}">{{ question.get_question_type_display }}</span>
               </div>
               <p class="text-sm font-medium m-0">{{ question.text }}</p>
-              {% if question.choices.exists %}
-                <div class="flex flex-col gap-1.5 mt-3 ps-2 border-s-2 border-line">
-                  {% for choice in question.choices.all %}
-                    <label class="flex items-center gap-2 text-sm">
-                      <input type="radio" class="form-radio" disabled{% if choice.is_correct %} checked{% endif %}>
-                      <span>{{ choice.text }}</span>
-                      <span class="text-xs text-muted">({{ choice.score }} {% trans "pts" %})</span>
-                    </label>
-                  {% endfor %}
-                </div>
+              {% if question.question_type == 'mcq' %}
+                {% if question.choices.exists %}
+                  <div class="flex flex-col gap-1.5 mt-3 ps-2 border-s-2 border-line">
+                    {% for choice in question.choices.all %}
+                      <label class="flex items-center gap-2 text-sm">
+                        <input type="radio" class="form-radio" disabled{% if choice.is_correct %} checked{% endif %}>
+                        <span>{{ choice.text }}</span>
+                        <span class="text-xs text-muted">({{ choice.score }} {% trans "pts" %})</span>
+                      </label>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              {% else %}
+                <textarea class="form-textarea" rows="5" disabled placeholder="{% trans 'Written answer' %}"></textarea>
               {% endif %}
             </div>
             <div class="flex gap-2 shrink-0">
-              <a class="btn-ghost text-xs py-1.5 px-2.5 min-h-0" href="{% url 'assessments:admin_lecture_bank_question_edit' diploma.id cohort.id semester.id lecture.id question.id %}">{% trans "Edit" %}</a>
+              <a class="btn-ghost btn-sm" href="{% url 'assessments:admin_lecture_bank_question_edit' diploma.id cohort.id semester.id lecture.id question.id %}">{% trans "Edit" %}</a>
               <form method="post" action="{% url 'assessments:admin_lecture_bank_question_delete' diploma.id cohort.id semester.id lecture.id question.id %}" data-confirm="{% trans 'Delete this question?' %}">{% csrf_token %}
                 <button class="btn-danger text-xs py-1.5 px-2.5 min-h-0" type="submit">{% trans "Delete" %}</button>
               </form>
@@ -191,7 +235,7 @@
         </div>
       {% empty %}
         <div class="border border-dashed border-line rounded-sm p-6 text-center">
-          <p class="text-muted m-0">{% trans "No questions yet." %}</p>
+          {% include "ui/components/_empty_state.html" with title=_("No questions yet.") %}
         </div>
       {% endfor %}
       <div class="flex gap-2.5 items-center flex-wrap mt-4">
@@ -202,7 +246,7 @@
   {% elif lecture %}
     <section class="card-surface"><div class="section-head"><div><p class="eyebrow">{% trans "Question bank" %}</p><h2>{{ lecture.title }}</h2><p class="text-muted">{{ cohort }} · {{ semester }}</p></div></div>
       <div class="border border-dashed border-line rounded-sm p-6 text-center">
-        <p class="text-muted m-0">{% trans "No questions yet." %}</p>
+        {% include "ui/components/_empty_state.html" with title=_("No questions yet.") %}
       </div>
       <div class="flex gap-2.5 items-center flex-wrap mt-4">
         <a class="btn-primary" href="{% url 'assessments:admin_lecture_bank_question_create' diploma.id cohort.id semester.id lecture.id %}">{% trans "Add question" %}</a>
@@ -210,7 +254,7 @@
       </div>
     </section>
   {% elif assignments %}
-    <div class="table-wrap"><table class="table">
+    <div class="table-wrap hidden lg:block"><table class="table">
         <thead>
           <tr>
             <th class="table-th">{% trans "Reviewer" %}</th>
@@ -231,6 +275,16 @@
         </tbody>
       </table>
     </div>
+    <div class="card-stack lg:hidden">
+      {% for item in assignments %}
+        <div class="mobile-card">
+          <div class="flex-1 min-w-0">
+            <strong class="block truncate">{{ item.reviewer }}</strong>
+            <small class="block text-muted">{{ item.cohort }} &middot; {{ item.semester }} &middot; {{ item.section|default:'-' }}</small>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
   {% elif form %}
     <form class="max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
       {% for field in form %}
@@ -248,7 +302,7 @@
         </div>
       </div>
       {% include "ui/components/_pagination.html" %}
-      <div class="table-wrap"><table class="table">
+      <div class="table-wrap hidden lg:block"><table class="table">
           <thead>
             <tr>
               <th class="table-th">{% trans "Student or assessment" %}</th>
@@ -273,6 +327,19 @@
             {% endfor %}
           </tbody>
         </table>
+      </div>
+      <div class="card-stack lg:hidden">
+        {% for item in page_obj %}
+          <div class="mobile-card">
+            <div class="flex-1 min-w-0">
+              <strong class="block truncate">{{ item.student|default:item.assessment|default:item.title|default:_("Assessment record") }}</strong>
+              <span class="status-pill-info">{{ item.get_status_display|default:item.status|default:'-' }}</span>
+              <small class="block text-muted">{{ item.created_at|default:'' }}</small>
+            </div>
+          </div>
+        {% empty %}
+          <div class="border border-line rounded-sm p-4 text-center">{% include "ui/components/_empty_state.html" with title=_("No records found.") %}</div>
+        {% endfor %}
       </div>
     </section>
   {% endif %}

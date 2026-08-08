@@ -24,7 +24,9 @@ MANIFEST
 
 # --- Project notes (not committed) -----------------------------------------
 docs/
-
+**/*.md
+!AGENTS.md
+!DOKKIMASHORA.md
 # --- Django ----------------------------------------------------------------
 *.log
 *.pot
@@ -43,6 +45,7 @@ htmlcov/
 
 # --- Environments ----------------------------------------------------------
 .env
+.env.docker
 .env.local
 .env.*.local
 
@@ -59,3 +62,6 @@ localhost_*.png
 node_modules/
 scripts/
 tests/
+stakeholder_lms_prototype/
+qa/
+**/*.docx

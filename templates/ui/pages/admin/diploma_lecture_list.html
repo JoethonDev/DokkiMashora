@@ -21,7 +21,7 @@
         </div>
       </div>
       {% if lectures %}
-        <div class="table-wrap"><table class="table">
+        <div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>
                 <th class="table-th">{% trans "Order" %}</th>
@@ -48,6 +48,20 @@
               {% endfor %}
             </tbody>
           </table>
+        </div>
+        <div class="card-stack lg:hidden">
+          {% for item in lectures %}
+            <div class="mobile-card">
+              <div class="flex-1 min-w-0">
+                <strong class="block truncate">{{ item.title }}</strong>
+                <small class="block text-muted">#{{ item.order }}</small>
+              </div>
+              <div class="flex gap-2 shrink-0">
+                <a class="btn-ghost btn-sm" href="{% url 'academics:admin_diploma_lecture_edit' diploma.id cohort.id semester.id item.id %}">{% trans "Edit" %}</a>
+                <a class="btn-soft-primary shrink-0" href="{% url 'academics:admin_diploma_lecture_preview' diploma.id cohort.id semester.id item.id %}">{% trans "Preview" %}</a>
+              </div>
+            </div>
+          {% endfor %}
         </div>
       {% else %}
         {% include "ui/components/_empty_state.html" with title=_("No lectures") message=_("No lectures found for this cohort and semester.") %}

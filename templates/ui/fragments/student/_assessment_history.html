@@ -1,13 +1,6 @@
 {% load i18n %}
-<section id="student-content" class="page-stack animate-enter-view"><section class="flex justify-between items-center gap-5 px-0.5 py-1.5"><div>
-      <p class="eyebrow">{% trans "Assessment" %}</p>
-      <h2>{% trans "Assessment history" %}</h2>
-      <p>{% trans "Review released scores, feedback, and assessment status." %}</p>
-    </div>
-    <a class="btn-soft"
-       href="{% url 'assessments:student_list' %}">{% trans "Available assessments" %}</a>
-  </section>
-  <section class="card-surface"><div class="table-wrap"><table class="table">
+<section id="student-content" class="page-stack animate-enter-view">{% url 'assessments:student_list' as student_assessment_list_url %}{% include "ui/components/_page_header.html" with eyebrow=_("Assessment") title=_("Assessment history") description=_("Review released scores, feedback, and assessment status.") back_url=student_assessment_list_url back_label=_("Available assessments") %}
+  <section class="card-surface"><div class="table-wrap hidden lg:block"><table class="table">
         <thead>
           <tr>
             <th class="table-th">{% trans "Assessment" %}</th>
@@ -25,22 +18,35 @@
               </td>
               <td class="table-td">{{ item.assessment.get_assessment_type_display }}</td>
               <td class="table-td">{{ item.submitted_at|date:"d/m/Y"|default:'—' }}</td>
-              <td class="table-td">{{ item.score|default:'—' }}</td>
+              <td class="table-td">{{ item.score_percent|default:'—' }}</td>
               <td class="table-td">
                 {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
               </td>
             </tr>
           {% empty %}
             <tr>
-              <td colspan="5" class="table-td"><div class="empty-state"><span>✓</span>
-                  <h3>{% trans "No assessment history" %}</h3>
-                  <p>{% trans "Completed assessments and released results will appear here." %}</p>
-                </div>
+              <td colspan="5" class="table-td">{% include "ui/components/_empty_state.html" with icon="✓" title=_("No assessment history") message=_("Completed assessments and released results will appear here.") %}
               </td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
+    </div>
+    <div class="card-stack lg:hidden">
+      {% for item in assessment_attempts %}
+        <div class="mobile-card">
+          <div class="flex-1 min-w-0">
+            <strong class="block truncate">{{ item.assessment.title }}</strong>
+            <small class="block text-muted">{{ item.assessment.get_assessment_type_display }}</small>
+            {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
+            <small class="block text-muted">{% trans "Submitted" %}: {{ item.submitted_at|date:"d/m/Y"|default:'—' }} &middot; {% trans "Score" %}: {{ item.score_percent|default:'—' }}</small>
+          </div>
+        </div>
+      {% empty %}
+        <div class="border border-line rounded-sm p-4 text-center">
+          {% include "ui/components/_empty_state.html" with icon="✓" title=_("No assessment history") message=_("Completed assessments and released results will appear here.") %}
+        </div>
+      {% endfor %}
     </div>
   </section>
 </section>

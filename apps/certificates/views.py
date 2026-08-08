@@ -41,6 +41,7 @@ def admin_template_list(request):
     page_obj, pagination_qs = paginate(request, templates)
     ctx = {
         "page_obj": page_obj,
+        "templates": page_obj,
         "pagination_qs": pagination_qs,
         "breadcrumb_items": [{"label": _("Certificate Templates")}],
     }

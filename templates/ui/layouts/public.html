@@ -1,15 +1,24 @@
 {% extends "ui/base.html" %}
 {% load i18n %}
 {% block shell %}
-  <main id="main" class="bg-white min-h-screen">{% block public_header %}
-      <header class="h-20 flex items-center justify-between page-container border-b border-line bg-white/92 backdrop-blur sticky top-0 z-header"><a class="flex items-center gap-3 no-underline text-inherit p-0" href="{% url 'core:landing' %}"><span class="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-50 to-brand-soft text-brand-strong grid place-items-center font-black shadow-card">DM</span>
-        <span><strong class="block text-sm">DokkiMashora</strong>
-          <small class="block text-xs mt-0.5 text-muted">{% trans "Learning Management" %}</small></span></a>
-        <nav class="flex gap-1.5" aria-label="{% trans 'Public navigation' %}"><a class="border-0 bg-transparent px-3 py-2 text-muted font-bold no-underline" href="{% url 'core:landing' %}#programs">{% trans "Programs" %}</a>
-          <a class="border-0 bg-transparent px-3 py-2 text-muted font-bold no-underline" href="{% url 'core:landing' %}#courses">{% trans "Courses" %}</a>
-        </nav>
-        <div class="actions-row"><a class="btn-soft" href="{% url 'accounts:login' %}">{% trans "Log in" %}</a>
-          <a class="btn-primary" href="{% url 'applications:register' %}">{% trans "Register" %}</a>
+  <main id="main" class="bg-white min-h-screen">    {% block public_header %}
+      <header class="h-20 bg-white/90 backdrop-blur border-b border-line sticky top-0 z-header">
+        <div class="h-20 flex items-center justify-between page-container">
+          <a class="flex items-center gap-3 no-underline text-inherit p-0" href="{% url 'core:landing' %}"><span class="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-50 to-brand-soft text-brand-strong grid place-items-center font-black shadow-card">DM</span>
+            <span><strong class="block text-sm">DokkiMashora</strong>
+              <small class="block text-xs mt-0.5 text-muted">{% trans "Learning Management" %}</small></span></a>
+          <nav class="hidden sm:flex gap-1.5" aria-label="{% trans 'Public navigation' %}"><a class="border-0 bg-transparent px-3 py-2 text-muted font-bold no-underline" href="{% url 'core:landing' %}#programs">{% trans "Programs" %}</a>
+            <a class="border-0 bg-transparent px-3 py-2 text-muted font-bold no-underline" href="{% url 'core:landing' %}#courses">{% trans "Courses" %}</a>
+          </nav>
+          <div class="actions-row">
+            {% include "ui/components/_language_switcher.html" %}
+            {% if request.user.is_authenticated %}
+              <a class="btn-primary" href="{% url 'accounts:dashboard' %}">{% trans "Dashboard" %}</a>
+            {% else %}
+              <a class="btn-soft" href="{% url 'accounts:login' %}">{% trans "Log in" %}</a>
+              <a class="btn-primary" href="{% url 'applications:register' %}">{% trans "Register" %}</a>
+            {% endif %}
+          </div>
         </div>
       </header>
     {% endblock %}

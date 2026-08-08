@@ -15,6 +15,8 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.academics.models import CourseEnrollment, DiplomaEnrollment
 from apps.applications.services import activate_application_if_ready
+from apps.audit.constants import ACTION_PAYMENT_RECORD_UPDATED
+from apps.audit.services import record_audit_event
 from apps.core.permissions import validate_score
 from apps.students.identity import normalize_identity_number
 from apps.students.models import StudentProfile
@@ -196,15 +198,19 @@ def _lookup_course_enrollment(data: dict, student: StudentProfile) -> CourseEnro
         return None
 
 
-def _build_target_snapshot(row) -> tuple[str, dict]:
-    if row.matched_diploma_enrollment:
-        enroll = row.matched_diploma_enrollment
+def _build_target_snapshot(
+    row,
+    diploma_enrollment: DiplomaEnrollment | None,
+    course_enrollment: CourseEnrollment | None,
+) -> tuple[str, dict]:
+    if diploma_enrollment:
+        enroll = diploma_enrollment
         return "diploma", {
             "cohort_name": enroll.cohort.name if enroll.cohort else "",
             "diploma_title": enroll.cohort.diploma.title if enroll.cohort and enroll.cohort.diploma else "",
         }
-    if row.matched_course_enrollment:
-        enroll = row.matched_course_enrollment
+    if course_enrollment:
+        enroll = course_enrollment
         return "course", {
             "course_title": enroll.course_version.course.title if enroll.course_version and enroll.course_version.course else "",
             "course_version_name": enroll.course_version.label if enroll.course_version else "",
@@ -258,94 +264,74 @@ def preview_upload(upload_id: int) -> PaymentUpload:
     return upload
 
 
+def _find_existing_payment(row) -> PaymentRecord | None:
+    if row.external_reference:
+        return PaymentRecord.objects.filter(
+            student=row.matched_student,
+            external_reference=row.external_reference,
+        ).first()
+    return PaymentRecord.objects.filter(
+        student=row.matched_student,
+        amount=row.amount,
+        paid_at=row.paid_at,
+        currency=row.currency,
+    ).first()
+
+
 @transaction.atomic
 def confirm_upload(upload_id: int, confirmed_by) -> PaymentUpload:
+    """Apply a fully validated payment CSV atomically (P0).
+
+    Two-phase: (1) every matched row is re-validated against the current
+    database and a write plan is built, with no writes and exact row
+    diagnostics; (2) only if every row is valid are all rows applied inside
+    one transaction. Any row failure marks the upload failed with zero
+    partial writes, per the atomic-per-file payment CSV rule.
+    """
     upload = PaymentUpload.objects.select_for_update().get(id=upload_id)
     if upload.status != UPLOAD_STATUS_PREVIEWED:
         raise ValueError(_("Upload is not in previewed state"))
     if upload.matched_rows == 0:
         raise ValueError(_("No rows matched; nothing to import"))
 
-    rows = list(upload.rows.select_for_update().filter(status=ROW_STATUS_MATCHED))
+    rows = list(upload.rows.select_for_update().filter(status=ROW_STATUS_MATCHED).select_related("matched_student"))
     errors: list[str] = []
-    created = updated = 0
+    plans: list[tuple[PaymentUploadRow, StudentProfile, Any, DiplomaEnrollment | None, CourseEnrollment | None, PaymentRecord | None]] = []
     for row in rows:
-        sid = transaction.savepoint()
         try:
-            # Serialize per student to prevent duplicate creates
-            StudentProfile.objects.filter(pk=row.matched_student_id).select_for_update().exists()
-
-            existing = None
-            if row.external_reference:
-                existing = PaymentRecord.objects.filter(
-                    student=row.matched_student,
-                    external_reference=row.external_reference,
-                ).first()
-            else:
-                existing = PaymentRecord.objects.filter(
-                    student=row.matched_student,
-                    amount=row.amount,
-                    paid_at=row.paid_at,
-                    currency=row.currency,
-                ).first()
-            target_type, target_snapshot = _build_target_snapshot(row)
-            if existing:
-                existing.amount = row.amount
-                existing.paid_at = row.paid_at
-                existing.status = PAYMENT_STATUS_PAID
-                existing.notes = row.raw_data.get("notes", "")
-                existing.imported_by = confirmed_by
-                existing.application = row.matched_application
-                existing.diploma_enrollment = row.matched_diploma_enrollment
-                existing.course_enrollment = row.matched_course_enrollment
-                if target_type:
-                    existing.target_type = target_type
-                    existing.target_snapshot = target_snapshot
-                target_ref = row.raw_data.get("target_ref", "")
-                if target_ref:
-                    existing.target_ref = target_ref
-                existing.save(update_fields=["amount", "paid_at", "status", "notes", "imported_by",
-                                              "application", "diploma_enrollment", "course_enrollment",
-                                              "target_type", "target_snapshot", "target_ref", "updated_at"])
-                row.status = ROW_STATUS_UPDATED
-                updated += 1
-            else:
-                PaymentRecord.objects.create(
-                    student=row.matched_student,
-                    upload_row=row,
-                    external_reference=row.external_reference or "",
-                    amount=row.amount,
-                    currency=row.currency,
-                    status=PAYMENT_STATUS_PAID,
-                    paid_at=row.paid_at,
-                    notes=row.raw_data.get("notes", ""),
-                    imported_by=confirmed_by,
-                    application=row.matched_application,
-                    diploma_enrollment=row.matched_diploma_enrollment,
-                    course_enrollment=row.matched_course_enrollment,
-                    target_type=row.raw_data.get("target_type", target_type),
-                    target_ref=row.raw_data.get("target_ref", ""),
-                    target_snapshot=target_snapshot,
-                )
-                row.status = ROW_STATUS_CREATED
-                created += 1
-            row.save(update_fields=["status"])
-        except Exception as e:
-            transaction.savepoint_rollback(sid)
-            row.status = ROW_STATUS_FAILED
-            row.save(update_fields=["status"])
-            errors.append(f"Row {row.row_number}: {e}")
-            continue
-        transaction.savepoint_commit(sid)
+            student, method, error = match_student(row.raw_data)
+            if student is None or student.id != row.matched_student_id:
+                raise ValueError(error or _("No student found matching the row identifiers."))
+            app, app_error = _lookup_application(row.raw_data, student)
+            if app_error:
+                raise ValueError(app_error)
+            diploma_enrollment = _lookup_diploma_enrollment(row.raw_data, student)
+            course_enrollment = _lookup_course_enrollment(row.raw_data, student)
+            existing = _find_existing_payment(row)
+            plans.append((row, student, app, diploma_enrollment, course_enrollment, existing))
+        except Exception as exc:
+            errors.append(f"Row {row.row_number}: {exc}")
 
     if errors:
         upload.failed_rows = len(errors)
         upload.status = UPLOAD_STATUS_FAILED
         upload.error_summary = "\n".join(errors)
-    else:
-        upload.status = UPLOAD_STATUS_CONFIRMED
+        upload.completed_at = timezone.now()
+        upload.save(update_fields=["failed_rows", "status", "error_summary", "completed_at", "updated_at"])
+        return upload
 
-    # Attempt activation for application-linked rows
+    try:
+        _apply_payment_rows(upload, plans, confirmed_by)
+    except Exception as exc:
+        upload.failed_rows = len(rows)
+        upload.status = UPLOAD_STATUS_FAILED
+        upload.error_summary = str(exc)
+        upload.completed_at = timezone.now()
+        upload.save(update_fields=["failed_rows", "status", "error_summary", "completed_at", "updated_at"])
+        return upload
+
+    # Attempt activation for application-linked rows (best-effort, after the
+    # import itself committed; activation failures never roll back the file).
     for row in upload.rows.filter(status__in=[ROW_STATUS_CREATED, ROW_STATUS_UPDATED]):
         if row.matched_application:
             try:
@@ -353,8 +339,9 @@ def confirm_upload(upload_id: int, confirmed_by) -> PaymentUpload:
             except Exception as e:
                 logger.warning("Activation failed for application %s: %s", row.matched_application.pk, e)
 
-    upload.created_rows = created
-    upload.updated_rows = updated
+    upload.created_rows = sum(1 for _row, *_ in plans if _row.status == ROW_STATUS_CREATED)
+    upload.updated_rows = sum(1 for _row, *_ in plans if _row.status == ROW_STATUS_UPDATED)
+    upload.status = UPLOAD_STATUS_CONFIRMED
     upload.completed_at = timezone.now()
     upload.save(
         update_fields=[
@@ -363,6 +350,61 @@ def confirm_upload(upload_id: int, confirmed_by) -> PaymentUpload:
         ]
     )
     return upload
+
+
+@transaction.atomic
+def _apply_payment_rows(upload: PaymentUpload, plans, confirmed_by) -> None:
+    """Write every validated row inside one transaction.
+
+    Any exception aborts the whole transaction so the file is never partially
+    applied. The student row is locked per plan to serialize concurrent
+    imports against the same student.
+    """
+    for row, student, app, diploma_enrollment, course_enrollment, existing in plans:
+        StudentProfile.objects.filter(pk=student.pk).select_for_update().exists()
+        existing = _find_existing_payment(row)
+        target_type, target_snapshot = _build_target_snapshot(
+            row, diploma_enrollment, course_enrollment,
+        )
+        if existing:
+            existing.amount = row.amount
+            existing.paid_at = row.paid_at
+            existing.status = PAYMENT_STATUS_PAID
+            existing.notes = row.raw_data.get("notes", "")
+            existing.imported_by = confirmed_by
+            existing.application = app
+            existing.diploma_enrollment = diploma_enrollment
+            existing.course_enrollment = course_enrollment
+            if target_type:
+                existing.target_type = target_type
+                existing.target_snapshot = target_snapshot
+            target_ref = row.raw_data.get("target_ref", "")
+            if target_ref:
+                existing.target_ref = target_ref
+            existing.save(update_fields=["amount", "paid_at", "status", "notes", "imported_by",
+                                          "application", "diploma_enrollment", "course_enrollment",
+                                          "target_type", "target_snapshot", "target_ref", "updated_at"])
+            row.status = ROW_STATUS_UPDATED
+        else:
+            PaymentRecord.objects.create(
+                student=student,
+                upload_row=row,
+                external_reference=row.external_reference or "",
+                amount=row.amount,
+                currency=row.currency,
+                status=PAYMENT_STATUS_PAID,
+                paid_at=row.paid_at,
+                notes=row.raw_data.get("notes", ""),
+                imported_by=confirmed_by,
+                application=app,
+                diploma_enrollment=diploma_enrollment,
+                course_enrollment=course_enrollment,
+                target_type=row.raw_data.get("target_type", target_type),
+                target_ref=row.raw_data.get("target_ref", ""),
+                target_snapshot=target_snapshot,
+            )
+            row.status = ROW_STATUS_CREATED
+        row.save(update_fields=["status"])
 
 
 def parse_row_data(row: dict[str, str], row_number: int) -> dict[str, Any]:
@@ -474,9 +516,20 @@ def mark_enrollment_paid(
     return PaymentRecord.objects.create(**kwargs)
 
 
-def mark_enrollment_unpaid(student: StudentProfile, enrollment_type: str, enrollment_id: int) -> int:
-    """Set all paid PaymentRecords for this enrollment to unpaid. Returns count."""
+@transaction.atomic
+def mark_enrollment_unpaid(
+    student: StudentProfile,
+    enrollment_type: str,
+    enrollment_id: int,
+    actor,
+    reason: str = "",
+) -> int:
+    """Set all paid PaymentRecords for this enrollment to unpaid.
 
+    Mirrors the immutable before/after audit pattern of record edits: the
+    actor and reason are mandatory workflow inputs, and the changed records
+    are captured before the bulk update.
+    """
     filters = {"student": student, "status": PAYMENT_STATUS_PAID, "deleted_at__isnull": True}
     if enrollment_type == "diploma":
         filters["diploma_enrollment_id"] = enrollment_id
@@ -484,4 +537,36 @@ def mark_enrollment_unpaid(student: StudentProfile, enrollment_type: str, enroll
         filters["course_enrollment_id"] = enrollment_id
     else:
         raise ValueError(_("Invalid enrollment type: {t}").format(t=enrollment_type))
-    return PaymentRecord.objects.filter(**filters).update(status=PAYMENT_STATUS_UNPAID)
+    records = list(PaymentRecord.objects.filter(**filters).order_by("id"))
+    if not records:
+        return 0
+    before = [
+        {
+            "id": record.id,
+            "amount": str(record.amount),
+            "status": record.status,
+            "paid_at": record.paid_at.isoformat() if record.paid_at else None,
+        }
+        for record in records
+    ]
+    count = PaymentRecord.objects.filter(pk__in=[record.pk for record in records]).update(
+        status=PAYMENT_STATUS_UNPAID
+    )
+    record_audit_event(
+        actor=actor,
+        action=ACTION_PAYMENT_RECORD_UPDATED,
+        target_type="PaymentRecord",
+        target_id=str(records[0].id),
+        metadata={
+            "student_id": student.id,
+            "enrollment_type": enrollment_type,
+            "enrollment_id": enrollment_id,
+            "reason": reason,
+            "before": before,
+            "after": [
+                {**state, "status": PAYMENT_STATUS_UNPAID}
+                for state in before
+            ],
+        },
+    )
+    return count

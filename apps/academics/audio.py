@@ -98,14 +98,20 @@ def transcode_to_hls(
             for f in output_dir.iterdir():
                 if not f.is_file():
                     continue
-                rel_key = f"{prefix}/{f.name}"
                 data = f.read_bytes()
                 ctype = (
                     "application/vnd.apple.mpegurl"
                     if f.suffix == ".m3u8"
                     else "video/MP2T"
                 )
-                storage_service.backend.upload(rel_key, data, ctype)
+                storage_service.upload_file(
+                    data,
+                    key_prefix=prefix,
+                    content_type=ctype,
+                    max_size=50 * 1024 * 1024,
+                    allowed_types=[".m3u8", ".ts"],
+                    original_filename=f.name,
+                )
 
         lecture.audio_processing_status = AUDIO_PROCESSING_COMPLETED
         lecture.save(update_fields=["audio_processing_status"])

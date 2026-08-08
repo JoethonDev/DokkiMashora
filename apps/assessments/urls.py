@@ -35,12 +35,12 @@ urlpatterns = [
     path(
         "manage/<int:assessment_id>/questions/<int:question_id>/form/",
         views.admin_question_form,
-        name="admin_question_form",
+        name="admin_question_edit_form",
     ),
     path(
         "manage/<int:assessment_id>/questions/<int:question_id>/save/",
         views.admin_question_save,
-        name="admin_question_save",
+        name="admin_question_edit_save",
     ),
     path(
         "manage/<int:assessment_id>/questions/<int:question_id>/delete/",

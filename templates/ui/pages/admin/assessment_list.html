@@ -11,6 +11,9 @@
     {% trans "Assessments" as title %}
     {% trans "Create, manage, and review exams, quizzes, and homework." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
+    <div class="actions-row justify-end">
+      <a class="btn-primary" href="{% url 'assessments:admin_create' %}">{% trans "Create assessment" %}</a>
+    </div>
     <section class="card-surface"><form class="actions-row items-end mb-4"
       method="get"
       hx-get="{% url 'assessments:admin_list' %}"
@@ -18,7 +21,7 @@
       hx-target="#assessment-results"
       hx-swap="outerHTML"
       hx-push-url="true"
-       hx-sync="this:replace"><div class="relative flex-1 min-w-[210px]"><span class="absolute inset-y-0 start-0 grid place-items-center ps-3 text-muted pointer-events-none">&#8981;</span>
+       hx-sync="this:replace"><div class="search-field"><span class="absolute inset-y-0 start-0 grid place-items-center ps-3 text-muted pointer-events-none">&#8981;</span>
       <input id="assessment-search"
              name="q"
              value="{{ search_value }}"

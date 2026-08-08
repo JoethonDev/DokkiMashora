@@ -47,20 +47,20 @@
             <h2>{{ exam.title }}</h2>
           </div>
         </div>
-        <nav class="flex gap-1 p-1 bg-line rounded-md w-max max-w-full overflow-auto" role="tablist">
-          <a href="?tab=invitation" role="tab" class="px-4 py-2 text-sm font-bold rounded-sm transition-colors no-underline {% if tab == 'invitation' %}bg-surface text-text shadow-sm{% else %}text-muted hover:text-text hover:bg-surface/50{% endif %}" {% if tab == 'invitation' %}aria-current="page"{% endif %}>{% trans "Invitations" %}</a>
-          <a href="?tab=results" role="tab" class="px-4 py-2 text-sm font-bold rounded-sm transition-colors no-underline {% if tab == 'results' %}bg-surface text-text shadow-sm{% else %}text-muted hover:text-text hover:bg-surface/50{% endif %}" {% if tab == 'results' %}aria-current="page"{% endif %}>{% trans "Results" %}</a>
-          <a href="?tab=history" role="tab" class="px-4 py-2 text-sm font-bold rounded-sm transition-colors no-underline {% if tab == 'history' %}bg-surface text-text shadow-sm{% else %}text-muted hover:text-text hover:bg-surface/50{% endif %}" {% if tab == 'history' %}aria-current="page"{% endif %}>{% trans "History" %}</a>
+        <nav class="tab-track w-max max-w-full overflow-auto" role="tablist">
+          <a href="?tab=invitation" role="tab" class="tab{% if tab == 'invitation' %} tab-active{% endif %}" {% if tab == 'invitation' %}aria-current="page"{% endif %}>{% trans "Invitations" %}</a>
+          <a href="?tab=results" role="tab" class="tab{% if tab == 'results' %} tab-active{% endif %}" {% if tab == 'results' %}aria-current="page"{% endif %}>{% trans "Results" %}</a>
+          <a href="?tab=history" role="tab" class="tab{% if tab == 'history' %} tab-active{% endif %}" {% if tab == 'history' %}aria-current="page"{% endif %}>{% trans "History" %}</a>
         </nav>
         <div class="mt-4"></div>
         <div id="email-tab-content">
         {% if tab == 'invitation' %}
-          <form class="actions-row items-end mb-4" hx-get="{% url 'entrance_exams:admin_cohort_email' exam.id %}" hx-target="#email-tab-content" hx-replace-url="true"><input type="hidden" name="tab" value="invitation"><div class="relative flex-1 min-w-[210px]"><span class="absolute inset-y-0 start-0 grid place-items-center ps-3 text-muted pointer-events-none">&#8981;</span><input name="iq" value="{{ iq }}" class="form-input ps-10" hx-trigger="keyup changed delay:500ms" aria-label="{% trans 'Search invitations' %}"></div><button class="btn-secondary min-h-[44px]" type="submit">{% trans "Search" %}</button>
+          <form class="actions-row items-end mb-4" hx-get="{% url 'entrance_exams:admin_cohort_email' exam.id %}" hx-target="#email-tab-content" hx-replace-url="true"><input type="hidden" name="tab" value="invitation"><div class="search-field"><span class="absolute inset-y-0 start-0 grid place-items-center ps-3 text-muted pointer-events-none">&#8981;</span><input name="iq" value="{{ iq }}" class="form-input ps-10" hx-trigger="keyup changed delay:500ms" aria-label="{% trans 'Search invitations' %}"></div><button class="btn-secondary" type="submit">{% trans "Search" %}</button>
           </form>
           <form method="post">{% csrf_token %}
             <input type="hidden" name="tab" value="invitation">
             {% if invitation_page %}
-              <div class="table-wrap"><table class="table">
+              <div class="table-wrap hidden lg:block"><table class="table">
                 <thead>
                   <tr>
                     <th class="table-th">{% trans "Select" %}</th>
@@ -78,22 +78,33 @@
                   {% endfor %}
                 </tbody>
               </table></div>
+              <div class="card-stack lg:hidden">
+                {% for item in invitation_page %}
+                  <div class="mobile-card">
+                    <label class="flex items-center gap-2 cursor-pointer shrink-0"><input type="checkbox" class="form-checkbox" name="student_ids" value="{{ item.student.id }}"></label>
+                    <div class="flex-1 min-w-0">
+                      <strong class="block truncate">{{ item.student.full_name|default:item.student }}</strong>
+                      {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
               <button class="btn-primary mt-4" type="submit">{% trans "Send invitations" %}</button>
             {% else %}
               <p>{% trans "No invitation candidates." %}</p>
             {% endif %}
           </form>
         {% elif tab == 'results' %}
-          <form class="actions-row items-end mb-4" hx-get="{% url 'entrance_exams:admin_cohort_email' exam.id %}" hx-target="#email-tab-content" hx-replace-url="true"><input type="hidden" name="tab" value="results"><div class="relative flex-1 min-w-[210px]"><span class="absolute inset-y-0 start-0 grid place-items-center ps-3 text-muted pointer-events-none">&#8981;</span><input name="rq" value="{{ rq }}" class="form-input ps-10" hx-trigger="keyup changed delay:500ms" aria-label="{% trans 'Search results' %}"></div><label class="min-w-40"><span class="field-label">{% trans "Result" %}</span><select name="result" class="form-select" hx-trigger="change" aria-label="{% trans 'Result' %}"><option value="">{% trans "All results" %}</option>
+          <form class="actions-row items-end mb-4" hx-get="{% url 'entrance_exams:admin_cohort_email' exam.id %}" hx-target="#email-tab-content" hx-replace-url="true"><input type="hidden" name="tab" value="results"><div class="search-field"><span class="absolute inset-y-0 start-0 grid place-items-center ps-3 text-muted pointer-events-none">&#8981;</span><input name="rq" value="{{ rq }}" class="form-input ps-10" hx-trigger="keyup changed delay:500ms" aria-label="{% trans 'Search results' %}"></div><label class="min-w-40"><span class="field-label">{% trans "Result" %}</span><select name="result" class="form-select" hx-trigger="change" aria-label="{% trans 'Result' %}"><option value="">{% trans "All results" %}</option>
               <option value="pass"{% if result_filter == 'pass' %} selected{% endif %}>{% trans "Pass" %}</option>
               <option value="fail"{% if result_filter == 'fail' %} selected{% endif %}>{% trans "Fail" %}</option>
             </select></label>
-            <button class="btn-secondary min-h-[44px]" type="submit">{% trans "Filter" %}</button>
+            <button class="btn-secondary" type="submit">{% trans "Filter" %}</button>
           </form>
           <form method="post">{% csrf_token %}
             <input type="hidden" name="tab" value="results">
             {% if results_page %}
-              <div class="table-wrap"><table class="table">
+              <div class="table-wrap hidden lg:block"><table class="table">
                 <thead>
                   <tr>
                     <th class="table-th">{% trans "Select" %}</th>
@@ -111,18 +122,29 @@
                   {% endfor %}
                 </tbody>
               </table></div>
+              <div class="card-stack lg:hidden">
+                {% for item in results_page %}
+                  <div class="mobile-card">
+                    <label class="flex items-center gap-2 cursor-pointer shrink-0"><input type="checkbox" class="form-checkbox" name="student_ids" value="{{ item.student.id }}"></label>
+                    <div class="flex-1 min-w-0">
+                      <strong class="block truncate">{{ item.student.full_name|default:item.student }}</strong>
+                      <span class="status-pill-{% if item.result == 'pass' %}success{% else %}danger{% endif %}">{{ item.get_result_display|default:item.result }}</span>
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
               <button class="btn-primary mt-4" type="submit">{% trans "Send results" %}</button>
             {% else %}
               <p>{% trans "No results." %}</p>
             {% endif %}
           </form>
         {% else %}
-          <form class="actions-row items-end mb-4" hx-get="{% url 'entrance_exams:admin_cohort_email' exam.id %}" hx-target="#email-tab-content" hx-replace-url="true"><input type="hidden" name="tab" value="history"><div class="relative flex-1 min-w-[210px]"><span class="absolute inset-y-0 start-0 grid place-items-center ps-3 text-muted pointer-events-none">&#8981;</span><input name="hq" value="{{ hq }}" class="form-input ps-10" hx-trigger="keyup changed delay:500ms" aria-label="{% trans "Search history" %}"></div><button class="btn-secondary min-h-[44px]" type="submit">{% trans "Search" %}</button>
+          <form class="actions-row items-end mb-4" hx-get="{% url 'entrance_exams:admin_cohort_email' exam.id %}" hx-target="#email-tab-content" hx-replace-url="true"><input type="hidden" name="tab" value="history"><div class="search-field"><span class="absolute inset-y-0 start-0 grid place-items-center ps-3 text-muted pointer-events-none">&#8981;</span><input name="hq" value="{{ hq }}" class="form-input ps-10" hx-trigger="keyup changed delay:500ms" aria-label="{% trans "Search history" %}"></div><button class="btn-secondary" type="submit">{% trans "Search" %}</button>
           </form>
           <form method="post">{% csrf_token %}
             <input type="hidden" name="tab" value="history">
             {% if history_page %}
-              <div class="table-wrap"><table class="table">
+              <div class="table-wrap hidden lg:block"><table class="table">
                 <thead>
                   <tr>
                     <th class="table-th">{% trans "Select" %}</th>
@@ -144,6 +166,18 @@
                   {% endfor %}
                 </tbody>
               </table></div>
+              <div class="card-stack lg:hidden">
+                {% for item in history_page %}
+                  <div class="mobile-card">
+                    <label class="flex items-center gap-2 cursor-pointer shrink-0"><input type="checkbox" class="form-checkbox" name="log_ids" value="{{ item.id }}"></label>
+                    <div class="flex-1 min-w-0">
+                      <strong class="block truncate">{{ item.recipient }}</strong>
+                      {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
+                      <small class="block text-muted">{{ item.get_action_display|default:item.action }} &middot; {{ item.sent_at|date:"d/m/Y H:i"|default:'—' }}</small>
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
               <button class="btn-primary mt-4" type="submit">{% trans "Resend emails" %}</button>
             {% else %}
               <p>{% trans "No email history." %}</p>
@@ -273,7 +307,7 @@
            href="{% url 'entrance_exams:admin_add_question' exam.id %}">{% trans "Add question" %}</a>
       </section>
     {% elif page_kind == 'exams' %}
-      <section class="card-surface"><div class="table-wrap"><table class="table">
+      <section class="card-surface"><div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>
                 <th class="table-th">{% trans "Exam" %}</th>
@@ -306,16 +340,29 @@
                 </tr>
               {% empty %}
                 <tr>
-                  <td class="table-td" colspan="6"><div class="empty-state"><span>&#9679;</span>
-                      <h3>{% trans "No entrance exams created." %}</h3>
-                      <a class="btn-primary"
-                         href="{% url 'entrance_exams:admin_create_exam' %}">{% trans "Create exam" %}</a>
-                    </div>
+                  <td class="table-td" colspan="6">{% url 'entrance_exams:admin_create_exam' as admin_create_exam_url %}{% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No entrance exams created.") href=admin_create_exam_url action_label=_("Create exam") %}
                   </td>
                 </tr>
               {% endfor %}
             </tbody>
           </table>
+        </div>
+        <div class="card-stack lg:hidden">
+          {% for item in page_obj %}
+            <div class="mobile-card">
+              <div class="flex-1 min-w-0">
+                <strong class="block truncate">{{ item.title }}</strong>
+                <small class="block text-muted truncate">{{ item.description|truncatewords:8|default:'—' }}</small>
+                <small class="block text-muted">{{ item.cohort|default:_("All") }} &middot; {{ item.duration_minutes|default:'—' }} {% trans "min" %}</small>
+                {% include "ui/components/_status.html" with code=item.is_active|yesno:"active,inactive" label=item.is_active|yesno:_("Active,Inactive") %}
+              </div>
+              <a class="btn-soft-primary shrink-0" href="{% url 'entrance_exams:admin_detail' item.id %}">{% trans "Open" %}</a>
+            </div>
+          {% empty %}
+            <div class="border border-line rounded-sm p-4 text-center">
+              {% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No entrance exams created.") href=admin_create_exam_url action_label=_("Create exam") %}
+            </div>
+          {% endfor %}
         </div>
         {% include "ui/components/_pagination.html" %}
       </section>
@@ -325,7 +372,7 @@
             <h3>{% trans "Attempts to grade" %}</h3>
           </div>
         </div>
-        <div class="table-wrap"><table class="table">
+        <div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>
                 <th class="table-th">{% trans "Exam" %}</th>
@@ -354,9 +401,23 @@
             </tbody>
           </table>
         </div>
+        <div class="card-stack lg:hidden">
+          {% for item in page_obj %}
+            <div class="mobile-card">
+              <div class="flex-1 min-w-0">
+                <strong class="block truncate">{{ item.exam }}</strong>
+                <small class="block text-muted">{{ item.student.full_name|default:item.student }}</small>
+                {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
+              </div>
+              <a class="btn-soft-primary shrink-0" href="{% url 'entrance_exams:admin_grade_attempt' item.id %}">{% trans "Grade" %}</a>
+            </div>
+          {% empty %}
+            <div class="border border-line rounded-sm p-4 text-center">{% include "ui/components/_empty_state.html" with title=_("No attempts to grade.") %}</div>
+          {% endfor %}
+        </div>
       </section>
     {% elif page_kind == 'email_log' %}
-      <section class="card-surface"><form class="actions-row items-end mb-4" method="get"><div class="relative flex-1 min-w-[210px]"><span class="absolute inset-y-0 start-0 grid place-items-center ps-3 text-muted pointer-events-none">&#8981;</span>
+      <section class="card-surface"><form class="actions-row items-end mb-4" method="get"><div class="search-field"><span class="absolute inset-y-0 start-0 grid place-items-center ps-3 text-muted pointer-events-none">&#8981;</span>
             <input name="q" class="form-input ps-10"
                    value="{{ search_value }}"
                    type="search"
@@ -378,7 +439,7 @@
           </label>
           <button class="btn-secondary" type="submit">{% trans "Filter" %}</button>
         </form>
-        <div class="table-wrap"><table class="table">
+        <div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>
                 <th class="table-th">{% trans "Recipient" %}</th>
@@ -403,9 +464,22 @@
             </tbody>
           </table>
         </div>
+        <div class="card-stack lg:hidden">
+          {% for item in page_obj %}
+            <div class="mobile-card">
+              <div class="flex-1 min-w-0">
+                <strong class="block truncate">{{ item.recipient }}</strong>
+                {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:item.status %}
+                <small class="block text-muted">{{ item.get_action_display|default:item.action }} &middot; {{ item.sent_at|date:"d/m/Y H:i"|default:'—' }}</small>
+              </div>
+            </div>
+          {% empty %}
+            <div class="border border-line rounded-sm p-4 text-center">{% include "ui/components/_empty_state.html" with title=_("No email logs.") %}</div>
+          {% endfor %}
+        </div>
       </section>
     {% elif page_obj %}
-      <section class="card-surface"><div class="table-wrap"><table class="table">
+      <section class="card-surface"><div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>
                 <th class="table-th">{% trans "Record" %}</th>
@@ -431,6 +505,19 @@
               {% endfor %}
             </tbody>
           </table>
+        </div>
+        <div class="card-stack lg:hidden">
+          {% for item in page_obj %}
+            <div class="mobile-card">
+              <div class="flex-1 min-w-0">
+                <strong class="block truncate">{{ item.exam.title|default:item.title|default:item.recipient|default:_("Exam record") }}</strong>
+                {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:item.status|default:'—' %}
+                <small class="block text-muted">{{ item.created_at|default:item.sent_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</small>
+              </div>
+            </div>
+          {% empty %}
+            <div class="border border-line rounded-sm p-4 text-center">{% include "ui/components/_empty_state.html" with title=_("No records found.") %}</div>
+          {% endfor %}
         </div>
       </section>
     {% endif %}

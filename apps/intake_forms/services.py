@@ -14,6 +14,7 @@ from apps.applications.constants import (
     PROGRAM_APP_STATUS_SURVEY_REQUESTED,
     PROGRAM_APP_STATUS_SURVEY_SUBMITTED,
 )
+from apps.applications.models import ProgramApplication
 from apps.applications.services import (
     _log_email_send,
     _record_decision,
@@ -22,6 +23,7 @@ from apps.applications.services import (
 from apps.communications.services import send_templated_email
 
 from .constants import (
+    INTAKE_REQUESTABLE_STATUSES,
     INTAKE_REQUEST_STATUS_CANCELLED,
     INTAKE_REQUEST_STATUS_EXPIRED,
     INTAKE_REQUEST_STATUS_REQUESTED,
@@ -37,7 +39,13 @@ if TYPE_CHECKING:
 
 
 def can_request_intake_form(application) -> bool:
-    """Check if an intake request can be sent for this application."""
+    """Check if an intake request can be sent for this application.
+
+    The application must still be in a pre-activation status (A6), a
+    required form must exist, and no response may be submitted yet.
+    """
+    if application.status not in INTAKE_REQUESTABLE_STATUSES:
+        return False
     form = get_required_intake_form_for_application(application)
     if form is None:
         return False
@@ -60,6 +68,8 @@ def request_intake_form_for_application(
     send_email=True,
 ) -> IntakeFormRequest:
     """Create an intake form request, send email, and set status to survey_requested."""
+    if application.status not in INTAKE_REQUESTABLE_STATUSES:
+        raise ValueError(_("Intake forms can only be requested for applications that are not yet rejected or activated."))
     if form is None:
         form = get_required_intake_form_for_application(application)
     if form is None:
@@ -159,10 +169,19 @@ def submit_intake_form_response(
     application: ProgramApplication,
     answers: dict,
 ) -> IntakeFormResponse:
-    """Submit intake form answers and attempt activation."""
+    """Submit intake form answers and attempt activation.
+
+    The request's application, the supplied application, and the actor must
+    form one consistent tuple (A7): the intake request is locked and must
+    belong to the supplied application before any response row is created.
+    """
     if isinstance(request_or_form, IntakeFormRequest):
-        intake_request = request_or_form
-        form = request_or_form.form
+        intake_request = IntakeFormRequest.objects.select_for_update().select_related(
+            "form", "program_application",
+        ).get(pk=request_or_form.pk)
+        if intake_request.program_application_id != application.pk:
+            raise ValueError(_("This intake form link does not belong to this application."))
+        form = intake_request.form
         if intake_request.status == INTAKE_REQUEST_STATUS_SUBMITTED:
             raise ValueError(_("This intake form request has already been submitted."))
         if intake_request.status == INTAKE_REQUEST_STATUS_EXPIRED:
@@ -180,6 +199,10 @@ def submit_intake_form_response(
     # ponytail: service-level ownership guard — actor must match the application's student user
     if application.student.user_id != actor.pk:
         raise PermissionError(_("You do not own this application."))
+
+    # Lock the application row so the response creation and status transition
+    # cannot race another submission for the same application.
+    application = ProgramApplication.objects.select_for_update().get(pk=application.pk)
 
     if IntakeFormResponse.objects.filter(form=form, program_application=application).exists():
         raise ValueError(_("A response for this form already exists."))

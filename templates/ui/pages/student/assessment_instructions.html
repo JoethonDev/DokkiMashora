@@ -4,13 +4,7 @@
   {{ assessment.title }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack animate-enter-view"><section class="flex justify-between items-center gap-5 px-0.5 py-1.5"><div>
-        <p class="eyebrow">{% trans "Assessment" %}</p>
-        <h2>{{ assessment.title }}</h2>
-        <p>{{ assessment.description }}</p>
-      </div>
-        <div class="actions-row"><a class="btn-ghost" href="{% url 'assessments:student_list' %}">{% trans "Back to assessments" %}</a></div>
-      </section>
+  <div class="page-stack animate-enter-view">{% url 'assessments:student_list' as student_assessment_list_url %}{% include "ui/components/_page_header.html" with eyebrow=_("Assessment") title=assessment.title description=assessment.description back_url=student_assessment_list_url back_label=_("Back to assessments") %}
     <section class="card-surface"><dl class="dl"><div>
           <dt class="dt">{% trans "Duration" %}</dt>
           <dd class="dd">
@@ -25,9 +19,17 @@
           </dd>
         </div>
       </dl>
-      <div class="max-w-2xl mx-auto"><form method="post" action="{% url 'assessments:start' assessment.id %}">{% csrf_token %}
-        <button class="btn-primary" type="submit">{% trans "Start assessment" %}</button>
-      </form></div>
+      <div class="max-w-2xl mx-auto">{% if readiness.state == "ready" or readiness.state == "continue" %}
+        {% if readiness.state == "ready" %}
+        <form method="post" action="{% url 'assessments:start' assessment.id %}">{% csrf_token %}
+          <button class="btn-primary" type="submit">{% trans "Start assessment" %}</button>
+        </form>
+        {% else %}
+        <a class="btn-primary" href="{% if readiness.action_url %}{{ readiness.action_url }}{% else %}{% url 'assessments:take' assessment.id %}{% endif %}">{{ readiness.action_label|default:_("Continue") }}</a>
+        {% endif %}
+      {% else %}
+        <span class="status-pill-info">{{ readiness.state_label }}</span>
+      {% endif %}</div>
     </section>
   </div>
 {% endblock %}

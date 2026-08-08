@@ -1,0 +1,60 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n ui_tags %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="page-stack animate-enter-view">
+  {% include "ui/components/_page_header.html" with eyebrow=_("Progression") title=diploma.title description=_("Cohorts") back_button=True %}
+  <section class="card-surface">
+    <div class="table-wrap hidden lg:block">
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="table-th">{% trans "Cohort" %}</th>
+            <th class="table-th">{% trans "Start date" %}</th>
+            <th class="table-th">{% trans "End date" %}</th>
+            <th class="table-th">{% trans "Enrollments" %}</th>
+            <th class="table-th">{% trans "Semesters" %}</th>
+            <th class="table-th">{% trans "Actions" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for cohort in cohorts %}
+            <tr>
+              <td class="table-td">{{ cohort.name }}</td>
+              <td class="table-td">{{ cohort.start_date|date:"d/m/Y" }}</td>
+              <td class="table-td">{{ cohort.end_date|date:"d/m/Y"|default:'—' }}</td>
+              <td class="table-td">{{ cohort.enrollment_count }}</td>
+              <td class="table-td">{{ cohort.semester_count }}</td>
+              <td class="table-td">
+                <a class="btn-secondary text-xs py-1 px-2 min-h-0" href="{% url 'progression:admin_semester_list' diploma.id cohort.id %}">{% trans "Semesters" %}</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td class="table-td" colspan="6">
+                {% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No cohorts found.") %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card-stack lg:hidden">
+      {% for cohort in cohorts %}
+        <div class="mobile-card">
+          <div class="flex-1 min-w-0">
+            <strong class="block truncate">{{ cohort.name }}</strong>
+            <small class="block text-muted">{{ cohort.start_date|date:"d/m/Y" }} — {{ cohort.end_date|date:"d/m/Y"|default:'—' }}</small>
+            <small class="block text-muted">{{ cohort.enrollment_count }} {% trans "enrollments" %} &middot; {{ cohort.semester_count }} {% trans "semesters" %}</small>
+          </div>
+          <a class="btn-soft-primary shrink-0" href="{% url 'progression:admin_semester_list' diploma.id cohort.id %}">{% trans "Semesters" %}</a>
+        </div>
+      {% empty %}
+        <div class="border border-line rounded-sm p-4 text-center">
+          {% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No cohorts found.") %}
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}

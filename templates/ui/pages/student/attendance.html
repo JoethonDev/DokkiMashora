@@ -4,11 +4,7 @@
   {% trans "My attendance" %}
 {% endblock %}
 {% block content %}
-  <div class="page-stack animate-enter-view"><section class="flex justify-between items-center gap-5 px-0.5 py-1.5"><div>
-        <p class="eyebrow">{% trans "Learning" %}</p>
-        <h2>{% trans "My attendance" %}</h2>
-      </div>
-    </section>
+  <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with eyebrow=_("Learning") title=_("My attendance") %}
     <section class="grid grid-cols-1 md:grid-cols-3 gap-4">{% for summary in summaries %}
         <article class="card-surface"><h3>{{ summary.course_title|default:summary.semester }}</h3>
           <p class="flex items-center gap-4"><strong>
@@ -22,8 +18,7 @@
           </p>
         </article>
       {% empty %}
-        <div class="empty-state"><h3>{% trans "No attendance records" %}</h3>
-        </div>
+        {% include "ui/components/_empty_state.html" with title=_("No attendance records") fill=True %}
       {% endfor %}
     </section>
   </div>

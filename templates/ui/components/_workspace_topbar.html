@@ -1,10 +1,10 @@
 {% load i18n %}
 <header class="min-h-14 px-5 py-3 flex items-center justify-between">
   <div class="flex items-center gap-3">
-    <button class="btn-icon md:hidden"
+    <button class="btn-icon lg:hidden"
             type="button"
             @click="sidebarOpen=true; $dispatch('sidebar-open', {trigger: $el})"
-            aria-controls="admin-sidebar"
+            aria-controls="{{ sidebar_id|default:'admin-sidebar' }}"
             :aria-expanded="sidebarOpen.toString()"
             aria-label="{% trans 'Open navigation' %}">&#9776;</button>
     <div>
@@ -14,7 +14,7 @@
   <div class="flex items-center gap-2">
     {% if show_global_search %}
       <button type="button"
-              class="relative flex-1 min-w-[210px]"
+              class="search-field hidden sm:flex"
               id="global-search-trigger"
               aria-label="{% trans 'Quick search' %}">
         <span class="absolute inset-y-0 start-0 grid place-items-center ps-3 text-muted pointer-events-none">&#8981;</span>

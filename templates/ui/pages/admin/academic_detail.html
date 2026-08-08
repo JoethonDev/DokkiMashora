@@ -14,13 +14,13 @@
         <dd class="dd">
           {{ course }}
         </dd>
-        <dt class="dt">{% trans "Semester" %}</dt>
+        <dt class="dt">{% trans "Access" %}</dt>
         <dd class="dd">
-          {{ version.semester }}
+          {% if version.access_duration_days %}{{ version.access_duration_days }} {% trans "days" %}{% else %}{% trans "Unlimited" %}{% endif %}
         </dd>
-        <dt class="dt">{% trans "Cohort" %}</dt>
+        <dt class="dt">{% trans "Status" %}</dt>
         <dd class="dd">
-          {{ version.cohort }}
+          {% include "ui/components/_status.html" with code=version.is_active|yesno:"active,inactive" label=version.is_active|yesno:_("Active,Inactive") %}
         </dd>
       </dl>
       <a class="btn-primary"
@@ -29,23 +29,33 @@
   {% endif %}
   {% if versions %}
     <section class="card-surface"><h2>{% trans "Versions" %}</h2>
-      <div class="table-wrap"><table class="table">
+      <div class="table-wrap hidden lg:block"><table class="table">
           <tbody>
             {% for item in versions %}
               <tr>
                 <td class="table-td">{{ item.label }}</td>
-                <td class="table-td">{{ item.semester }}</td>
-                <td class="table-td">{{ item.cohort }}</td>
+                <td class="table-td">{% if item.access_duration_days %}{{ item.access_duration_days }} {% trans "days" %}{% else %}{% trans "Unlimited" %}{% endif %}</td>
+                <td class="table-td">{% include "ui/components/_status.html" with code=item.is_active|yesno:"active,inactive" label=item.is_active|yesno:_("Active,Inactive") %}</td>
               </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
+      <div class="card-stack lg:hidden">
+        {% for item in versions %}
+          <div class="mobile-card">
+            <div class="flex-1 min-w-0">
+              <strong class="block truncate">{{ item.label }}</strong>
+              <small class="block text-muted">{{ item.is_active|yesno:_("Active,Inactive") }} &middot; {% if item.access_duration_days %}{{ item.access_duration_days }} {% trans "days" %}{% else %}{% trans "Unlimited" %}{% endif %}</small>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
     </section>
   {% endif %}
   {% if lectures %}
     <section class="card-surface"><h2>{% trans "Lectures" %}</h2>
-      <div class="table-wrap"><table class="table">
+      <div class="table-wrap hidden lg:block"><table class="table">
           <tbody>
             {% for item in lectures %}
               <tr>
@@ -53,11 +63,26 @@
                 <td class="table-td">{{ item.title }}</td>
                 <td class="table-td">
                   <a class="btn-ghost" href="{% url 'academics:admin_lecture_edit' course.id version.id item.id %}">{% trans "Edit" %}</a>
+                  <a class="btn-ghost" href="{% url 'academics:admin_lecture_preview' course.id version.id item.id %}">{% trans "Preview" %}</a>
                 </td>
               </tr>
             {% endfor %}
           </tbody>
         </table>
+      </div>
+      <div class="card-stack lg:hidden">
+        {% for item in lectures %}
+          <div class="mobile-card">
+            <div class="flex-1 min-w-0">
+              <strong class="block truncate">{{ item.title }}</strong>
+              <small class="block text-muted">#{{ item.order }}</small>
+            </div>
+            <div class="flex gap-2">
+              <a class="btn-ghost btn-sm" href="{% url 'academics:admin_lecture_edit' course.id version.id item.id %}">{% trans "Edit" %}</a>
+              <a class="btn-ghost btn-sm" href="{% url 'academics:admin_lecture_preview' course.id version.id item.id %}">{% trans "Preview" %}</a>
+            </div>
+          </div>
+        {% endfor %}
       </div>
     </section>
   {% endif %}

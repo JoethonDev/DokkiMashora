@@ -1,12 +1,12 @@
 {% load i18n %}
-<div id="{{ loader_id }}" class="flex flex-wrap gap-2 py-1.5"><label for="program-option">{{ placeholder }}</label>
-  <select id="program-option" name="program_target" class="form-select"><option value="">{{ placeholder }}</option>
+<div id="{{ loader_id }}" class="flex flex-wrap gap-2 items-center"><select id="{{ select_id|default:'program-option' }}" name="{{ field_name|default:'program_target' }}" class="form-select"><option value="">{{ placeholder }}</option>
     {% for value, label in options %}
       <option value="{{ value }}">{{ label }}</option>
     {% endfor %}
   </select>
   {% if has_more %}
     <button type="button"
+            class="btn-ghost btn-sm"
             hx-get="{{ load_url }}"
             hx-target="#{{ loader_id }}"
             hx-swap="outerHTML">{% trans "Load more" %}</button>

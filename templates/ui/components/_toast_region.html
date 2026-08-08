@@ -1,6 +1,6 @@
 {% load i18n %}
 <div id="toast-region"
-     class="fixed end-4 top-16 z-toast flex flex-col gap-2.5"
+     class="fixed end-4 max-sm:start-4 max-sm:w-[calc(100vw-2rem)] top-16 z-toast flex flex-col gap-2.5"
      aria-live="polite"
      aria-atomic="true"
      x-data="{toasts:[]}"
@@ -9,7 +9,7 @@
     <div class="min-w-72 max-w-96 p-4 border border-line rounded-sm bg-surface shadow-modal flex items-start gap-2.5 transition-all duration-300"
          role="status"
          :class="(toast.visible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-full') + ' ' + (toast.type === 'success' ? 'border-green' : toast.type === 'warning' ? 'border-amber' : toast.type === 'error' ? 'border-red' : 'border-blue')">
-      <span class="flex-1 min-w-0 truncate" x-text="toast.message || toast.detail || ''"></span>
+      <span class="flex-1 min-w-0 whitespace-normal break-words leading-snug" x-text="toast.message || toast.detail || ''"></span>
       <button type="button"
               @click="toasts[index].visible = false; setTimeout(() => toasts.splice(index, 1), 300)"
               class="border-0 bg-transparent text-muted cursor-pointer font-extrabold shrink-0"

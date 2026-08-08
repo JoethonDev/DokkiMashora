@@ -11,7 +11,6 @@
     if (!dialog) return;
     lastFocus = document.activeElement;
     dialog.showModal();
-    dialog.classList.add("open");
     if (searchInput) {
       searchInput.focus();
       searchInput.select();
@@ -20,7 +19,6 @@
 
   function closeSearch() {
     if (!dialog) return;
-    dialog.classList.remove("open");
     dialog.close();
     if (lastFocus && lastFocus.focus) {
       lastFocus.focus();
@@ -45,7 +43,6 @@
     });
 
     dialog.addEventListener("close", function () {
-      dialog.classList.remove("open");
       if (lastFocus && lastFocus.focus) {
         lastFocus.focus();
       }
@@ -92,7 +89,7 @@
         resultsContainer.addEventListener("mouseover", function (e) {
           var item = e.target.closest(".search-result-item");
           if (item) {
-            items = dialog.querySelectorAll(".search-result-item");
+            var items = dialog.querySelectorAll(".search-result-item");
             items.forEach(function (i) { i.classList.remove("active"); });
             item.classList.add("active");
           }
@@ -148,7 +145,6 @@
     var buttons = form.querySelectorAll("button[type='submit']");
     Array.from(buttons).forEach(function (btn) {
       btn.disabled = true;
-      btn.classList.add("disabled");
     });
   });
 
@@ -161,11 +157,9 @@
     if (feedbackTimer) clearTimeout(feedbackTimer);
     var msg = feedbackEl.getAttribute("data-msg-error") || "Request failed. Please try again.";
     feedbackEl.textContent = msg;
-    feedbackEl.removeAttribute("hidden");
     feedbackEl.classList.add("visible");
     feedbackTimer = setTimeout(function () {
       feedbackEl.classList.remove("visible");
-      feedbackEl.setAttribute("hidden", "");
       feedbackTimer = null;
     }, 6000);
   }
@@ -312,6 +306,46 @@
   document.addEventListener("DOMContentLoaded", function () { initEntranceChoices(); });
   document.addEventListener("htmx:afterSwap", function (e) { initEntranceChoices(e.detail.target); });
 
+  // --- Entrance exam autosave (every 60 seconds) ---
+  function initExamAutosave() {
+    var form = document.getElementById("exam-take-form");
+    if (!form) return;
+    var snapshotUrl = form.getAttribute("data-snapshot-url");
+    var csrf = form.querySelector("input[name='csrfmiddlewaretoken']");
+    if (!snapshotUrl || !csrf) return;
+
+    function collectAnswers() {
+      var answers = {};
+      var fields = form.querySelectorAll("[name^='question_']");
+      Array.prototype.forEach.call(fields, function (el) {
+        var qid = el.name.replace("question_", "");
+        if (el.type === "radio") {
+          if (el.checked) answers[qid] = { choice: el.value };
+        } else if (el.tagName === "TEXTAREA") {
+          answers[qid] = { text: el.value };
+        }
+      });
+      return answers;
+    }
+
+    function save() {
+      fetch(snapshotUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrf.value,
+        },
+        body: JSON.stringify({ answers: collectAnswers() }),
+        credentials: "same-origin",
+      }).catch(function () { /* best-effort autosave; failures are ignored */ });
+    }
+
+    setInterval(save, 60000);
+  }
+
+  document.addEventListener("DOMContentLoaded", function () { initExamAutosave(); });
+  document.addEventListener("htmx:afterSwap", function (e) { initExamAutosave(e.detail.target); });
+
   // --- Intake form choices ---
   var intakeChoiceIdx = 1;
 
@@ -322,7 +356,7 @@
     if (!typeSelect || !choicesSection) return;
 
     var syncVisibility = function () {
-      var isChoice = typeSelect.value === "choice";
+      var isChoice = typeSelect.value === "choice" || typeSelect.value === "multi_choice";
       choicesSection.classList.toggle("hidden", !isChoice);
     };
     typeSelect.removeEventListener("change", syncVisibility);
@@ -462,6 +496,142 @@
       }
     }
   });
+
+  // --- Registration program selection ---
+  function initProgramSelection(container) {
+    if (!container) container = document;
+    var checkbox = container.querySelector("#id_apply_program");
+    if (!checkbox) return;
+    var details = container.querySelector("#program-details");
+    if (!details) return;
+
+    var typeSelect = container.querySelector("#id_program_type");
+    var diplomaField = container.querySelector("#diploma-field");
+    var courseField = container.querySelector("#course-field");
+
+    var sync = function () {
+      var apply = checkbox.checked;
+      details.classList.toggle("hidden", !apply);
+      details.querySelectorAll("input, select, textarea").forEach(function (inp) {
+        inp.disabled = !apply;
+      });
+      if (apply && typeSelect && diplomaField && courseField) {
+        var isDiploma = typeSelect.value === "diploma";
+        diplomaField.classList.toggle("hidden", !isDiploma);
+        diplomaField.querySelectorAll("input, select, textarea").forEach(function (inp) {
+          inp.disabled = !isDiploma;
+        });
+        courseField.classList.toggle("hidden", isDiploma);
+        courseField.querySelectorAll("input, select, textarea").forEach(function (inp) {
+          inp.disabled = isDiploma;
+        });
+      }
+    };
+
+    checkbox.removeEventListener("change", sync);
+    checkbox.addEventListener("change", sync);
+    if (typeSelect) {
+      typeSelect.removeEventListener("change", sync);
+      typeSelect.addEventListener("change", sync);
+    }
+    sync();
+  }
+
+  document.addEventListener("DOMContentLoaded", function () { initProgramSelection(); });
+  document.addEventListener("htmx:afterSwap", function (e) { initProgramSelection(e.detail.target); });
+
+  // --- Registration wizard (multi-step) ---
+  function initRegistrationWizard(container) {
+    if (!container) container = document;
+    var wizard = container.querySelector("#registration-wizard");
+    if (!wizard) return;
+    var steps = Array.prototype.slice.call(wizard.querySelectorAll(".form-step"));
+    if (!steps.length) return;
+    var indicators = Array.prototype.slice.call(wizard.querySelectorAll("[data-wizard-step-index]"));
+    var prevBtn = wizard.querySelector("[data-wizard-prev]");
+    var nextBtn = wizard.querySelector("[data-wizard-next]");
+    var submitBtn = wizard.querySelector("[data-wizard-submit]");
+    var initial = parseInt(wizard.getAttribute("data-initial-step") || "1", 10);
+    if (isNaN(initial) || initial < 1) initial = 1;
+    if (initial > steps.length) initial = steps.length;
+    var current = initial - 1;
+
+    function validateStep(step) {
+      var fields = step.querySelectorAll("input, select, textarea");
+      for (var i = 0; i < fields.length; i++) {
+        var f = fields[i];
+        if (f.disabled || f.readOnly) continue;
+        if (!f.checkValidity()) {
+          f.reportValidity();
+          return false;
+        }
+      }
+      return true;
+    }
+
+    function show(index) {
+      current = index;
+      steps.forEach(function (s, i) {
+        s.classList.toggle("hidden", i !== current);
+      });
+      indicators.forEach(function (ind, i) {
+        ind.classList.toggle("bg-brand-strong", i === current);
+        ind.classList.toggle("text-white", i === current);
+        ind.classList.toggle("bg-line", i !== current);
+        ind.classList.toggle("text-muted", i !== current);
+      });
+      prevBtn.classList.toggle("hidden", current === 0);
+      nextBtn.classList.toggle("hidden", current === steps.length - 1);
+      submitBtn.classList.toggle("hidden", current !== steps.length - 1);
+    }
+
+    function next() {
+      if (current >= steps.length - 1) return;
+      if (!validateStep(steps[current])) return;
+      show(current + 1);
+      var first = steps[current].querySelector("input, select, textarea");
+      if (first) first.focus();
+    }
+
+    function prev() {
+      if (current <= 0) return;
+      show(current - 1);
+    }
+
+    nextBtn.removeEventListener("click", next);
+    nextBtn.addEventListener("click", next);
+    prevBtn.removeEventListener("click", prev);
+    prevBtn.addEventListener("click", prev);
+
+    wizard.removeEventListener("keydown", onWizardKey);
+    wizard.addEventListener("keydown", onWizardKey);
+    function onWizardKey(e) {
+      if (e.key !== "Enter" || e.isComposing) return;
+      var tag = e.target && e.target.tagName;
+      if (tag !== "INPUT") return;
+      var type = e.target.type;
+      if (type === "submit" || type === "button" || type === "checkbox" || type === "radio") return;
+      e.preventDefault();
+      next();
+    }
+
+    // With novalidate on the form, validate the visible step on the final submit.
+    var form = wizard.closest("form");
+    if (form) {
+      form.removeEventListener("submit", onWizardSubmit);
+      form.addEventListener("submit", onWizardSubmit);
+    }
+    function onWizardSubmit(e) {
+      if (!validateStep(steps[current])) {
+        e.preventDefault();
+      }
+    }
+
+    show(current);
+  }
+
+  document.addEventListener("DOMContentLoaded", function () { initRegistrationWizard(); });
+  document.addEventListener("htmx:afterSwap", function (e) { initRegistrationWizard(e.detail.target); });
 
   // --- Lucide Icons (loaded via CDN) ---
   function initLucide() {

@@ -6,34 +6,22 @@ import json
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template import engines
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods
 
-from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE, SCOPE_COURSE_VERSION
-from apps.academics.models import (
-    Cohort,
-    Course,
-    CourseEnrollment,
-    CourseVersion,
-    LectureWatchProgress,
-    TeacherAssignment,
-)
-from apps.assessments.constants import (
-    GRADE_VISIBILITY_HIDDEN,
-    GRADE_VISIBILITY_RELEASED,
-    GRADE_VISIBILITY_UNDER_REVIEW,
-)
+from apps.academics.models import Cohort, Course
+from apps.applications.services import is_apply_target_open
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import student_required
-from apps.entrance_exams.constants import ATTEMPT_STATUS_GRADED
 
 from .forms import StudentProfileUpdateForm
 from .policies import EDITABLE_FIELDS, RESTRICTED_FIELDS, get_field_label
-from .selectors import get_dashboard_data
+from .selectors import get_application_row, get_dashboard_data
 from .services import check_apply_eligibility, get_open_apply_targets, submit_apply_application
 
 # ---------------------------------------------------------------------------
@@ -105,7 +93,11 @@ def edit_profile(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         form = StudentProfileUpdateForm(request.POST, instance=profile)
         if form.is_valid():
-            form.save()
+            with transaction.atomic():
+                form.save()
+                if "phone" in form.changed_data:
+                    request.user.phone = form.cleaned_data["phone"]
+                    request.user.save(update_fields=["phone", "updated_at"])
             messages.success(request, _("Profile updated."))
             return redirect("students:details")
     else:
@@ -122,10 +114,14 @@ def edit_profile(request: HttpRequest) -> HttpResponse:
 def application_history(request: HttpRequest) -> HttpResponse:
     """Show all applications submitted by the student."""
     profile = _get_profile_or_404(request.user)
-    applications = profile.program_applications.select_related("reviewed_by", "cohort__diploma", "course").prefetch_related("document_requests__upload", "intake_requests").order_by("-created_at")
+    applications = profile.program_applications.select_related("reviewed_by", "cohort__diploma", "course").prefetch_related("document_requests__upload", "intake_requests", "entrance_attempts").order_by("-created_at")
     page_obj, pagination_qs = paginate(request, applications, per_page=15)
     data = get_dashboard_data(profile, sections=["apply"])
-    data.update({"applications": page_obj, "pagination_qs": pagination_qs})
+    data.update({
+        "applications": page_obj,
+        "pagination_qs": pagination_qs,
+        "application_rows": [get_application_row(application) for application in page_obj],
+    })
     return _render_profile(request, "ui/pages/student/applications.html", data)
 
 
@@ -140,37 +136,6 @@ def diploma_course(request: HttpRequest) -> HttpResponse:
     return _render_profile(request, "ui/pages/student/learning.html", data)
 
 
-@student_required
-def diploma_course_detail(request: HttpRequest, version_id: int) -> HttpResponse:
-    """Show course content, teacher, and moderator within the profile.
-
-    Diploma course versions are redirected to the new DiplomaLecture flow.
-    Course-version content is served here.
-    """
-    profile = _get_profile_or_404(request.user)
-    cv = get_object_or_404(CourseVersion.objects.select_related("course"), id=version_id, is_active=True)
-
-    has_access = CourseEnrollment.objects.filter(student=profile, course_version=cv, status=ENROLLMENT_STATUS_ACTIVE).exists()
-    if not has_access:
-        raise PermissionDenied
-    lectures = list(
-        cv.lectures.filter(is_published=True).order_by("order").only("id", "title", "order", "youtube_url", "audio_url", "audio_hls_playlist_key")
-    )
-    completed_ids = set(
-        LectureWatchProgress.objects.filter(
-            student=profile, lecture__in=lectures, status="completed"
-        ).values_list("lecture_id", flat=True)
-    )
-    teachers = list(
-        TeacherAssignment.objects.filter(scope_type=SCOPE_COURSE_VERSION, course_version=cv, active=True)
-        .select_related("teacher")
-    )
-    return _render_profile(request, "ui/pages/student/content.html", {
-        "course_version": cv, "lectures": lectures, "teachers": teachers,
-        "completed_lecture_ids": completed_ids,
-    })
-
-
 # ---------------------------------------------------------------------------
 # Entrance exam results
 # ---------------------------------------------------------------------------
@@ -181,7 +146,6 @@ def exam_results(request: HttpRequest) -> HttpResponse:
     """Show entrance exam assignments and results."""
     profile = _get_profile_or_404(request.user)
     data = get_dashboard_data(profile, sections=["exam_assignments"])
-    data["attempt_status_graded"] = ATTEMPT_STATUS_GRADED
     return _render_profile(request, "ui/pages/student/exam_results.html", data)
 
 
@@ -195,9 +159,6 @@ def assessment_history(request: HttpRequest) -> HttpResponse:
     """Show normal assessment attempts, grades, feedback."""
     profile = _get_profile_or_404(request.user)
     data = get_dashboard_data(profile, sections=["assessment_attempts"])
-    data["grade_visibility_hidden"] = GRADE_VISIBILITY_HIDDEN
-    data["grade_visibility_released"] = GRADE_VISIBILITY_RELEASED
-    data["grade_visibility_under_review"] = GRADE_VISIBILITY_UNDER_REVIEW
     return _render_profile(request, "ui/pages/student/assessment_history.html", data)
 
 
@@ -225,10 +186,6 @@ def record(request: HttpRequest) -> HttpResponse:
         "grade_items", "certificates", "payments", "notifications", "assessment_attempts",
         "exam_assignments", "attendance",
     ])
-    data["grade_visibility_hidden"] = GRADE_VISIBILITY_HIDDEN
-    data["grade_visibility_released"] = GRADE_VISIBILITY_RELEASED
-    data["grade_visibility_under_review"] = GRADE_VISIBILITY_UNDER_REVIEW
-    data["attempt_status_graded"] = ATTEMPT_STATUS_GRADED
     return _render_profile(request, "ui/pages/student/record.html", data)
 
 
@@ -255,7 +212,7 @@ def apply(request: HttpRequest) -> HttpResponse:
     open_targets = get_open_apply_targets(
         program_type=selected_program_type,
         profile=profile,
-        page_size=1000 if selected_program_type == "diploma" else 10,
+        page_size=100,
     )
     cohorts = open_targets["items"] if selected_program_type == "diploma" else []
     courses = open_targets["items"] if selected_program_type == "course" else []
@@ -272,17 +229,25 @@ def apply(request: HttpRequest) -> HttpResponse:
         target_id = request.POST.get("target_id", "").strip()
         context.update({"selected_program_type": program_type, "selected_target_id": target_id})
         if not program_type or not target_id:
-            messages.error(request, _("Please select a program."))
+            error_message = _("Please select a program.")
+            messages.error(request, error_message)
             response = _render_profile(request, "ui/pages/student/apply.html", context)
-            response['HX-Trigger'] = json.dumps({'show-toast': {'message': 'Please select a program.', 'type': 'error'}})
+            response['HX-Trigger'] = json.dumps({'show-toast': {'message': str(error_message), 'type': 'error'}})
             return response
 
         if program_type == "diploma":
             cohort = Cohort.objects.filter(pk=target_id).select_related("diploma").first()
             if not cohort:
-                messages.error(request, _("Invalid cohort selected."))
+                error_message = _("Invalid cohort selected.")
+                messages.error(request, error_message)
                 response = _render_profile(request, "ui/pages/student/apply.html", context)
-                response['HX-Trigger'] = json.dumps({'show-toast': {'message': 'Invalid cohort selected.', 'type': 'error'}})
+                response['HX-Trigger'] = json.dumps({'show-toast': {'message': str(error_message), 'type': 'error'}})
+                return response
+            if not is_apply_target_open(cohort=cohort):
+                error_message = _("This program is no longer accepting applications.")
+                messages.error(request, error_message)
+                response = _render_profile(request, "ui/pages/student/apply.html", context)
+                response['HX-Trigger'] = json.dumps({'show-toast': {'message': str(error_message), 'type': 'error'}})
                 return response
             target_eligibility = check_apply_eligibility(profile, cohort=cohort)
             if not target_eligibility["allowed"]:
@@ -294,17 +259,25 @@ def apply(request: HttpRequest) -> HttpResponse:
             try:
                 submit_apply_application(profile, cohort=cohort)
             except ValueError as exc:
-                messages.error(request, str(exc))
+                error_message = str(exc)
+                messages.error(request, error_message)
                 response = _render_profile(request, "ui/pages/student/apply.html", context)
-                response['HX-Trigger'] = json.dumps({'show-toast': {'message': str(exc), 'type': 'error'}})
+                response['HX-Trigger'] = json.dumps({'show-toast': {'message': error_message, 'type': 'error'}})
                 return response
         elif program_type == "course":
             course_id = target_id.removeprefix("course_")
-            course = Course.objects.filter(pk=course_id, is_active=True).first()
+            course = Course.objects.filter(pk=course_id).first()
             if not course:
-                messages.error(request, _("Invalid course selected."))
+                error_message = _("Invalid course selected.")
+                messages.error(request, error_message)
                 response = _render_profile(request, "ui/pages/student/apply.html", context)
-                response['HX-Trigger'] = json.dumps({'show-toast': {'message': 'Invalid course selected.', 'type': 'error'}})
+                response['HX-Trigger'] = json.dumps({'show-toast': {'message': str(error_message), 'type': 'error'}})
+                return response
+            if not is_apply_target_open(course=course):
+                error_message = _("This course is not currently accepting applications.")
+                messages.error(request, error_message)
+                response = _render_profile(request, "ui/pages/student/apply.html", context)
+                response['HX-Trigger'] = json.dumps({'show-toast': {'message': str(error_message), 'type': 'error'}})
                 return response
             target_eligibility = check_apply_eligibility(profile, course=course)
             if not target_eligibility["allowed"]:
@@ -316,14 +289,16 @@ def apply(request: HttpRequest) -> HttpResponse:
             try:
                 submit_apply_application(profile, course=course)
             except ValueError as exc:
-                messages.error(request, str(exc))
+                error_message = str(exc)
+                messages.error(request, error_message)
                 response = _render_profile(request, "ui/pages/student/apply.html", context)
-                response['HX-Trigger'] = json.dumps({'show-toast': {'message': str(exc), 'type': 'error'}})
+                response['HX-Trigger'] = json.dumps({'show-toast': {'message': error_message, 'type': 'error'}})
                 return response
         else:
-            messages.error(request, _("Invalid program type."))
+            error_message = _("Invalid program type.")
+            messages.error(request, error_message)
             response = _render_profile(request, "ui/pages/student/apply.html", context)
-            response['HX-Trigger'] = json.dumps({'show-toast': {'message': 'Invalid program type.', 'type': 'error'}})
+            response['HX-Trigger'] = json.dumps({'show-toast': {'message': str(error_message), 'type': 'error'}})
             return response
 
         messages.success(request, _("Your application has been submitted."))

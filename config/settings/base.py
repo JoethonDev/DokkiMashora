@@ -245,7 +245,7 @@ if USE_R2_STORAGE and R2_BUCKET_NAME and R2_ENDPOINT_URL:
             },
         },
         "staticfiles": {
-            "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
         },
     }
 

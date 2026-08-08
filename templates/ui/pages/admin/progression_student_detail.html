@@ -19,37 +19,71 @@
           {{ current_progress|default:'—' }}
         </p>
         {% for enrollment in enrollments %}
-          <div class="flex gap-2.5 items-center flex-wrap"><form method="post"
+          {% with actions=allowed_actions|dict_key:enrollment.id enrollment_semesters=semesters_by_enrollment|dict_key:enrollment.id %}
+          <div class="flex gap-2.5 items-center flex-wrap">{% if actions.can_evaluate %}<form method="post"
                   action="{% url 'progression:admin_evaluate_semester' student.id %}">{% csrf_token %}
               <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}"><select name="semester_id" class="form-select" required>
                 <option value="">{% trans "Semester" %}</option>
-                {% for semester in semesters %}
+                {% for semester in enrollment_semesters %}
                   <option value="{{ semester.id }}">{{ semester }}</option>
                 {% endfor %}
               </select>
               <button class="btn-secondary" type="submit">{% trans "Evaluate" %}</button>
-            </form>
-            <form method="post"
+            </form>{% endif %}
+            {% if actions.can_promote %}<form method="post"
                   action="{% url 'progression:admin_promote' student.id %}">{% csrf_token %}
-              <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}"><input name="semester_id" class="form-input" placeholder="{% trans 'Semester id' %}" required>
+              <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}"><select name="semester_id" class="form-select" required>
+                <option value="">{% trans "Promote semester" %}</option>
+                {% for semester in enrollment_semesters %}
+                  <option value="{{ semester.id }}">{{ semester }}</option>
+                {% endfor %}
+              </select>
               <button class="btn-success" type="submit">{% trans "Promote" %}</button>
-            </form>
-            <form method="post"
+            </form>{% endif %}
+            {% if actions.can_demote %}<form method="post"
                   action="{% url 'progression:admin_demote' student.id %}">{% csrf_token %}
-              <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}"><input name="semester_id" class="form-input" placeholder="{% trans 'Semester id' %}" required>
+              <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}"><select name="semester_id" class="form-select" required>
+                <option value="">{% trans "Demote semester" %}</option>
+                {% for semester in enrollment_semesters %}
+                  <option value="{{ semester.id }}">{{ semester }}</option>
+                {% endfor %}
+              </select>
               <button class="btn-warning" type="submit">{% trans "Demote" %}</button>
-            </form>
-            <form method="post" action="{% url 'progression:admin_lock' student.id %}">{% csrf_token %}
+            </form>{% endif %}
+            {% if actions.can_lock %}<form method="post" action="{% url 'progression:admin_lock' student.id %}">{% csrf_token %}
               <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}"><button class="btn-warning" type="submit">{% trans "Lock" %}</button>
-            </form>
-            <form method="post"
+            </form>{% endif %}
+            {% if actions.can_unlock %}<form method="post"
                   action="{% url 'progression:admin_unlock' student.id %}">{% csrf_token %}
               <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}"><button class="btn-success" type="submit">{% trans "Unlock" %}</button>
-            </form>
-            <a class="btn-secondary"
+            </form>{% endif %}
+            {% if actions.can_assign_retake %}<form method="post" action="{% url 'progression:admin_assign_retake' student.id %}">{% csrf_token %}
+              <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}"><select name="semester_id" class="form-select" required><option value="">{% trans "Retake semester" %}</option>{% for semester in enrollment_semesters %}<option value="{{ semester.id }}">{{ semester }}</option>{% endfor %}</select>
+              <input name="reason" class="form-input" placeholder="{% trans 'Reason' %}" required><button class="btn-warning" type="submit">{% trans "Assign retake" %}</button>
+            </form>{% endif %}
+            {% if actions.can_clear_retake %}<form method="post" action="{% url 'progression:admin_clear_retake' student.id %}">{% csrf_token %}
+              <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}"><select name="semester_id" class="form-select" required><option value="">{% trans "Clear semester retake" %}</option>{% for semester in enrollment_semesters %}<option value="{{ semester.id }}">{{ semester }}</option>{% endfor %}</select>
+              <input name="reason" class="form-input" placeholder="{% trans 'Reason' %}"><button class="btn-secondary" type="submit">{% trans "Clear retake" %}</button>
+            </form>{% endif %}
+            {% if actions.can_override %}<form method="post" action="{% url 'progression:admin_override' student.id %}">{% csrf_token %}
+              <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}"><select name="semester_id" class="form-select" required><option value="">{% trans "Override semester" %}</option>{% for semester in enrollment_semesters %}<option value="{{ semester.id }}">{{ semester }}</option>{% endfor %}</select>
+              <select name="new_status" class="form-select" required><option value="passed">{% trans "Passed" %}</option><option value="failed">{% trans "Failed" %}</option></select>
+              <input name="reason" class="form-input" placeholder="{% trans 'Reason' %}" required><button class="btn-warning" type="submit">{% trans "Override" %}</button>
+            </form>{% endif %}
+            {% if actions.can_mark_complete %}<form method="post" action="{% url 'progression:admin_mark_complete' student.id %}">{% csrf_token %}
+              <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}"><input name="notes" class="form-input" placeholder="{% trans 'Completion notes' %}"><button class="btn-success" type="submit">{% trans "Mark complete" %}</button>
+            </form>{% endif %}
+            {% if actions.can_mark_graduate %}<form method="post" action="{% url 'progression:admin_mark_graduate' student.id %}">{% csrf_token %}
+              <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}"><input name="notes" class="form-input" placeholder="{% trans 'Graduation notes' %}"><button class="btn-success" type="submit">{% trans "Mark graduated" %}</button>
+            </form>{% endif %}
+            {% if actions.can_generate_certificate %}<form method="post" action="{% url 'certificates:admin_generate_certificate' student.id %}">{% csrf_token %}
+              <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}"><button class="btn-primary" type="submit">{% trans "Generate certificate" %}</button>
+            </form>{% endif %}
+            {% if actions.can_create_rejoin_plan %}<a class="btn-secondary"
                href="{% url 'progression:admin_create_rejoin_plan' enrollment.id %}">{% trans "Create rejoin plan" %}
-            </a>
+            </a>{% endif %}
           </div>
+          {% endwith %}
         {% endfor %}
       </section>
       <section class="card-surface"><div class="section-head"><div>

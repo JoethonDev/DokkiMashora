@@ -64,46 +64,147 @@
           {% endif %}
         </dl>
       </article>
+      {% if can_accept or can_reject %}
       <article class="card-surface"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Workflow" %}</p>
             <h3>{% trans "Decision" %}</h3>
           </div>
         </div>
-        <form method="post"
-              hx-target="#main"
-              hx-indicator="#global-loading"
-              hx-disabled-elt="find button, find textarea">{% csrf_token %}
-          {% if form and form.non_field_errors %}
-            <div class="py-4 px-5 border border-red rounded-md bg-red-soft text-red" role="alert">{% for error in form.non_field_errors %}
-                <p>{{ error }}</p>
-              {% endfor %}
-            </div>
-          {% endif %}
-          <div class="field"><label for="admin-notes">{% trans "Reviewer notes" %}</label>
-            <textarea id="admin-notes" name="admin_notes" class="form-input min-h-32 resize-y" rows="5">{% if admin_notes %}
-                  {{ admin_notes }}
-                {% endif %}
-                  </textarea>
+        {% if can_accept %}
+        <form method="post">{% csrf_token %}
+          <input type="hidden" name="action" value="accept">
+          <div class="field"><label for="admin-notes-accept">{% trans "Reviewer notes" %}</label>
+            <textarea id="admin-notes-accept" name="admin_notes" class="form-input min-h-32 resize-y" rows="5">{% if admin_notes %}{{ admin_notes }}{% endif %}</textarea>
           </div>
-          <div class="field"><label for="rejection-reason">{% trans "Rejection reason" %}
-              <span aria-hidden="true">*</span>
-            </label>
-            <textarea id="rejection-reason" name="rejection_reason" class="form-input min-h-32 resize-y" rows="3" aria-required="true">{% if rejection_reason %}
-                    {{ rejection_reason }}
-                  {% endif %}
-                    </textarea>
-          </div>
-          <div class="flex gap-2.5 items-center flex-wrap"><button class="btn-success"
-                    name="action"
-                    value="accept"
-                    type="submit">{% trans "Accept application" %}</button>
-            <button class="btn-danger"
-                    name="action"
-                    value="reject"
-                    type="submit">{% trans "Reject application" %}</button>
-          </div>
+          <label class="flex items-center gap-2 mb-4"><input class="form-checkbox" type="checkbox" name="send_email" checked><span>{% trans "Send email notification" %}</span></label>
+          <button class="btn-success" type="submit">{% trans "Accept application" %}</button>
         </form>
+        {% endif %}
+        {% if can_reject %}
+        <form method="post">{% csrf_token %}
+          <input type="hidden" name="action" value="reject">
+          <div class="field"><label for="admin-notes-reject">{% trans "Reviewer notes" %}</label>
+            <textarea id="admin-notes-reject" name="admin_notes" class="form-input min-h-32 resize-y" rows="5">{% if admin_notes %}{{ admin_notes }}{% endif %}</textarea>
+          </div>
+          <div class="field"><label for="rejection-reason">{% trans "Rejection reason" %} <span aria-hidden="true">*</span></label>
+            <textarea id="rejection-reason" name="rejection_reason" class="form-input min-h-32 resize-y" rows="3" aria-required="true">{% if rejection_reason %}{{ rejection_reason }}{% endif %}</textarea>
+          </div>
+          <label class="flex items-center gap-2 mb-4"><input class="form-checkbox" type="checkbox" name="send_email" checked><span>{% trans "Send email notification" %}</span></label>
+          <button class="btn-danger" type="submit">{% trans "Reject application" %}</button>
+        </form>
+        {% endif %}
       </article>
+      {% elif decision_reason %}
+      <article class="card-surface"><div class="section-head"><div>
+            <p class="eyebrow">{% trans "Workflow" %}</p>
+            <h3>{% trans "Decision" %}</h3>
+          </div>
+        </div>
+        <p class="text-sm text-muted">{{ decision_reason }}</p>
+      </article>
+      {% endif %}
+      {% if intake_state.required_form %}
+        <article class="card-surface">
+          <div class="section-head"><div>
+              <p class="eyebrow">{% trans "Admissions" %}</p>
+              <h3>{% trans "Required intake form" %}</h3>
+            </div>
+          </div>
+          <p class="mb-3">{{ intake_state.required_form.title }}</p>
+          {% if intake_state.has_response %}
+            <span class="status-pill-success">{% trans "Response submitted" %}</span>
+          {% elif not intake_state.form_open %}
+            <span class="status-pill-warning">{% trans "Form is not currently open" %}</span>
+          {% elif not intake_state.can_request %}
+            <p class="text-sm text-muted">{% trans "Intake request is not available for the current application status." %}</p>
+          {% else %}
+            {% if intake_state.latest_request and intake_state.latest_request.status == "requested" %}
+              <p class="text-sm text-muted">{% trans "An intake request is already open." %}</p>
+            {% endif %}
+            <form method="post" class="mt-3">{% csrf_token %}
+              <input type="hidden" name="action" value="request_intake">
+              <button class="btn-warning" type="submit">
+                {% if intake_state.latest_request %}{% trans "Send intake form again" %}{% else %}{% trans "Request intake form" %}{% endif %}
+              </button>
+            </form>
+          {% endif %}
+        </article>
+      {% endif %}
+      {% if application.status == "payment_pending" %}
+        <article class="card-surface">
+          <div class="section-head"><div><p class="eyebrow">{% trans "Payments" %}</p><h3>{% trans "Record payment" %}</h3></div></div>
+          <form method="post">{% csrf_token %}<input type="hidden" name="action" value="mark_paid">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <label class="field"><span class="field-label">{% trans "Amount" %}</span><input class="form-input" name="amount" type="number" min="0" step="0.01" required></label>
+              <label class="field"><span class="field-label">{% trans "External reference" %}</span><input class="form-input" name="external_reference"></label>
+            </div>
+            <label class="field"><span class="field-label">{% trans "Notes" %}</span><textarea class="form-input" name="notes" rows="2"></textarea></label>
+            <button class="btn-success" type="submit">{% trans "Record payment" %}</button>
+          </form>
+        </article>
+      {% endif %}
+      {% if application.program_type == "diploma" %}
+        {% if application.status == "account_activated" or application.status == "invited_to_entrance" %}
+        <article class="card-surface">
+          <div class="section-head"><div><p class="eyebrow">{% trans "Entrance assessment" %}</p><h3>{% trans "Invite applicant" %}</h3></div></div>
+          <form method="post">{% csrf_token %}<input type="hidden" name="action" value="invite_to_entrance">
+            <label class="flex items-center gap-2 mb-4"><input class="form-checkbox" type="checkbox" name="send_email" checked><span>{% trans "Send invitation email" %}</span></label>
+            <button class="btn-primary" type="submit">{% trans "Assign entrance assessment" %}</button>
+          </form>
+        </article>
+        {% endif %}
+      {% endif %}
+      {% if request_doc_form or doc_request or doc_upload %}
+        <article class="card-surface">
+          <div class="section-head"><div><p class="eyebrow">{% trans "Documents" %}</p><h3>{% trans "Application documents" %}</h3></div></div>
+          {% if doc_upload %}
+            <p role="status">{% trans "Documents submitted." %}</p>
+            <div class="flex gap-2.5 items-center flex-wrap mt-3">
+              <a class="btn-secondary" href="{% url 'applications:download_persona' doc_upload.id %}">{% trans "Download photo" %}</a>
+              <a class="btn-secondary" href="{% url 'applications:download_attachments' doc_upload.id %}">{% trans "Download attachments" %}</a>
+            </div>
+          {% elif doc_request %}
+            <p>{% trans "Request status" %}: {{ doc_request.get_status_display }}</p>
+            <p class="text-sm text-muted">{% trans "Expires" %}: {{ doc_request.expires_at|date:"d/m/Y H:i" }}</p>
+          {% endif %}
+          {% if request_doc_form %}
+            <form method="post" class="mt-4">{% csrf_token %}<input type="hidden" name="action" value="request_documents">
+              {% for field in request_doc_form %}{% include "ui/components/_field.html" %}{% endfor %}
+              <button class="btn-warning" type="submit">{% trans "Request documents" %}</button>
+            </form>
+          {% endif %}
+        </article>
+      {% endif %}
+      {% if application.status == "entrance_submitted" %}
+        <article class="card-surface">
+          <div class="section-head"><div><p class="eyebrow">{% trans "Interview" %}</p><h3>{% trans "Request interview" %}</h3></div></div>
+          <form method="post">{% csrf_token %}<input type="hidden" name="action" value="request_interview">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <label class="field"><span class="field-label">{% trans "Interview date/time" %}</span><input class="form-input" name="interview_at" type="datetime-local"></label>
+              <label class="field"><span class="field-label">{% trans "Expiry date/time" %}</span><input class="form-input" name="expires_at" type="datetime-local" required></label>
+            </div>
+            <label class="field"><span class="field-label">{% trans "Phone number" %}</span><input class="form-input" name="phone_number"></label>
+            <label class="field"><span class="field-label">{% trans "Notes" %}</span><textarea class="form-input" name="notes" rows="2"></textarea></label>
+            <label class="flex items-center gap-2 mb-4"><input class="form-checkbox" type="checkbox" name="send_email" checked><span>{% trans "Send email notification" %}</span></label>
+            <button class="btn-primary" type="submit">{% trans "Request interview" %}</button>
+          </form>
+        </article>
+      {% endif %}
+      {% if application.status == "ready_for_activation" %}
+        <article class="card-surface">
+          <div class="section-head"><div><p class="eyebrow">{% trans "Activation" %}</p><h3>{% trans "Complete application" %}</h3></div></div>
+          <form method="post">{% csrf_token %}<input type="hidden" name="action" value="activate"><button class="btn-success" type="submit">{% trans "Activate application" %}</button></form>
+        </article>
+      {% endif %}
+      {% if application.status == "accepted" or application.status == "rejected" %}
+        <article class="card-surface">
+          <div class="section-head"><div><p class="eyebrow">{% trans "Decision" %}</p><h3>{% trans "Revert decision" %}</h3></div></div>
+          <form method="post">{% csrf_token %}<input type="hidden" name="action" value="revert">
+            <label class="field"><span class="field-label">{% trans "Reason" %}</span><textarea class="form-input" name="revert_reason" rows="2" required></textarea></label>
+            <button class="btn-warning" type="submit">{% trans "Revert decision" %}</button>
+          </form>
+        </article>
+      {% endif %}
     </section>
     <section class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Audit" %}</p>

@@ -16,7 +16,14 @@ from apps.applications.models import ProgramApplication
 from apps.core.pagination import paginate
 from apps.core.permissions import ROLE_SENIOR_STAFF, is_admin, role_required, student_required
 
-from .constants import FIELD_TYPE_BOOLEAN, FIELD_TYPE_CHOICE, INTAKE_REQUEST_STATUS_EXPIRED, INTAKE_REQUEST_STATUS_SUBMITTED
+from .constants import (
+    FIELD_TYPE_BOOLEAN,
+    FIELD_TYPE_CHOICE,
+    FIELD_TYPE_MULTI_CHOICE,
+    INTAKE_REQUESTABLE_STATUSES,
+    INTAKE_REQUEST_STATUS_EXPIRED,
+    INTAKE_REQUEST_STATUS_SUBMITTED,
+)
 from .forms import IntakeFormBuildForm, IntakeFormFieldForm, IntakeFormSubmitForm
 from .models import IntakeForm, IntakeFormField, IntakeFormRequest, IntakeFormResponse
 from .selectors import get_intake_responses_for_target
@@ -110,8 +117,13 @@ def admin_intake_form_detail(request: HttpRequest, form_id: int) -> HttpResponse
         if action == "add_field":
             field_form = IntakeFormFieldForm(request.POST)
             if field_form.is_valid():
+                if IntakeFormField.objects.filter(
+                    form=intake_form, order=field_form.cleaned_data["order"],
+                ).exists():
+                    messages.error(request, _("A field with this order already exists."))
+                    return redirect("intake_forms:admin_intake_form_detail", form_id=intake_form.pk)
                 field_type = field_form.cleaned_data["field_type"]
-                if field_type == FIELD_TYPE_CHOICE:
+                if field_type in (FIELD_TYPE_CHOICE, FIELD_TYPE_MULTI_CHOICE):
                     opts_list = []
                     for key in request.POST:
                         if key.startswith("intake_choice_"):
@@ -121,6 +133,9 @@ def admin_intake_form_detail(request: HttpRequest, form_id: int) -> HttpResponse
                 else:
                     opts_raw = field_form.cleaned_data.get("options", "")
                     opts_list = [o.strip() for o in opts_raw.splitlines() if o.strip()]
+                if field_type in (FIELD_TYPE_CHOICE, FIELD_TYPE_MULTI_CHOICE) and not opts_list:
+                    messages.error(request, _("Choice fields need at least one option."))
+                    return redirect("intake_forms:admin_intake_form_detail", form_id=intake_form.pk)
                 field = IntakeFormField.objects.create(
                     form=intake_form,
                     label=field_form.cleaned_data["label"],
@@ -247,6 +262,9 @@ def admin_intake_request_send(request: HttpRequest, application_id: int) -> Http
     if not is_admin(request.user):
         raise PermissionDenied
     application = get_object_or_404(ProgramApplication, pk=application_id)
+    if application.status not in INTAKE_REQUESTABLE_STATUSES:
+        messages.error(request, _("Intake forms can only be requested for applications that are not yet rejected or activated."))
+        return redirect("applications:program_detail", application_id=application.pk)
     try:
         intake_request = request_intake_form_for_application(
             application, actor=request.user, send_email=True,
@@ -285,7 +303,7 @@ def fill_intake_form(request: HttpRequest, token: str) -> HttpResponse:
         return redirect("students:applications")
 
     if intake_request.status == INTAKE_REQUEST_STATUS_SUBMITTED:
-        return render(request, "ui/pages/public/register.html", {
+        return render(request, "ui/pages/student/intake_form.html", {
             "submitted": True,
             "intake_request": intake_request,
             "application": application,
@@ -294,7 +312,7 @@ def fill_intake_form(request: HttpRequest, token: str) -> HttpResponse:
     if intake_request.expires_at <= timezone.now():
         intake_request.status = INTAKE_REQUEST_STATUS_EXPIRED
         intake_request.save(update_fields=["status"])
-        return render(request, "ui/pages/public/register.html", {
+        return render(request, "ui/pages/student/intake_form.html", {
             "expired": True,
             "intake_request": intake_request,
             "application": application,
@@ -333,7 +351,7 @@ def fill_intake_form(request: HttpRequest, token: str) -> HttpResponse:
     else:
         submit_form = IntakeFormSubmitForm(form_instance, prefix="intake")
 
-    return render(request, "ui/pages/public/register.html", {
+    return render(request, "ui/pages/student/intake_form.html", {
         "intake_request": intake_request,
         "application": application,
         "form_instance": form_instance,

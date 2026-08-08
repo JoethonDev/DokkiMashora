@@ -11,7 +11,7 @@
     </div>
   </div>
   {% if page_obj.object_list %}
-    <div class="table-wrap"><table class="table">
+    <div class="table-wrap hidden lg:block"><table class="table">
         <thead>
           <tr>
             <th class="table-th">#</th>
@@ -59,11 +59,22 @@
         </tbody>
       </table>
     </div>
-  {% else %}
-    <div class="empty-state"><span>&#9679;</span>
-      <h3>{% trans "No enrollments found" %}</h3>
-      <p>{% trans "Try changing the search or filters." %}</p>
+    <div class="card-stack lg:hidden">
+      {% for e in page_obj %}
+        <div class="mobile-card">
+          <span class="rounded-full bg-brand-soft text-brand font-black grid place-items-center shrink-0 w-9 h-9 text-sm">{{ e.student.full_name|slice:":2"|upper }}</span>
+          <div class="flex-1 min-w-0">
+            <strong class="block truncate">{{ e.student.full_name }}</strong>
+            <small class="block text-muted truncate">{% if enrollment_type == "course" %}{{ e.course_version }}{% else %}{{ e.cohort }}{% endif %}</small>
+            {% include "ui/components/_status.html" with code=e.status label=e.get_status_display %}
+          </div>
+          <a class="btn-soft-primary shrink-0"
+             href="{% if enrollment_type == 'course' %}{% url 'academics:admin_course_enrollment_list' course.id %}?q={{ e.student.full_name|urlencode }}{% else %}{% url 'academics:admin_diploma_enrollment_list' diploma.id %}?q={{ e.student.full_name|urlencode }}{% endif %}">{% trans "View" %}</a>
+        </div>
+      {% endfor %}
     </div>
+  {% else %}
+    {% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No enrollments found") message=_("Try changing the search or filters.") %}
   {% endif %}
 </section>
 

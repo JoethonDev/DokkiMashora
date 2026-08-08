@@ -15,6 +15,7 @@ from apps.students.models import StudentProfile
 from .constants import (
     AUDIO_PROCESSING_PENDING,
     AUDIO_PROCESSING_STATUS_CHOICES,
+    ENROLLMENT_STATUS_ACTIVE,
     ENROLLMENT_STATUS_CHOICES,
     ENROLLMENT_STATUS_PENDING,
     SCOPE_CHOICES,
@@ -579,8 +580,9 @@ class StudentClusterMembership(TimeStampedModel):
             if not DiplomaEnrollment.objects.filter(
                 student=self.student,
                 cohort=self.cluster.cohort,
+                status=ENROLLMENT_STATUS_ACTIVE,
             ).exists():
-                raise ValidationError(_("Student is not enrolled in the cluster's cohort."))
+                raise ValidationError(_("Student must have an active enrollment in the cluster's cohort."))
 
     def save(self, *args, **kwargs):
         self.cohort = self.cluster.cohort
@@ -647,8 +649,11 @@ class ModeratorAssignment(TimeStampedModel):
     def clean(self):
         if self.cluster_id and self.cluster.cohort_id != self.cohort_id:
             raise ValidationError(_("Cluster must belong to the same cohort as the assignment."))
-        if self.course_version_id and self.cohort_id and self.course_version.course_id != self.cohort.diploma_id:
-            raise ValidationError(_("Course version must belong to the same diploma as the assignment."))
+        # No course_version/course-versus-cohort cross-check exists here: the
+        # academic model (S2-01) has no diploma ownership relation on courses or
+        # course versions, so any ID comparison would be coincidental, not
+        # semantic. The supported delivery boundary is enforced by the
+        # assignment-creation workflow in apps/accounts/views.py.
 
     def save(self, *args, **kwargs):
         self.clean()

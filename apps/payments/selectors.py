@@ -49,7 +49,9 @@ def get_student_payment_records(student: StudentProfile) -> QuerySet[PaymentReco
 
 def get_student_payment_summary(student: StudentProfile) -> dict:
     total_paid = (
-        PaymentRecord.objects.filter(student=student, status=PAYMENT_STATUS_PAID)
+        PaymentRecord.objects.filter(
+            student=student, status=PAYMENT_STATUS_PAID, deleted_at__isnull=True,
+        )
         .aggregate(total=Sum("amount"))["total"]
         or 0
     )
@@ -64,7 +66,7 @@ def get_student_payment_summary(student: StudentProfile) -> dict:
 def get_enrollment_payment_status(student: StudentProfile) -> dict:
     """Return diploma + course enrollments annotated with has_paid."""
     paid = PaymentRecord.objects.filter(
-        status=PAYMENT_STATUS_PAID, student=student,
+        status=PAYMENT_STATUS_PAID, student=student, deleted_at__isnull=True,
         diploma_enrollment=OuterRef("pk"),
     )
     diploma_qs = (
@@ -73,7 +75,7 @@ def get_enrollment_payment_status(student: StudentProfile) -> dict:
         .select_related("cohort__diploma")
     )
     paid = PaymentRecord.objects.filter(
-        status=PAYMENT_STATUS_PAID, student=student,
+        status=PAYMENT_STATUS_PAID, student=student, deleted_at__isnull=True,
         course_enrollment=OuterRef("pk"),
     )
     course_qs = (

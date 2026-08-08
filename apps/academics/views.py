@@ -4,14 +4,16 @@ import base64
 import io as _io
 import json
 import logging
-import threading
+import re
+from decimal import Decimal
 
 import qrcode
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
-from django.db.models import Count, Q
+from django.db import transaction
+from django.db.models import Count, Prefetch, Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -19,8 +21,14 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_POST
 
-from apps.academics.audio import transcode_to_hls, validate_audio_file
-from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE, ENROLLMENT_STATUS_CHOICES
+from apps.academics.audio import validate_audio_file
+from apps.academics.constants import (
+    AUDIO_PROCESSING_FAILED,
+    AUDIO_PROCESSING_PENDING,
+    ENROLLMENT_STATUS_ACTIVE,
+    ENROLLMENT_STATUS_CHOICES,
+    WATCH_STATUS_COMPLETED,
+)
 from apps.academics.forms import (
     CohortForm,
     CourseForm,
@@ -39,7 +47,9 @@ from apps.academics.models import (
     DiplomaEnrollment,
     DiplomaLecture,
     Lecture,
+    StudentCluster,
     Semester,
+    TeacherAssignment,
     DiplomaLectureWatchProgress,
     LectureWatchProgress,
 )
@@ -50,8 +60,18 @@ from apps.academics.services import (
     can_access_course,
     can_access_diploma_lecture,
     can_access_lecture,
+    course_progress_for_enrollment,
     create_cohort,
-    delete_cohort_delivery,
+    delete_cohort_record,
+    delete_course_record,
+    delete_course_version_record,
+    delete_diploma_lecture_record,
+    delete_diploma_record,
+    delete_lecture_record,
+    delete_semester_record,
+    diploma_progress_for_enrollment,
+    enqueue_youtube_metadata_refresh,
+    extract_youtube_video_id,
     get_student_course_versions,
     get_student_diploma_access,
     get_visible_diploma_lectures,
@@ -60,10 +80,10 @@ from apps.academics.services import (
     record_lecture_checkpoint,
     start_diploma_lecture_watch,
     start_lecture_watch,
-    extract_youtube_video_id,
 )
 from apps.attendance.models import AttendanceCode
 from apps.attendance.services import build_attendance_qr_payload, get_attendance_summary
+from apps.progression.models import DiplomaProgressionRule, SemesterProgressionRule
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import (
@@ -136,7 +156,17 @@ def admin_diploma_list(request):
 def admin_diploma_detail(request, diploma_id):
     diploma = get_object_or_404(Diploma, id=diploma_id)
     semesters = diploma.semesters.all()
-    cohorts = diploma.cohorts.all()
+    cohorts = diploma.cohorts.prefetch_related(
+        Prefetch(
+            "clusters",
+            queryset=StudentCluster.objects.annotate(
+                member_count=Count("memberships", distinct=True),
+            ).prefetch_related(
+                "memberships__student__user",
+            ),
+        ),
+        "enrollments__student__user",
+    )
     # Annotate each cohort with diploma lecture count
     cohorts = cohorts.annotate(diploma_lecture_count=Count("lectures", distinct=True))
     # Batch-count lectures per (cohort, semester) in one query
@@ -231,9 +261,14 @@ def admin_diploma_edit(request, diploma_id):
 def admin_diploma_delete(request, diploma_id):
     diploma = get_object_or_404(Diploma, id=diploma_id)
     next_url = safe_next_url(request)
-    diploma.delete()
-    messages.success(request, _("Diploma deleted."))
-    redirect_url = next_url or reverse("academics:admin_diploma_list")
+    try:
+        delete_diploma_record(diploma=diploma, actor=request.user)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        redirect_url = reverse("academics:admin_diploma_detail", kwargs={"diploma_id": diploma.id})
+    else:
+        messages.success(request, _("Diploma deleted."))
+        redirect_url = next_url or reverse("academics:admin_diploma_list")
     response = HttpResponse()
     response["HX-Redirect"] = redirect_url
     return response
@@ -284,10 +319,72 @@ def admin_semester_edit(request, diploma_id, semester_id):
     diploma = get_object_or_404(Diploma, id=diploma_id)
     semester = get_object_or_404(Semester, id=semester_id, diploma=diploma)
     next_url = safe_next_url(request)
+
+    diploma_rule = DiplomaProgressionRule.objects.filter(diploma=diploma, is_active=True).first()
+    semester_rule = SemesterProgressionRule.objects.filter(
+        semester=semester, diploma_rule__diploma=diploma, is_active=True,
+    ).first()
+
     if request.method == "POST":
         form = SemesterForm(request.POST, instance=semester, diploma=diploma)
-        if form.is_valid():
+        pass_percent_raw = request.POST.get("semester_pass_percent_override", "").strip()
+        pass_percent = None
+        if pass_percent_raw:
+            try:
+                parsed = Decimal(pass_percent_raw)
+            except (ValueError, TypeError):
+                messages.error(request, _("Invalid semester pass percent override."))
+            else:
+                if not parsed.is_finite() or parsed < 0 or parsed > 100:
+                    messages.error(request, _("Semester pass percent must be between 0 and 100."))
+                else:
+                    pass_percent = parsed
+        require_all = request.POST.get("semester_require_all_required") == "1"
+        allow_missing = request.POST.get("semester_allow_missing_optional") == "1"
+        if form.is_valid() and pass_percent is not None:
             form.save()
+            if diploma_rule:
+                if pass_percent:
+                    from apps.progression.services import save_progression_rule
+
+                    semester_rule, _created = SemesterProgressionRule.objects.update_or_create(
+                        semester=semester,
+                        diploma_rule=diploma_rule,
+                        defaults={
+                            "pass_percent": pass_percent,
+                            "require_all_required_assessments": require_all,
+                            "allow_missing_optional_assessments": allow_missing,
+                            "is_active": True,
+                        },
+                    )
+                    try:
+                        save_progression_rule(semester_rule, request.user)
+                    except (ValueError, ValidationError) as exc:
+                        messages.error(request, str(exc))
+                        return render(
+                            request,
+                            "ui/pages/admin/academic_form.html",
+                            {
+                                "form": form,
+                                "title": _("Edit semester"),
+                                "diploma": diploma,
+                                "semester_pass_percent_override": str(pass_percent),
+                                "semester_require_all_required": require_all,
+                                "semester_allow_missing_optional": allow_missing,
+                                "next": next_url,
+                                "breadcrumb_items": _diploma_breadcrumbs(diploma) + [{"label": _("Edit semester")}],
+                            },
+                        )
+                elif semester_rule:
+                    from apps.progression.services import save_progression_rule
+
+                    semester_rule.is_active = False
+                    try:
+                        save_progression_rule(semester_rule, request.user)
+                    except (ValueError, ValidationError) as exc:
+                        messages.error(request, str(exc))
+                        return redirect(next_url) if next_url else redirect("academics:admin_diploma_detail", diploma_id=diploma.id)
+                    semester_rule = None
             messages.success(request, _("Semester updated."))
             return redirect(next_url) if next_url else redirect("academics:admin_diploma_detail", diploma_id=diploma.id)
     else:
@@ -299,6 +396,9 @@ def admin_semester_edit(request, diploma_id, semester_id):
             "form": form,
             "title": _("Edit semester"),
             "diploma": diploma,
+            "semester_pass_percent_override": str(semester_rule.pass_percent) if semester_rule else "",
+            "semester_require_all_required": semester_rule.require_all_required_assessments if semester_rule else True,
+            "semester_allow_missing_optional": semester_rule.allow_missing_optional_assessments if semester_rule else False,
             "next": next_url,
             "breadcrumb_items": _diploma_breadcrumbs(diploma) + [{"label": _("Edit semester")}],
         },
@@ -317,9 +417,14 @@ def admin_semester_delete(request, diploma_id, semester_id):
     diploma = get_object_or_404(Diploma, id=diploma_id)
     semester = get_object_or_404(Semester, id=semester_id, diploma=diploma)
     next_url = safe_next_url(request)
-    semester.delete()
-    messages.success(request, _("Semester deleted."))
-    redirect_url = next_url or reverse("academics:admin_diploma_detail", kwargs={"diploma_id": diploma.id})
+    try:
+        delete_semester_record(semester=semester, actor=request.user)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        redirect_url = reverse("academics:admin_diploma_detail", kwargs={"diploma_id": diploma.id})
+    else:
+        messages.success(request, _("Semester deleted."))
+        redirect_url = next_url or reverse("academics:admin_diploma_detail", kwargs={"diploma_id": diploma.id})
     response = HttpResponse()
     response["HX-Redirect"] = redirect_url
     return response
@@ -441,9 +546,14 @@ def admin_course_edit(request, course_id):
 def admin_course_delete(request, course_id):
     course = get_object_or_404(Course, id=course_id)
     next_url = safe_next_url(request)
-    course.delete()
-    messages.success(request, _("Course deleted."))
-    redirect_url = next_url or reverse("academics:admin_course_list")
+    try:
+        delete_course_record(course=course, actor=request.user)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        redirect_url = reverse("academics:admin_course_detail", kwargs={"course_id": course.id})
+    else:
+        messages.success(request, _("Course deleted."))
+        redirect_url = next_url or reverse("academics:admin_course_list")
     response = HttpResponse()
     response["HX-Redirect"] = redirect_url
     return response
@@ -518,9 +628,14 @@ def admin_cohort_delete(request, diploma_id, cohort_id):
     diploma = get_object_or_404(Diploma, id=diploma_id)
     cohort = get_object_or_404(Cohort, id=cohort_id, diploma=diploma)
     next_url = safe_next_url(request)
-    delete_cohort_delivery(cohort=cohort)
-    messages.success(request, _("Cohort deleted."))
-    redirect_url = next_url or reverse("academics:admin_diploma_detail", kwargs={"diploma_id": diploma.id})
+    try:
+        delete_cohort_record(cohort=cohort, actor=request.user)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        redirect_url = reverse("academics:admin_diploma_detail", kwargs={"diploma_id": diploma.id})
+    else:
+        messages.success(request, _("Cohort deleted."))
+        redirect_url = next_url or reverse("academics:admin_diploma_detail", kwargs={"diploma_id": diploma.id})
     response = HttpResponse()
     response["HX-Redirect"] = redirect_url
     return response
@@ -598,6 +713,7 @@ def admin_lecture_create(request, course_id, version_id):
             lecture.course_version = version
             lecture.save()
             _process_lecture_audio(request, lecture, request.FILES)
+            enqueue_youtube_metadata_refresh(lecture)
             messages.success(request, _("Lecture created."))
             return redirect(next_url) if next_url else redirect("academics:admin_version_detail", course_id=course.id, version_id=version.id)
     else:
@@ -621,8 +737,13 @@ def admin_lecture_edit(request, course_id, version_id, lecture_id):
     if request.method == "POST":
         form = LectureForm(request.POST, request.FILES, instance=lecture)
         if form.is_valid():
+            old_audio_key = lecture.audio_storage_key
+            old_hls_prefix = f"lectures/{lecture.id}/audio"
             form.save()
             _process_lecture_audio(request, lecture, request.FILES)
+            enqueue_youtube_metadata_refresh(lecture)
+            if old_audio_key and old_audio_key != lecture.audio_storage_key:
+                _cleanup_audio_after_commit([old_audio_key], [old_hls_prefix])
             messages.success(request, _("Lecture updated."))
             return redirect(next_url) if next_url else redirect("academics:admin_version_detail", course_id=course.id, version_id=version.id)
     else:
@@ -644,7 +765,11 @@ def admin_lecture_delete(request, course_id, version_id, lecture_id):
     if not can_manage_course_version(request.user, version):
         raise PermissionDenied
     next_url = safe_next_url(request)
-    lecture.delete()
+    try:
+        delete_lecture_record(lecture=lecture, actor=request.user)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect("academics:admin_version_detail", course_id=course.id, version_id=version.id)
     messages.success(request, _("Lecture deleted."))
     return redirect(next_url) if next_url else redirect("academics:admin_version_detail", course_id=course.id, version_id=version.id)
 
@@ -656,9 +781,14 @@ def admin_version_delete(request, course_id, version_id):
     course = get_object_or_404(Course, id=course_id)
     version = get_object_or_404(CourseVersion, id=version_id, course=course)
     next_url = safe_next_url(request)
-    version.delete()
-    messages.success(request, _("Course version deleted."))
-    redirect_url = next_url or reverse("academics:admin_course_detail", kwargs={"course_id": course.id})
+    try:
+        delete_course_version_record(version=version, actor=request.user)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        redirect_url = reverse("academics:admin_course_detail", kwargs={"course_id": course.id})
+    else:
+        messages.success(request, _("Course version deleted."))
+        redirect_url = next_url or reverse("academics:admin_course_detail", kwargs={"course_id": course.id})
     response = HttpResponse()
     response["HX-Redirect"] = redirect_url
     return response
@@ -677,15 +807,21 @@ def admin_version_toggle_active(request, course_id, version_id):
 
 
 def _process_lecture_audio(request, lecture, files, key_prefix=None):
+    """Validate and upload an audio file, then enqueue the HLS transcode.
+
+    The FFmpeg work runs in a bounded Celery task (S2-09); the web request
+    only validates size/type server-side and uploads the source through the
+    storage service. The lecture carries a visible processing state.
+    """
     audio_file = files.get("audio_file")
     if not audio_file:
         return
     prefix = key_prefix or f"lectures/{lecture.id}/audio"
     try:
-        data = audio_file.read()
         filename = str(audio_file)
         content_type = audio_file.content_type or "audio/mpeg"
         validate_audio_file(filename, content_type)
+        data = audio_file.read()
         result = storage_service.upload_file(
             data,
             key_prefix=prefix,
@@ -699,37 +835,76 @@ def _process_lecture_audio(request, lecture, files, key_prefix=None):
         lecture.audio_content_type = result.content_type
         lecture.audio_byte_size = result.byte_size
         lecture.audio_checksum = result.checksum
+        lecture.audio_processing_status = AUDIO_PROCESSING_PENDING
+        lecture.audio_processing_error = ""
         lecture.save(update_fields=[
             "audio_storage_key", "audio_original_filename",
             "audio_content_type", "audio_byte_size", "audio_checksum",
+            "audio_processing_status", "audio_processing_error",
         ])
-        # ponytail: sync FFmpeg blocks the request. Switch to Celery/Task queue if uploads >50MB.
-        threading.Thread(
-            target=transcode_to_hls,
-            args=(lecture, data, filename, content_type, prefix),
-            daemon=True,
-        ).start()
+        from apps.academics.tasks import transcode_lecture_audio_task
+
+        transcode_lecture_audio_task.delay(
+            lecture_id=lecture.id,
+            storage_key=result.key,
+            original_filename=filename,
+            content_type=content_type,
+            storage_prefix=prefix,
+        )
+        messages.success(request, _("Audio uploaded. HLS processing started."))
     except Exception as exc:
         logger.exception("Audio upload/processing failed for lecture %s", lecture.id)
-        messages.error(request, _("Audio processing failed: %(error)s") % {"error": str(exc)})
+        lecture.audio_processing_status = AUDIO_PROCESSING_FAILED
+        lecture.audio_processing_error = str(exc)
+        lecture.save(update_fields=["audio_processing_status", "audio_processing_error"])
+        messages.error(request, _("Audio upload failed: %(error)s") % {"error": str(exc)})
+
+
+_AUDIO_SEGMENT_RE = re.compile(r"^[A-Za-z0-9_-]+\.(m3u8|ts)$")
+
+
+def _is_valid_audio_file_path(file_path: str) -> bool:
+    """Reject any path that is not a single generated HLS audio filename (S2-22).
+
+    Only ``<name>.m3u8`` / ``<name>.ts`` segments with safe characters are
+    allowed; separators, dot segments, and empty paths return False so the
+    route boundary returns 404 instead of building a storage key.
+    """
+    if not file_path:
+        return False
+    if "/" in file_path or "\\" in file_path or "\x00" in file_path:
+        return False
+    if file_path in {".", ".."}:
+        return False
+    return bool(_AUDIO_SEGMENT_RE.fullmatch(file_path))
+
+
+def _cleanup_audio_after_commit(old_keys, old_prefixes):
+    """Delete replaced audio objects after the request's transaction commits.
+
+    S2-33: DB rows always point at the new objects; the old physical objects
+    are removed only post-commit, and failures are logged, never fatal.
+    """
+    def _cleanup():
+        for key in old_keys:
+            if not key:
+                continue
+            try:
+                storage_service.delete_file(key)
+            except Exception:  # noqa: BLE001 - best-effort post-commit cleanup
+                logger.exception("Storage cleanup failed for key %s", key)
+        for prefix in old_prefixes:
+            try:
+                storage_service.delete_prefix(prefix)
+            except Exception:  # noqa: BLE001 - best-effort post-commit cleanup
+                logger.exception("Storage cleanup failed for prefix %s", prefix)
+
+    transaction.on_commit(_cleanup)
 
 
 # ---------------------------------------------------------------------------
 # Student: content access
 # ---------------------------------------------------------------------------
-
-
-def _lecture_progress(lectures, progress_rows):
-    lecture_ids = {lecture.id for lecture in lectures}
-    progress = {row.lecture_id: row for row in progress_rows if row.lecture_id in lecture_ids}
-    completed = sum(row.status == "completed" for row in progress.values())
-    next_lecture = next((lecture for lecture in lectures if lecture.id not in progress or progress[lecture.id].status != "completed"), None)
-    return {
-        "completed_count": completed,
-        "lecture_count": len(lectures),
-        "percent": round(completed * 100 / len(lectures)) if lectures else 0,
-        "next_lecture": next_lecture,
-    }
 
 
 def _assessment_due_work(user, *, course_version_id=None, cohort_id=None):
@@ -796,22 +971,34 @@ def student_course_detail(request, version_id):
             buf = _io.BytesIO()
             img.save(buf, format="PNG")
             course_attendance_qr = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
-    progress = _lecture_progress(
-        list(lectures),
-        LectureWatchProgress.objects.filter(student=profile, course_enrollment=course_enrollment),
-    ) if course_enrollment else {"completed_count": 0, "lecture_count": len(lectures), "percent": 0, "next_lecture": next(iter(lectures), None)}
+    progress = course_progress_for_enrollment(profile, version)
+    completed_lecture_ids = list(
+        LectureWatchProgress.objects.filter(
+            student=profile,
+            course_enrollment=course_enrollment,
+            status=WATCH_STATUS_COMPLETED,
+        ).values_list("lecture_id", flat=True)
+    ) if course_enrollment else []
+    teachers = TeacherAssignment.objects.filter(
+        course_version=version, active=True,
+    ).select_related("teacher").order_by("teacher__full_name")
     due_work = _assessment_due_work(request.user, course_version_id=version.id)
     return render(
         request,
         "ui/pages/student/content.html",
         {
             "version": version,
+            "course_version": version,
             "lectures": lectures,
             "course_attendance_code": course_attendance_code,
             "course_attendance_qr": course_attendance_qr,
             "progress": progress,
+            "completed_lecture_ids": completed_lecture_ids,
+            "teachers": teachers,
             "due_work": due_work,
             "access_state": course_enrollment.get_status_display() if course_enrollment else _("No active enrollment"),
+            "back_url": reverse("students:diploma_course"),
+            "back_label": _("Back to learning"),
             "breadcrumb_items": [
                 {"label": _("Learning"), "href": reverse("students:learning")},
                 {"label": version.course.title},
@@ -838,7 +1025,15 @@ def student_lecture_view(request, version_id, lecture_id):
     return render(
         request,
         "ui/pages/student/content.html",
-        {"version": version, "lecture": lecture, "navigation": navigation, "watch_progress": watch_progress},
+        {
+            "version": version,
+            "course_version": version,
+            "lecture": lecture,
+            "navigation": navigation,
+            "watch_progress": watch_progress,
+            "back_url": reverse("academics:student_course_detail", args=[version.id]),
+            "back_label": _("Back to course"),
+        },
     )
 
 
@@ -855,6 +1050,8 @@ def student_lecture_audio(request, version_id, lecture_id, file_path=""):
     lecture = get_object_or_404(Lecture, id=lecture_id, course_version=version)
     if not can_access_lecture(profile, lecture):
         raise PermissionDenied(_("This lecture is not available yet."))
+    if not _is_valid_audio_file_path(file_path):
+        raise Http404
     storage_key = f"lectures/{lecture.id}/audio/{file_path}"
     try:
         file_data = storage_service.download_file(storage_key)
@@ -895,8 +1092,12 @@ def student_lecture_audio_download(request, version_id, lecture_id):
 @login_required
 @role_required(*ROLE_EXAM_STAFF)
 def admin_lecture_preview(request, course_id, version_id, lecture_id):
-    """Render the student-facing lecture page for admin preview (no enrollment/release checks)."""
-    version = get_object_or_404(CourseVersion, id=version_id)
+    """Render the student-facing lecture page for admin preview (no enrollment/release checks).
+
+    The version is resolved with BOTH its own id and the route's course parent
+    (S2-13), and the breadcrumb is built from the resolved object.
+    """
+    version = get_object_or_404(CourseVersion, id=version_id, course_id=course_id)
     lecture = get_object_or_404(Lecture, id=lecture_id, course_version=version)
     return render(
         request,
@@ -956,6 +1157,7 @@ def admin_diploma_lecture_create(request, diploma_id, cohort_id, semester_id):
             lecture.semester = semester
             lecture.save()
             _process_lecture_audio(request, lecture, request.FILES, key_prefix=f"diploma-lectures/{lecture.id}/audio")
+            enqueue_youtube_metadata_refresh(lecture, diploma=True)
             messages.success(request, _("Diploma lecture created."))
             return redirect(next_url) if next_url else redirect("academics:admin_diploma_detail", diploma_id=diploma.id)
     else:
@@ -979,8 +1181,13 @@ def admin_diploma_lecture_edit(request, diploma_id, cohort_id, semester_id, lect
     if request.method == "POST":
         form = DiplomaLectureForm(request.POST, request.FILES, instance=lecture)
         if form.is_valid():
+            old_audio_key = lecture.audio_storage_key
+            old_hls_prefix = f"diploma-lectures/{lecture.id}/audio"
             form.save()
             _process_lecture_audio(request, lecture, request.FILES, key_prefix=f"diploma-lectures/{lecture.id}/audio")
+            enqueue_youtube_metadata_refresh(lecture, diploma=True)
+            if old_audio_key and old_audio_key != lecture.audio_storage_key:
+                _cleanup_audio_after_commit([old_audio_key], [old_hls_prefix])
             messages.success(request, _("Diploma lecture updated."))
             return redirect(next_url) if next_url else redirect("academics:admin_diploma_detail", diploma_id=diploma.id)
     else:
@@ -1001,7 +1208,11 @@ def admin_diploma_lecture_delete(request, diploma_id, cohort_id, semester_id, le
     semester = get_object_or_404(Semester, id=semester_id, diploma=diploma)
     lecture = get_object_or_404(DiplomaLecture, id=lecture_id, cohort=cohort, semester=semester)
     next_url = safe_next_url(request)
-    lecture.delete()
+    try:
+        delete_diploma_lecture_record(lecture=lecture, actor=request.user)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect("academics:admin_diploma_detail", diploma_id=diploma.id)
     messages.success(request, _("Diploma lecture deleted."))
     return redirect(next_url) if next_url else redirect("academics:admin_diploma_detail", diploma_id=diploma.id)
 
@@ -1303,14 +1514,7 @@ def student_diploma_detail(request, enrollment_id):
         buf = _io.BytesIO()
         img.save(buf, format="PNG")
         attendance_qr = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
-    progress = _lecture_progress(
-        all_lectures,
-        DiplomaLectureWatchProgress.objects.filter(student=profile, diploma_enrollment=enrollment),
-    )
-    progress["next_lecture_url"] = (
-        reverse("academics:student_diploma_lecture_view", args=[enrollment.id, progress["next_lecture"].semester_id, progress["next_lecture"].id])
-        if progress["next_lecture"] else None
-    )
+    progress = diploma_progress_for_enrollment(profile, enrollment)
     attendance_summary = (
         get_attendance_summary(enrollment, access.get("current_semester"))
         if access.get("current_semester")
@@ -1328,6 +1532,8 @@ def student_diploma_detail(request, enrollment_id):
         "progress": progress,
         "attendance_summary": attendance_summary,
         "due_work": _assessment_due_work(request.user, cohort_id=cohort.id),
+        "back_url": reverse("students:diploma_course"),
+        "back_label": _("Back to learning"),
         "access_state": _("Active until %(date)s") % {"date": enrollment.expires_at.strftime("%x") if enrollment.expires_at else _("unlimited")},
     })
 
@@ -1374,8 +1580,10 @@ def student_diploma_semester_detail(request, enrollment_id, semester_id):
         "semester": semester,
         "lectures": lectures,
         "access": access,
-        "progress": _lecture_progress(lectures, watch_rows),
+        "progress": diploma_progress_for_enrollment(profile, enrollment),
         "due_work": _assessment_due_work(request.user, cohort_id=enrollment.cohort_id),
+        "back_url": reverse("academics:student_diploma_detail", args=[enrollment.id]),
+        "back_label": _("Back to diploma"),
         "video_tracking_enabled": enrollment.cohort.diploma.video_tracking_enabled,
     })
 
@@ -1419,6 +1627,8 @@ def student_diploma_lecture_view(request, enrollment_id, semester_id, lecture_id
         "youtube_video_id": lecture.youtube_video_id or extract_youtube_video_id(lecture.youtube_url),
         "navigation": navigation,
         "watch_progress": watch_progress,
+        "back_url": reverse("academics:student_diploma_semester_detail", args=[enrollment.id, semester.id]),
+        "back_label": _("Back to semester"),
     })
 
 
@@ -1449,6 +1659,8 @@ def student_diploma_lecture_audio(request, enrollment_id, semester_id, lecture_i
     if not can_access_diploma_lecture(profile, enrollment, lecture):
         raise PermissionDenied(_("This lecture is not available yet."))
 
+    if not _is_valid_audio_file_path(file_path):
+        raise Http404
     storage_key = f"diploma-lectures/{lecture.id}/audio/{file_path}"
     try:
         file_data = storage_service.download_file(storage_key)

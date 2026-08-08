@@ -29,6 +29,7 @@ from apps.applications.constants import (
     EMAIL_ACTION_EXAM_RESULT,
     PROGRAM_APP_STATUS_ACCEPTED,
     PROGRAM_APP_STATUS_ACTIVATED,
+    PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
     PROGRAM_APP_STATUS_INVITED,
     PROGRAM_APP_STATUS_REJECTED,
 )
@@ -66,6 +67,7 @@ from .models import EntranceAttempt, EntranceChoice, EntranceExam, EntranceQuest
 from .services import (
     AnswerData,
     assign_attempt,
+    attempt_decision,
     finalize_all_pending_for_exam,
     get_pending_grading,
     grade_answer,
@@ -94,6 +96,7 @@ def exam_access_token(request, token):
             PROGRAM_APP_STATUS_INVITED,
             PROGRAM_APP_STATUS_ACCEPTED,
             PROGRAM_APP_STATUS_ACTIVATED,
+            PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
         ],
     ).first()
     if not prog_app:
@@ -103,14 +106,25 @@ def exam_access_token(request, token):
     ).first()
     if not attempt:
         attempt = assign_attempt(exam, prog_app, profile)
-    if attempt.status == ATTEMPT_STATUS_IN_PROGRESS:
-        return redirect("entrance_exams:take_exam", token=token)
+    # Reopening the issued link after submission must resolve the completed
+    # state and route to results; the attempt is never re-taken (E3).
     if attempt.status in (ATTEMPT_STATUS_COMPLETED, ATTEMPT_STATUS_GRADED):
         return redirect("entrance_exams:results", token=token)
+    if attempt.status == ATTEMPT_STATUS_IN_PROGRESS:
+        return redirect("entrance_exams:take_exam", token=token)
+    now = timezone.now()
+    if exam.open_at and now < exam.open_at:
+        exam_readiness = "scheduled"
+    elif exam.close_at and now > exam.close_at:
+        exam_readiness = "closed"
+    else:
+        exam_readiness = "ready"
     return render(request, "ui/pages/student/exam.html", {
         "exam": exam,
         "attempt": attempt,
         "access_token": token,
+        "exam_readiness": exam_readiness,
+        "question_count": exam.questions.count(),
     })
 
 
@@ -243,15 +257,19 @@ def save_exam_snapshot(request, token):
 
 @student_required
 def exam_results(request, token):
-    """Show entrance exam results (token-based)."""
+    """Show entrance exam status (token-based). Grades are never exposed."""
     profile = _get_profile(request.user)
     exam = get_object_or_404(EntranceExam, access_token=token)
     attempt = get_object_or_404(EntranceAttempt, exam=exam, student=profile)
-    answers = attempt.answers.select_related("question", "selected_choice").all()
+    decision = attempt_decision(attempt)
+    state_label = decision["label"] if decision else _("Submitted — awaiting review")
     return render(request, "ui/pages/student/exam.html", {
         "exam": exam,
         "attempt": attempt,
-        "answers": answers,
+        "access_token": token,
+        "is_results": True,
+        "decision": decision,
+        "state_label": state_label,
     })
 
 
@@ -606,81 +624,6 @@ def admin_delete_question(request, exam_id, question_id):
             "show-toast": {"message": msg, "type": "success"},
         })
         return response
-    return redirect("entrance_exams:admin_detail", exam_id=exam.id)
-
-
-@login_required
-@require_POST
-@role_required(*ROLE_EXAM_STAFF)
-def admin_bulk_send_results(request, exam_id):
-    """Send pass/fail email templates to all students of an exam (V024)."""
-    if not is_admin(request.user):
-        raise PermissionDenied
-    exam = get_object_or_404(EntranceExam, id=exam_id)
-    decision = request.POST.get("decision", "")
-    if decision not in (RESULT_PASS, RESULT_FAIL):
-        messages.error(request, _("Invalid decision. Choose pass or fail."))
-        return redirect("entrance_exams:admin_detail", exam_id=exam.id)
-
-    slug = TEMPLATE_ENTRANCE_EXAM_PASS if decision == RESULT_PASS else TEMPLATE_ENTRANCE_EXAM_FAIL
-    attempts = list(
-        exam.attempts.filter(result=decision).select_related("student__user")
-    )
-    if not attempts:
-        messages.warning(
-            request,
-            _("No attempts with result '%(result)s' to email.") % {"result": decision},
-        )
-        return redirect("entrance_exams:admin_detail", exam_id=exam.id)
-
-    sent = 0
-    failed = 0
-    for attempt in attempts:
-        email_to = attempt.student.user.email
-        if not email_to:
-            failed += 1
-            continue
-        context = {
-            "full_name": attempt.student.full_name or attempt.student.user.get_full_name() or "",
-            "exam_title": exam.title,
-            "cohort_name": attempt.exam.cohort.name or "",
-            "exam_url": reverse("entrance_exams:exam_access_token", args=[exam.access_token]) if exam.access_token else "",
-        }
-        if decision == RESULT_FAIL:
-            context["rejection_reason"] = attempt.program_application.rejection_reason or ""
-        try:
-            record = send_templated_email(
-                slug=slug,
-                to_email=email_to,
-                context=context,
-                sent_by=request.user,
-            )
-        except Exception:
-            logger.exception("Bulk email send failed for attempt %s", attempt.id)
-            failed += 1
-            continue
-        if record and record.status == "sent":
-            sent += 1
-        else:
-            failed += 1
-
-    record_audit_event(
-        actor=request.user,
-        action=ACTION_BULK_EMAIL_SENT,
-        target_type="entrance_exam",
-        target_id=str(exam.id),
-        metadata={
-            "decision": decision,
-            "attempt_count": len(attempts),
-            "sent": sent,
-            "failed": failed,
-        },
-    )
-    messages.success(
-        request,
-        _("Sent %(sent)d emails (%(failed)d failed) for result '%(result)s'.")
-        % {"sent": sent, "failed": failed, "result": decision},
-    )
     return redirect("entrance_exams:admin_detail", exam_id=exam.id)
 
 

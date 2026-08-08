@@ -1,0 +1,135 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n ui_tags %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="page-stack animate-enter-view">
+  {% include "ui/components/_page_header.html" with eyebrow=_("Progression") title=semester.title description=cohort.name back_button=True %}
+
+  <section class="card-surface mb-4">
+    <div class="flex gap-2.5 items-center flex-wrap">
+      <form method="post" action="{% url 'progression:admin_semester_sync_all' cohort.id semester.id %}" class="inline">{% csrf_token %}
+        <button class="btn-secondary" type="submit">{% trans "Sync All" %}</button>
+      </form>
+      <form method="post" action="{% url 'progression:admin_semester_evaluate_all' cohort.id semester.id %}" class="inline">{% csrf_token %}
+        <button class="btn-secondary" type="submit">{% trans "Evaluate All" %}</button>
+      </form>
+      <form method="post" action="{% url 'progression:admin_semester_auto_promote' cohort.id semester.id %}" class="inline">{% csrf_token %}
+        <button class="btn-success" type="submit">{% trans "Auto-Promote" %}</button>
+      </form>
+      <a class="btn-ghost" href="{% url 'progression:admin_semester_export_csv' cohort.id semester.id %}">{% trans "Export CSV" %}</a>
+    </div>
+  </section>
+
+  <section class="card-surface">
+    <div class="table-wrap hidden lg:block">
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="table-th">{% trans "Student" %}</th>
+            <th class="table-th">{% trans "Semester Exam %" %}</th>
+            <th class="table-th">{% trans "Attendance %" %}</th>
+            <th class="table-th">{% trans "Homework/Assessments %" %}</th>
+            <th class="table-th">{% trans "Weighted Total %" %}</th>
+            <th class="table-th">{% trans "Status" %}</th>
+            <th class="table-th">{% trans "Interview" %}</th>
+            <th class="table-th">{% trans "Actions" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in table_rows %}
+            <tr id="student-row-{{ row.enrollment.id }}">
+              <td class="table-td"><strong>{{ row.student.full_name|default:row.student }}</strong></td>
+              <td class="table-td">{{ row.semester_exam.score_percent|default:'—' }}</td>
+              <td class="table-td">{{ row.attendance.score_percent|default:'—' }}</td>
+              <td class="table-td">{{ row.homework_assessment.score_percent|default:'—' }}</td>
+              <td class="table-td">
+                {% if row.result %}
+                  <strong>{{ row.result.total_percent|floatformat:2 }}%</strong>
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td class="table-td">
+                {% if row.progress %}
+                  {% include "ui/components/_status.html" with code=row.progress.status label=row.progress.get_status_display %}
+                {% else %}
+                  {% include "ui/components/_status.html" with code="not_started" label=_("Not started") %}
+                {% endif %}
+              </td>
+              <td class="table-td">
+                {% if row.interview %}
+                  {% if row.interview.decision_type == "request_interview" %}
+                    <span class="status-pill-warning">{% trans "Requested" %}</span>
+                  {% elif row.interview.decision_type == "interview_pass" %}
+                    <span class="status-pill-success">{% trans "Passed" %}</span>
+                  {% elif row.interview.decision_type == "interview_fail" %}
+                    <span class="status-pill-danger">{% trans "Failed" %}</span>
+                  {% endif %}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td class="table-td">
+                <div class="flex gap-1 items-center flex-wrap">
+                  <form method="post" action="{% url 'progression:admin_grade_sync' row.enrollment.id semester.id %}" class="inline">{% csrf_token %}
+                    <input type="hidden" name="next" value="{% url 'progression:admin_cohort_semester_progression' diploma.id cohort.id semester.id %}">
+                    <button class="btn-ghost btn-sm" type="submit">{% trans "Sync" %}</button>
+                  </form>
+                  <form method="post" action="{% url 'progression:admin_evaluate_semester' row.student.id %}" class="inline">{% csrf_token %}
+                    <input type="hidden" name="enrollment_id" value="{{ row.enrollment.id }}">
+                    <input type="hidden" name="semester_id" value="{{ semester.id }}">
+                    <input type="hidden" name="next" value="{% url 'progression:admin_cohort_semester_progression' diploma.id cohort.id semester.id %}">
+                    <button class="btn-ghost btn-sm" type="submit">{% trans "Evaluate" %}</button>
+                  </form>
+                  <a class="btn-ghost btn-sm" href="{% url 'progression:admin_request_interview' row.enrollment.id semester.id %}?next={% url 'progression:admin_cohort_semester_progression' diploma.id cohort.id semester.id %}">{% trans "Interview" %}</a>
+                  <form method="post" action="{% url 'progression:admin_confirm_pass' row.enrollment.id semester.id %}" class="inline">{% csrf_token %}
+                    <input type="hidden" name="skip_interview" value="1">
+                    <input type="hidden" name="next" value="{% url 'progression:admin_cohort_semester_progression' diploma.id cohort.id semester.id %}">
+                    <button class="btn-ghost btn-sm" type="submit">{% trans "Confirm Pass" %}</button>
+                  </form>
+                  <form method="post" action="{% url 'progression:admin_promote' row.student.id %}" class="inline">{% csrf_token %}
+                    <input type="hidden" name="enrollment_id" value="{{ row.enrollment.id }}">
+                    <input type="hidden" name="semester_id" value="{{ semester.id }}">
+                    <input type="hidden" name="next" value="{% url 'progression:admin_cohort_semester_progression' diploma.id cohort.id semester.id %}">
+                    <button class="btn-ghost btn-sm" type="submit">{% trans "Promote" %}</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td class="table-td" colspan="8">
+                {% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No active enrollments for this cohort and semester.") %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card-stack lg:hidden">
+      {% for row in table_rows %}
+        <div class="mobile-card">
+          <div class="flex-1 min-w-0">
+            <strong class="block truncate">{{ row.student.full_name|default:row.student }}</strong>
+            <small class="block text-muted">{% trans "Semester Exam" %}: {{ row.semester_exam.score_percent|default:'—' }} &middot; {% trans "Attendance" %}: {{ row.attendance.score_percent|default:'—' }} &middot; {% trans "Homework" %}: {{ row.homework_assessment.score_percent|default:'—' }}</small>
+            {% if row.result %}<small class="block text-muted"><strong>{% trans "Total" %}: {{ row.result.total_percent|floatformat:2 }}%</strong></small>{% endif %}
+            {% if row.progress %}{% include "ui/components/_status.html" with code=row.progress.status label=row.progress.get_status_display %}{% else %}{% include "ui/components/_status.html" with code="not_started" label=_("Not started") %}{% endif %}
+          </div>
+          <div class="flex flex-col gap-1 shrink-0">
+            <form method="post" action="{% url 'progression:admin_grade_sync' row.enrollment.id semester.id %}" class="inline">{% csrf_token %}
+              <button class="btn-ghost btn-sm" type="submit">{% trans "Sync" %}</button>
+            </form>
+            <form method="post" action="{% url 'progression:admin_evaluate_semester' row.student.id %}" class="inline">{% csrf_token %}
+              <button class="btn-ghost btn-sm" type="submit">{% trans "Evaluate" %}</button>
+            </form>
+          </div>
+        </div>
+      {% empty %}
+        <div class="border border-line rounded-sm p-4 text-center">
+          {% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No active enrollments for this cohort and semester.") %}
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}

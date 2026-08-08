@@ -1,12 +1,35 @@
 from __future__ import annotations
 
-from django.db.models.signals import pre_delete
+from decimal import Decimal
+
+from django.db.models.signals import post_save, pre_delete
 from django.dispatch import receiver
 
 from apps.audit.constants import ACTION_ENROLLMENT_DELETED
 from apps.audit.services import record_audit_event
+from apps.progression.models import DiplomaProgressionRule
 
-from .models import CourseEnrollment, DiplomaEnrollment
+from .models import CourseEnrollment, Diploma, DiplomaEnrollment
+
+
+@receiver(post_save, sender=Diploma, dispatch_uid="auto_create_diploma_progression_rule")
+def _auto_create_diploma_progression_rule(sender, instance, created, **kwargs):
+    if created:
+        DiplomaProgressionRule.objects.get_or_create(
+            diploma=instance,
+            defaults={
+                "is_active": True,
+                "semester_pass_percent": Decimal("50.00"),
+                "final_exam_pass_percent": Decimal("50.00"),
+                "require_all_semesters_passed": True,
+                "require_final_exam": True,
+                "auto_promote_enabled": False,
+                "allow_admin_override": True,
+                "allow_retake": True,
+                "max_retake_count": 0,
+                "created_by": instance.created_by,
+            },
+        )
 
 
 def _log_deleted_enrollment(instance, enrollment_type: str, fk_field: str) -> None:

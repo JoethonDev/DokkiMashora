@@ -4,14 +4,19 @@
   {% trans "Assessment results" %}
 {% endblock %}
 {% block content %}
-  <div class="page-stack animate-enter-view"><section class="flex justify-between items-center gap-5 px-0.5 py-1.5"><div>
-        <p class="eyebrow">{% trans "Assessment" %}</p>
-        <h2>{% trans "Assessment results" %}</h2>
-      </div>
-      <div class="actions-row"><a class="btn-ghost" href="{% url 'assessments:student_list' %}">{% trans "Back to assessments" %}</a></div>
-    </section>
-    <section class="card-surface">{% if attempts %}
-        <div class="table-wrap"><table class="table">
+  <div class="page-stack animate-enter-view">{% url 'assessments:student_list' as student_assessment_list_url %}{% include "ui/components/_page_header.html" with eyebrow=_("Assessment") title=_("Assessment results") back_url=student_assessment_list_url back_label=_("Back to assessments") %}
+    <section class="card-surface">{% if submission %}
+        <div class="table-wrap hidden lg:block"><table class="table">
+            <thead><tr><th class="table-th">{% trans "Assessment" %}</th><th class="table-th">{% trans "Score" %}</th><th class="table-th">{% trans "Status" %}</th></tr></thead>
+            <tbody><tr><td>{{ submission.assessment }}</td><td>{{ submission.score|default:'—' }}</td><td><span class="status-pill-info">{{ submission.get_status_display }}</span></td></tr></tbody>
+          </table></div>
+      {% elif attempt and attempt.visible_to_student %}
+        <div class="table-wrap hidden lg:block"><table class="table">
+            <thead><tr><th class="table-th">{% trans "Assessment" %}</th><th class="table-th">{% trans "Score" %}</th><th class="table-th">{% trans "Status" %}</th></tr></thead>
+            <tbody><tr><td>{{ attempt.assessment }}</td><td>{{ attempt.score_percent|default:'—' }}%</td><td><span class="status-pill-info">{{ attempt.get_status_display }}</span></td></tr></tbody>
+          </table></div>
+      {% elif attempts %}
+        <div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>
                 <th class="table-th">{% trans "Assessment" %}</th>
@@ -23,7 +28,7 @@
               {% for attempt in attempts %}
                 <tr>
                   <td>{{ attempt.assessment }}</td>
-                  <td>{{ attempt.score|default:'—' }}</td>
+                  <td>{{ attempt.score_percent|default:'—' }}%</td>
                   <td>
                     <span class="status-pill-info">{{ attempt.get_status_display }}</span>
                   </td>
@@ -32,9 +37,19 @@
             </tbody>
           </table>
         </div>
-      {% else %}
-        <div class="empty-state"><h3>{% trans "No results available" %}</h3>
+        <div class="card-stack lg:hidden">
+          {% for attempt in attempts %}
+            <div class="mobile-card">
+              <div class="flex-1 min-w-0">
+                <strong class="block truncate">{{ attempt.assessment }}</strong>
+                <span class="status-pill-info">{{ attempt.get_status_display }}</span>
+                <small class="block text-muted">{% trans "Score" %}: {{ attempt.score_percent|default:'—' }}%</small>
+              </div>
+            </div>
+          {% endfor %}
         </div>
+      {% else %}
+        {% include "ui/components/_empty_state.html" with title=_("No results available") %}
       {% endif %}
     </section>
   </div>

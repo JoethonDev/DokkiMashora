@@ -147,7 +147,7 @@
           </div>
         </dl>
       </section>
-      <div class="table-wrap"><table class="table">
+      <div class="table-wrap hidden lg:block"><table class="table">
           <thead>
             <tr>
               <th class="table-th">{% trans "Recipient" %}</th>
@@ -171,6 +171,19 @@
             {% endfor %}
           </tbody>
         </table>
+      </div>
+      <div class="card-stack lg:hidden">
+        {% for item in page_obj %}
+          <div class="mobile-card">
+            <div class="flex-1 min-w-0">
+              <strong class="block truncate">{{ item.to_email|default:item.recipient_email }}</strong>
+              {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:item.status %}
+              <small class="block text-muted">{{ item.error_message|default:'—' }}</small>
+            </div>
+          </div>
+        {% empty %}
+          <div class="border border-line rounded-sm p-4 text-center">{% include "ui/components/_empty_state.html" with title=_("No delivery messages.") %}</div>
+        {% endfor %}
       </div>
     {% elif available_slugs %}
       <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
@@ -288,7 +301,7 @@
            href="{% url 'communications:admin_template_preview' template.slug %}">{% trans "Preview template" %}</a>
       {% endif %}
     {% elif templates %}
-      <section class="card-surface"><div class="table-wrap"><table class="table">
+      <section class="card-surface"><div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>
                 <th class="table-th">{% trans "Template" %}</th>
@@ -323,6 +336,22 @@
             </tbody>
           </table>
         </div>
+        <div class="card-stack lg:hidden">
+          {% for item in templates %}
+            <div class="mobile-card">
+              <div class="flex-1 min-w-0">
+                <strong class="block truncate">{{ item.name }}</strong>
+                <small class="block text-muted"><code>{{ item.slug }}</code> &middot; {{ item.get_design_display|default:item.design }}</small>
+              </div>
+              <div class="flex gap-2 shrink-0">
+                <a class="btn-ghost btn-sm" href="{% url 'communications:admin_template_edit' item.slug %}">{% trans "Edit" %}</a>
+                <a class="btn-soft-primary shrink-0" href="{% url 'communications:admin_template_preview' item.slug %}">{% trans "Preview" %}</a>
+              </div>
+            </div>
+          {% empty %}
+            <div class="border border-line rounded-sm p-4 text-center">{% include "ui/components/_empty_state.html" with title=_("No templates.") %}</div>
+          {% endfor %}
+        </div>
       </section>
       <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-primary"
            href="{% url 'communications:admin_template_create' %}">{% trans "Create template" %}</a>
@@ -330,7 +359,7 @@
            href="{% url 'communications:admin_footer_edit' %}">{% trans "Edit footer" %}</a>
       </div>
     {% elif page_obj %}
-      <section class="card-surface"><div class="table-wrap"><table class="table">
+      <section class="card-surface"><div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>
                 <th class="table-th">{% trans "Subject" %}</th>
@@ -365,14 +394,31 @@
                 </tr>
               {% empty %}
                 <tr>
-                  <td class="table-td" colspan="6"><div class="empty-state"><span>&#9679;</span>
-                      <h3>{% trans "No messages have been sent." %}</h3>
-                    </div>
-                  </td>
+                <td class="table-td" colspan="6">{% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No messages have been sent.") %}
+                </td>
                 </tr>
               {% endfor %}
             </tbody>
           </table>
+        </div>
+        <div class="card-stack lg:hidden">
+          {% for item in page_obj %}
+            <div class="mobile-card">
+              <div class="flex-1 min-w-0">
+                <strong class="block truncate">{{ item.subject }}</strong>
+                {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:item.status %}
+                <small class="block text-muted">{{ item.recipient_count|default:'—' }} {% trans "recipients" %} &middot; {{ item.success_count|default:0 }}/{{ item.failure_count|default:0 }}</small>
+                <small class="block text-muted">{{ item.created_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</small>
+              </div>
+              {% if item.id %}
+                <a class="btn-soft-primary shrink-0" href="{% url 'communications:bulk_email_detail' item.id %}">{% trans "View" %}</a>
+              {% endif %}
+            </div>
+          {% empty %}
+            <div class="border border-line rounded-sm p-4 text-center">
+              {% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No messages have been sent.") %}
+            </div>
+          {% endfor %}
         </div>
         {% include "ui/components/_pagination.html" %}
       </section>

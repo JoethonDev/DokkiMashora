@@ -29,7 +29,7 @@
           <a class="btn-ghost"
              href="{% url 'progression:admin_dashboard' %}">{% trans "Reset" %}</a>
         </form>
-        <div class="table-wrap"><table class="table">
+        <div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>
                 <th class="table-th">{% trans "Student" %}</th>
@@ -59,14 +59,29 @@
                 </tr>
               {% empty %}
                 <tr>
-                  <td class="table-td" colspan="6"><div class="empty-state"><span>&#9679;</span>
-                      <h3>{% trans "No progression records found." %}</h3>
-                    </div>
+                  <td class="table-td" colspan="6">{% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No progression records found.") %}
                   </td>
                 </tr>
               {% endfor %}
             </tbody>
           </table>
+        </div>
+        <div class="card-stack lg:hidden">
+          {% for row in students_data %}
+            <div class="mobile-card">
+              <div class="flex-1 min-w-0">
+                <strong class="block truncate">{{ row.student.full_name|default:row.student }}</strong>
+                <small class="block text-muted">{{ row.student.current_cohort|default:'—' }}</small>
+                <small class="block text-muted">{{ row.semesters|length }} {% trans "semesters" %}</small>
+                {% include "ui/components/_status.html" with code=row.semesters.0.status|default:"unknown" label=row.semesters.0.get_status_display|default:"—" %}
+              </div>
+              <a class="btn-soft-primary shrink-0" href="{% url 'progression:admin_student_detail' row.student.id %}">{% trans "Open" %}</a>
+            </div>
+          {% empty %}
+            <div class="border border-line rounded-sm p-4 text-center">
+              {% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No progression records found.") %}
+            </div>
+          {% endfor %}
         </div>
         {% include "ui/components/_pagination.html" %}
       </section>
@@ -161,7 +176,7 @@
         </section>
       {% endif %}
     {% elif workflow == 'component_list' %}
-      <section class="card-surface"><div class="table-wrap"><table class="table">
+      <section class="card-surface"><div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>
                 <th class="table-th">{% trans "Name" %}</th>
@@ -197,6 +212,24 @@
               {% endfor %}
             </tbody>
           </table>
+        </div>
+        <div class="card-stack lg:hidden">
+          {% for item in components %}
+            <div class="mobile-card">
+              <div class="flex-1 min-w-0">
+                <strong class="block truncate">{{ item.name }}</strong>
+                <small class="block text-muted">{{ item.get_component_type_display|default:item.component_type }} &middot; {{ item.weight_percent }}%</small>
+              </div>
+              <div class="flex gap-2 shrink-0">
+                <a class="btn-ghost btn-sm" href="{% url 'progression:admin_component_edit' item.id %}">{% trans "Edit" %}</a>
+                <form class="m-0" method="post" action="{% url 'progression:admin_component_delete' item.id %}" data-confirm="{% trans 'Deactivate this component?' %}">{% csrf_token %}
+                  <button class="btn-danger text-xs py-1 px-2 min-h-0" type="submit">{% trans "Deactivate" %}</button>
+                </form>
+              </div>
+            </div>
+          {% empty %}
+            <div class="border border-line rounded-sm p-4 text-center">{% include "ui/components/_empty_state.html" with title=_("No components.") %}</div>
+          {% endfor %}
         </div>
         <a class="btn-primary"
            href="{% url 'progression:admin_component_create' cohort.id semester.id %}">{% trans "Create component" %}
@@ -340,7 +373,7 @@
           </label>
           <button class="btn-secondary" type="submit">{% trans "Filter" %}</button>
         </form>
-        <div class="table-wrap"><table class="table">
+        <div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>
                 <th class="table-th">{% trans "Student" %}</th>
@@ -376,6 +409,28 @@
               {% endfor %}
             </tbody>
           </table>
+        </div>
+        <div class="card-stack lg:hidden">
+          {% for item in plans %}
+            <div class="mobile-card">
+              <div class="flex-1 min-w-0">
+                <strong class="block truncate">{{ item.student.full_name|default:item.student }}</strong>
+                {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:item.status %}
+              </div>
+              <div class="flex flex-col gap-1 shrink-0">
+                {% if item.status != 'active' %}
+                  <form method="post" action="{% url 'progression:admin_activate_rejoin_plan' item.id %}" class="m-0">{% csrf_token %}
+                    <button class="btn-success text-xs py-1 px-2 min-h-0" type="submit">{% trans "Activate" %}</button>
+                  </form>
+                {% endif %}
+                <form method="post" action="{% url 'progression:admin_cancel_rejoin_plan' item.id %}" class="m-0">{% csrf_token %}
+                  <button class="btn-danger text-xs py-1 px-2 min-h-0" type="submit">{% trans "Cancel" %}</button>
+                </form>
+              </div>
+            </div>
+          {% empty %}
+            <div class="border border-line rounded-sm p-4 text-center">{% include "ui/components/_empty_state.html" with title=_("No rejoin plans.") %}</div>
+          {% endfor %}
         </div>
       </section>
     {% elif workflow == 'rejoin_create' %}

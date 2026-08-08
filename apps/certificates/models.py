@@ -13,6 +13,9 @@ from apps.progression.constants import (
 )
 from apps.students.models import StudentProfile
 
+CERTIFICATE_LANGUAGE_CHOICES = (("ar", _("Arabic")), ("en", _("English")))
+CERTIFICATE_TEMPLATE_TYPE_CHOICES = (("completion", _("Completion")),)
+
 
 class CertificateCounter(models.Model):
     """Atomic counter for certificate number generation (prevents duplicates under concurrency)."""
@@ -43,8 +46,12 @@ class CertificateTemplate(TimeStampedModel):
         related_name="certificate_templates",
         verbose_name=_("diploma"),
     )
-    language = models.CharField(_("language"), max_length=10, default="ar")
-    template_type = models.CharField(_("template type"), max_length=50, default="completion")
+    language = models.CharField(
+        _("language"), max_length=10, default="ar", choices=CERTIFICATE_LANGUAGE_CHOICES,
+    )
+    template_type = models.CharField(
+        _("template type"), max_length=50, default="completion", choices=CERTIFICATE_TEMPLATE_TYPE_CHOICES,
+    )
     background_file = models.FileField(
         _("background file"),
         upload_to="certificate_templates/",

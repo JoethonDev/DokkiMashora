@@ -8,7 +8,7 @@
     {% trans "Templates" as title %}
     {% trans "Manage email templates for system actions." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    <section class="card-surface"><div class="table-wrap"><table class="table">
+    <section class="card-surface"><div class="table-wrap hidden lg:block"><table class="table">
           <thead>
             <tr>
               <th class="table-th">{% trans "Template" %}</th>
@@ -42,6 +42,22 @@
             {% endfor %}
           </tbody>
         </table>
+      </div>
+      <div class="card-stack lg:hidden">
+        {% for item in templates %}
+          <div class="mobile-card">
+            <div class="flex-1 min-w-0">
+              <strong class="block truncate">{{ item.name }}</strong>
+              <small class="block text-muted"><code>{{ item.slug }}</code> &middot; {{ item.get_design_display|default:item.design }}</small>
+            </div>
+            <div class="flex gap-2 shrink-0">
+              <a class="btn-ghost btn-sm" href="{% url 'communications:admin_template_edit' item.slug %}">{% trans "Edit" %}</a>
+              <a class="btn-soft-primary shrink-0" href="{% url 'communications:admin_template_preview' item.slug %}">{% trans "Preview" %}</a>
+            </div>
+          </div>
+        {% empty %}
+          <div class="border border-line rounded-sm p-4 text-center">{% include "ui/components/_empty_state.html" with title=_("No templates.") %}</div>
+        {% endfor %}
       </div>
     </section>
     <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-primary"

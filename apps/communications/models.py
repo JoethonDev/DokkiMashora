@@ -7,6 +7,7 @@ import re
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.template import Context, Template
 from django.utils.translation import gettext_lazy as _
 
 from apps.core.models import TimeStampedModel
@@ -66,13 +67,20 @@ class EmailTemplate(TimeStampedModel):
         return sorted(set(re.findall(r"{{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*}}", self.body)))
 
     def render(self, context: dict[str, str]) -> tuple[str, str]:
-        """Return (rendered_subject, rendered_body) for the given context."""
+        """Return (rendered_subject, rendered_body) for the given context.
+
+        The subject is plain text and is token-replaced only. The body is
+        evaluated exactly once through Django's template engine so conditional
+        {% if %} blocks render and every variable value is HTML-escaped at
+        this boundary. Unknown variables render empty here; callers that need
+        strict coverage checks should use ``variable_names()`` against the
+        context before sending.
+        """
         subject_out = self.subject
-        body_out = self.body
         for key, value in context.items():
             token = "{{ " + str(key) + " }}"
             subject_out = subject_out.replace(token, str(value))
-            body_out = body_out.replace(token, str(value))
+        body_out = Template(self.body).render(Context(context))
         return subject_out, body_out
 
 

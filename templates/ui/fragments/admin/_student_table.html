@@ -50,9 +50,9 @@
         </tbody>
       </table>
     </div>
-    <div class="flex flex-col gap-4 lg:hidden">
+    <div class="card-stack lg:hidden">
       {% for student in page_obj %}
-        <div class="flex items-center gap-2.5 border border-line rounded-sm p-4"><span class="rounded-full bg-brand-soft text-brand font-black grid place-items-center shrink-0 w-9 h-9">{{ student.full_name|slice:":2"|upper }}</span>
+        <div class="mobile-card"><span class="rounded-full bg-brand-soft text-brand font-black grid place-items-center shrink-0 w-9 h-9">{{ student.full_name|slice:":2"|upper }}</span>
           <div class="flex-1 min-w-0"><strong class="block truncate">{{ student.full_name }}</strong>
             {% include "ui/components/_status.html" with code=student.status label=student.get_status_display %}
             <small class="block text-muted"><span class="bidi">{{ student.phone|default:'—' }}</span></small>

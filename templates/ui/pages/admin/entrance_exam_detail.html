@@ -47,20 +47,24 @@
                 <span class="px-2 py-0.5 text-xs font-bold rounded-full {% if item.question_type == 'mcq' %}bg-info-soft text-info-text{% else %}bg-warning-soft text-warning-text{% endif %}">{{ item.get_question_type_display }}</span>
               </div>
               <p class="text-sm font-medium m-0">{{ item.text }}</p>
-              {% if item.choices.exists %}
-                <div class="flex flex-col gap-1.5 mt-3 ps-2 border-s-2 border-line">
-                  {% for choice in item.choices.all %}
-                    <label class="flex items-center gap-2 text-sm">
-                      <input type="radio" class="form-radio" disabled{% if choice.is_correct %} checked{% endif %}>
-                      <span>{{ choice.text }}</span>
-                      <span class="text-xs text-muted">({{ choice.score }} {% trans "pts" %})</span>
-                    </label>
-                  {% endfor %}
-                </div>
+              {% if item.question_type == 'mcq' %}
+                {% if item.choices.exists %}
+                  <div class="flex flex-col gap-1.5 mt-3 ps-2 border-s-2 border-line">
+                    {% for choice in item.choices.all %}
+                      <label class="flex items-center gap-2 text-sm">
+                        <input type="radio" class="form-radio" disabled{% if choice.is_correct %} checked{% endif %}>
+                        <span>{{ choice.text }}</span>
+                        <span class="text-xs text-muted">({{ choice.score }} {% trans "pts" %})</span>
+                      </label>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              {% else %}
+                <textarea class="form-textarea" rows="5" disabled placeholder="{% trans 'Written answer' %}"></textarea>
               {% endif %}
             </div>
             <div class="flex gap-2 shrink-0">
-              <a class="btn-ghost text-xs py-1.5 px-2.5 min-h-0" href="{% url 'entrance_exams:admin_edit_question' exam.id item.id %}">{% trans "Edit" %}</a>
+              <a class="btn-ghost btn-sm" href="{% url 'entrance_exams:admin_edit_question' exam.id item.id %}">{% trans "Edit" %}</a>
               <form method="post" action="{% url 'entrance_exams:admin_delete_question' exam.id item.id %}" data-confirm="{% trans 'Delete this question?' %}">{% csrf_token %}
                 <button class="btn-danger text-xs py-1.5 px-2.5 min-h-0" type="submit">{% trans "Delete" %}</button>
               </form>
@@ -69,11 +73,62 @@
         </div>
       {% empty %}
         <div class="border border-dashed border-line rounded-sm p-6 text-center">
-          <p class="text-muted m-0">{% trans "No questions yet." %}</p>
+          {% include "ui/components/_empty_state.html" with title=_("No questions yet.") %}
         </div>
       {% endfor %}
       <a class="btn-primary mt-4"
          href="{% url 'entrance_exams:admin_add_question' exam.id %}">{% trans "Add question" %}</a>
+    </section>
+    <section class="card-surface"><div class="section-head"><div>
+          <p class="eyebrow">{% trans "Submissions" %}</p>
+          <h3>{% trans "Exam submissions" %}</h3>
+        </div>
+      </div>
+      <div class="table-wrap hidden lg:block"><table class="table">
+          <thead>
+            <tr>
+              <th class="table-th">{% trans "Student" %}</th>
+              <th class="table-th">{% trans "Status" %}</th>
+              <th class="table-th">{% trans "Submitted" %}</th>
+              <th class="table-th"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for attempt in exam.attempts.all %}
+              <tr>
+                <td class="table-td"><strong>{{ attempt.student.full_name|default:attempt.student }}</strong></td>
+                <td class="table-td">{% include "ui/components/_status.html" with code=attempt.status label=attempt.get_status_display %}</td>
+                <td class="table-td">{{ attempt.submitted_at|date:"d/m/Y H:i"|default:'—' }}</td>
+                <td class="table-td">
+                  <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-secondary"
+                       href="{% url 'entrance_exams:admin_grade_attempt' attempt.id %}">{% if attempt.status == 'graded' %}{% trans "Review" %}{% else %}{% trans "Grade" %}{% endif %}</a>
+                  </div>
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td class="table-td" colspan="4">{% include "ui/components/_empty_state.html" with title=_("No submissions yet.") %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="card-stack lg:hidden">
+        {% for attempt in exam.attempts.all %}
+          <div class="mobile-card">
+            <div class="flex-1 min-w-0">
+              <strong class="block truncate">{{ attempt.student.full_name|default:attempt.student }}</strong>
+              {% include "ui/components/_status.html" with code=attempt.status label=attempt.get_status_display %}
+              <small class="block text-muted">{% trans "Submitted" %}: {{ attempt.submitted_at|date:"d/m/Y H:i"|default:'—' }}</small>
+            </div>
+            <a class="btn-soft-primary shrink-0"
+               href="{% url 'entrance_exams:admin_grade_attempt' attempt.id %}">{% if attempt.status == 'graded' %}{% trans "Review" %}{% else %}{% trans "Grade" %}{% endif %}</a>
+          </div>
+        {% empty %}
+          <div class="border border-line rounded-sm p-4 text-center">{% include "ui/components/_empty_state.html" with title=_("No submissions yet.") %}</div>
+        {% endfor %}
+      </div>
     </section>
   </div>
 {% endblock %}

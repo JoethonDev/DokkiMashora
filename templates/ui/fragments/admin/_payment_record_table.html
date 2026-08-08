@@ -1,4 +1,4 @@
-{% load i18n %}<div id="payment-records" class="table-wrap"><table class="table">
+{% load i18n %}<div id="payment-records" class="table-wrap hidden lg:block"><table class="table">
     <thead>
       <tr>
         <th class="table-th">{% trans "Reference" %}</th>
@@ -39,7 +39,7 @@
           </td>
         </tr>
       {% empty %}
-        <tr class="empty-row">
+        <tr>
           <td colspan="6" class="table-td">
             {% if current_status or current_student_q or current_date_from or current_date_to %}
               {% include "ui/components/_empty_state.html" with title=_("No payments match these filters.") compact=True %}
@@ -52,4 +52,37 @@
     </tbody>
   </table>
   {% include "ui/components/_pagination.html" %}
+</div>
+<div class="card-stack lg:hidden">
+  {% for item in page_obj %}
+    <div class="mobile-card">
+      <div class="flex-1 min-w-0">
+        <strong class="block truncate">{{ item.student.full_name|default:item.student }}</strong>
+        <small class="block text-muted truncate">
+          {% if item.diploma_enrollment %}
+            {{ item.diploma_enrollment.cohort.diploma.title }}
+          {% elif item.course_enrollment %}
+            {{ item.course_enrollment.course_version.course.title }}
+          {% elif item.application.cohort %}
+            {{ item.application.cohort.diploma.title }}
+          {% elif item.application.course %}
+            {{ item.application.course.title }}
+          {% else %}
+            —
+          {% endif %}
+        </small>
+        <small class="block text-muted"><span dir="ltr" class="inline-block">{{ item.amount|default:'—' }}</span>{% if item.currency %} {{ item.currency }}{% endif %}</small>
+        {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
+      </div>
+      <a class="btn-soft-primary shrink-0" href="{% url 'payments:record_detail' item.id %}">{% trans "View" %}</a>
+    </div>
+  {% empty %}
+    <div class="border border-line rounded-sm p-4 text-center">
+      {% if current_status or current_student_q or current_date_from or current_date_to %}
+        {% include "ui/components/_empty_state.html" with title=_("No payments match these filters.") compact=True %}
+      {% else %}
+        {% include "ui/components/_empty_state.html" with title=_("No payment records yet.") message=_("Records appear after an enrollment is marked paid or a CSV import is confirmed.") compact=True %}
+      {% endif %}
+    </div>
+  {% endfor %}
 </div>

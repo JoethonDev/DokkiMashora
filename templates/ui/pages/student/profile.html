@@ -4,12 +4,7 @@
   {% trans "Profile" %}
 {% endblock %}
 {% block content %}
-  <div class="page-stack animate-enter-view"><section class="flex justify-between items-center gap-5 px-0.5 py-1.5"><div>
-        <p class="eyebrow">{% trans "Account" %}</p>
-        <h2>{% trans "Profile" %}</h2>
-      </div>
-      <a class="btn-soft" href="{% url 'students:details' %}">{% trans "View details" %}</a>
-    </section>
+  <div class="page-stack animate-enter-view">{% url 'students:details' as student_details_url %}{% include "ui/components/_page_header.html" with eyebrow=_("Account") title=_("Profile") back_url=student_details_url back_label=_("View details") %}
     <form class="card-surface max-w-form mx-auto w-full page-stack"
           method="post"
           action="{% url 'students:edit_profile' %}"

@@ -1,15 +1,5 @@
 {% load i18n %}
-<div id="student-content" class="page-stack animate-enter-view"><section class="bg-gradient-to-br from-white to-surface-soft border border-line rounded-lg p-6 flex items-center justify-between gap-5 shadow-2xs"><div class="flex items-center gap-4"><span class="rounded-full bg-brand-soft text-brand font-black grid place-items-center shrink-0 w-20 h-20 text-2xl">{{ user.get_full_name|slice:":2"|upper }}</span>
-      <div>
-        <p class="eyebrow">{% trans "Student record" %}</p>
-        <h2>{{ student.full_name|default:user.get_full_name }}</h2>
-        <div class="flex items-center gap-2.5 flex-wrap text-muted text-xs"><span><span dir="ltr" class="inline-block">{{ user.email }}</span></span>
-          <span class="status-pill-success">{% trans "Released information" %}</span>
-        </div>
-      </div>
-    </div>
-    <a class="btn-soft" href="{% url 'students:details' %}">{% trans "Profile details" %}</a>
-  </section>
+<div id="student-content" class="page-stack animate-enter-view">{% url 'students:details' as student_details_url %}{% include "ui/fragments/student/_student_hero_card.html" with eyebrow=_("Student record") title=student.full_name|default:user.get_full_name email=user.email pill_label=_("Released information") action_url=student_details_url action_label=_("Profile details") action_class="btn-soft" %}
   <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"><article class="stat-card"><div class="stat-icon bg-info-soft text-info-text">◉</div>
       <div class="stat-body">
         <span>{% trans "Attendance rate" %}</span>
@@ -61,10 +51,7 @@
             {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:item.status %}
           </div>
         {% empty %}
-          <div class="empty-state"><span>◷</span>
-            <h3>{% trans "No released attendance" %}</h3>
-            <p>{% trans "Attendance records will appear once released." %}</p>
-          </div>
+          {% include "ui/components/_empty_state.html" with icon="◷" title=_("No released attendance") message=_("Attendance records will appear once released.") %}
         {% endfor %}
       </div>
     </article>
@@ -75,19 +62,16 @@
         <a class="btn-ghost" href="{% url 'students:assessment_history' %}">{% trans "View all" %}</a>
       </div>
       <div class="flex flex-col">{% for item in assessment_attempts %}
-          {% if item.status == attempt_status_graded and item.grade_visibility != grade_visibility_hidden %}
+          {% if item.visible_to_student %}
             <div>
               <span class="rounded-full bg-brand-soft text-brand font-black grid place-items-center shrink-0 w-9 h-9 text-sm">✓</span>
               <span><strong>{{ item.assessment.title }}</strong>
                 <small>{{ item.get_status_display }}</small></span>
-              <span class="text-end">{{ item.score|default:'—' }}</span>
+              <span class="text-end">{{ item.score_percent|default:'—' }}</span>
             </div>
           {% endif %}
         {% empty %}
-          <div class="empty-state"><span>✓</span>
-            <h3>{% trans "No released assessments" %}</h3>
-            <p>{% trans "Released results will appear here." %}</p>
-          </div>
+          {% include "ui/components/_empty_state.html" with icon="✓" title=_("No released assessments") message=_("Released results will appear here.") %}
         {% endfor %}
       </div>
     </article>
@@ -106,12 +90,12 @@
               <small>
                 {{ item.get_status_display|default:item.status }}
                 ·
-                {{ item.average_score|default:'—' }}
+                {{ item.calculated_score|default:'—' }}
               </small>
             </p>
           </div>
         {% empty %}
-          <p class="text-muted">{% trans "No progression records." %}</p>
+          {% include "ui/components/_empty_state.html" with title=_("No progression records.") %}
         {% endfor %}
         {% for item in promotion_decisions %}
           <div>
@@ -122,7 +106,7 @@
                 →
                 {{ item.to_semester }}
               </strong>
-              <small>{{ item.get_decision_display|default:item.decision }}</small>
+              <small>{{ item.get_decision_type_display|default:item.decision_type }}</small>
             </p>
           </div>
         {% endfor %}
@@ -144,10 +128,7 @@
           <span class="status-pill-neutral">{{ item.get_status_display|default:item.status }}</span>
           </div>
         {% empty %}
-          <div class="empty-state"><span>¤</span>
-            <h3>{% trans "No payment records" %}</h3>
-            <p>{% trans "Released payment information will appear here." %}</p>
-          </div>
+          {% include "ui/components/_empty_state.html" with icon="¤" title=_("No payment records") message=_("Released payment information will appear here.") %}
         {% endfor %}
       </div>
     </article>
@@ -165,10 +146,7 @@
              href="{% url 'certificates:student_certificate_download' item.id %}">{% trans "Download certificate" %}
           </a></article>
       {% empty %}
-        <div class="empty-state"><span>▣</span>
-          <h3>{% trans "No certificates available" %}</h3>
-          <p>{% trans "Completed credentials will appear here when released." %}</p>
-        </div>
+        {% include "ui/components/_empty_state.html" with icon="▣" title=_("No certificates available") message=_("Completed credentials will appear here when released.") fill=True %}
       {% endfor %}
     </div>
   </section>
@@ -187,7 +165,7 @@
           </div>
         </div>
       {% empty %}
-        <p class="text-muted">{% trans "No entrance exam records." %}</p>
+        {% include "ui/components/_empty_state.html" with title=_("No entrance exam records.") %}
       {% endfor %}
     </article>
     <article class="card-surface"><div class="section-head"><div>
@@ -205,7 +183,7 @@
           </div>
         </div>
       {% empty %}
-        <p class="text-muted">{% trans "No communications released." %}</p>
+        {% include "ui/components/_empty_state.html" with title=_("No communications released.") %}
       {% endfor %}
     </article>
   </section>

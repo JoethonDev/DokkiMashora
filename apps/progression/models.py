@@ -63,6 +63,20 @@ class DiplomaProgressionRule(TimeStampedModel):
                 condition=models.Q(is_active=True),
                 name="unique_active_rule_per_diploma",
             ),
+            # S2-18: durable range enforcement so forged POST data or a save()
+            # that skips full_clean() cannot store out-of-range policy.
+            models.CheckConstraint(
+                condition=models.Q(semester_pass_percent__gte=0) & models.Q(semester_pass_percent__lte=100),
+                name="check_diploma_rule_semester_pass_percent_range",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(final_exam_pass_percent__gte=0) & models.Q(final_exam_pass_percent__lte=100),
+                name="check_diploma_rule_final_exam_pass_percent_range",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(max_retake_count__gte=0),
+                name="check_diploma_rule_max_retake_count_non_negative",
+            ),
         ]
 
     def __str__(self):
@@ -135,6 +149,13 @@ class SemesterProgressionRule(TimeStampedModel):
         verbose_name = _("semester progression rule")
         verbose_name_plural = _("semester progression rules")
         unique_together = (("diploma_rule", "semester"),)
+        constraints = [
+            # S2-18: durable range enforcement for the semester pass threshold.
+            models.CheckConstraint(
+                condition=models.Q(pass_percent__gte=0) & models.Q(pass_percent__lte=100),
+                name="check_semester_rule_pass_percent_range",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.semester} rule"

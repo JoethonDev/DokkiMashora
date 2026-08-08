@@ -16,7 +16,7 @@
         </form>
         <a class="btn-primary" href="{% url 'entrance_exams:admin_create_exam' %}">{% trans "Create exam" %}</a>
       </div>
-      <div id="exam-list-content"><div class="table-wrap"><table class="table">
+      <div id="exam-list-content"><div class="table-wrap hidden lg:block"><table class="table">
           <thead>
             <tr>
               <th class="table-th">{% trans "Exam" %}</th>
@@ -50,16 +50,33 @@
               </tr>
             {% empty %}
               <tr>
-                <td class="table-td" colspan="6"><div class="empty-state"><span>&#9679;</span>
-                    <h3>{% trans "No entrance exams created." %}</h3>
-                    <a class="btn-primary"
-                       href="{% url 'entrance_exams:admin_create_exam' %}">{% trans "Create exam" %}</a>
-                  </div>
+                <td class="table-td" colspan="6">{% url 'entrance_exams:admin_create_exam' as admin_create_exam_url %}{% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No entrance exams created.") href=admin_create_exam_url action_label=_("Create exam") %}
                 </td>
               </tr>
             {% endfor %}
           </tbody>
         </table>
+      </div>
+      <div class="card-stack lg:hidden">
+        {% for item in page_obj %}
+          <div class="mobile-card">
+            <div class="flex-1 min-w-0">
+              <strong class="block truncate">{{ item.title }}</strong>
+              <small class="block text-muted truncate">{{ item.description|truncatewords:8|default:'—' }}</small>
+              <small class="block text-muted">{{ item.cohort|default:_("All") }}</small>
+              {% include "ui/components/_status.html" with code=item.is_active|yesno:"active,inactive" label=item.is_active|yesno:_("Active,Inactive") %}
+              <small class="block text-muted">{{ item.total_questions|default:'—' }} {% trans "questions" %}</small>
+            </div>
+            <div class="flex gap-2 shrink-0">
+              <a class="btn-ghost btn-sm" href="{% url 'entrance_exams:admin_detail' item.id %}">{% trans "Open" %}</a>
+              <a class="btn-ghost btn-sm" href="{% url 'entrance_exams:admin_edit_exam' item.id %}">{% trans "Edit" %}</a>
+            </div>
+          </div>
+        {% empty %}
+          <div class="border border-line rounded-sm p-4 text-center">
+            {% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No entrance exams created.") href=admin_create_exam_url action_label=_("Create exam") %}
+          </div>
+        {% endfor %}
       </div>
       {% include "ui/components/_pagination.html" %}
       </div>

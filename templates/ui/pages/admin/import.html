@@ -6,7 +6,37 @@
 {% block content %}
   <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=_("Import students") eyebrow=_("Students") %}
     {% if upload %}
-      <p>{{ upload }}</p>
+      <section class="card-surface">
+        <div class="section-head">
+          <div>
+            <h2>{{ upload.original_filename }}</h2>
+            <p class="text-muted">{{ upload.get_status_display }}</p>
+          </div>
+          <div class="text-sm text-muted">
+            {% trans "Rows" %}: {{ upload.total_rows }} · {% trans "Matched" %}: {{ upload.matched_rows }} · {% trans "Unmatched" %}: {{ upload.unmatched_rows }} · {% trans "Failed" %}: {{ upload.failed_rows }}
+          </div>
+        </div>
+        {% if upload.error_summary %}<p class="text-red" role="alert">{{ upload.error_summary }}</p>{% endif %}
+        <div class="table-wrap mt-4">
+          <table class="table">
+            <thead><tr><th class="table-th">{% trans "Row" %}</th><th class="table-th">{% trans "Email" %}</th><th class="table-th">{% trans "Status" %}</th><th class="table-th">{% trans "Error" %}</th></tr></thead>
+            <tbody>
+              {% for row in upload.rows.all %}
+                <tr><td>{{ row.row_number }}</td><td>{{ row.normalized_email }}</td><td>{{ row.get_status_display }}</td><td>{{ row.error_message|default:"—" }}</td></tr>
+              {% empty %}
+                <tr><td colspan="4" class="text-muted">{% trans "No rows found." %}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if upload.status == "previewed" %}
+          {% if upload.unmatched_rows or upload.matched_rows %}
+            <form method="post" action="{% url 'accounts:admin_student_import_confirm' upload.id %}" class="mt-4">{% csrf_token %}
+              <button class="btn-primary" type="submit">{% trans "Confirm import" %}</button>
+            </form>
+          {% endif %}
+        {% endif %}
+      </section>
     {% endif %}
     {% if form %}
       <form class="card-surface max-w-form mx-auto w-full page-stack" method="post" enctype="multipart/form-data">{% csrf_token %}

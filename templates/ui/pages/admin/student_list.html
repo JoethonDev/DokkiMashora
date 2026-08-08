@@ -13,6 +13,8 @@
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
     <div class="actions-row"><a class="btn-primary"
          href="{% url 'accounts:admin_student_create' %}">{% trans "Create student" %}</a>
+      <a class="btn-secondary" href="{% url 'accounts:admin_download_student_csv_template' %}">{% trans "Download import template" %}</a>
+      <a class="btn-ghost" href="{% url 'accounts:admin_student_import' %}">{% trans "Import students" %}</a>
     </div>
     <section class="card-surface"><form class="actions-row items-end mb-4"
             method="get"
@@ -21,7 +23,7 @@
             hx-target="#student-results"
             hx-swap="outerHTML"
             hx-push-url="true"
-            hx-sync="this:replace"><div class="relative flex-1 min-w-[210px]">
+            hx-sync="this:replace"><div class="search-field">
             <span class="absolute inset-y-0 start-0 grid place-items-center ps-3 text-muted pointer-events-none">&#8981;</span>
             <input id="student-search"
        name="q"

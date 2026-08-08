@@ -9,7 +9,7 @@
         <div class="aspect-video overflow-hidden rounded-md bg-surface-inverse"><iframe class="w-full h-full" src="https://www.youtube.com/embed/{{ youtube_video_id }}?rel=0&modestbranding=1&origin={{ request.scheme }}://{{ request.get_host }}" title="{{ lecture.title }}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe></div>
       {% elif lecture.youtube_url %}
         <a class="btn-primary" href="{{ lecture.youtube_url }}" target="_blank" rel="noopener noreferrer">{% trans "Open YouTube video" %}</a>
-      {% else %}<p class="text-muted">{% trans "No YouTube video has been added to this lecture." %}</p>{% endif %}
+      {% else %}{% include "ui/components/_empty_state.html" with title=_("No YouTube video has been added to this lecture.") %}{% endif %}
       {% if lecture.audio_url %}<audio class="w-full mt-4" controls src="{{ lecture.audio_url }}"></audio>{% endif %}
     </section>
     <div class="actions-row"><a class="btn-secondary" href="{% url 'academics:admin_lecture_edit' version.course.id version.id lecture.id %}">{% trans "Edit lecture" %}</a><a class="btn-ghost" href="{% url 'academics:admin_version_detail' version.course.id version.id %}">{% trans "Back to course" %}</a></div>
