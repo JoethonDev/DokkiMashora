@@ -37,6 +37,7 @@ from .constants import (
 )
 from .models import AttendanceRecord, AttendanceSession
 from .services import (
+    AttendanceScanError,
     close_attendance_session,
     open_attendance_session,
     open_session,
@@ -344,6 +345,57 @@ def attendance_scan(request):
         "breadcrumb_items": [{"label": _("Scan Attendance")}],
     }
     return render(request, "ui/pages/admin/attendance_scan.html", ctx)
+
+
+@require_POST
+@login_required
+@role_required(*ROLE_ATTENDANCE_STAFF)
+def attendance_scan_api(request):
+    """Structured JSON endpoint for the browser-camera scanner (P7-01).
+
+    Uses the exact same authoritative service as the manual form; returns a
+    stable ``code`` for every outcome so the scanner can render states without
+    parsing prose. Never trusts client state — session/student/cohort/window/
+    replay are all validated server-side.
+    """
+    from django.http import JsonResponse
+
+    session_id = safe_int(request.POST.get("session_id"))
+    payload = request.POST.get("qr_payload", "").strip()
+
+    if not session_id:
+        return JsonResponse({"code": "invalid_request", "message": str(_("Select a session."))}, status=400)
+    session = AttendanceSession.objects.filter(id=session_id).first()
+    if session is None:
+        return JsonResponse({"code": "invalid_request", "message": str(_("Session not found."))}, status=404)
+
+    parts = payload.split(":")
+    if len(parts) < 3 or parts[0] != "attendance":
+        return JsonResponse({"code": "invalid_token", "message": str(_("Invalid QR payload format."))}, status=400)
+    raw_token = ":".join(parts[1:])
+
+    try:
+        record, already_exists = scan_attendance_token(
+            raw_token,
+            session=session,
+            scanned_by=request.user,
+        )
+    except AttendanceScanError as exc:
+        return JsonResponse({"code": exc.code, "message": str(exc)}, status=422)
+    except ValueError as exc:
+        return JsonResponse({"code": "invalid_token", "message": str(exc)}, status=422)
+
+    if already_exists:
+        return JsonResponse({
+            "code": "duplicate",
+            "message": str(_("Attendance already recorded for %(student)s.") % {"student": record.student}),
+            "student_name": str(record.student),
+        }, status=200)
+    return JsonResponse({
+        "code": "recorded",
+        "message": str(_("Attendance recorded for %(student)s.") % {"student": record.student}),
+        "student_name": str(record.student),
+    }, status=201)
 
 
 # ---------------------------------------------------------------------------

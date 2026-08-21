@@ -23,11 +23,20 @@ ALL_ROLE_GROUPS = (
     GROUP_SECRETARY,
 )
 
+# Teacher remains a historical group, but is not an active product role.
+ACTIVE_ROLE_GROUPS = (
+    GROUP_SUPER_ADMIN,
+    GROUP_ADMIN,
+    GROUP_MODERATOR,
+    GROUP_STUDENT,
+    GROUP_REVIEWER,
+    GROUP_SECRETARY,
+)
+
 STAFF_ROLE_GROUPS = (
     GROUP_SUPER_ADMIN,
     GROUP_ADMIN,
     GROUP_MODERATOR,
-    GROUP_TEACHER,
     GROUP_REVIEWER,
     GROUP_SECRETARY,
 )

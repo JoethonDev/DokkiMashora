@@ -1,5 +1,5 @@
 {% load i18n form_tags %}
-<section id="student-content" class="page-stack animate-enter-view">{% url 'students:edit_profile' as student_edit_profile_url %}{% include "ui/fragments/student/_student_hero_card.html" with eyebrow=_("Account") title=student.full_name|default:user.get_full_name email=user.email pill_label=_("Student") action_url=student_edit_profile_url action_label=_("Edit profile") action_class="btn-primary" %}
+<section id="student-content" class="page-stack animate-enter-view">{% url 'students:dashboard' as profile_back_url %}{% include "ui/components/_page_header.html" with title=_("Profile details") back_url=profile_back_url back_label=_("Back to dashboard") %}{% url 'students:edit_profile' as student_edit_profile_url %}{% include "ui/fragments/student/_student_hero_card.html" with eyebrow=_("Account") title=student.full_name|default:user.get_full_name email=user.email pill_label=_("Student") action_url=student_edit_profile_url action_label=_("Edit profile") action_class="btn-primary" %}
   <section class="grid grid-cols-1 md:grid-cols-2 gap-4"><article class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Identity" %}</p>
           <h3>{% trans "Personal details" %}</h3>

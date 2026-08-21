@@ -34,18 +34,15 @@
       </section>
     {% else %}
       <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
-        <label>
-          {% trans "Subject" %}
+        <label class="field"><span class="field-label">{% trans "Subject" %}</span>
           <input name="subject" class="form-input" value="{{ template.subject }}" required>
         </label>
-        <label>
-          {% trans "Body" %}
+        <label class="field"><span class="field-label">{% trans "Body" %}</span>
           <textarea name="body" class="form-input" rows="14" required>
                                     {{ template.body }}
                                     </textarea>
         </label>
-        <label>
-          {% trans "Design" %}
+        <label class="field"><span class="field-label">{% trans "Design" %}</span>
           <select name="design" class="form-select">{% for value,label in design_choices %}
               <option value="{{ value }}"
                       {% if template.design == value %} selected {% endif %}>{{ label }}</option>

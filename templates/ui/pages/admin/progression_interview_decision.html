@@ -9,15 +9,13 @@
     {% trans "Review semester progress, decisions, evaluations, interviews, and rejoin plans." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description back_button=True %}
     <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
-      <label>
-        {% trans "Decision" %}
+      <label class="field"><span class="field-label">{% trans "Decision" %}</span>
         <select name="decision" class="form-select" required>
           <option value="pass">{% trans "Pass" %}</option>
           <option value="fail">{% trans "Fail" %}</option>
         </select>
       </label>
-      <label>
-        {% trans "Notes" %}
+      <label class="field"><span class="field-label">{% trans "Notes" %}</span>
         <textarea name="notes" class="form-input"></textarea>
       </label>
       <button class="btn-primary" type="submit">{% trans "Save decision" %}</button>

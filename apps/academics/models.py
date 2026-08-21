@@ -205,6 +205,9 @@ class Lecture(TimeStampedModel):
     )
     audio_url = models.URLField(_("audio URL"), blank=True)
     audio_storage_key = models.CharField(_("audio storage key"), max_length=500, blank=True)
+    audio_pending_storage_key = models.CharField(
+        _("pending audio storage key"), max_length=500, blank=True,
+    )
     audio_original_filename = models.CharField(_("original filename"), max_length=500, blank=True)
     audio_content_type = models.CharField(_("content type"), max_length=100, blank=True)
     audio_byte_size = models.PositiveIntegerField(_("file size (bytes)"), null=True, blank=True)
@@ -218,6 +221,10 @@ class Lecture(TimeStampedModel):
         default=AUDIO_PROCESSING_PENDING,
     )
     audio_processing_error = models.TextField(_("processing error"), blank=True)
+    audio_duration_seconds = models.PositiveIntegerField(
+        _("audio duration (seconds)"), null=True, blank=True,
+        help_text=_("Server-measured audio duration persisted during transcode"),
+    )
     release_at = models.DateTimeField(
         _("release at"),
         null=True,
@@ -284,6 +291,15 @@ class DiplomaEnrollment(TimeStampedModel):
     )
     activated_at = models.DateTimeField(_("activated at"), null=True, blank=True)
     expires_at = models.DateTimeField(_("expires at"), null=True, blank=True)
+    entry_semester = models.ForeignKey(
+        Semester,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="enrollments_entry",
+        verbose_name=_("entry semester"),
+        help_text=_("Semester the enrollment starts at (Direct Rejoin starts at the failed semester)."),
+    )
 
     class Meta:
         verbose_name = _("diploma enrollment")
@@ -765,6 +781,92 @@ class LectureWatchProgress(TimeStampedModel):
         return f"{self.student} - {self.lecture} ({self.status})"
 
 
+class LectureAudioProgress(TimeStampedModel):
+    """Server-validated audio playback progress for a course lecture.
+
+    Course-only: audio completion participates in the sequential course
+    completion predicate exactly like video completion. Diploma lectures have
+    no watch/listen completion locking and never create these rows.
+    """
+
+    student = models.ForeignKey(
+        StudentProfile,
+        on_delete=models.CASCADE,
+        related_name="lecture_audio_progress",
+        verbose_name=_("student"),
+    )
+    lecture = models.ForeignKey(
+        Lecture,
+        on_delete=models.CASCADE,
+        related_name="audio_progress",
+        verbose_name=_("lecture"),
+    )
+    course_enrollment = models.ForeignKey(
+        CourseEnrollment,
+        on_delete=models.CASCADE,
+        related_name="audio_progress",
+        verbose_name=_("course enrollment"),
+    )
+    validated_contiguous_seconds = models.DecimalField(
+        _("validated contiguous seconds"),
+        max_digits=10,
+        decimal_places=3,
+        default=0,
+    )
+    resume_position_seconds = models.DecimalField(
+        _("resume position seconds"),
+        max_digits=10,
+        decimal_places=3,
+        default=0,
+    )
+    active_session_id = models.UUIDField(
+        _("active session ID"), null=True, blank=True,
+    )
+    last_sequence = models.PositiveIntegerField(_("last sequence"), default=0)
+    last_position_seconds = models.DecimalField(
+        _("last position seconds"),
+        max_digits=10,
+        decimal_places=3,
+        default=0,
+    )
+    last_checkpoint_at = models.DateTimeField(_("last checkpoint at"), null=True, blank=True)
+    status = models.CharField(
+        _("status"),
+        max_length=20,
+        choices=WATCH_STATUS_CHOICES,
+        default=WATCH_STATUS_IN_PROGRESS,
+        db_index=True,
+    )
+    violation_reason = models.CharField(
+        _("violation reason"),
+        max_length=24,
+        choices=VIOLATION_CHOICES,
+        default=VIOLATION_NONE,
+    )
+    completed_at = models.DateTimeField(_("completed at"), null=True, blank=True)
+
+    class Meta:
+        verbose_name = _("lecture audio progress")
+        verbose_name_plural = _("lecture audio progress")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["student", "lecture", "course_enrollment"],
+                name="uq_lap_student_lecture_course",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(validated_contiguous_seconds__gte=0),
+                name="lap_validated_non_negative",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["student", "lecture"]),
+            models.Index(fields=["active_session_id"]),
+        ]
+
+    def __str__(self):
+        return f"{self.student} - {self.lecture} ({self.status})"
+
+
 class DiplomaLecture(TimeStampedModel):
     """A lecture within a diploma cohort-semester (Phase 6 direct-lecture topology)."""
 
@@ -795,6 +897,9 @@ class DiplomaLecture(TimeStampedModel):
     )
     audio_url = models.URLField(_("audio URL"), blank=True)
     audio_storage_key = models.CharField(_("audio storage key"), max_length=500, blank=True)
+    audio_pending_storage_key = models.CharField(
+        _("pending audio storage key"), max_length=500, blank=True,
+    )
     audio_original_filename = models.CharField(_("original filename"), max_length=500, blank=True)
     audio_content_type = models.CharField(_("content type"), max_length=100, blank=True)
     audio_byte_size = models.PositiveIntegerField(_("file size (bytes)"), null=True, blank=True)
@@ -808,6 +913,10 @@ class DiplomaLecture(TimeStampedModel):
         default=AUDIO_PROCESSING_PENDING,
     )
     audio_processing_error = models.TextField(_("processing error"), blank=True)
+    audio_duration_seconds = models.PositiveIntegerField(
+        _("audio duration (seconds)"), null=True, blank=True,
+        help_text=_("Server-measured audio duration persisted during transcode"),
+    )
     release_at = models.DateTimeField(
         _("release at"),
         null=True,

@@ -1,0 +1,47 @@
+{% load i18n ui_tags %}
+<div id="waiver-rows" class="table-wrap hidden lg:block">
+  <table class="table">
+    <thead>
+      <tr>
+        <th class="table-th">{% trans "Student" %}</th>
+        <th class="table-th">{% trans "Program" %}</th>
+        <th class="table-th">{% trans "Reason" %}</th>
+        <th class="table-th">{% trans "Status / granted" %}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in page_obj %}
+        <tr>
+          <td class="table-td">{{ item.student.full_name|default:item.student }}</td>
+          <td class="table-td">
+            {% if item.application.cohort %}
+              {{ item.application.cohort.diploma.title }}
+            {% elif item.application.course %}
+              {{ item.application.course.title }}
+            {% else %}
+              —
+            {% endif %}
+          </td>
+          <td class="table-td">
+            {% include "ui/components/_expandable_text.html" with text=item.reason clamp=2 %}
+          </td>
+          <td class="table-td"><div class="flex flex-col">
+            {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
+            <small>{{ item.granted_at|date:"SHORT_DATE_FORMAT"|default:'—' }}</small></div>
+          </td>
+        </tr>
+      {% empty %}
+        <tr>
+          <td class="table-td" colspan="4">
+            {% if current_student_q %}
+              {% include "ui/components/_empty_state.html" with title=_("No waivers match these filters.") compact=True %}
+            {% else %}
+              {% include "ui/components/_empty_state.html" with title=_("No payment waivers yet.") message=_("Waivers are granted by an Admin from the application review page.") compact=True %}
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% include "ui/components/_pagination.html" %}

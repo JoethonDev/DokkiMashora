@@ -5,23 +5,65 @@
 {% endblock %}
 {% block content %}
   <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with eyebrow=_("Learning") title=_("Assessments") description=_("Open available assessments and review your current attempt status.") %}
-    <section class="grid grid-cols-1 md:grid-cols-3 gap-4">{% for card in assessment_cards %}
-        <article class="card-surface"><h3>{{ card.assessment.title }}</h3>
-          <p class="text-muted">{{ card.assessment.get_assessment_type_display }}</p>
-          {% if card.latest_attempt %}
-            <span class="status-pill-info">{{ card.latest_attempt.get_status_display }}</span>
-          {% endif %}
-          <div class="flex gap-2.5 items-center flex-wrap">{% if card.readiness.state == "ready" or card.readiness.state == "continue" %}
-            <a class="btn-primary"
-               href="{% if card.readiness.action_url %}{{ card.readiness.action_url }}{% else %}{% url 'assessments:instructions' card.assessment.id %}{% endif %}">{{ card.readiness.action_label|default:_("Open") }}</a>
-          {% else %}
-            <span class="status-pill-info">{{ card.readiness.state_label }}</span>
-          {% endif %}
+    {% if assessment_groups.homework %}
+      <section class="card-surface mb-4"><div class="section-head"><div>
+            <p class="eyebrow">{% trans "Diploma homework" %}</p>
+            <h3>{% trans "Homework" %}</h3>
           </div>
-        </article>
-      {% empty %}
-        {% include "ui/components/_empty_state.html" with title=_("No assessments available") fill=True %}
-      {% endfor %}
-    </section>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">{% for card in assessment_groups.homework %}
+            <article class="card-surface">
+              <h3>{{ card.assessment.title }}</h3>
+              <p class="text-muted">{{ card.assessment.get_assessment_type_display }}</p>
+              {% if card.latest_attempt %}
+                {% include "ui/components/_status.html" with code=card.latest_attempt.status label=card.latest_attempt.get_status_display %}
+              {% endif %}
+              {% include "ui/components/_state_banner.html" with state=card.readiness.state label=card.readiness.state_label primary_action=card.readiness.primary_action %}
+            </article>
+          {% endfor %}
+        </div>
+      </section>
+    {% endif %}
+    {% if assessment_groups.semester_exam %}
+      <section class="card-surface mb-4"><div class="section-head"><div>
+            <p class="eyebrow">{% trans "Semester exam" %}</p>
+            <h3>{% trans "Semester exams" %}</h3>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">{% for card in assessment_groups.semester_exam %}
+            <article class="card-surface">
+              <h3>{{ card.assessment.title }}</h3>
+              <p class="text-muted">{{ card.assessment.get_assessment_type_display }}</p>
+              {% if card.latest_attempt %}
+                {% include "ui/components/_status.html" with code=card.latest_attempt.status label=card.latest_attempt.get_status_display %}
+              {% endif %}
+              {% include "ui/components/_state_banner.html" with state=card.readiness.state label=card.readiness.state_label primary_action=card.readiness.primary_action %}
+            </article>
+          {% endfor %}
+        </div>
+      </section>
+    {% endif %}
+    {% if assessment_groups.quiz %}
+      <section class="card-surface"><div class="section-head"><div>
+            <p class="eyebrow">{% trans "Course quizzes" %}</p>
+            <h3>{% trans "Quizzes" %}</h3>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">{% for card in assessment_groups.quiz %}
+            <article class="card-surface">
+              <h3>{{ card.assessment.title }}</h3>
+              <p class="text-muted">{{ card.assessment.get_assessment_type_display }}</p>
+              {% if card.latest_attempt %}
+                {% include "ui/components/_status.html" with code=card.latest_attempt.status label=card.latest_attempt.get_status_display %}
+              {% endif %}
+              {% include "ui/components/_state_banner.html" with state=card.readiness.state label=card.readiness.state_label primary_action=card.readiness.primary_action %}
+            </article>
+          {% endfor %}
+        </div>
+      </section>
+    {% endif %}
+    {% if not assessment_cards %}
+      {% include "ui/components/_empty_state.html" with title=_("No assessments available") fill=True %}
+    {% endif %}
   </div>
 {% endblock %}

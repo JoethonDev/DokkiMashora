@@ -51,7 +51,7 @@
               <small class="block text-muted"><code>{{ item.slug }}</code> &middot; {{ item.get_design_display|default:item.design }}</small>
             </div>
             <div class="flex gap-2 shrink-0">
-              <a class="btn-ghost btn-sm" href="{% url 'communications:admin_template_edit' item.slug %}">{% trans "Edit" %}</a>
+              <a class="btn-ghost" href="{% url 'communications:admin_template_edit' item.slug %}">{% trans "Edit" %}</a>
               <a class="btn-soft-primary shrink-0" href="{% url 'communications:admin_template_preview' item.slug %}">{% trans "Preview" %}</a>
             </div>
           </div>

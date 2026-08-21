@@ -20,6 +20,8 @@ module.exports = {
     'shadow-btn','shadow-card-hover','shadow-2xs','animate-enter-view',
     'stat-card','stat-icon','stat-body','avatar','bar-chart','bar','progress-track','progress-bar','empty-state',
     'empty-state-fill','search-field','tab-track','tab','tab-active',
+    // P8-01: expandable-text component clamps with dynamic line-clamp-N
+    'line-clamp-1','line-clamp-2','line-clamp-3','line-clamp-4','line-clamp-5','line-clamp-none',
   ],
   theme: {
     screens: {
@@ -123,7 +125,10 @@ module.exports = {
         'fade-in': 'fadeIn 0.2s ease-smooth forwards',
         'slide-up': 'slideUp 0.25s ease-smooth forwards',
         'pop-in': 'popIn 0.2s ease-spring forwards',
-        'enter-view': 'enterView .36s ease both',
+        // P8-01: decorative page-entrance motion removed. The class remains
+        // referenced by many templates; it now emits no animation (no-op) so
+        // pages render instantly and reduced-motion users see no slide.
+        'enter-view': 'none',
       },
     },
   },

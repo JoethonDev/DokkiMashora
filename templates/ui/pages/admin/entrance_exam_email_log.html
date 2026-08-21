@@ -13,6 +13,7 @@
                    value="{{ search_value }}"
                    type="search"
                    hx-trigger="keyup changed delay:500ms"
+                   aria-label="{% trans 'Search email log' %}"
                     placeholder="{% trans 'Search…' %}"></div>
           <label class="min-w-40"><span class="field-label">{% trans "Action" %}</span>
             <select name="action" class="form-select" hx-trigger="change"><option value="">{% trans "All actions" %}</option>
@@ -44,7 +45,7 @@
                 <tr>
                 <td class="table-td">{{ item.recipient }}</td>
                 <td class="table-td">{{ item.get_action_display|default:item.action }}</td>
-                <td class="table-td">{% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:item.status %}</td>
+                <td class="table-td">{% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:'—' %}</td>
                 <td class="table-td"><span class="bidi" dir="ltr">{{ item.sent_at|date:"d/m/Y H:i"|default:'—' }}</span></td>
                 </tr>
               {% empty %}
@@ -60,7 +61,7 @@
             <div class="mobile-card">
               <div class="flex-1 min-w-0">
                 <strong class="block truncate">{{ item.recipient }}</strong>
-                {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:item.status %}
+                {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:'—' %}
                 <small class="block text-muted">{{ item.get_action_display|default:item.action }} &middot; {{ item.sent_at|date:"d/m/Y H:i"|default:'—' }}</small>
               </div>
             </div>

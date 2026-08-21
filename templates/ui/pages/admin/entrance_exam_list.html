@@ -30,8 +30,8 @@
           <tbody>
             {% for item in page_obj %}
               <tr>
-                <td class="table-td"><div class="flex flex-col"><strong>{{ item.title }}</strong>
-                  <small>{{ item.description|truncatewords:8|default:'—' }}</small></div>
+                <td class="table-td"><div class="flex flex-col gap-0.5"><strong>{{ item.title }}</strong>
+                  {% if item.description %}{% include "ui/components/_expandable_text.html" with text=item.description clamp=2 muted=True %}{% else %}<small class="text-muted">—</small>{% endif %}</div>
                 </td>
                 <td class="table-td">{{ item.cohort|default:_("All") }}</td>
                 <td class="table-td"><div class="flex flex-col"><small><span class="bidi" dir="ltr">{{ item.open_at|date:"d/m/Y"|default:'—' }}</span></small>
@@ -39,12 +39,12 @@
                 </div></td>
                 <td class="table-td">{{ item.total_questions|default:'—' }}</td>
                 <td class="table-td">
-                  {% include "ui/components/_status.html" with code=item.is_active|yesno:"active,inactive" label=item.is_active|yesno:_("Active,Inactive") %}
+                  {% include "ui/components/_status.html" with code=item.is_active|yesno:"active,inactive" label=item.is_active|boolean_label:"Active,Inactive" %}
                 </td>
                 <td class="table-td">
                   <div class="table-actions">
-                    <a class="btn-ghost" href="{% url 'entrance_exams:admin_detail' item.id %}">{% trans "Open" %}</a>
-                    <a class="btn-ghost" href="{% url 'entrance_exams:admin_edit_exam' item.id %}">{% trans "Edit" %}</a>
+                    <a class="btn-ghost" href="{% url 'entrance_exams:admin_detail' item.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Open" %}</a>
+                    <a class="btn-ghost" href="{% url 'entrance_exams:admin_edit_exam' item.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Edit" %}</a>
                   </div>
                 </td>
               </tr>
@@ -60,16 +60,16 @@
       <div class="card-stack lg:hidden">
         {% for item in page_obj %}
           <div class="mobile-card">
-            <div class="flex-1 min-w-0">
-              <strong class="block truncate">{{ item.title }}</strong>
-              <small class="block text-muted truncate">{{ item.description|truncatewords:8|default:'—' }}</small>
-              <small class="block text-muted">{{ item.cohort|default:_("All") }}</small>
-              {% include "ui/components/_status.html" with code=item.is_active|yesno:"active,inactive" label=item.is_active|yesno:_("Active,Inactive") %}
-              <small class="block text-muted">{{ item.total_questions|default:'—' }} {% trans "questions" %}</small>
-            </div>
+          <div class="flex-1 min-w-0">
+            <strong class="block">{{ item.title }}</strong>
+            {% if item.description %}{% include "ui/components/_expandable_text.html" with text=item.description clamp=2 muted=True %}{% endif %}
+            <small class="block text-muted">{{ item.cohort|default:_("All") }}</small>
+            {% include "ui/components/_status.html" with code=item.is_active|yesno:"active,inactive" label=item.is_active|boolean_label:"Active,Inactive" %}
+            <small class="block text-muted">{{ item.total_questions|default:'—' }} {% trans "questions" %}</small>
+          </div>
             <div class="flex gap-2 shrink-0">
-              <a class="btn-ghost btn-sm" href="{% url 'entrance_exams:admin_detail' item.id %}">{% trans "Open" %}</a>
-              <a class="btn-ghost btn-sm" href="{% url 'entrance_exams:admin_edit_exam' item.id %}">{% trans "Edit" %}</a>
+              <a class="btn-ghost" href="{% url 'entrance_exams:admin_detail' item.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Open" %}</a>
+              <a class="btn-ghost" href="{% url 'entrance_exams:admin_edit_exam' item.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Edit" %}</a>
             </div>
           </div>
         {% empty %}

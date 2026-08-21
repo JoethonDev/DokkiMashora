@@ -6,7 +6,7 @@
   </select>
   {% if has_more %}
     <button type="button"
-            class="btn-ghost btn-sm"
+            class="btn-ghost"
             hx-get="{{ load_url }}"
             hx-target="#{{ loader_id }}"
             hx-swap="outerHTML">{% trans "Load more" %}</button>

@@ -127,3 +127,48 @@ COMPONENT_TYPE_CHOICES = [
     (COMPONENT_TYPE_HOMEWORK_ASSESSMENT, _("Homework/Assessment")),
     (COMPONENT_TYPE_CUSTOM_ACTIVITY, _("Custom activity")),
 ]
+
+# Exact Semester Evaluation configuration (P2-05). Only these three locked
+# components participate; legacy generic components stay read-only history.
+EVALUATION_CONFIG_STATUS_ACTIVE = "active"
+EVALUATION_CONFIG_STATUS_INCOMPLETE = "incomplete"
+
+EVALUATION_CONFIG_STATUS_CHOICES = [
+    (EVALUATION_CONFIG_STATUS_ACTIVE, _("Active")),
+    (EVALUATION_CONFIG_STATUS_INCOMPLETE, _("Incomplete - remediation required")),
+]
+
+SEMESTER_EVALUATION_PASS = "pass"
+SEMESTER_EVALUATION_FAIL = "fail"
+
+SEMESTER_EVALUATION_CHOICES = [
+    (SEMESTER_EVALUATION_PASS, _("Pass")),
+    (SEMESTER_EVALUATION_FAIL, _("Fail")),
+]
+
+# Final progression outcome lifecycle (P2-07).
+FINAL_PROGRESSION_STATUS_PENDING = "pending"
+FINAL_PROGRESSION_STATUS_INTERVIEW_PENDING = "interview_pending"
+FINAL_PROGRESSION_STATUS_RESOLVED = "resolved"
+
+FINAL_PROGRESSION_STATUS_CHOICES = [
+    (FINAL_PROGRESSION_STATUS_PENDING, _("Pending")),
+    (FINAL_PROGRESSION_STATUS_INTERVIEW_PENDING, _("Interview Pending")),
+    (FINAL_PROGRESSION_STATUS_RESOLVED, _("Resolved")),
+]
+
+INTERVIEW_STATUS_REQUESTED = "requested"
+INTERVIEW_STATUS_COMPLETED = "completed"
+
+INTERVIEW_STATUS_CHOICES = [
+    (INTERVIEW_STATUS_REQUESTED, _("Requested")),
+    (INTERVIEW_STATUS_COMPLETED, _("Completed")),
+]
+
+INTERVIEW_DECISION_PASS = "pass"
+INTERVIEW_DECISION_FAIL = "fail"
+
+INTERVIEW_DECISION_CHOICES = [
+    (INTERVIEW_DECISION_PASS, _("Pass")),
+    (INTERVIEW_DECISION_FAIL, _("Fail")),
+]

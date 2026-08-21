@@ -17,7 +17,11 @@ from django.utils.translation import gettext as _
 from PIL import Image, ImageOps
 
 from apps.communications.services import send_templated_email
-from apps.storage.services import FileValidationError, storage_service
+from apps.storage.services import (
+    FileValidationError,
+    record_deferred_storage_deletion,
+    storage_service,
+)
 
 from .constants import (
     DECISION_ACTION_REQUEST_DOCUMENTS,
@@ -125,6 +129,8 @@ def validate_attachment_files(files) -> dict[str, Any]:
         # PDF header check
         if ext == ".pdf" and not data.startswith(b"%PDF-"):
             return {"valid": False, "error": _("File '%(name)s' is not a valid PDF.") % {"name": f.name}}
+        if ext == ".pdf" and has_pdf:
+            return {"valid": False, "error": _("Only one PDF file can be uploaded.")}
         if ext == ".pdf" and has_image:
             return {"valid": False, "error": _("Cannot mix PDF and image files in attachments.")}
         if ext == ".pdf":
@@ -301,7 +307,8 @@ def submit_application_documents(
     """Submit persona image and attachments for a document request."""
     application = request_obj.program_application
 
-    # Re-read and lock
+    # Check ownership and state under short-lived locks. Storage and image/PDF
+    # processing must not hold database locks or run inside a transaction.
     with transaction.atomic():
         locked_request = ApplicationDocumentRequest.objects.select_for_update().get(pk=request_obj.pk)
         locked_app = ProgramApplication.objects.select_for_update().get(pk=application.pk)
@@ -317,36 +324,47 @@ def submit_application_documents(
         if locked_app.student.user != actor:
             raise ValueError(_("You can only upload documents for your own application."))
 
-        # Validate persona
-        persona_data = validate_persona_image(persona_file)
-        persona_ext = _get_extension(persona_file.name)
-        persona_prefix = _get_storage_key_prefix(locked_app)
-        persona_key = _upload_file_safe(persona_data, persona_prefix, persona_file.name, _EXTENSION_TO_MIME[persona_ext])
+    # Validate and prepare all file bytes outside the transaction.
+    persona_data = validate_persona_image(persona_file)
+    persona_ext = _get_extension(persona_file.name)
+    persona_prefix = _get_storage_key_prefix(application)
+    result = validate_attachment_files(attachment_files)
+    if not result["valid"]:
+        raise FileValidationError(result["error"])
 
-        # Validate attachments — clean up persona if validation fails
-        result = validate_attachment_files(attachment_files)
-        if not result["valid"]:
-            storage_service.delete_file(persona_key)
-            raise FileValidationError(result["error"])
+    payload = result["payload"]
+    if payload["is_pdf"]:
+        pdf_data = payload["files"][0][0]
+    else:
+        pdf_data = combine_images_to_pdf(payload["files"])
 
-        payload = result["payload"]
+    persona_key = None
+    attachments_key = None
+    try:
+        persona_key = _upload_file_safe(
+            persona_data,
+            persona_prefix,
+            persona_file.name,
+            _EXTENSION_TO_MIME[persona_ext],
+        )
+        attachments_key = _upload_file_safe(
+            pdf_data, persona_prefix, "attachments.pdf", "application/pdf",
+        )
 
-        # Convert / upload attachments — clean up persona on failure
-        if payload["is_pdf"]:
-            pdf_data = payload["files"][0][0]
-        else:
-            pdf_data = combine_images_to_pdf(payload["files"])
+        # Re-lock and re-check after storage work so a concurrent submission
+        # cannot create a second logical upload for the same request.
+        with transaction.atomic():
+            locked_request = ApplicationDocumentRequest.objects.select_for_update().get(pk=request_obj.pk)
+            locked_app = ProgramApplication.objects.select_for_update().get(pk=application.pk)
+            if locked_request.status != DOCUMENT_REQUEST_STATUS_REQUESTED:
+                raise ValueError(_("This document request is no longer open."))
+            if locked_request.expires_at <= timezone.now():
+                raise ValueError(_("This document request has expired."))
+            if locked_app.status != PROGRAM_APP_STATUS_DOCUMENTS_REQUESTED:
+                raise ValueError(_("Application is not in documents-requested state."))
+            if locked_app.student.user != actor:
+                raise ValueError(_("You can only upload documents for your own application."))
 
-        try:
-            attachments_key = _upload_file_safe(
-                pdf_data, persona_prefix, "attachments.pdf", "application/pdf",
-            )
-        except Exception:
-            storage_service.delete_file(persona_key)
-            raise
-
-        # DB writes — clean up both files if database operations fail
-        try:
             upload = ApplicationDocumentUpload.objects.create(
                 request=locked_request,
                 submitted_by=actor,
@@ -388,10 +406,12 @@ def submit_application_documents(
                     "attachments_file_size": len(pdf_data),
                 },
             )
-        except Exception:
-            storage_service.delete_file(persona_key)
-            storage_service.delete_file(attachments_key)
-            raise
+    except Exception:
+        if persona_key:
+            _delete_storage_key_safely(persona_key, "Document submission cleanup failed")
+        if attachments_key:
+            _delete_storage_key_safely(attachments_key, "Document submission cleanup failed")
+        raise
 
     # Try to activate (outside the transaction since it succeeds independently)
     result = activate_application_if_ready(locked_app, actor=actor)
@@ -413,6 +433,16 @@ def _upload_file_safe(data: bytes, prefix: str, filename: str, content_type: str
         original_filename=filename,
     )
     return result.key
+
+
+def _delete_storage_key_safely(key: str, error: str) -> None:
+    """Delete an abandoned upload and retain failed cleanup for reconciliation."""
+    try:
+        if not storage_service.delete_file(key):
+            record_deferred_storage_deletion(key=key, error=error)
+    except Exception as exc:
+        logger.exception("Failed to clean application document object %s", key)
+        record_deferred_storage_deletion(key=key, error=str(exc))
 
 
 def has_application_documents_submitted(application) -> bool:

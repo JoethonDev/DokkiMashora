@@ -25,8 +25,8 @@
           {% for d in page_obj %}
             <tr>
               <td class="table-td text-muted">{{ page_obj.start_index|add:forloop.counter0 }}</td>
-              <td class="table-td"><div class="flex flex-col"><strong>{{ d.title }}</strong>
-                <small>{{ d.description|truncatewords:12|default:'—' }}</small></div>
+              <td class="table-td"><div class="flex flex-col gap-0.5"><strong>{{ d.title }}</strong>
+                {% if d.description %}{% include "ui/components/_expandable_text.html" with text=d.description clamp=2 muted=True %}{% else %}<small class="text-muted">—</small>{% endif %}</div>
               </td>
               <td class="table-td">
                 {{ d.semester_count }}
@@ -37,16 +37,19 @@
               </td>
               <td class="table-td">{{ d.enrollment_count }}</td>
               <td class="table-td">
-                {% include "ui/components/_status.html" with code=d.is_active|yesno:"active,inactive" label=d.is_active|yesno:_("Active,Inactive") %}
+                {% include "ui/components/_status.html" with code=d.is_active|yesno:"active,inactive" label=d.is_active|boolean_label:"Active,Inactive" %}
               </td>
               <td class="table-td"><span dir="ltr" class="inline-block">{{ d.updated_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</span></td>
               <td class="table-td">
                 <div class="table-actions"><a class="btn-secondary"
-                     href="{% url 'academics:admin_diploma_detail' d.id %}">{% trans "Open" %}</a>
-                  <a class="btn-ghost btn-sm"
-                     href="{% url 'academics:admin_diploma_edit' d.id %}">{% trans "Edit" %}</a>
-                  <a class="btn-ghost btn-sm"
-                     href="{% url 'progression:admin_diploma_rule_edit' d.id %}">{% trans "Rule" %}</a>
+                     href="{% url 'academics:admin_diploma_detail' d.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Open" %}</a>
+                  <a class="btn-ghost"
+                     href="{% url 'academics:admin_diploma_edit' d.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Edit" %}</a>
+                  <a class="btn-ghost"
+                     href="{% url 'progression:admin_diploma_rule_edit' d.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Rule" %}</a>
+                  <form method="post" action="{% url 'academics:admin_diploma_delete' d.id %}?next={{ request.get_full_path|urlencode }}" data-confirm="{% trans 'Delete this diploma and its delivery content?' %}" class="m-0">
+                    {% csrf_token %}<button class="btn-danger" type="submit">{% trans "Delete" %}</button>
+                  </form>
                 </div>
               </td>
             </tr>
@@ -58,12 +61,17 @@
       {% for d in page_obj %}
         <div class="mobile-card">
           <div class="flex-1 min-w-0">
-            <strong class="block truncate">{{ d.title }}</strong>
-            <small class="block text-muted truncate">{{ d.description|truncatewords:12|default:'—' }}</small>
+            <strong class="block">{{ d.title }}</strong>
+            {% if d.description %}{% include "ui/components/_expandable_text.html" with text=d.description clamp=2 muted=True %}{% endif %}
             <small class="block text-muted">{{ d.semester_count }} {% trans "semesters" %} / {{ d.cohort_count }} {% trans "cohorts" %} &middot; {{ d.enrollment_count }} {% trans "enrollments" %}</small>
-            {% include "ui/components/_status.html" with code=d.is_active|yesno:"active,inactive" label=d.is_active|yesno:_("Active,Inactive") %}
+            {% include "ui/components/_status.html" with code=d.is_active|yesno:"active,inactive" label=d.is_active|boolean_label:"Active,Inactive" %}
           </div>
-          <a class="btn-soft-primary shrink-0" href="{% url 'academics:admin_diploma_detail' d.id %}">{% trans "Open" %}</a>
+          <div class="flex gap-2 items-center shrink-0">
+            <a class="btn-soft-primary" href="{% url 'academics:admin_diploma_detail' d.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Open" %}</a>
+            <form method="post" action="{% url 'academics:admin_diploma_delete' d.id %}?next={{ request.get_full_path|urlencode }}" data-confirm="{% trans 'Delete this diploma and its delivery content?' %}" class="m-0">
+              {% csrf_token %}<button class="btn-danger" type="submit">{% trans "Delete" %}</button>
+            </form>
+          </div>
         </div>
       {% endfor %}
     </div>

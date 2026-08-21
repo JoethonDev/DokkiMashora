@@ -9,23 +9,19 @@
     {% trans "Review semester progress, decisions, evaluations, interviews, and rejoin plans." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
     <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
-      <label>
-        {% trans "Failed semester" %}
-        <select name="semester_id" class="form-select" required>
-          {% for item in semesters %}<option value="{{ item.id }}">{{ item }}</option>{% endfor %}
-        </select>
-      </label>
-      <label>
-        {% trans "Target cohort" %}
-        <select name="cohort_id" class="form-select" required>
-          {% for item in cohorts %}<option value="{{ item.id }}">{{ item }}</option>{% endfor %}
-        </select>
-      </label>
-      <label>
-        {% trans "Notes" %}
+      {% if selected_semester and target_cohort %}
+      <input type="hidden" name="semester_id" value="{{ selected_semester.id }}">
+      <dl class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div><dt class="field-label">{% trans "Failed semester" %}</dt><dd>{{ selected_semester }}</dd></div>
+        <div><dt class="field-label">{% trans "Target cohort" %}</dt><dd>{{ target_cohort }}</dd></div>
+      </dl>
+      <label class="field"><span class="field-label">{% trans "Notes" %}</span>
         <textarea name="notes" class="form-input"></textarea>
       </label>
       <button class="btn-primary" type="submit">{% trans "Create rejoin plan" %}</button>
+      {% else %}
+        {% include "ui/components/_empty_state.html" with title=_("No eligible rejoin transition is available.") compact=True %}
+      {% endif %}
     </form>
   </div>
 {% endblock %}

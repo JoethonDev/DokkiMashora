@@ -12,6 +12,7 @@ ACTION_ENROLLMENT_DELETED = "enrollment.deleted"
 ACTION_EXAM_CREATED = "exam.created"
 ACTION_EXAM_UPDATED = "exam.updated"
 ACTION_EXAM_TOGGLED = "exam.toggled"
+ACTION_EXAM_DELETED = "exam.deleted"
 ACTION_QUESTION_CREATED = "question.created"
 ACTION_QUESTION_UPDATED = "question.updated"
 ACTION_QUESTION_DELETED = "question.deleted"
@@ -33,6 +34,8 @@ ACTION_PAYMENT_UPLOAD_PREVIEWED = "payment.upload_previewed"
 ACTION_PAYMENT_UPLOAD_CONFIRMED = "payment.upload_confirmed"
 ACTION_PAYMENT_RECORD_UPDATED = "payment.record_updated"
 ACTION_PAYMENT_RECORD_DELETED = "payment.record_deleted"
+ACTION_PAYMENT_WAIVER_GRANTED = "payment.waiver_granted"
+ACTION_PAYMENT_WAIVER_REVOKED = "payment.waiver_revoked"
 ACTION_USER_IMPORT_PREVIEWED = "user_import.previewed"
 ACTION_USER_IMPORT_CONFIRMED = "user_import.confirmed"
 ACTION_EXAM_ACCESS_OVERRIDE_CREATED = "exam_access_override.created"
@@ -66,6 +69,7 @@ AUDIT_ACTION_CHOICES = (
     (ACTION_EXAM_CREATED, _("Exam created")),
     (ACTION_EXAM_UPDATED, _("Exam updated")),
     (ACTION_EXAM_TOGGLED, _("Exam toggled")),
+    (ACTION_EXAM_DELETED, _("Exam deleted")),
     (ACTION_QUESTION_CREATED, _("Question created")),
     (ACTION_QUESTION_UPDATED, _("Question updated")),
     (ACTION_QUESTION_DELETED, _("Question deleted")),
@@ -88,6 +92,8 @@ AUDIT_ACTION_CHOICES = (
     (ACTION_PAYMENT_UPLOAD_CONFIRMED, _("Payment upload confirmed")),
     (ACTION_PAYMENT_RECORD_UPDATED, _("Payment record updated")),
     (ACTION_PAYMENT_RECORD_DELETED, _("Payment record deleted")),
+    (ACTION_PAYMENT_WAIVER_GRANTED, _("Payment waiver granted")),
+    (ACTION_PAYMENT_WAIVER_REVOKED, _("Payment waiver revoked")),
     (ACTION_USER_IMPORT_PREVIEWED, _("User import previewed")),
     (ACTION_USER_IMPORT_CONFIRMED, _("User import confirmed")),
     (ACTION_EXAM_ACCESS_OVERRIDE_CREATED, _("Exam access override created")),

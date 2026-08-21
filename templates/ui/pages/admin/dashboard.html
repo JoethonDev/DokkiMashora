@@ -1,18 +1,13 @@
-{% extends "ui/layouts/admin.html" %}
+﻿{% extends "ui/layouts/admin.html" %}
 {% load i18n %}
 {% block title %}
   {% trans "Dashboard" %}
 {% endblock %}
-{% block page_title %}
-  {% trans "Dashboard" %}
-{% endblock %}
 {% block content %}
   <div class="page-stack animate-enter-view">
-    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=_("Dashboard") description=description %}
     {% if dashboard_kind == "admin" %}
       {% include "ui/fragments/admin/dashboard/_admin.html" %}
-    {% elif dashboard_kind == "teacher" %}
-      {% include "ui/fragments/admin/dashboard/_teacher.html" %}
     {% elif dashboard_kind == "moderator" %}
       {% include "ui/fragments/admin/dashboard/_moderator.html" %}
     {% elif dashboard_kind == "secretary" %}

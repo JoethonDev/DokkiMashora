@@ -1,5 +1,5 @@
 {% extends "ui/layouts/admin.html" %}
-{% load i18n %}
+{% load i18n ui_tags %}
 {% block title %}
   {% trans "Grade submission" %}
 {% endblock %}
@@ -11,77 +11,152 @@
       <p>{{ submission.student }} - {{ submission.assessment }}</p>
     {% endif %}
     {% if attempt %}
-      <div class="flex gap-2.5 items-center flex-wrap mb-4">
-        {% if attempt.status == "graded" %}
-          <form method="post" action="{% url 'assessments:admin_release_grades' attempt.id %}">{% csrf_token %}
-            <button class="btn-success" type="submit">{% trans "Release grades" %}</button>
-          </form>
-        {% elif attempt.status == "released" %}
-          <form method="post" action="{% url 'assessments:admin_hide_grades' attempt.id %}">{% csrf_token %}
-            <button class="btn-warning" type="submit">{% trans "Hide grades" %}</button>
-          </form>
-        {% endif %}
-      </div>
+      <section class="card-surface mb-4">
+        <div class="section-head"><div>
+              <p class="eyebrow">{% trans "Grades" %}</p>
+              <h3>{% trans "Release / hide" %}</h3>
+            </div>
+          </div>
+        <div class="flex gap-2.5 items-center flex-wrap">
+          {% if attempt.status == "graded" %}
+            <form method="post" action="{% url 'assessments:admin_release_grades' attempt.id %}">{% csrf_token %}
+              <button class="btn-success" type="submit">{% trans "Release grades" %}</button>
+            </form>
+          {% elif attempt.status == "released" %}
+            <form method="post" action="{% url 'assessments:admin_hide_grades' attempt.id %}">{% csrf_token %}
+              <button class="btn-warning" type="submit">{% trans "Hide grades" %}</button>
+            </form>
+          {% else %}
+            <p class="text-sm text-muted">{% trans "Grades are not in a releasable state." %}</p>
+          {% endif %}
+        </div>
+      </section>
     {% endif %}
   {% if submission %}
-    <section class="card-surface"><p>
+    <section class="card-surface">
+      {% include "ui/components/_status.html" with code=submission.status label=submission.get_status_display %}
+      <p class="text-sm text-muted mt-2 mb-0">
         {% trans "Submitted" %}
         :
-        {{ submission.created_at }}
+        {{ submission.submitted_at|default:submission.created_at }}
       </p>
-      {% if download_url %}
-        <a class="btn-soft" href="{{ download_url }}">{% trans "Download submission" %}</a>
+      {% if attachments %}
+        <div class="mt-4">
+          <h3>{% trans "Submitted files" %}</h3>
+          <ul class="mt-2 space-y-2">
+            {% for attachment in attachments %}
+              <li class="flex items-center justify-between gap-3 border-b border-line py-2">
+                <a class="btn-soft" href="{{ attachment_download_urls|dict_key:attachment.id }}">{{ attachment.original_filename }}</a>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
       {% endif %}
-      <form class="max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
-        <label>
-          {% trans "Score" %}
+      <form class="max-w-form mx-auto w-full page-stack mt-4" method="post">{% csrf_token %}
+        <div class="section-head"><div>
+              <p class="eyebrow">{% trans "Grading" %}</p>
+              <h3>{% trans "Save grade" %}</h3>
+            </div>
+          </div>
+        <label class="field"><span class="field-label">{% trans "Score" %}</span>
           <input name="score" class="form-input"
                  type="number"
                  step="0.01"
                  value="{{ submission.score|default:'' }}"
                  required>
         </label>
-        <label>
-          {% trans "Feedback" %}
+        <label class="field"><span class="field-label">{% trans "Feedback" %}</span>
           <textarea name="feedback" class="form-input" rows="6">{{ submission.feedback|default:'' }}
         </textarea>
         </label>
         <button class="btn-primary" type="submit">{% trans "Save grade" %}</button>
       </form>
     </section>
-  {% elif snapshot_pairs %}
-    <form class="max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
+  {% elif is_diploma_random %}
+    <form class="max-w-3xl mx-auto w-full page-stack" method="post">{% csrf_token %}
       {% for question,answer in snapshot_pairs %}
-        <fieldset>
-          <legend>{{ question.text_snapshot|default:question.text }}</legend>
-          <label>
-            {% trans "Score" %}
-            <input name="score_sq_{{ question.order }}" class="form-input"
-                   value="{{ answer.score|default:'' }}"
-                   type="number"
-                   step="0.01"></label>
-          <textarea name="feedback_sq_{{ question.order }}" class="form-input">{{ answer.feedback|default:'' }}
-          </textarea>
+        <fieldset class="border border-line rounded-sm p-4">
+          <legend class="sr-only">{% trans "Question" %} #{{ question.order }}</legend>
+          <div class="flex items-center gap-2 mb-4">
+            <span class="text-xs font-bold text-muted uppercase">#{{ question.order }}</span>
+            <span class="px-2 py-0.5 text-xs font-bold rounded-full bg-warning-soft text-warning-text">{% trans "Written" %}</span>
+          </div>
+          <div>
+            <p class="eyebrow mb-1">{% trans "Question" %}</p>
+            <p class="text-sm font-medium m-0 whitespace-pre-wrap">{{ question.text_snapshot }}</p>
+          </div>
+          <div class="mt-4">
+            <p class="eyebrow mb-1">{% trans "Answer" %}</p>
+            <div class="border-s-2 border-line ps-3">
+              {% if answer and answer.written_text %}
+                <p class="text-sm m-0 whitespace-pre-wrap">{{ answer.written_text }}</p>
+              {% else %}
+                <p class="text-sm text-muted m-0 italic">{% trans "No written answer provided." %}</p>
+              {% endif %}
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+            <label class="field"><span class="field-label">{% trans "Score" %}</span>
+              <input name="score_sq_{{ question.order }}" class="form-input"
+                     value="{{ answer.score|default:'' }}"
+                     type="number"
+                     step="0.01"></label>
+            <label class="field sm:col-span-2"><span class="field-label">{% trans "Feedback" %}</span>
+              <textarea name="feedback_sq_{{ question.order }}" class="form-textarea" rows="2">{{ answer.feedback|default:'' }}</textarea>
+            </label>
+          </div>
         </fieldset>
+      {% empty %}
+        {% include "ui/components/_empty_state.html" with title=_('No written questions to grade.') %}
       {% endfor %}
-      <button class="btn-primary" type="submit">{% trans "Save grades" %}</button>
+      {% if snapshot_pairs %}
+        <div class="actions-row justify-end">
+          <button class="btn-primary" type="submit">{% trans "Save grades" %}</button>
+        </div>
+      {% endif %}
     </form>
   {% else %}
-    <form class="max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
+    <form class="max-w-3xl mx-auto w-full page-stack" method="post">{% csrf_token %}
       {% for question,answer in question_answer_pairs %}
-        <fieldset>
-          <legend>{{ question.text }}</legend>
-          <label>
-            {% trans "Score" %}
-            <input name="score_{{ question.id }}" class="form-input"
-                   value="{{ answer.score|default:'' }}"
-                   type="number"
-                   step="0.01"></label>
-          <textarea name="feedback_{{ question.id }}" class="form-input">{{ answer.feedback|default:'' }}
-            </textarea>
+        <fieldset class="border border-line rounded-sm p-4">
+          <legend class="sr-only">{% trans "Question" %} #{{ question.order }}</legend>
+          <div class="flex items-center gap-2 mb-4">
+            <span class="text-xs font-bold text-muted uppercase">#{{ question.order }}</span>
+            <span class="px-2 py-0.5 text-xs font-bold rounded-full bg-warning-soft text-warning-text">{% trans "Written" %}</span>
+          </div>
+          <div>
+            <p class="eyebrow mb-1">{% trans "Question" %}</p>
+            <p class="text-sm font-medium m-0 whitespace-pre-wrap">{{ question.text }}</p>
+          </div>
+          <div class="mt-4">
+            <p class="eyebrow mb-1">{% trans "Answer" %}</p>
+            <div class="border-s-2 border-line ps-3">
+              {% if answer and answer.written_text %}
+                <p class="text-sm m-0 whitespace-pre-wrap">{{ answer.written_text }}</p>
+              {% else %}
+                <p class="text-sm text-muted m-0 italic">{% trans "No written answer provided." %}</p>
+              {% endif %}
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+            <label class="field"><span class="field-label">{% trans "Score" %}</span>
+              <input name="score_{{ question.id }}" class="form-input"
+                     value="{{ answer.score|default:'' }}"
+                     type="number"
+                     step="0.01"></label>
+            <label class="field sm:col-span-2"><span class="field-label">{% trans "Feedback" %}</span>
+              <textarea name="feedback_{{ question.id }}" class="form-textarea" rows="2">{{ answer.feedback|default:'' }}</textarea>
+            </label>
+          </div>
         </fieldset>
+      {% empty %}
+        {% include "ui/components/_empty_state.html" with title=_('No written questions to grade.') %}
       {% endfor %}
-      <button class="btn-primary" type="submit">{% trans "Save grades" %}</button>
+      {% if question_answer_pairs %}
+        <div class="actions-row justify-end">
+          <button class="btn-primary" type="submit">{% trans "Save grades" %}</button>
+        </div>
+      {% endif %}
     </form>
   {% endif %}
   </div>

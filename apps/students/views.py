@@ -5,15 +5,14 @@ from __future__ import annotations
 import json
 
 from django.contrib import messages
-from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.http import Http404, HttpRequest, HttpResponse
-from django.shortcuts import get_object_or_404, redirect, render
-from django.template import engines
+from django.shortcuts import redirect, render
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods
 
 from apps.academics.models import Cohort, Course
+from apps.applications.constants import DELIVERY_MODE_CHOICES, DELIVERY_MODE_ONLINE
 from apps.applications.services import is_apply_target_open
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
@@ -182,7 +181,7 @@ def record(request: HttpRequest) -> HttpResponse:
     """Canonical student record: released academic history and communications."""
     profile = _get_profile_or_404(request.user)
     data = get_dashboard_data(profile, sections=[
-        "semester_progress", "promotion_decisions", "completions", "eligibilities",
+        "record_history", "semester_progress", "promotion_decisions", "completions", "eligibilities",
         "grade_items", "certificates", "payments", "notifications", "assessment_attempts",
         "exam_assignments", "attendance",
     ])
@@ -205,6 +204,11 @@ def apply(request: HttpRequest) -> HttpResponse:
     selected_target_id = str(
         request.POST.get("target_id") if request.method == "POST" else request.GET.get("target_id", "")
     ).strip()
+    selected_delivery_mode = str(
+        request.POST.get("delivery_mode") if request.method == "POST" else request.GET.get("delivery_mode", DELIVERY_MODE_ONLINE)
+    ).strip()
+    if selected_delivery_mode not in dict(DELIVERY_MODE_CHOICES):
+        selected_delivery_mode = DELIVERY_MODE_ONLINE
     if selected_program_type not in {"diploma", "course"}:
         selected_program_type = "diploma"
 
@@ -222,12 +226,19 @@ def apply(request: HttpRequest) -> HttpResponse:
         "courses": courses,
         "selected_program_type": selected_program_type,
         "selected_target_id": selected_target_id,
+        "selected_delivery_mode": selected_delivery_mode,
+        "delivery_mode_choices": DELIVERY_MODE_CHOICES,
     }
 
     if request.method == "POST":
         program_type = request.POST.get("program_type", "").strip()
         target_id = request.POST.get("target_id", "").strip()
-        context.update({"selected_program_type": program_type, "selected_target_id": target_id})
+        delivery_mode = request.POST.get("delivery_mode", "").strip()
+        context.update({
+            "selected_program_type": program_type,
+            "selected_target_id": target_id,
+            "selected_delivery_mode": delivery_mode,
+        })
         if not program_type or not target_id:
             error_message = _("Please select a program.")
             messages.error(request, error_message)
@@ -249,6 +260,12 @@ def apply(request: HttpRequest) -> HttpResponse:
                 response = _render_profile(request, "ui/pages/student/apply.html", context)
                 response['HX-Trigger'] = json.dumps({'show-toast': {'message': str(error_message), 'type': 'error'}})
                 return response
+            if delivery_mode not in dict(DELIVERY_MODE_CHOICES):
+                error_message = _("Please select an attendance mode.")
+                messages.error(request, error_message)
+                response = _render_profile(request, "ui/pages/student/apply.html", context)
+                response['HX-Trigger'] = json.dumps({'show-toast': {'message': str(error_message), 'type': 'error'}})
+                return response
             target_eligibility = check_apply_eligibility(profile, cohort=cohort)
             if not target_eligibility["allowed"]:
                 reason = target_eligibility["reason"] or _("You are not eligible to apply.")
@@ -257,7 +274,7 @@ def apply(request: HttpRequest) -> HttpResponse:
                 response['HX-Trigger'] = json.dumps({'show-toast': {'message': str(reason), 'type': 'error'}})
                 return response
             try:
-                submit_apply_application(profile, cohort=cohort)
+                submit_apply_application(profile, cohort=cohort, delivery_mode=delivery_mode)
             except ValueError as exc:
                 error_message = str(exc)
                 messages.error(request, error_message)

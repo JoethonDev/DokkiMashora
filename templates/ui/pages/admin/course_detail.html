@@ -5,6 +5,11 @@
 {% endblock %}
 {% block content %}
   <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=course.title description=course.description eyebrow=_("Course") back_button=True %}
+    <div class="actions-row">
+      <form method="post" action="{% url 'academics:admin_course_delete' course.id %}" data-confirm="{% trans 'Delete this course and its versions?' %}" class="m-0">{% csrf_token %}
+        <button class="btn-danger" type="submit">{% trans "Delete course" %}</button>
+      </form>
+    </div>
     <section class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Versions" %}</p>
           <h3>{% trans "Course versions" %}</h3>
@@ -28,11 +33,14 @@
                 <tr>
                   <td class="table-td">{{ version.label }}</td>
                   <td class="table-td">{% if version.access_duration_days %}{{ version.access_duration_days }} {% trans "days" %}{% else %}{% trans "Unlimited" %}{% endif %}</td>
-                  <td class="table-td">{% include "ui/components/_status.html" with code=version.is_active|yesno:"active,inactive" label=version.is_active|yesno:_("Active,Inactive") %}</td>
+                  <td class="table-td">{% include "ui/components/_status.html" with code=version.is_active|yesno:"active,inactive" label=version.is_active|boolean_label:"Active,Inactive" %}</td>
                   <td class="table-td">{{ version.lectures|length }}</td>
                   <td class="table-td">
                     <a class="btn-secondary"
                        href="{% url 'academics:admin_version_detail' course.id version.id %}">{% trans "Open" %}</a>
+                    <form method="post" action="{% url 'academics:admin_version_delete' course.id version.id %}" data-confirm="{% trans 'Delete this course version and its lectures?' %}" class="inline m-0">{% csrf_token %}
+                      <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
+                    </form>
                   </td>
                 </tr>
               {% endfor %}
@@ -44,10 +52,15 @@
             <div class="mobile-card">
               <div class="flex-1 min-w-0">
                 <strong class="block truncate">{{ version.label }}</strong>
-                <small class="block text-muted">{{ version.is_active|yesno:_("Active,Inactive") }} &middot; {% if version.access_duration_days %}{{ version.access_duration_days }} {% trans "days" %}{% else %}{% trans "Unlimited" %}{% endif %}</small>
+                <small class="block text-muted">{{ version.is_active|boolean_label:"Active,Inactive" }} &middot; {% if version.access_duration_days %}{{ version.access_duration_days }} {% trans "days" %}{% else %}{% trans "Unlimited" %}{% endif %}</small>
                 <small class="block text-muted">{{ version.lectures|length }} {% trans "lectures" %}</small>
               </div>
-              <a class="btn-soft-primary shrink-0" href="{% url 'academics:admin_version_detail' course.id version.id %}">{% trans "Open" %}</a>
+              <div class="flex gap-2 items-center shrink-0">
+                <a class="btn-soft-primary" href="{% url 'academics:admin_version_detail' course.id version.id %}">{% trans "Open" %}</a>
+                <form method="post" action="{% url 'academics:admin_version_delete' course.id version.id %}" data-confirm="{% trans 'Delete this course version and its lectures?' %}" class="m-0">{% csrf_token %}
+                  <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
+                </form>
+              </div>
             </div>
           {% endfor %}
         </div>
@@ -80,6 +93,9 @@
                     <a class="btn-ghost"
                        href="{% url 'academics:admin_lecture_edit' course.id lecture.course_version.id lecture.id %}">{% trans "Edit" %}
                     </a>
+                    <form method="post" action="{% url 'academics:admin_lecture_delete' course.id lecture.course_version.id lecture.id %}" data-confirm="{% trans 'Delete this lecture?' %}" class="inline m-0">{% csrf_token %}
+                      <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
+                    </form>
                   </td>
                 </tr>
               {% endfor %}
@@ -93,7 +109,12 @@
                 <strong class="block truncate">{{ lecture.title }}</strong>
                 <small class="block text-muted">#{{ lecture.order }} &middot; {{ lecture.course_version.label }}</small>
               </div>
-              <a class="btn-ghost btn-sm" href="{% url 'academics:admin_lecture_edit' course.id lecture.course_version.id lecture.id %}">{% trans "Edit" %}</a>
+              <div class="flex gap-2 items-center shrink-0">
+                <a class="btn-ghost" href="{% url 'academics:admin_lecture_edit' course.id lecture.course_version.id lecture.id %}">{% trans "Edit" %}</a>
+                <form method="post" action="{% url 'academics:admin_lecture_delete' course.id lecture.course_version.id lecture.id %}" data-confirm="{% trans 'Delete this lecture?' %}" class="m-0">{% csrf_token %}
+                  <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
+                </form>
+              </div>
             </div>
           {% endfor %}
         </div>

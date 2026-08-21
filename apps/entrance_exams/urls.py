@@ -26,6 +26,7 @@ urlpatterns = [
     path("manage/<int:exam_id>/questions/<int:question_id>/delete/", views.admin_delete_question, name="admin_delete_question"),
     path("manage/grading/", views.admin_grade_list, name="admin_grade_list"),
     path("manage/grading/<int:attempt_id>/", views.admin_grade_attempt, name="admin_grade_attempt"),
+    path("manage/grading/<int:attempt_id>/decision/", views.admin_attempt_decision, name="admin_attempt_decision"),
     path("manage/<int:exam_id>/emails/", views.admin_cohort_email, name="admin_cohort_email"),
     path("manage/<int:exam_id>/emails/<int:app_id>/resend/", views.admin_app_email_resend, name="admin_app_email_resend"),
     path("emails/log/", views.admin_email_log_list, name="admin_email_log_list"),

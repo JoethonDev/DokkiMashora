@@ -15,13 +15,15 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods
 
-from apps.core.htmx import is_htmx
 from apps.academics.models import Cohort
+from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import ROLE_SENIOR_STAFF, is_admin, role_required, safe_int
+from apps.entrance_exams.services import assign_exam_for_application
 from apps.intake_forms.constants import INTAKE_REQUESTABLE_STATUSES  # noqa: E402
 from apps.intake_forms.selectors import get_application_intake_state  # noqa: E402
 from apps.intake_forms.services import request_intake_form_for_application  # noqa: E402
+from apps.payments.services import grant_payment_waiver, revoke_payment_waiver
 from apps.storage.services import StorageError, storage_service
 from apps.students.services import get_open_apply_targets
 
@@ -40,6 +42,9 @@ from .constants import (
     DECISION_ACTION_REVERT,
     DECISION_ACTION_SUBMIT_DOCUMENTS,
     DECISION_ACTION_SUBMIT_SURVEY,
+    DOCUMENT_REQUEST_STATUS_CANCELLED,
+    DOCUMENT_REQUEST_STATUS_REQUESTED,
+    DOCUMENT_REQUEST_STATUS_SUBMITTED,
     PROGRAM_APP_STATUS_ACCEPTED,
     PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED,
     PROGRAM_APP_STATUS_ACTIVATED,
@@ -63,19 +68,22 @@ from .documents import (
     submit_application_documents,
 )
 from .forms import AdminDocumentRequestForm, RegistrationForm, StudentDocumentUploadForm
-from .models import ApplicationDocumentRequest, ApplicationDocumentUpload, ProgramApplication
+from .models import ApplicationDocumentUpload, ProgramApplication
 from .services import (
     RegistrationData,
     accept_program_application,
+    activate_application_if_ready,
+    can_activate_application,
+    get_active_application_waiver,
     has_application_paid_record,
+    invite_to_entrance_exam,
     mark_application_paid,
     reject_program_application,
     request_interview_program_application,
     revert_program_application_decision,
+    send_post_activation_application_email,
     submit_registration,
 )
-from apps.entrance_exams.services import assign_exam_for_application
-from .services import activate_application_if_ready, invite_to_entrance_exam, send_post_activation_application_email
 
 PUBLIC_REGISTRATION_SESSION_KEY = "registration_email"
 
@@ -94,7 +102,7 @@ REGISTRATION_STEPS = (
     },
 )
 
-REGISTRATION_PROGRAM_FIELDS = ("apply_program", "program_type", "diploma", "program_target")
+REGISTRATION_PROGRAM_FIELDS = ("apply_program", "program_type", "diploma", "delivery_mode", "program_target")
 
 
 def _registration_error_step(error_fields: set) -> int:
@@ -181,6 +189,7 @@ def register(request: HttpRequest) -> HttpResponse:
                     program_type=program_data["program_type"],
                     cohort_id=program_data["cohort_id"],
                     course_id=program_data["course_id"],
+                    delivery_mode=program_data["delivery_mode"],
                 )
                 _profile, _program_application = submit_registration(data)
             request.session[PUBLIC_REGISTRATION_SESSION_KEY] = form.cleaned_data["email"]
@@ -248,6 +257,37 @@ def _reject_allowed(status, program_type=None):
     if program_type == PROGRAM_TYPE_COURSE:
         base |= {PROGRAM_APP_STATUS_SUBMITTED, PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED, PROGRAM_APP_STATUS_PAYMENT_PENDING}
     return status in base
+
+
+PAYMENT_ACTION_STATUSES = frozenset({
+    PROGRAM_APP_STATUS_PAYMENT_PENDING,
+    PROGRAM_APP_STATUS_DOCUMENTS_REQUESTED,
+    PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED,
+    PROGRAM_APP_STATUS_SURVEY_REQUESTED,
+    PROGRAM_APP_STATUS_SURVEY_SUBMITTED,
+    PROGRAM_APP_STATUS_READY_FOR_ACTIVATION,
+})
+COURSE_PAYMENT_ACTION_STATUSES = PAYMENT_ACTION_STATUSES | {PROGRAM_APP_STATUS_ACCEPTED}
+
+
+def _payment_action_status_ok(application) -> bool:
+    statuses = (
+        COURSE_PAYMENT_ACTION_STATUSES
+        if application.program_type == PROGRAM_TYPE_COURSE
+        else PAYMENT_ACTION_STATUSES
+    )
+    return application.status in statuses
+
+
+def _waiver_grant_status_ok(application) -> bool:
+    """Payment waiver is a payment-time action.
+
+    Payment remains a valid readiness gate while an application is moving
+    through its requested documents and intake steps.  The backend payment
+    service owns the final state validation; this helper only prepares the
+    Admin action for the detail page.
+    """
+    return _payment_action_status_ok(application)
 
 
 def _decision_unavailable_reason(application) -> str | None:
@@ -511,7 +551,40 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
                 messages.success(request, _("Entrance exam assigned." if not send_email else "Entrance exam assigned and invitation sent."))
             return redirect("applications:program_detail", application_id=application.id)
 
-        if action == "activate" and application.status == PROGRAM_APP_STATUS_READY_FOR_ACTIVATION and is_admin(request.user):
+        if action == "grant_waiver" and is_admin(request.user):
+            try:
+                waiver = grant_payment_waiver(
+                    application,
+                    request.user,
+                    reason=request.POST.get("waiver_reason", ""),
+                )
+            except ValueError as exc:
+                messages.error(request, str(exc))
+            else:
+                messages.success(
+                    request,
+                    _("Payment waiver granted and activation attempted."),
+                )
+            return redirect("applications:program_detail", application_id=application.id)
+
+        if action == "revoke_waiver" and is_admin(request.user):
+            waiver = get_active_application_waiver(application)
+            if waiver is None:
+                messages.error(request, _("No active payment waiver to revoke."))
+            else:
+                try:
+                    revoke_payment_waiver(
+                        waiver,
+                        request.user,
+                        reason=request.POST.get("waiver_revoke_reason", ""),
+                    )
+                except ValueError as exc:
+                    messages.error(request, str(exc))
+                else:
+                    messages.info(request, _("Payment waiver revoked."))
+            return redirect("applications:program_detail", application_id=application.id)
+
+        if action == "activate" and is_admin(request.user):
             try:
                 result = activate_application_if_ready(application, actor=request.user)
             except ValueError as exc:
@@ -525,7 +598,7 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
 
         messages.error(request, _("Action not allowed for the current status."))
 
-    DECISION_ACTION_TONES = {
+    decision_action_tones = {
         DECISION_ACTION_ACCOUNT_ACTIVATED: "success",
         DECISION_ACTION_PAYMENT_PENDING: "warning",
         DECISION_ACTION_INVITED_TO_ENTRANCE: "info",
@@ -552,7 +625,7 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
         (
             decision,
             decision.get_action_display(),
-            DECISION_ACTION_TONES.get(decision.action, "neutral"),
+            decision_action_tones.get(decision.action, "neutral"),
             status_labels.get(decision.old_status, _("Unknown")),
             status_labels.get(decision.new_status, _("Unknown")),
         )
@@ -560,6 +633,14 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
     ]
     notes = application.notes.all()[:20]
     is_paid = has_application_paid_record(application)
+    active_waiver = get_active_application_waiver(application)
+    is_waived = active_waiver is not None
+    can_record_payment = (
+        is_admin(request.user)
+        and not is_paid
+        and not is_waived
+        and _payment_action_status_ok(application)
+    )
 
     # Document request state
     doc_request = get_latest_document_request(application)
@@ -570,6 +651,7 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
 
     # Intake form state
     intake_state = get_application_intake_state(application)
+    activation_check = can_activate_application(application)
 
     return render(
         request,
@@ -581,8 +663,28 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
             "pagination_qs": decisions_qs,
             "notes": notes,
             "is_paid": is_paid,
+            "active_waiver": active_waiver,
+            "is_waived": is_waived,
+            "can_record_payment": can_record_payment,
+            "can_activate": is_admin(request.user) and activation_check.ready,
+            "can_grant_waiver": (
+                is_admin(request.user)
+                and not is_waived
+                and not is_paid
+                and _waiver_grant_status_ok(application)
+            ),
+            "can_revoke_waiver": is_admin(request.user) and is_waived,
+            "can_show_revert": (
+                application.status in {PROGRAM_APP_STATUS_ACCEPTED, PROGRAM_APP_STATUS_REJECTED}
+                and not application.entrance_attempts.all()
+            ),
             "doc_request": doc_request,
             "doc_upload": doc_upload,
+            "doc_uploads": list(
+                ApplicationDocumentUpload.objects.filter(
+                    request__program_application=application,
+                ).select_related("request").order_by("-submitted_at")
+            ),
             "request_doc_form": request_doc_form,
             "intake_state": intake_state,
             "can_accept": _accept_allowed(application.status, application.program_type),
@@ -600,25 +702,19 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
 # ---------------------------------------------------------------------------
 
 
-@require_http_methods(["GET", "POST"])
-@login_required
-def document_upload(request: HttpRequest, token: str) -> HttpResponse:
-    """Student document upload via expiring token link."""
-    doc_request = get_document_request_by_token(token)
-    if not doc_request:
-        messages.error(request, _("Invalid or expired document upload link."))
-        return redirect("students:applications")
+def _render_document_upload(request: HttpRequest, doc_request) -> HttpResponse:
+    """Shared document-upload GET/POST handling and render for a doc request.
 
+    Used by the emailed token link and the authenticated portal route.
+    """
     application = doc_request.program_application
-
-    # Verify ownership
-    if doc_request.program_application.student.user != request.user:
-        messages.error(request, _("This document upload link is not for your account."))
-        return redirect("students:applications")
-
-    if doc_request.status == "submitted":
+    if doc_request.status == DOCUMENT_REQUEST_STATUS_SUBMITTED:
         messages.info(request, _("Documents have already been submitted for this request."))
         return render(request, "ui/pages/public/document_upload.html", {"submitted": True, "doc_request": doc_request, "application": application})
+
+    if doc_request.status == DOCUMENT_REQUEST_STATUS_CANCELLED:
+        messages.error(request, _("This document request has been cancelled."))
+        return render(request, "ui/pages/public/document_upload.html", {"cancelled": True, "doc_request": doc_request, "application": application})
 
     if doc_request.expires_at <= timezone.now():
         messages.error(request, _("This document upload link has expired."))
@@ -650,6 +746,44 @@ def document_upload(request: HttpRequest, token: str) -> HttpResponse:
         "doc_request": doc_request,
         "application": application,
     })
+
+
+@require_http_methods(["GET", "POST"])
+@login_required
+def document_upload(request: HttpRequest, token: str) -> HttpResponse:
+    """Student document upload via expiring token link."""
+    doc_request = get_document_request_by_token(token)
+    if not doc_request:
+        messages.error(request, _("Invalid or expired document upload link."))
+        return redirect("students:applications")
+
+    # Verify ownership
+    if doc_request.program_application.student.user != request.user:
+        messages.error(request, _("This document upload link is not for your account."))
+        return redirect("students:applications")
+
+    return _render_document_upload(request, doc_request)
+
+
+@require_http_methods(["GET", "POST"])
+@login_required
+def my_document_upload(request: HttpRequest, application_id: int) -> HttpResponse:
+    """Authenticated document upload for the student's own application.
+
+    Lets a student reach an open document request from their applications
+    portal without the emailed token link.
+    """
+    application = get_object_or_404(ProgramApplication, id=application_id)
+    if application.student.user != request.user:
+        raise PermissionDenied
+    doc_request = application.document_requests.select_related("program_application").filter(
+        status=DOCUMENT_REQUEST_STATUS_REQUESTED,
+        expires_at__gt=timezone.now(),
+    ).first()
+    if not doc_request:
+        messages.info(request, _("No open document request for this application."))
+        return redirect("students:applications")
+    return _render_document_upload(request, doc_request)
 
 
 # ---------------------------------------------------------------------------

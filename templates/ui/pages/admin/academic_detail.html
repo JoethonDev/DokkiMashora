@@ -20,11 +20,14 @@
         </dd>
         <dt class="dt">{% trans "Status" %}</dt>
         <dd class="dd">
-          {% include "ui/components/_status.html" with code=version.is_active|yesno:"active,inactive" label=version.is_active|yesno:_("Active,Inactive") %}
+          {% include "ui/components/_status.html" with code=version.is_active|yesno:"active,inactive" label=version.is_active|boolean_label:"Active,Inactive" %}
         </dd>
       </dl>
       <a class="btn-primary"
          href="{% url 'academics:admin_lecture_create' course.id version.id %}">{% trans "Add lecture" %}</a>
+      <form method="post" action="{% url 'academics:admin_version_delete' course.id version.id %}" data-confirm="{% trans 'Delete this course version and its lectures?' %}" class="inline m-0">{% csrf_token %}
+        <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
+      </form>
     </section>
   {% endif %}
   {% if versions %}
@@ -35,7 +38,15 @@
               <tr>
                 <td class="table-td">{{ item.label }}</td>
                 <td class="table-td">{% if item.access_duration_days %}{{ item.access_duration_days }} {% trans "days" %}{% else %}{% trans "Unlimited" %}{% endif %}</td>
-                <td class="table-td">{% include "ui/components/_status.html" with code=item.is_active|yesno:"active,inactive" label=item.is_active|yesno:_("Active,Inactive") %}</td>
+                <td class="table-td">{% include "ui/components/_status.html" with code=item.is_active|yesno:"active,inactive" label=item.is_active|boolean_label:"Active,Inactive" %}</td>
+                <td class="table-td">
+                  <div class="flex gap-2 items-center">
+                    <a class="btn-ghost" href="{% url 'academics:admin_version_detail' course.id item.id %}">{% trans "Open" %}</a>
+                    <form method="post" action="{% url 'academics:admin_version_delete' course.id item.id %}" data-confirm="{% trans 'Delete this course version and its lectures?' %}" class="m-0">{% csrf_token %}
+                      <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
+                    </form>
+                  </div>
+                </td>
               </tr>
             {% endfor %}
           </tbody>
@@ -46,7 +57,13 @@
           <div class="mobile-card">
             <div class="flex-1 min-w-0">
               <strong class="block truncate">{{ item.label }}</strong>
-              <small class="block text-muted">{{ item.is_active|yesno:_("Active,Inactive") }} &middot; {% if item.access_duration_days %}{{ item.access_duration_days }} {% trans "days" %}{% else %}{% trans "Unlimited" %}{% endif %}</small>
+              <small class="block text-muted">{{ item.is_active|boolean_label:"Active,Inactive" }} &middot; {% if item.access_duration_days %}{{ item.access_duration_days }} {% trans "days" %}{% else %}{% trans "Unlimited" %}{% endif %}</small>
+            </div>
+            <div class="flex gap-2 items-center shrink-0">
+              <a class="btn-ghost" href="{% url 'academics:admin_version_detail' course.id item.id %}">{% trans "Open" %}</a>
+              <form method="post" action="{% url 'academics:admin_version_delete' course.id item.id %}" data-confirm="{% trans 'Delete this course version and its lectures?' %}" class="m-0">{% csrf_token %}
+                <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
+              </form>
             </div>
           </div>
         {% endfor %}
@@ -64,6 +81,9 @@
                 <td class="table-td">
                   <a class="btn-ghost" href="{% url 'academics:admin_lecture_edit' course.id version.id item.id %}">{% trans "Edit" %}</a>
                   <a class="btn-ghost" href="{% url 'academics:admin_lecture_preview' course.id version.id item.id %}">{% trans "Preview" %}</a>
+                  <form method="post" action="{% url 'academics:admin_lecture_delete' course.id version.id item.id %}" data-confirm="{% trans 'Delete this lecture?' %}" class="inline m-0">{% csrf_token %}
+                    <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
+                  </form>
                 </td>
               </tr>
             {% endfor %}
@@ -78,8 +98,11 @@
               <small class="block text-muted">#{{ item.order }}</small>
             </div>
             <div class="flex gap-2">
-              <a class="btn-ghost btn-sm" href="{% url 'academics:admin_lecture_edit' course.id version.id item.id %}">{% trans "Edit" %}</a>
-              <a class="btn-ghost btn-sm" href="{% url 'academics:admin_lecture_preview' course.id version.id item.id %}">{% trans "Preview" %}</a>
+              <a class="btn-ghost" href="{% url 'academics:admin_lecture_edit' course.id version.id item.id %}">{% trans "Edit" %}</a>
+              <a class="btn-ghost" href="{% url 'academics:admin_lecture_preview' course.id version.id item.id %}">{% trans "Preview" %}</a>
+              <form method="post" action="{% url 'academics:admin_lecture_delete' course.id version.id item.id %}" data-confirm="{% trans 'Delete this lecture?' %}" class="m-0">{% csrf_token %}
+                <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
+              </form>
             </div>
           </div>
         {% endfor %}

@@ -17,17 +17,30 @@
           </div>
         </div>
         {% if upload.error_summary %}<p class="text-red" role="alert">{{ upload.error_summary }}</p>{% endif %}
-        <div class="table-wrap mt-4">
+        <div class="table-wrap hidden lg:block mt-4">
           <table class="table">
             <thead><tr><th class="table-th">{% trans "Row" %}</th><th class="table-th">{% trans "Email" %}</th><th class="table-th">{% trans "Status" %}</th><th class="table-th">{% trans "Error" %}</th></tr></thead>
             <tbody>
               {% for row in upload.rows.all %}
-                <tr><td>{{ row.row_number }}</td><td>{{ row.normalized_email }}</td><td>{{ row.get_status_display }}</td><td>{{ row.error_message|default:"—" }}</td></tr>
+                <tr><td>{{ row.row_number }}</td><td class="break-words">{{ row.normalized_email }}</td><td>{{ row.get_status_display }}</td><td class="break-words">{{ row.error_message|default:"—" }}</td></tr>
               {% empty %}
                 <tr><td colspan="4" class="text-muted">{% trans "No rows found." %}</td></tr>
               {% endfor %}
             </tbody>
           </table>
+        </div>
+        <div class="card-stack lg:hidden mt-4">
+          {% for row in upload.rows.all %}
+            <div class="mobile-card">
+              <div class="flex-1 min-w-0">
+                <strong class="block break-words">{% trans "Row" %} {{ row.row_number }} &middot; {{ row.normalized_email|default:'—' }}</strong>
+                {% include "ui/components/_status.html" with code=row.status label=row.get_status_display %}
+                {% if row.error_message %}<small class="block text-muted break-words">{{ row.error_message }}</small>{% endif %}
+              </div>
+            </div>
+          {% empty %}
+            <div class="border border-line rounded-sm p-4 text-center">{% trans "No rows found." %}</div>
+          {% endfor %}
         </div>
         {% if upload.status == "previewed" %}
           {% if upload.unmatched_rows or upload.matched_rows %}

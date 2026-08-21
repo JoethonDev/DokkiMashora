@@ -113,18 +113,20 @@ class FullLifecycleIntegrationTests(TestCase):
         self.enrollment = DiplomaEnrollment.objects.create(
             student=self.student, cohort=self.cohort, status=ENROLLMENT_STATUS_ACTIVE,
         )
-        self.rule = DiplomaProgressionRule.objects.create(
+        self.rule, _ = DiplomaProgressionRule.objects.update_or_create(
             diploma=self.diploma,
-            semester_pass_percent=Decimal("50.00"),
-            final_exam_pass_percent=Decimal("60.00"),
-            require_all_semesters_passed=True,
-            require_final_exam=True,
-            auto_promote_enabled=True,
-            allow_admin_override=True,
-            allow_retake=True,
-            max_retake_count=3,
-            is_active=True,
-            created_by=self.admin,
+            defaults={
+                "semester_pass_percent": Decimal("50.00"),
+                "final_exam_pass_percent": Decimal("60.00"),
+                "require_all_semesters_passed": True,
+                "require_final_exam": True,
+                "auto_promote_enabled": True,
+                "allow_admin_override": True,
+                "allow_retake": True,
+                "max_retake_count": 3,
+                "is_active": True,
+                "created_by": self.admin,
+            },
         )
         self.course = Course.objects.create(title="Test Course", created_by=self.admin)
         self.cv = CourseVersion.objects.create(

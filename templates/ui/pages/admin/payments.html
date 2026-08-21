@@ -10,14 +10,95 @@
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title|default:default_title description=description %}
     <nav class="tab-track w-max max-w-full overflow-auto" role="tablist">
       <a href="{% url 'payments:index' %}" role="tab" class="tab{% if page_mode == 'record_list' %} tab-active{% endif %}" {% if page_mode == 'record_list' %}aria-current="page"{% endif %}>{% trans "Payment records" %}</a>
+      <a href="{% url 'payments:waiver_list' %}" role="tab" class="tab{% if page_mode == 'waiver_list' %} tab-active{% endif %}" {% if page_mode == 'waiver_list' %}aria-current="page"{% endif %}>{% trans "Waivers" %}</a>
       <a href="{% url 'payments:upload_list' %}" role="tab" class="tab{% if page_mode == 'upload_list' or page_mode == 'upload_detail' or page_mode == 'upload_create' %} tab-active{% endif %}" {% if page_mode == 'upload_list' or page_mode == 'upload_detail' or page_mode == 'upload_create' %}aria-current="page"{% endif %}>{% trans "Imports" %}</a>
     </nav>
 
-    {% if page_mode == "record_list" %}
+    {% if page_mode == "waiver_list" %}
+      <section class="card-surface">
+        <form class="actions-row items-end mb-4" method="get" hx-get="{% url 'payments:waiver_list' %}" hx-trigger="input changed delay:300ms from:#waiver-student-search, change from:select, submit" hx-target="#waiver-rows" hx-swap="outerHTML" hx-push-url="true" hx-sync="this:replace">
+          <div class="search-field"><span class="absolute inset-y-0 start-0 grid place-items-center ps-3 text-muted pointer-events-none">&#8981;</span>
+            <input id="waiver-student-search" name="student_q" value="{{ current_student_q|default:'' }}" type="search" placeholder="{% trans 'Search student…' %}" aria-label="{% trans 'Search students' %}" class="form-input ps-10">
+          </div>
+          <label class="min-w-40"><span class="field-label">{% trans "Status" %}</span>
+            <select name="status" class="form-select">
+              <option value="">{% trans "Active" %}</option>
+              {% for value,label in waiver_status_choices %}
+                <option value="{{ value }}" {% if value == current_status %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <button class="btn-secondary" type="submit">{% trans "Filter" %}</button>
+        </form>
+        <div id="waiver-rows" class="table-wrap hidden lg:block">
+          <table class="table">
+            <thead>
+              <tr>
+                <th class="table-th">{% trans "Student" %}</th>
+                <th class="table-th">{% trans "Program" %}</th>
+                <th class="table-th">{% trans "Reason" %}</th>
+                <th class="table-th">{% trans "Status / granted" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in page_obj %}
+                <tr>
+                  <td class="table-td">{{ item.student.full_name|default:item.student }}</td>
+                  <td class="table-td">
+                    {% if item.application.cohort %}
+                      {{ item.application.cohort.diploma.title }}
+                    {% elif item.application.course %}
+                      {{ item.application.course.title }}
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+                  <td class="table-td">
+                    {% include "ui/components/_expandable_text.html" with text=item.reason clamp=2 %}
+                  </td>
+                  <td class="table-td"><div class="flex flex-col">
+                    {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
+                    <small>{{ item.granted_at|date:"SHORT_DATE_FORMAT"|default:'—' }}</small></div>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td class="table-td" colspan="4">
+                    {% if current_student_q %}
+                      {% include "ui/components/_empty_state.html" with title=_("No waivers match these filters.") compact=True %}
+                    {% else %}
+                      {% include "ui/components/_empty_state.html" with title=_("No payment waivers yet.") message=_("Waivers are granted by an Admin from the application review page.") compact=True %}
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="card-stack lg:hidden">
+          {% for item in page_obj %}
+            <div class="mobile-card">
+              <div class="flex-1 min-w-0">
+                <strong class="block break-words">{{ item.student.full_name|default:item.student }}</strong>
+                <small class="block text-muted break-words">{% if item.application.cohort %}{{ item.application.cohort.diploma.title }}{% elif item.application.course %}{{ item.application.course.title }}{% else %}—{% endif %}</small>
+                {% if item.reason %}{% include "ui/components/_expandable_text.html" with text=item.reason clamp=2 muted=True %}{% endif %}
+                {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
+              </div>
+            </div>
+          {% empty %}
+            <div class="border border-line rounded-sm p-4 text-center">
+              {% include "ui/components/_empty_state.html" with title=_("No payment waivers yet.") compact=True %}
+            </div>
+          {% endfor %}
+        </div>
+        {% include "ui/components/_pagination.html" %}
+      </section>
+
+    {% elif page_mode == "record_list" %}
       <section class="card-surface">
         <form class="actions-row items-end mb-4" method="get" hx-get="{% url 'payments:index' %}" hx-trigger="input changed delay:300ms from:#payment-student-search, change from:select, submit" hx-target="#payment-records" hx-swap="outerHTML" hx-push-url="true" hx-sync="this:replace">
           <div class="search-field"><span class="absolute inset-y-0 start-0 grid place-items-center ps-3 text-muted pointer-events-none">&#8981;</span>
-            <input id="payment-student-search" name="student_q" value="{{ current_student_q|default:'' }}" type="search" placeholder="{% trans 'Search student…' %}" class="form-input ps-10">
+            <input id="payment-student-search" name="student_q" value="{{ current_student_q|default:'' }}" type="search" placeholder="{% trans 'Search student…' %}" aria-label="{% trans 'Search students' %}" class="form-input ps-10">
           </div>
           <label class="min-w-40"><span class="field-label">{% trans "Status" %}</span>
             <select name="status" class="form-select">

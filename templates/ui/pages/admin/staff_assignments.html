@@ -13,28 +13,11 @@
           <h3>{% trans "Teacher assignments" %}</h3>
         </div>
       </div>
-      <form class="actions-row items-end mb-4"
-            method="post"
-            action="{% url 'accounts:admin_teacher_assignment_create' staff_user.id %}">{% csrf_token %}
-        <label class="min-w-40"><span class="field-label">{% trans "Course version" %}</span>
-          <select name="course_version" class="form-select" required>
-            <option value="">{% trans "Select" %}</option>
-            {% for item in course_versions %}
-              <option value="{{ item.id }}">{{ item.course }}
-                —
-                {{ item.student.full_name|default:item }}
-              </option>
-            {% endfor %}
-          </select>
-        </label>
-        <button class="btn-primary" type="submit">{% trans "Assign teacher" %}</button>
-      </form>
       <div class="table-wrap hidden lg:block"><table class="table">
           <thead>
             <tr>
               <th class="table-th">{% trans "Course" %}</th>
               <th class="table-th">{% trans "Status" %}</th>
-              <th class="table-th">{% trans "Actions" %}</th>
             </tr>
           </thead>
           <tbody>
@@ -42,20 +25,12 @@
               <tr>
                 <td class="table-td">{{ item.course_version.course }}</td>
                 <td class="table-td">
-                  {% include "ui/components/_status.html" with code=item.active|yesno:"active,revoked" label=item.active|yesno:_("Active,Revoked") %}
-                </td>
-                <td class="table-td">
-                  {% if item.active %}
-                      <form method="post"
-                            action="{% url 'accounts:admin_teacher_assignment_delete' staff_user.id item.id %}" data-confirm="{% trans 'Revoke this teacher assignment?' %}">{% csrf_token %}
-                        <button class="btn-danger" type="submit">{% trans "Revoke" %}</button>
-                      </form>
-                  {% endif %}
+                  {% include "ui/components/_status.html" with code=item.active|yesno:"active,revoked" label=item.active|boolean_label:"Active,Revoked" %}
                 </td>
               </tr>
             {% empty %}
               <tr>
-                <td class="table-td" colspan="3">{% trans "No teacher assignments." %}</td>
+                <td class="table-td" colspan="2">{% trans "No teacher assignments." %}</td>
               </tr>
             {% endfor %}
           </tbody>
@@ -65,14 +40,9 @@
         {% for item in teacher_assignments %}
           <div class="mobile-card">
             <div class="flex-1 min-w-0">
-              <strong class="block truncate">{{ item.course_version.course }}</strong>
-              {% include "ui/components/_status.html" with code=item.active|yesno:"active,revoked" label=item.active|yesno:_("Active,Revoked") %}
+              <strong class="block break-words">{{ item.course_version.course }}</strong>
+              {% include "ui/components/_status.html" with code=item.active|yesno:"active,revoked" label=item.active|boolean_label:"Active,Revoked" %}
             </div>
-            {% if item.active %}
-              <form method="post" action="{% url 'accounts:admin_teacher_assignment_delete' staff_user.id item.id %}" data-confirm="{% trans 'Revoke this teacher assignment?' %}" class="m-0">{% csrf_token %}
-                <button class="btn-danger text-xs py-1 px-2 min-h-0" type="submit">{% trans "Revoke" %}</button>
-              </form>
-            {% endif %}
           </div>
         {% empty %}
           <div class="border border-line rounded-sm p-4 text-center">{% include "ui/components/_empty_state.html" with title=_("No teacher assignments.") %}</div>
@@ -158,12 +128,12 @@
         {% for item in moderator_assignments %}
           <div class="mobile-card">
             <div class="flex-1 min-w-0">
-              <strong class="block truncate">{{ item.course_version }}</strong>
+              <strong class="block break-words">{{ item.course_version }}</strong>
               <small class="block text-muted">{{ item.cohort|default:'—' }} &middot; {{ item.cluster|default:'—' }}</small>
             </div>
             {% if item.active %}
               <form method="post" action="{% url 'accounts:admin_moderator_assignment_delete' staff_user.id item.id %}" data-confirm="{% trans 'Revoke this moderator assignment?' %}" class="m-0">{% csrf_token %}
-                <button class="btn-danger text-xs py-1 px-2 min-h-0" type="submit">{% trans "Revoke" %}</button>
+                <button class="btn-danger" type="submit">{% trans "Revoke" %}</button>
               </form>
             {% endif %}
           </div>

@@ -1,11 +1,9 @@
-{% extends "ui/layouts/admin.html" %}
+﻿{% extends "ui/layouts/admin.html" %}
 {% load i18n %}
 {% block title %}
   {% trans "Staff" %}
 {% endblock %}
-{% block page_title %}
   {% trans "Staff" %}
-{% endblock %}
 {% block content %}
   <div class="page-stack animate-enter-view">{% trans "Accounts" as eyebrow %}
     {% trans "Staff" as title %}
@@ -19,11 +17,12 @@
       hx-swap="outerHTML"
       hx-push-url="true"
        hx-sync="this:replace"><div class="search-field"><span class="absolute inset-y-0 start-0 grid place-items-center ps-3 text-muted pointer-events-none">&#8981;</span>
-       <input id="staff-search"
-             name="q"
-             value="{{ search_value }}"
-             type="search"
-             placeholder="{% trans 'Name, email, phone, or national ID' %}"
+<input id="staff-search"
+name="q"
+value="{{ search_value }}"
+type="search"
+placeholder="{% trans 'Name, email, phone, or national ID' %}"
+aria-label="{% trans 'Search staff' %}"
               class="form-input ps-10"></div>
     <label class="min-w-40"><span class="field-label">{% trans "Role" %}</span>
       <select id="staff-role" name="role" class="form-select"><option value="">{% trans "All roles" %}</option>

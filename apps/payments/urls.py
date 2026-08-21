@@ -7,6 +7,7 @@ app_name = "payments"
 urlpatterns = [
     path("", views.payment_record_list, name="index"),
     path("records/", views.payment_record_list, name="record_list"),
+    path("waivers/", views.waiver_list, name="waiver_list"),
     path("imports/", views.upload_list, name="upload_list"),
     path("imports/new/", views.upload_create, name="upload_create"),
     path("imports/<int:upload_id>/", views.upload_detail, name="upload_detail"),

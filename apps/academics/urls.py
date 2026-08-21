@@ -152,6 +152,17 @@ urlpatterns = [
         views.api_watch_checkpoint,
         name="api_watch_checkpoint",
     ),
+    # Audio API (P5-01)
+    path(
+        "my-courses/<int:version_id>/lectures/<int:lecture_id>/audio/start/",
+        views.api_audio_start,
+        name="api_audio_start",
+    ),
+    path(
+        "my-courses/<int:version_id>/lectures/<int:lecture_id>/audio/checkpoint/",
+        views.api_audio_checkpoint,
+        name="api_audio_checkpoint",
+    ),
     # Student: diploma content (Phase 6)
     path(
         "my-diplomas/<int:enrollment_id>/",

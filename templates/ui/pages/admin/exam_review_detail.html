@@ -1,0 +1,53 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n ui_tags %}
+{% block title %}
+  {% trans "Semester Exam review" %}
+{% endblock %}
+{% block content %}
+  <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with eyebrow=_("Assessments") title=_("Semester Exam review") back_button=True %}
+    <section class="card-surface"><div class="section-head"><div>
+          <p class="eyebrow">{% trans "Review" %}</p>
+          <h3>
+            {{ attempt.student }}
+            ·
+            {{ attempt.assessment }}
+          </h3>
+        </div>
+      </div>
+      <dl class="dl">
+        <div>
+          <dt class="dt">{% trans "Computed grade" %}</dt>
+          <dd class="dd">{{ details.percent|default:'—' }}%</dd>
+        </div>
+        <div>
+          <dt class="dt">{% trans "Passing threshold" %}</dt>
+          <dd class="dd">{{ passing_score }}%</dd>
+        </div>
+        <div>
+          <dt class="dt">{% trans "Grading complete" %}</dt>
+          <dd class="dd">{% if details.complete %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</dd>
+        </div>
+        <div>
+          <dt class="dt">{% trans "Exam stage" %}</dt>
+          <dd class="dd">{% include "ui/components/_status.html" with code=attempt.exam_review_status label=attempt.get_exam_review_status_display %}</dd>
+        </div>
+      </dl>
+      {% if not details.complete %}
+        {% include "ui/components/_state_banner.html" with state="pending" label=_("Not all parts graded") description=_("Every configured exam part must be graded before the stage decision.") %}
+      {% else %}
+        <form method="post" action="{% url 'assessments:admin_exam_review_submit' attempt.id %}" class="page-stack mt-4">{% csrf_token %}
+          <fieldset>
+            <legend>{% trans "Stage decision" %}</legend>
+            <div class="flex gap-4 flex-wrap">
+              <label class="flex items-center gap-2"><input type="radio" name="decision" value="pass" class="form-radio">{% trans "Pass" %}</label>
+              <label class="flex items-center gap-2"><input type="radio" name="decision" value="fail" class="form-radio">{% trans "Fail" %}</label>
+            </div>
+          </fieldset>
+          <label class="field-label" for="review-note">{% trans "Note (optional)" %}</label>
+          <textarea id="review-note" name="note" class="form-textarea" rows="3"></textarea>
+          <button class="btn-primary" type="submit">{% trans "Save stage decision" %}</button>
+        </form>
+      {% endif %}
+    </section>
+  </div>
+{% endblock %}

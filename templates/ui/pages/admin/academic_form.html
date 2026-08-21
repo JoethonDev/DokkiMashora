@@ -1,27 +1,36 @@
 {% extends "ui/layouts/admin.html" %}
-{% load i18n %}
+{% load i18n static %}
 {% block title %}
   {{ title }}
 {% endblock %}
 {% block content %}
   <div class="page-stack animate-enter-view">
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow|default:_("Academic") title=title description=description back_button=True back_url=back_url back_label=back_label %}
-    <form class="card-surface max-w-form mx-auto w-full page-stack" method="post" enctype="multipart/form-data"{% if form_action %} action="{{ form_action }}"{% endif %}>{% csrf_token %}
+    <form class="card-surface max-w-form mx-auto w-full page-stack" method="post" enctype="multipart/form-data"{% if form_action %} action="{{ form_action }}"{% endif %}{% if form.assessment_type %} data-assessment-form data-scope-options-url="{% url 'assessments:admin_scope_fields' %}" data-select-label="{% trans 'Select' %}"{% endif %}>{% csrf_token %}
+      {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
       {% if reviewers %}
-        <label>{% trans "Reviewer" %}<select class="form-select" name="reviewer" required><option value="">{% trans "Select" %}</option>{% for reviewer in reviewers %}<option value="{{ reviewer.id }}">{{ reviewer.get_full_name|default:reviewer.email }}</option>{% endfor %}</select></label>
-        <label>{% trans "Cohort" %}<select class="form-select" name="cohort" required><option value="">{% trans "Select" %}</option>{% for cohort in cohorts %}<option value="{{ cohort.id }}">{{ cohort }}</option>{% endfor %}</select></label>
-        <label>{% trans "Semester" %}<select class="form-select" name="semester" required><option value="">{% trans "Select" %}</option>{% for semester in semesters %}<option value="{{ semester.id }}">{{ semester }}</option>{% endfor %}</select></label>
-        <label>{% trans "Section" %}<select class="form-select" name="section"><option value="">{% trans "All sections" %}</option>{% for section in sections %}<option value="{{ section.id }}">{{ section }}</option>{% endfor %}</select></label>
+        <div class="space-y-4" x-data="{scope: '{{ reviewer_scope|escapejs }}', filterOptions() { const cohort = $refs.cohort.options[$refs.cohort.selectedIndex]; const diplomaId = cohort ? cohort.dataset.diplomaId : ''; Array.from($refs.semester.options).forEach(option => { const visible = !option.value || !diplomaId || option.dataset.diplomaId === diplomaId; option.hidden = !visible; option.disabled = !visible; if (!visible && option.selected) $refs.semester.value = ''; }); Array.from($refs.assessment.options).forEach(option => { const visible = !option.value || !cohort || option.dataset.cohortId === cohort.value; option.hidden = !visible; option.disabled = !visible; if (!visible && option.selected) $refs.assessment.value = ''; }); }}" x-init="filterOptions()">
+          <label class="field"><span class="field-label">{% trans "Reviewers" %}</span><select class="form-select" name="reviewers" multiple size="5" required>{% for reviewer in reviewers %}<option value="{{ reviewer.id }}">{{ reviewer.get_full_name|default:reviewer.email }}</option>{% endfor %}</select><span class="field-help">{% trans "Hold Ctrl/Cmd to select multiple reviewers." %}</span></label>
+          <label class="field"><span class="field-label">{% trans "Assignment scope" %}</span><select class="form-select" name="scope" x-model="scope" @change="if (scope === 'cohort') { $refs.semester.value = ''; $refs.assessment.value = ''; } else if (scope === 'semester') { $refs.assessment.value = ''; }" required><option value="">{% trans "Select" %}</option>{% for value,label in reviewer_scope_choices %}<option value="{{ value }}"{% if value == reviewer_scope %} selected{% endif %}>{{ label }}</option>{% endfor %}</select><span class="field-help">{% trans "Choose one level. A broader assignment blocks narrower assignments for the same Reviewer." %}</span></label>
+          <label class="field"><span class="field-label">{% trans "Cohort" %}</span><select class="form-select" name="cohort" x-ref="cohort" @change="filterOptions(); $refs.semester.value = ''; $refs.assessment.value = '';" required><option value="">{% trans "Select" %}</option>{% for cohort in cohorts %}<option value="{{ cohort.id }}" data-diploma-id="{{ cohort.diploma_id }}"{% if cohort.id|stringformat:'s' == reviewer_cohort %} selected{% endif %}>{{ cohort }}</option>{% endfor %}</select></label>
+          <div x-show="scope === 'semester'" x-cloak>
+            <label class="field"><span class="field-label">{% trans "Semester" %}</span><select class="form-select" name="semester" x-ref="semester" :disabled="scope !== 'semester'"><option value="">{% trans "Select" %}</option>{% for semester in semesters %}<option value="{{ semester.id }}" data-diploma-id="{{ semester.diploma_id }}"{% if semester.id|stringformat:'s' == reviewer_semester %} selected{% endif %}>{{ semester }}</option>{% endfor %}</select></label>
+          </div>
+          <div x-show="scope === 'semester_exam'" x-cloak>
+            <label class="field"><span class="field-label">{% trans "Semester Exam" %}</span><select class="form-select" name="assessment" x-ref="assessment" :disabled="scope !== 'semester_exam'"><option value="">{% trans "Select" %}</option>{% for exam in semester_exams %}<option value="{{ exam.id }}" data-cohort-id="{{ exam.cohort_id }}"{% if exam.id|stringformat:'s' == reviewer_assessment %} selected{% endif %}>{{ exam }}</option>{% endfor %}</select><span class="field-help">{% trans "The Reviewer can receive both online and offline work within this scope." %}</span></label>
+          </div>
+          <label class="field"><span class="field-label">{% trans "Cluster (optional)" %}</span><select class="form-select" name="cluster"><option value="">{% trans "All assigned students" %}</option>{% for cluster in clusters %}<option value="{{ cluster.id }}"{% if cluster.id|stringformat:'s' == reviewer_cluster %} selected{% endif %}>{{ cluster }}</option>{% endfor %}</select></label>
+        </div>
       {% else %}
         {% for field in form %}
-          <div class="scope-field" data-field-name="{{ field.name }}">{% include "ui/components/_field.html" %}</div>
+          <div class="scope-field{% if field.name == 'max_upload_files' or field.name == 'allow_late_submission' %} homework-only-field{% if form.assessment_type.value != 'homework' %} hidden{% endif %}{% endif %}" data-field-name="{{ field.name }}"{% if field.name == 'max_upload_files' or field.name == 'allow_late_submission' %} data-homework-only{% endif %}>{% include "ui/components/_field.html" %}</div>
         {% endfor %}
       {% endif %}
       {% if semester_pass_percent_override is not None %}
         <div class="form-group">
-          <label class="field-label" for="semester_pass_percent_override">{% trans "Semester pass percent override" %}</label>
+          <label class="field-label" for="semester_pass_percent_override">{% trans "Semester passing threshold override (%)" %}</label>
           <input class="form-input" type="number" id="semester_pass_percent_override" name="semester_pass_percent_override" value="{{ semester_pass_percent_override }}" min="0" max="100" step="0.01" placeholder="{% trans 'Inherits from diploma rule' %}">
-          <p class="field-help">{% trans "Leave empty to inherit the pass percent from the diploma progression rule." %}</p>
+          <p class="field-help">{% trans "Enter a percentage from 0 to 100, or leave empty to inherit the diploma progression rule." %}</p>
         </div>
         <div class="form-group">
           <label class="flex items-center gap-2 cursor-pointer">
@@ -60,7 +69,7 @@
                   </div>
                 </div>
                 <div class="shrink-0 pt-6">
-                  <button type="button" class="btn-danger px-2.5 py-1.5 text-xs remove-choice-btn">{% trans "Remove" %}</button>
+                  <button type="button" class="btn-danger remove-choice-btn">{% trans "Remove" %}</button>
                 </div>
               </div>
             {% empty %}
@@ -83,7 +92,7 @@
                   </div>
                 </div>
                 <div class="shrink-0 pt-6">
-                  <button type="button" class="btn-danger px-2.5 py-1.5 text-xs remove-choice-btn">{% trans "Remove" %}</button>
+                  <button type="button" class="btn-danger remove-choice-btn">{% trans "Remove" %}</button>
                 </div>
               </div>
             {% endfor %}
@@ -110,7 +119,7 @@
               </div>
             </div>
             <div class="shrink-0 pt-6">
-              <button type="button" class="btn-danger px-2.5 py-1.5 text-xs remove-choice-btn">{% trans "Remove" %}</button>
+              <button type="button" class="btn-danger remove-choice-btn">{% trans "Remove" %}</button>
             </div>
           </div>
         </template>
@@ -119,25 +128,6 @@
         <button class="btn-primary" type="submit">{% trans "Save" %}</button>
       </div>
     </form>
-    <script>
-      (function() {
-        var scopeSelect = document.querySelector('[name="scope_type"]');
-        if (!scopeSelect) return;
-        var courseFields = ['course', 'course_version'];
-        var diplomaFields = ['diploma', 'semester', 'cohort'];
-        function toggleScope(scope) {
-          document.querySelectorAll('.scope-field').forEach(function(el) {
-            var name = el.getAttribute('data-field-name');
-            if (courseFields.indexOf(name) !== -1) {
-              el.classList.toggle('hidden', scope !== 'course');
-            } else if (diplomaFields.indexOf(name) !== -1) {
-              el.classList.toggle('hidden', scope !== 'diploma');
-            }
-          });
-        }
-        scopeSelect.addEventListener('change', function() { toggleScope(this.value); });
-        toggleScope(scopeSelect.value);
-      })();
-    </script>
+    {% if form.assessment_type %}<script src="{% static 'js/assessment-form.js' %}" defer></script>{% endif %}
   </div>
 {% endblock %}

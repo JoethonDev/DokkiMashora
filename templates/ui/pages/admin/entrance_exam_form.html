@@ -14,6 +14,7 @@
     {% endif %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title|default:default_title description=description back_button=True back_url=back_url %}
     <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
+      {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
       <div class="form-grid">
         {% for field in form %}
           {% if field.name == "description" or field.name == "auto_send_results" %}

@@ -1,0 +1,55 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n ui_tags %}
+{% block title %}
+  {% trans "Semester Exam review" %}
+{% endblock %}
+{% block content %}
+  <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with eyebrow=_("Assessments") title=_("Semester Exam review") description=_("Graded semester exams awaiting the explicit Admin stage decision.") %}
+    <section class="card-surface">
+      {% include "ui/components/_pagination.html" with page_obj=page_obj pagination_qs=pagination_qs %}
+      {% if page_obj.object_list %}
+        <div class="table-wrap hidden lg:block"><table class="table">
+            <thead>
+              <tr>
+                <th class="table-th">{% trans "Student" %}</th>
+                <th class="table-th">{% trans "Assessment" %}</th>
+                <th class="table-th">{% trans "Status" %}</th>
+                <th class="table-th">{% trans "Graded" %}</th>
+                <th class="table-th">{% trans "Actions" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in page_obj %}
+                <tr>
+                  <td class="table-td"><div class="flex flex-col"><strong>{{ item.student.full_name|default:item.student }}</strong>
+                    <small>{{ item.student.email|default:'' }}</small></div>
+                  </td>
+                  <td class="table-td">{{ item.assessment.title|default:item.assessment }}</td>
+                  <td class="table-td">{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
+                  <td class="table-td">{{ item.graded_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</td>
+                  <td class="table-td">
+                    <a class="btn-secondary"
+                       href="{% url 'assessments:admin_exam_review_detail' item.id %}">{% trans "Review" %}</a>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table></div>
+        <div class="card-stack lg:hidden">
+          {% for item in page_obj %}
+            <div class="mobile-card">
+              <div class="flex-1 min-w-0">
+                <strong class="block truncate">{{ item.student.full_name|default:item.student }}</strong>
+                <small class="block text-muted truncate">{{ item.assessment.title|default:item.assessment }}</small>
+                {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
+              </div>
+              <a class="btn-soft-primary shrink-0" href="{% url 'assessments:admin_exam_review_detail' item.id %}">{% trans "Review" %}</a>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        {% include "ui/components/_empty_state.html" with title=_("No exams waiting for review") %}
+      {% endif %}
+    </section>
+  </div>
+{% endblock %}

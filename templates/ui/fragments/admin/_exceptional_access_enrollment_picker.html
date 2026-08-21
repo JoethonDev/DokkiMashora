@@ -1,0 +1,70 @@
+{% load i18n %}
+<form class="page-stack mb-4"
+      method="get"
+      action="{% url 'assessments:admin_exceptional_access_enrollments' assessment.id %}"
+      hx-get="{% url 'assessments:admin_exceptional_access_enrollments' assessment.id %}"
+      hx-trigger="submit, keyup changed delay:300ms from:input[name='q']"
+      hx-target="#exceptional-access-enrollment-picker"
+      hx-swap="innerHTML"
+      hx-push-url="false">
+  <label class="field">
+    <span class="field-label">{% trans "Search by name or email" %}</span>
+    <input type="search" name="q" value="{{ query }}" class="form-input" autocomplete="off" autofocus>
+  </label>
+  <div class="actions-row">
+    <button type="submit" class="btn-secondary">{% trans "Search" %}</button>
+    <span class="text-sm text-muted" role="status">
+      {% blocktranslate with count=page_obj.paginator.count %}{{ count }} eligible students{% endblocktranslate %}
+    </span>
+  </div>
+</form>
+
+<div class="flex flex-col gap-2" aria-live="polite">
+  {% for enrollment in page_obj %}
+    <label class="flex cursor-pointer items-start gap-3 rounded-sm border border-line bg-surface-soft p-3 transition hover:border-brand-200 hover:bg-brand-soft">
+      <input type="checkbox"
+             class="form-checkbox mt-1"
+             name="{{ enrollment_field }}"
+             value="{{ enrollment.id }}"
+             form="exceptional-access-form"
+             data-enrollment-picker-checkbox
+             data-enrollment-id="{{ enrollment.id }}"
+             data-enrollment-label="{{ enrollment.student.full_name }}">
+      <span class="min-w-0">
+        <strong class="block">{{ enrollment.student.full_name }}</strong>
+        <small class="block text-muted">{{ enrollment.student.user.email }}</small>
+      </span>
+    </label>
+  {% empty %}
+    <div class="border border-line rounded-sm p-4 text-center">
+      <p class="text-sm text-muted">{% trans "No eligible active students match this search." %}</p>
+    </div>
+  {% endfor %}
+</div>
+
+{% if page_obj.has_other_pages %}
+  <nav class="flex items-center justify-between gap-3 pt-4 flex-wrap" aria-label="{% trans 'Student pages' %}">
+    <p class="text-sm text-muted m-0">
+      {% blocktranslate with first=page_obj.start_index last=page_obj.end_index total=page_obj.paginator.count %}Showing {{ first }}–{{ last }} of {{ total }}{% endblocktranslate %}
+    </p>
+    <div class="actions-row">
+      {% if page_obj.has_previous %}
+        <a class="btn-secondary"
+           href="{% url 'assessments:admin_exceptional_access_enrollments' assessment.id %}?q={{ query|urlencode }}&amp;page={{ page_obj.previous_page_number }}"
+           hx-get="{% url 'assessments:admin_exceptional_access_enrollments' assessment.id %}?q={{ query|urlencode }}&amp;page={{ page_obj.previous_page_number }}"
+           hx-target="#exceptional-access-enrollment-picker"
+           hx-swap="innerHTML"
+           hx-push-url="false">{% trans "Previous" %}</a>
+      {% endif %}
+      <span class="text-sm text-muted">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+      {% if page_obj.has_next %}
+        <a class="btn-secondary"
+           href="{% url 'assessments:admin_exceptional_access_enrollments' assessment.id %}?q={{ query|urlencode }}&amp;page={{ page_obj.next_page_number }}"
+           hx-get="{% url 'assessments:admin_exceptional_access_enrollments' assessment.id %}?q={{ query|urlencode }}&amp;page={{ page_obj.next_page_number }}"
+           hx-target="#exceptional-access-enrollment-picker"
+           hx-swap="innerHTML"
+           hx-push-url="false">{% trans "Next" %}</a>
+      {% endif %}
+    </div>
+  </nav>
+{% endif %}

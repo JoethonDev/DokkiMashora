@@ -1,0 +1,58 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n %}
+{% block title %}
+  {{ assessment }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack animate-enter-view">{% trans "Exam Code Roster" as eyebrow %}
+    {% include "ui/components/_page_header.html" with title=assessment eyebrow=eyebrow back_button=True %}
+    <section class="card-surface">
+      <div class="section-head"><div><p class="eyebrow">{% trans "Exam codes" %}</p><h2>{{ assessment }}</h2></div></div>
+      <div class="actions">
+        <form method="post" action="{% url 'assessments:admin_generate_codes' assessment.id %}">{% csrf_token %}
+          <button class="btn-ghost" type="submit">{% trans "Generate missing codes" %}</button>
+        </form>
+        <a class="btn-secondary" href="{% url 'assessments:admin_export_offline_codes' assessment.id %}">{% trans "Export offline codes" %}</a>
+      </div>
+    </section>
+    <div class="table-wrap hidden lg:block"><table class="table">
+        <thead>
+          <tr>
+            <th class="table-th">{% trans "Code" %}</th>
+            <th class="table-th">{% trans "Student" %}</th>
+            <th class="table-th">{% trans "Mode" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for code in codes %}
+            <tr>
+              <td class="table-td">{{ code.code_number }}</td>
+              <td class="table-td">{{ code.diploma_enrollment.student }}</td>
+              <td class="table-td">{{ code.get_delivery_mode_display|default:'—' }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td class="table-td" colspan="3">
+                {% include "ui/components/_empty_state.html" with title=_("No exam codes yet.") message=_("Generate codes for enrolled students.") compact=True %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card-stack lg:hidden">
+      {% for code in codes %}
+        <div class="mobile-card">
+          <div class="flex-1 min-w-0">
+            <strong class="block truncate">{{ code.code_number }}</strong>
+            <small class="block text-muted">{{ code.diploma_enrollment.student }} &middot; {{ code.get_delivery_mode_display|default:'—' }}</small>
+          </div>
+        </div>
+      {% empty %}
+        <div class="border border-line rounded-sm p-4 text-center">
+          {% include "ui/components/_empty_state.html" with title=_("No exam codes yet.") compact=True %}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+{% endblock %}

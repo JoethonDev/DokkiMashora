@@ -20,7 +20,14 @@
               </td>
               <td class="table-td">{{ item.submitted_at|date:"d/m/Y" }}</td>
               <td class="table-td">
-                <span class="status-pill-info">{{ item.status_label }}</span>
+                <div class="flex flex-col gap-1 items-start">
+                  <span class="status-pill-info">{{ item.status_label }}</span>
+                  {% if item.payment_state == "waived" %}
+                    <span class="status-pill-warning">{% trans "Payment waived" %}</span>
+                  {% elif item.payment_state == "paid" %}
+                    <span class="status-pill-success">{% trans "Payment confirmed" %}</span>
+                  {% endif %}
+                </div>
               </td>
               <td class="table-td">
                 {% if item.action_url %}

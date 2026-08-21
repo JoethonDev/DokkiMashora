@@ -22,7 +22,7 @@ def _auto_create_diploma_progression_rule(sender, instance, created, **kwargs):
                 "semester_pass_percent": Decimal("50.00"),
                 "final_exam_pass_percent": Decimal("50.00"),
                 "require_all_semesters_passed": True,
-                "require_final_exam": True,
+                "require_final_exam": False,
                 "auto_promote_enabled": False,
                 "allow_admin_override": True,
                 "allow_retake": True,

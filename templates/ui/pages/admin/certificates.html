@@ -9,12 +9,48 @@
     {% trans "Generate, download, and manage student certificates." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
     {% if form %}
-      <form class="card-surface max-w-form mx-auto w-full page-stack" method="post" enctype="multipart/form-data">{% csrf_token %}
-        {% for field in form %}
-          {% include "ui/components/_field.html" %}
-        {% endfor %}
-        <button class="btn-primary" type="submit">{% trans "Save" %}</button>
-      </form>
+      <section class="card-surface max-w-form mx-auto w-full page-stack">
+        <div class="section-head"><div>
+              <p class="eyebrow">{% trans "Template" %}</p>
+              <h3>{% if template %}{% trans "Edit template" %}{% else %}{% trans "New template" %}{% endif %}</h3>
+            </div>
+          </div>
+        <form class="page-stack" method="post" enctype="multipart/form-data">{% csrf_token %}
+          {% for field in form %}
+            {% include "ui/components/_field.html" %}
+          {% endfor %}
+          <button class="btn-primary" type="submit">{% trans "Save" %}</button>
+        </form>
+      </section>
+      {% if template %}
+        <section class="card-surface max-w-form mx-auto w-full page-stack">
+          <div class="section-head"><div>
+                <p class="eyebrow">{% trans "Background" %}</p>
+                <h3>{% trans "PDF / PSD source" %}</h3>
+              </div>
+            </div>
+          {% if template.source_status == "ready" %}
+            <p class="text-sm text-muted mb-3">{% trans "Source ready" %} · {% if template.source_format == "pdf" %}PDF{% else %}PSD{% endif %} · {{ template.preview_page_count }} {% trans "page(s)" %}</p>
+            <div class="flex gap-2.5 items-center flex-wrap">
+              <a class="btn-secondary" href="{% url 'certificates:admin_template_preview' template.id %}" target="_blank" rel="noopener">{% trans "View preview" %}</a>
+              <a class="btn-primary" href="{% url 'certificates:admin_template_editor' template.id %}">{% trans "Edit placement" %}</a>
+              <form method="post" action="{% url 'certificates:admin_template_clear_source' template.id %}" class="m-0" data-confirm="{% trans 'Remove this template source?' %}">{% csrf_token %}
+                <button class="btn-danger" type="submit">{% trans "Remove source" %}</button>
+              </form>
+            </div>
+          {% elif template.source_status == "failed" %}
+            <p class="text-sm text-red">{{ template.source_error|default:_("Source processing failed.") }}</p>
+          {% else %}
+            <p class="text-sm text-muted mb-3">{% trans "No PDF/PSD background uploaded. The HTML body above is used instead." %}</p>
+          {% endif %}
+          <form class="mt-4 flex items-end gap-2.5 flex-wrap" method="post" action="{% url 'certificates:admin_template_upload_source' template.id %}" enctype="multipart/form-data">{% csrf_token %}
+            <label class="field"><span class="field-label">{% trans "PDF or PSD source" %}</span>
+              <input class="form-input" type="file" name="source_file" accept=".pdf,.psd,application/pdf,image/vnd.adobe.photoshop" required>
+            </label>
+            <button class="btn-primary" type="submit">{% trans "Upload source" %}</button>
+          </form>
+        </section>
+      {% endif %}
     {% elif template %}
       <section class="card-surface"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Template" %}</p>
@@ -60,7 +96,7 @@
                   <td class="table-td">{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
                   <td class="table-td">{{ item.issued_at|default:item.created_at|date:"DATE_FORMAT"|default:'—' }}</td>
                   <td class="table-td">
-                    <div class="flex gap-2.5 items-center flex-wrap">{% if item.id and item.student_id %}
+                    <div class="flex gap-2.5 items-center flex-wrap">{% if item.status == "available" %}
                         <a class="btn-secondary"
                            href="{% url 'certificates:admin_download_certificate' item.id %}">{% trans "Download" %}
                         </a>
@@ -77,6 +113,11 @@
                  name="reason"
                  value="{% trans 'Revoked by administrator' %}"><button class="btn-danger" type="submit">{% trans "Revoke" %}</button>
         </form>
+                      {% elif item.status == "failed" and item.diploma_enrollment_id %}
+                        <form method="post" action="{% url 'certificates:admin_generate_certificate' item.student_id %}" class="m-0">{% csrf_token %}
+                          <input type="hidden" name="enrollment_id" value="{{ item.diploma_enrollment_id }}">
+                          <button class="btn-secondary" type="submit">{% trans "Retry generation" %}</button>
+                        </form>
                       {% endif %}
                     </div>
                   </td>

@@ -14,7 +14,6 @@
                 <th class="table-th">{% trans "Name" %}</th>
                 <th class="table-th">{% trans "Type" %}</th>
                 <th class="table-th">{% trans "Weight" %}</th>
-                <th class="table-th">{% trans "Actions" %}</th>
               </tr>
             </thead>
             <tbody>
@@ -26,20 +25,10 @@
                     {{ item.weight_percent }}
                     %
                   </td>
-                  <td class="table-td">
-                    <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-ghost"
-                         href="{% url 'progression:admin_component_edit' item.id %}">{% trans "Edit" %}</a>
-                      <form class="m-0"
-                            method="post"
-                            action="{% url 'progression:admin_component_delete' item.id %}" data-confirm="{% trans 'Deactivate this component?' %}">{% csrf_token %}
-                        <button class="btn-danger" type="submit">{% trans "Deactivate" %}</button>
-                      </form>
-                    </div>
-                  </td>
                 </tr>
               {% empty %}
                 <tr>
-                  <td class="table-td" colspan="4">{% trans "No components." %}</td>
+                  <td class="table-td" colspan="3">{% trans "No components." %}</td>
                 </tr>
               {% endfor %}
             </tbody>
@@ -52,20 +41,11 @@
                 <strong class="block truncate">{{ item.name }}</strong>
                 <small class="block text-muted">{{ item.get_component_type_display|default:item.component_type }} &middot; {{ item.weight_percent }}%</small>
               </div>
-              <div class="flex gap-2 shrink-0">
-                <a class="btn-ghost btn-sm" href="{% url 'progression:admin_component_edit' item.id %}">{% trans "Edit" %}</a>
-                <form class="m-0" method="post" action="{% url 'progression:admin_component_delete' item.id %}" data-confirm="{% trans 'Deactivate this component?' %}">{% csrf_token %}
-                  <button class="btn-danger text-xs py-1 px-2 min-h-0" type="submit">{% trans "Deactivate" %}</button>
-                </form>
-              </div>
             </div>
           {% empty %}
             <div class="border border-line rounded-sm p-4 text-center">{% include "ui/components/_empty_state.html" with title=_("No components.") %}</div>
           {% endfor %}
         </div>
-        <a class="btn-primary"
-           href="{% url 'progression:admin_component_create' cohort.id semester.id %}">{% trans "Create component" %}
-        </a>
       </section>
   </div>
 {% endblock %}

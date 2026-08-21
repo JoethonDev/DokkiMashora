@@ -136,9 +136,9 @@
       <a class="btn-ghost" href="{% url 'applications:program_list' %}">{% trans "View queue" %}</a>
     </div>
     <div class="flex flex-col divide-y divide-line">{% for item in recent_applications|slice:":5" %}
-        <div class="flex items-center gap-4 py-3">
-          <span class="avatar">{{ item.student.full_name|slice:":2"|upper }}</span>
-          <p>
+        <div class="flex flex-wrap sm:flex-nowrap items-center gap-3 sm:gap-4 py-3 min-w-0">
+          <span class="avatar shrink-0">{{ item.student.full_name|slice:":2"|upper }}</span>
+          <p class="min-w-0 flex-1 break-words">
             <strong>{{ item.student.full_name }}</strong>
             <small>
               <span dir="ltr" class="inline-block">{% if item.student.user %}{{ item.student.user.email }}{% endif %}</span>
@@ -150,7 +150,7 @@
               {% endif %}
             </small>
           </p>
-          <span class="status-pill-info">{{ item.get_status_display }}</span>
+          <span class="max-w-full shrink-0">{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</span>
         </div>
       {% empty %}
         {% include "ui/components/_empty_state.html" with title=_("No recent applications") message=_("New submissions will appear here.") %}

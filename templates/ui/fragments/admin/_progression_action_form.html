@@ -1,0 +1,88 @@
+{% load i18n ui_tags %}
+{% comment %}
+Progression action form (locked review rule): renders ONE action form per
+inclusion. The view computes a state-valid `primary` action and a small
+`contextual` set; the page renders the primary prominently and the rest as a
+compact contextual set. Service-side validation remains the authority.
+{% endcomment %}
+{% with targets=actions.targets|dict_key:key %}
+{% if key == "evaluate" %}
+  {% for target in targets %}
+  <form class="flex items-end gap-2 flex-wrap" method="post" action="{% url 'progression:admin_evaluate_semester' student.id %}">{% csrf_token %}
+    <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}">
+    <input type="hidden" name="semester_id" value="{{ target.id }}">
+    <button class="btn-secondary" type="submit">{% trans "Evaluate" %}: {{ target }}</button>
+  </form>
+  {% endfor %}
+{% elif key == "promote" %}
+  {% for target in targets %}
+  <form class="flex items-end gap-2 flex-wrap" method="post" action="{% url 'progression:admin_promote' student.id %}">{% csrf_token %}
+    <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}">
+    <input type="hidden" name="semester_id" value="{{ target.id }}">
+    <label class="field flex-1 min-w-40"><span class="field-label">{% trans "Reason (required for exceptional decisions)" %}</span><input name="reason" class="form-input" value=""></label>
+    <button class="btn-success" type="submit">{% trans "Promote" %}: {{ target }}</button>
+  </form>
+  {% endfor %}
+{% elif key == "demote" %}
+  {% for target in targets %}
+  <form class="flex items-end gap-2 flex-wrap" method="post" action="{% url 'progression:admin_demote' student.id %}">{% csrf_token %}
+    <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}">
+    <input type="hidden" name="semester_id" value="{{ target.id }}">
+    <label class="field flex-1 min-w-40"><span class="field-label">{% trans "Reason (required for exceptional decisions)" %}</span><input name="reason" class="form-input" value=""></label>
+    <button class="btn-warning" type="submit">{% trans "Demote" %}: {{ target }}</button>
+  </form>
+  {% endfor %}
+{% elif key == "lock" %}
+  <form class="flex items-end gap-2 flex-wrap" method="post" action="{% url 'progression:admin_lock' student.id %}">{% csrf_token %}
+    <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}">
+    <label class="field flex-1 min-w-40"><span class="field-label">{% trans "Lock reason" %}</span><input name="reason" class="form-input" value="" required></label>
+    <button class="btn-warning" type="submit">{% trans "Lock" %}</button>
+  </form>
+{% elif key == "unlock" %}
+  <form class="flex items-end gap-2 flex-wrap" method="post" action="{% url 'progression:admin_unlock' student.id %}">{% csrf_token %}
+    <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}">
+    <label class="field flex-1 min-w-40"><span class="field-label">{% trans "Unlock reason" %}</span><input name="reason" class="form-input" value="" required></label>
+    <button class="btn-success" type="submit">{% trans "Unlock" %}</button>
+  </form>
+{% elif key == "assign_retake" %}
+  {% for target in targets %}
+  <form class="flex items-end gap-2 flex-wrap" method="post" action="{% url 'progression:admin_assign_retake' student.id %}">{% csrf_token %}
+    <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}">
+    <input type="hidden" name="semester_id" value="{{ target.id }}">
+    <label class="field flex-1 min-w-40"><span class="field-label">{% trans "Retake reason" %}</span><input name="reason" class="form-input" value="" required></label>
+    <button class="btn-warning" type="submit">{% trans "Assign retake" %}: {{ target }}</button>
+  </form>
+  {% endfor %}
+{% elif key == "clear_retake" %}
+  {% for target in targets %}
+  <form class="flex items-end gap-2 flex-wrap" method="post" action="{% url 'progression:admin_clear_retake' student.id %}">{% csrf_token %}
+    <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}">
+    <input type="hidden" name="semester_id" value="{{ target.id }}">
+    <label class="field flex-1 min-w-40"><span class="field-label">{% trans "Reason" %}</span><input name="reason" class="form-input" value=""></label>
+    <button class="btn-secondary" type="submit">{% trans "Clear retake" %}: {{ target }}</button>
+  </form>
+  {% endfor %}
+{% elif key == "mark_complete" %}
+  <form class="flex items-end gap-2 flex-wrap" method="post" action="{% url 'progression:admin_mark_complete' student.id %}">{% csrf_token %}
+    <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}">
+    <label class="field flex-1 min-w-40"><span class="field-label">{% trans "Completion notes" %}</span><input name="notes" class="form-input" value=""></label>
+    <button class="btn-success" type="submit">{% trans "Mark complete" %}</button>
+  </form>
+{% elif key == "mark_graduate" %}
+  <form class="flex items-end gap-2 flex-wrap" method="post" action="{% url 'progression:admin_mark_graduate' student.id %}">{% csrf_token %}
+    <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}">
+    <label class="field flex-1 min-w-40"><span class="field-label">{% trans "Graduation notes" %}</span><input name="notes" class="form-input" value=""></label>
+    <button class="btn-success" type="submit">{% trans "Mark graduated" %}</button>
+  </form>
+{% elif key == "generate_certificate" %}
+  <form method="post" action="{% url 'certificates:admin_generate_certificate' student.id %}">{% csrf_token %}
+    <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}"><button class="btn-primary" type="submit">{% trans "Generate certificate" %}</button>
+  </form>
+{% elif key == "create_rejoin_plan" %}
+  {% for target in targets %}
+  <a class="btn-secondary"
+     href="{% url 'progression:admin_create_rejoin_plan' enrollment.id %}?semester_id={{ target.id }}">{% trans "Create rejoin plan" %}: {{ target }}
+  </a>
+  {% endfor %}
+{% endif %}
+{% endwith %}

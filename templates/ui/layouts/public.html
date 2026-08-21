@@ -1,7 +1,7 @@
 {% extends "ui/base.html" %}
 {% load i18n %}
 {% block shell %}
-  <main id="main" class="bg-white min-h-screen">    {% block public_header %}
+  <main id="main" tabindex="-1" class="bg-white min-h-screen focus:outline-none">    {% block public_header %}
       <header class="h-20 bg-white/90 backdrop-blur border-b border-line sticky top-0 z-header">
         <div class="h-20 flex items-center justify-between page-container">
           <a class="flex items-center gap-3 no-underline text-inherit p-0" href="{% url 'core:landing' %}"><span class="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-50 to-brand-soft text-brand-strong grid place-items-center font-black shadow-card">DM</span>

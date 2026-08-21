@@ -7,14 +7,7 @@
     <section class="card-surface">
       {% if youtube_video_id %}
         <div class="aspect-video overflow-hidden rounded-md bg-surface-inverse">
-          <iframe 
-  class="w-full h-full" 
-  src="https://www.youtube-nocookie.com/embed/{{ youtube_video_id }}?rel=0&modestbranding=1&origin={{ request.scheme }}://{{ request.get_host }}" 
-  title="{{ lecture.title }}" 
-  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
-  referrerpolicy="strict-origin-when-cross-origin"
-  allowfullscreen>
-</iframe>
+          <iframe class="w-full h-full" src="https://www.youtube-nocookie.com/embed/{{ youtube_video_id }}?rel=0&modestbranding=1&origin={{ request.scheme }}://{{ request.get_host }}&widget_referrer={{ request.scheme }}://{{ request.get_host }}" title="{{ lecture.title }}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
         </div>
       {% elif lecture.youtube_url %}
         <a class="btn-primary" href="{{ lecture.youtube_url }}" target="_blank" rel="noopener noreferrer">{% trans "Open YouTube video" %}</a>
@@ -25,6 +18,9 @@
     </section>
     <div class="actions-row">
       <a class="btn-secondary" href="{% url 'academics:admin_diploma_lecture_edit' diploma.id cohort.id semester.id lecture.id %}">{% trans "Edit lecture" %}</a>
+      <form method="post" action="{% url 'academics:admin_diploma_lecture_delete' diploma.id cohort.id semester.id lecture.id %}" data-confirm="{% trans 'Delete this lecture?' %}" class="m-0">{% csrf_token %}
+        <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
+      </form>
       <a class="btn-ghost" href="{% url 'academics:admin_diploma_lecture_list' diploma.id cohort.id semester.id %}">{% trans "Back to lectures" %}</a>
     </div>
   </div>

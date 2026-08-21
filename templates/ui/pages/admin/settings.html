@@ -1,5 +1,5 @@
 {% extends "ui/layouts/admin.html" %}
-{% load i18n %}
+{% load i18n ui_tags %}
 {% block title %}
   {% trans "Settings" %}
 {% endblock %}
@@ -90,7 +90,7 @@
       <dl class="dl"><div>
           <dt class="dt">{% trans "Enabled" %}</dt>
           <dd class="dd">
-            {{ ai_config.enabled|yesno:_("Yes,No") }}
+            {{ ai_config.enabled|boolean_label:"Yes,No" }}
           </dd>
         </div>
         <div>

@@ -1,4 +1,23 @@
-"""Permission helpers and decorators used across the LMS."""
+"""Permission helpers and decorators used across the LMS.
+
+Active role/action matrix (P1-01)
+---------------------------------
+Super Admin / Admin : platform administration; general assessment grading;
+                      manual Diploma grade release; progression; payments;
+                      certificates.
+Moderator           : assigned-cluster Diploma Homework grading only; never
+                      releases grades.
+Reviewer            : assigned anonymous Semester Exam grading only; never
+                      releases grades.
+Secretary           : Attendance only.
+Student             : own workflows only.
+Teacher             : DEFERRED / not a current product role. Preserved as
+                      historical data only; no active workflow decision in
+                      this module grants Teacher capability.
+
+Every helper below must be combined with the scoped querysets/mutations a
+domain already applies. A role membership check alone is never sufficient.
+"""
 
 from __future__ import annotations
 
@@ -12,12 +31,11 @@ from django.core.exceptions import PermissionDenied
 from django.db.models import F, Q
 from django.utils.translation import gettext_lazy as _
 
-from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE, SCOPE_COURSE_VERSION, SCOPE_DIPLOMA_COHORT
+from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE
 from apps.academics.models import (
     DiplomaEnrollment,
     ModeratorAssignment,
     ModeratorStudentAssignment,
-    TeacherAssignment,
 )
 from apps.accounts.constants import (
     GROUP_ADMIN,
@@ -26,8 +44,8 @@ from apps.accounts.constants import (
     GROUP_SECRETARY,
     GROUP_STUDENT,
     GROUP_SUPER_ADMIN,
-    GROUP_TEACHER,
 )
+from apps.assessments.constants import ASSESSMENT_TYPE_HOMEWORK
 
 
 def safe_int(value: str | None, default: int | None = None) -> int | None:
@@ -78,8 +96,7 @@ ROLE_EXAM_STAFF = (GROUP_SUPER_ADMIN, GROUP_ADMIN)
 ROLE_SENIOR_STAFF = (GROUP_SUPER_ADMIN, GROUP_ADMIN)
 ROLE_REVIEW_STAFF = (GROUP_SUPER_ADMIN, GROUP_ADMIN, GROUP_REVIEWER)
 ROLE_ATTENDANCE_STAFF = (GROUP_SUPER_ADMIN, GROUP_ADMIN, GROUP_SECRETARY)
-ROLE_GRADING_STAFF = (GROUP_SUPER_ADMIN, GROUP_ADMIN, GROUP_MODERATOR)
-ROLE_GRADING_QUEUE = (GROUP_SUPER_ADMIN, GROUP_ADMIN, GROUP_MODERATOR, GROUP_TEACHER)
+ROLE_HOMEWORK_GRADING_STAFF = (GROUP_SUPER_ADMIN, GROUP_ADMIN, GROUP_MODERATOR)
 ROLE_REVIEWER = (GROUP_SUPER_ADMIN, GROUP_ADMIN, GROUP_REVIEWER)
 
 
@@ -119,29 +136,8 @@ def is_secretary(user) -> bool:
     )
 
 
-def is_teacher(user) -> bool:
-    return bool(
-        user
-        and user.is_authenticated
-        and _user_in_any_group(user, (GROUP_SUPER_ADMIN, GROUP_ADMIN, GROUP_TEACHER))
-    )
-
-
 def is_student(user) -> bool:
     return bool(user and user.is_authenticated and _user_in_any_group(user, (GROUP_STUDENT,)))
-
-
-def is_teacher_of_cohort(user, cohort) -> bool:
-    if not user or not user.is_authenticated or cohort is None:
-        return False
-    if is_admin(user):
-        return True
-    return TeacherAssignment.objects.filter(
-        teacher=user,
-        active=True,
-    ).filter(
-        scope_type=SCOPE_DIPLOMA_COHORT, cohort=cohort,
-    ).exists()
 
 
 def is_moderator_for_student(user, student, cohort=None) -> bool:
@@ -179,24 +175,33 @@ def is_moderator_for_student(user, student, cohort=None) -> bool:
     ).exists()
 
 
-def can_grade_attempt(user, attempt) -> bool:
-    if not user or not user.is_authenticated or attempt is None:
+def can_moderator_grade_homework(user, submission) -> bool:
+    """Authorize grading of one Homework submission.
+
+    Admins/Super Admins always qualify. A Moderator qualifies only when the
+    submission's assessment is a diploma-scoped Homework (Diploma/Cohort/
+    Semester, not a course version) and the submitting student is inside the
+    Moderator's active assigned scope for that cohort. Other roles never
+    receive Homework grading through this helper, and Moderators are never
+    authorized for other assessment types here.
+    """
+    if not user or not user.is_authenticated or submission is None:
         return False
     if is_admin(user):
         return True
-    assessment = _assessment_for_staff_object(attempt)
-    if assessment is not None and assessment.course_version_id:
-        # Course-version assessments have no cohort: grant the exact
-        # course-version teacher assignment predicate the queue filter uses.
-        return TeacherAssignment.objects.filter(
-            teacher=user,
-            scope_type=SCOPE_COURSE_VERSION,
-            course_version_id=assessment.course_version_id,
-            active=True,
-        ).exists()
-    cohort = _cohort_for_staff_object(attempt)
-    student = _student_for_staff_object(attempt)
-    return is_teacher_of_cohort(user, cohort) or is_moderator_for_student(user, student, cohort)
+    if not _user_in_any_group(user, (GROUP_MODERATOR,)):
+        return False
+    assessment = getattr(submission, "assessment", None)
+    if assessment is None:
+        return False
+    if assessment.assessment_type != ASSESSMENT_TYPE_HOMEWORK:
+        return False
+    if not (assessment.course_version_id is None and assessment.cohort_id and assessment.semester_id):
+        return False
+    student_profile = _student_profile(getattr(submission, "student", None))
+    if student_profile is None:
+        return False
+    return is_moderator_for_student(user, student_profile, assessment.cohort)
 
 
 def can_view_student_progress(user, student, cohort=None) -> bool:
@@ -209,20 +214,7 @@ def can_view_student_progress(user, student, cohort=None) -> bool:
         return False
     if student_profile.user_id == user.id:
         return True
-    if is_moderator_for_student(user, student_profile, cohort):
-        return True
-    if cohort is not None:
-        return is_teacher_of_cohort(user, cohort)
-    assigned_cohorts = TeacherAssignment.objects.filter(
-        teacher=user,
-        scope_type=SCOPE_DIPLOMA_COHORT,
-        active=True,
-    ).values("cohort_id")
-    return DiplomaEnrollment.objects.filter(
-        student=student_profile,
-        status=ENROLLMENT_STATUS_ACTIVE,
-        cohort_id__in=assigned_cohorts,
-    ).exists()
+    return is_moderator_for_student(user, student_profile, cohort)
 
 
 def assessment_staff_scope_filter(user, prefix: str = "") -> Q:
@@ -231,17 +223,14 @@ def assessment_staff_scope_filter(user, prefix: str = "") -> Q:
     if is_admin(user):
         return Q()
     filter_prefix = f"{prefix}__" if prefix else ""
-    teacher_cohorts = TeacherAssignment.objects.filter(
-        teacher=user, scope_type=SCOPE_DIPLOMA_COHORT, active=True,
-    ).values("cohort_id")
-    teacher_cv_ids = TeacherAssignment.objects.filter(
-        teacher=user, scope_type=SCOPE_COURSE_VERSION, active=True,
-        course_version_id__isnull=False,
-    ).values("course_version_id")
-    teacher_filter = (
-        Q(**{f"{filter_prefix}assessment__cohort_id__in": teacher_cohorts})
-        | Q(**{f"{filter_prefix}assessment__course_version_id__in": teacher_cv_ids})
+    # Only Moderators may reach this filter now. A Moderator without any
+    # active assignment must never see an unscoped match-all result.
+    has_moderator_scope = (
+        ModeratorStudentAssignment.objects.filter(moderator=user, active=True).exists()
+        or ModeratorAssignment.objects.filter(moderator=user, active=True).exists()
     )
+    if not has_moderator_scope:
+        return Q(pk__isnull=True)
     moderator_filter = (
         Q(**{f"{filter_prefix}student__student_profile__moderator_assignments__moderator": user})
         & Q(**{f"{filter_prefix}student__student_profile__moderator_assignments__active": True})
@@ -276,7 +265,7 @@ def assessment_staff_scope_filter(user, prefix: str = "") -> Q:
             Q(**{f"{filter_prefix}student__student_profile_id__in": active_cluster_students})
             & Q(**{f"{filter_prefix}assessment__cohort_id__in": mod_cluster_cohorts})
         )
-    return teacher_filter | moderator_filter | mod_filter
+    return moderator_filter | mod_filter
 
 
 def _student_profile(student):
@@ -285,48 +274,12 @@ def _student_profile(student):
     return getattr(student, "student_profile", None)
 
 
-def _student_for_staff_object(obj):
-    if hasattr(obj, "student"):
-        return obj.student
-    if hasattr(obj, "attempt") and hasattr(obj.attempt, "student"):
-        return obj.attempt.student
-    return None
-
-
-def _assessment_for_staff_object(obj):
-    exam = getattr(obj, "exam", None)
-    if exam is not None:
-        return None
-    assessment = getattr(obj, "assessment", None)
-    if assessment is None and hasattr(obj, "attempt"):
-        assessment = getattr(obj.attempt, "assessment", None)
-    return assessment
-
-
-def _cohort_for_staff_object(obj):
-    exam = getattr(obj, "exam", None)
-    if exam is not None:
-        return getattr(exam, "cohort", None)
-    assessment = _assessment_for_staff_object(obj)
-    if assessment is None:
-        return None
-    if assessment.cohort_id:
-        return assessment.cohort
-    return None
-
-
 def assessment_scope_filter(user) -> Q:
     """Return a Q filter for Assessment querysets scoped to a non-admin staff user."""
     if not user or not user.is_authenticated:
         return Q(pk__isnull=True)
     if is_admin(user):
         return Q()
-    teacher_cohorts = TeacherAssignment.objects.filter(
-        teacher=user, scope_type=SCOPE_DIPLOMA_COHORT, active=True,
-    ).values("cohort_id")
-    teacher_cvs = TeacherAssignment.objects.filter(
-        teacher=user, scope_type=SCOPE_COURSE_VERSION, active=True,
-    ).values("course_version_id")
     mod_cohorts = ModeratorAssignment.objects.filter(
         moderator=user, active=True,
     ).values("cohort_id")
@@ -334,9 +287,7 @@ def assessment_scope_filter(user) -> Q:
         moderator=user, active=True,
     ).values("course_version_id")
     return (
-        Q(cohort_id__in=teacher_cohorts)
-        | Q(course_version_id__in=teacher_cvs)
-        | Q(cohort_id__in=mod_cohorts)
+        Q(cohort_id__in=mod_cohorts)
         | Q(course_version_id__in=mod_cvs)
     )
 
@@ -347,12 +298,6 @@ def enrollment_scope_filter(user, enrollment_model: str = "course") -> Q:
         return Q(pk__isnull=True)
     if is_admin(user):
         return Q()
-    teacher_cohorts = TeacherAssignment.objects.filter(
-        teacher=user, scope_type=SCOPE_DIPLOMA_COHORT, active=True,
-    ).values("cohort_id")
-    teacher_cvs = TeacherAssignment.objects.filter(
-        teacher=user, scope_type=SCOPE_COURSE_VERSION, active=True,
-    ).values("course_version_id")
     mod_cohorts = ModeratorAssignment.objects.filter(
         moderator=user, active=True,
     ).values("cohort_id")
@@ -360,40 +305,17 @@ def enrollment_scope_filter(user, enrollment_model: str = "course") -> Q:
         moderator=user, active=True,
     ).values("course_version_id")
     if enrollment_model == "course":
-        return (
-            Q(course_version_id__in=teacher_cvs)
-            | Q(course_version_id__in=mod_cvs)
-        )
-    return (
-        Q(cohort_id__in=teacher_cohorts)
-        | Q(cohort_id__in=mod_cohorts)
-    )
-
-
-def can_manage_course_version(user, course_version) -> bool:
-    """Check if a non-admin staff user can manage lectures on a course version."""
-    if not user or not user.is_authenticated:
-        return False
-    if is_admin(user):
-        return True
-    if TeacherAssignment.objects.filter(
-        teacher=user, scope_type=SCOPE_COURSE_VERSION, course_version=course_version, active=True,
-    ).exists():
-        return True
-    if ModeratorAssignment.objects.filter(
-        moderator=user, course_version=course_version, active=True,
-    ).exists():
-        return True
-    return False
+        return Q(course_version_id__in=mod_cvs)
+    return Q(cohort_id__in=mod_cohorts)
 
 
 def staff_required(view_func: Callable) -> Callable:
-    """Allow only staff (admins/moderators/teachers/superusers)."""
+    """Allow only staff (admins/moderators/superusers)."""
 
     @wraps(view_func)
     @login_required
     def _wrapped(request, *args, **kwargs):
-        if not (request.user.is_staff or is_moderator(request.user) or is_teacher(request.user)):
+        if not (request.user.is_staff or is_moderator(request.user)):
             raise PermissionDenied
         return view_func(request, *args, **kwargs)
 

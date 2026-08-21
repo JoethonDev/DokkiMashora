@@ -1,27 +1,71 @@
 {% extends "ui/layouts/admin.html" %}
-{% load i18n ui_tags %}
+{% load i18n static %}
 {% block title %}
   {% trans "Scan attendance" %}
 {% endblock %}
 {% block content %}
   <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=_("Scan attendance") eyebrow=_("Attendance") %}
-    <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
-      <div class="field"><label for="session_id">{% trans "Session" %}</label>
-        <select id="session_id" name="session_id" class="form-select">
+    <section id="attendance-scanner" class="card-surface max-w-form mx-auto w-full page-stack"
+             data-scan-api-url="{% url 'attendance:attendance_scan_api' %}"
+             data-msg-ready="{% trans 'Ready for the next scan.' %}"
+             data-msg-library-missing="{% trans 'Camera scanner is unavailable. Use the manual entry form below.' %}"
+             data-msg-requesting="{% trans 'Requesting camera...' %}"
+             data-msg-camera-denied="{% trans 'Camera unavailable or permission denied. Use the manual entry form below.' %}"
+             data-msg-submitting="{% trans 'Submitting scan...' %}"
+             data-msg-recorded="{% trans 'Recorded' %}"
+             data-msg-attendance-recorded="{% trans 'Attendance recorded.' %}"
+             data-msg-duplicate="{% trans 'Duplicate' %}"
+             data-msg-already-recorded="{% trans 'Already recorded for this student.' %}"
+             data-msg-rejected="{% trans 'Scan rejected.' %}"
+             data-msg-try-again="{% trans 'Try again.' %}"
+             data-msg-network-error="{% trans 'Network error submitting the scan.' %}">
+      <div class="section-head"><div>
+            <p class="eyebrow">{% trans "Camera scanner" %}</p>
+            <h2>{% trans "Scan student QR code" %}</h2>
+          </div>
+        </div>
+      <label class="field"><span class="field-label">{% trans "Session" %}</span>
+        <select data-scanner-session name="scanner_session_id" class="form-select">
           <option value="">{% trans "Select" %}</option>{% for session in open_sessions %}
             <option value="{{ session.id }}">{{ session }}</option>
           {% endfor %}
         </select>
+      </label>
+      <div id="scanner-video" class="aspect-square w-full max-w-sm mx-auto rounded-md bg-surface-inverse overflow-hidden"></div>
+      <div class="flex gap-2.5 items-center flex-wrap">
+        <button class="btn-primary" type="button" data-scanner-start>{% trans "Start camera" %}</button>
+        <button class="btn-ghost hidden" type="button" data-scanner-retry>{% trans "Retry camera" %}</button>
       </div>
-      <div class="field"><label for="qr_payload">{% trans "QR payload" %}</label>
-        <input id="qr_payload" name="qr_payload" class="form-input" required>
-      </div>
-      <button class="btn-primary" type="submit">{% trans "Record attendance" %}</button>
-    </form>
-    {% if result %}
-      <p role="status">{{ result.student_name }}
-        —
-        {{ result.status }}</p>
-    {% endif %}
+      <p data-scanner-status class="text-sm mt-2 text-muted" role="status">{% trans "Start the camera to begin scanning." %}</p>
+      <p data-scanner-result class="status-pill hidden"></p>
+      {% if result %}
+        <p role="status" class="status-pill {% if result.status == 'duplicate' %}status-pill-warning{% else %}status-pill-success{% endif %}">
+          {{ result.student_name }} &mdash; {% if result.status == 'duplicate' %}{% trans "Duplicate" %}{% else %}{% trans "Recorded" %}{% endif %}
+        </p>
+      {% endif %}
+    </section>
+
+    <section class="card-surface max-w-form mx-auto w-full page-stack">
+      <div class="section-head"><div>
+            <p class="eyebrow">{% trans "Manual entry" %}</p>
+            <h2>{% trans "Enter QR payload" %}</h2>
+          </div>
+        </div>
+      <form class="page-stack" method="post">{% csrf_token %}
+        <div class="field"><label for="session_id">{% trans "Session" %}</label>
+          <select id="session_id" name="session_id" class="form-select">
+            <option value="">{% trans "Select" %}</option>{% for session in open_sessions %}
+              <option value="{{ session.id }}">{{ session }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field"><label for="qr_payload">{% trans "QR payload" %}</label>
+          <input id="qr_payload" name="qr_payload" class="form-input" required>
+        </div>
+        <button class="btn-primary" type="submit">{% trans "Record attendance" %}</button>
+      </form>
+    </section>
   </div>
+  <script src="{% static 'js/html5-qrcode.min.js' %}"></script>
+  <script src="{% static 'js/attendance-scanner.js' %}" defer></script>
 {% endblock %}

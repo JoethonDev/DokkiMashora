@@ -9,28 +9,23 @@
     {% trans "Create a new email template for a system action." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
     <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
-      <label>
-        {% trans "Action" %}
+      <label class="field"><span class="field-label">{% trans "Action" %}</span>
         <select name="slug" class="form-select" required>
           {% for slug in available_slugs %}
             <option value="{{ slug }}">{{ slug }}</option>
           {% endfor %}
         </select>
       </label>
-      <label>
-        {% trans "Name" %}
+      <label class="field"><span class="field-label">{% trans "Name" %}</span>
         <input name="name" class="form-input" required>
       </label>
-      <label>
-        {% trans "Subject" %}
+      <label class="field"><span class="field-label">{% trans "Subject" %}</span>
         <input name="subject" class="form-input" required>
       </label>
-      <label>
-        {% trans "Body" %}
+      <label class="field"><span class="field-label">{% trans "Body" %}</span>
         <textarea name="body" class="form-input" rows="12" required></textarea>
       </label>
-      <label>
-        {% trans "Design" %}
+      <label class="field"><span class="field-label">{% trans "Design" %}</span>
         <select name="design" class="form-select">{% for value,label in design_choices %}
             <option value="{{ value }}">{{ label }}</option>
           {% endfor %}

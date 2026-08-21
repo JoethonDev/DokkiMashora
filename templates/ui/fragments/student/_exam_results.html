@@ -14,7 +14,9 @@
             <tr>
               <td class="table-td">
                 <strong>{{ item.exam.title }}</strong>
-                <small>{{ item.exam.description|truncatewords:12 }}</small>
+                {% if item.exam.description %}
+                  {% include "ui/components/_expandable_text.html" with text=item.exam.description clamp=2 muted=True %}
+                {% endif %}
               </td>
               <td class="table-td">{{ item.assigned_at|date:"d/m/Y"|default:'—' }}</td>
               <td class="table-td">
@@ -39,8 +41,10 @@
       {% for item in exam_assignments %}
         <div class="mobile-card">
           <div class="flex-1 min-w-0">
-            <strong class="block truncate">{{ item.exam.title }}</strong>
-            <small class="block text-muted truncate">{{ item.exam.description|truncatewords:12 }}</small>
+            <strong class="block">{{ item.exam.title }}</strong>
+            {% if item.exam.description %}
+              {% include "ui/components/_expandable_text.html" with text=item.exam.description clamp=2 muted=True %}
+            {% endif %}
             <span class="status-pill-{{ item.readiness.tone|default:'info' }}">{{ item.readiness.state_label }}</span>
             <small class="block text-muted">{% trans "Assigned" %}: {{ item.assigned_at|date:"d/m/Y"|default:'—' }}</small>
           </div>

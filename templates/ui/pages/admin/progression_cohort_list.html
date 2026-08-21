@@ -26,7 +26,7 @@
               <td class="table-td">{{ cohort.enrollment_count }}</td>
               <td class="table-td">{{ cohort.semester_count }}</td>
               <td class="table-td">
-                <a class="btn-secondary text-xs py-1 px-2 min-h-0" href="{% url 'progression:admin_semester_list' diploma.id cohort.id %}">{% trans "Semesters" %}</a>
+                <a class="btn-secondary" href="{% url 'progression:admin_semester_list' diploma.id cohort.id %}">{% trans "Semesters" %}</a>
               </td>
             </tr>
           {% empty %}

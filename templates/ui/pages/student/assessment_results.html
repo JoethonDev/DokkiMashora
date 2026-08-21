@@ -1,20 +1,78 @@
 {% extends "ui/layouts/student.html" %}
-{% load i18n %}
+{% load i18n ui_tags %}
 {% block title %}
   {% trans "Assessment results" %}
 {% endblock %}
 {% block content %}
   <div class="page-stack animate-enter-view">{% url 'assessments:student_list' as student_assessment_list_url %}{% include "ui/components/_page_header.html" with eyebrow=_("Assessment") title=_("Assessment results") back_url=student_assessment_list_url back_label=_("Back to assessments") %}
-    <section class="card-surface">{% if submission %}
-        <div class="table-wrap hidden lg:block"><table class="table">
-            <thead><tr><th class="table-th">{% trans "Assessment" %}</th><th class="table-th">{% trans "Score" %}</th><th class="table-th">{% trans "Status" %}</th></tr></thead>
-            <tbody><tr><td>{{ submission.assessment }}</td><td>{{ submission.score|default:'—' }}</td><td><span class="status-pill-info">{{ submission.get_status_display }}</span></td></tr></tbody>
-          </table></div>
-      {% elif attempt and attempt.visible_to_student %}
-        <div class="table-wrap hidden lg:block"><table class="table">
-            <thead><tr><th class="table-th">{% trans "Assessment" %}</th><th class="table-th">{% trans "Score" %}</th><th class="table-th">{% trans "Status" %}</th></tr></thead>
-            <tbody><tr><td>{{ attempt.assessment }}</td><td>{{ attempt.score_percent|default:'—' }}%</td><td><span class="status-pill-info">{{ attempt.get_status_display }}</span></td></tr></tbody>
-          </table></div>
+    <section class="card-surface">
+      {% if homework_result %}
+        {% include "ui/components/_state_banner.html" with state=homework_result.status label=homework_result.status_label %}
+        <dl class="dl mt-4"><div>
+              <dt class="dt">{% trans "Assessment" %}</dt>
+              <dd class="dd">{{ homework_result.assessment_title }}</dd>
+            </div>
+            {% if homework_result.score is not None %}
+              <div>
+                <dt class="dt">{% trans "Score" %}</dt>
+                <dd class="dd">{{ homework_result.score|default:'—' }} / {{ homework_result.total_points }}</dd>
+              </div>
+              {% if homework_result.feedback %}<div class="md:col-span-2">
+                  <dt class="dt">{% trans "Feedback" %}</dt>
+                  <dd class="dd">{{ homework_result.feedback }}</dd>
+                </div>{% endif %}
+            {% endif %}
+          </dl>
+        {% if homework_attachments %}
+          <div class="mt-6">
+            <h3>{% trans "Submitted files" %}</h3>
+            <ul class="mt-2 space-y-2">
+              {% for attachment in homework_attachments %}
+                <li class="flex items-center justify-between gap-3 border-b border-line py-2">
+                  <a class="btn-soft" href="{{ homework_download_urls|dict_key:attachment.id }}">{{ attachment.original_filename }}</a>
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+      {% elif attempt_projection %}
+        {% include "ui/components/_state_banner.html" with state=attempt_projection.status label=attempt_projection.status_label %}
+        {% if result_projection.visible_to_student %}
+          <dl class="dl mt-4"><div>
+                <dt class="dt">{% trans "Assessment" %}</dt>
+                <dd class="dd">{{ attempt_projection.assessment_title }}</dd>
+              </div>
+              <div>
+                <dt class="dt">{% trans "Score" %}</dt>
+                <dd class="dd">{{ result_projection.score_percent|default:'—' }}%</dd>
+              </div>
+            </dl>
+          {% if result_projection.questions %}
+            <div class="mt-6">
+              <h3>{% trans "Your answers" %}</h3>
+              <div class="mt-2 space-y-4">
+                {% for question in result_projection.questions %}
+                  <div class="border border-line rounded-sm p-3">
+                    <p class="text-sm font-bold m-0">{{ question.order }}. {{ question.text }}</p>
+                    {% if question.selected_text %}<p class="text-sm text-muted mt-1 mb-0">{% trans "Your answer" %}: {{ question.selected_text }}</p>{% endif %}
+                    {% if question.written_text %}<p class="text-sm text-muted mt-1 mb-0">{{ question.written_text }}</p>{% endif %}
+                    {% if question.score is not None %}<p class="text-sm mt-1 mb-0">{% trans "Score" %}: {{ question.score }}</p>{% endif %}
+                    {% if question.feedback %}<p class="text-sm mt-1 mb-0">{% trans "Feedback" %}: {{ question.feedback }}</p>{% endif %}
+                  </div>
+                {% endfor %}
+              </div>
+            </div>
+          {% endif %}
+        {% else %}
+          <div class="mt-4 state-banner state-banner-info">
+            <div>
+              <strong>{% trans "Your submission was recorded" %}</strong>
+              <p class="m-0 mt-1 text-sm">{% trans "You submitted this assessment successfully. The questions and responses remain unavailable until the result is released." %}</p>
+              {% if result_projection.submitted_at %}<p class="m-0 mt-1 text-sm">{% trans "Submitted" %}: {{ result_projection.submitted_at|date:"d/m/Y H:i" }}</p>{% endif %}
+              {% if result_projection.graded_at %}<p class="m-0 mt-1 text-sm">{% trans "Graded" %}: {{ result_projection.graded_at|date:"d/m/Y H:i" }}</p>{% endif %}
+            </div>
+          </div>
+        {% endif %}
       {% elif attempts %}
         <div class="table-wrap hidden lg:block"><table class="table">
             <thead>
@@ -30,7 +88,7 @@
                   <td>{{ attempt.assessment }}</td>
                   <td>{{ attempt.score_percent|default:'—' }}%</td>
                   <td>
-                    <span class="status-pill-info">{{ attempt.get_status_display }}</span>
+                    {% include "ui/components/_status.html" with code=attempt.status label=attempt.get_status_display %}
                   </td>
                 </tr>
               {% endfor %}
@@ -41,8 +99,8 @@
           {% for attempt in attempts %}
             <div class="mobile-card">
               <div class="flex-1 min-w-0">
-                <strong class="block truncate">{{ attempt.assessment }}</strong>
-                <span class="status-pill-info">{{ attempt.get_status_display }}</span>
+                <strong class="block break-words">{{ attempt.assessment }}</strong>
+                {% include "ui/components/_status.html" with code=attempt.status label=attempt.get_status_display %}
                 <small class="block text-muted">{% trans "Score" %}: {{ attempt.score_percent|default:'—' }}%</small>
               </div>
             </div>

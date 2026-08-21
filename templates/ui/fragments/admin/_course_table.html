@@ -25,8 +25,8 @@
           {% for c in page_obj %}
             <tr>
               <td class="table-td text-muted">{{ page_obj.start_index|add:forloop.counter0 }}</td>
-              <td class="table-td"><div class="flex flex-col"><strong>{{ c.title }}</strong>
-                <small>{{ c.description|truncatewords:12|default:'—' }}</small></div>
+              <td class="table-td"><div class="flex flex-col gap-0.5"><strong>{{ c.title }}</strong>
+                {% if c.description %}{% include "ui/components/_expandable_text.html" with text=c.description clamp=2 muted=True %}{% else %}<small class="text-muted">—</small>{% endif %}</div>
               </td>
               <td class="table-td">
                 {{ c.version_count }}
@@ -37,12 +37,15 @@
               </td>
               <td class="table-td">{{ c.enrollment_count }}</td>
               <td class="table-td">
-                {% include "ui/components/_status.html" with code=c.is_active|yesno:"active,inactive" label=c.is_active|yesno:_("Active,Inactive") %}
+                {% include "ui/components/_status.html" with code=c.is_active|yesno:"active,inactive" label=c.is_active|boolean_label:"Active,Inactive" %}
               </td>
               <td class="table-td"><span dir="ltr" class="inline-block">{{ c.updated_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</span></td>
               <td class="table-td">
                  <div class="table-actions"><a class="btn-secondary"
-                      href="{% url 'academics:admin_course_detail' c.id %}">{% trans "Open" %}</a>
+                      href="{% url 'academics:admin_course_detail' c.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Open" %}</a>
+                  <form method="post" action="{% url 'academics:admin_course_delete' c.id %}?next={{ request.get_full_path|urlencode }}" data-confirm="{% trans 'Delete this course and its versions?' %}" class="m-0">
+                    {% csrf_token %}<button class="btn-danger" type="submit">{% trans "Delete" %}</button>
+                  </form>
                 </div>
               </td>
             </tr>
@@ -54,12 +57,17 @@
       {% for c in page_obj %}
         <div class="mobile-card">
           <div class="flex-1 min-w-0">
-            <strong class="block truncate">{{ c.title }}</strong>
-            <small class="block text-muted truncate">{{ c.description|truncatewords:12|default:'—' }}</small>
+            <strong class="block">{{ c.title }}</strong>
+            {% if c.description %}{% include "ui/components/_expandable_text.html" with text=c.description clamp=2 muted=True %}{% endif %}
             <small class="block text-muted">{{ c.version_count }} {% trans "versions" %} / {{ c.lecture_count }} {% trans "lectures" %} &middot; {{ c.enrollment_count }} {% trans "enrollments" %}</small>
-            {% include "ui/components/_status.html" with code=c.is_active|yesno:"active,inactive" label=c.is_active|yesno:_("Active,Inactive") %}
+            {% include "ui/components/_status.html" with code=c.is_active|yesno:"active,inactive" label=c.is_active|boolean_label:"Active,Inactive" %}
           </div>
-          <a class="btn-soft-primary shrink-0" href="{% url 'academics:admin_course_detail' c.id %}">{% trans "Open" %}</a>
+          <div class="flex gap-2 items-center shrink-0">
+            <a class="btn-soft-primary" href="{% url 'academics:admin_course_detail' c.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Open" %}</a>
+            <form method="post" action="{% url 'academics:admin_course_delete' c.id %}?next={{ request.get_full_path|urlencode }}" data-confirm="{% trans 'Delete this course and its versions?' %}" class="m-0">
+              {% csrf_token %}<button class="btn-danger" type="submit">{% trans "Delete" %}</button>
+            </form>
+          </div>
         </div>
       {% endfor %}
     </div>

@@ -11,18 +11,15 @@
     <form class="card-surface max-w-form mx-auto w-full page-stack"
           method="post"
           action="{% url 'communications:bulk_email_create' %}">{% csrf_token %}
-      <label>
-        {% trans "Subject" %}
+      <label class="field"><span class="field-label">{% trans "Subject" %}</span>
         <input name="subject" class="form-input" value="{{ subject|default:'' }}" required>
       </label>
-      <label>
-        {% trans "Body" %}
+      <label class="field"><span class="field-label">{% trans "Body" %}</span>
         <textarea name="body" class="form-input" rows="12" required>
       {{ body|default:'' }}
       </textarea>
       </label>
-      <label>
-        {% trans "Template" %}
+      <label class="field"><span class="field-label">{% trans "Template" %}</span>
         <select name="template_id" class="form-select"><option value="">{% trans "No template" %}</option>
           {% for item in templates %}
             <option value="{{ item.id }}"
@@ -32,8 +29,8 @@
           {% endfor %}
         </select>
       </label>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4"><label>
-          {% trans "Diploma" %}
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4"><label class="field">
+          <span class="field-label">{% trans "Diploma" %}</span>
           <select name="filter_diploma" class="form-select"><option value="">{% trans "All diplomas" %}</option>
             {% for item in diplomas %}
               <option value="{{ item.id }}"
@@ -43,8 +40,8 @@
             {% endfor %}
           </select>
         </label>
-        <label>
-          {% trans "Cohort" %}
+        <label class="field">
+          <span class="field-label">{% trans "Cohort" %}</span>
           <select name="filter_cohort" class="form-select"><option value="">{% trans "All cohorts" %}</option>
             {% for item in cohorts %}
               <option value="{{ item.id }}"
@@ -54,8 +51,8 @@
             {% endfor %}
           </select>
         </label>
-        <label>
-          {% trans "Enrollment status" %}
+        <label class="field">
+          <span class="field-label">{% trans "Enrollment status" %}</span>
           <select name="filter_status" class="form-select"><option value="">{% trans "Any status" %}</option>
             {% for value,label in status_choices %}
               <option value="{{ value }}"
@@ -63,14 +60,13 @@
             {% endfor %}
           </select>
         </label>
-        <label>
-          {% trans "Recipient search" %}
+        <label class="field">
+          <span class="field-label">{% trans "Recipient search" %}</span>
           <input name="recipient_search" class="form-input"
                  value="{{ recipient_search|default:'' }}"
                  placeholder="{% trans 'Name or email' %}"></label>
       </div>
-      <label>
-        {% trans "Manual recipients" %}
+      <label class="field"><span class="field-label">{% trans "Manual recipients" %}</span>
         <textarea name="manual_emails" class="form-input" rows="4" placeholder="{% trans 'One email per line or comma separated' %}">{{ manual_emails|default:'' }}
                     </textarea>
       </label>

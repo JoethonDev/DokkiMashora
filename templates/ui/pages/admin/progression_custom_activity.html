@@ -18,18 +18,15 @@
           </div>
         </div>
         <form method="post">{% csrf_token %}
-          <label>
-            {% trans "Score" %}
-            <input name="score" class="form-input" value="{{ grade_item.score|default:'' }}" required>
+          <label class="field"><span class="field-label">{% trans "Score (points)" %}</span>
+            <input name="score" class="form-input" type="number" min="0" step="0.01" value="{{ grade_item.score|default:'' }}" required>
           </label>
-          <label>
-            {% trans "Maximum score" %}
-            <input name="max_score" class="form-input"
+          <label class="field"><span class="field-label">{% trans "Maximum score (points)" %}</span>
+            <input name="max_score" class="form-input" type="number" min="0" step="0.01"
                    value="{{ grade_item.max_score|default:'' }}"
                    required>
           </label>
-          <label>
-            {% trans "Notes" %}
+          <label class="field"><span class="field-label">{% trans "Notes" %}</span>
             <textarea name="notes" class="form-input">{{ grade_item.notes|default:'' }}
                                         </textarea>
           </label>

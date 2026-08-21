@@ -16,7 +16,6 @@ urlpatterns = [
     path("dashboard/", views.dashboard_router, name="dashboard"),
     path("dashboard/admin/", views.admin_dashboard, name="dashboard_admin"),
     path("dashboard/moderator/", views.moderator_dashboard, name="dashboard_moderator"),
-    path("dashboard/teacher/", views.teacher_dashboard, name="dashboard_teacher"),
     path("dashboard/secretary/", views.secretary_dashboard, name="dashboard_secretary"),
     # Admin: user management
     path("manage/students/", views.admin_student_list, name="admin_student_list"),
@@ -27,10 +26,9 @@ urlpatterns = [
     path("manage/staff/", views.admin_staff_list, name="admin_staff_list"),
     path("manage/staff/create/", views.admin_user_create, {"user_type": "staff"}, name="admin_staff_create"),
     path("manage/users/<int:user_id>/delete/", views.admin_user_delete, name="admin_user_delete"),
+    path("manage/users/<int:user_id>/resend-activation/", views.admin_user_resend_activation, name="admin_user_resend_activation"),
     # Staff assignments
     path("manage/staff/<int:user_id>/assignments/", views.admin_staff_assignments, name="admin_staff_assignments"),
-    path("manage/staff/<int:user_id>/assignments/teacher/create/", views.admin_teacher_assignment_create, name="admin_teacher_assignment_create"),
-    path("manage/staff/<int:user_id>/assignments/teacher/<int:assignment_id>/delete/", views.admin_teacher_assignment_delete, name="admin_teacher_assignment_delete"),
     path("manage/staff/<int:user_id>/assignments/moderator/create/", views.admin_moderator_assignment_create, name="admin_moderator_assignment_create"),
     path("manage/staff/<int:user_id>/assignments/moderator/<int:assignment_id>/delete/", views.admin_moderator_assignment_delete, name="admin_moderator_assignment_delete"),
     # Student clusters

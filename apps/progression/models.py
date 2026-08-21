@@ -13,9 +13,18 @@ from .constants import (
     COMPONENT_TYPE_CHOICES,
     DIPLOMA_COMPLETION_ACTIVE,
     DIPLOMA_COMPLETION_CHOICES,
+    EVALUATION_CONFIG_STATUS_ACTIVE,
+    EVALUATION_CONFIG_STATUS_CHOICES,
+    FINAL_PROGRESSION_STATUS_CHOICES,
+    FINAL_PROGRESSION_STATUS_PENDING,
+    INTERVIEW_DECISION_CHOICES,
+    INTERVIEW_STATUS_CHOICES,
+    INTERVIEW_STATUS_REQUESTED,
     PROMOTION_DECISION_CHOICES,
     REJOIN_STATUS_CHOICES,
     REJOIN_STATUS_PLANNED,
+    SEMESTER_EVALUATION_CHOICES,
+    SEMESTER_EVALUATION_PASS,
     SEMESTER_PROGRESS_CHOICES,
     SEMESTER_PROGRESS_NOT_STARTED,
 )
@@ -41,7 +50,9 @@ class DiplomaProgressionRule(TimeStampedModel):
         validators=[MinValueValidator(0), MaxValueValidator(100)],
     )
     require_all_semesters_passed = models.BooleanField(_("require all semesters passed"), default=True)
-    require_final_exam = models.BooleanField(_("require final exam"), default=True)
+    # Retained for historical rule records; active progression no longer uses
+    # a separate final-exam gate.
+    require_final_exam = models.BooleanField(_("require final exam"), default=False)
     auto_promote_enabled = models.BooleanField(_("auto promote enabled"), default=False)
     allow_admin_override = models.BooleanField(_("allow admin override"), default=True)
     allow_retake = models.BooleanField(_("allow retake"), default=True)
@@ -604,6 +615,335 @@ class StudentGradeItem(TimeStampedModel):
         super().save(*args, **kwargs)
 
 
+class SemesterEvaluationConfig(TimeStampedModel):
+    """Exact Cohort+Semester evaluation configuration (P2-05).
+
+    Exactly three components (Attendance, Homework, Semester Exam) with
+    weights that must sum to 100, plus the three component minimums and one
+    overall minimum. ``incomplete`` configs need Admin remediation and block
+    finalization. Legacy generic components remain read-only history.
+    """
+
+    cohort = models.ForeignKey(
+        Cohort,
+        on_delete=models.CASCADE,
+        related_name="evaluation_configs",
+        verbose_name=_("cohort"),
+    )
+    semester = models.ForeignKey(
+        Semester,
+        on_delete=models.CASCADE,
+        related_name="evaluation_configs",
+        verbose_name=_("semester"),
+    )
+    attendance_weight_percent = models.DecimalField(
+        _("attendance weight percent"),
+        max_digits=5, decimal_places=2,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    homework_weight_percent = models.DecimalField(
+        _("homework weight percent"),
+        max_digits=5, decimal_places=2,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    semester_exam_weight_percent = models.DecimalField(
+        _("semester exam weight percent"),
+        max_digits=5, decimal_places=2,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    attendance_min_percent = models.DecimalField(
+        _("attendance min percent"),
+        max_digits=5, decimal_places=2, default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    homework_min_percent = models.DecimalField(
+        _("homework min percent"),
+        max_digits=5, decimal_places=2, default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    semester_exam_min_percent = models.DecimalField(
+        _("semester exam min percent"),
+        max_digits=5, decimal_places=2, default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    overall_min_percent = models.DecimalField(
+        _("overall min percent"),
+        max_digits=5, decimal_places=2,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    status = models.CharField(
+        _("status"),
+        max_length=20,
+        choices=EVALUATION_CONFIG_STATUS_CHOICES,
+        default=EVALUATION_CONFIG_STATUS_ACTIVE,
+        db_index=True,
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="created_evaluation_configs",
+        verbose_name=_("created by"),
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_evaluation_configs",
+        verbose_name=_("updated by"),
+    )
+
+    class Meta:
+        verbose_name = _("semester evaluation configuration")
+        verbose_name_plural = _("semester evaluation configurations")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("cohort", "semester"),
+                name="unique_evaluation_config_per_cohort_semester",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.cohort} - {self.semester} ({self.get_status_display()})"
+
+    def clean(self):
+        if self.semester.diploma_id != self.cohort.diploma_id:
+            raise ValidationError(_("Semester must belong to the same diploma as the cohort."))
+        if self.status == EVALUATION_CONFIG_STATUS_ACTIVE:
+            total = (
+                self.attendance_weight_percent
+                + self.homework_weight_percent
+                + self.semester_exam_weight_percent
+            )
+            if total != 100:
+                raise ValidationError(_("Active evaluation weights must sum to 100."))
+            if self.overall_min_percent <= 0:
+                raise ValidationError(_("Overall minimum must be positive."))
+
+
+class SemesterEvaluation(TimeStampedModel):
+    """Immutable calculated Semester Evaluation snapshot (P2-05).
+
+    Created once by the finalization service (P2-06) and never mutated.
+    Component/config/source snapshots preserve the exact inputs used at
+    finalization time.
+    """
+
+    diploma_enrollment = models.ForeignKey(
+        "academics.DiplomaEnrollment",
+        on_delete=models.CASCADE,
+        related_name="semester_evaluations",
+        verbose_name=_("diploma enrollment"),
+    )
+    student = models.ForeignKey(
+        StudentProfile,
+        on_delete=models.CASCADE,
+        related_name="semester_evaluations",
+        verbose_name=_("student"),
+    )
+    cohort = models.ForeignKey(
+        Cohort,
+        on_delete=models.CASCADE,
+        related_name="semester_evaluations",
+        verbose_name=_("cohort"),
+    )
+    semester = models.ForeignKey(
+        Semester,
+        on_delete=models.CASCADE,
+        related_name="semester_evaluations",
+        verbose_name=_("semester"),
+    )
+    result = models.CharField(
+        _("result"),
+        max_length=10,
+        choices=SEMESTER_EVALUATION_CHOICES,
+        default=SEMESTER_EVALUATION_PASS,
+    )
+    overall_percent = models.DecimalField(
+        _("overall percent"),
+        max_digits=5, decimal_places=2,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    attendance_percent = models.DecimalField(
+        _("attendance percent"),
+        max_digits=5, decimal_places=2, null=True, blank=True,
+    )
+    homework_percent = models.DecimalField(
+        _("homework percent"),
+        max_digits=5, decimal_places=2, null=True, blank=True,
+    )
+    semester_exam_percent = models.DecimalField(
+        _("semester exam percent"),
+        max_digits=5, decimal_places=2, null=True, blank=True,
+    )
+    config_snapshot = models.JSONField(_("config snapshot"), default=dict, blank=True)
+    source_snapshot = models.JSONField(_("source snapshot"), default=dict, blank=True)
+    finalized_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="finalized_semester_evaluations",
+        verbose_name=_("finalized by"),
+    )
+    finalized_at = models.DateTimeField(_("finalized at"), auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = _("semester evaluation")
+        verbose_name_plural = _("semester evaluations")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("diploma_enrollment", "semester"),
+                name="unique_semester_evaluation_per_enrollment_semester",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(overall_percent__gte=0) & models.Q(overall_percent__lte=100),
+                name="check_semester_evaluation_overall_percent_range",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["student"]),
+            models.Index(fields=["cohort"]),
+            models.Index(fields=["semester"]),
+        ]
+
+    def __str__(self):
+        return f"{self.student} - {self.semester} ({self.get_result_display()})"
+
+
+class FinalProgressionOutcome(TimeStampedModel):
+    """Authoritative final progression outcome (P2-07).
+
+    Tied one-to-one to the immutable ``SemesterEvaluation``. Holds the
+    calculated result snapshot and the authoritative final decision
+    (Continue/Promote or Do Not Continue). ``interview_pending`` blocks all
+    final resolution until the linked interview is completed.
+    """
+
+    evaluation = models.OneToOneField(
+        SemesterEvaluation,
+        on_delete=models.CASCADE,
+        related_name="progression_outcome",
+        verbose_name=_("semester evaluation"),
+    )
+    diploma_enrollment = models.ForeignKey(
+        "academics.DiplomaEnrollment",
+        on_delete=models.CASCADE,
+        related_name="progression_outcomes",
+        verbose_name=_("diploma enrollment"),
+    )
+    student = models.ForeignKey(
+        StudentProfile,
+        on_delete=models.CASCADE,
+        related_name="progression_outcomes",
+        verbose_name=_("student"),
+    )
+    semester = models.ForeignKey(
+        Semester,
+        on_delete=models.CASCADE,
+        related_name="progression_outcomes",
+        verbose_name=_("semester"),
+    )
+    calculated_result = models.CharField(
+        _("calculated result"),
+        max_length=10,
+        choices=SEMESTER_EVALUATION_CHOICES,
+    )
+    status = models.CharField(
+        _("status"),
+        max_length=20,
+        choices=FINAL_PROGRESSION_STATUS_CHOICES,
+        default=FINAL_PROGRESSION_STATUS_PENDING,
+        db_index=True,
+    )
+    final_result = models.CharField(
+        _("final result"),
+        max_length=10,
+        choices=SEMESTER_EVALUATION_CHOICES,
+        blank=True,
+        default="",
+    )
+    is_exceptional = models.BooleanField(_("exceptional decision"), null=True, blank=True)
+    reason = models.TextField(_("reason"), blank=True)
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="decided_progression_outcomes",
+        verbose_name=_("decided by"),
+    )
+    decided_at = models.DateTimeField(_("decided at"), null=True, blank=True)
+
+    class Meta:
+        verbose_name = _("final progression outcome")
+        verbose_name_plural = _("final progression outcomes")
+        indexes = [
+            models.Index(fields=["student"]),
+            models.Index(fields=["semester"]),
+            models.Index(fields=["status"]),
+        ]
+
+    def __str__(self):
+        return f"{self.student} - {self.semester} ({self.get_status_display()})"
+
+
+class SemesterInterview(TimeStampedModel):
+    """One post-evaluation interview (P2-07).
+
+    Requested after a finalized evaluation (PASS or FAIL); while requested it
+    blocks final resolution. Completion records the structured outcome and may
+    be followed by either final direction.
+    """
+
+    outcome = models.OneToOneField(
+        FinalProgressionOutcome,
+        on_delete=models.CASCADE,
+        related_name="interview",
+        verbose_name=_("final progression outcome"),
+    )
+    status = models.CharField(
+        _("status"),
+        max_length=20,
+        choices=INTERVIEW_STATUS_CHOICES,
+        default=INTERVIEW_STATUS_REQUESTED,
+        db_index=True,
+    )
+    outcome_result = models.CharField(
+        _("interview outcome"),
+        max_length=10,
+        choices=INTERVIEW_DECISION_CHOICES,
+        blank=True,
+        default="",
+    )
+    details = models.TextField(_("details"), blank=True)
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="requested_semester_interviews",
+        verbose_name=_("requested by"),
+    )
+    requested_at = models.DateTimeField(_("requested at"), auto_now_add=True)
+    completed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="completed_semester_interviews",
+        verbose_name=_("completed by"),
+    )
+    completed_at = models.DateTimeField(_("completed at"), null=True, blank=True)
+
+    class Meta:
+        verbose_name = _("semester interview")
+        verbose_name_plural = _("semester interviews")
+
+    def __str__(self):
+        return f"Interview {self.get_status_display()} for {self.outcome}"
+
+
 class SemesterRejoinPlan(TimeStampedModel):
     student = models.ForeignKey(
         StudentProfile,
@@ -657,6 +997,13 @@ class SemesterRejoinPlan(TimeStampedModel):
         verbose_name = _("semester rejoin plan")
         verbose_name_plural = _("semester rejoin plans")
         ordering = ("-created_at",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=["student"],
+                condition=models.Q(status__in=[REJOIN_STATUS_PLANNED, "active"]),
+                name="uq_active_rejoin_plan_per_student",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.student} - {self.failed_semester} ({self.status})"

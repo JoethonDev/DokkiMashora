@@ -8,9 +8,11 @@ from .models import CertificateTemplate
 class CertificateTemplateForm(StyledFormMixin, forms.ModelForm):
     class Meta:
         model = CertificateTemplate
+        # background_file is replaced by the validated PDF/PSD source upload
+        # (P7-02); existing HTML templates keep editing body_html.
         fields = [
             "name", "diploma", "language", "template_type",
-            "background_file", "body_html", "active", "is_placeholder",
+            "body_html", "active", "is_placeholder",
         ]
         widgets = {
             "name": forms.TextInput(attrs={}),

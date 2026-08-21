@@ -12,7 +12,9 @@ from .models import PaymentRecord
 class PaymentUploadForm(StyledFormMixin, forms.Form):
     csv_file = forms.FileField(
         label=_("CSV file"),
-        help_text=_("Upload a CSV file with columns: national_id, amount, payment_date"),
+        help_text=_(
+            "Required columns: amount and payment_date. Each row must include at least one of national_id, email, or phone."
+        ),
         widget=forms.FileInput(attrs={"accept": ".csv"}),
     )
 

@@ -7,6 +7,9 @@
   <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=diploma.title description=diploma.description eyebrow=_("Diploma") back_button=True %}
     <div class="flex gap-2.5 items-center flex-wrap mb-4">
       <a class="btn-primary" href="{% url 'academics:admin_diploma_edit' diploma.id %}">{% trans "Edit diploma" %}</a>
+      <form method="post" action="{% url 'academics:admin_diploma_delete' diploma.id %}" data-confirm="{% trans 'Delete this diploma and its delivery content?' %}" class="m-0">{% csrf_token %}
+        <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
+      </form>
     </div>
     <section class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Structure" %}</p>
@@ -25,10 +28,15 @@
                 <div class="flex items-center gap-3">
                   <span class="text-xs text-muted transition-transform group-open:rotate-90">&#9654;</span>
                   <strong>{{ group.cohort.name }}</strong>
-                  {% include "ui/components/_status.html" with code=group.cohort.is_active|yesno:"active,inactive" label=group.cohort.is_active|yesno:_("Active,Inactive") %}
+                  {% include "ui/components/_status.html" with code=group.cohort.is_active|yesno:"active,inactive" label=group.cohort.is_active|boolean_label:"Active,Inactive" %}
                   <span class="text-xs text-muted">{{ group.semesters|length }} {% trans "semesters" %}</span>
                 </div>
-                <a class="btn-ghost btn-sm" href="{% url 'academics:admin_cohort_edit' diploma.id group.cohort.id %}">{% trans "Edit cohort" %}</a>
+                <div class="flex gap-2 items-center shrink-0">
+                  <a class="btn-ghost" href="{% url 'academics:admin_cohort_edit' diploma.id group.cohort.id %}">{% trans "Edit cohort" %}</a>
+                  <form method="post" action="{% url 'academics:admin_cohort_delete' diploma.id group.cohort.id %}" data-confirm="{% trans 'Delete this cohort and its delivery content?' %}" class="m-0">{% csrf_token %}
+                    <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
+                  </form>
+                </div>
               </summary>
               <div class="pb-3 px-1">
                 {% if group.semesters %}
@@ -47,8 +55,11 @@
                           <td class="table-td">{{ item.lecture_count }}</td>
                           <td class="table-td">
                             <div class="flex gap-2.5 items-center flex-wrap">
-                              <a class="btn-ghost btn-sm" href="{% url 'academics:admin_semester_edit' diploma.id item.semester.id %}">{% trans "Edit" %}</a>
-                              <a class="btn-secondary text-xs py-1 px-2 min-h-0" href="{% url 'academics:admin_diploma_lecture_list' diploma.id group.cohort.id item.semester.id %}">{% trans "Lectures" %}</a>
+                              <a class="btn-ghost" href="{% url 'academics:admin_semester_edit' diploma.id item.semester.id %}">{% trans "Edit" %}</a>
+                              <a class="btn-ghost" href="{% url 'academics:admin_diploma_lecture_list' diploma.id group.cohort.id item.semester.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Lectures" %}</a>
+                              <form method="post" action="{% url 'academics:admin_semester_delete' diploma.id item.semester.id %}" data-confirm="{% trans 'Delete this semester and its delivery lectures?' %}" class="m-0">{% csrf_token %}
+                                <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
+                              </form>
                             </div>
                           </td>
                         </tr>
@@ -64,8 +75,11 @@
                         <small class="block text-muted">{{ item.lecture_count }} {% trans "lectures" %}</small>
                       </div>
                       <div class="flex gap-2 shrink-0">
-                        <a class="btn-ghost btn-sm" href="{% url 'academics:admin_semester_edit' diploma.id item.semester.id %}">{% trans "Edit" %}</a>
-                        <a class="btn-soft-primary shrink-0" href="{% url 'academics:admin_diploma_lecture_list' diploma.id group.cohort.id item.semester.id %}">{% trans "Lectures" %}</a>
+                        <a class="btn-ghost" href="{% url 'academics:admin_semester_edit' diploma.id item.semester.id %}">{% trans "Edit" %}</a>
+                        <a class="btn-ghost shrink-0" href="{% url 'academics:admin_diploma_lecture_list' diploma.id group.cohort.id item.semester.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Lectures" %}</a>
+                        <form method="post" action="{% url 'academics:admin_semester_delete' diploma.id item.semester.id %}" data-confirm="{% trans 'Delete this semester and its delivery lectures?' %}" class="m-0">{% csrf_token %}
+                          <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
+                        </form>
                       </div>
                     </div>
                   {% endfor %}
@@ -143,9 +157,7 @@
         {% if rule %}
           <div class="grid grid-cols-2 md:grid-cols-4 gap-4 p-4">
             <div><span class="text-xs text-muted">{% trans "Semester pass %" %}</span><p class="font-semibold">{{ rule.semester_pass_percent }}%</p></div>
-            <div><span class="text-xs text-muted">{% trans "Final exam pass %" %}</span><p class="font-semibold">{{ rule.final_exam_pass_percent }}%</p></div>
             <div><span class="text-xs text-muted">{% trans "Require all semesters" %}</span><p class="font-semibold">{% if rule.require_all_semesters_passed %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</p></div>
-            <div><span class="text-xs text-muted">{% trans "Require final exam" %}</span><p class="font-semibold">{% if rule.require_final_exam %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</p></div>
             <div><span class="text-xs text-muted">{% trans "Auto promote" %}</span><p class="font-semibold">{% if rule.auto_promote_enabled %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</p></div>
             <div><span class="text-xs text-muted">{% trans "Admin override" %}</span><p class="font-semibold">{% if rule.allow_admin_override %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</p></div>
             <div><span class="text-xs text-muted">{% trans "Allow retake" %}</span><p class="font-semibold">{% if rule.allow_retake %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</p></div>

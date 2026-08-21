@@ -28,8 +28,8 @@ from apps.communications.constants import (
 from apps.communications.services import send_templated_email
 from apps.core.permissions import validate_score
 from apps.intake_forms.selectors import has_required_intake_response  # noqa: E402
-from apps.payments.constants import CURRENCY_EGP, PAYMENT_STATUS_PAID
-from apps.payments.models import PaymentRecord
+from apps.payments.constants import CURRENCY_EGP, PAYMENT_STATUS_PAID, WAIVER_STATUS_ACTIVE
+from apps.payments.models import PaymentRecord, PaymentWaiver
 from apps.students.identity import (
     COUNTRY_EG,
     normalize_identity_number,
@@ -46,6 +46,8 @@ from .constants import (
     DECISION_ACTION_REJECT,
     DECISION_ACTION_REQUEST_INTERVIEW,
     DECISION_ACTION_REVERT,
+    DELIVERY_MODE_CHOICES,
+    DELIVERY_MODE_ONLINE,
     PROGRAM_APP_STATUS_ACCEPTED,
     PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED,
     PROGRAM_APP_STATUS_ACTIVATED,
@@ -123,6 +125,7 @@ class RegistrationData:
     program_type: str | None = None
     cohort_id: int | None = None
     course_id: int | None = None
+    delivery_mode: str = DELIVERY_MODE_ONLINE
 
 
 def normalize_phone(raw: str) -> str:
@@ -243,6 +246,8 @@ def submit_registration(
 
     program_application = None
     if data.program_type == PROGRAM_TYPE_DIPLOMA and data.cohort_id:
+        if data.delivery_mode not in dict(DELIVERY_MODE_CHOICES):
+            raise ValueError(_("Please select an attendance mode."))
         cohort = Cohort.objects.filter(pk=data.cohort_id).first()
         if cohort is None or not is_apply_target_open(cohort=cohort):
             raise ValueError(_("This program is no longer accepting applications."))
@@ -250,6 +255,7 @@ def submit_registration(
             student=profile,
             program_type=PROGRAM_TYPE_DIPLOMA,
             cohort=cohort,
+            delivery_mode=data.delivery_mode,
             status=PROGRAM_APP_STATUS_SUBMITTED,
         )
     elif data.program_type == PROGRAM_TYPE_COURSE and data.course_id:
@@ -263,9 +269,17 @@ def submit_registration(
             status=PROGRAM_APP_STATUS_SUBMITTED,
         )
 
-    transaction.on_commit(lambda: send_activation_email(user))
+    transaction.on_commit(lambda: _send_activation_email_safely(user))
 
     return profile, program_application
+
+
+def _send_activation_email_safely(user) -> None:
+    """Keep a committed registration successful if email configuration fails."""
+    try:
+        send_activation_email(user)
+    except Exception:  # noqa: BLE001
+        logger.exception("Failed to send activation email for user_id=%s", user.pk)
 
 
 def submit_program_application(
@@ -273,6 +287,7 @@ def submit_program_application(
     program_type: str,
     cohort: Cohort | None = None,
     course: Course | None = None,
+    delivery_mode: str = DELIVERY_MODE_ONLINE,
 ) -> ProgramApplication:
     """Create a new program application for an existing student."""
     if program_type == PROGRAM_TYPE_COURSE:
@@ -281,6 +296,8 @@ def submit_program_application(
     elif program_type == PROGRAM_TYPE_DIPLOMA:
         if cohort is None or not is_apply_target_open(cohort=cohort):
             raise ValueError(_("This program is no longer accepting applications."))
+        if delivery_mode not in dict(DELIVERY_MODE_CHOICES):
+            raise ValueError(_("Please select an attendance mode."))
     _check_duplicate_program_application(profile, program_type, cohort=cohort, course=course)
 
     return ProgramApplication.objects.create(
@@ -288,6 +305,7 @@ def submit_program_application(
         program_type=program_type,
         cohort=cohort,
         course=course,
+        delivery_mode=delivery_mode if program_type == PROGRAM_TYPE_DIPLOMA else DELIVERY_MODE_ONLINE,
         status=PROGRAM_APP_STATUS_SUBMITTED,
     )
 
@@ -690,6 +708,99 @@ def revert_program_application_decision(application, actor, reason: str = "") ->
         )
 
 
+ENTRANCE_DECISION_STATUSES = frozenset({
+    PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
+    PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
+    PROGRAM_APP_STATUS_ACCEPTED,
+    PROGRAM_APP_STATUS_REJECTED,
+})
+
+
+@transaction.atomic
+def change_entrance_decision(
+    application,
+    *,
+    target: str,
+    actor,
+    reason: str = "",
+    notes: str = "",
+    send_email: bool = False,
+    interview_at=None,
+    phone_number: str = "",
+    expires_at=None,
+) -> None:
+    """Change an entrance decision while the application is still in a decision state.
+
+    Allowed while status is entrance_submitted / interview_requested / accepted /
+    rejected. Once the application advances past the decision (documents, survey,
+    activation), the decision is locked and this raises ValueError. The academic
+    entrance score is never rewritten by a decision change.
+    """
+    if application.status not in ENTRANCE_DECISION_STATUSES:
+        raise ValueError(_("The decision can no longer be changed for this application."))
+    if target not in ENTRANCE_DECISION_STATUSES:
+        raise ValueError(_("Invalid decision target."))
+    if target == application.status:
+        raise ValueError(_("The application already has this decision."))
+    if target == PROGRAM_APP_STATUS_REJECTED and not (reason or "").strip():
+        raise ValueError(_("Rejection reason is required."))
+    if target == PROGRAM_APP_STATUS_INTERVIEW_REQUESTED:
+        if application.program_type != PROGRAM_TYPE_DIPLOMA:
+            raise ValueError(_("Interview can only be requested for diploma applications."))
+        if not interview_at and not phone_number:
+            raise ValueError(_("Either interview date/time or staff phone instructions is required."))
+        if not expires_at:
+            raise ValueError(_("Expiry time is required for interview request."))
+        if timezone.is_naive(expires_at):
+            raise ValueError(_("Expiry time must be timezone-aware."))
+        if expires_at <= timezone.now():
+            raise ValueError(_("Expiry time must be in the future."))
+
+    old_status = application.status
+    decision_action = {
+        PROGRAM_APP_STATUS_ACCEPTED: DECISION_ACTION_ACCEPT,
+        PROGRAM_APP_STATUS_REJECTED: DECISION_ACTION_REJECT,
+        PROGRAM_APP_STATUS_INTERVIEW_REQUESTED: DECISION_ACTION_REQUEST_INTERVIEW,
+        PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED: DECISION_ACTION_REVERT,
+    }[target]
+    audit_action = {
+        PROGRAM_APP_STATUS_ACCEPTED: "application.approved",
+        PROGRAM_APP_STATUS_REJECTED: "application.rejected",
+        PROGRAM_APP_STATUS_INTERVIEW_REQUESTED: "application.interview_requested",
+        PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED: ACTION_APPLICATION_DECISION_REVERTED,
+    }[target]
+    metadata = {}
+    if target == PROGRAM_APP_STATUS_INTERVIEW_REQUESTED:
+        metadata = {
+            "interview_at": interview_at.isoformat() if interview_at else None,
+            "phone_number": phone_number,
+            "expires_at": expires_at.isoformat(),
+        }
+    application.status = target
+    application.reviewed_by = actor
+    application.reviewed_at = timezone.now()
+    if notes:
+        application.admin_notes = notes
+    application.save(update_fields=["status", "reviewed_by", "reviewed_at", "admin_notes", "updated_at"])
+    _record_decision(application, decision_action, old_status, target, actor, reason=reason, metadata=metadata)
+    if notes:
+        record_program_application_note(application, actor, note=notes, metadata=metadata)
+    record_audit_event(
+        actor=actor,
+        action=audit_action,
+        target_type="program_application",
+        target_id=str(application.pk),
+        metadata={"old_status": old_status, "new_status": target, "reason": reason, "send_email": send_email, **metadata},
+    )
+    if send_email:
+        if target == PROGRAM_APP_STATUS_ACCEPTED:
+            transaction.on_commit(lambda: _send_program_app_acceptance_email(application))
+        elif target == PROGRAM_APP_STATUS_REJECTED:
+            transaction.on_commit(lambda: _send_program_app_rejection_email(application, reason))
+        elif target == PROGRAM_APP_STATUS_INTERVIEW_REQUESTED:
+            transaction.on_commit(lambda: _send_interview_request_email(application, metadata))
+
+
 # ---------------------------------------------------------------------------
 # Notes
 # ---------------------------------------------------------------------------
@@ -763,12 +874,44 @@ def has_application_paid_record(application) -> bool:
     ).exists()
 
 
+def has_active_application_waiver(application) -> bool:
+    """Check if an active Admin payment waiver exists for this application."""
+    return PaymentWaiver.objects.filter(
+        application=application,
+        status=WAIVER_STATUS_ACTIVE,
+    ).exists()
+
+
+def has_application_payment_readiness(application) -> bool:
+    """Payment readiness: satisfied payment OR a valid recorded Admin waiver."""
+    return has_application_paid_record(application) or has_active_application_waiver(application)
+
+
+def _active_application_waiver_id(application) -> str | None:
+    waiver = PaymentWaiver.objects.filter(
+        application=application,
+        status=WAIVER_STATUS_ACTIVE,
+    ).first()
+    return str(waiver.pk) if waiver else None
+
+
+def get_active_application_waiver(application):
+    """Return the active Admin payment waiver for this application, or None."""
+    return PaymentWaiver.objects.filter(
+        application=application,
+        status=WAIVER_STATUS_ACTIVE,
+    ).first()
+
+
 def can_activate_application(application) -> ActivationCheck:
     """Determine whether an application is ready for activation.
 
     This is a read-only check — no mutations.
     Phase 5: required intake form check added.
     """
+    if application.status == PROGRAM_APP_STATUS_ACTIVATED:
+        return ActivationCheck(ready=False, reasons=["already_activated"])
+
     reasons: list[str] = []
 
     if not application.student.user.email_activated_at:
@@ -779,7 +922,7 @@ def can_activate_application(application) -> ActivationCheck:
             reasons.append("not_accepted")
         if not application.course:
             reasons.append("no_course_target")
-        if not has_application_paid_record(application):
+        if not has_application_payment_readiness(application):
             reasons.append("not_paid")
         # Phase 5: required intake check
         if not _has_required_intake_check(application):
@@ -787,13 +930,17 @@ def can_activate_application(application) -> ActivationCheck:
         return ActivationCheck(ready=len(reasons) == 0, reasons=reasons)
 
     # Diploma
-    if application.status not in (PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED, PROGRAM_APP_STATUS_PAYMENT_PENDING, PROGRAM_APP_STATUS_ACTIVATED):
+    if application.status not in (
+        PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED,
+        PROGRAM_APP_STATUS_PAYMENT_PENDING,
+        PROGRAM_APP_STATUS_READY_FOR_ACTIVATION,
+    ):
         reasons.append("not_accepted_or_documents_not_submitted")
     if application.status == PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED and not application.submitted_document_upload:
         reasons.append("documents_not_uploaded")
     if not application.cohort:
         reasons.append("no_cohort_target")
-    if not has_application_paid_record(application):
+    if not has_application_payment_readiness(application):
         reasons.append("not_paid")
     # Phase 5: required intake check
     if not _has_required_intake_check(application):
@@ -870,6 +1017,7 @@ def activate_application_if_ready(application, actor=None) -> ActivationResult:
         actor,
         metadata={
             "payment_record_id": _find_paid_record_id(locked),
+            "payment_waiver_id": _active_application_waiver_id(locked),
             "enrollment_id": enrollment_id,
             "enrollment_type": enrollment_type,
             "activated_by": actor.email if actor else "",

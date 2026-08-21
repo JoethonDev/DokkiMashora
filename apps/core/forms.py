@@ -8,6 +8,7 @@ WIDGET_CLASSES = {
     "Select": "form-select",
     "SelectMultiple": "form-select",
     "NullBooleanSelect": "form-select",
+    "Textarea": "form-textarea",
     "CheckboxInput": "form-checkbox",
     "RadioSelect": "form-radio",
     "CheckboxSelectMultiple": "form-checkbox",

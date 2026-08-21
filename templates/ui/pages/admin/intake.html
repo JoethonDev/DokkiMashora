@@ -84,7 +84,7 @@
                   {% endif %}
                 </div>
                 <form method="post" action="{% url 'intake_forms:admin_intake_form_field_delete' intake_form.id field.id %}" data-confirm="{% trans 'Delete this field?' %}">{% csrf_token %}
-                  <button class="btn-danger px-2.5 py-1 text-xs shrink-0" type="submit">{% trans "Delete" %}</button>
+                  <button class="btn-danger shrink-0" type="submit">{% trans "Delete" %}</button>
                 </form>
               </div>
             {% endfor %}
@@ -107,8 +107,8 @@
                     <label class="field-label">{% trans "Choices" %}</label>
                     <div id="intake-choices" class="flex flex-col gap-2">
                       <div class="choice-row flex items-center gap-2" data-idx="1">
-                        <input type="text" class="form-input flex-1" name="intake_choice_1" placeholder="{% trans 'Choice text' %}">
-                        <button type="button" class="btn-danger px-2 py-1 text-xs intake-remove-btn">{% trans "Remove" %}</button>
+                        <label class="field flex-1"><span class="field-label sr-only">{% trans "Choice text" %}</span><input type="text" class="form-input" name="intake_choice_1" placeholder="{% trans 'Choice text' %}"></label>
+                        <button type="button" class="btn-danger intake-remove-btn">{% trans "Remove" %}</button>
                       </div>
                     </div>
                     <button type="button" class="btn-ghost text-sm mt-1" id="add-intake-choice-btn">+ {% trans "Add choice" %}</button>
@@ -134,8 +134,8 @@
           </form>
           <template id="intake-choice-template">
             <div class="choice-row flex items-center gap-2" data-idx="__IDX__">
-              <input type="text" class="form-input flex-1" name="intake_choice___IDX__" placeholder="{% trans 'Choice text' %}">
-              <button type="button" class="btn-danger px-2 py-1 text-xs intake-remove-btn">{% trans "Remove" %}</button>
+              <label class="field flex-1"><span class="field-label sr-only">{% trans "Choice text" %}</span><input type="text" class="form-input" name="intake_choice___IDX__" placeholder="{% trans 'Choice text' %}"></label>
+              <button type="button" class="btn-danger intake-remove-btn">{% trans "Remove" %}</button>
             </div>
           </template>
         {% endif %}
@@ -214,8 +214,8 @@
             <tbody>
               {% for item in page_obj %}
                 <tr>
-                  <td class="table-td"><div class="flex flex-col"><strong>{{ item.title }}</strong>
-                    <small>{{ item.description|truncatewords:8|default:'—' }}</small></div>
+                  <td class="table-td"><div class="flex flex-col gap-0.5"><strong>{{ item.title }}</strong>
+                    {% if item.description %}{% include "ui/components/_expandable_text.html" with text=item.description clamp=2 muted=True %}{% else %}<small class="text-muted">—</small>{% endif %}</div>
                   </td>
                   <td class="table-td">
                     {% if item.course_version %}
@@ -242,10 +242,10 @@
                     </small></div>
                   </td>
                   <td class="table-td">
-                    {% include "ui/components/_status.html" with code=item.is_required|yesno:"required,optional" label=item.is_required|yesno:_("Required,Optional") %}
+                    {% include "ui/components/_status.html" with code=item.is_required|yesno:"required,optional" label=item.is_required|boolean_label:"Required,Optional" %}
                   </td>
                   <td class="table-td">
-                    {% include "ui/components/_status.html" with code=item.is_active|yesno:"active,inactive" label=item.is_active|yesno:_("Active,Inactive") %}
+                    {% include "ui/components/_status.html" with code=item.is_active|yesno:"active,inactive" label=item.is_active|boolean_label:"Active,Inactive" %}
                   </td>
                   <td class="table-td">
                     <div class="table-actions"><a class="btn-secondary"
@@ -266,11 +266,11 @@
           {% for item in page_obj %}
             <div class="mobile-card">
               <div class="flex-1 min-w-0">
-                <strong class="block truncate">{{ item.title }}</strong>
-                <small class="block text-muted truncate">{{ item.description|truncatewords:8|default:'—' }}</small>
+                <strong class="block">{{ item.title }}</strong>
+                {% if item.description %}{% include "ui/components/_expandable_text.html" with text=item.description clamp=2 muted=True %}{% endif %}
                 <small class="block text-muted">{% if item.course_version %}{% trans "Course" %}{% elif item.cohort %}{% trans "Diploma" %}{% else %}—{% endif %} &middot; {% if item.course_version %}{{ item.course_version.course }}{% elif item.cohort %}{{ item.cohort.diploma }}{% endif %}</small>
-                {% include "ui/components/_status.html" with code=item.is_required|yesno:"required,optional" label=item.is_required|yesno:_("Required,Optional") %}
-                {% include "ui/components/_status.html" with code=item.is_active|yesno:"active,inactive" label=item.is_active|yesno:_("Active,Inactive") %}
+                {% include "ui/components/_status.html" with code=item.is_required|yesno:"required,optional" label=item.is_required|boolean_label:"Required,Optional" %}
+                {% include "ui/components/_status.html" with code=item.is_active|yesno:"active,inactive" label=item.is_active|boolean_label:"Active,Inactive" %}
               </div>
               <a class="btn-soft-primary shrink-0" href="{% url 'intake_forms:admin_intake_form_detail' item.id %}">{% trans "Manage" %}</a>
             </div>

@@ -22,8 +22,8 @@
                 .
                 {{ question.text }}
               </legend>
-              <label>
-                {% trans "Score" %}
+              <label class="field">
+                <span class="field-label">{% trans "Score" %}</span>
                 <input name="score_{{ question.id }}"
                        value="{{ answer.score|default:'' }}"
                        type="number"
@@ -31,8 +31,8 @@
                        max="{{ max_score }}"
                        step="0.01"
                        class="form-input"></label>
-              <label>
-                {% trans "Feedback" %}
+              <label class="field">
+                <span class="field-label">{% trans "Feedback" %}</span>
                 <textarea name="feedback_{{ question.id }}" class="form-input">{{ answer.feedback|default:'' }}
         </textarea>
               </label>
@@ -117,7 +117,7 @@
                     <tr>
                       <td class="table-td"><input type="checkbox" class="form-checkbox" name="student_ids" value="{{ item.student.id }}"></td>
                       <td class="table-td">{{ item.student.full_name|default:item.student }}</td>
-                      <td class="table-td"><span class="status-pill-{% if item.result == 'pass' %}success{% else %}danger{% endif %}">{{ item.get_result_display|default:item.result }}</span></td>
+                      <td class="table-td"><span class="status-pill-{% if item.result == 'pass' %}success{% else %}danger{% endif %}">{{ item.get_result_display|default:'—' }}</span></td>
                     </tr>
                   {% endfor %}
                 </tbody>
@@ -128,7 +128,7 @@
                     <label class="flex items-center gap-2 cursor-pointer shrink-0"><input type="checkbox" class="form-checkbox" name="student_ids" value="{{ item.student.id }}"></label>
                     <div class="flex-1 min-w-0">
                       <strong class="block truncate">{{ item.student.full_name|default:item.student }}</strong>
-                      <span class="status-pill-{% if item.result == 'pass' %}success{% else %}danger{% endif %}">{{ item.get_result_display|default:item.result }}</span>
+                      <span class="status-pill-{% if item.result == 'pass' %}success{% else %}danger{% endif %}">{{ item.get_result_display|default:'—' }}</span>
                     </div>
                   </div>
                 {% endfor %}
@@ -209,7 +209,7 @@
               {% if choice_form.instance.pk %}
                 <span class="sr-only">{{ choice_form.DELETE }}</span>
               {% endif %}
-              <button type="button" class="btn-danger px-2.5 py-1.5 text-xs remove-choice-btn">{% trans "Remove" %}</button>
+              <button type="button" class="btn-danger remove-choice-btn">{% trans "Remove" %}</button>
             </div>
                 {% if choice_form.non_field_errors %}
                   <div class="text-red text-xs mt-0" role="alert">{{ choice_form.non_field_errors }}</div>
@@ -227,7 +227,7 @@
               {% include "ui/components/_field.html" with field=formset.empty_form.order %}
             </div>
             <div class="shrink-0 pt-6">
-              <button type="button" class="btn-danger px-2.5 py-1.5 text-xs remove-choice-btn">{% trans "Remove" %}</button>
+              <button type="button" class="btn-danger remove-choice-btn">{% trans "Remove" %}</button>
             </div>
           </div>
         </template>
@@ -263,7 +263,7 @@
         </div>
         <p>{{ exam.description }}</p>
         <p>
-          {% include "ui/components/_status.html" with code=exam.is_active|yesno:"active,inactive" label=exam.is_active|yesno:_("Active,Inactive") %}
+          {% include "ui/components/_status.html" with code=exam.is_active|yesno:"active,inactive" label=exam.is_active|boolean_label:"Active,Inactive" %}
         </p>
         <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-ghost"
              href="{% url 'entrance_exams:admin_edit_exam' exam.id %}">{% trans "Edit" %}</a>
@@ -321,8 +321,8 @@
             <tbody>
               {% for item in page_obj %}
                 <tr>
-                  <td class="table-td"><div class="flex flex-col"><strong>{{ item.title }}</strong>
-                    <small>{{ item.description|truncatewords:8|default:'—' }}</small></div>
+                  <td class="table-td"><div class="flex flex-col gap-0.5"><strong>{{ item.title }}</strong>
+                    {% if item.description %}{% include "ui/components/_expandable_text.html" with text=item.description clamp=2 muted=True %}{% else %}<small class="text-muted">—</small>{% endif %}</div>
                   </td>
                   <td class="table-td">{{ item.cohort|default:_("All") }}</td>
                   <td class="table-td"><div class="flex flex-col"><small>{{ item.open_at|date:"DATE_FORMAT"|default:'—' }}</small>
@@ -330,7 +330,7 @@
                   </div></td>
                   <td class="table-td">{{ item.duration_minutes|default:'—' }}</td>
                   <td class="table-td">
-                    {% include "ui/components/_status.html" with code=item.is_active|yesno:"active,inactive" label=item.is_active|yesno:_("Active,Inactive") %}
+                    {% include "ui/components/_status.html" with code=item.is_active|yesno:"active,inactive" label=item.is_active|boolean_label:"Active,Inactive" %}
                   </td>
                   <td class="table-td">
                     <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-secondary"
@@ -351,10 +351,10 @@
           {% for item in page_obj %}
             <div class="mobile-card">
               <div class="flex-1 min-w-0">
-                <strong class="block truncate">{{ item.title }}</strong>
-                <small class="block text-muted truncate">{{ item.description|truncatewords:8|default:'—' }}</small>
+                <strong class="block">{{ item.title }}</strong>
+                {% if item.description %}{% include "ui/components/_expandable_text.html" with text=item.description clamp=2 muted=True %}{% endif %}
                 <small class="block text-muted">{{ item.cohort|default:_("All") }} &middot; {{ item.duration_minutes|default:'—' }} {% trans "min" %}</small>
-                {% include "ui/components/_status.html" with code=item.is_active|yesno:"active,inactive" label=item.is_active|yesno:_("Active,Inactive") %}
+                {% include "ui/components/_status.html" with code=item.is_active|yesno:"active,inactive" label=item.is_active|boolean_label:"Active,Inactive" %}
               </div>
               <a class="btn-soft-primary shrink-0" href="{% url 'entrance_exams:admin_detail' item.id %}">{% trans "Open" %}</a>
             </div>
@@ -422,6 +422,7 @@
                    value="{{ search_value }}"
                    type="search"
                    data-auto-search
+                   aria-label="{% trans 'Search email log' %}"
                      placeholder="{% trans 'Search—' %}"></div>
           <label class="min-w-40"><span class="field-label">{% trans "Action" %}</span>
             <select name="action" class="form-select" data-auto-submit><option value="">{% trans "All actions" %}</option>
@@ -453,7 +454,7 @@
                 <tr>
                   <td class="table-td">{{ item.recipient }}</td>
                   <td class="table-td">{{ item.get_action_display|default:item.action }}</td>
-                  <td class="table-td">{% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:item.status %}</td>
+                  <td class="table-td">{% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:'—' %}</td>
                   <td class="table-td"><span class="bidi" dir="ltr">{{ item.sent_at|date:"d/m/Y H:i"|default:'—' }}</span></td>
                 </tr>
               {% empty %}
@@ -469,7 +470,7 @@
             <div class="mobile-card">
               <div class="flex-1 min-w-0">
                 <strong class="block truncate">{{ item.recipient }}</strong>
-                {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:item.status %}
+                {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:'—' %}
                 <small class="block text-muted">{{ item.get_action_display|default:item.action }} &middot; {{ item.sent_at|date:"d/m/Y H:i"|default:'—' }}</small>
               </div>
             </div>
@@ -494,7 +495,7 @@
                     <strong>{{ item.exam.title|default:item.title|default:item.recipient|default:_("Exam record") }}</strong>
                   </td>
                   <td class="table-td">
-                    {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:item.status|default:'—' %}
+                    {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:'—'|default:'—' %}
                   </td>
                   <td class="table-td">{{ item.created_at|default:item.sent_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</td>
                 </tr>
@@ -511,7 +512,7 @@
             <div class="mobile-card">
               <div class="flex-1 min-w-0">
                 <strong class="block truncate">{{ item.exam.title|default:item.title|default:item.recipient|default:_("Exam record") }}</strong>
-                {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:item.status|default:'—' %}
+                {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:'—'|default:'—' %}
                 <small class="block text-muted">{{ item.created_at|default:item.sent_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</small>
               </div>
             </div>

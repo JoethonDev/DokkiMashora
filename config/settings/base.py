@@ -150,6 +150,18 @@ CELERY_TASK_IGNORE_RESULT = True
 CELERY_TASK_SERIALIZER = "json"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TIMEZONE = "Africa/Cairo"
+CELERY_ENABLE_UTC = True
+
+# P5-04: bounded daily lifecycle normalization for expired enrollments.
+# Read-path active/non-expired checks remain the authorization authority; this
+# beat only keeps the persisted status consistent. Beat uses the existing
+# Celery broker (no second scheduler, no worker-concurrency increase).
+CELERY_BEAT_SCHEDULE = {
+    "expire-stale-enrollments-daily": {
+        "task": "apps.academics.tasks.expire_stale_enrollments_task",
+        "schedule": 86400.0,  # every 24h
+    },
+}
 
 # --- Custom user -------------------------------------------------------------
 AUTH_USER_MODEL = "accounts.User"
@@ -240,7 +252,6 @@ if USE_R2_STORAGE and R2_BUCKET_NAME and R2_ENDPOINT_URL:
                 "bucket_name": R2_BUCKET_NAME,
                 "endpoint_url": R2_ENDPOINT_URL,
                 "region_name": "auto",
-                "public_base_url": R2_PUBLIC_BASE_URL or None,
                 "default_acl": None,
             },
         },

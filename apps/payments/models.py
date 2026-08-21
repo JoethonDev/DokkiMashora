@@ -19,6 +19,8 @@ from .constants import (
     ROW_STATUS_PARSED,
     UPLOAD_STATUS_CHOICES,
     UPLOAD_STATUS_PENDING,
+    WAIVER_STATUS_ACTIVE,
+    WAIVER_STATUS_CHOICES,
 )
 
 
@@ -255,3 +257,89 @@ class PaymentRecord(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.student} — {self.amount} {self.currency} ({self.get_status_display()})"
+
+
+class PaymentWaiver(TimeStampedModel):
+    """Admin-authorized override that satisfies payment readiness for one application.
+
+    A waiver is a distinct audited business event, never a zero/manual payment.
+    At most one active waiver may exist per application. Revocation is a
+    separate audited transition and never mutates a PaymentRecord.
+    """
+
+    student = models.ForeignKey(
+        "students.StudentProfile",
+        on_delete=models.PROTECT,
+        related_name="payment_waivers",
+        verbose_name=_("student"),
+        db_index=True,
+    )
+    application = models.ForeignKey(
+        "applications.ProgramApplication",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="payment_waivers",
+        verbose_name=_("program application"),
+        db_index=True,
+    )
+    target_snapshot = models.JSONField(
+        _("target snapshot"),
+        default=dict,
+        blank=True,
+        help_text=_("Snapshot of the application target at waiver time"),
+    )
+    status = models.CharField(
+        _("status"),
+        max_length=16,
+        choices=WAIVER_STATUS_CHOICES,
+        default=WAIVER_STATUS_ACTIVE,
+        db_index=True,
+    )
+    reason = models.TextField(_("reason"))
+    requirement_before = models.JSONField(
+        _("requirement state before"),
+        default=dict,
+        blank=True,
+        help_text=_("Payment/activation requirement state before the waiver"),
+    )
+    requirement_after = models.JSONField(
+        _("requirement state after"),
+        default=dict,
+        blank=True,
+        help_text=_("Payment/activation requirement state after the waiver"),
+    )
+    granted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="granted_payment_waivers",
+        verbose_name=_("granted by"),
+    )
+    granted_at = models.DateTimeField(_("granted at"), null=True, blank=True)
+    revoked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="revoked_payment_waivers",
+        verbose_name=_("revoked by"),
+    )
+    revoked_at = models.DateTimeField(_("revoked at"), null=True, blank=True)
+    revoke_reason = models.TextField(_("revoke reason"), blank=True)
+
+    class Meta:
+        verbose_name = _("payment waiver")
+        verbose_name_plural = _("payment waivers")
+        ordering = ("-created_at",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=["application"],
+                name="uq_payment_waiver_active_application",
+                condition=models.Q(status=WAIVER_STATUS_ACTIVE, application__isnull=False),
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.student} — {self.get_status_display()}"

@@ -30,6 +30,7 @@ from apps.applications.constants import (
     PROGRAM_APP_STATUS_ACCEPTED,
     PROGRAM_APP_STATUS_ACTIVATED,
     PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
+    PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
     PROGRAM_APP_STATUS_INVITED,
     PROGRAM_APP_STATUS_REJECTED,
 )
@@ -39,6 +40,7 @@ from apps.applications.models import (
     ProgramApplication,
 )
 from apps.applications.models import ProgramApplicationEmailLog as PAEL  # noqa: N817
+from apps.applications.services import change_entrance_decision
 from apps.audit.constants import ACTION_BULK_EMAIL_SENT
 from apps.audit.services import record_audit_event
 from apps.communications.constants import (
@@ -51,6 +53,7 @@ from apps.communications.services import send_templated_email
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import ROLE_EXAM_STAFF, is_admin, role_required, safe_int, student_required
+from apps.core.views import safe_next_url
 from apps.students.models import StudentProfile
 
 from .constants import (
@@ -108,7 +111,10 @@ def exam_access_token(request, token):
         attempt = assign_attempt(exam, prog_app, profile)
     # Reopening the issued link after submission must resolve the completed
     # state and route to results; the attempt is never re-taken (E3).
-    if attempt.status in (ATTEMPT_STATUS_COMPLETED, ATTEMPT_STATUS_GRADED):
+    # ``submitted_at`` is the durable "has taken the exam" marker: even if a
+    # stale row still carries an in-progress status, a submitted attempt must
+    # never grant exam access again.
+    if attempt.submitted_at or attempt.status in (ATTEMPT_STATUS_COMPLETED, ATTEMPT_STATUS_GRADED):
         return redirect("entrance_exams:results", token=token)
     if attempt.status == ATTEMPT_STATUS_IN_PROGRESS:
         return redirect("entrance_exams:take_exam", token=token)
@@ -176,7 +182,9 @@ def take_exam(request, token):
     profile = _get_profile(request.user)
     exam = get_object_or_404(EntranceExam, access_token=token, is_active=True)
     attempt = get_object_or_404(EntranceAttempt, exam=exam, student=profile)
-    if attempt.status not in (ATTEMPT_STATUS_IN_PROGRESS, ATTEMPT_STATUS_ASSIGNED):
+    # A submitted attempt is final: never render the exam page again, even if
+    # a stale row still carries an in-progress status.
+    if attempt.submitted_at or attempt.status not in (ATTEMPT_STATUS_IN_PROGRESS, ATTEMPT_STATUS_ASSIGNED):
         return redirect("entrance_exams:results", token=token)
     now = timezone.now()
     if attempt.started_at:
@@ -323,7 +331,11 @@ def admin_detail(request, exam_id):
         ),
         id=exam_id,
     )
-    return render(request, "ui/pages/admin/entrance_exam_detail.html", {"exam": exam, "title": _("Entrance exam")})
+    return render(request, "ui/pages/admin/entrance_exam_detail.html", {
+        "exam": exam,
+        "title": _("Entrance exam"),
+        "next": safe_next_url(request),
+    })
 
 
 @login_required
@@ -353,6 +365,7 @@ def admin_create_exam(request):
     """Create a new entrance exam."""
     if not is_admin(request.user):
         raise PermissionDenied
+    next_url = safe_next_url(request)
     if request.method == "POST":
         form = EntranceExamForm(request.POST)
         if form.is_valid():
@@ -360,12 +373,13 @@ def admin_create_exam(request):
             exam.created_by = request.user
             exam.save()
             messages.success(request, _("Entrance exam created."))
-            return redirect("entrance_exams:admin_detail", exam_id=exam.id)
+            return redirect(next_url) if next_url else redirect("entrance_exams:admin_detail", exam_id=exam.id)
     else:
         form = EntranceExamForm()
     return render(request, "ui/pages/admin/entrance_exam_form.html", {
         "form": form,
         "title": _("Create entrance exam"),
+        "next": next_url,
     })
 
 
@@ -376,18 +390,20 @@ def admin_edit_exam(request, exam_id):
     if not is_admin(request.user):
         raise PermissionDenied
     exam = get_object_or_404(EntranceExam, id=exam_id)
+    next_url = safe_next_url(request)
     if request.method == "POST":
         form = EntranceExamForm(request.POST, instance=exam)
         if form.is_valid():
             form.save()
             messages.success(request, _("Entrance exam updated."))
-            return redirect("entrance_exams:admin_detail", exam_id=exam.id)
+            return redirect(next_url) if next_url else redirect("entrance_exams:admin_detail", exam_id=exam.id)
     else:
         form = EntranceExamForm(instance=exam)
     return render(request, "ui/pages/admin/entrance_exam_form.html", {
         "form": form,
         "title": _("Edit entrance exam"),
         "exam": exam,
+        "next": next_url,
     })
 
 
@@ -399,13 +415,14 @@ def admin_toggle_active(request, exam_id):
     if not is_admin(request.user):
         raise PermissionDenied
     exam = get_object_or_404(EntranceExam, id=exam_id)
+    next_url = safe_next_url(request)
     exam.is_active = not exam.is_active
     exam.save(update_fields=["is_active", "updated_at"])
     if exam.is_active:
         exam.regenerate_access_token()
     status = _("activated") if exam.is_active else _("deactivated")
     messages.success(request, _("Entrance exam %(status)s.") % {"status": status})
-    return redirect("entrance_exams:admin_detail", exam_id=exam.id)
+    return redirect(next_url) if next_url else redirect("entrance_exams:admin_detail", exam_id=exam.id)
 
 
 @login_required
@@ -416,12 +433,13 @@ def admin_finalize_pending(request, exam_id):
     if not is_admin(request.user):
         raise PermissionDenied
     exam = get_object_or_404(EntranceExam, id=exam_id)
+    next_url = safe_next_url(request)
     count = finalize_all_pending_for_exam(exam)
     messages.success(
         request,
         _("Finalized %(count)d pending attempt(s).") % {"count": count},
     )
-    return redirect("entrance_exams:admin_detail", exam_id=exam.id)
+    return redirect(next_url) if next_url else redirect("entrance_exams:admin_detail", exam_id=exam.id)
 
 
 @login_required
@@ -446,7 +464,7 @@ def admin_grade_attempt(request, attempt_id):
     if not is_admin(request.user):
         raise PermissionDenied
     attempt = get_object_or_404(
-        EntranceAttempt.objects.select_related("exam", "student__user"),
+        EntranceAttempt.objects.select_related("exam", "student__user", "program_application"),
         id=attempt_id,
     )
     questions = attempt.exam.questions.prefetch_related("choices").all()
@@ -488,10 +506,107 @@ def admin_grade_attempt(request, attempt_id):
         else:
             max_score = q.max_score
         question_answer_pairs.append((q, answers.get(q.id), max_score))
+    application = attempt.program_application
+    decision_allowed = {PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED, PROGRAM_APP_STATUS_INTERVIEW_REQUESTED}
+    percentage = None
+    if attempt.score is not None and attempt.exam.total_score:
+        percentage = round(attempt.score / attempt.exam.total_score * Decimal("100"), 2)
+    change_targets = []
+    if application.status in decision_allowed or application.status in (PROGRAM_APP_STATUS_ACCEPTED, PROGRAM_APP_STATUS_REJECTED):
+        if application.status != PROGRAM_APP_STATUS_ACCEPTED:
+            change_targets.append("pass")
+        if application.status != PROGRAM_APP_STATUS_REJECTED:
+            change_targets.append("fail")
+        if application.status != PROGRAM_APP_STATUS_INTERVIEW_REQUESTED:
+            change_targets.append("interview")
     return render(request, "ui/pages/admin/entrance_exam_grade_attempt.html", {
         "attempt": attempt,
         "question_answer_pairs": question_answer_pairs,
+        "exam_total_score": attempt.exam.total_score,
+        "percentage": percentage,
+        "pass_percentage": attempt.exam.pass_percentage,
+        "application_decision": attempt_decision(attempt),
+        "application_status_label": application.get_status_display(),
+        "can_change_decision": bool(change_targets),
+        "change_targets": change_targets,
+        "change_default": change_targets[0] if change_targets else "",
+        "can_undo_decision": application.status in {PROGRAM_APP_STATUS_ACCEPTED, PROGRAM_APP_STATUS_REJECTED, PROGRAM_APP_STATUS_INTERVIEW_REQUESTED},
+        "application_detail_url": reverse("applications:program_detail", args=[application.id]),
     })
+
+
+def _parse_local_datetime(value: str):
+    """Parse a form datetime-local value into a timezone-aware datetime (or None)."""
+    value = (value or "").strip()
+    if not value:
+        return None
+    dt = timezone.datetime.fromisoformat(value)
+    return timezone.make_aware(dt) if timezone.is_naive(dt) else dt
+
+
+@login_required
+@role_required(*ROLE_EXAM_STAFF)
+def admin_attempt_decision(request, attempt_id):
+    """Admin decision for a graded entrance attempt: pass / fail / interview / revert.
+
+    The decision transitions the attempt's ProgramApplication through
+    ``change_entrance_decision``, which stays available while the application is
+    still in a decision state (entrance_submitted / interview_requested /
+    accepted / rejected) and locks once the application advances. The calculated
+    entrance score is advisory only (§7.3 DOKKIMASHORA): the Admin decides
+    independently, and the academic result is never rewritten to match.
+    """
+    if not is_admin(request.user):
+        raise PermissionDenied
+    attempt = get_object_or_404(
+        EntranceAttempt.objects.select_related("exam", "student__user", "program_application"),
+        id=attempt_id,
+    )
+    application = attempt.program_application
+    action = request.POST.get("action")
+    send_email = request.POST.get("send_email") == "on"
+    try:
+        if action == "accept":
+            change_entrance_decision(
+                application, target=PROGRAM_APP_STATUS_ACCEPTED, actor=request.user,
+                notes=(request.POST.get("admin_notes") or "").strip(),
+                send_email=send_email,
+            )
+            messages.success(request, _("Application accepted."))
+        elif action == "reject":
+            change_entrance_decision(
+                application, target=PROGRAM_APP_STATUS_REJECTED, actor=request.user,
+                reason=(request.POST.get("rejection_reason") or "").strip(),
+                notes=(request.POST.get("admin_notes") or "").strip(),
+                send_email=send_email,
+            )
+            messages.warning(request, _("Application rejected."))
+        elif action == "request_interview":
+            try:
+                interview_at = _parse_local_datetime(request.POST.get("interview_at"))
+                expires_at = _parse_local_datetime(request.POST.get("expires_at"))
+            except (ValueError, TypeError):
+                raise ValueError(_("Invalid date/time format.")) from None
+            change_entrance_decision(
+                application, target=PROGRAM_APP_STATUS_INTERVIEW_REQUESTED, actor=request.user,
+                interview_at=interview_at,
+                phone_number=(request.POST.get("phone_number") or "").strip(),
+                expires_at=expires_at,
+                notes=(request.POST.get("notes") or "").strip(),
+                send_email=send_email,
+            )
+            messages.success(request, _("Interview requested."))
+        elif action == "revert_decision":
+            change_entrance_decision(
+                application, target=PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED, actor=request.user,
+                reason=(request.POST.get("revert_reason") or "").strip(),
+            )
+            messages.info(request, _("Decision reverted."))
+        else:
+            raise ValueError(_("This action is not available for the current application status."))
+    except ValueError as exc:
+        messages.error(request, str(exc))
+    return redirect("entrance_exams:admin_grade_attempt", attempt_id=attempt.id)
 
 
 # ---------------------------------------------------------------------------
@@ -503,7 +618,7 @@ def admin_grade_attempt(request, attempt_id):
 # Question builder helpers (inline HTMX)
 # ---------------------------------------------------------------------------
 
-def _question_form_context(exam, question=None, form=None, formset=None):
+def _question_form_context(exam, question=None, form=None, formset=None, next_url=""):
     if form is None:
         form = EntranceQuestionForm(instance=question)
     if formset is None:
@@ -519,12 +634,15 @@ def _question_form_context(exam, question=None, form=None, formset=None):
         "form": form,
         "formset": formset,
         "title": _("Edit question") if question else _("Add question"),
+        "next": next_url,
     }
 
 
 
-def _render_question_form(request, exam, question=None, form=None, formset=None):
-    context = _question_form_context(exam, question=question, form=form, formset=formset)
+def _render_question_form(request, exam, question=None, form=None, formset=None, next_url=""):
+    context = _question_form_context(
+        exam, question=question, form=form, formset=formset, next_url=next_url,
+    )
     template = "ui/fragments/admin/_question_form.html" if is_htmx(request) else "ui/pages/admin/entrance_exam_question_form.html"
     return render(request, template, context)
 
@@ -536,6 +654,7 @@ def admin_add_question(request, exam_id):
     if not is_admin(request.user):
         raise PermissionDenied
     exam = get_object_or_404(EntranceExam, id=exam_id)
+    next_url = safe_next_url(request)
     if request.method == "POST":
         form = EntranceQuestionForm(request.POST)
         if form.is_valid():
@@ -549,15 +668,15 @@ def admin_add_question(request, exam_id):
                 else:
                     question.delete()
                     formset = EntranceChoiceFormSet(request.POST, instance=EntranceQuestion())
-                    return _render_question_form(request, exam, form=form, formset=formset)
+                    return _render_question_form(request, exam, form=form, formset=formset, next_url=next_url)
             else:
                 EntranceChoice.objects.filter(question=question).delete()
             messages.success(request, _("Question added."))
             if is_htmx(request):
                 response = HttpResponse()
-                response["HX-Redirect"] = reverse("entrance_exams:admin_detail", args=[exam.id])
+                response["HX-Redirect"] = next_url or reverse("entrance_exams:admin_detail", args=[exam.id])
                 return response
-            return redirect("entrance_exams:admin_detail", exam_id=exam.id)
+            return redirect(next_url) if next_url else redirect("entrance_exams:admin_detail", exam_id=exam.id)
         formset = EntranceChoiceFormSet(request.POST, instance=EntranceQuestion())
     else:
         last = exam.questions.order_by("order").last()
@@ -566,7 +685,7 @@ def admin_add_question(request, exam_id):
             "question_type": QUESTION_TYPE_MCQ,
         })
         formset = EntranceChoiceFormSet(instance=EntranceQuestion())
-    return _render_question_form(request, exam, form=form, formset=formset)
+    return _render_question_form(request, exam, form=form, formset=formset, next_url=next_url)
 
 
 @login_required
@@ -577,6 +696,7 @@ def admin_edit_question(request, exam_id, question_id):
         raise PermissionDenied
     exam = get_object_or_404(EntranceExam, id=exam_id)
     question = get_object_or_404(EntranceQuestion, id=question_id, exam=exam)
+    next_url = safe_next_url(request)
     if request.method == "POST":
         form = EntranceQuestionForm(request.POST, instance=question)
         if form.is_valid():
@@ -588,21 +708,21 @@ def admin_edit_question(request, exam_id, question_id):
                 if formset.is_valid():
                     formset.save()
                 else:
-                    return _render_question_form(request, exam, question=question, form=form, formset=formset)
+                    return _render_question_form(request, exam, question=question, form=form, formset=formset, next_url=next_url)
             else:
                 EntranceChoice.objects.filter(question=question).delete()
             messages.success(request, _("Question updated."))
             if is_htmx(request):
                 response = HttpResponse()
-                response["HX-Redirect"] = reverse("entrance_exams:admin_detail", args=[exam.id])
+                response["HX-Redirect"] = next_url or reverse("entrance_exams:admin_detail", args=[exam.id])
                 return response
-            return redirect("entrance_exams:admin_detail", exam_id=exam.id)
+            return redirect(next_url) if next_url else redirect("entrance_exams:admin_detail", exam_id=exam.id)
         formset = EntranceChoiceFormSet(request.POST, instance=question)
     else:
         form = EntranceQuestionForm(instance=question)
         formset = EntranceChoiceFormSet(instance=question)
         formset.extra = 0
-    return _render_question_form(request, exam, question=question, form=form, formset=formset)
+    return _render_question_form(request, exam, question=question, form=form, formset=formset, next_url=next_url)
 
 
 @login_required
@@ -614,6 +734,7 @@ def admin_delete_question(request, exam_id, question_id):
         raise PermissionDenied
     exam = get_object_or_404(EntranceExam, id=exam_id)
     question = get_object_or_404(EntranceQuestion, id=question_id, exam=exam)
+    next_url = safe_next_url(request)
     question.delete()
     msg = _("Question deleted.")
     messages.success(request, msg)
@@ -624,7 +745,7 @@ def admin_delete_question(request, exam_id, question_id):
             "show-toast": {"message": msg, "type": "success"},
         })
         return response
-    return redirect("entrance_exams:admin_detail", exam_id=exam.id)
+    return redirect(next_url) if next_url else redirect("entrance_exams:admin_detail", exam_id=exam.id)
 
 
 def _eligible_applications(cohort, action, exam=None, status_filter=None):
@@ -1019,7 +1140,7 @@ def admin_app_email_resend(request, exam_id, app_id):
         metadata={"action": "resend_" + action, "application_id": app_id, "status": record.status},
     )
     messages.success(request, _("Email resent."))
-    return redirect("entrance_exams:admin_detail", exam_id=exam.id)
+    return redirect(next_url) if next_url else redirect("entrance_exams:admin_detail", exam_id=exam.id)
 
 
 @login_required

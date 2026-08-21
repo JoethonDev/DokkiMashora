@@ -9,12 +9,10 @@
     {% trans "Review semester progress, decisions, evaluations, interviews, and rejoin plans." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description back_button=True %}
     <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
-      <label>
-        {% trans "Name" %}
+      <label class="field"><span class="field-label">{% trans "Name" %}</span>
         <input name="name" class="form-input" value="{{ component.name|default:'' }}" required>
       </label>
-      <label>
-        {% trans "Type" %}
+      <label class="field"><span class="field-label">{% trans "Type" %}</span>
         <select name="component_type" class="form-select" required>
           {% for value,label in component_type_choices %}
             <option value="{{ value }}"
@@ -22,18 +20,17 @@
           {% endfor %}
         </select>
       </label>
-      <label>
-        {% trans "Weight percent" %}
-        <input name="weight_percent" class="form-input"
+      <label class="field"><span class="field-label">{% trans "Weight of final grade (%)" %}</span>
+        <input name="weight_percent" class="form-input" type="number" min="0" max="100" step="0.01"
                value="{{ component.weight_percent|default:'' }}"
                required>
       </label>
-      <label>
-        {% trans "Required minimum percent" %}
-        <input name="required_min_percent" class="form-input"
-               value="{{ component.required_min_percent|default:0 }}"></label>
-      <label>
-        {% trans "Order" %}
+      <label class="field"><span class="field-label">{% trans "Required minimum (%)" %}</span>
+        <input name="required_min_percent" class="form-input" type="number" min="0" max="100" step="0.01"
+               value="{{ component.required_min_percent|default:0 }}">
+        <span class="field-help">{% trans "Enter a percentage from 0 to 100." %}</span>
+      </label>
+      <label class="field"><span class="field-label">{% trans "Order" %}</span>
         <input name="order" class="form-input" value="{{ component.order|default:'' }}" required>
       </label>
       <div class="flex items-center gap-4 pt-4 border-t border-line"><label class="flex items-center gap-2 cursor-pointer">

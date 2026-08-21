@@ -13,7 +13,11 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.academics.models import Cohort, Course
-from apps.applications.constants import PROGRAM_TYPE_CHOICES
+from apps.applications.constants import (
+    DELIVERY_MODE_CHOICES,
+    DELIVERY_MODE_ONLINE,
+    PROGRAM_TYPE_CHOICES,
+)
 from apps.applications.documents import ATTACHMENT_ALLOWED_EXTENSIONS
 from apps.applications.services import (
     RegistrationData,
@@ -74,6 +78,13 @@ class RegistrationForm(StyledFormMixin, forms.Form):
         label=_("Diploma"),
         choices=[],
         required=False,
+        widget=forms.Select(attrs={}),
+    )
+    delivery_mode = forms.ChoiceField(
+        label=_("Diploma attendance mode"),
+        choices=DELIVERY_MODE_CHOICES,
+        required=False,
+        initial=DELIVERY_MODE_ONLINE,
         widget=forms.Select(attrs={}),
     )
     program_target = forms.CharField(
@@ -212,7 +223,9 @@ class RegistrationForm(StyledFormMixin, forms.Form):
                 if program_type == "diploma":
                     if not diploma:
                         self.add_error("diploma", _("Please select a diploma."))
-                    else:
+                    if not cleaned.get("delivery_mode"):
+                        self.add_error("delivery_mode", _("Please select an attendance mode."))
+                    if diploma:
                         cohort = Cohort.objects.filter(pk=diploma).select_related("diploma").first()
                         if not cohort or not is_apply_target_open(cohort=cohort):
                             self.add_error("diploma", _("No active cohort with an entrance exam found for this diploma."))
@@ -233,7 +246,12 @@ class RegistrationForm(StyledFormMixin, forms.Form):
 
     def get_program_data(self) -> dict:
         """Extract optional program selection from cleaned data."""
-        result: dict[str, Any] = {"program_type": None, "cohort_id": None, "course_id": None}
+        result: dict[str, Any] = {
+            "program_type": None,
+            "cohort_id": None,
+            "course_id": None,
+            "delivery_mode": DELIVERY_MODE_ONLINE,
+        }
         if not self.cleaned_data.get("apply_program"):
             return result
         program_type = self.cleaned_data.get("program_type")
@@ -242,6 +260,7 @@ class RegistrationForm(StyledFormMixin, forms.Form):
             if cohort_id:
                 result["program_type"] = "diploma"
                 result["cohort_id"] = cohort_id
+                result["delivery_mode"] = self.cleaned_data.get("delivery_mode") or DELIVERY_MODE_ONLINE
         elif program_type == "course":
             program_target = self.cleaned_data.get("program_target")
             if program_target and program_target.startswith("course_"):
@@ -320,6 +339,8 @@ class StudentDocumentUploadForm(StyledFormMixin, forms.Form):
                     _("File type '%(ext)s' is not allowed for attachments.") % {"ext": ext}
                 )
             if ext == ".pdf":
+                if has_pdf:
+                    raise forms.ValidationError(_("Only one PDF file can be uploaded."))
                 has_pdf = True
             else:
                 has_image = True

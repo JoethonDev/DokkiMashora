@@ -1,0 +1,35 @@
+{% load i18n %}
+{% comment %}
+Expandable text (P1-02/P8-01): renders the FULL value in the DOM so no data is
+ever lost server-side, clamps it visually with a line-clamp, and shows a
+"Show more / Show less" toggle only when the content actually overflows.
+
+Usage:
+  {% include "ui/components/_expandable_text.html" with text=item.reason clamp=2 %}
+  {% include "ui/components/_expandable_text.html" with text=item.description clamp=3 muted=True %}
+
+Works inside table cells and cards; Alpine is available on every page.
+{% endcomment %}
+{% with clamp_lines=clamp|default:2 %}
+<div
+  class="min-w-0"
+  x-data="{ expanded: false, overflowing: false, init() { this.$nextTick(() => { this.overflowing = this.$refs.text.scrollHeight > this.$refs.text.clientHeight + 1; }); } }"
+>
+  <p
+    x-ref="text"
+    :class="expanded ? '' : 'line-clamp-{{ clamp_lines }}'"
+    class="m-0 text-sm {% if muted %}text-muted{% else %}text-text{% endif %} break-words"
+  >{{ text|default:'—' }}</p>
+  <button
+    type="button"
+    x-cloak
+    x-show="overflowing"
+    @click="expanded = !expanded"
+    :aria-expanded="expanded ? 'true' : 'false'"
+    class="inline-flex items-center gap-1 text-xs font-bold text-brand underline underline-offset-2 decoration-brand/40 hover:decoration-brand mt-1 min-h-11 md:min-h-0"
+  >
+    <span x-show="!expanded">{% trans "Show more" %}</span>
+    <span x-show="expanded" x-cloak>{% trans "Show less" %}</span>
+  </button>
+</div>
+{% endwith %}

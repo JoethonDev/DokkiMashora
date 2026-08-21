@@ -1,0 +1,35 @@
+{% load i18n ui_tags %}
+{% comment %}
+State presentation primitive (P1-02).
+
+Domains supply these keys from backend state; templates never derive
+permission or transition decisions from raw state:
+
+  state          - stable machine code (e.g. "ready", "awaiting_release")
+  label          - translated display label (required)
+  icon           - optional semantic glyph override (defaults to the tone glyph)
+  description    - optional translated explanation
+  block_reason   - optional translated reason an action is blocked
+  primary_action - optional dict {label, url, method} ("GET" default,
+                   "POST" supported); rendered only when supplied
+
+Future domain adapters (P2-03, P4-01, P5-02) may extend this shape with
+secondary actions through a shared available-actions partial once at least
+two pages need it. This partial is presentation only.
+{% endcomment %}
+<div class="flex flex-col gap-1" data-state-banner>
+  <div class="flex items-center gap-3 flex-wrap">
+    {% include "ui/components/_status.html" with code=state label=label icon=icon %}
+    {% if primary_action %}
+      {% if primary_action.method == "POST" %}
+        <form method="post" action="{{ primary_action.url }}" class="m-0">{% csrf_token %}
+          <button class="btn-primary" type="submit">{{ primary_action.label }}</button>
+        </form>
+      {% else %}
+        <a class="btn-primary" href="{{ primary_action.url }}">{{ primary_action.label }}</a>
+      {% endif %}
+    {% endif %}
+  </div>
+  {% if description %}<p class="text-sm text-muted mt-1 mb-0">{{ description }}</p>{% endif %}
+  {% if block_reason %}<p class="text-xs text-muted mt-1 mb-0">{{ block_reason }}</p>{% endif %}
+</div>

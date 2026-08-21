@@ -9,6 +9,7 @@ from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
+from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE
 from apps.academics.models import CourseEnrollment, DiplomaEnrollment
 
 from .constants import (
@@ -24,6 +25,18 @@ from .models import AttendanceCode, AttendanceRecord, AttendanceSession
 _salt = "attendance-qr"
 _signer = TimestampSigner(salt=_salt)
 _QR_MAX_AGE_SECONDS = 90 * 24 * 3600  # 90 days
+
+
+class AttendanceScanError(ValueError):
+    """Stable domain result codes for the scanner (P7-01).
+
+    ``code`` is one of: invalid_token, no_enrollment, wrong_scope,
+    session_not_open, outside_window, enrollment_inactive, enrollment_expired.
+    """
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
 
 
 def get_or_create_attendance_code_for_enrollment(
@@ -136,35 +149,43 @@ def scan_attendance_token(
     locked_session = AttendanceSession.objects.select_for_update().get(pk=session.pk)
 
     if locked_session.status != SESSION_STATUS_OPEN:
-        raise ValueError(_("Attendance session is not open."))
+        raise AttendanceScanError("session_not_open", _("Attendance session is not open."))
     if not (locked_session.open_at <= now <= locked_session.close_at):
-        raise ValueError(_("Scanning is outside the session time window."))
+        raise AttendanceScanError("outside_window", _("Scanning is outside the session time window."))
 
     # raw_token is the signed payload — unsign to get the pk (with expiry)
     try:
         pk = int(_signer.unsign(raw_token, max_age=_QR_MAX_AGE_SECONDS))
     except Exception:
-        raise ValueError(_("Invalid or tampered attendance token.")) from None
+        raise AttendanceScanError("invalid_token", _("Invalid or tampered attendance token.")) from None
     try:
         code = AttendanceCode.objects.get(pk=pk, active=True)
     except AttendanceCode.DoesNotExist:
-        raise ValueError(_("Invalid attendance token.")) from None
+        raise AttendanceScanError("invalid_token", _("Invalid attendance token.")) from None
 
     enrollment = code.diploma_enrollment or code.course_enrollment
     if enrollment is None:
-        raise ValueError(_("Attendance code is not linked to an enrollment."))
+        raise AttendanceScanError("no_enrollment", _("Attendance code is not linked to an enrollment."))
+
+    # P7-01: exact active, non-expired enrollment is required. A persisted
+    # status that P5-04 has not yet normalized is never the authorization
+    # boundary — access is denied here at scan time.
+    if enrollment.status != ENROLLMENT_STATUS_ACTIVE:
+        raise AttendanceScanError("enrollment_inactive", _("The student's enrollment is not active."))
+    if enrollment.expires_at and now >= enrollment.expires_at:
+        raise AttendanceScanError("enrollment_expired", _("The student's enrollment has expired."))
 
     if isinstance(enrollment, DiplomaEnrollment):
         if not session.cohort_id:
-            raise ValueError(_("Session is not for a diploma cohort."))
+            raise AttendanceScanError("wrong_scope", _("Session is not for a diploma cohort."))
         if enrollment.cohort_id != session.cohort_id:
-            raise ValueError(_("Attendance code does not match this session."))
+            raise AttendanceScanError("wrong_scope", _("Attendance code does not match this session."))
         record_kwargs = {"diploma_enrollment": enrollment, "course_enrollment": None}
     else:
         if not session.course_version_id:
-            raise ValueError(_("Session is not for a course."))
+            raise AttendanceScanError("wrong_scope", _("Session is not for a course."))
         if enrollment.course_version_id != session.course_version_id:
-            raise ValueError(_("Attendance code does not match this session."))
+            raise AttendanceScanError("wrong_scope", _("Attendance code does not match this session."))
         record_kwargs = {"diploma_enrollment": None, "course_enrollment": enrollment}
 
     record, created = AttendanceRecord.objects.get_or_create(

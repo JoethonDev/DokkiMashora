@@ -1,0 +1,31 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n %}
+{% block title %}
+  {{ assessment }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack animate-enter-view">{% trans "Offline grading" as eyebrow %}
+    {% include "ui/components/_page_header.html" with title=assessment eyebrow=eyebrow back_button=True %}
+    <section class="card-surface">
+      <div class="section-head"><div><p class="eyebrow">{% trans "Offline grade entry" %}</p><h2>{{ assessment }}</h2></div></div>
+      <form class="max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
+        <label class="field"><span class="field-label">{% trans "Exam code" %}</span>
+          <input name="code_number" class="form-input" value="{{ code.code_number|default:'' }}" required>
+        </label>
+        <button class="btn-ghost" type="submit">{% trans "Load code" %}</button>
+      </form>
+      {% if code %}
+        {% include "ui/components/_form_section_divider.html" with title=_("Section grades") %}
+        <div class="page-stack">
+          {% for section in sections %}
+            <form class="flex items-end gap-2.5 flex-wrap" method="post" action="{% url 'assessments:admin_offline_grade_section' assessment.id code.id section.id %}">{% csrf_token %}
+              <label class="field flex-1 min-w-40"><span class="field-label">{{ section }}</span>
+                <input name="score" class="form-input" type="number" step="0.01"></label>
+              <button class="btn-primary" type="submit">{% trans "Save" %}</button>
+            </form>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </section>
+  </div>
+{% endblock %}

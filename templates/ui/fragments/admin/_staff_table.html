@@ -51,8 +51,9 @@
                      href="{% url 'accounts:admin_user_detail' staff.id %}">{% trans "View" %}</a>
                   <a class="btn-ghost"
                      href="{% url 'accounts:admin_user_edit' staff.id %}">{% trans "Edit" %}</a>
-                  <a class="btn-ghost"
-                     href="{% url 'accounts:admin_staff_assignments' staff.id %}">{% trans "Assignments" %}</a>
+                   <a class="btn-ghost"
+                      href="{% url 'accounts:admin_staff_assignments' staff.id %}">{% trans "Assignments" %}</a>
+                   {% if not staff.is_active and not staff.email_activated_at %}<form method="post" action="{% url 'accounts:admin_user_resend_activation' staff.id %}" data-confirm="{% trans 'Send a new activation email to this user?' %}" class="inline m-0">{% csrf_token %}<button class="btn-ghost" type="submit">{% trans "Resend activation" %}</button></form>{% endif %}
                 </div>
               </td>
             </tr>
@@ -71,7 +72,7 @@
           </div>
           <div class="flex gap-2 shrink-0">
             <a class="btn-soft-primary" href="{% url 'accounts:admin_user_detail' staff.id %}">{% trans "View" %}</a>
-            <a class="btn-ghost" href="{% url 'accounts:admin_staff_assignments' staff.id %}">{% trans "Assignments" %}</a>
+             <a class="btn-ghost" href="{% url 'accounts:admin_staff_assignments' staff.id %}">{% trans "Assignments" %}</a>{% if not staff.is_active and not staff.email_activated_at %}<form method="post" action="{% url 'accounts:admin_user_resend_activation' staff.id %}" data-confirm="{% trans 'Send a new activation email to this user?' %}" class="inline m-0">{% csrf_token %}<button class="btn-ghost" type="submit">{% trans "Resend activation" %}</button></form>{% endif %}
           </div>
         </div>
       {% endfor %}

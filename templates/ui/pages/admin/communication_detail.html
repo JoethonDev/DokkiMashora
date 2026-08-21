@@ -52,7 +52,7 @@
             <tr>
               <td class="table-td">{{ item.to_email|default:item.recipient_email }}</td>
               <td class="table-td">
-                {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:item.status %}
+                {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:'—' %}
               </td>
               <td class="table-td">{{ item.error_message|default:'—' }}</td>
             </tr>
@@ -68,8 +68,8 @@
       {% for item in page_obj %}
         <div class="mobile-card">
           <div class="flex-1 min-w-0">
-            <strong class="block truncate">{{ item.to_email|default:item.recipient_email }}</strong>
-            {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:item.status %}
+            <strong class="block break-words">{{ item.to_email|default:item.recipient_email }}</strong>
+            {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:'—' %}
             <small class="block text-muted">{{ item.error_message|default:'—' }}</small>
           </div>
         </div>

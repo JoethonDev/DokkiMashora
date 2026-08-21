@@ -9,25 +9,27 @@ from typing import Any
 
 from django.conf import settings
 from django.contrib.auth.models import Group
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.db import transaction
+from django.db.models.deletion import CASCADE, PROTECT
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from apps.audit.constants import ACTION_USER_IMPORT_CONFIRMED, ACTION_USER_IMPORT_PREVIEWED
+from apps.audit.constants import (
+    ACTION_USER_DELETED,
+    ACTION_USER_IMPORT_CONFIRMED,
+    ACTION_USER_IMPORT_PREVIEWED,
+)
 from apps.audit.models import AuditEvent
+from apps.audit.services import record_audit_event
 from apps.communications.constants import TEMPLATE_ACTIVATION
 from apps.communications.services import send_templated_email
 from apps.students.identity import normalize_identity_number, validate_identity_number
 from apps.students.models import StudentProfile
 
 from .constants import (
-    GROUP_ADMIN,
-    GROUP_MODERATOR,
     GROUP_STUDENT,
-    GROUP_SUPER_ADMIN,
-    GROUP_TEACHER,
     MATCH_METHOD_AMBIGUOUS,
     MATCH_METHOD_EMAIL,
     MATCH_METHOD_NATIONAL_ID,
@@ -41,6 +43,7 @@ from .constants import (
     ROW_STATUS_PARSED,
     ROW_STATUS_UNMATCHED,
     ROW_STATUS_UPDATED,
+    STAFF_ROLE_GROUPS,
     UPLOAD_STATUS_CONFIRMED,
     UPLOAD_STATUS_FAILED,
     UPLOAD_STATUS_PENDING,
@@ -96,7 +99,7 @@ def match_user(row: dict[str, str]) -> tuple[User | None, str, str]:
     sources: dict[int, str] = {}
 
     student_user_ids = set(User.objects.filter(groups__name=GROUP_STUDENT).values_list("id", flat=True))
-    staff_group_names = [GROUP_SUPER_ADMIN, GROUP_ADMIN, GROUP_MODERATOR, GROUP_TEACHER]
+    staff_group_names = list(STAFF_ROLE_GROUPS)
     staff_user_ids = set(User.objects.filter(groups__name__in=staff_group_names).values_list("id", flat=True))
 
     def _is_importable(u: User) -> bool:
@@ -427,4 +430,48 @@ def send_activation_email(user) -> None:
         TEMPLATE_ACTIVATION, user.email,
         {"full_name": full_name, "activation_url": activation_url, "email": user.email},
         sent_by=None,
+    )
+
+
+def _has_cascade_or_protected_records(instance, *, excluded_models=()) -> bool:
+    """Return whether deleting instance would remove or invalidate related records."""
+    for relation in instance._meta.related_objects:
+        if relation.on_delete not in (CASCADE, PROTECT) or relation.related_model in excluded_models:
+            continue
+        accessor = relation.get_accessor_name()
+        if not accessor:
+            continue
+        try:
+            related = getattr(instance, accessor)
+        except ObjectDoesNotExist:
+            continue
+        if hasattr(related, "exists"):
+            if related.exists():
+                return True
+        elif related is not None:
+            return True
+    return False
+
+
+@transaction.atomic
+def delete_student_account(user, actor) -> None:
+    """Delete an unused student account without deleting historical records."""
+    profile = StudentProfile.objects.filter(user=user).first()
+    if profile is None:
+        raise ValueError(_("This account has no student profile."))
+    if _has_cascade_or_protected_records(profile) or _has_cascade_or_protected_records(
+        user,
+        excluded_models=(StudentProfile,),
+    ):
+        raise ValueError(_("This student cannot be deleted because historical records are linked to the account."))
+
+    user_id = user.id
+    email = user.email
+    user.delete()
+    record_audit_event(
+        actor=actor,
+        action=ACTION_USER_DELETED,
+        target_type="user",
+        target_id=str(user_id),
+        metadata={"email": email, "student_account": True},
     )

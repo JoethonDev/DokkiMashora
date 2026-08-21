@@ -5,11 +5,13 @@ import io as _io
 import json
 import logging
 import re
+import uuid
 from decimal import Decimal
 
 import qrcode
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
@@ -27,7 +29,6 @@ from apps.academics.constants import (
     AUDIO_PROCESSING_PENDING,
     ENROLLMENT_STATUS_ACTIVE,
     ENROLLMENT_STATUS_CHOICES,
-    WATCH_STATUS_COMPLETED,
 )
 from apps.academics.forms import (
     CohortForm,
@@ -46,17 +47,19 @@ from apps.academics.models import (
     Diploma,
     DiplomaEnrollment,
     DiplomaLecture,
+    DiplomaLectureWatchProgress,
     Lecture,
+    LectureAudioProgress,
+    LectureWatchProgress,
     StudentCluster,
     Semester,
-    TeacherAssignment,
-    DiplomaLectureWatchProgress,
-    LectureWatchProgress,
 )
 from apps.assessments.constants import ATTEMPT_STATUS_ASSIGNED, ATTEMPT_STATUS_IN_PROGRESS
-from apps.assessments.models import Assessment, AssessmentAttempt
+from apps.assessments.models import AssessmentAttempt
 from apps.assessments.services import get_student_assessments
 from apps.academics.services import (
+    _course_lecture_completion_map,
+    _course_unlock_map,
     can_access_course,
     can_access_diploma_lecture,
     can_access_lecture,
@@ -72,13 +75,14 @@ from apps.academics.services import (
     diploma_progress_for_enrollment,
     enqueue_youtube_metadata_refresh,
     extract_youtube_video_id,
-    get_student_course_versions,
     get_student_diploma_access,
     get_visible_diploma_lectures,
     get_visible_lectures,
     record_diploma_lecture_checkpoint,
+    record_lecture_audio_checkpoint,
     record_lecture_checkpoint,
     start_diploma_lecture_watch,
+    start_lecture_audio,
     start_lecture_watch,
 )
 from apps.attendance.models import AttendanceCode
@@ -88,15 +92,15 @@ from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import (
     ROLE_EXAM_STAFF,
-    can_manage_course_version,
     enrollment_scope_filter,
+    is_admin,
     is_student,
     role_required,
     student_required,
 )
 from apps.core.views import safe_next_url
 from apps.intake_forms.models import IntakeForm
-from apps.storage.services import storage_service
+from apps.storage.services import record_deferred_storage_deletion, storage_service
 from apps.students.models import StudentProfile
 
 logger = logging.getLogger(__name__)
@@ -703,7 +707,7 @@ def admin_version_detail(request, course_id, version_id):
 def admin_lecture_create(request, course_id, version_id):
     course = get_object_or_404(Course, id=course_id)
     version = get_object_or_404(CourseVersion, id=version_id, course=course)
-    if not can_manage_course_version(request.user, version):
+    if not is_admin(request.user):
         raise PermissionDenied
     next_url = safe_next_url(request)
     if request.method == "POST":
@@ -731,19 +735,23 @@ def admin_lecture_edit(request, course_id, version_id, lecture_id):
     course = get_object_or_404(Course, id=course_id)
     version = get_object_or_404(CourseVersion, id=version_id, course=course)
     lecture = get_object_or_404(Lecture, id=lecture_id, course_version=version)
-    if not can_manage_course_version(request.user, version):
+    if not is_admin(request.user):
         raise PermissionDenied
     next_url = safe_next_url(request)
     if request.method == "POST":
         form = LectureForm(request.POST, request.FILES, instance=lecture)
         if form.is_valid():
-            old_audio_key = lecture.audio_storage_key
-            old_hls_prefix = f"lectures/{lecture.id}/audio"
+            previous_pending_key = lecture.audio_pending_storage_key
+            previous_pending_prefix = (
+                previous_pending_key.rsplit("/", 1)[0]
+                if previous_pending_key.startswith(f"lectures/{lecture.id}/audio/")
+                else ""
+            )
             form.save()
-            _process_lecture_audio(request, lecture, request.FILES)
+            pending_replaced = _process_lecture_audio(request, lecture, request.FILES)
             enqueue_youtube_metadata_refresh(lecture)
-            if old_audio_key and old_audio_key != lecture.audio_storage_key:
-                _cleanup_audio_after_commit([old_audio_key], [old_hls_prefix])
+            if pending_replaced and previous_pending_prefix:
+                _cleanup_audio_after_commit([], [previous_pending_prefix])
             messages.success(request, _("Lecture updated."))
             return redirect(next_url) if next_url else redirect("academics:admin_version_detail", course_id=course.id, version_id=version.id)
     else:
@@ -762,7 +770,7 @@ def admin_lecture_delete(request, course_id, version_id, lecture_id):
     course = get_object_or_404(Course, id=course_id)
     version = get_object_or_404(CourseVersion, id=version_id, course=course)
     lecture = get_object_or_404(Lecture, id=lecture_id, course_version=version)
-    if not can_manage_course_version(request.user, version):
+    if not is_admin(request.user):
         raise PermissionDenied
     next_url = safe_next_url(request)
     try:
@@ -815,52 +823,72 @@ def _process_lecture_audio(request, lecture, files, key_prefix=None):
     """
     audio_file = files.get("audio_file")
     if not audio_file:
-        return
-    prefix = key_prefix or f"lectures/{lecture.id}/audio"
+        return False
+    base_prefix = key_prefix or f"lectures/{lecture.id}/audio"
+    generation_prefix = f"{base_prefix}/{uuid.uuid4().hex}"
+    uploaded_key = ""
+    source_persisted = False
     try:
         filename = str(audio_file)
         content_type = audio_file.content_type or "audio/mpeg"
         validate_audio_file(filename, content_type)
-        data = audio_file.read()
+        max_size = settings.AUDIO_MAX_UPLOAD_MB * 1024 * 1024
+        if getattr(audio_file, "size", 0) > max_size:
+            raise ValueError(
+                _("Audio file exceeds the maximum allowed size of %(size)s MB.")
+                % {"size": settings.AUDIO_MAX_UPLOAD_MB}
+            )
+        data = audio_file.read(max_size + 1)
         result = storage_service.upload_file(
             data,
-            key_prefix=prefix,
+            key_prefix=generation_prefix,
             content_type=content_type,
-            max_size=200 * 1024 * 1024,
+            max_size=max_size,
             allowed_types=[".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac"],
             original_filename=filename,
         )
-        lecture.audio_storage_key = result.key
-        lecture.audio_original_filename = filename
-        lecture.audio_content_type = result.content_type
-        lecture.audio_byte_size = result.byte_size
-        lecture.audio_checksum = result.checksum
+        uploaded_key = result.key
+        # Keep the currently published source/HLS generation addressable while
+        # the replacement is processed. Only the worker publishes these
+        # metadata fields after every HLS object exists.
+        lecture.audio_pending_storage_key = result.key
         lecture.audio_processing_status = AUDIO_PROCESSING_PENDING
         lecture.audio_processing_error = ""
         lecture.save(update_fields=[
-            "audio_storage_key", "audio_original_filename",
-            "audio_content_type", "audio_byte_size", "audio_checksum",
-            "audio_processing_status", "audio_processing_error",
+            "audio_pending_storage_key", "audio_processing_status",
+            "audio_processing_error", "updated_at",
         ])
+        source_persisted = True
         from apps.academics.tasks import transcode_lecture_audio_task
 
         transcode_lecture_audio_task.delay(
             lecture_id=lecture.id,
             storage_key=result.key,
             original_filename=filename,
-            content_type=content_type,
-            storage_prefix=prefix,
+            content_type=result.content_type,
+            byte_size=result.byte_size,
+            checksum=result.checksum,
+            storage_prefix=generation_prefix,
+            diploma=isinstance(lecture, DiplomaLecture),
         )
         messages.success(request, _("Audio uploaded. HLS processing started."))
     except Exception as exc:
         logger.exception("Audio upload/processing failed for lecture %s", lecture.id)
-        lecture.audio_processing_status = AUDIO_PROCESSING_FAILED
-        lecture.audio_processing_error = str(exc)
-        lecture.save(update_fields=["audio_processing_status", "audio_processing_error"])
+        if uploaded_key and not source_persisted:
+            try:
+                if not storage_service.delete_prefix(generation_prefix):
+                    record_deferred_storage_deletion(prefix=generation_prefix, error=str(exc))
+            except Exception as cleanup_exc:
+                record_deferred_storage_deletion(prefix=generation_prefix, error=str(cleanup_exc))
+        elif source_persisted or not lecture.audio_storage_key:
+            lecture.audio_processing_status = AUDIO_PROCESSING_FAILED
+            lecture.audio_processing_error = str(exc)[:2000]
+            lecture.save(update_fields=["audio_processing_status", "audio_processing_error", "updated_at"])
         messages.error(request, _("Audio upload failed: %(error)s") % {"error": str(exc)})
+    return source_persisted
 
 
-_AUDIO_SEGMENT_RE = re.compile(r"^[A-Za-z0-9_-]+\.(m3u8|ts)$")
+_AUDIO_SEGMENT_RE = re.compile(r"^[a-f0-9]{32}/(?:index\.m3u8|seg_\d{3}\.ts)$")
 
 
 def _is_valid_audio_file_path(file_path: str) -> bool:
@@ -872,7 +900,7 @@ def _is_valid_audio_file_path(file_path: str) -> bool:
     """
     if not file_path:
         return False
-    if "/" in file_path or "\\" in file_path or "\x00" in file_path:
+    if "\\" in file_path or "\x00" in file_path:
         return False
     if file_path in {".", ".."}:
         return False
@@ -890,14 +918,20 @@ def _cleanup_audio_after_commit(old_keys, old_prefixes):
             if not key:
                 continue
             try:
-                storage_service.delete_file(key)
-            except Exception:  # noqa: BLE001 - best-effort post-commit cleanup
+                if not storage_service.delete_file(key):
+                    record_deferred_storage_deletion(key=key, error="Delete returned false")
+            except Exception as exc:  # noqa: BLE001 - post-commit reconciliation
                 logger.exception("Storage cleanup failed for key %s", key)
+                record_deferred_storage_deletion(key=key, error=str(exc))
         for prefix in old_prefixes:
+            if not prefix:
+                continue
             try:
-                storage_service.delete_prefix(prefix)
-            except Exception:  # noqa: BLE001 - best-effort post-commit cleanup
+                if not storage_service.delete_prefix(prefix):
+                    record_deferred_storage_deletion(prefix=prefix, error="Delete returned false")
+            except Exception as exc:  # noqa: BLE001 - post-commit reconciliation
                 logger.exception("Storage cleanup failed for prefix %s", prefix)
+                record_deferred_storage_deletion(prefix=prefix, error=str(exc))
 
     transaction.on_commit(_cleanup)
 
@@ -929,7 +963,20 @@ def _assessment_due_work(user, *, course_version_id=None, cohort_id=None):
     return attempts[:5]
 
 
-def _lecture_navigation(lectures, lecture, *, version=None, enrollment=None, semester=None):
+def _learning_assessments(user, *, course_version_id=None, cohort_id=None):
+    """Return active student-visible assessments for one learning target."""
+    return [
+        assessment
+        for assessment in get_student_assessments(user)
+        if (
+            course_version_id and assessment.course_version_id == course_version_id
+        ) or (
+            cohort_id and assessment.cohort_id == cohort_id
+        )
+    ]
+
+
+def _lecture_navigation(lectures, lecture, *, version=None, enrollment=None, semester=None, unlock_map=None):
     ordered = list(lectures)
     index = ordered.index(lecture)
     route = "academics:student_lecture_view" if version else "academics:student_diploma_lecture_view"
@@ -937,9 +984,15 @@ def _lecture_navigation(lectures, lecture, *, version=None, enrollment=None, sem
         return reverse(route, args=[version.id, item.id]) if version else reverse(
             route, args=[enrollment.id, semester.id, item.id]
         )
+    next_item = ordered[index + 1] if index + 1 < len(ordered) else None
+    # Course lectures unlock sequentially; never offer a next link into a
+    # locked lecture. Diploma lectures have no completion locking.
+    if version and next_item is not None and unlock_map is not None:
+        if not unlock_map.get(next_item.id, False):
+            next_item = None
     return {
         "previous_url": url(ordered[index - 1]) if index else None,
-        "next_url": url(ordered[index + 1]) if index + 1 < len(ordered) else None,
+        "next_url": url(next_item) if next_item else None,
     }
 
 
@@ -972,17 +1025,16 @@ def student_course_detail(request, version_id):
             img.save(buf, format="PNG")
             course_attendance_qr = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
     progress = course_progress_for_enrollment(profile, version)
-    completed_lecture_ids = list(
-        LectureWatchProgress.objects.filter(
-            student=profile,
-            course_enrollment=course_enrollment,
-            status=WATCH_STATUS_COMPLETED,
-        ).values_list("lecture_id", flat=True)
-    ) if course_enrollment else []
-    teachers = TeacherAssignment.objects.filter(
-        course_version=version, active=True,
-    ).select_related("teacher").order_by("teacher__full_name")
+    lecture_unlock = _course_unlock_map(profile, course_enrollment, lectures) if course_enrollment else {}
+    completed_lecture_ids = [
+        lecture_id
+        for lecture_id, done in _course_lecture_completion_map(
+            profile, course_enrollment, lectures,
+        ).items()
+        if done
+    ] if course_enrollment else []
     due_work = _assessment_due_work(request.user, course_version_id=version.id)
+    learning_assessments = _learning_assessments(request.user, course_version_id=version.id)
     return render(
         request,
         "ui/pages/student/content.html",
@@ -990,12 +1042,14 @@ def student_course_detail(request, version_id):
             "version": version,
             "course_version": version,
             "lectures": lectures,
+            "lecture_unlock": lecture_unlock,
             "course_attendance_code": course_attendance_code,
             "course_attendance_qr": course_attendance_qr,
             "progress": progress,
+            "video_tracking_enabled": version.course.video_tracking_enabled,
             "completed_lecture_ids": completed_lecture_ids,
-            "teachers": teachers,
             "due_work": due_work,
+            "learning_assessments": learning_assessments,
             "access_state": course_enrollment.get_status_display() if course_enrollment else _("No active enrollment"),
             "back_url": reverse("students:diploma_course"),
             "back_label": _("Back to learning"),
@@ -1020,8 +1074,14 @@ def student_lecture_view(request, version_id, lecture_id):
     lecture = get_object_or_404(Lecture, id=lecture_id, course_version=version)
     if not can_access_lecture(profile, lecture):
         raise PermissionDenied(_("This lecture is not available yet."))
-    navigation = _lecture_navigation(get_visible_lectures(profile, version), lecture, version=version)
+    visible = get_visible_lectures(profile, version)
+    enrollment = CourseEnrollment.objects.filter(
+        student=profile, course_version=version, status__in=["active", "pending"]
+    ).first()
+    unlock_map = _course_unlock_map(profile, enrollment, visible) if enrollment else {}
+    navigation = _lecture_navigation(visible, lecture, version=version, unlock_map=unlock_map)
     watch_progress = LectureWatchProgress.objects.filter(student=profile, lecture=lecture, course_enrollment__isnull=False).first()
+    audio_progress = LectureAudioProgress.objects.filter(student=profile, lecture=lecture).first()
     return render(
         request,
         "ui/pages/student/content.html",
@@ -1029,8 +1089,11 @@ def student_lecture_view(request, version_id, lecture_id):
             "version": version,
             "course_version": version,
             "lecture": lecture,
+            "youtube_video_id": lecture.youtube_video_id or extract_youtube_video_id(lecture.youtube_url),
+            "video_tracking_enabled": version.course.video_tracking_enabled,
             "navigation": navigation,
             "watch_progress": watch_progress,
+            "audio_progress": audio_progress,
             "back_url": reverse("academics:student_course_detail", args=[version.id]),
             "back_label": _("Back to course"),
         },
@@ -1051,6 +1114,9 @@ def student_lecture_audio(request, version_id, lecture_id, file_path=""):
     if not can_access_lecture(profile, lecture):
         raise PermissionDenied(_("This lecture is not available yet."))
     if not _is_valid_audio_file_path(file_path):
+        raise Http404
+    expected_prefix = f"lectures/{lecture.id}/audio/{file_path.split('/', 1)[0]}"
+    if lecture.audio_hls_segment_prefix != expected_prefix:
         raise Http404
     storage_key = f"lectures/{lecture.id}/audio/{file_path}"
     try:
@@ -1181,13 +1247,20 @@ def admin_diploma_lecture_edit(request, diploma_id, cohort_id, semester_id, lect
     if request.method == "POST":
         form = DiplomaLectureForm(request.POST, request.FILES, instance=lecture)
         if form.is_valid():
-            old_audio_key = lecture.audio_storage_key
-            old_hls_prefix = f"diploma-lectures/{lecture.id}/audio"
+            previous_pending_key = lecture.audio_pending_storage_key
+            previous_pending_prefix = (
+                previous_pending_key.rsplit("/", 1)[0]
+                if previous_pending_key.startswith(f"diploma-lectures/{lecture.id}/audio/")
+                else ""
+            )
             form.save()
-            _process_lecture_audio(request, lecture, request.FILES, key_prefix=f"diploma-lectures/{lecture.id}/audio")
+            pending_replaced = _process_lecture_audio(
+                request, lecture, request.FILES,
+                key_prefix=f"diploma-lectures/{lecture.id}/audio",
+            )
             enqueue_youtube_metadata_refresh(lecture, diploma=True)
-            if old_audio_key and old_audio_key != lecture.audio_storage_key:
-                _cleanup_audio_after_commit([old_audio_key], [old_hls_prefix])
+            if pending_replaced and previous_pending_prefix:
+                _cleanup_audio_after_commit([], [previous_pending_prefix])
             messages.success(request, _("Diploma lecture updated."))
             return redirect(next_url) if next_url else redirect("academics:admin_diploma_detail", diploma_id=diploma.id)
     else:
@@ -1469,6 +1542,55 @@ def api_watch_checkpoint(request, version_id, lecture_id):
     return JsonResponse(result, status=http_status)
 
 
+@require_POST
+@login_required
+def api_audio_start(request, version_id, lecture_id):
+    """POST start audio session. Returns session_id, resume_position, duration, interval, threshold."""
+    try:
+        version = CourseVersion.objects.get(id=version_id)
+        lecture = Lecture.objects.get(id=lecture_id, course_version=version)
+    except (CourseVersion.DoesNotExist, Lecture.DoesNotExist):
+        return JsonResponse({"error": "not_found"}, status=404)
+
+    try:
+        student = StudentProfile.objects.get(user=request.user)
+    except StudentProfile.DoesNotExist:
+        return JsonResponse({"error": "no_student_profile"}, status=400)
+
+    try:
+        result = start_lecture_audio(student=student, lecture=lecture)
+        return JsonResponse(result)
+    except ValueError as e:
+        return JsonResponse({"error": str(e)}, status=403)
+
+
+@require_POST
+@login_required
+def api_audio_checkpoint(request, version_id, lecture_id):
+    """POST audio checkpoint. Returns progress, status, violation."""
+    try:
+        version = CourseVersion.objects.get(id=version_id)
+        lecture = Lecture.objects.get(id=lecture_id, course_version=version)
+    except (CourseVersion.DoesNotExist, Lecture.DoesNotExist):
+        return JsonResponse({"error": "not_found"}, status=404)
+
+    try:
+        student = StudentProfile.objects.get(user=request.user)
+    except StudentProfile.DoesNotExist:
+        return JsonResponse({"error": "no_student_profile"}, status=400)
+
+    try:
+        payload = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"error": "invalid_json"}, status=400)
+
+    result = record_lecture_audio_checkpoint(student=student, lecture=lecture, payload=payload)
+    http_status = result.pop("status", 200)
+    if not isinstance(http_status, int):
+        http_status = 200
+    return JsonResponse(result, status=http_status)
+
+
 # --- Student: Diploma content views (Phase 6) ---------------------------------
 
 
@@ -1530,8 +1652,10 @@ def student_diploma_detail(request, enrollment_id):
         "attendance_code": attendance_code,
         "attendance_qr": attendance_qr,
         "progress": progress,
+        "video_tracking_enabled": diploma.video_tracking_enabled,
         "attendance_summary": attendance_summary,
         "due_work": _assessment_due_work(request.user, cohort_id=cohort.id),
+        "learning_assessments": _learning_assessments(request.user, cohort_id=cohort.id),
         "back_url": reverse("students:diploma_course"),
         "back_label": _("Back to learning"),
         "access_state": _("Active until %(date)s") % {"date": enrollment.expires_at.strftime("%x") if enrollment.expires_at else _("unlimited")},
@@ -1582,6 +1706,7 @@ def student_diploma_semester_detail(request, enrollment_id, semester_id):
         "access": access,
         "progress": diploma_progress_for_enrollment(profile, enrollment),
         "due_work": _assessment_due_work(request.user, cohort_id=enrollment.cohort_id),
+        "learning_assessments": _learning_assessments(request.user, cohort_id=enrollment.cohort_id),
         "back_url": reverse("academics:student_diploma_detail", args=[enrollment.id]),
         "back_label": _("Back to diploma"),
         "video_tracking_enabled": enrollment.cohort.diploma.video_tracking_enabled,
@@ -1625,6 +1750,7 @@ def student_diploma_lecture_view(request, enrollment_id, semester_id, lecture_id
         "diploma": diploma,
         "version": None,
         "youtube_video_id": lecture.youtube_video_id or extract_youtube_video_id(lecture.youtube_url),
+        "video_tracking_enabled": diploma.video_tracking_enabled,
         "navigation": navigation,
         "watch_progress": watch_progress,
         "back_url": reverse("academics:student_diploma_semester_detail", args=[enrollment.id, semester.id]),
@@ -1660,6 +1786,9 @@ def student_diploma_lecture_audio(request, enrollment_id, semester_id, lecture_i
         raise PermissionDenied(_("This lecture is not available yet."))
 
     if not _is_valid_audio_file_path(file_path):
+        raise Http404
+    expected_prefix = f"diploma-lectures/{lecture.id}/audio/{file_path.split('/', 1)[0]}"
+    if lecture.audio_hls_segment_prefix != expected_prefix:
         raise Http404
     storage_key = f"diploma-lectures/{lecture.id}/audio/{file_path}"
     try:

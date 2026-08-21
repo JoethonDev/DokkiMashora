@@ -5,10 +5,21 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from django import forms
+from django.db.models import Sum
 from django.utils.translation import gettext_lazy as _
 
-from apps.academics.models import Cohort, Course, Diploma, DiplomaLecture, Semester
-from apps.assessments.constants import QUESTION_TYPE_MCQ, QUESTION_TYPE_WRITTEN
+from apps.academics.models import Cohort, Course, CourseVersion, Diploma, DiplomaLecture, Semester
+from apps.assessments.constants import (
+    ASSESSMENT_TYPE_ACTIVE_CHOICES,
+    ASSESSMENT_TYPE_HOMEWORK,
+    ASSESSMENT_TYPE_QUIZ,
+    ASSESSMENT_TYPE_SEMESTER_EXAM,
+    QUESTION_TYPE_MCQ,
+    QUESTION_TYPE_WRITTEN,
+    RELEASE_MODE_AUTOMATIC,
+    RELEASE_MODE_MANUAL,
+)
+from apps.core.forms import StyledFormMixin
 
 from .models import (
     Assessment,
@@ -17,8 +28,6 @@ from .models import (
     AssessmentSectionManualQuestion,
     DiplomaLectureQuestion,
 )
-
-from apps.core.forms import StyledFormMixin
 
 
 class AssessmentLectureSectionForm(StyledFormMixin, forms.ModelForm):
@@ -29,6 +38,14 @@ class AssessmentLectureSectionForm(StyledFormMixin, forms.ModelForm):
             "lecture": forms.Select(attrs={}),
             "order": forms.NumberInput(attrs={}),
             "mcq_count": forms.NumberInput(attrs={}),
+        }
+        labels = {
+            "order": _("Section order (number)"),
+            "mcq_count": _("MCQ question count (number)"),
+        }
+        help_texts = {
+            "order": _("Enter the display order as a whole number."),
+            "mcq_count": _("Number of MCQ questions to draw from this lecture."),
         }
 
     def __init__(self, *args, assessment=None, **kwargs):
@@ -75,17 +92,30 @@ class AssessmentLectureSectionForm(StyledFormMixin, forms.ModelForm):
 
 
 class AssessmentSectionManualQuestionForm(StyledFormMixin, forms.ModelForm):
-    question_type = forms.CharField(widget=forms.HiddenInput(), initial=QUESTION_TYPE_WRITTEN)
-
     class Meta:
         model = AssessmentSectionManualQuestion
-        fields = ["text", "question_type", "points", "order", "required", "rubric"]
+        fields = ["text", "points", "order", "required", "rubric"]
         widgets = {
             "text": forms.Textarea(attrs={"rows": 3}),
             "rubric": forms.Textarea(attrs={"rows": 2}),
             "points": forms.NumberInput(attrs={}),
             "order": forms.NumberInput(attrs={}),
         }
+        labels = {
+            "points": _("Points available (number)"),
+            "order": _("Question order (number)"),
+        }
+        help_texts = {
+            "points": _("Raw points awarded for this question."),
+            "order": _("Enter the display order as a whole number."),
+        }
+
+    def save(self, commit=True):
+        question = super().save(commit=False)
+        question.question_type = QUESTION_TYPE_WRITTEN
+        if commit:
+            question.save()
+        return question
 
 SCOPE_COURSE = "course"
 SCOPE_DIPLOMA = "diploma"
@@ -123,12 +153,10 @@ class AssessmentForm(StyledFormMixin, forms.ModelForm):
             "duration_minutes",
             "total_points",
             "passing_score",
-            "max_attempts",
             "max_upload_files",
             "is_active",
-            "show_correct_answers",
             "show_written_feedback",
-            "grade_visibility",
+            "release_mode",
             "allow_late_submission",
             "penalty_percent",
         ]
@@ -142,17 +170,39 @@ class AssessmentForm(StyledFormMixin, forms.ModelForm):
             "open_at": forms.DateTimeInput(attrs={"type": "datetime-local"}),
             "close_at": forms.DateTimeInput(attrs={"type": "datetime-local"}),
             "duration_minutes": forms.NumberInput(attrs={}),
-            "total_points": forms.NumberInput(attrs={}),
+            "total_points": forms.NumberInput(attrs={"readonly": "readonly", "inputmode": "decimal"}),
             "passing_score": forms.NumberInput(attrs={}),
-            "max_attempts": forms.NumberInput(attrs={}),
             "max_upload_files": forms.NumberInput(attrs={}),
-            "grade_visibility": forms.Select(attrs={}),
+            "release_mode": forms.Select(attrs={}),
             "penalty_percent": forms.NumberInput(attrs={}),
+        }
+        labels = {
+            "total_points": _("Total points available (number)"),
+            "passing_score": _("Passing score (%)"),
+            "penalty_percent": _("Wrong-answer penalty (%)"),
+        }
+        help_texts = {
+            "total_points": _("Raw points available across all questions."),
+            "passing_score": _("Enter a percentage from 0 to 100."),
+            "penalty_percent": _("Enter a percentage from 0 to 100."),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        instance = kwargs.get("instance")
+        instance = self.instance
+        # Active vocabulary only: Quiz / Semester Exam / Homework. Deprecated
+        # types (final_exam, additional_assessment) are historical and are
+        # never offered for new or edited assessments (P2-01).
+        self.fields["assessment_type"].choices = ASSESSMENT_TYPE_ACTIVE_CHOICES
+        # Locked release defaults on create (P2-04): Course Quiz = Automatic,
+        # Diploma Homework/Semester Exam = Manual; both remain configurable.
+        if not instance:
+            scope = self.data.get("scope_type") if self.is_bound else None
+            atype = self.data.get("assessment_type") if self.is_bound else None
+            if scope == SCOPE_COURSE and atype == ASSESSMENT_TYPE_QUIZ:
+                self.fields["release_mode"].initial = RELEASE_MODE_AUTOMATIC
+            else:
+                self.fields["release_mode"].initial = RELEASE_MODE_MANUAL
         if instance:
             if instance.course_version_id:
                 self.fields["scope_type"].initial = SCOPE_COURSE
@@ -168,8 +218,21 @@ class AssessmentForm(StyledFormMixin, forms.ModelForm):
                         self.fields["diploma"].queryset = Diploma.objects.filter(is_active=True, id=instance.semester.diploma_id)
                 if instance.cohort_id:
                     self.fields["cohort"].initial = instance.cohort_id
-        self.fields["semester"].queryset = Semester.objects.filter(is_active=True)
-        self.fields["cohort"].queryset = Cohort.objects.filter(is_active=True)
+        selected_course_id = self.data.get("course") if self.is_bound else self.fields["course"].initial
+        selected_diploma_id = self.data.get("diploma") if self.is_bound else self.fields["diploma"].initial
+        if hasattr(selected_course_id, "pk"):
+            selected_course_id = selected_course_id.pk
+        if hasattr(selected_diploma_id, "pk"):
+            selected_diploma_id = selected_diploma_id.pk
+        self.fields["course_version"].queryset = CourseVersion.objects.filter(
+            is_active=True, course_id=selected_course_id,
+        ) if selected_course_id else CourseVersion.objects.none()
+        self.fields["semester"].queryset = Semester.objects.filter(
+            is_active=True, diploma_id=selected_diploma_id,
+        ) if selected_diploma_id else Semester.objects.none()
+        self.fields["cohort"].queryset = Cohort.objects.filter(
+            is_active=True, diploma_id=selected_diploma_id,
+        ) if selected_diploma_id else Cohort.objects.none()
         self.fields["semester"].required = False
         self.fields["cohort"].required = False
         self.fields["course_version"].required = False
@@ -180,6 +243,7 @@ class AssessmentForm(StyledFormMixin, forms.ModelForm):
         course = cleaned.get("course")
         semester = cleaned.get("semester")
         cohort = cleaned.get("cohort")
+        assessment_type = cleaned.get("assessment_type")
 
         if scope_type == SCOPE_COURSE:
             if not course:
@@ -188,12 +252,21 @@ class AssessmentForm(StyledFormMixin, forms.ModelForm):
                 )
             cleaned["semester"] = None
             cleaned["cohort"] = None
-            cv = course.versions.filter(is_active=True).first()
+            cv = cleaned.get("course_version")
+            if cv and cv.course_id != course.id:
+                self.add_error("course_version", _("Selected course version does not belong to the selected course."))
+                cv = None
+            cv = cv or course.versions.filter(is_active=True).first()
             if not cv:
                 raise forms.ValidationError(
                     _("Selected course has no active version.")
                 )
             cleaned["course_version"] = cv
+            if assessment_type != ASSESSMENT_TYPE_QUIZ:
+                self.add_error(
+                    "assessment_type",
+                    _("Course-scoped assessments can only be a Quiz."),
+                )
         elif scope_type == SCOPE_DIPLOMA:
             if not semester or not cohort:
                 self.add_error(
@@ -210,10 +283,30 @@ class AssessmentForm(StyledFormMixin, forms.ModelForm):
                 raise forms.ValidationError(
                     _("Semester and cohort must belong to the same diploma.")
                 )
+            if assessment_type not in (ASSESSMENT_TYPE_HOMEWORK, ASSESSMENT_TYPE_SEMESTER_EXAM):
+                self.add_error(
+                    "assessment_type",
+                    _("Diploma-scoped assessments can only be Homework or Semester Exam."),
+                )
         else:
             raise forms.ValidationError(
                 _("Please select a scope (course or diploma).")
             )
+
+        if assessment_type == ASSESSMENT_TYPE_QUIZ:
+            cleaned["total_points"] = (
+                self.instance.questions.aggregate(total=Sum("points"))["total"]
+                if self.instance.pk
+                else 0
+            ) or 0
+
+        # Locked active assessments allow exactly one attempt (P2-01); the
+        # field is not user-configurable.
+        cleaned["max_attempts"] = 1
+
+        # Safety net: never persist an empty release mode (P2-04).
+        if cleaned.get("release_mode") not in (RELEASE_MODE_AUTOMATIC, RELEASE_MODE_MANUAL):
+            cleaned["release_mode"] = RELEASE_MODE_MANUAL
 
         open_at = cleaned.get("open_at")
         close_at = cleaned.get("close_at")
@@ -222,9 +315,6 @@ class AssessmentForm(StyledFormMixin, forms.ModelForm):
         duration = cleaned.get("duration_minutes")
         if duration is not None and duration < 1:
             raise forms.ValidationError(_("Duration must be positive."))
-        max_attempts = cleaned.get("max_attempts")
-        if max_attempts is not None and max_attempts < 1:
-            raise forms.ValidationError(_("Max attempts must be at least 1."))
         if cleaned.get("assessment_type") != "homework":
             cleaned["max_upload_files"] = 1
             cleaned["allow_late_submission"] = False
@@ -242,6 +332,12 @@ class QuestionForm(StyledFormMixin, forms.ModelForm):
             "question_type": forms.Select(attrs={}),
             "points": forms.NumberInput(attrs={}),
             "rubric": forms.Textarea(attrs={"rows": 2}),
+        }
+        labels = {
+            "points": _("Points available (number)"),
+        }
+        help_texts = {
+            "points": _("Raw points awarded for this question."),
         }
 
 
@@ -268,4 +364,10 @@ class DiplomaLectureQuestionForm(StyledFormMixin, forms.ModelForm):
             "question_type": forms.Select(attrs={}),
             "points": forms.NumberInput(attrs={}),
             "active": forms.CheckboxInput(attrs={}),
+        }
+        labels = {
+            "points": _("Points available (number)"),
+        }
+        help_texts = {
+            "points": _("Raw points awarded for this question."),
         }

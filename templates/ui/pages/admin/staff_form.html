@@ -11,6 +11,7 @@
 {% block content %}
   <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=title|default:_("Staff member") eyebrow=_("Staff") back_button=True %}
     <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
+      {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
       {% for field in form %}
         {% include "ui/components/_field.html" %}
       {% endfor %}

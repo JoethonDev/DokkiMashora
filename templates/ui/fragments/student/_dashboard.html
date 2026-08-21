@@ -1,5 +1,5 @@
 {% load i18n %}
-<div id="student-content" class="page-stack animate-enter-view"><section class="min-h-52 rounded-lg p-7 bg-gradient-to-br from-brand-soft to-surface-soft border border-line flex items-center justify-between shadow-card"><div>
+<div id="student-content" class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=_("Dashboard") %}<section class="min-h-52 rounded-lg p-7 bg-gradient-to-br from-brand-soft to-surface-soft border border-line flex items-center justify-between shadow-card"><div>
       <p class="eyebrow">{% trans "Learning overview" %}</p>
       <h2>
         {% trans "Welcome back" %}
@@ -52,9 +52,9 @@
       <a class="btn-ghost" href="{% url 'students:record' %}">{% trans "View record" %}</a>
     </div>
     <div class="flex flex-col">{% for action in next_actions|slice:":5" %}
-        <a href="{{ action.url }}"><span class="w-2.5 h-2.5 rounded-full {% if action.priority == 'urgent' %} bg-red {% else %} bg-amber {% endif %}"></span>
-          <span><strong>{{ action.title }}</strong>
-            <small>
+        <a class="flex items-center gap-2.5 py-2.5 no-underline text-inherit hover:text-brand" href="{{ action.url }}"><span class="w-2.5 h-2.5 rounded-full shrink-0 {% if action.priority == 'urgent' %} bg-red {% else %} bg-amber {% endif %}"></span>
+          <span class="flex-1 min-w-0"><strong class="block">{{ action.title }}</strong>
+            <small class="block">
               {{ action.description }}
               {% if action.due_at %}
                 ·
@@ -62,7 +62,7 @@
                 <span dir="ltr" class="inline-block">{{ action.due_at }}</span>
               {% endif %}
             </small></span>
-            <b>→</b></a>
+            <b class="shrink-0">→</b></a>
       {% empty %}
         {% include "ui/components/_empty_state.html" with icon="✓" title=_("You are all caught up") message=_("There are no outstanding actions right now.") fill=True %}
       {% endfor %}

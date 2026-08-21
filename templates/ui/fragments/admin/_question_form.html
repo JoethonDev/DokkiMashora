@@ -1,6 +1,7 @@
 {% load i18n %}
 <div id="question-form">
   <form method="post" class="card-surface max-w-form mx-auto w-full page-stack">{% csrf_token %}
+    {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
     {% for field in form %}
       {% include "ui/components/_field.html" %}
     {% endfor %}
@@ -22,7 +23,7 @@
               {% if choice_form.instance.pk %}
                 <span class="sr-only">{{ choice_form.DELETE }}</span>
               {% endif %}
-              <button type="button" class="btn-danger px-2.5 py-1.5 text-xs remove-choice-btn">{% trans "Remove" %}</button>
+              <button type="button" class="btn-danger remove-choice-btn">{% trans "Remove" %}</button>
             </div>
             {% if choice_form.non_field_errors %}
               <div class="text-red text-xs mt-0" role="alert">{{ choice_form.non_field_errors }}</div>
@@ -46,7 +47,7 @@
       {% include "ui/components/_field.html" with field=formset.empty_form.order %}
     </div>
     <div class="shrink-0 pt-6">
-      <button type="button" class="btn-danger px-2.5 py-1.5 text-xs remove-choice-btn">{% trans "Remove" %}</button>
+      <button type="button" class="btn-danger remove-choice-btn">{% trans "Remove" %}</button>
     </div>
   </div>
 </template>

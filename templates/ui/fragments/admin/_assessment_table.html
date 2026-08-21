@@ -25,20 +25,25 @@
           {% for a in page_obj %}
             <tr>
               <td class="table-td text-muted">{{ page_obj.start_index|add:forloop.counter0 }}</td>
-              <td class="table-td"><div class="flex flex-col"><strong>{{ a.title }}</strong>
-                <small>{{ a.description|truncatewords:8|default:'—' }}</small></div>
+              <td class="table-td"><div class="flex flex-col gap-0.5"><strong>{{ a.title }}</strong>
+                {% if a.description %}{% include "ui/components/_expandable_text.html" with text=a.description clamp=2 muted=True %}{% else %}<small class="text-muted">—</small>{% endif %}</div>
               </td>
-              <td class="table-td">{{ a.get_assessment_type_display }}</td>
+              <td class="table-td">{{ a.get_assessment_type_display }}{% if a.is_legacy %}<span class="ms-1 inline-block rounded bg-amber-soft text-amber px-1.5 py-0.5 text-xs" title="{{ a.legacy_note }}">{% trans "legacy" %}</span>{% endif %}</td>
               <td class="table-td">{{ a.attempt_count }}</td>
               <td class="table-td">
-                {% include "ui/components/_status.html" with code=a.is_active|yesno:"active,inactive" label=a.is_active|yesno:_("Active,Inactive") %}
+                {% include "ui/components/_status.html" with code=a.is_active|yesno:"active,inactive" label=a.is_active|boolean_label:"Active,Inactive" %}
               </td>
               <td class="table-td"><div class="flex flex-col"><small><span dir="ltr" class="inline-block">{{ a.open_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</span></small>
                 <small><span dir="ltr" class="inline-block">{{ a.close_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</span></small>
               </div></td>
               <td class="table-td">
                 <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-secondary"
-                     href="{% url 'assessments:admin_detail' a.id %}">{% trans "Open" %}</a>
+                     href="{% url 'assessments:admin_detail' a.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Open" %}</a>
+                  {% if not a.is_legacy %}
+                    <form method="post" action="{% url 'assessments:admin_delete' a.id %}?next={{ request.get_full_path|urlencode }}" data-confirm="{% trans 'Delete this assessment?' %}" class="m-0">
+                      {% csrf_token %}<button class="btn-danger" type="submit">{% trans "Delete" %}</button>
+                    </form>
+                  {% endif %}
                 </div>
               </td>
             </tr>
@@ -50,12 +55,19 @@
       {% for a in page_obj %}
         <div class="mobile-card">
           <div class="flex-1 min-w-0">
-            <strong class="block truncate">{{ a.title }}</strong>
-            <small class="block text-muted truncate">{{ a.description|truncatewords:8|default:'—' }}</small>
-            <small class="block text-muted">{{ a.get_assessment_type_display }} &middot; {{ a.attempt_count }} {% trans "attempts" %}</small>
-            {% include "ui/components/_status.html" with code=a.is_active|yesno:"active,inactive" label=a.is_active|yesno:_("Active,Inactive") %}
+            <strong class="block">{{ a.title }}</strong>
+            {% if a.description %}{% include "ui/components/_expandable_text.html" with text=a.description clamp=2 muted=True %}{% endif %}
+            <small class="block text-muted">{{ a.get_assessment_type_display }}{% if a.is_legacy %} &middot; {% trans "legacy" %}{% endif %} &middot; {{ a.attempt_count }} {% trans "attempts" %}</small>
+            {% include "ui/components/_status.html" with code=a.is_active|yesno:"active,inactive" label=a.is_active|boolean_label:"Active,Inactive" %}
           </div>
-          <a class="btn-soft-primary shrink-0" href="{% url 'assessments:admin_detail' a.id %}">{% trans "Open" %}</a>
+          <div class="flex gap-2 items-center shrink-0">
+            <a class="btn-soft-primary" href="{% url 'assessments:admin_detail' a.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Open" %}</a>
+            {% if not a.is_legacy %}
+              <form method="post" action="{% url 'assessments:admin_delete' a.id %}?next={{ request.get_full_path|urlencode }}" data-confirm="{% trans 'Delete this assessment?' %}" class="m-0">
+                {% csrf_token %}<button class="btn-danger" type="submit">{% trans "Delete" %}</button>
+              </form>
+            {% endif %}
+          </div>
         </div>
       {% endfor %}
     </div>

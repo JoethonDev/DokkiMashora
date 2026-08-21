@@ -1,0 +1,70 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n %}
+{% block title %}
+  {% trans "Reviewer assignments" %}
+{% endblock %}
+{% block content %}
+  <div class="page-stack animate-enter-view">{% trans "Semester exam" as eyebrow %}
+    {% include "ui/components/_page_header.html" with title=_("Reviewer assignments") eyebrow=eyebrow %}
+    <section class="card-surface">
+      <div class="table-wrap hidden lg:block"><table class="table">
+          <thead>
+            <tr>
+              <th class="table-th">{% trans "Reviewer" %}</th>
+              <th class="table-th">{% trans "Cohort" %}</th>
+              <th class="table-th">{% trans "Semester" %}</th>
+               <th class="table-th">{% trans "Scope" %}</th>
+               <th class="table-th">{% trans "Semester Exam" %}</th>
+               <th class="table-th">{% trans "Online" %}</th>
+               <th class="table-th">{% trans "Offline" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in assignments %}
+              <tr>
+                <td class="table-td">{{ item.reviewer }}</td>
+                <td class="table-td">{{ item.cohort }}</td>
+                <td class="table-td">{{ item.semester }}</td>
+                <td class="table-td">{{ item.get_scope_display }}{% if item.cluster %} · {{ item.cluster }}{% endif %}</td>
+                <td class="table-td">{{ item.assessment|default:'All Semester Exams' }}</td>
+                <td class="table-td">{{ item.available_submissions|default:'—' }}</td>
+                <td class="table-td">{{ item.available_offline|default:'—' }}</td>
+              </tr>
+            {% empty %}
+              <tr>
+                  <td class="table-td" colspan="7">
+                  {% include "ui/components/_empty_state.html" with title=_("No reviewer assignments yet.") compact=True %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="card-stack lg:hidden">
+        {% for item in assignments %}
+          <div class="mobile-card">
+            <div class="flex-1 min-w-0">
+              <strong class="block truncate">{{ item.reviewer }}</strong>
+                  <small class="block text-muted">{{ item.cohort }} &middot; {{ item.get_scope_display }} &middot; {{ item.assessment|default:'All Semester Exams' }} &middot; {% trans "Online" %}: {{ item.available_submissions|default:'—' }} &middot; {% trans "Offline" %}: {{ item.available_offline|default:'—' }}</small>
+            </div>
+          </div>
+        {% empty %}
+          <div class="border border-line rounded-sm p-4 text-center">
+            {% include "ui/components/_empty_state.html" with title=_("No reviewer assignments yet.") compact=True %}
+          </div>
+        {% endfor %}
+      </div>
+      <div class="flex gap-2.5 items-center flex-wrap mt-4">
+        <a class="btn-primary" href="{% url 'assessments:admin_reviewer_assignment_create' %}">{% trans "New assignment" %}</a>
+      </div>
+      {% include "ui/components/_pagination.html" %}
+    </section>
+    <section class="card-surface">
+      <div class="section-head"><div><p class="eyebrow">{% trans "Grading activity" %}</p><h2>{% trans "Claimed submissions" %}</h2></div></div>
+      <div class="table-wrap hidden lg:block"><table class="table"><thead><tr><th class="table-th">{% trans "Assessment" %}</th><th class="table-th">{% trans "Section" %}</th><th class="table-th">{% trans "Reviewer" %}</th><th class="table-th">{% trans "Status" %}</th><th class="table-th">{% trans "Finalized by" %}</th></tr></thead><tbody>
+        {% for claim in claims %}<tr><td class="table-td">{{ claim.attempt.assessment }}</td><td class="table-td">{{ claim.section }}</td><td class="table-td">{{ claim.claimed_by }}</td><td class="table-td">{{ claim.get_status_display }}</td><td class="table-td">{{ claim.finalized_by|default:'—' }}</td></tr>{% empty %}<tr><td class="table-td" colspan="5">{% trans "No grading claims yet." %}</td></tr>{% endfor %}
+      </tbody></table></div>
+      <div class="card-stack lg:hidden">{% for claim in claims %}<div class="mobile-card"><div class="flex-1 min-w-0"><strong class="block">{{ claim.attempt.assessment }}</strong><small class="block text-muted">{{ claim.section }} · {{ claim.claimed_by }} · {{ claim.get_status_display }}</small></div></div>{% empty %}<div class="border border-line rounded-sm p-4 text-center">{% trans "No grading claims yet." %}</div>{% endfor %}</div>
+    </section>
+  </div>
+{% endblock %}

@@ -67,9 +67,21 @@ CURRENCY_CHOICES = (
     (CURRENCY_EGP, _("EGP")),
 )
 
-MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
+WAIVER_STATUS_ACTIVE = "active"
+WAIVER_STATUS_REVOKED = "revoked"
 
-REQUIRED_CSV_HEADERS = ["national_id", "amount", "payment_date"]
+WAIVER_STATUS_CHOICES = (
+    (WAIVER_STATUS_ACTIVE, _("Active")),
+    (WAIVER_STATUS_REVOKED, _("Revoked")),
+)
+
+MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
+# Atomic-per-file imports intentionally stay small enough for the deployment's
+# 2 vCPU / 4 GB ceiling. Larger statements should be split into separate files
+# by the operator rather than holding one transaction and its row locks open.
+MAX_CSV_ROWS = 1_000
+
+REQUIRED_CSV_HEADERS = ["amount", "payment_date"]
 OPTIONAL_CSV_HEADERS = [
     "external_reference", "email", "phone", "notes",
     "application_id", "diploma_enrollment_id", "course_enrollment_id",

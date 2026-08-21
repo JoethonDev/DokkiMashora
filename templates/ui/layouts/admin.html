@@ -1,19 +1,26 @@
 {% extends "ui/base.html" %}
 {% load i18n %}
 {% block shell %}
-  <div class="grid min-h-screen grid-cols-shell"
-       x-data="{sidebarOpen:false, sidebarTrigger:null}"
+  <div class="grid min-h-screen grid-cols-1 lg:grid-cols-shell"
+       x-data="{sidebarOpen:false, sidebarTrigger:null, isDesktop:false}"
        @keydown.escape.window="sidebarOpen=false; $nextTick(() => { if (sidebarTrigger) sidebarTrigger.focus(); })"
-       @sidebar-open.window="sidebarOpen=true; sidebarTrigger=$event.detail?.trigger || $event.target; $nextTick(() => document.body.classList.add('overflow-hidden'))"
-       @sidebar-close.window="sidebarOpen=false; $nextTick(() => { document.body.classList.remove('overflow-hidden'); if (sidebarTrigger) sidebarTrigger.focus(); })"
-        x-init="$watch('sidebarOpen', val => { document.body.classList.toggle('overflow-hidden', val); if (!val && sidebarTrigger) { $nextTick(() => sidebarTrigger.focus()); } })"><div class="fixed inset-0 top-14 bg-surface-inverse/40 z-backdrop opacity-0 pointer-events-none transition-opacity"
+       @sidebar-open.window="sidebarOpen=true; sidebarTrigger=$event.detail?.trigger || $event.target; $nextTick(() => { document.body.classList.add('overflow-hidden'); if (!$data.isDesktop) { window.dispatchEvent(new CustomEvent('focus-trap:enable', {detail:{container: document.getElementById('admin-sidebar')}})); setTimeout(() => { $refs.sidebarClose && $refs.sidebarClose.focus(); }, 80); } })"
+       @sidebar-close.window="sidebarOpen=false; $nextTick(() => { document.body.classList.remove('overflow-hidden'); window.dispatchEvent(new CustomEvent('focus-trap:disable')); if (sidebarTrigger) sidebarTrigger.focus(); })"
+       x-init="$watch('sidebarOpen', val => { document.body.classList.toggle('overflow-hidden', val); if (val && !isDesktop) { window.dispatchEvent(new CustomEvent('focus-trap:enable', {detail:{container: document.getElementById('admin-sidebar')}})); setTimeout(() => { $refs.sidebarClose && $refs.sidebarClose.focus(); }, 80); } else if (!val) { window.dispatchEvent(new CustomEvent('focus-trap:disable')); if (sidebarTrigger) { $nextTick(() => sidebarTrigger.focus()); } } });
+                 (() => { const mq = window.matchMedia('(min-width: 1024px)'); const sync = () => { isDesktop = mq.matches; if (isDesktop && sidebarOpen) { sidebarOpen=false; document.body.classList.remove('overflow-hidden'); window.dispatchEvent(new CustomEvent('focus-trap:disable')); } }; sync(); mq.addEventListener('change', sync); })()"
+       data-page-shell><div class="fixed inset-0 top-14 bg-surface-inverse/40 z-backdrop opacity-0 pointer-events-none transition-opacity"
             :class="{open:sidebarOpen}"
             @click="sidebarOpen=false; $dispatch('sidebar-close')"></div><aside id="admin-sidebar"
-             class="fixed -start-72 top-14 w-72 shadow-modal bg-surface-inverse text-white flex flex-col z-sidebar transition-all duration-300 ease lg:h-screen lg:sticky lg:top-0 lg:start-auto lg:w-sidebar lg:p-5 lg:shadow-none"
-           :class="{open:sidebarOpen}"
-            aria-label="{% trans 'Main navigation' %}"><a class="flex items-center gap-3 no-underline text-inherit p-2.5 pb-5" href="{% url 'accounts:dashboard' %}"><span class="w-10 h-10 rounded-md bg-gradient-to-br from-brand-50 to-brand-soft text-brand-strong grid place-items-center font-black shadow-card">DM</span>
+             class="fixed -start-72 top-14 w-72 shadow-modal bg-surface-inverse text-white flex flex-col z-sidebar transition-all duration-300 ease lg:h-screen lg:sticky lg:top-0 lg:start-auto lg:w-sidebar lg:p-5 lg:shadow-none lg:transition-none"
+            :class="{open:sidebarOpen}"
+            aria-label="{% trans 'Main navigation' %}"><a class="flex items-center gap-2.5 no-underline text-inherit p-2.5 pb-5" href="{% url 'accounts:dashboard' %}"><span class="w-10 h-10 rounded-md bg-gradient-to-br from-brand-50 to-brand-soft text-brand-strong grid place-items-center font-black shadow-card">DM</span>
         <span><strong class="block text-sm">DokkiMashora</strong><small class="block text-xs mt-0.5 text-white/60">{% trans "Learning Management" %}</small></span>
       </a>
+      <button type="button"
+              x-ref="sidebarClose"
+              class="btn-icon lg:hidden self-end mb-1 border-white/20 bg-white/10 text-white"
+              @click="sidebarOpen=false; $dispatch('sidebar-close')"
+              aria-label="{% trans 'Close navigation' %}">&times;</button>
       <nav class="overflow-y-auto scrollbar-none py-2 lg:block" aria-label="{% trans 'Admin navigation' %}">{% regroup WORKSPACE_NAVIGATION by section_key as nav_sections %}
         {% for section in nav_sections %}
           <div class="sidebar-section">{{ section.list.0.section }}</div>
@@ -30,10 +37,11 @@
       </nav>
       {% include "ui/components/_profile_menu.html" with role_label=user.primary_role|default:_("Staff") %}
     </aside>
-    <section class="min-w-0 lg:col-start-2">
+    <section class="min-w-0 lg:col-start-2" :inert="sidebarOpen && !isDesktop ? 'true' : null">
       {% include "ui/components/_workspace_topbar.html" with show_global_search=True profile_url="accounts:profile" profile_icon="&#9813;" section_label=section_label|default:_("Workspace") sidebar_id="admin-sidebar" %}
-      <main id="main" class="pt-3 px-5 pb-9 lg:pt-3.5 lg:px-8 lg:pb-12 max-w-7xl mx-auto w-full">{% block content %}{% endblock %}{% block extra %}{% endblock %}</main>
+      <main id="main" tabindex="-1" class="pt-3 px-5 pb-9 lg:pt-3.5 lg:px-8 lg:pb-12 max-w-7xl mx-auto w-full focus:outline-none">
+        {% block content %}{% endblock %}</main>
     </section>
-    <footer class="col-span-2 shrink-0 bg-white border-t border-line py-4 px-4 lg:px-8 text-center text-xs text-muted">{% block footer %}{% now "Y" as current_year %}&copy; {{ current_year }} DokkiMashora. {% trans "All rights reserved." %}{% endblock %}</footer>
+    <footer class="shrink-0 bg-white border-t border-line py-4 px-4 lg:px-8 lg:col-span-2 text-center text-xs text-muted">{% block footer %}{% now "Y" as current_year %}&copy; {{ current_year }} DokkiMashora. {% trans "All rights reserved." %}{% endblock %}</footer>
   </div>
 {% endblock %}

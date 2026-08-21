@@ -1,30 +1,77 @@
-{% extends "ui/layouts/student.html" %}
-{% load i18n static %}
+﻿{% extends "ui/layouts/student.html" %}
+{% load i18n static form_tags %}
 {% block title %}
   {% if diploma %}{{ diploma.title }}{% else %}{{ course_version.course.title|default:_('Learning') }}{% endif %}
 {% endblock %}
-{% block page_title %}
-  {% if diploma %}{% trans "Diploma learning" %}{% else %}{% trans "Course learning" %}{% endif %}
-{% endblock %}
 {% block content %}
   {% url 'students:diploma_course' as learning_back_url %}
-  <div class="page-stack animate-enter-view">{% if lecture %}
+  <div class="page-stack animate-enter-view">
+  {% if not lecture and progress %}
+    <section class="grid grid-cols-1 lg:grid-cols-3 gap-4" aria-label="{% trans 'Learning overview' %}">
+      {% if video_tracking_enabled %}
+      <article class="card-surface lg:col-span-2">
+        <div class="section-head"><div><p class="eyebrow">{% trans "Progress" %}</p><h2>{% trans "Learning progress" %}</h2></div><strong class="text-xl">{{ progress.percent }}%</strong></div>
+        <div class="progress-track"><span class="progress-bar" style="--progress: {{ progress.percent }}%"></span></div>
+        <div class="flex flex-wrap gap-4 text-sm text-muted">
+          <span><strong class="text-text">{{ progress.completed_count }}</strong> {% trans "completed lectures" %}</span>
+          <span><strong class="text-text">{{ progress.total_lectures }}</strong> {% trans "total lectures" %}</span>
+        </div>
+      </article>
+      {% endif %}
+      <article class="card-surface{% if not video_tracking_enabled %} lg:col-span-3{% endif %}">
+        <div class="section-head"><div><p class="eyebrow">{% trans "Assessments" %}</p><h3>{% trans "Quizzes and assessments" %}</h3></div></div>
+        <div class="flex flex-col gap-3">
+          {% for assessment in learning_assessments %}
+            <a class="border border-line rounded-sm p-3 no-underline text-inherit hover:bg-surface-soft" href="{% url 'assessments:instructions' assessment.id %}">
+              <strong class="block">{{ assessment.title }}</strong>
+              <small class="text-muted">{{ assessment.get_assessment_type_display }}</small>
+            </a>
+          {% empty %}
+            <p class="text-sm text-muted m-0">{% trans "No quizzes or assessments are currently available." %}</p>
+          {% endfor %}
+        </div>
+        <a class="btn-ghost self-start" href="{% url 'assessments:student_list' %}">{% trans "View all assessments" %}</a>
+      </article>
+    </section>
+  {% endif %}
+  {% if lecture %}
     {% include "ui/components/_page_header.html" with eyebrow=_("Learning") title=lecture.title back_url=learning_back_url back_label=_("Back to learning") %}
     <section class="card-surface">
       {% if lecture.description %}<p>{{ lecture.description }}</p>{% endif %}
-      {% if lecture.youtube_video_id %}<div
-     data-youtube-progress="{{ lecture.youtube_video_id }}"
+      {% if youtube_video_id|default:lecture.youtube_video_id %}<div{% if video_tracking_enabled %}
+     data-youtube-progress="{{ youtube_video_id|default:lecture.youtube_video_id }}"
      data-watch-start-url="{% if version %}{% url 'academics:api_watch_start' version.id lecture.id %}{% elif diploma %}{% url 'academics:api_diploma_watch_start' enrollment.id semester.id lecture.id %}{% endif %}"
-     data-watch-checkpoint-url="{% if version %}{% url 'academics:api_watch_checkpoint' version.id lecture.id %}{% elif diploma %}{% url 'academics:api_diploma_watch_checkpoint' enrollment.id semester.id lecture.id %}{% endif %}"><div class="aspect-video overflow-hidden rounded-md bg-surface-inverse"><iframe class="yt-iframe w-full h-full" src="https://www.youtube.com/embed/{{ lecture.youtube_video_id }}?rel=0&modestbranding=1&origin={{ request.scheme }}://{{ request.get_host }}" title="{{ lecture.title }}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe></div>
-  <div class="flex items-center gap-3 mt-3"><div class="progress-track flex-1"><div class="progress-bar yt-progress-bar" style="--progress:0%"></div></div><span class="yt-progress-text text-sm text-muted">0%</span></div>
+     data-watch-checkpoint-url="{% if version %}{% url 'academics:api_watch_checkpoint' version.id lecture.id %}{% elif diploma %}{% url 'academics:api_diploma_watch_checkpoint' enrollment.id semester.id lecture.id %}{% endif %}{% endif %}><div class="aspect-video overflow-hidden rounded-md bg-surface-inverse"><iframe class="yt-iframe w-full h-full" src="https://www.youtube-nocookie.com/embed/{{ youtube_video_id|default:lecture.youtube_video_id }}?enablejsapi=1&rel=0&modestbranding=1&origin={{ request.scheme }}://{{ request.get_host }}&widget_referrer={{ request.scheme }}://{{ request.get_host }}" title="{{ lecture.title }}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div>
+  {% if video_tracking_enabled %}<div class="flex items-center gap-3 mt-3"><div class="progress-track flex-1"><div class="progress-bar yt-progress-bar" style="--progress:0%"></div></div><span class="yt-progress-text text-sm text-muted">0%</span></div>
   <p class="yt-status text-sm mt-2"></p>
-  <p class="yt-violation hidden text-red text-sm mt-2"></p>
+  <p class="yt-violation hidden text-red text-sm mt-2"></p>{% endif %}
 </div>
       {% elif lecture.youtube_url %}<a class="btn-primary" href="{{ lecture.youtube_url }}" target="_blank" rel="noopener noreferrer">{% trans "Open video" %}</a>{% endif %}
       {% if lecture.audio_hls_playlist_key and version %}
-        <audio class="w-full mt-4" controls src="{% url 'academics:student_lecture_audio' version.id lecture.id lecture.audio_hls_playlist_key %}"></audio>
+        <div class="mt-4"
+             data-audio-progress
+             data-audio-start-url="{% url 'academics:api_audio_start' version.id lecture.id %}"
+             data-audio-checkpoint-url="{% url 'academics:api_audio_checkpoint' version.id lecture.id %}"
+             data-msg-refresh="{% trans 'Refresh' %}"
+             data-msg-paused="{% trans 'Paused' %}"
+             data-msg-playback-error="{% trans 'Playback error' %}"
+             data-msg-violation-prefix="{% trans 'Violation' %}"
+             data-msg-access-denied="{% trans 'Access denied' %}"
+             data-msg-start-failed="{% trans 'Could not start tracking.' %}"
+             data-msg-completed="{% trans 'Completed' %}">
+          <audio class="w-full" controls preload="metadata">
+            <source src="{% url 'academics:student_lecture_audio' version.id lecture.id lecture.audio_hls_playlist_key %}" type="application/vnd.apple.mpegurl">
+            <source src="{% url 'academics:student_lecture_audio_download' version.id lecture.id %}" type="{{ lecture.audio_content_type|default:'audio/mpeg' }}">
+          </audio>
+          <div class="flex items-center gap-3 mt-3"><div class="progress-track flex-1"><div class="progress-bar audio-progress-bar" style="--progress:0%"></div></div><span class="audio-progress-text text-sm text-muted">0%</span></div>
+          <p class="audio-status text-sm mt-2"></p>
+          <p class="audio-violation hidden text-red text-sm mt-2"></p>
+        </div>
       {% elif lecture.audio_hls_playlist_key and diploma %}
-        <audio class="w-full mt-4" controls src="{% url 'academics:student_diploma_lecture_audio' enrollment.id semester.id lecture.id lecture.audio_hls_playlist_key %}"></audio>
+        <audio class="w-full mt-4" controls>
+          <source src="{% url 'academics:student_diploma_lecture_audio' enrollment.id semester.id lecture.id lecture.audio_hls_playlist_key %}" type="application/vnd.apple.mpegurl">
+          <source src="{% url 'academics:student_diploma_lecture_audio_download' enrollment.id semester.id lecture.id %}" type="{{ lecture.audio_content_type|default:'audio/mpeg' }}">
+        </audio>
       {% endif %}
       {% if lecture.audio_storage_key and version %}
         <a class="btn-soft mt-3" href="{% url 'academics:student_lecture_audio_download' version.id lecture.id %}">{% trans "Download audio" %}</a>
@@ -32,6 +79,16 @@
         <a class="btn-soft mt-3" href="{% url 'academics:student_diploma_lecture_audio_download' enrollment.id semester.id lecture.id %}">{% trans "Download audio" %}</a>
       {% endif %}
     </section>
+    {% if navigation %}
+    <nav class="flex items-center justify-between gap-3" aria-label="{% trans 'Lesson navigation' %}">
+      {% if navigation.previous_url %}
+        <a class="btn-secondary" href="{{ navigation.previous_url }}">{% trans "Previous" %}</a>
+      {% else %}<span></span>{% endif %}
+      {% if navigation.next_url %}
+        <a class="btn-primary" href="{{ navigation.next_url }}">{% trans "Next lesson" %}</a>
+      {% endif %}
+    </nav>
+    {% endif %}
   {% elif diploma %}
     {% include "ui/components/_page_header.html" with eyebrow=_("Learning") title=diploma.title description=cohort.title back_url=learning_back_url back_label=_("Back to learning") %}
     {% if semester %}
@@ -51,43 +108,31 @@
           </div>
         </div>
         {% for item in lectures %}
+          {% with unlocked=lecture_unlock|get_item:item.id %}
           <a class="flex items-center gap-3 py-2.5 no-underline text-inherit{% if item.id in completed_lecture_ids %} font-bold text-brand{% endif %}"
-             href="#lecture-{{ item.id }}"><span class="avatar">{% if item.id in completed_lecture_ids %}
-              ✓
-            {% else %}
+             href="{% if unlocked %}{% url 'academics:student_lecture_view' version.id item.id %}{% else %}#lecture-{{ item.id }}{% endif %}"><span class="avatar">{% if item.id in completed_lecture_ids %}
+              &#10003;
+            {% elif unlocked %}
               {{ item.order }}
+            {% else %}
+              &#128274;
             {% endif %}
           </span>
           <span><strong>{{ item.title }}</strong>
             <small>
               {% if item.id in completed_lecture_ids %}
                 {% trans "Completed" %}
-              {% else %}
+              {% elif unlocked %}
                 {% trans "Not started" %}
+              {% else %}
+                {% trans "Locked" %}
               {% endif %}
             </small></span></a>
+          {% endwith %}
         {% empty %}
           {% include "ui/components/_empty_state.html" with title=_("No published lessons yet.") %}
         {% endfor %}
       </aside>
-      <article class="card-surface"><div class="section-head"><div>
-            <p class="eyebrow">{% trans "Course team" %}</p>
-            <h3>{% trans "Teachers and moderators" %}</h3>
-          </div>
-        </div>
-        {% for assignment in teachers %}
-          <div class="flex flex-col"><div>
-              <span class="avatar">{{ assignment.teacher.get_full_name|slice:":2"|upper }}</span>
-              <p>
-                <strong>{{ assignment.teacher.get_full_name }}</strong>
-                <small>{{ assignment.get_scope_type_display|default:_("Course teacher") }}</small>
-              </p>
-            </div>
-          </div>
-        {% empty %}
-          {% include "ui/components/_empty_state.html" with title=_("No course team listed.") %}
-        {% endfor %}
-      </article>
     </section>
     <section class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Lessons" %}</p>
@@ -95,6 +140,7 @@
         </div>
       </div>
       {% for item in lectures %}
+        {% with unlocked=lecture_unlock|get_item:item.id %}
         <article id="lecture-{{ item.id }}" class="py-4 border-t border-line"><div class="section-head"><div>
               <h3>
                 {{ item.order }}
@@ -104,19 +150,29 @@
             </div>
             {% if item.id in completed_lecture_ids %}
               <span class="status-pill-success">{% trans "Completed" %}</span>
+            {% elif unlocked %}
+              <span class="status-pill-info">{% trans "Available" %}</span>
+            {% else %}
+              <span class="status-pill-warning">{% trans "Locked" %}</span>
             {% endif %}
           </div>
           {% if item.description %}
             <p>{{ item.description }}</p>
           {% endif %}
+          {% if unlocked %}
           <a class="btn-soft"
              href="{% url 'academics:student_lecture_view' version.id item.id %}">{% trans "Open lesson" %}</a>
+          {% else %}
+          <p class="text-sm text-muted">{% trans "Complete the previous lesson to unlock this one." %}</p>
+          {% endif %}
         </article>
+        {% endwith %}
       {% empty %}
-        {% include "ui/components/_empty_state.html" with icon="▶" title=_("No lessons available") message=_("Published course content will appear here.") %}
+        {% include "ui/components/_empty_state.html" with icon="&#9654;" title=_("No lessons available") message=_("Published course content will appear here.") %}
       {% endfor %}
     </section>
   {% endif %}
   </div>
   <script src="{% static 'js/youtube-progress.js' %}" defer></script>
+  <script src="{% static 'js/audio-progress.js' %}" defer></script>
 {% endblock %}

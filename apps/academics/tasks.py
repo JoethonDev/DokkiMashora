@@ -19,6 +19,7 @@ from datetime import timedelta
 import requests
 from celery import shared_task
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 
 logger = logging.getLogger("apps.academics.tasks")
@@ -122,6 +123,8 @@ def transcode_lecture_audio_task(
     original_filename: str,
     content_type: str,
     storage_prefix: str,
+    byte_size: int | None = None,
+    checksum: str = "",
     *,
     diploma: bool = False,
 ) -> None:
@@ -132,31 +135,134 @@ def transcode_lecture_audio_task(
     the lecture is marked FAILED with a visible error on any exception.
     """
     from apps.academics.audio import transcode_to_hls
-    from apps.academics.constants import AUDIO_PROCESSING_COMPLETED
+    from apps.academics.constants import (
+        AUDIO_PROCESSING_COMPLETED,
+        AUDIO_PROCESSING_FAILED,
+        AUDIO_PROCESSING_PROCESSING,
+    )
     from apps.academics.models import DiplomaLecture, Lecture
+    from apps.storage.services import record_deferred_storage_deletion, storage_service
+
+    def cleanup_generation(prefix, source_key=""):
+        """Remove only one immutable generation and durably record failures."""
+        try:
+            if prefix and not storage_service.delete_prefix(prefix):
+                record_deferred_storage_deletion(
+                    prefix=prefix, error="Audio generation cleanup returned false",
+                )
+        except Exception as cleanup_exc:
+            record_deferred_storage_deletion(prefix=prefix, error=str(cleanup_exc))
+        if source_key and (not prefix or not source_key.startswith(f"{prefix.rstrip('/')}/")):
+            try:
+                if not storage_service.delete_file(source_key):
+                    record_deferred_storage_deletion(
+                        key=source_key, error="Audio source cleanup returned false",
+                    )
+            except Exception as cleanup_exc:
+                record_deferred_storage_deletion(key=source_key, error=str(cleanup_exc))
 
     model = DiplomaLecture if diploma else Lecture
     try:
-        lecture = model.objects.get(id=lecture_id)
+        with transaction.atomic():
+            locked = model.objects.select_for_update().get(pk=lecture_id)
+            active_generation_matches = (
+                locked.audio_storage_key == storage_key
+                and locked.audio_processing_status == AUDIO_PROCESSING_COMPLETED
+                and locked.audio_hls_segment_prefix == storage_prefix.rstrip("/")
+                and locked.audio_hls_playlist_key
+            )
+            if active_generation_matches:
+                logger.info("Audio transcode for lecture %s already completed; skipping", lecture_id)
+                return
+            if locked.audio_pending_storage_key != storage_key:
+                if locked.audio_hls_segment_prefix != storage_prefix.rstrip("/"):
+                    transaction.on_commit(
+                        lambda prefix=storage_prefix: cleanup_generation(prefix)
+                    )
+                logger.info("Ignoring stale audio task for lecture %s", lecture_id)
+                return
+            locked.audio_processing_status = AUDIO_PROCESSING_PROCESSING
+            locked.audio_processing_error = ""
+            locked.save(update_fields=["audio_processing_status", "audio_processing_error", "updated_at"])
     except model.DoesNotExist:
         logger.warning("Audio transcode task: lecture %s (diploma=%s) no longer exists", lecture_id, diploma)
+        cleanup_generation(storage_prefix)
         return
 
-    if (
-        lecture.audio_processing_status == AUDIO_PROCESSING_COMPLETED
-        and lecture.audio_storage_key == storage_key
-        and lecture.audio_hls_playlist_key
-    ):
-        logger.info("Audio transcode for lecture %s already completed; skipping", lecture_id)
-        return
+    try:
+        result = transcode_to_hls(
+            storage_key,
+            original_filename,
+            storage_prefix=storage_prefix,
+        )
+        with transaction.atomic():
+            locked = model.objects.select_for_update().get(pk=lecture_id)
+            if locked.audio_pending_storage_key != storage_key:
+                if locked.audio_hls_segment_prefix != storage_prefix.rstrip("/"):
+                    transaction.on_commit(
+                        lambda prefix=storage_prefix: cleanup_generation(prefix)
+                    )
+                logger.info("Discarded stale completed audio generation for lecture %s", lecture_id)
+                return
+            old_source_key = locked.audio_storage_key
+            old_hls_prefix = locked.audio_hls_segment_prefix
+            locked.audio_storage_key = storage_key
+            locked.audio_pending_storage_key = ""
+            locked.audio_original_filename = original_filename
+            locked.audio_content_type = content_type
+            locked.audio_byte_size = byte_size
+            locked.audio_checksum = checksum
+            locked.audio_hls_playlist_key = result["playlist_path"]
+            locked.audio_hls_segment_prefix = result["storage_prefix"]
+            locked.audio_duration_seconds = result["duration"]
+            locked.audio_processing_status = AUDIO_PROCESSING_COMPLETED
+            locked.audio_processing_error = ""
+            locked.save(update_fields=[
+                "audio_storage_key", "audio_pending_storage_key",
+                "audio_original_filename", "audio_content_type",
+                "audio_byte_size", "audio_checksum",
+                "audio_hls_playlist_key", "audio_hls_segment_prefix",
+                "audio_duration_seconds", "audio_processing_status",
+                "audio_processing_error", "updated_at",
+            ])
+            if old_source_key or old_hls_prefix:
+                transaction.on_commit(
+                    lambda prefix=old_hls_prefix, key=old_source_key: cleanup_generation(
+                        prefix, key,
+                    )
+                )
+    except Exception as exc:
+        logger.exception("Audio transcoding failed for lecture %s", lecture_id)
+        with transaction.atomic():
+            locked = model.objects.select_for_update().filter(pk=lecture_id).first()
+            if locked is not None and locked.audio_pending_storage_key == storage_key:
+                locked.audio_processing_status = AUDIO_PROCESSING_FAILED
+                locked.audio_processing_error = str(exc)[:2000]
+                locked.save(update_fields=["audio_processing_status", "audio_processing_error", "updated_at"])
+            elif locked is None:
+                transaction.on_commit(
+                    lambda prefix=storage_prefix: cleanup_generation(prefix)
+                )
+        # Keep the immutable source generation for an idempotent retry. Any
+        # partial HLS siblings are written at exact keys and will be replaced.
+        raise
 
-    from apps.storage.services import storage_service
 
-    source_data = storage_service.download_file(storage_key)
-    transcode_to_hls(
-        lecture,
-        source_data,
-        original_filename,
-        content_type,
-        storage_prefix=storage_prefix,
-    )
+@shared_task(ignore_result=True)
+def expire_stale_enrollments_task() -> dict:
+    """Periodic lifecycle normalization for expired enrollments (P5-04).
+
+    Bounded and idempotent: set-based conditional updates mark only active
+    enrollments whose expiry has passed as expired. Returns operational counts
+    without any student-sensitive data. Active access is never gated by this
+    task — every read path independently enforces active/non-expired at read
+    time, so a delayed run can never grant access.
+    """
+    from apps.academics.services import expire_stale_enrollments
+
+    counts = expire_stale_enrollments()
+    if any(counts.values()):
+        logger.info("Expired enrollment normalization: %s", counts)
+    else:
+        logger.info("Expired enrollment normalization: nothing to expire")
+    return counts

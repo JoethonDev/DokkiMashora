@@ -21,6 +21,7 @@ from apps.academics.models import (
     DiplomaEnrollment,
 )
 from apps.applications.constants import (
+    DELIVERY_MODE_ONLINE,
     PROGRAM_APP_STATUS_REJECTED,
     PROGRAM_TYPE_COURSE,
     PROGRAM_TYPE_DIPLOMA,
@@ -274,11 +275,19 @@ def _blocked_course_ids(profile: StudentProfile) -> set[int]:
     return blocked
 
 
-def submit_apply_application(profile: StudentProfile, cohort=None, course=None) -> ProgramApplication:
+def submit_apply_application(
+    profile: StudentProfile,
+    cohort=None,
+    course=None,
+    delivery_mode: str = DELIVERY_MODE_ONLINE,
+) -> ProgramApplication:
     """Create a *new* ProgramApplication record for Apply."""
     if cohort is not None:
         return submit_program_application(
-            profile, program_type=PROGRAM_TYPE_DIPLOMA, cohort=cohort
+            profile,
+            program_type=PROGRAM_TYPE_DIPLOMA,
+            cohort=cohort,
+            delivery_mode=delivery_mode,
         )
     if course is not None:
         return submit_program_application(

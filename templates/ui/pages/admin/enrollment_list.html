@@ -1,22 +1,20 @@
-{% extends "ui/layouts/admin.html" %}
+﻿{% extends "ui/layouts/admin.html" %}
 {% load i18n %}
 {% block title %}
   {% trans "Enrollments" %}
 {% endblock %}
-{% block page_title %}
   {% trans "Enrollments" %}
-{% endblock %}
 {% block content %}
   <div class="page-stack animate-enter-view">{% if enrollment_type == "course" %}
       {% trans "Academics" as eyebrow %}
       {{ course.title }}
-      —
+      &mdash;
       {% trans "Enrollments" as title %}
       {% trans "Manage course enrollment records." as description %}
     {% elif enrollment_type == "diploma" %}
       {% trans "Academics" as eyebrow %}
       {{ diploma.title }}
-      —
+      &mdash;
       {% trans "Enrollments" as title %}
       {% trans "Manage diploma enrollment records." as description %}
     {% endif %}
@@ -33,8 +31,9 @@
              name="q"
              value="{{ search_value }}"
              type="search"
-              placeholder="{% trans 'Search by name or email…' %}"
-               class="form-input ps-10"></div>
+             placeholder="{% trans 'Search by name or email…' %}"
+             aria-label="{% trans 'Search enrollments' %}"
+             class="form-input ps-10"></div>
     {% for filter in filters %}
       <label class="min-w-40"><span class="field-label">{{ filter.label }}</span>
         <select id="filter-{{ filter.name }}"

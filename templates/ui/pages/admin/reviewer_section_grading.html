@@ -1,0 +1,36 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n %}
+{% block title %}
+  {{ assignment.title }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack animate-enter-view">{% trans "Offline grading" as eyebrow %}
+     {% include "ui/components/_page_header.html" with title=assignment.title eyebrow=eyebrow back_button=True %}
+    <section class="card-surface">
+       <div class="section-head"><div><p class="eyebrow">{% trans "Reviewer grading" %}</p><h2>{{ assignment.title }}</h2></div></div>
+      <form class="max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
+         <label class="field"><span class="field-label">{% trans "Exam code" %}</span>
+           <input name="code_number" class="form-input" value="{{ code_number }}" required>
+         </label>
+         <button class="btn-ghost" type="submit">{% trans "Load code" %}</button>
+       </form>
+       {% if code %}
+         {% include "ui/components/_form_section_divider.html" with title=_('Section grades') %}
+         <div class="page-stack">
+           {% for row in section_rows %}
+             <form class="flex items-end gap-2.5 flex-wrap border-b border-line pb-4 last:border-b-0" method="post">{% csrf_token %}
+               <input type="hidden" name="code_number" value="{{ code.code_number }}">
+               <input type="hidden" name="section_id" value="{{ row.section.id }}">
+               <label class="field flex-1 min-w-48"><span class="field-label">{{ row.section }}</span><span class="field-help">{% trans "Maximum" %}: {{ row.section.max_grade }}</span>
+                 <input name="score" class="form-input" value="{{ row.score }}" type="number" min="0" max="{{ row.section.max_grade }}" step="0.01" required>
+               </label>
+               <button class="btn-primary" type="submit">{% trans "Save grade" %}</button>
+             </form>
+           {% empty %}
+             {% include "ui/components/_empty_state.html" with title=_('No sections found') message=_('This exam has no sections available within your assignment.') %}
+           {% endfor %}
+         </div>
+       {% endif %}
+     </section>
+  </div>
+{% endblock %}

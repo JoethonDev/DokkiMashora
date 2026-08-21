@@ -4,7 +4,7 @@ import logging
 import re
 import uuid
 from datetime import datetime, timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
 from django.db.models import Q
@@ -39,6 +39,7 @@ from apps.academics.models import (
     DiplomaLecture,
     DiplomaLectureWatchProgress,
     Lecture,
+    LectureAudioProgress,
     LectureWatchProgress,
     Semester,
     ModeratorAssignment,
@@ -93,16 +94,27 @@ def activate_course_enrollment(enrollment: CourseEnrollment) -> CourseEnrollment
 
 
 def expire_stale_enrollments():
-    """Mark any active enrollments whose expiry has passed as expired."""
+    """Mark any active enrollments whose expiry has passed as expired.
+
+    Set-based conditional updates (P5-04): returns a bounded dict of affected
+    counts without any student-sensitive identifiers. This is lifecycle
+    normalization only — every active-access read independently enforces
+    ``status=active`` AND non-expired at read time, so a delayed run never
+    grants access.
+    """
     now = timezone.now()
-    DiplomaEnrollment.objects.filter(
+    diploma_count = DiplomaEnrollment.objects.filter(
         status=ENROLLMENT_STATUS_ACTIVE,
         expires_at__lte=now,
     ).update(status=ENROLLMENT_STATUS_EXPIRED)
-    CourseEnrollment.objects.filter(
+    course_count = CourseEnrollment.objects.filter(
         status=ENROLLMENT_STATUS_ACTIVE,
         expires_at__lte=now,
     ).update(status=ENROLLMENT_STATUS_EXPIRED)
+    return {
+        "diploma_expired": diploma_count,
+        "course_expired": course_count,
+    }
 
 
 def get_student_course_versions(student_profile):
@@ -127,7 +139,6 @@ def get_visible_lectures(student_profile, course_version):
         )
         .order_by("order")
     )
-
 
 def get_student_diploma_access(enrollment):
     """Return only the completed and currently unlocked diploma semesters."""
@@ -269,11 +280,142 @@ def can_access_course(student_profile, course_version) -> bool:
     return False
 
 
+# --- Course sequential completion (P5-01) -------------------------------------
+#
+# One canonical course-only predicate: a lecture is completed when it has no
+# trackable required media, or its video is completed, or its audio is
+# completed. When both video and audio exist, EITHER completion is sufficient.
+# Completion never trusts client-reported duration or browser events; it is
+# derived only from server-validated contiguous seconds vs persisted duration.
+
+
+def _lecture_has_video_source(lecture) -> bool:
+    return bool(lecture.youtube_url or lecture.youtube_video_id)
+
+
+def _lecture_has_audio_source(lecture) -> bool:
+    return bool(lecture.audio_storage_key or lecture.audio_url)
+
+
+def _lecture_has_video(lecture) -> bool:
+    return bool(lecture.youtube_video_id and lecture.youtube_duration_seconds)
+
+
+def _lecture_has_audio(lecture) -> bool:
+    return bool(lecture.audio_hls_playlist_key and lecture.audio_duration_seconds)
+
+
+def _lecture_has_trackable_media(lecture) -> bool:
+    return _lecture_has_video_source(lecture) or _lecture_has_audio_source(lecture)
+
+
+def _completed_video_ids(student, enrollment, lecture_qs) -> set[int]:
+    return set(
+        LectureWatchProgress.objects.filter(
+            lecture__in=lecture_qs,
+            student=student,
+            course_enrollment=enrollment,
+            status=WATCH_STATUS_COMPLETED,
+        ).values_list("lecture_id", flat=True)
+    )
+
+
+def _completed_audio_ids(student, enrollment, lecture_qs) -> set[int]:
+    return set(
+        LectureAudioProgress.objects.filter(
+            lecture__in=lecture_qs,
+            student=student,
+            course_enrollment=enrollment,
+            status=WATCH_STATUS_COMPLETED,
+        ).values_list("lecture_id", flat=True)
+    )
+
+
+def _course_lecture_completion_map(student_profile, enrollment, lecture_qs) -> dict[int, bool]:
+    """Set-based completion map for a released/published lecture queryset."""
+    video_completed = _completed_video_ids(student_profile, enrollment, lecture_qs)
+    audio_completed = _completed_audio_ids(student_profile, enrollment, lecture_qs)
+    result: dict[int, bool] = {}
+    for lecture in lecture_qs:
+        if not _lecture_has_trackable_media(lecture):
+            result[lecture.id] = True
+            continue
+        if lecture.id in video_completed:
+            result[lecture.id] = True
+            continue
+        if _lecture_has_audio(lecture) and lecture.id in audio_completed:
+            result[lecture.id] = True
+            continue
+        result[lecture.id] = False
+    return result
+
+
+def is_course_lecture_completed(student_profile, lecture, enrollment=None) -> bool:
+    """Course-only completion predicate for a single lecture."""
+    if not _lecture_has_trackable_media(lecture):
+        return True
+    if enrollment is None:
+        enrollment = _get_course_enrollment(student_profile, lecture.course_version)
+    if enrollment is None:
+        return False
+    if _lecture_has_video(lecture) and LectureWatchProgress.objects.filter(
+        lecture=lecture, student=student_profile, course_enrollment=enrollment,
+        status=WATCH_STATUS_COMPLETED,
+    ).exists():
+        return True
+    if _lecture_has_audio(lecture) and LectureAudioProgress.objects.filter(
+        lecture=lecture, student=student_profile, course_enrollment=enrollment,
+        status=WATCH_STATUS_COMPLETED,
+    ).exists():
+        return True
+    return False
+
+
+def _course_unlock_map(student_profile, enrollment, lecture_qs) -> dict[int, bool]:
+    """Sequential unlock: each released/published lecture is open only when all
+    previous released/published lectures are completed when video tracking is
+    enabled for the course."""
+    ordered = list(lecture_qs.order_by("order"))
+    if not enrollment.course_version.course.video_tracking_enabled:
+        return {lecture.id: True for lecture in ordered}
+    completion = _course_lecture_completion_map(student_profile, enrollment, ordered)
+    unlocked: dict[int, bool] = {}
+    blocked = False
+    for lecture in ordered:
+        unlocked[lecture.id] = not blocked
+        if not completion.get(lecture.id, False):
+            blocked = True
+    return unlocked
+
+
 def can_access_lecture(student_profile, lecture) -> bool:
-    """Check whether the student can view a specific lecture."""
+    """Check whether the student can view a specific course lecture.
+
+    The student must have active course access and the lecture must be
+    released. When course video tracking is enabled, every previous
+    released/published lecture must also be completed. Diploma lectures are
+    never locked by watch/listen progress.
+    """
     if not can_access_course(student_profile, lecture.course_version):
         return False
-    return lecture.is_released
+    if not lecture.is_released:
+        return False
+    enrollment = _get_course_enrollment(student_profile, lecture.course_version)
+    if enrollment is None:
+        return False
+    if not lecture.course_version.course.video_tracking_enabled:
+        return True
+    previous = (
+        lecture.course_version.lectures.filter(
+            Q(release_at__isnull=True) | Q(release_at__lte=timezone.now()),
+            is_published=True,
+            order__lt=lecture.order,
+        )
+    )
+    if not previous.exists():
+        return True
+    completion = _course_lecture_completion_map(student_profile, enrollment, previous)
+    return all(completion.get(item.id, False) for item in previous)
 
 
 def _get_course_enrollment(student_profile, course_version):
@@ -366,10 +508,10 @@ def assign_teacher(teacher, scope_type, actor, **scope_ids) -> TeacherAssignment
     """Create a teacher assignment for the given scope.
 
     Keyword scope_ids must match the scope_type:
-       whole_diploma     â†’ diploma_id
-      diploma_semester  â†’ semester_id
-      diploma_cohort    â†’ cohort_id
-      semester_cohort   â†’ semester_id + cohort_id
+       whole_diploma     -> diploma_id
+      diploma_semester  -> semester_id
+      diploma_cohort    -> cohort_id
+      semester_cohort   -> semester_id + cohort_id
     """
     defaults = {
         "teacher": teacher,
@@ -496,7 +638,7 @@ def create_cohort_with_defaults(*, diploma, form_data, actor):
 
 
 def create_cohort(*, diploma, form_data, actor):
-    """Create a cohort. Delegates to create_cohort_with_defaults â€” no CourseVersion rows created."""
+    """Create a cohort. Delegates to create_cohort_with_defaults; no CourseVersion rows created."""
     return create_cohort_with_defaults(diploma=diploma, form_data=form_data, actor=actor)
 
 
@@ -590,6 +732,19 @@ def _schedule_audio_cleanup(lecture_keys, prefixes) -> None:
     transaction.on_commit(_cleanup)
 
 
+def _assert_no_assessment_history(assessment_qs):
+    """Prevent academic cascades from erasing assessment history."""
+    if assessment_qs.filter(attempts__isnull=False).exists() or assessment_qs.filter(
+        homework_submissions__isnull=False,
+    ).exists():
+        raise ValueError(
+            _(
+                "This academic record cannot be deleted because it contains "
+                "student assessment or submission history. Deactivate it instead."
+            )
+        )
+
+
 def delete_diploma_record(*, diploma, actor):
     """Hard-delete a diploma and its owned delivery content, preserving immutable history.
 
@@ -599,11 +754,17 @@ def delete_diploma_record(*, diploma, actor):
     and audit rows are preserved (SET_NULL) and never deleted.
     """
     with transaction.atomic():
+        from apps.assessments.models import Assessment
+
         if diploma.entrance_exams.exists():
             raise ValueError(
                 _("This diploma cannot be deleted because it still has entrance exams. "
-                  "Delete or archive its entrance exams first.")
+                "Delete or archive its entrance exams first.")
             )
+        _assert_no_assessment_history(
+            Assessment.objects.filter(cohort__diploma=diploma)
+            | Assessment.objects.filter(semester__diploma=diploma)
+        )
         _remove_scope_assignment_rows(
             TeacherAssignment.objects.filter(diploma=diploma),
             actor=actor,
@@ -634,6 +795,9 @@ def delete_semester_record(*, semester, actor):
     stays separate from storage cleanup.
     """
     with transaction.atomic():
+        from apps.assessments.models import Assessment
+
+        _assert_no_assessment_history(Assessment.objects.filter(semester=semester))
         lecture_rows = list(semester.diploma_lectures.values_list("id", "audio_storage_key"))
         lecture_keys = [row[1] for row in lecture_rows]
         prefixes = [_audio_prefix_for_lecture(row[0], diploma=True) for row in lecture_rows]
@@ -651,6 +815,9 @@ def delete_course_record(*, course, actor):
     course-version teacher/moderator scope rows that would raise ProtectedError.
     """
     with transaction.atomic():
+        from apps.assessments.models import Assessment
+
+        _assert_no_assessment_history(Assessment.objects.filter(course_version__course=course))
         _remove_scope_assignment_rows(
             TeacherAssignment.objects.filter(course_version__course=course),
             actor=actor,
@@ -681,6 +848,9 @@ def delete_course_version_record(*, version, actor):
     separate from storage cleanup.
     """
     with transaction.atomic():
+        from apps.assessments.models import Assessment
+
+        _assert_no_assessment_history(Assessment.objects.filter(course_version=version))
         _remove_scope_assignment_rows(
             TeacherAssignment.objects.filter(course_version=version),
             actor=actor,
@@ -741,6 +911,9 @@ def delete_cohort_record(*, cohort, actor):
     Diploma-lecture audio objects are removed post-commit (S2-33).
     """
     with transaction.atomic():
+        from apps.assessments.models import Assessment
+
+        _assert_no_assessment_history(Assessment.objects.filter(cohort=cohort))
         _remove_scope_assignment_rows(
             ModeratorAssignment.objects.filter(cluster__cohort=cohort),
             actor=actor,
@@ -836,14 +1009,16 @@ def _empty_progress_result():
     }
 
 
-def _duration_weighted_progress(lecture_qs, completed_lecture_ids) -> dict:
+def _duration_weighted_progress(
+    lecture_qs, completed_lecture_ids, *, duration_field="youtube_duration_seconds",
+) -> dict:
     from django.db.models import Sum
 
-    totals = lecture_qs.aggregate(total_seconds=Sum("youtube_duration_seconds"))
+    totals = lecture_qs.aggregate(total_seconds=Sum(duration_field))
     total_seconds = Decimal(str(totals["total_seconds"] or 0))
     completed_qs = lecture_qs.filter(id__in=completed_lecture_ids)
     completed_seconds = Decimal(
-        str(completed_qs.aggregate(completed=Sum("youtube_duration_seconds"))["completed"] or 0)
+        str(completed_qs.aggregate(completed=Sum(duration_field))["completed"] or 0)
     )
     percent = (completed_seconds / total_seconds * 100).quantize(_PROGRESS_QUANTIZER) if total_seconds else Decimal("0")
     return {
@@ -856,24 +1031,41 @@ def _duration_weighted_progress(lecture_qs, completed_lecture_ids) -> dict:
 
 
 def course_progress_for_enrollment(student_profile, course_version) -> dict:
-    """Duration-weighted video progress for a student's course enrollment.
+    """Duration-weighted course progress using the course completion predicate.
 
     Callers must check ``can_access_course`` before rendering; this selector
     itself returns a zero result when no enrollment exists.
     """
-    lecture_qs = course_version.lectures.filter(_progress_lecture_filter())
+    from django.db.models import IntegerField, Value
+    from django.db.models.functions import Coalesce
+
+    lecture_qs = (
+        course_version.lectures.filter(
+            Q(release_at__isnull=True) | Q(release_at__lte=timezone.now()),
+            is_published=True,
+        )
+        .annotate(
+            progress_duration_seconds=Coalesce(
+                "youtube_duration_seconds", "audio_duration_seconds",
+                Value(0), output_field=IntegerField(),
+            ),
+        )
+    )
     enrollment = CourseEnrollment.objects.filter(
         student=student_profile, course_version=course_version,
     ).first()
     if enrollment is None:
         return _empty_progress_result()
-    completed_lecture_ids = LectureWatchProgress.objects.filter(
-        lecture__in=lecture_qs,
-        student=student_profile,
-        course_enrollment=enrollment,
-        status=WATCH_STATUS_COMPLETED,
-    ).values_list("lecture_id", flat=True)
-    return _duration_weighted_progress(lecture_qs, completed_lecture_ids)
+    completed_lecture_ids = [
+        lecture_id
+        for lecture_id, done in _course_lecture_completion_map(
+            student_profile, enrollment, lecture_qs
+        ).items()
+        if done
+    ]
+    return _duration_weighted_progress(
+        lecture_qs, completed_lecture_ids, duration_field="progress_duration_seconds",
+    )
 
 
 def diploma_progress_for_enrollment(student_profile, diploma_enrollment) -> dict:
@@ -899,35 +1091,60 @@ def diploma_progress_for_enrollment(student_profile, diploma_enrollment) -> dict
 
 DEFAULT_COMPLETION_THRESHOLD = Decimal("80.0")
 DEFAULT_CHECKPOINT_INTERVAL_SECONDS = 5
+
+
+def _parse_checkpoint_payload(payload):
+    """Parse untrusted checkpoint JSON into bounded primitive values."""
+    session_id_str = payload.get("session_id", "")
+    if not isinstance(session_id_str, str) or not session_id_str:
+        return None, {"error": "missing_session_id", "status": 400}
+    try:
+        session_id = uuid.UUID(session_id_str)
+        sequence = int(payload.get("sequence", 0))
+        position = Decimal(str(payload.get("position", 0)))
+        rate = Decimal(str(payload.get("rate", 1)))
+    except (ValueError, TypeError, InvalidOperation):
+        return None, {"error": "invalid_checkpoint", "status": 400}
+    if sequence < 1 or position < 0 or rate <= 0 or not position.is_finite() or not rate.is_finite():
+        return None, {"error": "invalid_checkpoint", "status": 400}
+    player_state = payload.get("player_state", "")
+    if not isinstance(player_state, str) or len(player_state) > 32:
+        return None, {"error": "invalid_checkpoint", "status": 400}
+    return (session_id, sequence, position, rate, player_state), None
+
+
 def start_lecture_watch(*, student, lecture):
     """Start or resume a watch session for a lecture.
     Returns dict with session_id, resume_position, duration, interval, threshold."""
-    if not lecture.course_version.course.video_tracking_enabled:
-        raise ValueError(_("Video tracking is disabled for this course."))
-
     # Duration comes ONLY from persisted metadata; never from the client and
     # never from a remote fetch in the request path (S2-03).
     duration = lecture.youtube_duration_seconds or 0
+    if duration <= 0:
+        raise ValueError(_("Video metadata is still being processed."))
 
     version = lecture.course_version
-    if not can_access_course(student, version):
-        raise ValueError(_("No active enrollment."))
+    if not can_access_lecture(student, lecture):
+        raise ValueError(_("This lecture is not available."))
 
     threshold = version.course.video_completion_percent or 80
 
     with transaction.atomic():
-        # Lock existing row or create
+        enrollment = CourseEnrollment.objects.select_for_update().filter(
+            student=student, course_version=version, status=ENROLLMENT_STATUS_ACTIVE,
+        ).first()
+        if enrollment is None or enrollment.is_access_expired:
+            raise ValueError(_("No active enrollment."))
         lwp = (
             LectureWatchProgress.objects
             .select_for_update()
-            .filter(student=student, lecture=lecture)
+            .filter(student=student, lecture=lecture, course_enrollment=enrollment)
             .first()
         )
         if lwp is None:
             lwp = LectureWatchProgress(
                 student=student,
                 lecture=lecture,
-                course_enrollment=_get_course_enrollment(student, version),
+                course_enrollment=enrollment,
             )
         # Preserve completed
         if lwp.status == WATCH_STATUS_COMPLETED:
@@ -941,13 +1158,16 @@ def start_lecture_watch(*, student, lecture):
             }
         # A violated session must restart from zero with a fresh session (S2-04);
         # other restarts keep the validated resume position.
-        resume_pos = Decimal("0") if lwp.status == WATCH_STATUS_VIOLATED else lwp.resume_position_seconds
+        violated = lwp.status == WATCH_STATUS_VIOLATED
+        resume_pos = Decimal("0") if violated else lwp.resume_position_seconds
         lwp.status = WATCH_STATUS_IN_PROGRESS
         lwp.violation_reason = VIOLATION_NONE
         lwp.last_sequence = 0
-        lwp.last_position_seconds = Decimal("0")
-        lwp.validated_contiguous_seconds = Decimal("0")
-        lwp.last_checkpoint_at = None
+        lwp.last_position_seconds = resume_pos
+        if violated:
+            lwp.validated_contiguous_seconds = Decimal("0")
+            lwp.resume_position_seconds = Decimal("0")
+        lwp.last_checkpoint_at = timezone.now()
         session_id = uuid.uuid4()
         lwp.active_session_id = session_id
         lwp.save()
@@ -978,21 +1198,12 @@ def record_lecture_checkpoint(*, student, lecture, payload, now=None):
     if now is None:
         now = timezone.now()
 
-    session_id_str = payload.get("session_id", "")
-    sequence = payload.get("sequence", 0)
-    position = Decimal(str(payload.get("position", 0)))
-    player_state = payload.get("player_state", "")
-    rate = Decimal(str(payload.get("rate", 1)))
+    parsed, error = _parse_checkpoint_payload(payload)
+    if error:
+        return error
+    session_id, sequence, position, rate, player_state = parsed
 
-    if not session_id_str:
-        return {"error": "missing_session_id", "status": 400}
-
-    try:
-        session_id = uuid.UUID(session_id_str)
-    except ValueError:
-        return {"error": "invalid_session_id", "status": 400}
-
-    if not can_access_course(student, lecture.course_version):
+    if not can_access_lecture(student, lecture):
         return {"error": "no_access", "status": 403}
 
     duration = Decimal(str(lecture.youtube_duration_seconds or 1))
@@ -1002,10 +1213,18 @@ def record_lecture_checkpoint(*, student, lecture, payload, now=None):
     threshold = Decimal(str(version.course.video_completion_percent or 80))
 
     with transaction.atomic():
+        enrollment = CourseEnrollment.objects.select_for_update().filter(
+            student=student, course_version=version, status=ENROLLMENT_STATUS_ACTIVE,
+        ).first()
+        if enrollment is None or enrollment.is_access_expired:
+            return {"error": "no_access", "status": 403}
         lwp = (
             LectureWatchProgress.objects
             .select_for_update()
-            .filter(student=student, lecture=lecture, active_session_id=session_id)
+            .filter(
+                student=student, lecture=lecture,
+                course_enrollment=enrollment, active_session_id=session_id,
+            )
             .first()
         )
         if lwp is None:
@@ -1115,6 +1334,220 @@ def record_lecture_checkpoint(*, student, lecture, payload, now=None):
     }
 
 
+# --- Audio watch server (P5-01) ----------------------------------------------
+#
+# Audio completion participates in the course sequential predicate exactly like
+# video completion. Duration comes ONLY from persisted transcode metadata and
+# completion is computed ONLY from server-validated contiguous seconds; the
+# client can never manufacture completion (S2-04 rule applied to audio).
+
+AUDIO_COMPLETION_THRESHOLD = Decimal("80.0")
+
+
+def start_lecture_audio(*, student, lecture):
+    """Start or resume an audio playback session for a course lecture."""
+    if not can_access_lecture(student, lecture):
+        raise ValueError(_("This lecture is not available."))
+    if not _lecture_has_audio(lecture):
+        raise ValueError(_("No audio is available for this lecture."))
+
+    duration = Decimal(str(lecture.audio_duration_seconds))
+    version = lecture.course_version
+    threshold = Decimal(str(version.course.video_completion_percent or 80))
+
+    with transaction.atomic():
+        enrollment = CourseEnrollment.objects.select_for_update().filter(
+            student=student, course_version=version, status=ENROLLMENT_STATUS_ACTIVE,
+        ).first()
+        if enrollment is None or enrollment.is_access_expired:
+            raise ValueError(_("No active enrollment."))
+        lap = (
+            LectureAudioProgress.objects
+            .select_for_update()
+            .filter(student=student, lecture=lecture, course_enrollment=enrollment)
+            .first()
+        )
+        if lap is None:
+            lap = LectureAudioProgress(
+                student=student,
+                lecture=lecture,
+                course_enrollment=enrollment,
+            )
+        if lap.status == WATCH_STATUS_COMPLETED:
+            return {
+                "session_id": str(lap.active_session_id),
+                "resume_position": float(lap.resume_position_seconds),
+                "duration": float(duration),
+                "interval": DEFAULT_CHECKPOINT_INTERVAL_SECONDS,
+                "threshold": float(threshold),
+                "completed": True,
+            }
+        # A violated session restarts from zero with a fresh session; other
+        # restarts keep the validated resume position (S2-04).
+        violated = lap.status == WATCH_STATUS_VIOLATED
+        resume_pos = Decimal("0") if violated else lap.resume_position_seconds
+        lap.status = WATCH_STATUS_IN_PROGRESS
+        lap.violation_reason = VIOLATION_NONE
+        lap.last_sequence = 0
+        lap.last_position_seconds = resume_pos
+        if violated:
+            lap.validated_contiguous_seconds = Decimal("0")
+            lap.resume_position_seconds = Decimal("0")
+        lap.last_checkpoint_at = timezone.now()
+        session_id = uuid.uuid4()
+        lap.active_session_id = session_id
+        lap.save()
+
+    return {
+        "session_id": str(session_id),
+        "resume_position": float(resume_pos),
+        "duration": float(duration),
+        "interval": DEFAULT_CHECKPOINT_INTERVAL_SECONDS,
+        "threshold": float(threshold),
+        "completed": False,
+    }
+
+
+def record_lecture_audio_checkpoint(*, student, lecture, payload, now=None):
+    """Record a heartbeat checkpoint for audio playback.
+
+    payload must contain: session_id, sequence, position, player_state, rate.
+    Mirrors the video checkpoint validation: no client-trusted duration, no
+    manufactured completion, violated sessions must restart from zero.
+    """
+    if now is None:
+        now = timezone.now()
+
+    parsed, error = _parse_checkpoint_payload(payload)
+    if error:
+        return error
+    session_id, sequence, position, rate, _player_state = parsed
+
+    if not can_access_lecture(student, lecture):
+        return {"error": "no_access", "status": 403}
+
+    duration = Decimal(str(lecture.audio_duration_seconds or 1))
+    duration_known = lecture.audio_duration_seconds is not None
+
+    version = lecture.course_version
+    threshold = Decimal(str(version.course.video_completion_percent or 80))
+
+    with transaction.atomic():
+        enrollment = CourseEnrollment.objects.select_for_update().filter(
+            student=student, course_version=version, status=ENROLLMENT_STATUS_ACTIVE,
+        ).first()
+        if enrollment is None or enrollment.is_access_expired:
+            return {"error": "no_access", "status": 403}
+        lap = (
+            LectureAudioProgress.objects
+            .select_for_update()
+            .filter(
+                student=student, lecture=lecture,
+                course_enrollment=enrollment, active_session_id=session_id,
+            )
+            .first()
+        )
+        if lap is None:
+            return {"error": "unknown_session", "status": 404}
+        if lap.status == WATCH_STATUS_COMPLETED:
+            return {
+                "progress": 100.0,
+                "status": WATCH_STATUS_COMPLETED,
+                "violation": VIOLATION_NONE,
+                "resume_position": float(lap.resume_position_seconds),
+            }
+        if lap.status == WATCH_STATUS_VIOLATED:
+            return {
+                "error": "session_violated",
+                "status": 409,
+                "violation": lap.violation_reason,
+                "progress": float(_validated_progress_pct(lap, duration)),
+            }
+
+        # Sequence validation
+        expected_seq = lap.last_sequence + 1
+        if sequence != expected_seq:
+            lap.status = WATCH_STATUS_VIOLATED
+            lap.violation_reason = VIOLATION_INVALID_SEQUENCE
+            lap.save(update_fields=["status", "violation_reason"])
+            return {
+                "error": "out_of_order",
+                "status": 409,
+                "violation": VIOLATION_INVALID_SEQUENCE,
+                "progress": float(_validated_progress_pct(lap, duration)),
+            }
+
+        # Time movement validation
+        elapsed = Decimal("0")
+        if lap.last_checkpoint_at:
+            diff = (now - lap.last_checkpoint_at).total_seconds()
+            elapsed = Decimal(str(diff))
+
+        # Speed check
+        if rate > Decimal("1.5"):
+            lap.status = WATCH_STATUS_VIOLATED
+            lap.violation_reason = VIOLATION_SPEED
+            lap.save(update_fields=["status", "violation_reason"])
+            return {
+                "error": "speed_violation",
+                "status": 409,
+                "violation": VIOLATION_SPEED,
+                "progress": float(_validated_progress_pct(lap, duration)),
+            }
+
+        allowed_jitter = Decimal(str(DEFAULT_CHECKPOINT_INTERVAL_SECONDS + 2))
+        if elapsed < Decimal("1") and lap.last_sequence > 0:
+            lap.status = WATCH_STATUS_VIOLATED
+            lap.violation_reason = VIOLATION_INVALID_POSITION
+            lap.save(update_fields=["status", "violation_reason"])
+            return {
+                "error": "too_fast",
+                "status": 409,
+                "violation": VIOLATION_INVALID_POSITION,
+                "progress": float(_validated_progress_pct(lap, duration)),
+            }
+
+        # Forward skip detection
+        position_delta = position - lap.last_position_seconds
+        if position_delta > allowed_jitter and lap.last_sequence > 0 and position > lap.last_position_seconds:
+            lap.status = WATCH_STATUS_VIOLATED
+            lap.violation_reason = VIOLATION_FORWARD_SKIP
+            lap.save(update_fields=["status", "violation_reason"])
+            return {
+                "error": "forward_skip",
+                "status": 409,
+                "violation": VIOLATION_FORWARD_SKIP,
+                "progress": float(_validated_progress_pct(lap, duration)),
+            }
+
+        # Advance validated seconds (only for forward movement within audio)
+        if duration_known and position > lap.last_position_seconds and position <= duration:
+            advance = min(position - lap.last_position_seconds, elapsed + Decimal("2"))
+            lap.validated_contiguous_seconds += advance
+
+        lap.last_sequence = sequence
+        lap.last_position_seconds = position
+        lap.last_checkpoint_at = now
+        lap.resume_position_seconds = position
+
+        progress_pct = float(_validated_progress_pct(lap, duration)) if duration_known else 0.0
+        completed = False
+        if duration_known and Decimal(str(progress_pct)) >= threshold and lap.status != WATCH_STATUS_COMPLETED:
+            lap.status = WATCH_STATUS_COMPLETED
+            lap.completed_at = now
+            completed = True
+
+        lap.save()
+
+    return {
+        "progress": progress_pct,
+        "status": lap.status,
+        "violation": lap.violation_reason,
+        "resume_position": float(lap.resume_position_seconds),
+        "completed": completed,
+    }
+
+
 def get_visible_diploma_lectures(student_profile, enrollment, semester=None):
     """Return visible (published & released) diploma lectures for an enrollment."""
     if enrollment.status != ENROLLMENT_STATUS_ACTIVE:
@@ -1161,14 +1594,21 @@ def start_diploma_lecture_watch(*, student, enrollment, lecture):
     # Duration comes ONLY from persisted metadata; never from a remote fetch
     # or the client in the request path (S2-03).
     duration = lecture.youtube_duration_seconds or 0
+    if duration <= 0:
+        raise ValueError(_("Video metadata is still being processed."))
 
     threshold = Decimal(str(lecture.cohort.diploma.video_completion_percent or 80))
 
     with transaction.atomic():
+        enrollment = DiplomaEnrollment.objects.select_for_update().get(
+            pk=enrollment.pk, student=student,
+        )
+        if not can_access_diploma_lecture(student, enrollment, lecture):
+            raise ValueError(_("This lecture is not available."))
         lwp = (
             DiplomaLectureWatchProgress.objects
             .select_for_update()
-            .filter(student=student, lecture=lecture)
+            .filter(student=student, lecture=lecture, diploma_enrollment=enrollment)
             .first()
         )
         if lwp is None:
@@ -1187,13 +1627,16 @@ def start_diploma_lecture_watch(*, student, enrollment, lecture):
                 "completed": True,
             }
         # A violated session must restart from zero with a fresh session (S2-04).
-        resume_pos = Decimal("0") if lwp.status == WATCH_STATUS_VIOLATED else lwp.resume_position_seconds
+        violated = lwp.status == WATCH_STATUS_VIOLATED
+        resume_pos = Decimal("0") if violated else lwp.resume_position_seconds
         lwp.status = WATCH_STATUS_IN_PROGRESS
         lwp.violation_reason = VIOLATION_NONE
         lwp.last_sequence = 0
-        lwp.last_position_seconds = Decimal("0")
-        lwp.validated_contiguous_seconds = Decimal("0")
-        lwp.last_checkpoint_at = None
+        lwp.last_position_seconds = resume_pos
+        if violated:
+            lwp.validated_contiguous_seconds = Decimal("0")
+            lwp.resume_position_seconds = Decimal("0")
+        lwp.last_checkpoint_at = timezone.now()
         session_id = uuid.uuid4()
         lwp.active_session_id = session_id
         lwp.save()
@@ -1218,19 +1661,10 @@ def record_diploma_lecture_checkpoint(*, student, enrollment, lecture, payload, 
     if now is None:
         now = timezone.now()
 
-    session_id_str = payload.get("session_id", "")
-    sequence = payload.get("sequence", 0)
-    position = Decimal(str(payload.get("position", 0)))
-    player_state = payload.get("player_state", "")
-    rate = Decimal(str(payload.get("rate", 1)))
-
-    if not session_id_str:
-        return {"error": "missing_session_id", "status": 400}
-
-    try:
-        session_id = uuid.UUID(session_id_str)
-    except ValueError:
-        return {"error": "invalid_session_id", "status": 400}
+    parsed, error = _parse_checkpoint_payload(payload)
+    if error:
+        return error
+    session_id, sequence, position, rate, player_state = parsed
 
     if not can_access_diploma_lecture(student, enrollment, lecture):
         return {"error": "no_access", "status": 403}
@@ -1241,10 +1675,18 @@ def record_diploma_lecture_checkpoint(*, student, enrollment, lecture, payload, 
     threshold = Decimal(str(lecture.cohort.diploma.video_completion_percent or 80))
 
     with transaction.atomic():
+        enrollment = DiplomaEnrollment.objects.select_for_update().get(
+            pk=enrollment.pk, student=student,
+        )
+        if not can_access_diploma_lecture(student, enrollment, lecture):
+            return {"error": "no_access", "status": 403}
         lwp = (
             DiplomaLectureWatchProgress.objects
             .select_for_update()
-            .filter(student=student, lecture=lecture, active_session_id=session_id)
+            .filter(
+                student=student, lecture=lecture,
+                diploma_enrollment=enrollment, active_session_id=session_id,
+            )
             .first()
         )
         if lwp is None:

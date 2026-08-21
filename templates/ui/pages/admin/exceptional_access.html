@@ -1,0 +1,161 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n static %}
+{% block title %}
+  {{ assessment }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack animate-enter-view">
+    {% trans "Exceptional access" as eyebrow %}
+    {% include "ui/components/_page_header.html" with title=assessment eyebrow=eyebrow back_button=True %}
+
+    <section class="card-surface">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">{% trans "Exceptional access" %}</p>
+          <h2>{{ assessment }}</h2>
+        </div>
+      </div>
+      <div class="state-banner state-banner-info mb-5">
+        <div>
+          <strong>{% trans "What this does" %}</strong>
+          <p class="m-0 mt-1 text-sm">
+            {% trans "This creates a separate, time-bounded access window for selected active students. It does not bypass enrollment, the assessment timer, or server-side submission rules." %}
+          </p>
+        </div>
+      </div>
+      <form id="exceptional-access-form" class="max-w-form mx-auto w-full page-stack" method="post">
+        {% csrf_token %}
+        <label class="field"><span class="field-label">{% trans "Open at" %}</span>
+          <input type="datetime-local" name="open_at" class="form-input" required>
+        </label>
+        <label class="field"><span class="field-label">{% trans "Close at" %}</span>
+          <input type="datetime-local" name="close_at" class="form-input" required>
+        </label>
+        <label class="field"><span class="field-label">{% trans "Reason" %}</span>
+          <textarea name="reason" class="form-input" required></textarea>
+        </label>
+
+        {% if assessment.assessment_type == "quiz" %}
+          <div class="border-t border-line pt-4">
+            <h3 class="text-base font-bold">{% trans "Course students" %}</h3>
+            <p class="text-sm text-muted mt-1">{% trans "Search and select active students enrolled in this course quiz." %}</p>
+          </div>
+        {% else %}
+          <div class="border-t border-line pt-4">
+            <h3 class="text-base font-bold">{% trans "Diploma students" %}</h3>
+            <p class="text-sm text-muted mt-1">{% trans "Search and select active students enrolled in this diploma cohort." %}</p>
+          </div>
+        {% endif %}
+        <div class="flex flex-col gap-3">
+          <button type="button" class="btn-secondary" id="exceptional-access-open-picker">
+            {% trans "Search and select students" %}
+          </button>
+          <div id="exceptional-access-selected-enrollments"
+               class="flex flex-col gap-2"
+               data-empty-label="{% trans 'No students selected yet.' %}"
+               data-selected-label="{% trans 'students selected' %}"
+               data-remove-label="{% trans 'Remove' %}">
+            <p class="text-sm text-muted">{% trans "No students selected yet." %}</p>
+          </div>
+        </div>
+        {% if assessment.assessment_type != "quiz" %}
+          <label class="flex items-center gap-2 pt-4 border-t border-line">
+            <input type="checkbox" class="form-checkbox" name="force_online">
+            <span>{% trans "Force online delivery for selected semester-exam students" %}</span>
+          </label>
+        {% endif %}
+        <div class="actions-row"><button class="btn-primary" type="submit">{% trans "Create exceptional access" %}</button></div>
+      </form>
+    </section>
+
+    <dialog id="exceptional-access-enrollment-dialog"
+            class="relative w-[calc(100%-2rem)] max-w-3xl max-h-[calc(100vh-2rem)] overflow-hidden rounded-2xl border border-line bg-white p-0 shadow-modal"
+            aria-labelledby="exceptional-access-enrollment-dialog-title">
+      <div class="flex max-h-[calc(100vh-2rem)] flex-col">
+        <div class="section-head border-b border-line p-4 sm:p-6">
+          <div>
+            <p class="eyebrow">{% trans "Student selection" %}</p>
+            <h2 id="exceptional-access-enrollment-dialog-title">{% trans "Search eligible students" %}</h2>
+          </div>
+          <button type="button" class="btn-icon" id="exceptional-access-close-picker" aria-label="{% trans 'Close' %}">&#10005;</button>
+        </div>
+        <div class="min-h-0 overflow-y-auto p-4 sm:p-6">
+          <div id="exceptional-access-enrollment-picker"
+                data-picker-field="{% if assessment.assessment_type == 'quiz' %}course_enrollments{% else %}diploma_enrollments{% endif %}"
+               hx-get="{% url 'assessments:admin_exceptional_access_enrollments' assessment.id %}?page=1"
+               hx-trigger="load"
+               hx-target="this"
+               hx-swap="innerHTML"
+               hx-push-url="false">
+            <p class="text-sm text-muted">{% trans "Loading eligible students…" %}</p>
+          </div>
+        </div>
+        <div class="actions-row border-t border-line p-4 sm:p-6">
+          <button type="button" class="btn-primary" id="exceptional-access-done-picker">{% trans "Done" %}</button>
+        </div>
+      </div>
+    </dialog>
+
+    <section class="card-surface">
+      <div class="section-head"><div><p class="eyebrow">{% trans "Existing overrides" %}</p><h2>{% trans "Access windows" %}</h2></div></div>
+      <div class="table-wrap hidden lg:block"><table class="table">
+          <thead>
+            <tr>
+              <th class="table-th">{% trans "Student" %}</th>
+              <th class="table-th">{% trans "Window" %}</th>
+              <th class="table-th">{% trans "Status" %}</th>
+              <th class="table-th"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in overrides %}
+              <tr>
+                <td class="table-td">{% if item.course_enrollment %}{{ item.course_enrollment.student }}{% else %}{{ item.diploma_enrollment.student }}{% endif %}</td>
+                <td class="table-td">{{ item.open_at }} - {{ item.close_at }}</td>
+                <td class="table-td">{{ item.get_status_display|default:'—' }}</td>
+                <td class="table-td">
+                  {% if item.status == "active" %}
+                    <form method="post" action="{% url 'assessments:admin_cancel_exceptional_access' assessment.id item.id %}" class="flex items-end gap-2 flex-wrap">
+                      {% csrf_token %}
+                      <label class="field"><span class="field-label">{% trans "Cancellation reason" %}</span><input name="reason" class="form-input" value="" required></label>
+                      <button class="btn-danger" type="submit">{% trans "Cancel" %}</button>
+                    </form>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td class="table-td" colspan="4">
+                  {% include "ui/components/_empty_state.html" with title=_('No exceptional access windows yet.') compact=True %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="card-stack lg:hidden">
+        {% for item in overrides %}
+          <div class="mobile-card">
+            <div class="flex-1 min-w-0">
+              <strong class="block truncate">{% if item.course_enrollment %}{{ item.course_enrollment.student }}{% else %}{{ item.diploma_enrollment.student }}{% endif %}</strong>
+              <small class="block text-muted">{{ item.open_at }} — {{ item.close_at }}</small>
+              <small class="block text-muted">{{ item.get_status_display|default:'—' }}</small>
+              {% if item.status == "active" %}
+                <form method="post" action="{% url 'assessments:admin_cancel_exceptional_access' assessment.id item.id %}" class="flex items-end gap-2 flex-wrap mt-3">
+                  {% csrf_token %}
+                  <label class="field"><span class="field-label">{% trans "Cancellation reason" %}</span><input name="reason" class="form-input" value="" required></label>
+                  <button class="btn-danger" type="submit">{% trans "Cancel" %}</button>
+                </form>
+              {% endif %}
+            </div>
+          </div>
+        {% empty %}
+          <div class="border border-line rounded-sm p-4 text-center">
+            {% include "ui/components/_empty_state.html" with title=_('No exceptional access windows yet.') compact=True %}
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+  <script src="{% static 'js/exceptional-access.js' %}" defer></script>
+{% endblock %}

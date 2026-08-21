@@ -17,10 +17,37 @@
             </h3>
           </div>
         </div>
-        <p>
-          {% trans "Evaluation result" %}
-          : <strong>{{ result }}</strong>
-        </p>
+        {% if result.blocked %}
+          {% include "ui/components/_state_banner.html" with state="pending" label=_("Evaluation blocked") %}
+          {% for reason in result.blocked_reasons %}<p class="text-sm text-muted mt-1 mb-0">{{ reason }}</p>{% endfor %}
+        {% else %}
+          {% include "ui/components/_state_banner.html" with state=result.passed|yesno:"passed,failed" label=result.passed|boolean_label:"Pass,Fail" %}
+        {% endif %}
+        {% if result.config %}
+          <dl class="dl mt-4">
+            <div>
+              <dt class="dt">{% trans "Overall" %}</dt>
+              <dd class="dd">{{ result.overall_percent|default:'—' }}% / {% trans "min" %} {{ result.overall_min }}%</dd>
+            </div>
+            {% for part in result.parts %}
+              <div>
+                <dt class="dt">{{ part.label }}</dt>
+                <dd class="dd">
+                  {% if part.percent is None %}
+                    {% trans "No graded result" %}
+                  {% else %}
+                    {{ part.percent }}%
+                    /
+                    {% trans "min" %}
+                    {{ part.min }}%
+                    ({% trans "weight" %}
+                    {{ part.weight }}%)
+                  {% endif %}
+                </dd>
+              </div>
+            {% endfor %}
+          </dl>
+        {% endif %}
         <div class="flex gap-2.5 items-center flex-wrap"><form method="post"
                 action="{% url 'progression:admin_grade_sync' enrollment.id semester.id %}">{% csrf_token %}
             <button class="btn-secondary" type="submit">{% trans "Synchronize grade items" %}</button>

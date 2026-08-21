@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from django.utils.translation import gettext_lazy as _
 
-from apps.academics.models import ModeratorAssignment, TeacherAssignment
-from apps.accounts.constants import GROUP_ADMIN, GROUP_MODERATOR, GROUP_SECRETARY, GROUP_SUPER_ADMIN, GROUP_TEACHER
-from apps.core.permissions import is_admin, is_moderator, is_secretary, is_teacher
+from apps.core.permissions import (
+    is_admin,
+    is_moderator,
+    is_reviewer,
+    is_secretary,
+)
 
 
 def _user_in_group(user, group_name: str) -> bool:
@@ -17,6 +20,7 @@ def workspace_navigation(user):
     section_keys = {
         _("Workspace"): "workspace",
         _("Learning"): "learning",
+        _("Admissions"): "admissions",
         _("Administration"): "administration",
     }
 
@@ -36,33 +40,61 @@ def workspace_navigation(user):
 
     can_admin = is_admin(user)
     can_moderator = is_moderator(user)
-    can_teacher = is_teacher(user)
+    can_reviewer = is_reviewer(user)
     can_secretary = is_secretary(user)
     is_super = user.is_superuser
 
+    # --- Reviewer: anonymous Semester Exam grading only -----------------------
+    # Locked nav: Dashboard + Grading assignments only. Grading lives under
+    # "Learning" for grouping consistency, but the reviewer sees exactly two
+    # destinations (Dashboard, Grading).
+    if can_reviewer and not can_admin:
+        _add(_("Workspace"), _("Dashboard"), "accounts:dashboard",
+             "&#8962;",
+              ["accounts:dashboard", "accounts:dashboard_admin",
+              "accounts:dashboard_moderator", "accounts:dashboard_secretary"])
+        _add(_("Learning"), _("Grading assignments"), "assessments:reviewer_dashboard", "&#10003;",
+             ["assessments:reviewer_section_grading",
+              "assessments:reviewer_online_grading"], "grade")
+        return items
+
+    # --- Moderator: assigned-cluster Homework grading only --------------------
+    # Locked nav: Dashboard + Homework Review only.
+    if can_moderator and not can_admin:
+        _add(_("Workspace"), _("Dashboard"), "accounts:dashboard",
+             "&#8962;",
+              ["accounts:dashboard", "accounts:dashboard_admin",
+              "accounts:dashboard_moderator", "accounts:dashboard_secretary"])
+        _add(_("Learning"), _("Homework review"), "assessments:admin_homework_list", "&#9997;",
+             ["assessments:admin_homework_grade_detail",
+              "assessments:admin_grade_homework"], "grade")
+        return items
+
+    # --- Secretary: Attendance only ------------------------------------------
+    if can_secretary and not can_admin:
+        _add(_("Workspace"), _("Dashboard"), "accounts:dashboard",
+             "&#8962;",
+              ["accounts:dashboard", "accounts:dashboard_admin",
+              "accounts:dashboard_moderator", "accounts:dashboard_secretary"])
+        _add(_("Learning"), _("Attendance"), "attendance:attendance_session_list", "&#9687;",
+             ["attendance:attendance_session_create",
+              "attendance:attendance_session_detail",
+              "attendance:attendance_session_open",
+              "attendance:attendance_session_close",
+              "attendance:attendance_session_records",
+              "attendance:attendance_scan",
+              "attendance:semester_options_by_cohort",
+              "attendance:my_attendance"], "session")
+        return items
+
+    # --- Admin / Super Admin: full grouped workspace --------------------------
+    # Locked groups: Workspace, Learning (incl assessments/grading), Admissions,
+    # Administration. Navigation is display-only; backend permissions are unchanged.
     _add(_("Workspace"), _("Dashboard"), "accounts:dashboard",
          "&#8962;",
-         ["accounts:dashboard_admin", "accounts:dashboard_moderator",
-          "accounts:dashboard_teacher", "accounts:dashboard_secretary",
-          "accounts:dashboard_router"])
-    if can_admin or is_super:
-        _add(_("Workspace"), _("Students"), "accounts:admin_student_list", "&#9678;",
-             ["accounts:admin_user_detail", "accounts:admin_user_edit",
-              "accounts:admin_student_create", "accounts:admin_student_import",
-              "accounts:admin_download_student_csv_template",
-              "accounts:admin_student_import_detail",
-              "accounts:admin_student_import_confirm"], "student")
-        _add(_("Workspace"), _("Applications"), "applications:program_list", "&#9635;",
-             ["applications:program_detail"], "application")
-        _add(_("Workspace"), _("Staff"), "accounts:admin_staff_list", "&#9679;",
-             ["accounts:admin_staff_create", "accounts:admin_staff_assignments",
-              "accounts:admin_teacher_assignment_create",
-              "accounts:admin_teacher_assignment_delete",
-              "accounts:admin_moderator_assignment_create",
-              "accounts:admin_moderator_assignment_delete",
-              "accounts:admin_student_cluster_create",
-              "accounts:admin_student_cluster_membership_add",
-              "accounts:admin_student_cluster_membership_remove"], "staff")
+              ["accounts:dashboard", "accounts:dashboard_admin", "accounts:dashboard_moderator",
+          "accounts:dashboard_secretary",
+           "accounts:dashboard"])
 
     if can_admin or is_super:
         _add(_("Learning"), _("Academics"), "academics:admin_diploma_list", "&#9707;",
@@ -70,16 +102,20 @@ def workspace_navigation(user):
               "academics:admin_diploma_edit", "academics:admin_diploma_delete",
               "academics:admin_diploma_enrollment_list",
               "academics:admin_diploma_enrollment_update",
-              "academics:admin_course_list", "academics:admin_course_create",
-              "academics:admin_course_detail", "academics:admin_course_edit",
-              "academics:admin_course_delete",
+              "academics:admin_semester_create", "academics:admin_semester_edit",
+              "academics:admin_cohort_create", "academics:admin_cohort_edit"],
+             "diploma")
+        _add(_("Learning"), _("Courses"), "academics:admin_course_list", "&#9654;",
+             ["academics:admin_course_create", "academics:admin_course_detail",
+              "academics:admin_course_edit", "academics:admin_course_delete",
               "academics:admin_course_enrollment_list",
               "academics:admin_course_enrollment_migrate",
-              "academics:admin_semester_create", "academics:admin_semester_edit",
-              "academics:admin_cohort_create", "academics:admin_cohort_edit",
-              "academics:admin_version_create", "academics:admin_version_edit",
-              "academics:admin_lecture_create", "academics:admin_lecture_edit"],
-             "diploma course")
+               "academics:admin_version_create", "academics:admin_version_detail",
+               "academics:admin_version_delete",
+              "academics:admin_version_toggle_active", "academics:admin_lecture_create",
+              "academics:admin_lecture_edit", "academics:admin_lecture_delete",
+              "academics:admin_lecture_preview"],
+             "course")
     if can_admin or can_secretary or is_super:
         _add(_("Learning"), _("Attendance"), "attendance:attendance_session_list", "&#9687;",
              ["attendance:attendance_session_create",
@@ -89,28 +125,41 @@ def workspace_navigation(user):
               "attendance:attendance_session_records",
               "attendance:attendance_scan", "attendance:semester_options_by_cohort",
               "attendance:my_attendance"], "session")
-    if can_admin or can_moderator or can_teacher or is_super:
+    if can_admin or is_super:
         _add(_("Learning"), _("Assessments"), "assessments:admin_list", "&#10003;",
              ["assessments:admin_create", "assessments:admin_detail",
               "assessments:admin_edit", "assessments:admin_preview",
               "assessments:admin_toggle", "assessments:admin_recalculate",
-              "assessments:admin_scope_fields", "assessments:reviewer_dashboard",
-              "assessments:reviewer_section_grading",
-              "assessments:admin_offline_grade_entry",
+               "assessments:admin_scope_fields", "assessments:reviewer_dashboard",
+               "assessments:reviewer_section_grading",
+               "assessments:reviewer_online_grading",
+               "assessments:admin_offline_grade_entry",
               "assessments:admin_offline_grade_section",
               "assessments:admin_generate_codes",
-              "assessments:admin_export_offline_codes",
-              "assessments:admin_toggle_delivery_mode"], "assessment exam")
-    if can_admin or can_moderator or can_teacher or is_super:
-        _add(_("Learning"), _("Grading"), "assessments:admin_grade_list", "&#9997;",
-             ["assessments:admin_grade_detail", "assessments:admin_release_grades",
-              "assessments:admin_hide_grades", "assessments:admin_grade_answer",
-              "assessments:admin_grade_homework",
-              "assessments:admin_homework_list",
-              "assessments:admin_homework_grade_detail",
-              "assessments:admin_toggle_grades",
-              "entrance_exams:admin_grade_list",
-              "entrance_exams:admin_grade_attempt"], "grade")
+                "assessments:admin_export_offline_codes"], "assessment exam")
+        _add(_("Learning"), _("Reviewer assignments"),
+             "assessments:admin_reviewer_assignment_list", "&#10003;",
+             ["assessments:admin_reviewer_assignment_create"], "reviewer grading assignment")
+    if can_admin or can_moderator or is_super:
+        if can_moderator and not can_admin:
+            _add(_("Learning"), _("Homework review"), "assessments:admin_homework_list", "&#9997;",
+                 ["assessments:admin_homework_list",
+                  "assessments:admin_homework_grade_detail",
+                  "assessments:admin_grade_homework"], "grade")
+        else:
+            _add(_("Learning"), _("Grading"), "assessments:admin_grade_list", "&#9997;",
+                 ["assessments:admin_grade_list", "assessments:admin_grade_detail",
+                  "assessments:admin_release_grades", "assessments:admin_hide_grades",
+                  "assessments:admin_grade_answer",
+                  "assessments:admin_grade_homework",
+                  "assessments:admin_homework_list",
+                  "assessments:admin_homework_grade_detail",
+                  "assessments:admin_toggle_grades",
+                  "assessments:admin_exam_review_list",
+                  "assessments:admin_exam_review_detail",
+                  "assessments:admin_exam_review_submit",
+                  "entrance_exams:admin_grade_list",
+                  "entrance_exams:admin_grade_attempt"], "grade")
     if can_admin or is_super:
         _add(_("Learning"), _("Progression"), "progression:admin_dashboard", "&#8599;",
              ["progression:admin_student_detail",
@@ -122,25 +171,37 @@ def workspace_navigation(user):
               "progression:admin_assign_retake",
               "progression:admin_clear_retake",
               "progression:admin_mark_complete",
-              "progression:admin_mark_graduate",
-              "progression:admin_component_list",
-              "progression:admin_component_create",
-              "progression:admin_component_edit",
-              "progression:admin_component_delete",
-              "progression:admin_custom_activity_grade",
-              "progression:admin_grade_sync",
-              "progression:admin_semester_evaluation",
+               "progression:admin_mark_graduate",
+               "progression:admin_component_list",
+               "progression:admin_grade_sync",
+               "progression:admin_semester_evaluation",
               "progression:admin_request_interview",
               "progression:admin_confirm_pass",
               "progression:admin_interview_decision",
-              "progression:admin_create_rejoin_plan",
-              "progression:admin_rejoin_plan_list",
-              "progression:admin_activate_rejoin_plan",
-              "progression:admin_cancel_rejoin_plan",
-              "progression:student_progress"], "progress")
+               "progression:admin_create_rejoin_plan",
+               "progression:admin_rejoin_plan_list",
+               "progression:admin_rejoin_eligibility",
+               "progression:admin_activate_rejoin_plan",
+               "progression:admin_cancel_rejoin_plan",
+               "progression:student_progress"], "progress")
 
     if can_admin or is_super:
-        _add(_("Administration"), _("Entrance exams"), "entrance_exams:admin_list", "&#9671;",
+        _add(_("Admissions"), _("Applications"), "applications:program_list", "&#9635;",
+             ["applications:program_detail"], "application")
+        _add(_("Admissions"), _("Students"), "accounts:admin_student_list", "&#9678;",
+             ["accounts:admin_user_detail", "accounts:admin_user_edit",
+              "accounts:admin_student_create", "accounts:admin_student_import",
+              "accounts:admin_download_student_csv_template",
+              "accounts:admin_student_import_detail",
+              "accounts:admin_student_import_confirm"], "student")
+        _add(_("Admissions"), _("Staff"), "accounts:admin_staff_list", "&#9679;",
+             ["accounts:admin_staff_create", "accounts:admin_staff_assignments",
+              "accounts:admin_moderator_assignment_create",
+              "accounts:admin_moderator_assignment_delete",
+              "accounts:admin_student_cluster_create",
+              "accounts:admin_student_cluster_membership_add",
+              "accounts:admin_student_cluster_membership_remove"], "staff")
+        _add(_("Admissions"), _("Entrance exams"), "entrance_exams:admin_list", "&#9671;",
              ["entrance_exams:admin_cohorts_for_diploma",
               "entrance_exams:admin_create_exam", "entrance_exams:admin_detail",
               "entrance_exams:admin_edit_exam", "entrance_exams:admin_preview",
@@ -154,12 +215,14 @@ def workspace_navigation(user):
               "entrance_exams:admin_cohort_email",
               "entrance_exams:admin_app_email_resend",
               "entrance_exams:admin_email_log_list"], "exam")
+
+    if can_admin or is_super:
         _add(_("Administration"), _("Payments"), "payments:index", "&#164;",
              ["payments:download_payment_csv_template", "payments:upload_create",
               "payments:upload_detail", "payments:upload_confirm",
               "payments:record_list", "payments:record_detail",
               "payments:record_edit", "payments:record_delete",
-              "payments:enrollment_payment_toggle"], "payment fee")
+              "payments:enrollment_payment_toggle", "payments:waiver_list"], "payment fee")
         _add(_("Administration"), _("Communications"), "communications:bulk_email_history", "&#9993;",
              ["communications:bulk_email_create", "communications:bulk_email_preview",
               "communications:bulk_email_detail",
@@ -189,8 +252,8 @@ def workspace_navigation(user):
               "intake_forms:admin_cohort_intake_responses",
               "intake_forms:admin_intake_request_send",
               "intake_forms:fill_intake_form"], "intake form")
+        _add(_("Administration"), _("Audit"), "audit:list", "&#9675;", ["audit:detail"], "audit log")
         _add(_("Administration"), _("Landing settings"), "core:landing_settings", "&#9998;", [], "landing")
         _add(_("Administration"), _("General settings"), "accounts:admin_settings", "&#9881;", [], "settings")
-        _add(_("Administration"), _("Audit"), "audit:list", "&#9675;", ["audit:detail"], "audit log")
 
     return items

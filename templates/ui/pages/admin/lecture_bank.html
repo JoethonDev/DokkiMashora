@@ -1,0 +1,60 @@
+﻿{% extends "ui/layouts/admin.html" %}
+{% load i18n %}
+{% block title %}
+  {{ title|default:lecture.title }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack animate-enter-view">{% trans "Question bank" as eyebrow %}
+    {% include "ui/components/_page_header.html" with title=lecture.title eyebrow=eyebrow back_button=True %}
+    <section class="card-surface"><div class="section-head"><div>
+          <p class="eyebrow">{% trans "Question bank" %}</p>
+          <h2>{{ lecture.title }}</h2>
+          <p class="text-muted">{{ cohort }} &middot; {{ semester }}</p>
+        </div>
+      </div>
+      {% for question in questions %}
+        <div class="border border-line rounded-sm p-4 mb-3 last:mb-0">
+          <div class="flex items-start justify-between gap-4">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="text-xs font-bold text-muted uppercase">#{{ question.order }}</span>
+                <span class="px-2 py-0.5 text-xs font-bold rounded-full {% if question.question_type == 'mcq' %}bg-info-soft text-info-text{% else %}bg-warning-soft text-warning-text{% endif %}">{{ question.get_question_type_display }}</span>
+              </div>
+              <p class="text-sm font-medium m-0">{{ question.text }}</p>
+              {% if question.question_type == 'mcq' %}
+                {% if question.choices.exists %}
+                  <div class="flex flex-col gap-1.5 mt-3 ps-2 border-s-2 border-line">
+                    {% for choice in question.choices.all %}
+                      <label class="flex items-center gap-2 text-sm">
+                        <input type="radio" class="form-radio" disabled{% if choice.is_correct %} checked{% endif %}>
+                        <span>{{ choice.text }}</span>
+                        <span class="text-xs text-muted">({{ choice.score }} {% trans "pts" %})</span>
+                      </label>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              {% else %}
+                <textarea class="form-textarea" rows="5" disabled placeholder="{% trans 'Written answer' %}" aria-label="{% trans 'Written answer' %}"></textarea>
+              {% endif %}
+            </div>
+            <div class="flex gap-2 shrink-0">
+              <a class="btn-ghost" href="{% url 'assessments:admin_lecture_bank_question_edit' diploma.id cohort.id semester.id lecture.id question.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Edit" %}</a>
+              <form method="post" action="{% url 'assessments:admin_lecture_bank_question_delete' diploma.id cohort.id semester.id lecture.id question.id %}" data-confirm="{% trans 'Delete this question?' %}">{% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      {% empty %}
+        <div class="border border-dashed border-line rounded-sm p-6 text-center">
+          {% include "ui/components/_empty_state.html" with title=_("No questions yet.") %}
+        </div>
+      {% endfor %}
+      <div class="flex gap-2.5 items-center flex-wrap mt-4">
+        <a class="btn-primary" href="{% url 'assessments:admin_lecture_bank_question_create' diploma.id cohort.id semester.id lecture.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Add question" %}</a>
+        <a class="btn-ghost" href="{% url 'academics:admin_diploma_lecture_list' diploma.id cohort.id semester.id %}">{% trans "Back to lectures" %}</a>
+      </div>
+    </section>
+  </div>
+{% endblock %}

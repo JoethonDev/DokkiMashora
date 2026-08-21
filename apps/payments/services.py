@@ -10,12 +10,18 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from django.db import transaction
+from django.db.models import Q
+from django.db.models.functions import Lower
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.academics.models import CourseEnrollment, DiplomaEnrollment
 from apps.applications.services import activate_application_if_ready
-from apps.audit.constants import ACTION_PAYMENT_RECORD_UPDATED
+from apps.audit.constants import (
+    ACTION_PAYMENT_RECORD_UPDATED,
+    ACTION_PAYMENT_WAIVER_GRANTED,
+    ACTION_PAYMENT_WAIVER_REVOKED,
+)
 from apps.audit.services import record_audit_event
 from apps.core.permissions import validate_score
 from apps.students.identity import normalize_identity_number
@@ -28,6 +34,7 @@ from .constants import (
     MATCH_METHOD_NATIONAL_ID,
     MATCH_METHOD_NONE,
     MATCH_METHOD_PHONE,
+    MAX_CSV_ROWS,
     PAYMENT_STATUS_PAID,
     PAYMENT_STATUS_UNPAID,
     REQUIRED_CSV_HEADERS,
@@ -41,8 +48,10 @@ from .constants import (
     UPLOAD_STATUS_FAILED,
     UPLOAD_STATUS_PENDING,
     UPLOAD_STATUS_PREVIEWED,
+    WAIVER_STATUS_ACTIVE,
+    WAIVER_STATUS_REVOKED,
 )
-from .models import PaymentRecord, PaymentUpload, PaymentUploadRow
+from .models import PaymentRecord, PaymentUpload, PaymentUploadRow, PaymentWaiver
 
 logger = logging.getLogger(__name__)
 
@@ -94,14 +103,20 @@ def validate_csv_content(content: bytes) -> list[dict[str, str]]:
     if missing:
         raise ValueError(_("Missing required columns: {columns}").format(columns=", ".join(missing)))
     rows = []
-    for row in reader:
+    for row_number, row in enumerate(reader, start=1):
+        if row_number > MAX_CSV_ROWS:
+            raise ValueError(
+                _("CSV exceeds the maximum of %(count)s rows.") % {"count": MAX_CSV_ROWS}
+            )
         cleaned = {k.strip().lower(): (v or "").strip() for k, v in row.items()}
         rows.append(cleaned)
     return rows
 
 
 def match_student(row: dict[str, str]) -> tuple[StudentProfile | None, str, str]:
-    identity_variants = normalize_national_id_for_matching(row.get("national_id", ""))
+    identity_variants = [
+        item for item in normalize_national_id_for_matching(row.get("national_id", "")) if item
+    ]
     email = row.get("email", "").strip().lower()
     phone = normalize_phone(row.get("phone", ""))
     candidates: dict[int, StudentProfile] = {}
@@ -161,6 +176,80 @@ def match_student(row: dict[str, str]) -> tuple[StudentProfile | None, str, str]
     else:
         method = MATCH_METHOD_NONE
     return match, method, ""
+
+
+def _build_student_matcher(rows):
+    """Build one set-based identifier index for a bounded CSV batch."""
+    identities = set()
+    emails = set()
+    phones = set()
+    for row in rows:
+        identities.update(
+            item for item in normalize_national_id_for_matching(row.get("national_id", "")) if item
+        )
+        email = row.get("email", "").strip().lower()
+        phone = normalize_phone(row.get("phone", ""))
+        if email:
+            emails.add(email)
+        if phone:
+            phones.add(phone)
+
+    candidates = (
+        StudentProfile.objects.select_related("user")
+        .annotate(normalized_email_db=Lower("user__email"))
+        .filter(
+            Q(national_id__in=identities)
+            | Q(normalized_email_db__in=emails)
+            | Q(phone__in=phones)
+        )
+    )
+    by_identity = {}
+    by_email = {}
+    by_phone = {}
+    for student in candidates:
+        if student.national_id:
+            by_identity.setdefault(student.national_id, []).append(student)
+        email = (student.user.email or "").strip().lower()
+        if email:
+            by_email.setdefault(email, []).append(student)
+        if student.phone:
+            by_phone.setdefault(normalize_phone(student.phone), []).append(student)
+
+    def resolve(row):
+        matches = {}
+        methods = {}
+        identity_values = [
+            item for item in normalize_national_id_for_matching(row.get("national_id", "")) if item
+        ]
+        email = row.get("email", "").strip().lower()
+        phone = normalize_phone(row.get("phone", ""))
+        for value in identity_values:
+            students = by_identity.get(value, [])
+            if len(students) > 1:
+                return None, MATCH_METHOD_AMBIGUOUS, f"Multiple students match national ID {value}"
+            if students:
+                matches[students[0].pk] = students[0]
+                methods[students[0].pk] = MATCH_METHOD_NATIONAL_ID
+        for value, index, method, label in (
+            (email, by_email, MATCH_METHOD_EMAIL, "email"),
+            (phone, by_phone, MATCH_METHOD_PHONE, "phone"),
+        ):
+            if not value:
+                continue
+            students = index.get(value, [])
+            if len(students) > 1:
+                return None, MATCH_METHOD_AMBIGUOUS, f"Multiple students match {label} {value}"
+            if students:
+                matches[students[0].pk] = students[0]
+                methods.setdefault(students[0].pk, method)
+        if not matches:
+            return None, MATCH_METHOD_NONE, "No student found matching any identifier"
+        if len(matches) > 1:
+            return None, MATCH_METHOD_AMBIGUOUS, "Conflicting identifiers match different students"
+        student = next(iter(matches.values()))
+        return student, methods[student.pk], ""
+
+    return resolve
 
 
 def _lookup_application(data: dict, student: StudentProfile) -> tuple:
@@ -224,9 +313,11 @@ def preview_upload(upload_id: int) -> PaymentUpload:
     all_parsed = True
     matched = unmatched = failed = 0
 
-    for row in upload.rows.filter(status=ROW_STATUS_PARSED):
+    parsed_rows = list(upload.rows.filter(status=ROW_STATUS_PARSED))
+    resolve_student = _build_student_matcher([row.raw_data for row in parsed_rows])
+    for row in parsed_rows:
         data = row.raw_data
-        student, method, error = match_student(data)
+        student, method, error = resolve_student(data)
         if student:
             row.matched_student = student
             row.match_method = method
@@ -295,11 +386,12 @@ def confirm_upload(upload_id: int, confirmed_by) -> PaymentUpload:
         raise ValueError(_("No rows matched; nothing to import"))
 
     rows = list(upload.rows.select_for_update().filter(status=ROW_STATUS_MATCHED).select_related("matched_student"))
+    resolve_student = _build_student_matcher([row.raw_data for row in rows])
     errors: list[str] = []
     plans: list[tuple[PaymentUploadRow, StudentProfile, Any, DiplomaEnrollment | None, CourseEnrollment | None, PaymentRecord | None]] = []
     for row in rows:
         try:
-            student, method, error = match_student(row.raw_data)
+            student, method, error = resolve_student(row.raw_data)
             if student is None or student.id != row.matched_student_id:
                 raise ValueError(error or _("No student found matching the row identifiers."))
             app, app_error = _lookup_application(row.raw_data, student)
@@ -330,15 +422,6 @@ def confirm_upload(upload_id: int, confirmed_by) -> PaymentUpload:
         upload.save(update_fields=["failed_rows", "status", "error_summary", "completed_at", "updated_at"])
         return upload
 
-    # Attempt activation for application-linked rows (best-effort, after the
-    # import itself committed; activation failures never roll back the file).
-    for row in upload.rows.filter(status__in=[ROW_STATUS_CREATED, ROW_STATUS_UPDATED]):
-        if row.matched_application:
-            try:
-                activate_application_if_ready(row.matched_application, actor=confirmed_by)
-            except Exception as e:
-                logger.warning("Activation failed for application %s: %s", row.matched_application.pk, e)
-
     upload.created_rows = sum(1 for _row, *_ in plans if _row.status == ROW_STATUS_CREATED)
     upload.updated_rows = sum(1 for _row, *_ in plans if _row.status == ROW_STATUS_UPDATED)
     upload.status = UPLOAD_STATUS_CONFIRMED
@@ -349,6 +432,27 @@ def confirm_upload(upload_id: int, confirmed_by) -> PaymentUpload:
             "error_summary", "completed_at",
         ]
     )
+
+    # Activation performs a separate domain transition. Defer it until this
+    # atomic file import is durably committed so activation failures cannot
+    # extend or roll back the payment transaction.
+    application_ids = {app.pk for _row, _student, app, *_rest in plans if app}
+    actor_id = getattr(confirmed_by, "pk", None)
+
+    def activate_linked_applications():
+        from django.contrib.auth import get_user_model
+        from apps.applications.models import ProgramApplication
+
+        actor = get_user_model().objects.filter(pk=actor_id).first() if actor_id else None
+        applications = ProgramApplication.objects.filter(pk__in=application_ids)
+        for application in applications:
+            try:
+                activate_application_if_ready(application, actor=actor)
+            except Exception as exc:
+                logger.warning("Activation failed for application %s: %s", application.pk, exc)
+
+    if application_ids:
+        transaction.on_commit(activate_linked_applications)
     return upload
 
 
@@ -413,14 +517,19 @@ def parse_row_data(row: dict[str, str], row_number: int) -> dict[str, Any]:
         amount = Decimal(amount_raw) if amount_raw else None
     except InvalidOperation:
         return {"status": ROW_STATUS_FAILED, "error_message": str(_("Invalid amount: %(amount)s") % {"amount": amount_raw})}
+    if amount is None or amount < 0:
+        return {"status": ROW_STATUS_FAILED, "error_message": str(_("Amount is required and cannot be negative."))}
     paid_at = parse_date(row.get("payment_date", ""))
-    if not paid_at and row.get("payment_date", "").strip():
+    if not paid_at:
         return {"status": ROW_STATUS_FAILED, "error_message": str(_("Invalid date: %(date)s") % {"date": row.get("payment_date", "")})}
     national_id = normalize_national_id(row.get("national_id", ""))
-    if not national_id:
-        return {"status": ROW_STATUS_FAILED, "error_message": str(_("Empty national ID"))}
     email = row.get("email", "").strip().lower()
     phone = normalize_phone(row.get("phone", ""))
+    if not any((national_id, email, phone)):
+        return {
+            "status": ROW_STATUS_FAILED,
+            "error_message": str(_("At least one identifier is required: national ID, email, or phone.")),
+        }
     return {
         "raw_data": row,
         "normalized_national_id": national_id,
@@ -447,13 +556,15 @@ def create_upload(original_filename: str, content: bytes, uploaded_by) -> Paymen
         started_at=timezone.now(),
         total_rows=len(rows),
     )
+    row_objects = []
     for i, row in enumerate(rows, start=1):
         parsed = parse_row_data(row, i)
-        PaymentUploadRow.objects.create(
+        row_objects.append(PaymentUploadRow(
             upload=upload,
             row_number=i,
             **parsed,
-        )
+        ))
+    PaymentUploadRow.objects.bulk_create(row_objects, batch_size=500)
     return upload
 
 
@@ -570,3 +681,175 @@ def mark_enrollment_unpaid(
         },
     )
     return count
+
+
+# ---------------------------------------------------------------------------
+# Payment waiver (P2-08)
+# ---------------------------------------------------------------------------
+
+# Application statuses in which payment readiness is still meaningful. A waiver
+# must never be granted for a rejected or already-activated application.
+WAIVER_LEGAL_APPLICATION_STATUSES = frozenset({
+    "accepted",
+    "payment_pending",
+    "documents_requested",
+    "documents_submitted",
+    "survey_requested",
+    "survey_submitted",
+    "ready_for_activation",
+})
+
+
+def _build_waiver_target_snapshot(application) -> dict:
+    snapshot = {
+        "program_type": application.program_type or "",
+        "status": application.status or "",
+    }
+    if application.cohort:
+        snapshot["cohort_name"] = application.cohort.name or ""
+        if application.cohort.diploma:
+            snapshot["diploma_title"] = application.cohort.diploma.title or ""
+    if application.course:
+        snapshot["course_title"] = application.course.title or ""
+    return snapshot
+
+
+def _waiver_requirement_state(application) -> dict:
+    return {
+        "paid": bool(
+            PaymentRecord.objects.filter(
+                application=application,
+                status=PAYMENT_STATUS_PAID,
+                deleted_at__isnull=True,
+            ).exists()
+        ),
+        "waiver_active": PaymentWaiver.objects.filter(
+            application=application,
+            status=WAIVER_STATUS_ACTIVE,
+        ).exists(),
+        "application_status": application.status or "",
+    }
+
+
+def has_active_payment_waiver(application) -> bool:
+    """Whether an active Admin waiver satisfies payment readiness."""
+    return PaymentWaiver.objects.filter(
+        application=application,
+        status=WAIVER_STATUS_ACTIVE,
+    ).exists()
+
+
+def get_active_payment_waiver(application) -> PaymentWaiver | None:
+    return PaymentWaiver.objects.filter(
+        application=application,
+        status=WAIVER_STATUS_ACTIVE,
+    ).first()
+
+
+def _payment_requirement_satisfied(application) -> bool:
+    """Payment readiness: a paid record OR an active Admin waiver."""
+    return has_active_payment_waiver(application) or bool(
+        PaymentRecord.objects.filter(
+            application=application,
+            status=PAYMENT_STATUS_PAID,
+            deleted_at__isnull=True,
+        ).exists()
+    )
+
+
+@transaction.atomic
+def grant_payment_waiver(application, actor, *, reason: str) -> PaymentWaiver:
+    """Grant an Admin/Super Admin payment waiver for one exact application.
+
+    The waiver is an audited override: it never mutates a PaymentRecord and
+    records requirement state before/after. Exactly one active waiver may
+    exist per application (also enforced by a DB partial unique constraint).
+    Activation is attempted only if the waiver is the missing readiness gate.
+    """
+    from apps.applications.models import ProgramApplication
+
+    if not reason or not reason.strip():
+        raise ValueError(_("Waiver reason is required."))
+
+    locked = ProgramApplication.objects.select_for_update().get(pk=application.pk)
+    if locked.status not in WAIVER_LEGAL_APPLICATION_STATUSES:
+        raise ValueError(_("Cannot grant a payment waiver for the current application status."))
+
+    before = _waiver_requirement_state(locked)
+    if PaymentWaiver.objects.filter(
+        application=locked,
+        status=WAIVER_STATUS_ACTIVE,
+    ).exists():
+        raise ValueError(_("An active payment waiver already exists for this application."))
+
+    after = {**before, "waiver_active": True}
+    waiver = PaymentWaiver.objects.create(
+        student=locked.student,
+        application=locked,
+        target_snapshot=_build_waiver_target_snapshot(locked),
+        reason=reason.strip(),
+        requirement_before=before,
+        requirement_after=after,
+        granted_by=actor,
+        granted_at=timezone.now(),
+    )
+
+    record_audit_event(
+        actor=actor,
+        action=ACTION_PAYMENT_WAIVER_GRANTED,
+        target_type="PaymentWaiver",
+        target_id=str(waiver.pk),
+        metadata={
+            "application_id": str(locked.pk),
+            "student_id": locked.student_id,
+            "reason": waiver.reason,
+            "requirement_before": before,
+            "requirement_after": after,
+        },
+    )
+
+    # Attempt activation only if payment readiness is now satisfied and the
+    # waiver was the blocking gate; other gates (intake, documents) remain.
+    try:
+        activate_application_if_ready(locked, actor=actor)
+    except Exception:
+        logger.exception("Activation attempt after waiver grant failed for application %s", locked.pk)
+
+    return waiver
+
+
+@transaction.atomic
+def revoke_payment_waiver(waiver, actor, *, reason: str = "") -> PaymentWaiver:
+    """Revoke an active payment waiver (audited transition).
+
+    The owning application row is locked alongside the waiver so a concurrent
+    activation (which locks the application) cannot race the readiness flip.
+    """
+    from apps.applications.models import ProgramApplication
+
+    locked = PaymentWaiver.objects.select_for_update().get(pk=waiver.pk)
+    if locked.application_id:
+        ProgramApplication.objects.select_for_update().get(pk=locked.application_id)
+    if locked.status != WAIVER_STATUS_ACTIVE:
+        raise ValueError(_("This payment waiver is not active."))
+    locked.status = WAIVER_STATUS_REVOKED
+    locked.revoked_by = actor
+    locked.revoked_at = timezone.now()
+    locked.revoke_reason = reason.strip()
+    locked.save(
+        update_fields=[
+            "status", "revoked_by", "revoked_at", "revoke_reason", "updated_at",
+        ]
+    )
+    record_audit_event(
+        actor=actor,
+        action=ACTION_PAYMENT_WAIVER_REVOKED,
+        target_type="PaymentWaiver",
+        target_id=str(locked.pk),
+        metadata={
+            "application_id": str(locked.application_id) if locked.application_id else "",
+            "student_id": locked.student_id,
+            "reason": locked.revoke_reason,
+        },
+    )
+    return locked

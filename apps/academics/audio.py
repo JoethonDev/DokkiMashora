@@ -7,13 +7,9 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from django.conf import settings
 from django.utils.translation import gettext_lazy as _
 
-from apps.academics.constants import (
-    AUDIO_PROCESSING_COMPLETED,
-    AUDIO_PROCESSING_FAILED,
-    AUDIO_PROCESSING_PROCESSING,
-)
 from apps.storage.services import storage_service
 
 logger = logging.getLogger("apps.academics.audio")
@@ -44,38 +40,56 @@ def validate_audio_file(filename: str, content_type: str) -> None:
         )
 
 
-def transcode_to_hls(
-    lecture,
-    file_data: bytes,
-    original_filename: str,
-    content_type: str,
-    storage_prefix: str | None = None,
-) -> None:
-    """Transcode uploaded audio to HLS, upload segments to storage."""
-    lect_id = lecture.id
-    prefix = storage_prefix or f"lectures/{lect_id}/audio"
-    playlist_key = "index.m3u8"
-    segment_prefix = "seg_"
-
-    lecture.audio_processing_status = AUDIO_PROCESSING_PROCESSING
-    lecture.audio_processing_error = ""
-    lecture.audio_hls_playlist_key = playlist_key
-    lecture.audio_hls_segment_prefix = segment_prefix
-    lecture.save(update_fields=[
-        "audio_processing_status", "audio_processing_error",
-        "audio_hls_playlist_key", "audio_hls_segment_prefix",
-    ])
-
+def _probe_duration(input_path: Path) -> int | None:
+    """Measure audio duration with ffprobe. Returns whole seconds or None."""
     try:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            input_path = Path(tmpdir) / f"input{Path(original_filename).suffix}"
-            output_dir = Path(tmpdir) / "hls"
-            output_dir.mkdir(parents=True, exist_ok=True)
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                str(input_path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if result.returncode != 0:
+            logger.warning("ffprobe failed: %s", result.stderr.strip()[:200])
+            return None
+        raw = result.stdout.strip()
+        if not raw:
+            return None
+        return max(1, int(float(raw)))
+    except (ValueError, subprocess.TimeoutExpired) as exc:
+        logger.warning("Audio duration probe failed for %s: %s", input_path, exc)
+        return None
 
-            input_path.write_bytes(file_data)
 
-            playlist_path = output_dir / "index.m3u8"
-            result = subprocess.run(
+def transcode_to_hls(
+    source_storage_key: str,
+    original_filename: str,
+    *,
+    storage_prefix: str,
+) -> dict[str, int | str]:
+    """Transcode one source and upload an addressable immutable HLS generation."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        input_path = Path(tmpdir) / f"input{Path(original_filename).suffix}"
+        output_dir = Path(tmpdir) / "hls"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        storage_service.download_file_to_path(
+            source_storage_key,
+            input_path,
+            max_size=settings.AUDIO_MAX_UPLOAD_MB * 1024 * 1024,
+        )
+
+        duration = _probe_duration(input_path)
+        if duration is None:
+            raise RuntimeError("Could not determine audio duration.")
+
+        playlist_path = output_dir / "index.m3u8"
+        result = subprocess.run(
                 [
                     "ffmpeg", "-y",
                     "-i", str(input_path),
@@ -91,34 +105,29 @@ def transcode_to_hls(
                 capture_output=True,
                 text=True,
                 timeout=300,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"FFmpeg failed: {result.stderr}")
+
+        for f in output_dir.iterdir():
+            if not f.is_file():
+                continue
+            data = f.read_bytes()
+            ctype = (
+                "application/vnd.apple.mpegurl"
+                if f.suffix == ".m3u8"
+                else "video/MP2T"
             )
-            if result.returncode != 0:
-                raise RuntimeError(f"FFmpeg failed: {result.stderr}")
-
-            for f in output_dir.iterdir():
-                if not f.is_file():
-                    continue
-                data = f.read_bytes()
-                ctype = (
-                    "application/vnd.apple.mpegurl"
-                    if f.suffix == ".m3u8"
-                    else "video/MP2T"
-                )
-                storage_service.upload_file(
-                    data,
-                    key_prefix=prefix,
-                    content_type=ctype,
-                    max_size=50 * 1024 * 1024,
-                    allowed_types=[".m3u8", ".ts"],
-                    original_filename=f.name,
-                )
-
-        lecture.audio_processing_status = AUDIO_PROCESSING_COMPLETED
-        lecture.save(update_fields=["audio_processing_status"])
-
-    except Exception as exc:
-        logger.exception("Audio transcoding failed for lecture %s", lect_id)
-        lecture.audio_processing_status = AUDIO_PROCESSING_FAILED
-        lecture.audio_processing_error = str(exc)
-        lecture.save(update_fields=["audio_processing_status", "audio_processing_error"])
-        raise
+            storage_service.upload_generated_file(
+                data,
+                key=f"{storage_prefix.rstrip('/')}/{f.name}",
+                content_type=ctype,
+                max_size=settings.AUDIO_MAX_UPLOAD_MB * 1024 * 1024,
+                allowed_types=[".m3u8", ".ts"],
+            )
+    generation = storage_prefix.rstrip("/").rsplit("/", 1)[-1]
+    return {
+        "duration": duration,
+        "playlist_path": f"{generation}/index.m3u8",
+        "storage_prefix": storage_prefix.rstrip("/"),
+    }

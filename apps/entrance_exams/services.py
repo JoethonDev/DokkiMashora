@@ -89,6 +89,8 @@ def assign_attempt(
 
 
 def start_attempt(attempt: EntranceAttempt) -> EntranceAttempt:
+    if attempt.submitted_at:
+        raise ValueError(_("This exam has already been taken and cannot be started again."))
     if attempt.status != ATTEMPT_STATUS_ASSIGNED:
         raise ValueError(_("Attempt can only be started from assigned status."))
     exam = attempt.exam
@@ -332,6 +334,20 @@ def student_has_attempt(student: StudentProfile, exam: EntranceExam) -> Entrance
 
 def save_snapshot(attempt: EntranceAttempt, question_id: int, choice_id: int | None = None, written_text: str = "") -> None:
     """Save or update a single answer snapshot for the given attempt/question."""
+    if attempt.status != ATTEMPT_STATUS_IN_PROGRESS:
+        raise ValueError(_("Exam can only be saved from in_progress status."))
+    exam = attempt.exam
+    now = timezone.now()
+    if not exam.is_active:
+        raise ValueError(_("Exam is not active."))
+    if exam.open_at and now < exam.open_at:
+        raise ValueError(_("Exam has not opened yet."))
+    if exam.close_at and now > exam.close_at:
+        raise ValueError(_("Exam has already closed."))
+    if attempt.started_at and exam.duration_minutes:
+        deadline = attempt.started_at + timezone.timedelta(minutes=exam.duration_minutes)
+        if now > deadline:
+            raise ValueError(_("Exam duration has expired."))
     question = attempt.exam.questions.filter(id=question_id).first()
     if not question:
         return

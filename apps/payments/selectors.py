@@ -5,8 +5,8 @@ from django.db.models import Exists, OuterRef, Prefetch, Q, QuerySet, Sum
 from apps.academics.models import CourseEnrollment, DiplomaEnrollment
 from apps.students.models import StudentProfile
 
-from .constants import PAYMENT_STATUS_PAID
-from .models import PaymentRecord, PaymentUpload, PaymentUploadRow
+from .constants import PAYMENT_STATUS_PAID, WAIVER_STATUS_ACTIVE
+from .models import PaymentRecord, PaymentUpload, PaymentUploadRow, PaymentWaiver
 
 
 def get_upload_queryset(
@@ -116,4 +116,29 @@ def get_payment_record_queryset(
         qs = qs.filter(paid_at__date__gte=date_from)
     if date_to:
         qs = qs.filter(paid_at__date__lte=date_to)
+    return qs
+
+
+def get_waiver_queryset(
+    status: str | None = None,
+    student_q: str | None = None,
+) -> QuerySet[PaymentWaiver]:
+    qs = PaymentWaiver.objects.select_related(
+        "student__user",
+        "application__cohort__diploma",
+        "application__course",
+        "granted_by",
+        "revoked_by",
+    )
+    if status:
+        qs = qs.filter(status=status)
+    else:
+        qs = qs.filter(status=WAIVER_STATUS_ACTIVE)
+    if student_q:
+        qs = qs.filter(
+            Q(student__user__full_name__icontains=student_q)
+            | Q(student__user__email__icontains=student_q)
+            | Q(student__national_id__icontains=student_q)
+            | Q(student__phone__icontains=student_q)
+        )
     return qs

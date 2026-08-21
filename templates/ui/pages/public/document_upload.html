@@ -4,18 +4,60 @@
   {% trans "Upload documents" %}
 {% endblock %}
 {% block content %}
-  <h1>{% trans "Upload documents" %}</h1>
-  <p>{{ application }}</p>
-  {% if submitted %}
-    <p role="status">{% trans "These documents have already been submitted." %}</p>
-  {% elif expired %}
-    <p role="alert">{% trans "This upload link has expired." %}</p>
-  {% else %}
-    <div class="max-w-2xl mx-auto"><form method="post" enctype="multipart/form-data">{% csrf_token %}
-      {% for field in form %}
-        {% include "ui/components/_field.html" %}
-      {% endfor %}
-      <button class="btn-primary" type="submit">{% trans "Submit documents" %}</button>
-    </form></div>
-  {% endif %}
+  <div class="page-container py-10 sm:py-14">
+    <div class="max-w-2xl mx-auto">
+      {% if submitted %}
+        <section class="card-surface text-center page-stack">
+          <span class="w-12 h-12 rounded-full bg-green-soft text-green grid place-items-center mx-auto" aria-hidden="true">✓</span>
+          <h1>{% trans "Documents submitted" %}</h1>
+          <p class="text-muted m-0">{% trans "These documents have already been submitted." %}</p>
+          <div class="actions-row justify-center">
+            <a class="btn-primary" href="{% url 'students:applications' %}">{% trans "Go to my applications" %}</a>
+          </div>
+        </section>
+      {% elif expired %}
+        <section class="card-surface text-center page-stack">
+          <span class="w-12 h-12 rounded-full bg-amber-soft text-amber grid place-items-center mx-auto" aria-hidden="true">!</span>
+          <h1>{% trans "Upload link expired" %}</h1>
+          <p class="text-muted m-0">{% trans "This upload link has expired. Contact the admissions office for a new link." %}</p>
+        </section>
+      {% elif cancelled %}
+        <section class="card-surface text-center page-stack">
+          <span class="w-12 h-12 rounded-full bg-amber-soft text-amber grid place-items-center mx-auto" aria-hidden="true">!</span>
+          <h1>{% trans "Upload request cancelled" %}</h1>
+          <p class="text-muted m-0">{% trans "This document request is no longer open." %}</p>
+        </section>
+      {% else %}
+        <section class="card-surface">
+          <div class="section-head"><div>
+              <p class="eyebrow">{% trans "Documents" %}</p>
+              <h1>{% trans "Upload documents" %}</h1>
+            </div>
+          </div>
+          <dl class="dl mb-4">
+            <div>
+              <dt class="dt">{% trans "Program" %}</dt>
+              <dd class="dd">{{ application.cohort.diploma|default:application.course }}</dd>
+            </div>
+            <div>
+              <dt class="dt">{% trans "Student" %}</dt>
+              <dd class="dd">{{ application.student.full_name|default:application.student.user.get_full_name }}</dd>
+            </div>
+            <div>
+              <dt class="dt">{% trans "Deadline" %}</dt>
+              <dd class="dd"><span dir="ltr" class="inline-block">{{ doc_request.expires_at|date:"d/m/Y H:i" }}</span></dd>
+            </div>
+          </dl>
+          <form method="post" enctype="multipart/form-data" class="page-stack">{% csrf_token %}
+            {% for field in form %}
+              {% include "ui/components/_field.html" %}
+            {% endfor %}
+            <div class="actions-row">
+              <button class="btn-primary" type="submit">{% trans "Submit documents" %}</button>
+            </div>
+          </form>
+        </section>
+      {% endif %}
+    </div>
+  </div>
 {% endblock %}

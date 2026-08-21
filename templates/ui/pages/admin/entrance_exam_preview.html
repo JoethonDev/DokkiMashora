@@ -1,4 +1,4 @@
-{% extends "ui/layouts/admin.html" %}
+﻿{% extends "ui/layouts/admin.html" %}
 {% load i18n %}
 {% block title %}{{ exam.title|default:_("Entrance exam") }}{% endblock %}
 {% block content %}
@@ -24,7 +24,7 @@
                     </label>
                   {% endfor %}
                 {% else %}
-                  <textarea class="form-textarea" rows="5" disabled placeholder="{% trans 'Written answer' %}"></textarea>
+                  <textarea class="form-textarea" rows="5" disabled placeholder="{% trans 'Written answer' %}" aria-label="{% trans 'Written answer' %}"></textarea>
                 {% endif %}
               </fieldset>
             </div>

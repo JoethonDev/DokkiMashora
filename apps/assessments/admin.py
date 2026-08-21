@@ -7,6 +7,7 @@ from .models import (
     AssessmentAnswer,
     AssessmentAttempt,
     AssessmentQuestion,
+    HomeworkAttachment,
     HomeworkSubmission,
 )
 
@@ -27,11 +28,11 @@ class AssessmentAttemptInline(admin.TabularInline):
 @admin.register(Assessment)
 class AssessmentAdmin(admin.ModelAdmin):
     list_display = (
-        "title", "assessment_type", "is_active", "open_at", "close_at",
-        "max_attempts", "grade_visibility", "created_by",
+        "title", "assessment_type", "legacy_status", "is_active", "release_mode",
+        "max_attempts", "created_by",
     )
     list_filter = (
-        "assessment_type", "is_active", "grade_visibility",
+        "assessment_type", "legacy_status", "is_active", "release_mode",
         "course_version", "cohort", "semester",
     )
     search_fields = ("title",)
@@ -63,8 +64,23 @@ class AssessmentAnswerAdmin(admin.ModelAdmin):
 
 @admin.register(HomeworkSubmission)
 class HomeworkSubmissionAdmin(admin.ModelAdmin):
+    """Authoritative aggregate homework submission (P2-02)."""
+
     list_display = (
-        "student", "assessment", "original_filename", "status",
+        "student", "assessment", "attempt", "status", "score",
+        "legacy_status", "submitted_at",
+    )
+    list_filter = ("status", "legacy_status", "assessment__assessment_type")
+    search_fields = ("student__email", "assessment__title")
+    readonly_fields = ("score", "feedback", "reviewed_by", "reviewed_at", "attempt")
+
+
+@admin.register(HomeworkAttachment)
+class HomeworkAttachmentAdmin(admin.ModelAdmin):
+    """Per-file attachment history preserved from the legacy per-file model."""
+
+    list_display = (
+        "student", "assessment", "submission", "original_filename", "status",
         "file_size", "submitted_at",
     )
     list_filter = ("status",)

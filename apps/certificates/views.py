@@ -4,6 +4,7 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
@@ -17,14 +18,22 @@ from apps.audit.constants import (
 )
 from apps.audit.services import record_audit_event
 from apps.core.pagination import paginate
-from apps.core.permissions import ROLE_SENIOR_STAFF, is_admin, is_moderator, role_required, student_required
+from apps.core.permissions import ROLE_SENIOR_STAFF, is_admin, role_required, student_required
 from apps.progression.constants import CERTIFICATE_STATUS_AVAILABLE
 from apps.storage.services import storage_service
 from apps.students.models import StudentProfile
 
 from .forms import CertificateTemplateForm
 from .models import CertificateTemplate, GeneratedCertificate
-from .services import generate_certificate_pdf, regenerate_certificate, revoke_certificate
+from .services import (
+    _image_bytes_to_pdf,
+    clear_certificate_source,
+    generate_certificate_pdf,
+    ingest_certificate_source,
+    regenerate_certificate,
+    revoke_certificate,
+)
+from .source_adapters import SourcePreview, overlay_text_on_source, validate_field_mapping
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +97,7 @@ def admin_template_edit(request, template_id):
 
     ctx = {
         "form": form,
+        "template": template,
         "title": _("Edit certificate template"),
         "breadcrumb_items": [
             {"label": _("Certificate Templates"), "href": reverse("certificates:admin_template_list")},
@@ -95,6 +105,183 @@ def admin_template_edit(request, template_id):
         ],
     }
     return render(request, "ui/pages/admin/certificates.html", {**ctx, "title": _("Certificate template")})
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+def admin_template_preview(request, template_id):
+    """Protected preview of a stored PDF/PSD template source (P7-02)."""
+    template = get_object_or_404(CertificateTemplate, id=template_id)
+    if not template.preview_storage_key:
+        messages.error(request, _("This template has no source preview."))
+        return redirect("certificates:admin_template_list")
+    url = storage_service.get_protected_download_url(
+        template.preview_storage_key,
+        user=request.user,
+        permission_fn=lambda u: is_admin(u) or u.is_superuser,
+    )
+    return redirect(url)
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_POST
+def admin_template_upload_source(request, template_id):
+    """Admin-only validated PDF/PSD source upload (P7-02)."""
+    template = get_object_or_404(CertificateTemplate, id=template_id)
+    file = request.FILES.get("source_file")
+    if file is None:
+        messages.error(request, _("Select a PDF or PSD source file."))
+        return redirect("certificates:admin_template_edit", template_id=template.id)
+    try:
+        data = file.read()
+        ingest_certificate_source(
+            template,
+            data=data,
+            filename=file.name,
+            content_type=file.content_type or "",
+            actor=request.user,
+        )
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect("certificates:admin_template_edit", template_id=template.id)
+    except Exception:
+        logger.exception("Certificate source upload failed for template %s", template.id)
+        messages.error(request, _("The source could not be processed. Check the format and try again."))
+        return redirect("certificates:admin_template_edit", template_id=template.id)
+    messages.success(request, _("Template source uploaded and previewed."))
+    return redirect("certificates:admin_template_edit", template_id=template.id)
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_POST
+def admin_template_clear_source(request, template_id):
+    """Admin-only removal of a template source (P7-02)."""
+    template = get_object_or_404(CertificateTemplate, id=template_id)
+    clear_certificate_source(template)
+    messages.success(request, _("Template source removed."))
+    return redirect("certificates:admin_template_edit", template_id=template.id)
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+def admin_template_editor(request, template_id):
+    """Visual placement editor (P7-03): load preview, place Student Name, save mapping."""
+    template = get_object_or_404(CertificateTemplate, id=template_id)
+    if template.source_status != "ready" or not template.preview_storage_key:
+        messages.error(request, _("Upload and preview a PDF/PSD source before editing placement."))
+        return redirect("certificates:admin_template_edit", template_id=template.id)
+    preview_url = storage_service.get_protected_download_url(
+        template.preview_storage_key,
+        user=request.user,
+        permission_fn=lambda u: is_admin(u) or u.is_superuser,
+    )
+    ctx = {
+        "template": template,
+        "preview_url": preview_url,
+        "preview_width": template.preview_width,
+        "preview_height": template.preview_height,
+        "page_count": template.preview_page_count,
+        "current_mapping": template.field_mapping,
+        "mapping_save_url": reverse("certificates:admin_template_save_mapping", args=[template.id]),
+        "preview_generate_url": reverse("certificates:admin_template_preview_generate", args=[template.id]),
+        "breadcrumb_items": [
+            {"label": _("Certificate Templates"), "href": reverse("certificates:admin_template_list")},
+            {"label": template.name},
+            {"label": _("Placement editor")},
+        ],
+        "title": _("Placement editor"),
+        "back_url": reverse("certificates:admin_template_edit", args=[template.id]),
+        "back_label": _("Back to template"),
+    }
+    return render(request, "ui/pages/admin/certificate_editor.html", ctx)
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_POST
+def admin_template_save_mapping(request, template_id):
+    """Validate and persist the placement mapping (P7-03)."""
+    import json
+
+    template = get_object_or_404(CertificateTemplate, id=template_id)
+    if template.source_status != "ready":
+        return JsonResponse({"error": _("No source preview available.")}, status=400)
+    try:
+        raw = json.loads(request.body or "{}")
+        mapping = raw.get("mapping") or {}
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"error": _("Invalid mapping JSON.")}, status=400)
+
+    preview = SourcePreview(
+        preview_bytes=b"",
+        width=template.preview_width or 0,
+        height=template.preview_height or 0,
+        page_count=template.preview_page_count or 1,
+    )
+    try:
+        normalized = validate_field_mapping(mapping, preview)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=422)
+
+    template.field_mapping = normalized
+    template.mapping_schema_version = 1
+    template.save(update_fields=["field_mapping", "mapping_schema_version", "updated_at"])
+    return JsonResponse({"ok": True, "mapping": normalized})
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_POST
+def admin_template_preview_generate(request, template_id):
+    """Render a generated preview with sample/current authorized data (P7-03).
+
+    Uses a stable sample name — never issues or mutates certificate history.
+    Accepts the CURRENT in-editor mapping (server-validated) so the preview
+    reflects what the admin sees, not silently stale persisted state. When no
+    mapping is sent, falls back to the persisted mapping.
+    """
+    import json
+
+    template = get_object_or_404(CertificateTemplate, id=template_id)
+    if template.source_status != "ready" or not template.source_storage_key:
+        return JsonResponse({"error": _("No source available.")}, status=400)
+
+    preview = SourcePreview(
+        preview_bytes=b"",
+        width=template.preview_width or 0,
+        height=template.preview_height or 0,
+        page_count=template.preview_page_count or 1,
+    )
+
+    mapping = template.field_mapping
+    try:
+        raw = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": _("Invalid mapping JSON.")}, status=400)
+    submitted = raw.get("mapping") or {}
+    if submitted:
+        try:
+            mapping = validate_field_mapping(submitted, preview)
+        except ValueError as exc:
+            return JsonResponse({"error": str(exc)}, status=422)
+
+    if not mapping:
+        return JsonResponse({"error": _("Save a placement mapping first.")}, status=422)
+
+    source_bytes = storage_service.download_file(template.source_storage_key)
+    output_bytes = overlay_text_on_source(
+        source_bytes,
+        template.source_format,
+        mapping,
+        {"student_name": "Student Name"},
+    )
+    pdf_bytes = output_bytes if template.source_format == "pdf" else _image_bytes_to_pdf(output_bytes)
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = 'inline; filename="certificate_preview.pdf"'
+    response["Cache-Control"] = "no-store"
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -146,7 +333,11 @@ def admin_generate_certificate(request, student_id):
         if cert.status == CERTIFICATE_STATUS_AVAILABLE:
             messages.success(request, _("Certificate generated."))
         else:
-            messages.warning(request, _("Certificate generation completed with status: %s") % cert.status)
+            messages.warning(
+                request,
+                _("Certificate generation completed with status: %(status)s")
+                % {"status": cert.get_status_display()},
+            )
     except ValueError as exc:
         messages.error(request, str(exc))
 
@@ -204,7 +395,11 @@ def admin_regenerate_certificate(request, cert_id):
         if new_cert.status == CERTIFICATE_STATUS_AVAILABLE:
             messages.success(request, _("Certificate regenerated."))
         else:
-            messages.warning(request, _("Regeneration completed with status: %s") % new_cert.status)
+            messages.warning(
+                request,
+                _("Regeneration completed with status: %(status)s")
+                % {"status": new_cert.get_status_display()},
+            )
     except ValueError as exc:
         messages.error(request, str(exc))
 
@@ -257,7 +452,7 @@ def _serve_certificate_pdf(request, cert):
             user=request.user,
             permission_fn=lambda u: (
                 getattr(u, "student_profile", None) == cert.student
-                or is_admin(u) or is_moderator(u)
+                or is_admin(u)
             ),
         )
         return redirect(url)

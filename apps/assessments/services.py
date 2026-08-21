@@ -11,25 +11,34 @@ from typing import TYPE_CHECKING
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, Exists, F, OuterRef, Q, Subquery, Sum
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE
-from apps.academics.models import CourseEnrollment, DiplomaEnrollment
+from apps.academics.models import CourseEnrollment, DiplomaEnrollment, StudentClusterMembership
 from apps.academics.services import get_visible_semester_ids_by_enrollment
+from apps.applications.constants import DELIVERY_MODE_ONLINE as APPLICATION_DELIVERY_MODE_ONLINE
+from apps.applications.constants import PROGRAM_APP_STATUS_REJECTED, PROGRAM_TYPE_DIPLOMA
+from apps.applications.models import ProgramApplication
 from apps.audit.constants import (
     ACTION_EXAM_ACCESS_OVERRIDE_CANCELLED,
     ACTION_EXAM_ACCESS_OVERRIDE_CREATED,
     ACTION_EXAM_ACCESS_OVERRIDE_USED,
+    ACTION_EXAM_DELETED,
+    ACTION_GRADE_CHANGED,
+    ACTION_GRADE_HIDDEN,
+    ACTION_GRADE_RELEASED,
 )
 from apps.audit.services import record_audit_event
-from apps.core.permissions import assessment_staff_scope_filter, is_admin, validate_score
-from apps.storage.services import storage_service
+from apps.core.permissions import assessment_staff_scope_filter, is_admin, is_moderator, validate_score
+from apps.storage.services import record_deferred_storage_deletion, storage_service
+from apps.students.models import StudentProfile
 
 from .constants import (
     ASSESSMENT_TYPE_HOMEWORK,
+    ASSESSMENT_TYPE_QUIZ,
     ASSESSMENT_TYPE_SEMESTER_EXAM,
     ATTEMPT_STATUS_CANCELLED,
     ATTEMPT_STATUS_EXPIRED,
@@ -43,11 +52,23 @@ from .constants import (
     EXAM_OVERRIDE_ACTIVE,
     EXAM_OVERRIDE_CANCELLED,
     EXAM_OVERRIDE_USED,
+    EXAM_REVIEW_STATUS_FAILED,
+    EXAM_REVIEW_STATUS_NOT_REVIEWED,
+    EXAM_REVIEW_STATUS_PASSED,
     HOMEWORK_STATUS_GRADED,
+    HOMEWORK_STATUS_RELEASED,
+    HOMEWORK_STATUS_SUBMITTED,
     HOMEWORK_STATUS_UNDER_REVIEW,
     HOMEWORK_STATUS_UPLOADED,
+    LEGACY_STATUS_ACTIVE,
     QUESTION_TYPE_MCQ,
     QUESTION_TYPE_WRITTEN,
+    RELEASE_MODE_AUTOMATIC,
+    REVIEWER_CLAIM_FINALIZED,
+    REVIEWER_CLAIM_IN_PROGRESS,
+    REVIEWER_SCOPE_COHORT,
+    REVIEWER_SCOPE_EXAM,
+    REVIEWER_SCOPE_SEMESTER,
     SNAPSHOT_QUESTION_SOURCE_BANK,
     SNAPSHOT_QUESTION_SOURCE_MANUAL,
 )
@@ -63,8 +84,10 @@ from .models import (
     AssessmentQuestion,
     DiplomaLectureChoice,
     DiplomaLectureQuestion,
+    HomeworkAttachment,
     HomeworkSubmission,
     OfflineSectionGrade,
+    ReviewerExamClaim,
     SemesterExamAccessOverride,
     SemesterExamCode,
 )
@@ -73,6 +96,45 @@ if TYPE_CHECKING:
     pass
 
 HOMEWORK_ALLOWED_EXTENSIONS = [".pdf", ".docx"]
+
+
+def sync_course_quiz_total_points(assessment):
+    """Persist the total raw points defined by a course quiz's questions."""
+    if not assessment.pk or assessment.assessment_type != ASSESSMENT_TYPE_QUIZ or not assessment.course_version_id:
+        return assessment.total_points
+    total = assessment.questions.aggregate(total=Sum("points"))["total"] or Decimal("0.00")
+    if assessment.total_points != total:
+        assessment.total_points = total
+        assessment.save(update_fields=["total_points", "updated_at"])
+    return total
+
+
+def delete_assessment_record(*, assessment, actor):
+    """Delete an unused active assessment while preserving academic history.
+
+    Legacy assessments and assessments with student attempts or homework
+    submissions are immutable history. They must be deactivated or archived,
+    not hard-deleted. A clean active assessment is authored configuration and
+    may be removed together with its questions, sections, and operational rows.
+    """
+    if assessment.legacy_status != LEGACY_STATUS_ACTIVE:
+        raise ValueError(_("This assessment is preserved legacy data and is read-only."))
+    if assessment.attempts.exists() or assessment.homework_submissions.exists():
+        raise ValueError(
+            _("This assessment cannot be deleted because student attempt or submission history exists. Deactivate it instead.")
+        )
+    with transaction.atomic():
+        record_audit_event(
+            actor=actor,
+            action=ACTION_EXAM_DELETED,
+            target_type="assessment",
+            target_id=str(assessment.id),
+            metadata={
+                "title": assessment.title,
+                "assessment_type": assessment.assessment_type,
+            },
+        )
+        assessment.delete()
 
 
 @dataclass
@@ -92,6 +154,32 @@ class GradingResult:
 # ---------------------------------------------------------------------------
 # Access & enrollment checks
 # ---------------------------------------------------------------------------
+
+
+def ensure_active_assessment(assessment: Assessment) -> None:
+    """Raise ValueError when the assessment is quarantined legacy data.
+
+    Legacy/archived/review-required rows are preserved read-only and must not
+    enter active student, grading, release, or scoring workflows (P2-01).
+    """
+    if getattr(assessment, "legacy_status", LEGACY_STATUS_ACTIVE) != LEGACY_STATUS_ACTIVE:
+        raise ValueError(_("This assessment is preserved legacy data and cannot be used."))
+    invalid_question = assessment.questions.annotate(
+        choice_count=Count("choices"),
+        correct_count=Count("choices", filter=Q(choices__is_correct=True)),
+    ).filter(
+        Q(
+            question_type=QUESTION_TYPE_MCQ,
+            choice_count__lt=2,
+        )
+        | (Q(question_type=QUESTION_TYPE_MCQ) & ~Q(correct_count=1))
+        | Q(
+            question_type=QUESTION_TYPE_WRITTEN,
+            choice_count__gt=0,
+        )
+    ).exists()
+    if invalid_question:
+        raise ValueError(_("This assessment has an invalid question configuration."))
 
 
 def has_active_enrollment(student, assessment: Assessment) -> bool:
@@ -137,11 +225,19 @@ def check_delivery_mode(student, assessment: Assessment) -> None:
         raise ValueError(_("This exam is offline-only and cannot be taken online."))
 
 
-def check_assessment_access(student, assessment: Assessment) -> None:
+def check_assessment_access(
+    student,
+    assessment: Assessment,
+    *,
+    existing_attempt: bool = False,
+    allow_late_submission: bool = False,
+) -> None:
     """Raise ValueError if the student cannot access the assessment."""
     now = timezone.now()
     if not assessment.is_active:
         raise ValueError(_("Assessment is not active."))
+    if getattr(assessment, "legacy_status", LEGACY_STATUS_ACTIVE) != LEGACY_STATUS_ACTIVE:
+        raise ValueError(_("This assessment is preserved legacy data and cannot be accessed."))
     if not has_active_enrollment(student, assessment):
         raise ValueError(_("You do not have an active enrollment for this course."))
 
@@ -162,33 +258,47 @@ def check_assessment_access(student, assessment: Assessment) -> None:
 
     check_delivery_mode(student, assessment)
 
-    is_semester_exam = (
-        assessment.assessment_type == ASSESSMENT_TYPE_SEMESTER_EXAM
-        and assessment.cohort_id and assessment.semester_id
-        and assessment.course_version_id is None
-    )
-    if is_semester_exam:
-        override = get_active_semester_exam_override(student, assessment, now)
-        if override and override.open_at <= now <= override.close_at:
-            attempt_count = AssessmentAttempt.objects.filter(
-                assessment=assessment, student=student,
-            ).exclude(
-                status__in=[ATTEMPT_STATUS_CANCELLED, ATTEMPT_STATUS_EXPIRED],
-            ).count()
-            if attempt_count < override.max_attempts:
-                return
+    override = get_active_assessment_access_override(student, assessment, now)
+    if override and override.open_at <= now <= override.close_at:
+        if existing_attempt or override.used_count < override.max_attempts:
+            return
+    if existing_attempt and override and override.attempt_id:
+        return
 
     if assessment.open_at and now < assessment.open_at:
         raise ValueError(_("Assessment has not opened yet."))
-    if assessment.close_at and now > assessment.close_at:
+    if assessment.close_at and now > assessment.close_at and not allow_late_submission:
         raise ValueError(_("Assessment has already closed."))
-    attempt_count = AssessmentAttempt.objects.filter(
-        assessment=assessment, student=student,
-    ).exclude(
-        status__in=[ATTEMPT_STATUS_CANCELLED, ATTEMPT_STATUS_EXPIRED],
-    ).count()
-    if attempt_count >= assessment.max_attempts:
-        raise ValueError(_("You have reached the maximum number of attempts."))
+    if not existing_attempt:
+        attempt_count = AssessmentAttempt.objects.filter(
+            assessment=assessment, student=student,
+        ).exclude(
+            status__in=[ATTEMPT_STATUS_CANCELLED, ATTEMPT_STATUS_EXPIRED],
+        ).count()
+        if attempt_count >= assessment.max_attempts:
+            raise ValueError(_("You have reached the maximum number of attempts."))
+
+
+def check_attempt_submission_access(
+    attempt: AssessmentAttempt,
+    *,
+    allow_late_submission: bool = False,
+) -> None:
+    """Revalidate ownership, enrollment, scope, schedule, and timer for a live attempt."""
+    if attempt.status != ATTEMPT_STATUS_IN_PROGRESS:
+        raise ValueError(_("Attempt is not in progress."))
+    assessment = attempt.assessment
+    check_assessment_access(
+        attempt.student,
+        assessment,
+        existing_attempt=True,
+        allow_late_submission=allow_late_submission,
+    )
+    now = timezone.now()
+    if attempt.started_at and assessment.duration_minutes:
+        deadline = attempt.started_at + timezone.timedelta(minutes=assessment.duration_minutes)
+        if now > deadline:
+            raise ValueError(_("Assessment duration has expired."))
 
 
 # ---------------------------------------------------------------------------
@@ -198,24 +308,47 @@ def check_assessment_access(student, assessment: Assessment) -> None:
 
 @transaction.atomic
 def start_assessment(student, assessment: Assessment) -> AssessmentAttempt:
-    check_assessment_access(student, assessment)
-    existing = AssessmentAttempt.objects.filter(
-        assessment=assessment,
-        student=student,
-        status=ATTEMPT_STATUS_IN_PROGRESS,
-    ).first()
+    override = get_active_assessment_access_override(student, assessment)
+    now = timezone.now()
+    exceptional_access_start = bool(
+        override
+        and override.status == EXAM_OVERRIDE_ACTIVE
+        and override.open_at <= now <= override.close_at
+        and override.used_count < override.max_attempts
+    )
+
+    if exceptional_access_start:
+        # Exceptional access is a fresh assessment run, but the original
+        # attempt is immutable history. Preserve it and let the new row receive
+        # the next attempt number (normally attempt 2).
+        if AssessmentAttempt.objects.filter(
+            assessment=assessment,
+            student=student,
+            status=ATTEMPT_STATUS_IN_PROGRESS,
+        ).exists():
+            raise ValueError(_("Finish the current attempt before starting exceptional access."))
+        existing = None
+    else:
+        existing = AssessmentAttempt.objects.filter(
+            assessment=assessment,
+            student=student,
+            status=ATTEMPT_STATUS_IN_PROGRESS,
+        ).first()
     if existing:
+        check_attempt_submission_access(
+            existing,
+            allow_late_submission=assessment.allow_late_submission,
+        )
         if _is_diploma_random(assessment):
             generate_diploma_assessment_snapshot(existing)
         return existing
-    override = get_active_semester_exam_override(student, assessment)
+    check_assessment_access(student, assessment)
+    override = get_active_assessment_access_override(student, assessment)
     if override:
         attempt_number = AssessmentAttempt.objects.filter(
             assessment=assessment, student=student,
-        ).exclude(
-            status__in=[ATTEMPT_STATUS_CANCELLED, ATTEMPT_STATUS_EXPIRED],
         ).count() + 1
-        if attempt_number > override.max_attempts:
+        if override.used_count >= override.max_attempts:
             raise ValueError(_("You have reached the maximum number of attempts."))
     else:
         attempt_number = AssessmentAttempt.objects.filter(
@@ -233,15 +366,19 @@ def start_assessment(student, assessment: Assessment) -> AssessmentAttempt:
     if override:
         attempt.is_exceptional = True
         attempt.save(update_fields=["is_exceptional"])
-        consume_semester_exam_override(override, attempt)
+        consume_assessment_access_override(override, attempt)
     if _is_diploma_random(assessment):
         generate_diploma_assessment_snapshot(attempt)
     return attempt
 
 
 def _is_diploma_random(assessment: Assessment) -> bool:
-    """True if this is a diploma-scoped random assessment (uses snapshot questions)."""
-    return assessment.course_version_id is None and bool(assessment.semester_id and assessment.cohort_id)
+    """True if this is an online Diploma Semester Exam."""
+    return (
+        assessment.course_version_id is None
+        and bool(assessment.semester_id and assessment.cohort_id)
+        and assessment.assessment_type == ASSESSMENT_TYPE_SEMESTER_EXAM
+    )
 
 
 def generate_diploma_assessment_snapshot(attempt: AssessmentAttempt) -> None:
@@ -336,35 +473,29 @@ def submit_assessment(attempt: AssessmentAttempt, answers: list[AssessmentAnswer
     if attempt.status != ATTEMPT_STATUS_IN_PROGRESS:
         raise ValueError(_("Assessment can only be submitted from in_progress status."))
     assessment = attempt.assessment
+    ensure_active_assessment(assessment)
+    check_attempt_submission_access(
+        attempt,
+        allow_late_submission=assessment.allow_late_submission,
+    )
     now = timezone.now()
     if not assessment.is_active:
         raise ValueError(_("Assessment is not active."))
-    if assessment.close_at and now > assessment.close_at and not assessment.allow_late_submission:
-        raise ValueError(_("Assessment has already closed."))
-    if attempt.started_at and assessment.duration_minutes:
-        deadline = attempt.started_at + timezone.timedelta(minutes=assessment.duration_minutes)
-        if now > deadline:
-            raise ValueError(_("Assessment duration has expired."))
-
     questions = list(assessment.questions.select_related("assessment").prefetch_related("choices"))
     if not questions:
         # An empty question set must never be finalized as a zero-point grade (E8).
         raise ValueError(_("This assessment has no questions available."))
-    question_map = {q.id: q for q in questions}
-    answered_question_ids = {answer_data.question_id for answer_data in answers}
-    missing_required = [q for q in questions if q.required and q.id not in answered_question_ids]
-    if missing_required:
-        raise ValueError(_("Please answer all required questions before submitting."))
-
     has_ungraded = False
     total_score = Decimal("0.00")
-    total_possible = sum(q.points for q in questions if q.required or q.id in answered_question_ids)
+    total_possible = sum(q.points for q in questions)
+    answers_by_question = {answer_data.question_id: answer_data for answer_data in answers}
 
     with transaction.atomic():
-        for answer_data in answers:
-            question = question_map.get(answer_data.question_id)
-            if not question:
-                continue
+        for question in questions:
+            answer_data = answers_by_question.get(
+                question.id,
+                AssessmentAnswerData(question_id=question.id),
+            )
             if question.question_type == QUESTION_TYPE_MCQ:
                 if answer_data.written_text:
                     raise ValueError(_("MCQ answer must not carry written text."))
@@ -411,6 +542,10 @@ def submit_assessment(attempt: AssessmentAttempt, answers: list[AssessmentAnswer
                 "graded_at", "is_pass",
             ],
         )
+        # P2-04: automatic release fires only after the authoritative grade
+        # transaction commits.
+        if not has_ungraded and assessment.release_mode == RELEASE_MODE_AUTOMATIC:
+            transaction.on_commit(lambda aid=attempt.pk: _maybe_auto_release_attempt(aid))
     return attempt
 
 
@@ -423,37 +558,55 @@ def submit_diploma_assessment(attempt: AssessmentAttempt, answer_data: dict) -> 
         raise ValueError(_("Attempt is not in progress."))
 
     assessment = attempt.assessment
+    ensure_active_assessment(assessment)
+    check_attempt_submission_access(attempt)
     now = timezone.now()
-    if assessment.close_at and now > assessment.close_at:
-        raise ValueError(_("Assessment has already closed."))
-    if attempt.started_at and assessment.duration_minutes:
-        deadline = attempt.started_at + timezone.timedelta(minutes=assessment.duration_minutes)
-        if now > deadline:
-            raise ValueError(_("Assessment duration has expired."))
 
     with transaction.atomic():
         attempt_ref = AssessmentAttempt.objects.select_for_update().get(pk=attempt.pk)
 
-        if not attempt_ref.snapshot_questions.exists():
+        # Load the snapshot question set with prefetched choices and the
+        # existing answers once (P3-01): no per-question queries.
+        snapshot_questions = list(
+            attempt_ref.snapshot_questions.prefetch_related("choices").order_by("order")
+        )
+        if not snapshot_questions:
             # An empty question set must never be finalized as a zero-point grade (E8).
             raise ValueError(_("This assessment has no questions available."))
+
+        existing_answers = {
+            a.attempt_question_id: a
+            for a in AssessmentAttemptSnapshotAnswer.objects.filter(
+                attempt_question__attempt=attempt_ref,
+            )
+        }
+        choices_by_key = {
+            (sq.pk, choice.pk): choice
+            for sq in snapshot_questions
+            for choice in sq.choices.all()
+        }
 
         has_written = False
         total_earned = Decimal("0")
         total_possible = Decimal("0")
+        new_answers = []
+        answers_to_save = []
 
-        for sq in attempt_ref.snapshot_questions.order_by("order"):
-            answer, created = AssessmentAttemptSnapshotAnswer.objects.get_or_create(
-                attempt_question=sq,
-            )
+        for sq in snapshot_questions:
+            answer = existing_answers.get(sq.pk)
+            if answer is None:
+                answer = AssessmentAttemptSnapshotAnswer(attempt_question=sq)
+                new_answers.append(answer)
+            else:
+                answers_to_save.append(answer)
             order_key = f"q_{sq.order}"
 
             if sq.question_type == QUESTION_TYPE_MCQ:
                 raw = answer_data.get(order_key, "")
                 if raw:
                     try:
-                        choice = sq.choices.get(pk=int(raw))
-                    except (ValueError, AssessmentAttemptChoice.DoesNotExist):
+                        choice = choices_by_key[(sq.pk, int(raw))]
+                    except (KeyError, ValueError):
                         raise ValueError(_("Invalid choice for question %(order)d.") % {"order": sq.order}) from None
                     answer.selected_choice = choice
                     answer.score = sq.points if choice.is_correct_snapshot else Decimal("0")
@@ -469,15 +622,13 @@ def submit_diploma_assessment(attempt: AssessmentAttempt, answer_data: dict) -> 
                 text = answer_data.get(order_key, "")
                 answer.written_text = text
                 answer.score = None
-                if sq.required and not text.strip():
-                    raise ValueError(
-                        _("Question %(order)d requires an answer.") % {"order": sq.order}
-                    )
                 if text.strip():
                     has_written = True
-                if sq.required or text.strip():
-                    total_possible += sq.points
+                total_possible += sq.points
 
+        if new_answers:
+            AssessmentAttemptSnapshotAnswer.objects.bulk_create(new_answers)
+        for answer in answers_to_save:
             answer.save()
 
         attempt_ref.score_points = total_earned
@@ -491,6 +642,7 @@ def submit_diploma_assessment(attempt: AssessmentAttempt, answer_data: dict) -> 
             attempt_ref.status = ATTEMPT_STATUS_UNDER_REVIEW
         else:
             attempt_ref.status = ATTEMPT_STATUS_GRADED
+            attempt_ref.graded_at = now
         attempt_ref.submitted_at = now
         attempt_ref.save()
 
@@ -499,15 +651,26 @@ def submit_diploma_assessment(attempt: AssessmentAttempt, answer_data: dict) -> 
 
 def diploma_autosave_attempt(attempt: AssessmentAttempt, answer_data: dict) -> None:
     """Save in-progress snapshot answers without scoring or status change."""
-    if attempt.status != ATTEMPT_STATUS_IN_PROGRESS:
-        return
-    for sq in attempt.snapshot_questions.order_by("order"):
+    check_attempt_submission_access(attempt)
+    snapshot_questions = list(attempt.snapshot_questions.order_by("order"))
+    existing = {
+        a.attempt_question_id: a
+        for a in AssessmentAttemptSnapshotAnswer.objects.filter(
+            attempt_question__attempt=attempt,
+        )
+    }
+    new_answers = []
+    to_save = []
+    for sq in snapshot_questions:
         order_key = f"q_{sq.order}"
         if order_key not in answer_data:
             continue
-        answer, _created = AssessmentAttemptSnapshotAnswer.objects.get_or_create(
-            attempt_question=sq,
-        )
+        answer = existing.get(sq.pk)
+        if answer is None:
+            answer = AssessmentAttemptSnapshotAnswer(attempt_question=sq)
+            new_answers.append(answer)
+        else:
+            to_save.append(answer)
         raw = answer_data[order_key]
         if sq.question_type == QUESTION_TYPE_MCQ:
             try:
@@ -516,13 +679,18 @@ def diploma_autosave_attempt(attempt: AssessmentAttempt, answer_data: dict) -> N
                 answer.selected_choice_id = None
         elif sq.question_type == QUESTION_TYPE_WRITTEN:
             answer.written_text = raw
+    if new_answers:
+        AssessmentAttemptSnapshotAnswer.objects.bulk_create(new_answers)
+    for answer in to_save:
         answer.save(update_fields=["selected_choice", "written_text"])
 
 
 # ponytail: V154 — save in-progress answers without scoring or status change.
 def autosave_attempt(attempt: AssessmentAttempt, answers: list[AssessmentAnswerData]) -> None:
-    if attempt.status != ATTEMPT_STATUS_IN_PROGRESS:
-        return
+    check_attempt_submission_access(
+        attempt,
+        allow_late_submission=attempt.assessment.allow_late_submission,
+    )
     answers_by_question = {a.question_id: a for a in answers}
     questions = list(attempt.assessment.questions.prefetch_related("choices"))
     with transaction.atomic():
@@ -531,11 +699,16 @@ def autosave_attempt(attempt: AssessmentAttempt, answers: list[AssessmentAnswerD
             if not answer_data:
                 continue
             if question.question_type == QUESTION_TYPE_MCQ:
+                selected_choice_id = answer_data.selected_choice_id
+                if selected_choice_id is not None and selected_choice_id not in {
+                    choice.id for choice in question.choices.all()
+                }:
+                    selected_choice_id = None
                 AssessmentAnswer.objects.update_or_create(
                     attempt=attempt,
                     question=question,
                     defaults={
-                        "selected_choice_id": answer_data.selected_choice_id,
+                        "selected_choice_id": selected_choice_id,
                         "written_text": "",
                     },
                 )
@@ -572,20 +745,15 @@ def _score_mcq_answer(
 
 
 # ---------------------------------------------------------------------------
-# Homework submission
+# Homework submission (aggregate lifecycle, P2-03)
 # ---------------------------------------------------------------------------
 
 
-def submit_homework(
-    student,
-    assessment: Assessment,
-    file_data: bytes,
-    original_filename: str,
-    content_type: str,
-) -> HomeworkSubmission:
-    """Submit a homework file, creating an attempt and storage record."""
+def _validate_homework_flow(student, assessment: Assessment) -> None:
+    """Shared guard for homework draft/upload/submit operations."""
     if assessment.assessment_type != ASSESSMENT_TYPE_HOMEWORK:
         raise ValueError(_("This assessment does not accept homework uploads."))
+    ensure_active_assessment(assessment)
     now = timezone.now()
     if not assessment.is_active:
         raise ValueError(_("Assessment is not active."))
@@ -595,15 +763,32 @@ def submit_homework(
         raise ValueError(_("Assessment has already closed."))
     if not has_active_enrollment(student, assessment):
         raise ValueError(_("You do not have an active enrollment for this course."))
-    if HomeworkSubmission.objects.filter(assessment=assessment, student=student).count() >= assessment.max_upload_files:
-        raise ValueError(_("Maximum number of files reached for this assessment."))
-    attempt_count = AssessmentAttempt.objects.filter(
-        assessment=assessment, student=student,
-    ).exclude(
-        status__in=[ATTEMPT_STATUS_CANCELLED, ATTEMPT_STATUS_EXPIRED],
-    ).count()
-    if attempt_count >= assessment.max_attempts:
-        raise ValueError(_("You have reached the maximum number of attempts."))
+
+
+def get_student_homework_submission(student, assessment: Assessment) -> HomeworkSubmission | None:
+    """Return the student's homework submission for an assessment, or None."""
+    return (
+        HomeworkSubmission.objects.filter(assessment=assessment, student=student)
+        .select_related("attempt", "assessment")
+        .prefetch_related("attachments")
+        .first()
+    )
+
+
+def add_homework_attachment(
+    student,
+    assessment: Assessment,
+    file_data: bytes,
+    original_filename: str,
+    content_type: str,
+) -> HomeworkAttachment:
+    """Upload one file into the student's draft homework submission.
+
+    The object upload happens before the short locked attach step; an orphaned
+    object is deleted if the attach step rejects it. Never submits on upload.
+    """
+    _validate_homework_flow(student, assessment)
+    now = timezone.now()
     max_size = settings.HOMEWORK_MAX_UPLOAD_MB * 1024 * 1024
     result = storage_service.upload_file(
         data=file_data,
@@ -613,27 +798,96 @@ def submit_homework(
         allowed_types=HOMEWORK_ALLOWED_EXTENSIONS,
         original_filename=original_filename,
     )
-    attempt = AssessmentAttempt.objects.create(
-        assessment=assessment,
-        student=student,
-        attempt_number=AssessmentAttempt.objects.filter(
+    try:
+        with transaction.atomic():
+            # Lock the durable parent that all first-upload contenders share.
+            # StudentProfile.pk is not interchangeable with the custom User.pk.
+            StudentProfile.objects.select_for_update().get(pk=student.pk)
+            submission, _created = HomeworkSubmission.objects.select_for_update().get_or_create(
+                assessment=assessment,
+                student=student,
+                defaults={"status": HOMEWORK_STATUS_UPLOADED},
+            )
+            if submission.status != HOMEWORK_STATUS_UPLOADED:
+                raise ValueError(_("This homework has already been submitted."))
+            if assessment.max_upload_files is not None and (
+                submission.attachments.count() >= assessment.max_upload_files
+            ):
+                raise ValueError(_("Maximum number of files reached for this assessment."))
+            attachment = HomeworkAttachment.objects.create(
+                submission=submission,
+                assessment=assessment,
+                student=student,
+                original_filename=original_filename,
+                storage_key=result.key,
+                content_type=content_type,
+                file_size=result.byte_size,
+                checksum=result.checksum,
+                status=HOMEWORK_STATUS_UPLOADED,
+                submitted_at=now,
+            )
+    except Exception:
+        # Reconcile the orphaned object uploaded before the rejected attach.
+        try:
+            if not storage_service.delete_file(result.key):
+                record_deferred_storage_deletion(key=result.key, error="Homework attach rejected")
+        except Exception as cleanup_exc:
+            record_deferred_storage_deletion(key=result.key, error=str(cleanup_exc))
+        raise
+    return attachment
+
+
+def remove_homework_attachment(student, assessment: Assessment, attachment_id: int) -> None:
+    """Remove one file from the student's draft before submission."""
+    attachment = (
+        HomeworkAttachment.objects.select_related("submission")
+        .filter(id=attachment_id, student=student, assessment=assessment)
+        .first()
+    )
+    if attachment is None or attachment.submission_id is None:
+        raise ValueError(_("Attachment not found."))
+    storage_key = attachment.storage_key
+    with transaction.atomic():
+        submission = HomeworkSubmission.objects.select_for_update().get(pk=attachment.submission_id)
+        if submission.status != HOMEWORK_STATUS_UPLOADED:
+            raise ValueError(_("Homework attachments can only be removed before submission."))
+        attachment.delete()
+    try:
+        if not storage_service.delete_file(storage_key):
+            record_deferred_storage_deletion(key=storage_key, error="Homework attachment removed")
+    except Exception as exc:
+        record_deferred_storage_deletion(key=storage_key, error=str(exc))
+
+
+def submit_homework_submission(student, assessment: Assessment) -> HomeworkSubmission:
+    """Explicitly submit the student's draft homework (one logical attempt).
+
+    Idempotent in effect: a second submit is rejected and never creates a
+    second attempt. Requires at least one uploaded attachment.
+    """
+    _validate_homework_flow(student, assessment)
+    now = timezone.now()
+    with transaction.atomic():
+        submission = HomeworkSubmission.objects.select_for_update().filter(
             assessment=assessment, student=student,
-        ).count() + 1,
-        status=ATTEMPT_STATUS_SUBMITTED,
-        submitted_at=timezone.now(),
-    )
-    submission = HomeworkSubmission.objects.create(
-        assessment=assessment,
-        student=student,
-        attempt=attempt,
-        original_filename=original_filename,
-        storage_key=result.key,
-        content_type=content_type,
-        file_size=result.byte_size,
-        checksum=result.checksum,
-        status=HOMEWORK_STATUS_UNDER_REVIEW,
-        submitted_at=timezone.now(),
-    )
+        ).select_related("assessment").first()
+        if submission is None:
+            raise ValueError(_("You have not added any homework files yet."))
+        if submission.status != HOMEWORK_STATUS_UPLOADED:
+            raise ValueError(_("This homework has already been submitted."))
+        if not submission.attachments.exists():
+            raise ValueError(_("Add at least one homework file before submitting."))
+        attempt = AssessmentAttempt.objects.create(
+            assessment=assessment,
+            student=student,
+            attempt_number=1,
+            status=ATTEMPT_STATUS_SUBMITTED,
+            submitted_at=now,
+        )
+        submission.attempt = attempt
+        submission.status = HOMEWORK_STATUS_SUBMITTED
+        submission.submitted_at = now
+        submission.save(update_fields=["attempt", "status", "submitted_at", "updated_at"])
     return submission
 
 
@@ -709,16 +963,25 @@ def grade_diploma_snapshot_answer(
 
 
 def _update_diploma_attempt_grade(attempt: AssessmentAttempt) -> None:
+    snapshot_questions = list(attempt.snapshot_questions.all())
+    if not snapshot_questions:
+        return
+    answers = {
+        a.attempt_question_id: a
+        for a in AssessmentAttemptSnapshotAnswer.objects.filter(
+            attempt_question__attempt=attempt,
+        )
+    }
     total = Decimal("0")
     all_graded = True
-    for sq in attempt.snapshot_questions.all():
-        answer = AssessmentAttemptSnapshotAnswer.objects.filter(attempt_question=sq).first()
+    for sq in snapshot_questions:
+        answer = answers.get(sq.pk)
         if answer and answer.score is not None:
             total += answer.score
         else:
             all_graded = False
     attempt.score_points = total
-    total_possible = sum(sq.points for sq in attempt.snapshot_questions.all())
+    total_possible = sum(sq.points for sq in snapshot_questions)
     assessment = attempt.assessment
     if total_possible > 0:
         attempt.score_percent = (total / total_possible * Decimal("100")).quantize(Decimal("0.01"))
@@ -735,19 +998,25 @@ def _update_diploma_attempt_grade(attempt: AssessmentAttempt) -> None:
 
 
 def grade_homework(submission_id: int, score: Decimal, feedback: str, grader) -> HomeworkSubmission:
+    """Grade the aggregate homework submission (one score/feedback for all files)."""
     with transaction.atomic():
-        submission = HomeworkSubmission.objects.select_for_update().select_related("assessment").get(id=submission_id)
+        submission = HomeworkSubmission.objects.select_for_update().select_related("assessment", "attempt").get(id=submission_id)
         score = validate_score(score, max_score=submission.assessment.total_points)
-        if not submission.attempt_id:
+        if submission.legacy_status != LEGACY_STATUS_ACTIVE:
+            raise ValueError(_("This homework submission is preserved legacy data and is read-only."))
+        if submission.status in (HOMEWORK_STATUS_UPLOADED, HOMEWORK_STATUS_RELEASED):
+            raise ValueError(_("This homework submission cannot be graded in its current state."))
+        attempt = submission.attempt
+        if attempt is None:
             raise ValueError(_("This homework submission has no linked assessment attempt."))
-        attempt = AssessmentAttempt.objects.select_for_update().get(pk=submission.attempt_id)
+        attempt = AssessmentAttempt.objects.select_for_update().get(pk=attempt.pk)
         now = timezone.now()
         submission.score = score
         submission.feedback = feedback
         submission.reviewed_at = now
         submission.reviewed_by = grader
         submission.status = HOMEWORK_STATUS_GRADED
-        submission.save(update_fields=["score", "feedback", "reviewed_at", "reviewed_by", "status"])
+        submission.save(update_fields=["score", "feedback", "reviewed_at", "reviewed_by", "status", "updated_at"])
 
         if submission.assessment.total_points <= 0:
             raise ValueError(_("Assessment total points must be positive."))
@@ -760,6 +1029,9 @@ def grade_homework(submission_id: int, score: Decimal, feedback: str, grader) ->
         attempt.save(update_fields=[
             "score_points", "score_percent", "graded_at", "graded_by", "is_pass", "status",
         ])
+        # P2-04: automatic release only after the aggregate grade commits.
+        if submission.assessment.release_mode == RELEASE_MODE_AUTOMATIC:
+            transaction.on_commit(lambda aid=attempt.pk: _maybe_auto_release_attempt(aid))
     return submission
 
 
@@ -794,48 +1066,287 @@ def _update_attempt_grade(attempt: AssessmentAttempt):
 
 
 # ---------------------------------------------------------------------------
-# Grade release
+# Grade release (P2-04)
 # ---------------------------------------------------------------------------
 
 
-def release_grades(attempt: AssessmentAttempt) -> AssessmentAttempt:
+@transaction.atomic
+def release_attempt_grades(
+    attempt_id: int,
+    *,
+    actor=None,
+    reason: str = "",
+    source: str = "manual",
+) -> AssessmentAttempt:
+    """Idempotently release a graded attempt.
+
+    Locked transition: graded -> released with ``visible_to_student=True``.
+    Duplicate release requests are harmless. Manual Diploma release requires
+    an Admin/Super Admin actor; automatic release (``source="automatic"``) is
+    invoked only after the final grade transaction commits.
+    """
+    attempt = AssessmentAttempt.objects.select_for_update().select_related("assessment").get(pk=attempt_id)
+    assessment = attempt.assessment
+    if assessment.legacy_status != LEGACY_STATUS_ACTIVE:
+        raise ValueError(_("This assessment is preserved legacy data and is read-only."))
+    if source == "manual" and assessment.course_version_id is None and not is_admin(actor):
+        raise ValueError(_("Only Administrators can release Diploma grades."))
+    if attempt.status == ATTEMPT_STATUS_RELEASED and attempt.visible_to_student:
+        return attempt
     if attempt.status != ATTEMPT_STATUS_GRADED:
         raise ValueError(_("Only graded attempts can be released."))
+    before = {"status": attempt.status, "visible_to_student": attempt.visible_to_student}
     attempt.status = ATTEMPT_STATUS_RELEASED
     attempt.visible_to_student = True
-    attempt.save(update_fields=["status", "visible_to_student"])
+    attempt.save(update_fields=["status", "visible_to_student", "updated_at"])
+    # Sync the linked aggregate homework submission so its lifecycle matches.
+    HomeworkSubmission.objects.filter(attempt=attempt).update(status=HOMEWORK_STATUS_RELEASED, updated_at=timezone.now())
+    record_audit_event(
+        actor=actor,
+        action=ACTION_GRADE_RELEASED,
+        target_type="assessment_attempt",
+        target_id=str(attempt.pk),
+        metadata={
+            "assessment_id": assessment.pk,
+            "student_id": attempt.student_id,
+            "source": source,
+            "reason": reason,
+            "before": before,
+            "after": {"status": attempt.status, "visible_to_student": attempt.visible_to_student},
+        },
+    )
     return attempt
 
 
-def hide_grades(attempt: AssessmentAttempt) -> AssessmentAttempt:
-    attempt.visible_to_student = False
+@transaction.atomic
+def hide_attempt_grades(attempt_id: int, *, actor=None, reason: str = "") -> AssessmentAttempt:
+    """Idempotently hide (un-release) a released attempt."""
+    attempt = AssessmentAttempt.objects.select_for_update().select_related("assessment").get(pk=attempt_id)
+    if attempt.assessment.legacy_status != LEGACY_STATUS_ACTIVE:
+        raise ValueError(_("This assessment is preserved legacy data and is read-only."))
+    if attempt.status != ATTEMPT_STATUS_RELEASED or not attempt.visible_to_student:
+        raise ValueError(_("Only released attempts can be hidden."))
+    before = {"status": attempt.status, "visible_to_student": attempt.visible_to_student}
     attempt.status = ATTEMPT_STATUS_GRADED
-    attempt.save(update_fields=["visible_to_student", "status"])
+    attempt.visible_to_student = False
+    attempt.save(update_fields=["status", "visible_to_student", "updated_at"])
+    # Sync the linked aggregate homework submission back to graded.
+    HomeworkSubmission.objects.filter(attempt=attempt).update(status=HOMEWORK_STATUS_GRADED, updated_at=timezone.now())
+    record_audit_event(
+        actor=actor,
+        action=ACTION_GRADE_HIDDEN,
+        target_type="assessment_attempt",
+        target_id=str(attempt.pk),
+        metadata={
+            "assessment_id": attempt.assessment_id,
+            "student_id": attempt.student_id,
+            "reason": reason,
+            "before": before,
+            "after": {"status": attempt.status, "visible_to_student": attempt.visible_to_student},
+        },
+    )
     return attempt
 
 
-def release_all_graded(assessment: Assessment) -> int:
-    """Release all graded attempts for an assessment. Returns count released."""
-    attempts = AssessmentAttempt.objects.filter(
-        assessment=assessment, status=ATTEMPT_STATUS_GRADED,
+def _maybe_auto_release_attempt(attempt_id: int) -> None:
+    """Release an attempt after commit when the assessment is automatic (P2-04).
+
+    Called via ``transaction.on_commit`` so it never runs inside the grading
+    transaction and never releases unless the authoritative grade committed.
+    """
+    attempt = AssessmentAttempt.objects.filter(pk=attempt_id).select_related("assessment").first()
+    if attempt is None:
+        return
+    if attempt.assessment.release_mode != RELEASE_MODE_AUTOMATIC:
+        return
+    try:
+        release_attempt_grades(attempt_id, source="automatic", reason="automatic release")
+    except ValueError:
+        # Not graded/ready yet; the manual/automatic trigger will run later.
+        return
+
+
+def release_all_graded(assessment: Assessment, *, actor) -> int:
+    """Release every graded attempt of an assessment in bounded batches."""
+    if assessment.legacy_status != LEGACY_STATUS_ACTIVE:
+        raise ValueError(_("This assessment is preserved legacy data and is read-only."))
+    ids = list(
+        AssessmentAttempt.objects.filter(
+            assessment=assessment, status=ATTEMPT_STATUS_GRADED,
+        ).values_list("id", flat=True)
     )
-    count = attempts.count()
-    attempts.update(
-        status=ATTEMPT_STATUS_RELEASED, visible_to_student=True,
-    )
+    count = 0
+    for attempt_id in ids:
+        try:
+            release_attempt_grades(attempt_id, actor=actor, source="manual", reason="bulk release")
+            count += 1
+        except ValueError:
+            continue
     return count
 
 
-def hide_all_released(assessment: Assessment) -> int:
-    """Hide all released attempts for an assessment. Returns count hidden."""
-    attempts = AssessmentAttempt.objects.filter(
-        assessment=assessment, status=ATTEMPT_STATUS_RELEASED,
+def hide_all_released(assessment: Assessment, *, actor) -> int:
+    """Hide every released attempt of an assessment in bounded batches."""
+    if assessment.legacy_status != LEGACY_STATUS_ACTIVE:
+        raise ValueError(_("This assessment is preserved legacy data and is read-only."))
+    ids = list(
+        AssessmentAttempt.objects.filter(
+            assessment=assessment, status=ATTEMPT_STATUS_RELEASED,
+        ).values_list("id", flat=True)
     )
-    count = attempts.count()
-    attempts.update(
-        status=ATTEMPT_STATUS_GRADED, visible_to_student=False,
-    )
+    count = 0
+    for attempt_id in ids:
+        try:
+            hide_attempt_grades(attempt_id, actor=actor, reason="bulk hide")
+            count += 1
+        except ValueError:
+            continue
     return count
+
+
+# ---------------------------------------------------------------------------
+# Admin Semester Exam stage review (P3-03)
+# ---------------------------------------------------------------------------
+
+
+def _semester_exam_attempt_details(attempt: AssessmentAttempt) -> dict:
+    """Return grading completeness and computed percent for a semester exam attempt.
+
+    Online (diploma snapshot): all written/MCQ snapshot answers must have a
+    score. Offline: every lecture section must have an entered grade for the
+    exam code. Computed totals are set-wise.
+    """
+    is_online = attempt.snapshot_questions.exists()
+    if is_online:
+        snapshot_questions = list(attempt.snapshot_questions.prefetch_related("choices"))
+        answers = {
+            a.attempt_question_id: a
+            for a in AssessmentAttemptSnapshotAnswer.objects.filter(
+                attempt_question__attempt=attempt,
+            )
+        }
+        graded_count = 0
+        total_points = Decimal("0")
+        earned = Decimal("0")
+        for sq in snapshot_questions:
+            answer = answers.get(sq.pk)
+            total_points += sq.points
+            if answer is not None and answer.score is not None:
+                graded_count += 1
+                earned += answer.score
+        complete = bool(snapshot_questions) and graded_count == len(snapshot_questions)
+        percent = (earned / total_points * Decimal("100")).quantize(Decimal("0.01")) if total_points else None
+        return {"is_online": True, "complete": complete, "percent": percent}
+
+    code = SemesterExamCode.objects.filter(
+        assessment=attempt.assessment,
+        diploma_enrollment__student__user=attempt.student,
+        active=True,
+    ).first()
+    sections = list(attempt.assessment.lecture_sections.order_by("order"))
+    if not sections or code is None:
+        return {"is_online": False, "complete": False, "percent": None}
+    grades = {
+        g.section_id: g
+        for g in OfflineSectionGrade.objects.filter(exam_code=code, section__in=sections)
+    }
+    total_max = sum(section.max_grade for section in sections)
+    earned = sum(grades[s.id].score for s in sections if s.id in grades)
+    complete = len(grades) == len(sections)
+    percent = (earned / total_max * Decimal("100")).quantize(Decimal("0.01")) if total_max else None
+    return {"is_online": False, "complete": complete, "percent": percent}
+
+
+def get_semester_exam_review_queue(user=None):
+    """Paginated Admin queue: graded semester exam attempts awaiting Admin review."""
+    qs = AssessmentAttempt.objects.filter(
+        assessment__assessment_type=ASSESSMENT_TYPE_SEMESTER_EXAM,
+        assessment__course_version__isnull=True,
+        assessment__legacy_status=LEGACY_STATUS_ACTIVE,
+        status__in=[ATTEMPT_STATUS_GRADED, ATTEMPT_STATUS_RELEASED],
+        exam_review_status=EXAM_REVIEW_STATUS_NOT_REVIEWED,
+    ).select_related("assessment", "student")
+    if user is not None and not is_admin(user):
+        qs = qs.none()
+    return qs
+
+
+@transaction.atomic
+def admin_review_semester_exam(
+    attempt_id: int,
+    decision: str,
+    *,
+    actor=None,
+    note: str = "",
+) -> AssessmentAttempt:
+    """Make the explicit Admin Semester Exam stage decision.
+
+    Requires every configured part graded, permits Fail only below the exam
+    passing threshold, preserves all grades, locks the attempt, audits
+    before/after, and hands off to release only after commit when the
+    assessment release mode is automatic. Idempotent for the same decision.
+    """
+    attempt = AssessmentAttempt.objects.select_for_update().select_related("assessment").get(pk=attempt_id)
+    assessment = attempt.assessment
+    if assessment.assessment_type != ASSESSMENT_TYPE_SEMESTER_EXAM or assessment.course_version_id is not None:
+        raise ValueError(_("Exam-stage review applies only to diploma-scoped Semester Exams."))
+    if assessment.legacy_status != LEGACY_STATUS_ACTIVE:
+        raise ValueError(_("This assessment is preserved legacy data and is read-only."))
+    details = _semester_exam_attempt_details(attempt)
+    if not details["complete"]:
+        raise ValueError(_("All exam parts must be graded before the stage decision."))
+    percent = details["percent"]
+    if percent is None:
+        raise ValueError(_("The computed exam grade is unavailable."))
+    if attempt.exam_review_status != EXAM_REVIEW_STATUS_NOT_REVIEWED:
+        if (attempt.exam_review_status == EXAM_REVIEW_STATUS_PASSED and decision == "pass") or (
+            attempt.exam_review_status == EXAM_REVIEW_STATUS_FAILED and decision == "fail"
+        ):
+            return attempt
+        raise ValueError(_("This attempt has already received an exam-stage decision."))
+    if decision not in ("pass", "fail"):
+        raise ValueError(_("Invalid exam review decision."))
+    if decision == "pass" and percent < assessment.passing_score:
+        raise ValueError(_("An exam below the passing threshold cannot be marked as passed."))
+    if decision == "fail" and percent >= assessment.passing_score:
+        raise ValueError(_("An exam at or above the passing threshold cannot be failed."))
+    before = {
+        "exam_review_status": attempt.exam_review_status,
+        "score_percent": str(percent),
+        "is_pass": attempt.is_pass,
+    }
+    now = timezone.now()
+    attempt.exam_review_status = (
+        EXAM_REVIEW_STATUS_PASSED if decision == "pass" else EXAM_REVIEW_STATUS_FAILED
+    )
+    attempt.exam_reviewed_by = actor
+    attempt.exam_reviewed_at = now
+    attempt.exam_review_note = note.strip()
+    attempt.save(update_fields=[
+        "exam_review_status", "exam_reviewed_by", "exam_reviewed_at", "exam_review_note", "updated_at",
+    ])
+    record_audit_event(
+        actor=actor,
+        action=ACTION_GRADE_CHANGED,
+        target_type="assessment_attempt",
+        target_id=str(attempt.pk),
+        metadata={
+            "assessment_id": assessment.pk,
+            "student_id": attempt.student_id,
+            "stage": "semester_exam_review",
+            "decision": decision,
+            "computed_percent": str(percent),
+            "before": before,
+            "after": {
+                "exam_review_status": attempt.exam_review_status,
+                "exam_reviewed_at": now.isoformat(),
+            },
+            "note": note.strip(),
+        },
+    )
+    if assessment.release_mode == RELEASE_MODE_AUTOMATIC:
+        transaction.on_commit(lambda aid=attempt.pk: _maybe_auto_release_attempt(aid))
+    return attempt
 
 
 # ---------------------------------------------------------------------------
@@ -843,20 +1354,95 @@ def hide_all_released(assessment: Assessment) -> int:
 # ---------------------------------------------------------------------------
 
 
+def get_student_result_projection(attempt: AssessmentAttempt) -> dict:
+    """Project an attempt for student display without any correctness data.
+
+    Correctness flags, answer keys, rubrics, and model answers are never
+    included before or after release (P2-04). Scores/feedback are omitted
+    until the attempt is released (``visible_to_student``).
+    """
+    show_scores = bool(attempt.visible_to_student)
+    is_diploma = bool(
+        attempt.assessment.course_version_id is None
+        and attempt.assessment.semester_id and attempt.assessment.cohort_id
+    )
+    questions = []
+    if not show_scores:
+        # A submitted attempt is a status record until release. Do not expose
+        # the exam questions or submitted responses through the results URL.
+        questions = []
+    elif is_diploma:
+        answers = {
+            a.attempt_question_id: a
+            for a in AssessmentAttemptSnapshotAnswer.objects.filter(
+                attempt_question__attempt=attempt,
+            ).select_related("selected_choice")
+        }
+        for sq in attempt.snapshot_questions.order_by("order"):
+            answer = answers.get(sq.pk)
+            selected = answer.selected_choice if answer and answer.selected_choice_id else None
+            questions.append({
+                "order": sq.order,
+                "text": sq.text_snapshot,
+                "question_type": sq.question_type,
+                "selected_text": selected.text_snapshot if selected else "",
+                "written_text": answer.written_text if answer else "",
+                "score": (answer.score if show_scores and answer and answer.score is not None else None),
+                "feedback": (answer.feedback if show_scores and answer else ""),
+            })
+    else:
+        answers = {
+            a.question_id: a
+            for a in attempt.answers.select_related("question", "selected_choice")
+        }
+        for question in attempt.assessment.questions.order_by("order"):
+            answer = answers.get(question.pk)
+            selected = answer.selected_choice if answer and answer.selected_choice_id else None
+            questions.append({
+                "order": question.order,
+                "text": question.text,
+                "question_type": question.question_type,
+                "selected_text": selected.text if selected else "",
+                "written_text": answer.written_text if answer else "",
+                "score": (answer.score if show_scores and answer and answer.score is not None else None),
+                "feedback": (answer.feedback if show_scores and answer else ""),
+            })
+    return {
+        "status": attempt.status,
+        "visible_to_student": show_scores,
+        "score_points": attempt.score_points if show_scores else None,
+        "score_percent": attempt.score_percent if show_scores else None,
+        "is_pass": attempt.is_pass if show_scores else None,
+        "submitted_at": attempt.submitted_at,
+        "graded_at": attempt.graded_at,
+        "questions": questions,
+    }
+
+
 def get_assessment_readiness(student, assessment: Assessment, latest_attempt=None) -> dict:
     """Project one assessment into a student-facing state (E6).
 
     Returns ``state`` (ready / continue / scheduled / closed / max-attempts /
-    awaiting-release / completed), a translated ``state_label``, and an
-    ``action_url``/``action_label`` pair that only exists when the student can
-    act right now. The list page and the instructions page must both use it so
-    they stay equivalent.
+    awaiting-release / completed), a translated ``state_label``, a
+    ``primary_action`` dict (``{label, url, method}``) that only exists when
+    the student can act right now, and the legacy flat ``action_url`` /
+    ``action_label`` pair. The list page and the instructions page must both
+    use it so they stay equivalent. ``primary_action`` is the shared
+    presentation key (P1-02); templates never derive it.
     """
     now = timezone.now()
-    if not assessment.is_active:
-        return {"state": "closed", "state_label": _("Closed"), "action_url": None, "action_label": None}
+    if not assessment.is_active or assessment.legacy_status != LEGACY_STATUS_ACTIVE:
+        return {"state": "closed", "state_label": _("Closed"), "action_url": None, "action_label": None, "primary_action": None}
     if not has_active_enrollment(student, assessment):
-        return {"state": "closed", "state_label": _("No active enrollment"), "action_url": None, "action_label": None}
+        return {"state": "closed", "state_label": _("No active enrollment"), "action_url": None, "action_label": None, "primary_action": None}
+
+    override = get_active_assessment_access_override(student, assessment, now)
+    exceptional_window = bool(
+        override and override.open_at <= now <= override.close_at
+    )
+    exceptional_attempt_available = bool(
+        exceptional_window and override.used_count < override.max_attempts
+    )
 
     attempt = latest_attempt
     if attempt is not None:
@@ -865,33 +1451,77 @@ def get_assessment_readiness(student, assessment: Assessment, latest_attempt=Non
                 "state": "continue", "state_label": _("In progress"),
                 "action_url": reverse("assessments:take", args=[assessment.id]),
                 "action_label": _("Continue"),
+                "primary_action": {
+                    "label": _("Continue"),
+                    "url": reverse("assessments:take", args=[assessment.id]),
+                    "method": "GET",
+                },
+            }
+        if exceptional_attempt_available:
+            return {
+                "state": "ready", "state_label": _("Ready"),
+                "action_url": reverse("assessments:instructions", args=[assessment.id]),
+                "action_label": _("Open"),
+                "primary_action": {
+                    "label": _("Open"),
+                    "url": reverse("assessments:instructions", args=[assessment.id]),
+                    "method": "GET",
+                },
             }
         if attempt.status in (ATTEMPT_STATUS_SUBMITTED, ATTEMPT_STATUS_UNDER_REVIEW) or (
             attempt.status == ATTEMPT_STATUS_GRADED and not attempt.visible_to_student
         ):
-            return {"state": "awaiting-release", "state_label": _("Awaiting release"), "action_url": None, "action_label": None}
+            return {
+                "state": "awaiting-release", "state_label": _("Awaiting release"),
+                "action_url": None, "action_label": None, "primary_action": None,
+            }
         if attempt.status == ATTEMPT_STATUS_RELEASED:
             return {
                 "state": "completed", "state_label": _("Completed"),
                 "action_url": reverse("assessments:results", args=[assessment.id]),
                 "action_label": _("View result"),
+                "primary_action": {
+                    "label": _("View result"),
+                    "url": reverse("assessments:results", args=[assessment.id]),
+                    "method": "GET",
+                },
             }
 
-    if assessment.open_at and now < assessment.open_at:
-        return {"state": "scheduled", "state_label": _("Scheduled"), "action_url": None, "action_label": None}
-    if assessment.close_at and now > assessment.close_at:
-        return {"state": "closed", "state_label": _("Closed"), "action_url": None, "action_label": None}
     attempt_count = AssessmentAttempt.objects.filter(
         assessment=assessment, student=student,
     ).exclude(
         status__in=[ATTEMPT_STATUS_CANCELLED, ATTEMPT_STATUS_EXPIRED],
     ).count()
-    if attempt_count >= assessment.max_attempts:
-        return {"state": "max-attempts", "state_label": _("Maximum attempts reached"), "action_url": None, "action_label": None}
+    if exceptional_attempt_available:
+        return {
+            "state": "ready", "state_label": _("Ready"),
+            "action_url": reverse("assessments:instructions", args=[assessment.id]),
+            "action_label": _("Open"),
+            "primary_action": {
+                "label": _("Open"),
+                "url": reverse("assessments:instructions", args=[assessment.id]),
+                "method": "GET",
+            },
+        }
+    if not exceptional_window and assessment.open_at and now < assessment.open_at:
+        return {"state": "scheduled", "state_label": _("Scheduled"), "action_url": None, "action_label": None, "primary_action": None}
+    if not exceptional_window and assessment.close_at and now > assessment.close_at:
+        return {"state": "closed", "state_label": _("Closed"), "action_url": None, "action_label": None, "primary_action": None}
+    max_attempts = override.max_attempts if exceptional_window else assessment.max_attempts
+    if attempt_count >= max_attempts:
+        return {
+            "state": "max-attempts", "state_label": _("Maximum attempts reached"),
+            "action_url": None, "action_label": None, "primary_action": None,
+        }
     return {
         "state": "ready", "state_label": _("Ready"),
         "action_url": reverse("assessments:instructions", args=[assessment.id]),
         "action_label": _("Open"),
+        "primary_action": {
+            "label": _("Open"),
+            "url": reverse("assessments:instructions", args=[assessment.id]),
+            "method": "GET",
+        },
     }
 
 
@@ -907,7 +1537,9 @@ def get_student_assessments(student):
     ).filter(
         Q(expires_at__isnull=True) | Q(expires_at__gt=now),
     ).values_list("cohort_id", flat=True)
-    base_qs = Assessment.objects.filter(is_active=True).filter(
+    base_qs = Assessment.objects.filter(
+        is_active=True, legacy_status=LEGACY_STATUS_ACTIVE,
+    ).filter(
         active_enrollment_q
         | Q(cohort_id__in=list(enrolled_cohort_ids), course_version__isnull=True)
     )
@@ -945,16 +1577,38 @@ def get_student_assessments(student):
             if not (a.course_version_id is None and a.cohort_id and a.semester_id)
             or (a.cohort_id in visible_by_cohort and a.semester_id in visible_by_cohort[a.cohort_id])
         ]
-    override_ids = SemesterExamAccessOverride.objects.filter(
-        Q(diploma_enrollment__student__user=student, diploma_enrollment__status=ENROLLMENT_STATUS_ACTIVE)
-        & (Q(diploma_enrollment__expires_at__isnull=True) | Q(diploma_enrollment__expires_at__gt=now)),
+    override_ids = set(SemesterExamAccessOverride.objects.filter(
+        (
+            Q(
+                course_enrollment__student__user=student,
+                course_enrollment__status=ENROLLMENT_STATUS_ACTIVE,
+            )
+            & (Q(course_enrollment__expires_at__isnull=True) | Q(course_enrollment__expires_at__gt=now))
+        )
+        | (
+            Q(
+                diploma_enrollment__student__user=student,
+                diploma_enrollment__status=ENROLLMENT_STATUS_ACTIVE,
+            )
+            & (Q(diploma_enrollment__expires_at__isnull=True) | Q(diploma_enrollment__expires_at__gt=now))
+        ),
         status=EXAM_OVERRIDE_ACTIVE,
         open_at__lte=now,
         close_at__gte=now,
-    ).values_list("assessment_id", flat=True)
+    ).values_list("assessment_id", flat=True))
+    override_ids.update(
+        AssessmentAttempt.objects.filter(
+            student=student,
+            status=ATTEMPT_STATUS_IN_PROGRESS,
+            assessment__is_active=True,
+            assessment__legacy_status=LEGACY_STATUS_ACTIVE,
+        ).values_list("assessment_id", flat=True)
+    )
     if override_ids:
         extra = list(
-            Assessment.objects.filter(id__in=override_ids)
+            Assessment.objects.filter(
+                id__in=override_ids, legacy_status=LEGACY_STATUS_ACTIVE,
+            )
             .select_related("course_version__course")
             .prefetch_related("attempts")
         )
@@ -974,6 +1628,7 @@ def get_student_attempts(student):
 def get_pending_grading(user=None):
     qs = AssessmentAttempt.objects.filter(
         status=ATTEMPT_STATUS_UNDER_REVIEW,
+        assessment__legacy_status=LEGACY_STATUS_ACTIVE,
     ).select_related("assessment", "assessment__cohort", "student")
     if user is not None:
         qs = qs.filter(assessment_staff_scope_filter(user)).distinct()
@@ -982,10 +1637,15 @@ def get_pending_grading(user=None):
 
 def get_homework_pending_grading(user=None):
     qs = HomeworkSubmission.objects.filter(
-        status__in=[HOMEWORK_STATUS_UPLOADED, HOMEWORK_STATUS_UNDER_REVIEW],
-    ).select_related("assessment", "assessment__cohort", "student", "attempt")
+        status__in=[HOMEWORK_STATUS_SUBMITTED, HOMEWORK_STATUS_UNDER_REVIEW],
+        assessment__legacy_status=LEGACY_STATUS_ACTIVE,
+    ).select_related("assessment", "assessment__cohort", "student", "attempt").prefetch_related("attachments")
     if user is not None:
         qs = qs.filter(assessment_staff_scope_filter(user)).distinct()
+        # Moderators grade Diploma Homework only (P1-01): exclude course-scoped
+        # homework from their queue regardless of assignment shape.
+        if is_moderator(user) and not is_admin(user):
+            qs = qs.filter(assessment__course_version__isnull=True)
     return qs
 
 
@@ -1050,6 +1710,14 @@ def generate_exam_codes(assessment: Assessment, actor) -> int:
     existing_numbers = set(
         SemesterExamCode.objects.filter(assessment=assessment).values_list("code_number", flat=True)
     )
+    application_modes = {}
+    for row in ProgramApplication.objects.filter(
+        program_type=PROGRAM_TYPE_DIPLOMA,
+        cohort_id=assessment.cohort_id,
+    ).exclude(status=PROGRAM_APP_STATUS_REJECTED).order_by("-created_at", "-id").values(
+        "student_id", "delivery_mode",
+    ):
+        application_modes.setdefault(row["student_id"], row["delivery_mode"])
 
     new_codes = []
     for de in enrollments:
@@ -1064,7 +1732,11 @@ def generate_exam_codes(assessment: Assessment, actor) -> int:
             raise ValueError(_("Could not generate a unique exam code after 1000 attempts."))
         new_codes.append(SemesterExamCode(
             assessment=assessment, diploma_enrollment=de,
-            code_number=code, delivery_mode=DELIVERY_MODE_ONLINE,
+            code_number=code,
+            delivery_mode=application_modes.get(
+                de.student_id,
+                APPLICATION_DELIVERY_MODE_ONLINE,
+            ),
             created_by=actor, active=True,
         ))
 
@@ -1080,8 +1752,24 @@ def set_exam_code_delivery_mode(code_id: int, mode: str) -> SemesterExamCode:
     return code
 
 
-def enter_offline_section_grade(exam_code_id: int, section_id: int, score: Decimal, grader) -> OfflineSectionGrade:
+def enter_offline_section_grade(
+    exam_code_id: int,
+    section_id: int,
+    score: Decimal,
+    grader,
+    *,
+    assessment_id: int | None = None,
+) -> OfflineSectionGrade:
+    exam_code = SemesterExamCode.objects.select_related("assessment").get(pk=exam_code_id)
+    if exam_code.assessment.legacy_status != LEGACY_STATUS_ACTIVE:
+        raise ValueError(_("Legacy semester exam data is read-only."))
+    if assessment_id is not None and exam_code.assessment_id != assessment_id:
+        raise ValueError(_("Exam code does not belong to this assessment."))
+    if not exam_code.active or exam_code.delivery_mode != DELIVERY_MODE_OFFLINE:
+        raise ValueError(_("Offline section grades require an active offline exam code."))
     section = AssessmentLectureSection.objects.get(pk=section_id)
+    if section.assessment_id != exam_code.assessment_id:
+        raise ValueError(_("Section does not belong to the exam code's assessment."))
     validate_score(score, max_score=section.max_grade)
     grade, created = OfflineSectionGrade.objects.update_or_create(
         exam_code_id=exam_code_id, section_id=section_id,
@@ -1093,6 +1781,8 @@ def enter_offline_section_grade(exam_code_id: int, section_id: int, score: Decim
 def finalize_offline_attempt(exam_code_id: int) -> AssessmentAttempt:
     exam_code = SemesterExamCode.objects.select_related("assessment", "diploma_enrollment__student__user").get(pk=exam_code_id)
     assessment = exam_code.assessment
+    if assessment.legacy_status != LEGACY_STATUS_ACTIVE:
+        raise ValueError(_("Legacy semester exam data is read-only."))
     with transaction.atomic():
         attempt, _created = AssessmentAttempt.objects.get_or_create(
             assessment=assessment, student=exam_code.diploma_enrollment.student.user,
@@ -1122,54 +1812,364 @@ def finalize_offline_attempt(exam_code_id: int) -> AssessmentAttempt:
 
 
 # ---------------------------------------------------------------------------
-# Reviewer services (Phase 8)
+# Reviewer services (Phase 8) — anonymous Semester Exam grading (P3-02)
 # ---------------------------------------------------------------------------
 
 
-def get_reviewer_ungraded_count(assignment) -> int:
-    """Return count of ungraded exam codes for a reviewer assignment's section."""
-    if not assignment.section_id:
-        return 0
-    total = SemesterExamCode.objects.filter(
-        assessment__lecture_sections=assignment.section,
-        active=True,
-        diploma_enrollment__cohort=assignment.cohort,
-    ).count()
-    graded = OfflineSectionGrade.objects.filter(
-        section=assignment.section,
-        exam_code__assessment__lecture_sections=assignment.section,
-        exam_code__diploma_enrollment__cohort=assignment.cohort,
-    ).values("exam_code_id").distinct().count()
-    return total - graded
-
-
-def reviewer_grade_section(exam_code_id: int, section_id: int, score: Decimal, grader) -> OfflineSectionGrade:
-    """Enter or update an offline section grade as a reviewer."""
-    section = AssessmentLectureSection.objects.get(pk=section_id)
-    validate_score(score, max_score=section.max_grade)
-    grade, created = OfflineSectionGrade.objects.update_or_create(
-        exam_code_id=exam_code_id, section_id=section_id,
-        defaults={"score": score, "graded_by": grader},
+def _reviewer_assignment_scope(assignment):
+    """Return active online Semester Exam attempts within an assignment scope."""
+    qs = AssessmentAttempt.objects.filter(
+        assessment__cohort_id=assignment.cohort_id,
+        assessment__assessment_type=ASSESSMENT_TYPE_SEMESTER_EXAM,
+        assessment__legacy_status=LEGACY_STATUS_ACTIVE,
+        assessment__exam_codes__diploma_enrollment__student__user_id=F("student_id"),
+        assessment__exam_codes__active=True,
+        assessment__exam_codes__delivery_mode=DELIVERY_MODE_ONLINE,
+        status__in=[ATTEMPT_STATUS_SUBMITTED, ATTEMPT_STATUS_UNDER_REVIEW, ATTEMPT_STATUS_GRADED],
+        snapshot_questions__question_type=QUESTION_TYPE_WRITTEN,
+        snapshot_questions__answers__score__isnull=True,
     )
+    if assignment.scope == REVIEWER_SCOPE_EXAM and assignment.assessment_id:
+        qs = qs.filter(assessment_id=assignment.assessment_id)
+    elif assignment.scope == REVIEWER_SCOPE_SEMESTER and assignment.semester_id:
+        qs = qs.filter(assessment__semester_id=assignment.semester_id)
+    elif assignment.scope != REVIEWER_SCOPE_COHORT:
+        return AssessmentAttempt.objects.none()
+    if assignment.section_id:
+        qs = qs.filter(snapshot_questions__section=assignment.section)
+    if assignment.semester_id:
+        qs = qs.filter(assessment__semester_id=assignment.semester_id)
+    newer_attempt = AssessmentAttempt.objects.filter(
+        assessment_id=OuterRef("assessment_id"),
+        student_id=OuterRef("student_id"),
+        attempt_number__gt=OuterRef("attempt_number"),
+    ).exclude(status__in=[ATTEMPT_STATUS_CANCELLED, ATTEMPT_STATUS_EXPIRED])
+    qs = qs.annotate(has_newer_attempt=Exists(newer_attempt)).filter(has_newer_attempt=False)
+    if assignment.cluster_id:
+        qs = qs.filter(
+            student__student_profile__cluster_memberships__cluster_id=assignment.cluster_id,
+        )
+    return qs.distinct()
+
+
+def get_active_reviewer_claim(assignment):
+    return ReviewerExamClaim.objects.filter(
+        assignment=assignment,
+        claimed_by=assignment.reviewer,
+        status=REVIEWER_CLAIM_IN_PROGRESS,
+    ).select_related("attempt", "section").first()
+
+
+@transaction.atomic
+def claim_next_reviewer_submission(assignment) -> ReviewerExamClaim:
+    """Exclusively claim one anonymous submission for an online reviewer.
+
+    The assignment lock prevents one reviewer from opening a second pending
+    submission. ``skip_locked`` plus the active claim constraint prevents two
+    reviewers assigned to the same section from receiving the same attempt.
+    """
+    locked_assignment = assignment.__class__.objects.select_for_update().get(pk=assignment.pk)
+    active_claim = ReviewerExamClaim.objects.filter(
+        assignment=locked_assignment,
+        status=REVIEWER_CLAIM_IN_PROGRESS,
+    ).first()
+    if active_claim:
+        return active_claim
+
+    candidates = list(
+        _reviewer_assignment_scope(locked_assignment)
+        .select_for_update(skip_locked=True)
+        .order_by("submitted_at", "id")[:25]
+    )
+    candidate = None
+    section_id = None
+    for possible in candidates:
+        section_ids = list(
+            AssessmentAttemptQuestion.objects.filter(
+                attempt=possible,
+                question_type=QUESTION_TYPE_WRITTEN,
+                answers__score__isnull=True,
+            ).values_list("section_id", flat=True).distinct()
+        )
+        claimed_section_ids = set(
+            ReviewerExamClaim.objects.filter(
+                attempt=possible, section_id__in=section_ids,
+            ).values_list("section_id", flat=True)
+        )
+        available_section_ids = [sid for sid in section_ids if sid not in claimed_section_ids]
+        if available_section_ids:
+            candidate = possible
+            section_id = available_section_ids[0]
+            break
+    if candidate is None or section_id is None:
+        raise ValueError(_("No submitted online Semester Exam is waiting for this assignment."))
+    return ReviewerExamClaim.objects.create(
+        assignment=locked_assignment,
+        attempt=candidate,
+        section_id=section_id,
+        claimed_by=locked_assignment.reviewer,
+    )
+
+
+def reviewer_claim_items(claim):
+    """Return anonymous primitives for the claimed section only."""
+    code_number = SemesterExamCode.objects.filter(
+        assessment_id=claim.attempt.assessment_id,
+        diploma_enrollment__student__user_id=claim.attempt.student_id,
+        active=True,
+        delivery_mode=DELIVERY_MODE_ONLINE,
+    ).values("code_number")[:1]
+    return (
+        AssessmentAttemptSnapshotAnswer.objects.filter(
+            attempt_question__attempt_id=claim.attempt_id,
+            attempt_question__section_id=claim.section_id,
+            attempt_question__question_type=QUESTION_TYPE_WRITTEN,
+        )
+        .annotate(
+            answer_id=F("pk"),
+            code_number=Subquery(code_number),
+            question_text=F("attempt_question__text_snapshot"),
+            answer_text=F("written_text"),
+            points=F("attempt_question__points"),
+        )
+        .values("answer_id", "code_number", "question_text", "answer_text", "points", "score")
+        .order_by("answer_id")
+    )
+
+
+@transaction.atomic
+def finalize_reviewer_claim(claim, reviewer) -> ReviewerExamClaim:
+    """Finalize a claimed section only after every written answer is scored."""
+    locked_claim = ReviewerExamClaim.objects.select_for_update().get(pk=claim.pk)
+    if locked_claim.claimed_by_id != reviewer.id or locked_claim.status != REVIEWER_CLAIM_IN_PROGRESS:
+        raise ValueError(_("This reviewer submission is no longer pending for you."))
+    if AssessmentAttemptSnapshotAnswer.objects.filter(
+        attempt_question__attempt_id=locked_claim.attempt_id,
+        attempt_question__section_id=locked_claim.section_id,
+        attempt_question__question_type=QUESTION_TYPE_WRITTEN,
+        score__isnull=True,
+    ).exists():
+        raise ValueError(_("Grade every written answer before finalizing this submission."))
+    locked_claim.status = REVIEWER_CLAIM_FINALIZED
+    locked_claim.finalized_by = reviewer
+    locked_claim.finalized_at = timezone.now()
+    locked_claim.save(update_fields=["status", "finalized_by", "finalized_at", "updated_at"])
+    record_audit_event(
+        actor=reviewer,
+        action=ACTION_GRADE_CHANGED,
+        target_type="reviewer_exam_claim",
+        target_id=str(locked_claim.pk),
+        metadata={"attempt_id": locked_claim.attempt_id, "section_id": locked_claim.section_id, "stage": "finalized"},
+    )
+    return locked_claim
+
+
+def _reviewer_assignment_assessments(assignment):
+    """Return active Diploma Semester Exams covered by an assignment."""
+    assessments = Assessment.objects.filter(
+        assessment_type=ASSESSMENT_TYPE_SEMESTER_EXAM,
+        legacy_status=LEGACY_STATUS_ACTIVE,
+        cohort_id=assignment.cohort_id,
+    )
+    if assignment.scope == REVIEWER_SCOPE_EXAM and assignment.assessment_id:
+        assessments = assessments.filter(pk=assignment.assessment_id)
+    elif assignment.scope == REVIEWER_SCOPE_SEMESTER and assignment.semester_id:
+        assessments = assessments.filter(semester_id=assignment.semester_id)
+    elif assignment.scope != REVIEWER_SCOPE_COHORT:
+        return assessments.none()
+    if assignment.semester_id:
+        assessments = assessments.filter(semester_id=assignment.semester_id)
+    if assignment.section_id:
+        assessments = assessments.filter(pk=assignment.section.assessment_id)
+    return assessments
+
+
+def get_reviewer_ungraded_count(assignment) -> int:
+    """Return ungraded offline code/section pairs within an assignment scope."""
+    assessments = _reviewer_assignment_assessments(assignment)
+    sections = AssessmentLectureSection.objects.filter(assessment__in=assessments)
+    if assignment.section_id:
+        sections = sections.filter(pk=assignment.section_id)
+    codes = SemesterExamCode.objects.filter(
+        assessment__in=assessments,
+        active=True,
+        delivery_mode=DELIVERY_MODE_OFFLINE,
+        diploma_enrollment__cohort=assignment.cohort,
+    )
+    if assignment.cluster_id:
+        codes = codes.filter(
+            diploma_enrollment__student__cluster_memberships__cluster_id=assignment.cluster_id,
+        )
+    total = codes.annotate(
+        section_count=Count("assessment__lecture_sections", filter=Q(assessment__lecture_sections__in=sections), distinct=True),
+    ).aggregate(total=Sum("section_count"))["total"] or 0
+    graded_qs = OfflineSectionGrade.objects.filter(
+        section__in=sections,
+        exam_code__assessment__in=assessments,
+        exam_code__delivery_mode=DELIVERY_MODE_OFFLINE,
+        exam_code__diploma_enrollment__cohort=assignment.cohort,
+    )
+    if assignment.cluster_id:
+        graded_qs = graded_qs.filter(
+            exam_code__diploma_enrollment__student__cluster_memberships__cluster_id=assignment.cluster_id,
+        )
+    graded = graded_qs.values("exam_code_id", "section_id").distinct().count()
+    return max(0, total - graded)
+
+
+def annotate_reviewer_ungraded_counts(assignments) -> dict[int, int]:
+    """Return offline availability counts for the supplied assignments."""
+    return {assignment.id: get_reviewer_ungraded_count(assignment) for assignment in assignments}
+
+
+def get_reviewer_online_written_items(assignment):
+    """Anonymous written snapshot answers for a ReviewerAssignment (online only).
+
+    Returns primitive projections only: ``code_number``, written prompt,
+    answer text, points, and the gradeable answer id. Never includes student
+    identity, enrollment, or attempt objects.
+    """
+    claim = get_active_reviewer_claim(assignment)
+    if not claim:
+        return AssessmentAttemptSnapshotAnswer.objects.none().values("id")
+    return reviewer_claim_items(claim)
+
+
+def annotate_reviewer_online_ungraded_counts(assignments) -> dict[int, int]:
+    """Count available anonymous submissions, excluding claimed submissions."""
+    counts = {assignment.id: 0 for assignment in assignments}
+    for assignment in assignments:
+        candidates = _reviewer_assignment_scope(assignment).exclude(
+            reviewer_exam_claims__isnull=False,
+        )
+        if assignment.cluster_id:
+            candidates = candidates.filter(
+                student__student_profile__cluster_memberships__cluster_id=assignment.cluster_id,
+            )
+        counts[assignment.id] = candidates.values("id").distinct().count()
+    return counts
+
+
+def reviewer_grade_section(exam_code_id: int, section_id: int, score: Decimal, grader, assignment) -> OfflineSectionGrade:
+    """Enter or update an offline section grade as a reviewer.
+
+    Hardened (P3-02): locks the code, requires offline delivery and the exact
+    assigned section, validates against the section maximum, and audits.
+    """
+    with transaction.atomic():
+        code = SemesterExamCode.objects.select_for_update().select_related(
+            "assessment", "diploma_enrollment",
+        ).get(pk=exam_code_id)
+        if not assignment.active or assignment.reviewer_id != grader.id:
+            raise ValueError(_("This Reviewer assignment is not active for grading."))
+        if code.assessment.legacy_status != LEGACY_STATUS_ACTIVE:
+            raise ValueError(_("Legacy semester exam data is read-only."))
+        if code.delivery_mode != DELIVERY_MODE_OFFLINE:
+            raise ValueError(_("Offline section grades require an offline exam code."))
+        section = AssessmentLectureSection.objects.select_for_update().get(pk=section_id)
+        if not can_reviewer_grade_code(assignment, code) or not can_reviewer_grade_section(assignment, section):
+            raise ValueError(_("This exam code or section is outside your Reviewer assignment."))
+        if section.assessment_id != code.assessment_id:
+            raise ValueError(_("Section does not belong to the exam code's assessment."))
+        score = validate_score(score, max_score=section.max_grade)
+        existing_grade = OfflineSectionGrade.objects.filter(
+            exam_code_id=exam_code_id, section_id=section_id,
+        ).first()
+        if existing_grade and existing_grade.graded_by_id != grader.id:
+            raise ValueError(_("This offline submission has already been graded by another Reviewer."))
+        grade, created = OfflineSectionGrade.objects.update_or_create(
+            exam_code_id=exam_code_id, section_id=section_id,
+            defaults={"score": score, "graded_by": grader},
+        )
+        record_audit_event(
+            actor=grader,
+            action=ACTION_GRADE_CHANGED,
+            target_type="offline_section_grade",
+            target_id=str(grade.pk),
+            metadata={"exam_code_id": exam_code_id, "section_id": section_id, "score": str(score)},
+        )
     return grade
 
 
+def reviewer_grade_written_answer(answer_id: int, score: Decimal, grader, assignment) -> AssessmentAttemptSnapshotAnswer:
+    """Grade one anonymous written snapshot answer within a ReviewerAssignment.
+
+    Locks the answer, re-validates the assignment scope (cohort/semester/
+    section/assessment, written-only), saves the score, recomputes the attempt
+    grade set-wise, and audits. Reviewer can never grade MCQ.
+    """
+    with transaction.atomic():
+        answer = (
+            AssessmentAttemptSnapshotAnswer.objects.select_for_update()
+            .select_related("attempt_question__section", "attempt_question__attempt__assessment")
+            .get(pk=answer_id)
+        )
+        sq = answer.attempt_question
+        assessment = sq.attempt.assessment
+        if assessment.legacy_status != LEGACY_STATUS_ACTIVE:
+            raise ValueError(_("Legacy semester exam data is read-only."))
+        if sq.question_type != QUESTION_TYPE_WRITTEN:
+            raise ValueError(_("Only written answers can be graded by a Reviewer."))
+        if not assignment.active or assignment.reviewer_id != grader.id:
+            raise ValueError(_("This Reviewer assignment is not active for online grading."))
+        if assignment.section_id and sq.section_id != assignment.section_id:
+            raise ValueError(_("Answer is outside your assigned section."))
+        claim = ReviewerExamClaim.objects.filter(
+            assignment=assignment,
+            attempt=sq.attempt,
+            section=sq.section,
+            claimed_by=grader,
+            status=REVIEWER_CLAIM_IN_PROGRESS,
+        ).first()
+        if not claim:
+            raise ValueError(_("Request and keep the anonymous submission before grading it."))
+        if not _reviewer_assignment_assessments(assignment).filter(pk=assessment.pk).exists():
+            raise ValueError(_("Answer is outside your assigned assessment."))
+        if assignment.cohort_id != assessment.cohort_id or assignment.semester_id != assessment.semester_id:
+            raise ValueError(_("Answer is outside your assigned cohort/semester."))
+        score = validate_score(score, max_score=sq.points)
+        answer.score = score
+        answer.graded_by = grader
+        answer.graded_at = timezone.now()
+        answer.save(update_fields=["score", "graded_by", "graded_at", "updated_at"])
+        _update_diploma_attempt_grade(sq.attempt)
+        record_audit_event(
+            actor=grader,
+            action=ACTION_GRADE_CHANGED,
+            target_type="assessment_attempt_snapshot_answer",
+            target_id=str(answer.pk),
+            metadata={
+                "attempt_id": sq.attempt_id,
+                "assessment_id": assessment.id,
+                "question_id": sq.pk,
+                "section_id": sq.section_id,
+                "score": str(score),
+            },
+        )
+    return answer
+
+
 def can_reviewer_grade_code(assignment, exam_code) -> bool:
-    """Check that the exam code belongs to the reviewer's assigned cohort, semester, and section."""
+    """Check that the exam code belongs to the reviewer's assigned scope."""
+    if exam_code.assessment.legacy_status != LEGACY_STATUS_ACTIVE:
+        return False
     if assignment.cohort_id != exam_code.diploma_enrollment.cohort_id:
         return False
-    if assignment.semester_id != exam_code.assessment.semester_id:
+    if not _reviewer_assignment_assessments(assignment).filter(pk=exam_code.assessment_id).exists():
         return False
-    if assignment.section_id and assignment.section.assessment_id != exam_code.assessment_id:
+    if assignment.cluster_id and not StudentClusterMembership.objects.filter(
+        cluster_id=assignment.cluster_id,
+        student_id=exam_code.diploma_enrollment.student_id,
+    ).exists():
         return False
     return True
 
 
 def can_reviewer_grade_section(assignment, section) -> bool:
-    """Check that the section belongs to the reviewer's assignment."""
+    """Check that a section belongs to the reviewer's assignment scope."""
     if assignment.section_id and assignment.section_id != section.pk:
         return False
-    return True
+    return _reviewer_assignment_assessments(assignment).filter(pk=section.assessment_id).exists()
 
 
 def can_take_diploma_assessment(student, assessment):
@@ -1187,26 +2187,52 @@ def can_take_diploma_assessment(student, assessment):
 
 
 # ---------------------------------------------------------------------------
-# Exceptional semester exam access overrides (Phase 9)
+# Exceptional assessment access overrides
 # ---------------------------------------------------------------------------
 
 
 @transaction.atomic
-def create_semester_exam_access_overrides(assessment, enrollments, *, open_at, close_at, reason, actor, force_online=False) -> list[SemesterExamAccessOverride]:
-    if assessment.assessment_type != ASSESSMENT_TYPE_SEMESTER_EXAM:
-        raise ValueError(_("Overrides are only allowed for semester exams."))
-    if assessment.course_version_id is not None or not assessment.cohort_id or not assessment.semester_id:
-        raise ValueError(_("Overrides are only allowed for diploma-scoped semester exams."))
+def create_assessment_access_overrides(
+    assessment,
+    *,
+    diploma_enrollments=None,
+    course_enrollments=None,
+    open_at,
+    close_at,
+    reason,
+    actor,
+    force_online=False,
+) -> list[SemesterExamAccessOverride]:
+    is_course_quiz = assessment.assessment_type == ASSESSMENT_TYPE_QUIZ
+    is_semester_exam = assessment.assessment_type == ASSESSMENT_TYPE_SEMESTER_EXAM
+    if not (is_course_quiz or is_semester_exam):
+        raise ValueError(_("Exceptional access is only available for quizzes and semester exams."))
+    if is_course_quiz and (assessment.course_version_id is None or assessment.cohort_id is not None):
+        raise ValueError(_("Quiz exceptional access requires a course-scoped quiz."))
+    if is_semester_exam and (
+        assessment.course_version_id is not None
+        or not assessment.cohort_id
+        or not assessment.semester_id
+    ):
+        raise ValueError(_("Diploma assessment exceptional access requires a diploma-scoped assessment."))
     if open_at >= close_at:
         raise ValueError(_("open_at must be before close_at."))
     if not reason:
         raise ValueError(_("Reason is required."))
 
-    generate_exam_codes(assessment, actor)
+    diploma_enrollments = diploma_enrollments or []
+    course_enrollments = course_enrollments or []
+    if is_course_quiz and diploma_enrollments:
+        raise ValueError(_("A course quiz override must target course enrollments."))
+    if is_semester_exam and course_enrollments:
+        raise ValueError(_("A semester exam override must target diploma enrollments."))
+
+    if is_semester_exam:
+        generate_exam_codes(assessment, actor)
 
     created = []
-    for enrollment in enrollments:
-        if enrollment.cohort_id != assessment.cohort_id:
+    for enrollment in diploma_enrollments:
+        if not is_semester_exam or enrollment.cohort_id != assessment.cohort_id:
             continue
         if enrollment.status != ENROLLMENT_STATUS_ACTIVE:
             continue
@@ -1246,10 +2272,57 @@ def create_semester_exam_access_overrides(assessment, enrollments, *, open_at, c
             },
         )
         created.append(override)
+
+    for enrollment in course_enrollments:
+        if not is_course_quiz or enrollment.course_version_id != assessment.course_version_id:
+            continue
+        if enrollment.status != ENROLLMENT_STATUS_ACTIVE:
+            continue
+        if SemesterExamAccessOverride.objects.filter(
+            assessment=assessment, course_enrollment=enrollment,
+            status=EXAM_OVERRIDE_ACTIVE,
+        ).exists():
+            continue
+        override = SemesterExamAccessOverride.objects.create(
+            assessment=assessment,
+            course_enrollment=enrollment,
+            open_at=open_at,
+            close_at=close_at,
+            max_attempts=1,
+            reason=reason,
+            created_by=actor,
+        )
+        record_audit_event(
+            actor=actor,
+            action=ACTION_EXAM_ACCESS_OVERRIDE_CREATED,
+            target_type="SemesterExamAccessOverride",
+            target_id=str(override.pk),
+            metadata={
+                "assessment_id": assessment.pk,
+                "course_enrollment_id": enrollment.pk,
+                "reason": reason,
+            },
+        )
+        created.append(override)
     return created
 
 
-def cancel_semester_exam_access_override(override, *, actor, reason="") -> SemesterExamAccessOverride:
+def create_semester_exam_access_overrides(
+    assessment, enrollments, *, open_at, close_at, reason, actor, force_online=False,
+) -> list[SemesterExamAccessOverride]:
+    """Backward-compatible wrapper for existing semester-exam callers."""
+    return create_assessment_access_overrides(
+        assessment,
+        diploma_enrollments=enrollments,
+        open_at=open_at,
+        close_at=close_at,
+        reason=reason,
+        actor=actor,
+        force_online=force_online,
+    )
+
+
+def cancel_assessment_access_override(override, *, actor, reason="") -> SemesterExamAccessOverride:
     if not reason.strip():
         raise ValueError(_("Reason is required to cancel an override."))
     if override.status != EXAM_OVERRIDE_ACTIVE:
@@ -1268,22 +2341,56 @@ def cancel_semester_exam_access_override(override, *, actor, reason="") -> Semes
     return override
 
 
-def get_active_semester_exam_override(student, assessment, now=None) -> SemesterExamAccessOverride | None:
+def cancel_semester_exam_access_override(override, *, actor, reason="") -> SemesterExamAccessOverride:
+    """Backward-compatible wrapper for existing semester-exam callers."""
+    return cancel_assessment_access_override(override, actor=actor, reason=reason)
+
+
+def get_active_assessment_access_override(student, assessment, now=None) -> SemesterExamAccessOverride | None:
     now = now or timezone.now()
-    enrollment = DiplomaEnrollment.objects.filter(
-        student__user=student,
-        cohort=assessment.cohort,
-        status=ENROLLMENT_STATUS_ACTIVE,
-    ).filter(
-        Q(expires_at__isnull=True) | Q(expires_at__gt=now),
-    ).first()
-    if not enrollment:
-        return None
-    return SemesterExamAccessOverride.objects.filter(
-        diploma_enrollment=enrollment,
-        assessment=assessment,
-        status=EXAM_OVERRIDE_ACTIVE,
-    ).first()
+    if assessment.assessment_type == ASSESSMENT_TYPE_QUIZ and assessment.course_version_id:
+        enrollment = CourseEnrollment.objects.filter(
+            student__user=student,
+            course_version_id=assessment.course_version_id,
+            status=ENROLLMENT_STATUS_ACTIVE,
+        ).filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gt=now),
+        ).first()
+        if enrollment:
+            return SemesterExamAccessOverride.objects.filter(
+                course_enrollment=enrollment,
+                assessment=assessment,
+            ).filter(
+                Q(status=EXAM_OVERRIDE_ACTIVE)
+                | Q(status=EXAM_OVERRIDE_USED, attempt__student=student, attempt__status=ATTEMPT_STATUS_IN_PROGRESS),
+            ).order_by("-created_at").first()
+    if (
+        assessment.assessment_type == ASSESSMENT_TYPE_SEMESTER_EXAM
+        and assessment.cohort_id
+        and assessment.semester_id
+        and assessment.course_version_id is None
+    ):
+        enrollment = DiplomaEnrollment.objects.filter(
+            student__user=student,
+            cohort_id=assessment.cohort_id,
+            status=ENROLLMENT_STATUS_ACTIVE,
+        ).filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gt=now),
+        ).first()
+        if enrollment:
+            return SemesterExamAccessOverride.objects.filter(
+                diploma_enrollment=enrollment,
+                assessment=assessment,
+            ).filter(
+                Q(status=EXAM_OVERRIDE_ACTIVE)
+                | Q(status=EXAM_OVERRIDE_USED, attempt__student=student, attempt__status=ATTEMPT_STATUS_IN_PROGRESS),
+            ).order_by("-created_at").first()
+    return None
+
+
+def get_active_semester_exam_override(student, assessment, now=None) -> SemesterExamAccessOverride | None:
+    """Backward-compatible wrapper for existing semester-exam callers."""
+    return get_active_assessment_access_override(student, assessment, now)
 
 
 def check_semester_exam_access(student, assessment, now=None) -> bool:
@@ -1292,14 +2399,14 @@ def check_semester_exam_access(student, assessment, now=None) -> bool:
         return True
     except ValueError:
         now = now or timezone.now()
-        override = get_active_semester_exam_override(student, assessment, now)
+        override = get_active_assessment_access_override(student, assessment, now)
         if override and override.open_at <= now <= override.close_at:
             return True
         return False
 
 
 @transaction.atomic
-def consume_semester_exam_override(override, attempt) -> SemesterExamAccessOverride:
+def consume_assessment_access_override(override, attempt) -> SemesterExamAccessOverride:
     SemesterExamAccessOverride.objects.select_for_update().get(pk=override.pk)
     override.refresh_from_db()
     override.used_count += 1
@@ -1316,3 +2423,8 @@ def consume_semester_exam_override(override, attempt) -> SemesterExamAccessOverr
         metadata={"attempt_id": attempt.pk, "assessment_id": override.assessment_id, "used_count": override.used_count},
     )
     return override
+
+
+def consume_semester_exam_override(override, attempt) -> SemesterExamAccessOverride:
+    """Backward-compatible wrapper for existing semester-exam callers."""
+    return consume_assessment_access_override(override, attempt)

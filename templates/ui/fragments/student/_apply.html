@@ -39,6 +39,16 @@
         </select>
       </div>
     </div>
+    <div class="form-group{% if selected_program_type != 'diploma' %} hidden{% endif %}" id="delivery-mode-field">
+      <label class="field-label" for="delivery-mode">{% trans "Diploma attendance mode" %}</label>
+      <select id="delivery-mode" name="delivery_mode" class="form-select"{% if selected_program_type == 'diploma' %} required{% endif %}>
+        <option value="">{% trans "Select an attendance mode" %}</option>
+        {% for value, label in delivery_mode_choices %}
+          <option value="{{ value }}"{% if selected_delivery_mode == value %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <span class="field-help">{% trans "This choice is saved on your Diploma application and determines your Semester Exam delivery." %}</span>
+    </div>
     <button class="btn-primary" type="submit">{% trans "Submit application" %}</button>
   </form>
 </div>

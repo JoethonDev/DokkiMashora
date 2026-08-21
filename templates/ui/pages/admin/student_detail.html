@@ -10,8 +10,8 @@
           <p class="eyebrow">{% trans "Identity" %}</p>
           <h3>{% trans "Account summary" %}</h3>
         </div>
-        <a class="btn-primary"
-           href="{% url 'accounts:admin_user_edit' user_obj.id %}">{% trans "Edit student" %}</a>
+         <div class="flex gap-2 flex-wrap"><a class="btn-primary"
+            href="{% url 'accounts:admin_user_edit' user_obj.id %}">{% trans "Edit student" %}</a>{% if can_resend_activation %}<form method="post" action="{% url 'accounts:admin_user_resend_activation' user_obj.id %}" data-confirm="{% trans 'Send a new activation email to this user?' %}" class="inline m-0">{% csrf_token %}<button class="btn-ghost" type="submit">{% trans "Resend activation" %}</button></form>{% endif %}{% if can_delete_student %}<form method="post" action="{% url 'accounts:admin_user_delete' user_obj.id %}" data-confirm="{% trans 'Delete this student account? Only students without historical records can be deleted.' %}" class="inline m-0">{% csrf_token %}<button class="btn-danger" type="submit">{% trans "Delete student" %}</button></form>{% endif %}</div>
       </div>
       <dl class="dl"><div>
           <dt class="dt">{% trans "Status" %}</dt>
@@ -162,6 +162,55 @@
             {% include "ui/components/_empty_state.html" with title=_("No enrollments") message=_("This student is not enrolled in any programs.") %}
           {% endif %}
         </article>
+      </section>
+      <section class="card-surface">
+        <div class="section-head"><div>
+            <p class="eyebrow">{% trans "Documents" %}</p>
+            <h3>{% trans "Uploaded documents" %}</h3>
+          </div>
+        </div>
+        {% if document_uploads %}
+          <div class="table-wrap hidden lg:block"><table class="table">
+              <thead>
+                <tr>
+                  <th class="table-th">{% trans "Application" %}</th>
+                  <th class="table-th">{% trans "Submitted" %}</th>
+                  <th class="table-th">{% trans "Actions" %}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for upload in document_uploads %}
+                  <tr>
+                    <td class="table-td">{% if upload.request.program_application.cohort %}{{ upload.request.program_application.cohort.diploma }}{% else %}{{ upload.request.program_application.course }}{% endif %}</td>
+                    <td class="table-td"><span dir="ltr" class="inline-block">{{ upload.submitted_at|date:"d/m/Y H:i" }}</span></td>
+                    <td class="table-td">
+                      <div class="flex gap-2.5 items-center flex-wrap">
+                        <a class="btn-secondary" href="{% url 'applications:download_persona' upload.id %}">{% trans "Download photo" %}</a>
+                        <a class="btn-secondary" href="{% url 'applications:download_attachments' upload.id %}">{% trans "Download attachments" %}</a>
+                      </div>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <div class="card-stack lg:hidden">
+            {% for upload in document_uploads %}
+              <div class="mobile-card">
+                <div class="flex-1 min-w-0">
+                  <strong class="block truncate">{% if upload.request.program_application.cohort %}{{ upload.request.program_application.cohort.diploma }}{% else %}{{ upload.request.program_application.course }}{% endif %}</strong>
+                  <small class="block text-muted"><span dir="ltr" class="inline-block">{{ upload.submitted_at|date:"d/m/Y H:i" }}</span></small>
+                </div>
+                <div class="flex gap-2 shrink-0 flex-col items-end">
+                  <a class="btn-soft-primary" href="{% url 'applications:download_persona' upload.id %}">{% trans "Download photo" %}</a>
+                  <a class="btn-soft-primary" href="{% url 'applications:download_attachments' upload.id %}">{% trans "Download attachments" %}</a>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          {% include "ui/components/_empty_state.html" with title=_("No documents") message=_("No documents have been uploaded for this student.") %}
+        {% endif %}
       </section>
       <section class="card-surface">
         <div class="section-head"><div>

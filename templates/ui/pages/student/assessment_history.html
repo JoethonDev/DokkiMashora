@@ -4,27 +4,29 @@
   {% trans "Assessment history" %}
 {% endblock %}
 {% block content %}
-  <div class="page-stack animate-enter-view">{% url 'assessments:student_list' as student_assessment_list_url %}{% include "ui/components/_page_header.html" with eyebrow=_("Learning") title=_("Assessment history") back_url=student_assessment_list_url back_label=_("Back to assessments") %}
+  <div class="page-stack animate-enter-view">{% url 'assessments:student_list' as student_assessment_list_url %}{% include "ui/components/_page_header.html" with eyebrow=_("Learning") title=_("Assessment history") description=_("Submitted assessments remain visible as a record; released results can be opened when available.") back_url=student_assessment_list_url back_label=_("Back to assessments") %}
     <section class="card-surface"><div class="table-wrap hidden lg:block"><table class="table">
           <thead>
             <tr>
               <th class="table-th">{% trans "Assessment" %}</th>
-              <th class="table-th">{% trans "Status" %}</th>
+                <th class="table-th">{% trans "Submitted" %}</th>
+                <th class="table-th">{% trans "Status" %}</th>
               <th class="table-th">{% trans "Score" %}</th>
             </tr>
           </thead>
           <tbody>
             {% for item in assessment_attempts %}
               <tr>
-                <td>{{ item.assessment }}</td>
+                <td>{% if item.result_url %}<a class="link" href="{{ item.result_url }}">{{ item.assessment }}</a>{% else %}{{ item.assessment }}{% endif %}</td>
+                <td>{{ item.submitted_at|date:"d/m/Y H:i"|default:"—" }}</td>
                 <td>
-                  <span class="status-pill-info">{{ item.get_status_display }}</span>
+                 {% include "ui/components/_status.html" with code=item.status label=item.status_label %}
                 </td>
-                <td>{{ item.score_percent|default:"—" }}</td>
+                <td>{% if item.visible_to_student %}{{ item.score_percent|default:"—" }}{% else %}—{% endif %}</td>
               </tr>
             {% empty %}
               <tr>
-                <td class="table-td" colspan="3">{% include "ui/components/_empty_state.html" with title=_("No assessment history available.") %}</td>
+                <td class="table-td" colspan="4">{% include "ui/components/_empty_state.html" with title=_("No assessment history available.") %}</td>
               </tr>
             {% endfor %}
           </tbody>
@@ -34,9 +36,9 @@
         {% for item in assessment_attempts %}
           <div class="mobile-card">
             <div class="flex-1 min-w-0">
-              <strong class="block truncate">{{ item.assessment }}</strong>
-              <span class="status-pill-info">{{ item.get_status_display }}</span>
-              <small class="block text-muted">{% trans "Score" %}: {{ item.score_percent|default:"—" }}</small>
+                 {% if item.result_url %}<a class="link font-bold block break-words" href="{{ item.result_url }}">{{ item.assessment }}</a>{% else %}<strong class="block break-words">{{ item.assessment }}</strong>{% endif %}
+                 {% include "ui/components/_status.html" with code=item.status label=item.status_label %}
+                 <small class="block text-muted">{% trans "Submitted" %}: {{ item.submitted_at|date:"d/m/Y H:i"|default:"—" }} · {% trans "Score" %}: {% if item.visible_to_student %}{{ item.score_percent|default:"—" }}{% else %}—{% endif %}</small>
             </div>
           </div>
         {% empty %}

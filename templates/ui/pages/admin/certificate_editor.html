@@ -1,0 +1,77 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n static %}
+{% block title %}
+  {{ title|default:_("Placement editor") }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=_("Placement editor") eyebrow=_("Certificates") back_url=back_url back_label=back_label %}
+    {{ current_mapping|json_script:"certificate-current-mapping" }}
+    <section id="certificate-editor"
+             class="card-surface"
+             data-preview-url="{{ preview_url }}"
+             data-preview-width="{{ preview_width }}"
+             data-preview-height="{{ preview_height }}"
+             data-page-count="{{ page_count }}"
+             data-save-url="{{ mapping_save_url }}"
+             data-generate-url="{{ preview_generate_url }}"
+             data-msg-saving="{% trans 'Saving…' %}"
+             data-msg-saved="{% trans 'Mapping saved.' %}"
+             data-msg-save-failed="{% trans 'Could not save mapping.' %}"
+             data-msg-generating="{% trans 'Generating preview…' %}"
+             data-msg-generated="{% trans 'Generated preview ready.' %}"
+             data-msg-generate-failed="{% trans 'Could not generate preview.' %}"
+             data-msg-network-error="{% trans 'Network error.' %}"
+             data-msg-placement-label="{% trans 'Placement of the student name field. Use arrow keys to move.' %}">
+      <div class="hidden" aria-hidden="true">{% csrf_token %}</div>
+      <div class="section-head"><div>
+            <p class="eyebrow">{% trans "Template" %}</p>
+            <h3>{{ template.name }}</h3>
+          </div>
+        </div>
+      <p class="text-sm text-muted mb-3">{% trans "Drag the field box to place the student name, choose alignment and direction, then save the mapping." %}</p>
+      <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_18rem] gap-4">
+        <div class="relative border border-line rounded-md overflow-hidden bg-surface-inverse"
+             style="max-height: 70vh; overflow: auto;">
+          <img id="editor-preview" src="{{ preview_url }}" alt="{% trans 'Certificate template preview' %}" class="w-full h-auto block">
+          <div id="editor-field"
+               class="absolute border-2 border-brand bg-brand/10 text-center cursor-move select-none"
+               style="min-width: 120px; min-height: 32px; padding: 4px 8px;">
+            <span>{% trans "Student Name" %}</span>
+          </div>
+        </div>
+        <div class="page-stack">
+          <label class="field"><span class="field-label">{% trans "Page" %}</span>
+            <select id="editor-page" class="form-select">
+              {% for page in ''|make_list %}{% endfor %}
+            </select>
+          </label>
+          <label class="field"><span class="field-label">{% trans "Font size" %}</span>
+            <input id="editor-font-size" class="form-input" type="number" min="4" max="120" value="28">
+          </label>
+          <label class="field"><span class="field-label">{% trans "Alignment" %}</span>
+            <select id="editor-align" class="form-select">
+              <option value="left">{% trans "Left" %}</option>
+              <option value="center" selected>{% trans "Center" %}</option>
+              <option value="right">{% trans "Right" %}</option>
+            </select>
+          </label>
+          <label class="field"><span class="field-label">{% trans "Direction" %}</span>
+            <select id="editor-direction" class="form-select">
+              <option value="rtl" selected>{% trans "Right-to-left (Arabic)" %}</option>
+              <option value="ltr">{% trans "Left-to-right (English)" %}</option>
+            </select>
+          </label>
+          <div class="flex gap-2.5 items-center flex-wrap">
+            <button class="btn-primary" type="button" data-editor-save>{% trans "Save mapping" %}</button>
+            <button class="btn-secondary" type="button" data-editor-generate>{% trans "Preview generated" %}</button>
+          </div>
+          <p data-editor-status class="text-sm text-muted mt-2" role="status"></p>
+          <div data-editor-result class="hidden mt-3">
+            <a class="btn-soft" href="#" target="_blank" rel="noopener" data-editor-result-link>{% trans "Open generated preview" %}</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script src="{% static 'js/certificate-editor.js' %}" defer></script>
+{% endblock %}

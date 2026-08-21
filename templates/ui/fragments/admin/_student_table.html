@@ -41,9 +41,11 @@
               <td class="table-td">
                 <div class="table-actions"><a class="btn-secondary"
                      href="{% url 'accounts:admin_user_detail' student.id %}">{% trans "View" %}</a>
-                  <a class="btn-ghost"
-                     href="{% url 'accounts:admin_user_edit' student.id %}">{% trans "Edit" %}</a>
-                </div>
+                   <a class="btn-ghost"
+                      href="{% url 'accounts:admin_user_edit' student.id %}">{% trans "Edit" %}</a>
+                   <form method="post" action="{% url 'accounts:admin_user_delete' student.id %}" data-confirm="{% trans 'Delete this student account? Only students without historical records can be deleted.' %}" class="inline m-0">{% csrf_token %}<button class="btn-danger" type="submit">{% trans "Delete" %}</button></form>
+                   {% if not student.is_active and not student.email_activated_at %}<form method="post" action="{% url 'accounts:admin_user_resend_activation' student.id %}" data-confirm="{% trans 'Send a new activation email to this user?' %}" class="inline m-0">{% csrf_token %}<button class="btn-ghost" type="submit">{% trans "Resend activation" %}</button></form>{% endif %}
+                 </div>
               </td>
             </tr>
           {% endfor %}
@@ -57,7 +59,7 @@
             {% include "ui/components/_status.html" with code=student.status label=student.get_status_display %}
             <small class="block text-muted"><span class="bidi">{{ student.phone|default:'—' }}</span></small>
           </div>
-          <a class="btn-soft-primary shrink-0" href="{% url 'accounts:admin_user_detail' student.id %}">{% trans "View" %}</a>
+           <div class="flex gap-2 shrink-0"><a class="btn-soft-primary" href="{% url 'accounts:admin_user_detail' student.id %}">{% trans "View" %}</a><form method="post" action="{% url 'accounts:admin_user_delete' student.id %}" data-confirm="{% trans 'Delete this student account? Only students without historical records can be deleted.' %}" class="inline m-0">{% csrf_token %}<button class="btn-danger" type="submit">{% trans "Delete" %}</button></form>{% if not student.is_active and not student.email_activated_at %}<form method="post" action="{% url 'accounts:admin_user_resend_activation' student.id %}" data-confirm="{% trans 'Send a new activation email to this user?' %}" class="inline m-0">{% csrf_token %}<button class="btn-ghost" type="submit">{% trans "Resend activation" %}</button></form>{% endif %}</div>
         </div>
       {% endfor %}
     </div>

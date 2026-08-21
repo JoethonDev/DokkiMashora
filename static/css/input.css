@@ -60,19 +60,33 @@
   .card-surface {
     @apply bg-white border border-line rounded-2xl p-4 sm:p-6 shadow-card transition-shadow duration-200;
   }
+  /* Cards without an explicit layout class use one comfortable vertical rhythm.
+     Explicit flex/page-stack cards keep their own layout contract. */
+  .card-surface:not(.flex):not(.page-stack) {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
   .card-surface-interactive {
     @apply card-surface hover:shadow-card-hover hover:border-surface-300 cursor-pointer transition-all duration-200;
   }
   .form-group {
     @apply flex flex-col gap-2.5 w-full;
   }
+  .field {
+    @apply flex flex-col gap-2.5 w-full;
+  }
   .form-step {
     @apply flex flex-col gap-4 w-full;
   }
   .form-group-error .form-input,
-  .form-group-error .form-select { @apply border-red; }
+  .form-group-error .form-select,
+  .form-group-error .form-textarea,
+  .form-group-error .form-file { @apply border-red; }
   .form-group-error .form-input:focus,
-  .form-group-error .form-select:focus { @apply ring-red/15; }
+  .form-group-error .form-select:focus,
+  .form-group-error .form-textarea:focus,
+  .form-group-error .form-file:focus { @apply ring-red/15; }
   .field-label {
     @apply block text-xs font-bold text-text uppercase tracking-wider;
   }
@@ -89,10 +103,11 @@
            disabled:bg-surface-soft disabled:text-muted disabled:cursor-not-allowed;
   }
   .form-textarea {
-    @apply w-full rounded-sm border border-surface-300 bg-surface px-3.5 py-2.5 text-base sm:text-sm text-text outline-none transition resize-y
+    @apply w-full rounded-sm border border-surface-300 bg-surface px-3.5 py-2.5 text-base sm:text-sm min-h-11 text-text outline-none transition resize-y
            placeholder:text-muted/70 focus:border-brand focus:ring-2 focus:ring-brand/15
            disabled:bg-surface-soft disabled:text-muted disabled:cursor-not-allowed;
   }
+  textarea.form-input { @apply resize-y; }
   .form-file {
     @apply w-full rounded-sm border border-surface-300 bg-surface px-3 py-2 text-base sm:text-sm min-h-11 text-text outline-none transition
            file:me-3 file:py-1.5 file:px-4 file:rounded-sm file:border-0 file:text-sm file:font-bold file:bg-brand-soft file:text-brand
@@ -117,26 +132,21 @@
     accent-color: #2b675f;
   }
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold
+    @apply inline-flex items-center justify-center gap-2 rounded-sm px-4 py-2.5 text-sm font-bold
            no-underline cursor-pointer select-none transition-all duration-150 min-h-[44px] max-w-full
            active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none disabled:transform-none;
   }
   .btn-primary {
     @apply btn text-white bg-brand-800 shadow-btn hover:bg-brand-900 hover:shadow-card-hover;
   }
-  /* Compact action for dense table/tool rows (replaces repeated btn-ghost text-xs py-1 px-2 min-h-0 overrides).
-     Desktop-only by definition: keeps a 44px tap target on touch screens. */
-  .btn-sm {
-    @apply text-xs py-1.5 px-2.5 min-h-9 md:py-1 md:px-2 md:min-h-0;
-  }
   .btn-soft-primary {
     @apply btn bg-brand-50 text-brand-800 border border-brand-100 hover:bg-brand-100;
   }
   .btn-soft {
-    @apply btn bg-white border-line text-text;
+    @apply btn bg-surface-soft border border-surface-300 text-text;
   }
   .btn-soft:hover {
-    @apply shadow-sm;
+    @apply bg-surface-strong shadow-sm;
   }
   .btn-info {
     @apply btn bg-blue-soft text-blue border-transparent;
@@ -181,6 +191,10 @@
   .status-pill-neutral {
     @apply status-pill bg-surface-soft text-muted border-line;
   }
+  /* Semantic glyph inside a status pill (P1-02): non-color-only indication. */
+  .status-icon {
+    @apply inline-grid place-items-center w-3.5 h-3.5 text-[10px] font-black leading-none;
+  }
   .eyebrow {
     @apply text-brand uppercase text-[10px] tracking-[.11em] font-black m-0;
   }
@@ -190,6 +204,7 @@
   .page-stack     { @apply flex flex-col gap-4 sm:gap-5; }
   .aspect-video   { aspect-ratio: 16 / 9; }
   .section-head   { @apply flex items-center justify-between gap-4 mb-4 flex-wrap; }
+  .card-surface > .section-head { margin-bottom: 0; }
   .actions-row    { @apply flex items-center gap-2.5 flex-wrap; }
   .form-grid      { @apply grid grid-cols-1 md:grid-cols-2 gap-4; }
   .form-grid-full { @apply md:col-span-2; }
@@ -230,7 +245,7 @@
   .sidebar-link.active, .sidebar-link[aria-current="page"] { @apply bg-white/15 text-white border-s-[3px] border-brand-200; }
 
   /* Stat cards (dashboards) */
-  .stat-card { @apply card-surface-interactive flex items-center gap-3.5 no-underline text-inherit; }
+  .stat-card { @apply card-surface-interactive flex flex-row items-center gap-3.5 no-underline text-inherit; }
   .stat-icon { @apply w-11 h-11 rounded-md grid place-items-center font-black shrink-0; }
   .stat-body { @apply flex flex-col min-w-0; }
   .stat-body strong { @apply text-xl font-black text-text leading-tight; }
@@ -338,18 +353,23 @@
    Alpine toggles the `open` class on #admin-sidebar / #student-sidebar and the
    `.z-backdrop` scrim. These rules are intentionally UNLAYERED: CSS layer order
    beats specificity, so layered rules would lose to utilities like `-start-72`
-   and `opacity-0`. Unlayered styles win without !important. */
+   and `opacity-0`. Unlayered styles win without !important.
+
+   A CLOSED off-canvas sidebar is `visibility: hidden`, which removes it from
+   the keyboard tab order and the accessibility tree while it is off-screen. */
 @media (max-width: 1023.98px) {
   #admin-sidebar,
   #student-sidebar {
     bottom: 0;
     padding: 1rem 1.25rem calc(1rem + env(safe-area-inset-bottom, 0px));
     box-shadow: none; /* shadow-modal would bleed a strip onto the viewport edge while hidden off-canvas */
+    visibility: hidden;
   }
   #admin-sidebar.open,
   #student-sidebar.open {
     inset-inline-start: 0;
     box-shadow: 0 25px 50px -12px rgba(10, 46, 47, 0.25);
+    visibility: visible;
   }
   .z-backdrop.open {
     opacity: 1;

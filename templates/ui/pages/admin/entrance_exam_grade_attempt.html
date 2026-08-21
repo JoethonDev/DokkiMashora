@@ -1,43 +1,191 @@
 {% extends "ui/layouts/admin.html" %}
-{% load i18n l10n ui_tags %}
+{% load i18n l10n %}
 {% block title %}
   {{ title|default:_("Grade attempt") }}
 {% endblock %}
 {% block content %}
   <div class="page-stack animate-enter-view">{% trans "Assessment operations" as eyebrow %}
     {% trans "Grade attempt" as default_title %}
-    {% trans "Create exams, manage invitations, grade attempts, and inspect delivery history." as description %}
-    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title|default:default_title description=description %}
-    <section class="card-surface"><h2>
-        {{ attempt.exam }}
-        -
-        {{ attempt.student }}
-      </h2>
-      <form class="max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
-        {% for question,answer,max_score in question_answer_pairs %}
-          <fieldset>
-            <legend>
-              {{ question.order }}
-              .
-              {{ question.text }}
-            </legend>
-            <label>
-              {% trans "Score" %}
-              <input name="score_{{ question.id }}" class="form-input"
-                     value="{{ answer.score|unlocalize }}"
-                     type="number"
-                     min="0"
-                     max="{{ max_score }}"
-                     step="0.01"></label>
-            <label>
-              {% trans "Feedback" %}
-              <textarea name="feedback_{{ question.id }}" class="form-input">{{ answer.feedback|default:'' }}
-        </textarea>
-            </label>
-          </fieldset>
+    {% trans "Review each question and the student's answer, then record the final score and feedback." as description %}
+    {% url 'entrance_exams:admin_grade_list' as grade_list_url %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title|default:default_title description=description back_url=grade_list_url back_label=_("Back to grading queue") %}
+    <section class="card-surface">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div class="min-w-0">
+          <h2 class="text-lg font-bold m-0">{{ attempt.exam }}</h2>
+          <p class="text-muted m-0 mt-1">{{ attempt.student }}</p>
+        </div>
+        {% include "ui/components/_status.html" with code=attempt.status label=attempt.get_status_display %}
+      </div>
+      <form class="max-w-3xl mx-auto w-full page-stack" method="post">{% csrf_token %}
+        {% for question, answer, max_score in question_answer_pairs %}
+          <div class="border border-line rounded-sm p-4">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="text-xs font-bold text-muted uppercase">#{{ question.order }}</span>
+              <span class="px-2 py-0.5 text-xs font-bold rounded-full {% if question.question_type == 'mcq' %}bg-info-soft text-info-text{% else %}bg-warning-soft text-warning-text{% endif %}">{{ question.get_question_type_display }}</span>
+              {% if answer and answer.score is not None %}
+                <span class="ms-auto text-xs font-bold text-muted">{{ answer.score|unlocalize }}{% if max_score %} / {{ max_score|unlocalize }} {% trans "pts" %}{% endif %}</span>
+              {% endif %}
+            </div>
+            <p class="text-sm font-medium m-0">{{ question.text }}</p>
+            {% if question.question_type == 'mcq' %}
+              <div class="flex flex-col gap-1.5 mt-3 ps-2 border-s-2 border-line">
+                {% for choice in question.choices.all %}
+                  <div class="flex items-center gap-2 text-sm {% if answer and answer.selected_choice_id == choice.id %}font-semibold text-brand-strong{% endif %}"{% if answer and answer.selected_choice_id == choice.id %} aria-current="true"{% endif %}>
+                    <span class="grid place-items-center w-4 h-4 rounded-full border {% if answer and answer.selected_choice_id == choice.id %}border-brand bg-brand text-white{% else %}border-line{% endif %}" aria-hidden="true">{% if answer and answer.selected_choice_id == choice.id %}✓{% endif %}</span>
+                    <span>{{ choice.text }}</span>
+                    {% if answer and answer.selected_choice_id == choice.id and choice.score %}<span class="text-xs text-muted">({{ choice.score|unlocalize }} {% trans "pts" %})</span>{% endif %}
+                  </div>
+                {% endfor %}
+              </div>
+              {% if not answer or not answer.selected_choice_id %}
+                <p class="text-xs text-muted mt-2 italic">{% trans "No answer selected." %}</p>
+              {% endif %}
+            {% else %}
+              <div class="mt-3 ps-2 border-s-2 border-line">
+                {% if answer and answer.written_text %}
+                  <p class="text-sm m-0 whitespace-pre-wrap">{{ answer.written_text }}</p>
+                {% else %}
+                  <p class="text-sm text-muted m-0 italic">{% trans "No written answer provided." %}</p>
+                {% endif %}
+              </div>
+              {% if question.rubric %}
+                <details class="mt-3 text-sm">
+                  <summary class="cursor-pointer text-muted">{% trans "Scoring rubric / model answer" %}</summary>
+                  <p class="mt-2 p-3 bg-surface-soft border border-line rounded-sm m-0 whitespace-pre-wrap">{{ question.rubric }}</p>
+                </details>
+              {% endif %}
+            {% endif %}
+            {% if answer and answer.gemini_suggested_score is not None %}
+              <div class="mt-3 p-3 bg-info-soft border border-line rounded-sm text-sm">
+                <p class="m-0"><strong>{% trans "AI suggestion" %}:</strong> {% trans "Score" %} {{ answer.gemini_suggested_score|unlocalize }}{% if answer.gemini_suggested_feedback %} · {{ answer.gemini_suggested_feedback }}{% endif %}</p>
+              </div>
+            {% endif %}
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+              <label class="field"><span class="field-label">{% trans "Score" %}</span>
+                <input name="score_{{ question.id }}" class="form-input"
+                       value="{{ answer.score|unlocalize }}"
+                       type="number"
+                       min="0"
+                       {% if max_score %}max="{{ max_score|unlocalize }}"{% endif %}
+                       step="0.01"></label>
+              <label class="field sm:col-span-2"><span class="field-label">{% trans "Feedback" %}</span>
+                <textarea name="feedback_{{ question.id }}" class="form-textarea" rows="2">{{ answer.feedback|default:'' }}</textarea></label>
+            </div>
+          </div>
         {% endfor %}
-        <button class="btn-primary" type="submit">{% trans "Save grades" %}</button>
+        <div class="actions-row justify-end">
+          <button class="btn-primary" type="submit">{% trans "Save grades" %}</button>
+        </div>
       </form>
     </section>
+    {% if attempt.score is not None or can_accept_or_reject or can_request_interview %}
+    <section class="card-surface">
+      <div class="section-head"><div>
+          <p class="eyebrow">{% trans "Decision" %}</p>
+          <h2>{% trans "Entrance result" %}</h2>
+        </div>
+      </div>
+      {% if attempt.score is not None %}
+        <dl class="dl">
+          <div>
+            <dt class="dt">{% trans "Total points" %}</dt>
+            <dd class="dd"><span dir="ltr" class="inline-block">{{ attempt.score|unlocalize }} / {{ exam_total_score|unlocalize }}</span>{% if percentage is not None %} <span dir="ltr" class="inline-block">({{ percentage|unlocalize }}%)</span>{% endif %}</dd>
+          </div>
+          <div>
+            <dt class="dt">{% trans "Calculated result" %}</dt>
+            <dd class="dd">
+              {% include "ui/components/_status.html" with code=attempt.result label=attempt.get_result_display|default:_("Not graded") %}
+              {% if pass_percentage %}<small class="text-muted">{% trans "Pass threshold" %}: <span dir="ltr" class="inline-block">{{ pass_percentage|unlocalize }}%</span></small>{% endif %}
+            </dd>
+          </div>
+        </dl>
+      {% else %}
+        <p class="text-sm text-muted m-0">{% trans "The total will appear after all answers are graded." %}</p>
+      {% endif %}
+      <div class="flex flex-wrap items-center gap-2.5 mt-4">
+        <span class="text-xs font-bold text-muted uppercase">{% trans "Application decision" %}</span>
+        {% if application_decision %}
+          {% include "ui/components/_status.html" with code=application_decision.code label=application_decision.label %}
+        {% else %}
+          {% include "ui/components/_status.html" with code=application.status label=application_status_label %}
+        {% endif %}
+        <a class="btn-ghost" href="{{ application_detail_url }}">{% trans "Open application" %}</a>
+      </div>
+      {% if can_change_decision or can_undo_decision %}
+        <div class="mt-5 border-t border-line pt-4" x-data="{ action: '{{ change_default }}' }">
+          <h3>{% trans "Decision actions" %}</h3>
+          {% if can_change_decision %}
+            <nav class="tab-track w-max max-w-full overflow-auto mt-3" role="tablist" aria-label="{% trans 'Decision action' %}">
+              {% if 'pass' in change_targets %}
+                <button class="tab" :class="action==='pass' ? 'tab tab-active' : 'tab'" role="tab" :aria-selected="action==='pass'" aria-controls="panel-pass" id="tab-pass" type="button" @click="action='pass'">{% trans "Pass" %}</button>
+              {% endif %}
+              {% if 'interview' in change_targets %}
+                <button class="tab" :class="action==='interview' ? 'tab tab-active' : 'tab'" role="tab" :aria-selected="action==='interview'" aria-controls="panel-interview" id="tab-interview" type="button" @click="action='interview'">{% trans "Interview" %}</button>
+              {% endif %}
+              {% if 'fail' in change_targets %}
+                <button class="tab" :class="action==='fail' ? 'tab tab-active' : 'tab'" role="tab" :aria-selected="action==='fail'" aria-controls="panel-fail" id="tab-fail" type="button" @click="action='fail'">{% trans "Fail" %}</button>
+              {% endif %}
+            </nav>
+            <div class="mt-4">
+              {% if 'pass' in change_targets %}
+                <form id="panel-pass" x-show="action==='pass'" x-cloak role="tabpanel" aria-labelledby="tab-pass" method="post" action="{% url 'entrance_exams:admin_attempt_decision' attempt.id %}">{% csrf_token %}<input type="hidden" name="action" value="accept">
+                  <div class="max-w-2xl border border-line rounded-sm p-4 flex flex-col gap-3">
+                    <p class="text-sm text-muted m-0">{% trans "Accept the student based on this decision. The calculated score stays unchanged." %}</p>
+                    <label class="field"><span class="field-label">{% trans "Reviewer notes" %}</span><textarea name="admin_notes" class="form-textarea" rows="2"></textarea></label>
+                    <label class="flex items-center gap-2 text-sm"><input class="form-checkbox" type="checkbox" name="send_email" checked><span>{% trans "Send email notification" %}</span></label>
+                    <div class="actions-row">
+                      <button class="btn-success" type="submit">{% trans "Pass student" %}</button>
+                    </div>
+                  </div>
+                </form>
+              {% endif %}
+              {% if 'fail' in change_targets %}
+                <form id="panel-fail" x-show="action==='fail'" x-cloak role="tabpanel" aria-labelledby="tab-fail" method="post" action="{% url 'entrance_exams:admin_attempt_decision' attempt.id %}">{% csrf_token %}<input type="hidden" name="action" value="reject">
+                  <div class="max-w-2xl border border-line rounded-sm p-4 flex flex-col gap-3">
+                    <p class="text-sm text-muted m-0">{% trans "Reject the student based on this decision. The calculated score stays unchanged." %}</p>
+                    <label class="field"><span class="field-label">{% trans "Rejection reason" %} <span aria-hidden="true">*</span></span><textarea name="rejection_reason" class="form-textarea" rows="2" aria-required="true"></textarea></label>
+                    <label class="field"><span class="field-label">{% trans "Reviewer notes" %}</span><textarea name="admin_notes" class="form-textarea" rows="1"></textarea></label>
+                    <label class="flex items-center gap-2 text-sm"><input class="form-checkbox" type="checkbox" name="send_email" checked><span>{% trans "Send email notification" %}</span></label>
+                    <div class="actions-row">
+                      <button class="btn-danger" type="submit">{% trans "Fail student" %}</button>
+                    </div>
+                  </div>
+                </form>
+              {% endif %}
+              {% if 'interview' in change_targets %}
+                <form id="panel-interview" x-show="action==='interview'" x-cloak role="tabpanel" aria-labelledby="tab-interview" method="post" action="{% url 'entrance_exams:admin_attempt_decision' attempt.id %}">{% csrf_token %}<input type="hidden" name="action" value="request_interview">
+                  <div class="max-w-2xl border border-line rounded-sm p-4 flex flex-col gap-3">
+                    <p class="text-sm text-muted m-0">{% trans "Interview is required before a final decision." %}</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <label class="field"><span class="field-label">{% trans "Interview date/time" %}</span><input class="form-input" name="interview_at" type="datetime-local"></label>
+                      <label class="field"><span class="field-label">{% trans "Expiry date/time" %} <span aria-hidden="true">*</span></span><input class="form-input" name="expires_at" type="datetime-local" required></label>
+                    </div>
+                    <label class="field"><span class="field-label">{% trans "Phone number" %}</span><input class="form-input" name="phone_number"></label>
+                    <label class="field"><span class="field-label">{% trans "Notes" %}</span><textarea class="form-textarea" name="notes" rows="1"></textarea></label>
+                    <label class="flex items-center gap-2 text-sm"><input class="form-checkbox" type="checkbox" name="send_email" checked><span>{% trans "Send email notification" %}</span></label>
+                    <div class="actions-row">
+                      <button class="btn-primary" type="submit">{% trans "Request interview" %}</button>
+                    </div>
+                  </div>
+                </form>
+              {% endif %}
+            </div>
+          {% endif %}
+          {% if can_undo_decision %}
+            <form method="post" action="{% url 'entrance_exams:admin_attempt_decision' attempt.id %}" class="mt-4">{% csrf_token %}<input type="hidden" name="action" value="revert_decision">
+              <div class="max-w-2xl border border-line rounded-sm p-4 flex flex-col gap-3">
+                <p class="text-sm text-muted m-0">{% trans "Return the application to the undecided state so it can be re-evaluated." %}</p>
+                <label class="field"><span class="field-label">{% trans "Reason" %}</span><textarea name="revert_reason" class="form-textarea" rows="1"></textarea></label>
+                <div class="actions-row">
+                  <button class="btn-ghost" type="submit">{% trans "Undo decision" %}</button>
+                </div>
+              </div>
+            </form>
+          {% endif %}
+        </div>
+      {% endif %}
+    </section>
+    {% endif %}
   </div>
 {% endblock %}

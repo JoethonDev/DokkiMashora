@@ -1,11 +1,9 @@
-{% extends "ui/layouts/admin.html" %}
+﻿{% extends "ui/layouts/admin.html" %}
 {% load i18n %}
 {% block title %}
   {% trans "Courses" %}
 {% endblock %}
-{% block page_title %}
   {% trans "Courses" %}
-{% endblock %}
 {% block content %}
   <div class="page-stack animate-enter-view">{% trans "Academics" as eyebrow %}
     {% trans "Courses" as title %}
@@ -23,8 +21,9 @@
               name="q"
               value="{{ search_value }}"
               type="search"
-               placeholder="{% trans 'Search courses…' %}"
-               class="form-input ps-10"></div>
+              placeholder="{% trans 'Search courses…' %}"
+              aria-label="{% trans 'Search courses' %}"
+              class="form-input ps-10"></div>
      <label class="min-w-40"><span class="field-label">{% trans "Status" %}</span>
       <select id="course-status" name="is_active" class="form-select"><option value="">{% trans "All" %}</option>
         {% for option in filters.0.options %}

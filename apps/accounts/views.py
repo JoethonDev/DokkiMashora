@@ -13,8 +13,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView, LogoutView
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
-from django.db.models.deletion import ProtectedError
 from django.db.models import Count, Q
+from django.db.models.deletion import ProtectedError
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
@@ -25,10 +25,9 @@ from django.views.decorators.http import require_http_methods
 from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE, SCOPE_COURSE_VERSION, SCOPE_DIPLOMA_COHORT
 from apps.academics.models import (
     Cohort,
-    Course,
     CourseVersion,
-    DiplomaEnrollment,
     Diploma,
+    DiplomaEnrollment,
     Lecture,
     ModeratorAssignment,
     StudentCluster,
@@ -41,16 +40,19 @@ from apps.ai.prompts import DEFAULT_PROMPT_VERSION
 from apps.applications.constants import (
     PROGRAM_APP_STATUS_ACCEPTED,
     PROGRAM_APP_STATUS_ACTIVATED,
-    PROGRAM_APP_STATUS_INVITED,
-    PROGRAM_APP_STATUS_REJECTED,
     PROGRAM_APP_STATUS_SUBMITTED,
     PROGRAM_APP_STATUS_UNDER_REVIEW,
 )
-from apps.applications.models import ProgramApplication, ProgramApplicationDecision
-from apps.applications.models import ProgramApplicationEmailLog
+from apps.applications.models import (
+    ApplicationDocumentUpload,
+    ProgramApplication,
+    ProgramApplicationDecision,
+    ProgramApplicationEmailLog,
+)
 from apps.applications.views import review_queue_applications
 from apps.assessments.constants import ATTEMPT_STATUS_SUBMITTED, ATTEMPT_STATUS_UNDER_REVIEW
 from apps.assessments.models import AssessmentAttempt
+from apps.attendance.models import AttendanceRecord, AttendanceSession
 from apps.audit.constants import (
     ACTION_CLUSTER_CREATED,
     ACTION_CLUSTER_MEMBERSHIP_ADDED,
@@ -61,29 +63,28 @@ from apps.audit.constants import (
     ACTION_USER_DELETED,
     ACTION_USER_UPDATED,
 )
-from apps.audit.models import AuditEvent
 from apps.audit.services import record_audit_event
+from apps.certificates.models import GeneratedCertificate
 from apps.communications.email_message import EmailMessage as CommEmailMessage
 from apps.core.htmx import is_htmx
 from apps.core.models import LandingAnnouncement
-from apps.core.permissions import ROLE_ATTENDANCE_STAFF, ROLE_EXAM_STAFF, ROLE_SENIOR_STAFF, is_student, role_required
+from apps.core.permissions import (
+    ROLE_ATTENDANCE_STAFF,
+    ROLE_EXAM_STAFF,
+    ROLE_SENIOR_STAFF,
+    is_student,
+    role_required,
+)
 from apps.core.views import safe_next_url
 from apps.entrance_exams.models import EntranceAttempt
 from apps.payments.constants import (
-    PAYMENT_STATUS_PAID,
-    PAYMENT_STATUS_UNPAID,
     ROW_STATUS_UNMATCHED,
-    UPLOAD_STATUS_PENDING,
     UPLOAD_STATUS_PREVIEWED,
 )
-from apps.payments.models import PaymentRecord, PaymentUpload, PaymentUploadRow
-from apps.students.models import StudentProfile
-from apps.attendance.models import AttendanceSession
-from apps.attendance.models import AttendanceRecord
-from apps.certificates.models import GeneratedCertificate
-from apps.progression.models import StudentSemesterProgress
+from apps.payments.models import PaymentUpload
 from apps.progression.constants import REJOIN_STATUS_PLANNED
-from apps.progression.models import SemesterRejoinPlan
+from apps.progression.models import SemesterRejoinPlan, StudentSemesterProgress
+from apps.students.models import StudentProfile
 
 from .constants import (
     GROUP_ADMIN,
@@ -98,7 +99,13 @@ from .constants import (
 )
 from .forms import ActivationConfirmForm, EmailAuthenticationForm, ProfileForm, UserEditForm, UserUploadForm
 from .models import User, UserUpload
-from .services import confirm_upload, create_upload, preview_upload, send_activation_email
+from .services import (
+    confirm_upload,
+    create_upload,
+    delete_student_account,
+    preview_upload,
+    send_activation_email,
+)
 from .tokens import validate_activation_token
 
 
@@ -189,14 +196,6 @@ def moderator_dashboard(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
-@role_required(GROUP_TEACHER)
-def teacher_dashboard(request: HttpRequest) -> HttpResponse:
-    ctx = _dashboard_context(request.user)
-    ctx["dashboard_kind"] = "teacher"
-    return render(request, "ui/pages/admin/dashboard.html", ctx)
-
-
-@login_required
 @role_required(*ROLE_ATTENDANCE_STAFF)
 def secretary_dashboard(request: HttpRequest) -> HttpResponse:
     now = timezone.now()
@@ -225,8 +224,6 @@ def _dashboard_context(user: User) -> dict:
     }
     if user.primary_role == GROUP_MODERATOR:
         ctx["assignment_count"] = ModeratorAssignment.objects.filter(moderator=user, active=True).count()
-    elif user.primary_role == GROUP_TEACHER:
-        ctx["assignment_count"] = TeacherAssignment.objects.filter(teacher=user, active=True).count()
     elif user.is_staff or user.is_superuser:
         ctx["diploma_count"] = Diploma.objects.filter(is_active=True).count()
     elif hasattr(user, "student_profile"):
@@ -482,9 +479,15 @@ def admin_staff_list(request):
 @require_http_methods(["POST"])
 def admin_user_delete(request, user_id):
     user_obj = get_object_or_404(User, id=user_id)
-    is_student = user_obj.groups.filter(name=GROUP_STUDENT).exists()
+    is_student = user_obj.groups.filter(name=GROUP_STUDENT).exists() or StudentProfile.objects.filter(user=user_obj).exists()
     if user_obj == request.user:
         messages.error(request, _("You cannot delete your own account."))
+    elif is_student:
+        try:
+            delete_student_account(user_obj, request.user)
+            messages.success(request, _("Student account deleted."))
+        except (ProtectedError, ValueError) as exc:
+            messages.error(request, str(exc))
     else:
         try:
             uid = user_obj.id
@@ -504,6 +507,33 @@ def admin_user_delete(request, user_id):
 
 
 @login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_http_methods(["POST"])
+def admin_user_resend_activation(request, user_id):
+    user_obj = get_object_or_404(User, id=user_id)
+    is_student = user_obj.groups.filter(name=GROUP_STUDENT).exists() or StudentProfile.objects.filter(user=user_obj).exists()
+    target_url = reverse("accounts:admin_student_list" if is_student else "accounts:admin_staff_list")
+    if user_obj == request.user:
+        messages.error(request, _("You cannot resend activation for your own account."))
+    elif user_obj.is_active or user_obj.email_activated_at is not None:
+        messages.error(request, _("This account is already activated."))
+    else:
+        try:
+            send_activation_email(user_obj)
+            record_audit_event(
+                actor=request.user,
+                action=ACTION_USER_UPDATED,
+                target_type="user",
+                target_id=str(user_obj.id),
+                metadata={"activation_email_resent": True, "email": user_obj.email},
+            )
+            messages.success(request, _("Activation email sent."))
+        except Exception:  # noqa: BLE001
+            messages.error(request, _("The activation email could not be sent. Please try again later."))
+    return redirect(target_url)
+
+
+@login_required
 @role_required(*ROLE_EXAM_STAFF)
 def admin_user_detail(request, user_id):
     user_obj = get_object_or_404(User.objects.select_related("student_profile").prefetch_related("groups"), id=user_id)
@@ -515,6 +545,8 @@ def admin_user_detail(request, user_id):
         "user_obj": user_obj,
         "student_profile": profile,
         "back_url": back_url,
+        "can_delete_student": bool(profile) and user_obj != request.user,
+        "can_resend_activation": user_obj != request.user and not user_obj.is_active and user_obj.email_activated_at is None,
     }
     if profile:
         context.update({
@@ -529,6 +561,14 @@ def admin_user_detail(request, user_id):
             "entrance_attempts": list(EntranceAttempt.objects.filter(student=profile).select_related("exam").order_by("-created_at")[:10]),
             "staff_assignments": list(profile.moderator_assignments.select_related("moderator", "cohort").order_by("-created_at")[:10]),
             "decisions": list(ProgramApplicationDecision.objects.filter(program_application__student=profile).select_related("program_application", "actor").order_by("-created_at")[:10]),
+            "document_uploads": list(
+                ApplicationDocumentUpload.objects.filter(
+                    request__program_application__student=profile,
+                ).select_related(
+                    "request__program_application__cohort__diploma",
+                    "request__program_application__course",
+                ).order_by("-submitted_at")[:20]
+            ),
             "application_list_url": f'{reverse("applications:program_list")}?student_id={profile.pk}',
             "progression_url": reverse("progression:admin_student_detail", args=[profile.pk]),
             "payment_list_url": f'{reverse("payments:record_list")}?student_q={profile.user.email}',
@@ -559,9 +599,10 @@ def admin_user_detail(request, user_id):
 def admin_user_edit(request, user_id):
     user_obj = get_object_or_404(User, id=user_id)
     profile = getattr(user_obj, "student_profile", None)
+    is_student_user = profile is not None or user_obj.groups.filter(name=GROUP_STUDENT).exists()
     next_url = safe_next_url(request)
     if request.method == "POST":
-        form = UserEditForm(request.POST, instance=user_obj, staff_only=profile is None)
+        form = UserEditForm(request.POST, instance=user_obj, staff_only=not is_student_user)
         if form.is_valid():
             old_is_active = user_obj.is_active
             password_changed = bool(form.cleaned_data.get("new_password"))
@@ -582,9 +623,9 @@ def admin_user_edit(request, user_id):
             messages.success(request, _("User updated."))
             return redirect(next_url) if next_url else redirect("accounts:admin_user_detail", user_id=user_obj.id)
     else:
-        form = UserEditForm(instance=user_obj, staff_only=profile is None)
-    template = "ui/pages/admin/student_form.html" if profile else "ui/pages/admin/staff_form.html"
-    page_title = _("Edit student") if profile else _("Edit staff member")
+        form = UserEditForm(instance=user_obj, staff_only=not is_student_user)
+    template = "ui/pages/admin/student_form.html" if is_student_user else "ui/pages/admin/staff_form.html"
+    page_title = _("Edit student") if is_student_user else _("Edit staff member")
     return render(request, template, {"form": form, "user_obj": user_obj, "next": next_url, "title": page_title})
 
 
@@ -710,57 +751,6 @@ def admin_staff_assignments(request, user_id):
         "GROUP_TEACHER": GROUP_TEACHER,
     }
     return render(request, "ui/pages/admin/staff_assignments.html", ctx)
-
-
-@login_required
-@role_required(*ROLE_SENIOR_STAFF)
-@require_http_methods(["POST"])
-def admin_teacher_assignment_create(request, user_id):
-    staff_user = get_object_or_404(User, id=user_id)
-    if GROUP_TEACHER not in staff_user.groups.values_list("name", flat=True):
-        messages.error(request, _("Target user is not a Teacher."))
-        return redirect("accounts:admin_staff_assignments", user_id=staff_user.id)
-    version_id = request.POST.get("course_version")
-    if not version_id:
-        messages.error(request, _("Course version is required."))
-        return redirect("accounts:admin_staff_assignments", user_id=staff_user.id)
-    version = get_object_or_404(CourseVersion, id=version_id)
-    assignment = TeacherAssignment.objects.create(
-        teacher=staff_user,
-        scope_type=SCOPE_COURSE_VERSION,
-        course_version=version,
-        active=True,
-        assigned_by=request.user,
-    )
-    record_audit_event(
-        actor=request.user,
-        action=ACTION_STAFF_ASSIGNMENT_CREATED,
-        target_type="teacher_assignment",
-        target_id=str(assignment.id),
-        metadata={"teacher_id": str(staff_user.id), "course_version_id": str(version.id)},
-    )
-    messages.success(request, _("Teacher assignment created."))
-    return redirect("accounts:admin_staff_assignments", user_id=staff_user.id)
-
-
-@login_required
-@role_required(*ROLE_SENIOR_STAFF)
-@require_http_methods(["POST"])
-def admin_teacher_assignment_delete(request, user_id, assignment_id):
-    assignment = get_object_or_404(TeacherAssignment, id=assignment_id, teacher_id=user_id)
-    assignment.active = False
-    assignment.revoked_by = request.user
-    assignment.revoked_at = timezone.now()
-    assignment.save()
-    record_audit_event(
-        actor=request.user,
-        action=ACTION_STAFF_ASSIGNMENT_REVOKED,
-        target_type="teacher_assignment",
-        target_id=str(assignment.id),
-        metadata={"teacher_id": str(user_id)},
-    )
-    messages.success(request, _("Teacher assignment revoked."))
-    return redirect("accounts:admin_staff_assignments", user_id=user_id)
 
 
 @login_required
@@ -927,8 +917,6 @@ def _dashboard_url_name(user: User) -> str:
     role = user.primary_role
     if role == GROUP_MODERATOR:
         return "accounts:dashboard_moderator"
-    if role == GROUP_TEACHER:
-        return "accounts:dashboard_teacher"
     if role == GROUP_REVIEWER:
         return "assessments:reviewer_dashboard"
     if role == GROUP_SECRETARY:
@@ -955,9 +943,7 @@ def activate_account(request, uidb64, token):
             "uidb64": uidb64,
             "token": token,
         })
-    # POST — perform the activation mutation inside ONE transaction.
-    from apps.applications.services import handle_user_account_activated
-
+    # POST — perform only the account activation mutation inside ONE transaction.
     form = ActivationConfirmForm(request.POST, user=User.objects.filter(pk=pk).first())
     if not form.is_valid():
         return render(request, "ui/pages/public/activation_confirm.html", {
@@ -971,17 +957,14 @@ def activate_account(request, uidb64, token):
             messages.error(request, _("Activation link is invalid or expired."))
             return redirect("core:landing")
         if user.email_activated_at is not None:
-            # Already activated: reconcile any applications still stuck at
-            # submitted (idempotent), then send the user to login. The link is
-            # not a perpetual passwordless login, so no session is created.
-            handle_user_account_activated(user)
+            # The link is not a perpetual passwordless login, so no session is
+            # created. Application state remains unchanged for Admin review.
             messages.info(request, _("Account is already activated. Please log in."))
             return redirect("accounts:login")
         user.is_active = True
         user.email_activated_at = timezone.now()
         user.set_password(form.cleaned_data["new_password1"])
         user.save(update_fields=["is_active", "email_activated_at", "password", "updated_at"])
-        handle_user_account_activated(user)
     auth_login(request, user)
     messages.success(request, _("Account activated successfully. Welcome!"))
     return redirect(_dashboard_url_name(user))

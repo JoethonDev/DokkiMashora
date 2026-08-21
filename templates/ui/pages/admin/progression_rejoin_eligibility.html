@@ -1,0 +1,96 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n ui_tags %}
+{% block title %}{% trans "Rejoin Eligibility" %}{% endblock %}
+{% block content %}
+  <div class="page-stack animate-enter-view">
+    {% include "ui/components/_page_header.html" with eyebrow=_("Progression") title=_("Rejoin Eligibility") description=_("Students eligible for the immediately next cohort at the same failed semester.") back_button=True %}
+    {% include "ui/components/_pagination.html" with page_obj=page_obj pagination_qs=pagination_qs %}
+    <section class="card-surface">
+      {% if rows.object_list %}
+        <div class="table-wrap hidden lg:block"><table class="table">
+            <thead>
+              <tr>
+                <th class="table-th">{% trans "Student" %}</th>
+                <th class="table-th">{% trans "Previous Cohort" %}</th>
+                <th class="table-th">{% trans "Failed Semester" %}</th>
+                <th class="table-th">{% trans "Eligible Next Cohort" %}</th>
+                <th class="table-th">{% trans "State" %}</th>
+                <th class="table-th">{% trans "Action" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in rows %}
+                <tr>
+                  <td class="table-td">{{ row.student }}</td>
+                  <td class="table-td">{{ row.previous_cohort }}</td>
+                  <td class="table-td">{{ row.failed_semester }}</td>
+                  <td class="table-td">{{ row.next_cohort|default:"—" }}</td>
+                  <td class="table-td">
+                    {% if row.eligible %}
+                      {% include "ui/components/_status.html" with code="passed" label=_("Eligible") %}
+                    {% else %}
+                      {% include "ui/components/_status.html" with code="pending" label=_("Ineligible") %}
+                    {% endif %}
+                  </td>
+                  <td class="table-td">
+                    {% if row.eligible and not row.plan %}
+                      <form method="post"
+                            action="{% url 'progression:admin_create_rejoin_plan' row.from_enrollment_id %}"
+                            class="inline">{% csrf_token %}
+                        <input type="hidden" name="semester_id" value="{{ row.failed_semester_id }}">
+                        <button class="btn-ghost" type="submit">{% trans "Prepare" %}</button>
+                      </form>
+                    {% elif row.plan and row.plan.status == "planned" and row.eligible %}
+                      <form method="post"
+                            action="{% url 'progression:admin_activate_rejoin_plan' row.plan.id %}"
+                            class="inline">{% csrf_token %}
+                        <button class="btn-primary" type="submit">{% trans "Activate" %}</button>
+                      </form>
+                    {% elif row.plan %}
+                      {{ row.plan.get_status_display }}
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table></div>
+        <div class="card-stack lg:hidden">
+          {% for row in rows %}
+            <div class="mobile-card">
+              <div class="flex-1 min-w-0">
+                <strong class="block break-words">{{ row.student }}</strong>
+                <small class="block text-muted break-words">{% trans "Previous" %}: {{ row.previous_cohort }} &middot; {% trans "Failed" %}: {{ row.failed_semester }}</small>
+                <small class="block text-muted break-words">{% trans "Next" %}: {{ row.next_cohort|default:"—" }}</small>
+                {% if row.eligible %}
+                  {% include "ui/components/_status.html" with code="passed" label=_("Eligible") %}
+                {% else %}
+                  {% include "ui/components/_status.html" with code="pending" label=_("Ineligible") %}
+                {% endif %}
+              </div>
+              <div class="shrink-0">
+                {% if row.eligible and not row.plan %}
+                  <form method="post" action="{% url 'progression:admin_create_rejoin_plan' row.from_enrollment_id %}" class="m-0">{% csrf_token %}
+                    <input type="hidden" name="semester_id" value="{{ row.failed_semester_id }}">
+                    <button class="btn-ghost" type="submit">{% trans "Prepare" %}</button>
+                  </form>
+                {% elif row.plan and row.plan.status == "planned" and row.eligible %}
+                  <form method="post" action="{% url 'progression:admin_activate_rejoin_plan' row.plan.id %}" class="m-0">{% csrf_token %}
+                    <button class="btn-primary" type="submit">{% trans "Activate" %}</button>
+                  </form>
+                {% elif row.plan %}
+                  {{ row.plan.get_status_display }}
+                {% else %}
+                  —
+                {% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        {% include "ui/components/_empty_state.html" with title=_("No eligible students") %}
+      {% endif %}
+    </section>
+  </div>
+{% endblock %}

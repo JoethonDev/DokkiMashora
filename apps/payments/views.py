@@ -14,9 +14,9 @@ from django.views.decorators.http import require_POST
 from apps.accounts.constants import GROUP_ADMIN, GROUP_SUPER_ADMIN
 from apps.audit.constants import (
     ACTION_PAYMENT_RECORD_DELETED,
+    ACTION_PAYMENT_RECORD_UPDATED,
     ACTION_PAYMENT_UPLOAD_CONFIRMED,
     ACTION_PAYMENT_UPLOAD_PREVIEWED,
-    ACTION_PAYMENT_RECORD_UPDATED,
 )
 from apps.audit.services import record_audit_event
 from apps.communications.constants import TEMPLATE_PAYMENT_NOTIFICATION
@@ -32,6 +32,7 @@ from .constants import (
     UPLOAD_STATUS_CHOICES,
     UPLOAD_STATUS_FAILED,
     UPLOAD_STATUS_PREVIEWED,
+    WAIVER_STATUS_CHOICES,
 )
 from .forms import PaymentRecordEditForm, PaymentUploadForm
 from .models import PaymentRecord, PaymentUpload
@@ -39,6 +40,7 @@ from .selectors import (
     get_payment_record_queryset,
     get_upload_detail,
     get_upload_queryset,
+    get_waiver_queryset,
 )
 from .services import (
     confirm_upload,
@@ -94,6 +96,7 @@ def download_payment_csv_template(request):
     writer = csv.writer(response)
     writer.writerow(headers)
     writer.writerow(["29001010100001", "500.00", "2026-01-15", "INV-001", "student@example.com", "+201234567890", _("Tuition fee"), "", "", "", "diploma", "42"])
+    writer.writerow(["", "500.00", "2026-01-15", "INV-EMAIL-ONLY", "student@example.com", "", _("Email-only identifier example"), "", "", "", "", ""])
     return response
 
 
@@ -343,3 +346,25 @@ def payment_record_delete(request, record_id):
     )
     messages.success(request, _("Payment record deleted."))
     return redirect("payments:record_list")
+
+
+@login_required
+@role_required(*ROLE_PAYMENT_STAFF)
+def waiver_list(request):
+    status = request.GET.get("status", "")
+    student_q = request.GET.get("student_q", "")
+    waivers = get_waiver_queryset(status=status or None, student_q=student_q or None)
+    page_obj, pagination_qs = paginate(request, waivers)
+    template = "ui/fragments/admin/_payment_waiver_table.html" if is_htmx(request) else "ui/pages/admin/payments.html"
+    return render(
+        request,
+        template,
+        {
+            "page_mode": "waiver_list",
+            "page_obj": page_obj,
+            "pagination_qs": pagination_qs,
+            "waiver_status_choices": WAIVER_STATUS_CHOICES,
+            "current_status": status,
+            "current_student_q": student_q,
+        },
+    )

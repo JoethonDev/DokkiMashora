@@ -24,10 +24,12 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+import shutil
 import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+from pathlib import PurePosixPath
 from urllib.parse import urlencode
 
 from django.conf import settings
@@ -192,6 +194,13 @@ class LocalStorageBackend:
             raise StorageError(_("File not found: {key}").format(key=key))
         return full_path.read_bytes()
 
+    def download_to_path(self, key: str, destination: Path, max_size: int) -> None:
+        source = self.resolve_path(key)
+        if not source.exists() or source.stat().st_size > max_size:
+            raise StorageError(_("Stored file is missing or exceeds the processing limit."))
+        with source.open("rb") as src, destination.open("wb") as dst:
+            shutil.copyfileobj(src, dst, length=1024 * 1024)
+
 
 class R2StorageBackend:
     """Cloudflare R2 (S3-compatible) storage backend."""
@@ -306,6 +315,20 @@ class R2StorageBackend:
             logger.error("R2 download failed for key=%s: %s", key, exc)
             raise StorageError(_("File download failed.")) from exc
 
+    def download_to_path(self, key: str, destination: Path, max_size: int) -> None:
+        client = self._get_client()
+        try:
+            metadata = client.head_object(Bucket=settings.R2_BUCKET_NAME, Key=key)
+            if int(metadata.get("ContentLength", 0)) > max_size:
+                raise StorageError(_("Stored file exceeds the processing limit."))
+            with destination.open("wb") as output:
+                client.download_fileobj(settings.R2_BUCKET_NAME, key, output)
+        except StorageError:
+            raise
+        except Exception as exc:
+            logger.error("R2 streamed download failed for key=%s: %s", key, exc)
+            raise StorageError(_("File download failed.")) from exc
+
 
 class StorageService:
     """Unified storage service with validation and backend abstraction."""
@@ -334,6 +357,47 @@ class StorageService:
     ) -> UploadResult:
         _validate_file(data, original_filename, content_type, max_size, allowed_types or [])
         key = build_storage_key(key_prefix, original_filename)
+        checksum = _compute_checksum(data)
+        self.backend.upload(key, data, content_type)
+        return UploadResult(
+            key=key,
+            content_type=content_type,
+            byte_size=len(data),
+            checksum=checksum,
+            backend="r2" if settings.USE_R2_STORAGE else "local",
+        )
+
+    def upload_generated_file(
+        self,
+        data: bytes,
+        *,
+        key: str,
+        content_type: str,
+        max_size: int,
+        allowed_types: list[str] | None = None,
+    ) -> UploadResult:
+        """Upload a server-generated artifact at one exact, validated key.
+
+        User filenames must continue through ``upload_file``. This narrow path
+        exists for generated multi-file formats such as HLS, whose playlist
+        references exact sibling filenames.
+        """
+        path = PurePosixPath(key)
+        if (
+            not key
+            or "\\" in key
+            or "\x00" in key
+            or path.is_absolute()
+            or any(part in {"", ".", ".."} for part in path.parts)
+        ):
+            raise FileValidationError(_("Invalid generated storage key."))
+        _validate_file(
+            data,
+            path.name,
+            content_type,
+            max_size,
+            allowed_types or [],
+        )
         checksum = _compute_checksum(data)
         self.backend.upload(key, data, content_type)
         return UploadResult(
@@ -385,6 +449,10 @@ class StorageService:
 
     def download_file(self, key: str) -> bytes:
         return self.backend.download(key)
+
+    def download_file_to_path(self, key: str, destination: Path, *, max_size: int) -> None:
+        """Stream a stored object to bounded temporary disk."""
+        self.backend.download_to_path(key, destination, max_size)
 
 
 def record_deferred_storage_deletion(*, key: str = "", prefix: str = "", error: str = "") -> DeferredStorageDeletion | None:

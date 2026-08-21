@@ -151,7 +151,7 @@
               {% for version in course_versions %}
                 <li class="flex items-center justify-between gap-3 border-b border-line py-2">
                   <span>{{ version.course.title }} — {{ version.label }}</span>
-                  <a class="btn-ghost btn-sm" href="{% url 'academics:admin_version_detail' version.course_id version.id %}">{% trans "Manage visibility" %}</a>
+                  <a class="btn-ghost" href="{% url 'academics:admin_version_detail' version.course_id version.id %}">{% trans "Manage visibility" %}</a>
                 </li>
               {% empty %}
                 <li class="text-muted">{% trans "No course versions found." %}</li>
@@ -164,7 +164,7 @@
               {% for cohort in diploma_cohorts %}
                 <li class="flex items-center justify-between gap-3 border-b border-line py-2">
                   <span>{{ cohort.diploma.title }} — {{ cohort.name }}</span>
-                  <a class="btn-ghost btn-sm" href="{% url 'academics:admin_cohort_edit' cohort.diploma_id cohort.id %}">{% trans "Manage visibility" %}</a>
+                  <a class="btn-ghost" href="{% url 'academics:admin_cohort_edit' cohort.diploma_id cohort.id %}">{% trans "Manage visibility" %}</a>
                 </li>
               {% empty %}
                 <li class="text-muted">{% trans "No diploma cohorts found." %}</li>

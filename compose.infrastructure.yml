@@ -84,6 +84,32 @@ services:
     networks: [app]
     logging: *default-logging
 
+  beat:
+    image: dokkimashora-app:${APP_IMAGE_TAG:-local}
+    restart: unless-stopped
+    env_file:
+      - ${APP_ENV_FILE:-.env}
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      CACHE_URL: redis://redis:6379/1
+      CELERY_BROKER_URL: redis://redis:6379/0
+      DJANGO_SETTINGS_MODULE: config.settings.prod
+    command: celery -A config beat --loglevel=INFO -s /tmp/celerybeat-schedule
+    volumes:
+      - ${APP_SOURCE:-.}:/app:ro
+      - media_data:/app/media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      celery:
+        condition: service_healthy
+    cpus: 0.05
+    mem_limit: 128m
+    networks: [app]
+    logging: *default-logging
+
   nginx:
     image: nginx:stable-alpine
     restart: unless-stopped

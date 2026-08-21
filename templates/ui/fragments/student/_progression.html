@@ -20,7 +20,7 @@
                 <strong>{{ item.semester }}</strong>
               </td>
               <td class="table-td">
-                <span class="status-pill-info">{{ item.get_status_display|default:item.status }}</span>
+                {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:'—' %}
               </td>
               <td class="table-td">{{ item.calculated_score|default:'—' }}</td>
             </tr>
@@ -36,8 +36,8 @@
       {% for item in semester_progress %}
         <div class="mobile-card">
           <div class="flex-1 min-w-0">
-            <strong class="block truncate">{{ item.semester }}</strong>
-            <span class="status-pill-info">{{ item.get_status_display|default:item.status }}</span>
+            <strong class="block break-words">{{ item.semester }}</strong>
+            {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:'—' %}
             <small class="block text-muted">{% trans "Average score" %}: {{ item.calculated_score|default:'—' }}</small>
           </div>
         </div>
@@ -61,7 +61,7 @@
                 {{ item.to_semester }}
               </strong>
               <small>
-                {{ item.get_decision_type_display|default:item.decision_type }}
+                {{ item.get_decision_type_display }}
                 ·
                 {{ item.decided_at|date:"d/m/Y" }}
               </small>
@@ -74,22 +74,14 @@
     </article>
     <article class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Completion" %}</p>
-          <h3>{% trans "Eligibility and certificates" %}</h3>
+          <h3>{% trans "Completion and certificates" %}</h3>
         </div>
       </div>
       {% for item in completions %}
         <p>
-          <span class="status-pill-success">{{ item.get_status_display|default:item.status }}</span>
+          {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:'—' %}
           {{ item.diploma_enrollment.cohort.diploma }}
         </p>
-      {% endfor %}
-      {% for item in eligibilities %}
-        <p>
-          <span class="status-pill-info">{{ item.get_status_display|default:item.status }}</span>
-          {{ item.diploma_enrollment.cohort.diploma }}
-        </p>
-      {% empty %}
-        {% include "ui/components/_empty_state.html" with title=_("No final-exam eligibility records.") %}
       {% endfor %}
     </article>
   </section>
@@ -125,7 +117,7 @@
       {% for item in grade_items %}
         <div class="mobile-card">
           <div class="flex-1 min-w-0">
-            <strong class="block truncate">{{ item.component }}</strong>
+            <strong class="block break-words">{{ item.component }}</strong>
             <small class="block text-muted">{% trans "Score" %}: {{ item.score }}</small>
             <small class="block text-muted">{% trans "Feedback" %}: {{ item.feedback|default:'—' }}</small>
           </div>

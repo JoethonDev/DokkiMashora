@@ -10,6 +10,7 @@ from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
 from apps.applications.services import normalize_phone as application_normalize_phone
+from apps.core.forms import StyledFormMixin
 from apps.students.identity import (
     COUNTRY_CHOICES,
     identity_label,
@@ -19,14 +20,13 @@ from apps.students.identity import (
 from apps.students.models import StudentProfile
 
 from .constants import (
-    ALL_ROLE_GROUPS,
+    ACTIVE_ROLE_GROUPS,
     GROUP_STUDENT,
     USER_STATUS_ACTIVE,
     USER_STATUS_INACTIVE,
     USER_STATUS_SUSPENDED,
 )
 from .models import User
-from apps.core.forms import StyledFormMixin
 
 
 class EmailAuthenticationForm(StyledFormMixin, AuthenticationForm):
@@ -166,7 +166,7 @@ class UserEditForm(StyledFormMixin, forms.ModelForm):
     priest_name = forms.CharField(label=_("Priest name"), required=False, widget=forms.TextInput())
     priest_contact = forms.CharField(label=_("Priest contact"), required=False, widget=forms.TextInput())
     new_password = forms.CharField(label=_("New password"), required=False, strip=False, widget=forms.PasswordInput())
-    role = forms.ChoiceField(label=_("Role"), choices=[(role, _(role)) for role in ALL_ROLE_GROUPS], required=False, widget=forms.Select())
+    role = forms.ChoiceField(label=_("Role"), choices=[(role, _(role)) for role in ACTIVE_ROLE_GROUPS], required=False, widget=forms.Select())
 
     class Meta:
         model = User
@@ -183,7 +183,7 @@ class UserEditForm(StyledFormMixin, forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["country_code"].choices = [("", _("Select country"))] + COUNTRY_CHOICES
         if staff_only:
-            self.fields["role"].choices = [(role, _(role)) for role in ALL_ROLE_GROUPS if role != GROUP_STUDENT]
+            self.fields["role"].choices = [(role, _(role)) for role in ACTIVE_ROLE_GROUPS if role != GROUP_STUDENT]
             for fname in self.STUDENT_ONLY_FIELDS:
                 if fname in self.fields:
                     del self.fields[fname]
@@ -200,7 +200,8 @@ class UserEditForm(StyledFormMixin, forms.ModelForm):
         role = self.data.get("role") or self.initial.get("role")
         if role == GROUP_STUDENT:
             for name in ("full_name", "phone", "country_code", "national_id", "date_of_birth", "gender", "address", "education"):
-                self.fields[name].required = True
+                if name in self.fields:
+                    self.fields[name].required = True
         if profile is not None:
             self.fields["full_name"].initial = profile.full_name
             self.fields["phone"].initial = profile.phone

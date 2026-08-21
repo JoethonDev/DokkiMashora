@@ -1,11 +1,9 @@
-{% extends "ui/layouts/admin.html" %}
+﻿{% extends "ui/layouts/admin.html" %}
 {% load i18n %}
 {% block title %}
   {% trans "Assessments" %}
 {% endblock %}
-{% block page_title %}
   {% trans "Assessments" %}
-{% endblock %}
 {% block content %}
   <div class="page-stack animate-enter-view">{% trans "Learning" as eyebrow %}
     {% trans "Assessments" as title %}
@@ -26,8 +24,9 @@
              name="q"
              value="{{ search_value }}"
              type="search"
-              placeholder="{% trans 'Search assessments…' %}"
-               class="form-input ps-10"></div>
+             placeholder="{% trans 'Search assessments…' %}"
+             aria-label="{% trans 'Search assessments' %}"
+             class="form-input ps-10"></div>
     {% for filter in filters %}
       <label class="min-w-40"><span class="field-label">{{ filter.label }}</span>
         <select id="filter-{{ filter.name }}"

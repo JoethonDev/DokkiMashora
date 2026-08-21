@@ -96,18 +96,20 @@ class ProgressionServiceTests(TestCase):
         self.enrollment = DiplomaEnrollment.objects.create(
             student=self.student, cohort=self.cohort, status=ENROLLMENT_STATUS_ACTIVE,
         )
-        self.rule = DiplomaProgressionRule.objects.create(
+        self.rule, _ = DiplomaProgressionRule.objects.update_or_create(
             diploma=self.diploma,
-            semester_pass_percent=Decimal("50.00"),
-            final_exam_pass_percent=Decimal("60.00"),
-            require_all_semesters_passed=True,
-            require_final_exam=True,
-            auto_promote_enabled=False,
-            allow_admin_override=True,
-            allow_retake=True,
-            max_retake_count=3,
-            is_active=True,
-            created_by=self.admin,
+            defaults={
+                "semester_pass_percent": Decimal("50.00"),
+                "final_exam_pass_percent": Decimal("60.00"),
+                "require_all_semesters_passed": True,
+                "require_final_exam": True,
+                "auto_promote_enabled": False,
+                "allow_admin_override": True,
+                "allow_retake": True,
+                "max_retake_count": 3,
+                "is_active": True,
+                "created_by": self.admin,
+            },
         )
         self.course = Course.objects.create(title="Test Course", created_by=self.admin)
         self.cv = CourseVersion.objects.create(
@@ -510,3 +512,29 @@ class ProgressionServiceTests(TestCase):
             )
         completion = mark_graduated(self.student, self.enrollment, actor=self.admin, notes="Graduated")
         self.assertEqual(completion.status, "graduated")
+
+    def test_isolation_across_enrollments(self):
+        diploma_b = Diploma.objects.create(title="Diploma B", total_semesters=2, created_by=self.admin)
+        sem_b1 = Semester.objects.create(diploma=diploma_b, order=1, title="Diploma B Sem 1")
+        sem_b2 = Semester.objects.create(diploma=diploma_b, order=2, title="Diploma B Sem 2")
+        cohort_b = Cohort.objects.create(
+            diploma=diploma_b, name="Cohort B", start_date=timezone.now().date(),
+            created_by=self.admin,
+        )
+        enrollment_b = DiplomaEnrollment.objects.create(
+            student=self.student, cohort=cohort_b, status=ENROLLMENT_STATUS_ACTIVE,
+        )
+        progress_a = StudentSemesterProgress.objects.create(
+            student=self.student, diploma_enrollment=self.enrollment,
+            cohort=self.cohort, semester=self.sem1,
+            status=SEMESTER_PROGRESS_IN_PROGRESS,
+        )
+        progress_b = StudentSemesterProgress.objects.create(
+            student=self.student, diploma_enrollment=enrollment_b,
+            cohort=cohort_b, semester=sem_b1,
+            status=SEMESTER_PROGRESS_IN_PROGRESS,
+        )
+        progress_a.status = SEMESTER_PROGRESS_PASSED
+        progress_a.save()
+        progress_b.refresh_from_db()
+        self.assertEqual(progress_b.status, SEMESTER_PROGRESS_IN_PROGRESS, "Enrollment B progress must not be affected by mutating enrollment A")

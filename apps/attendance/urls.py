@@ -13,5 +13,6 @@ urlpatterns = [
     path("sessions/<int:session_id>/close/", views.attendance_session_close, name="attendance_session_close"),
     path("sessions/<int:session_id>/records/", views.attendance_session_records, name="attendance_session_records"),
     path("scan/", views.attendance_scan, name="attendance_scan"),
+    path("scan/api/", views.attendance_scan_api, name="attendance_scan_api"),
     path("my-attendance/", views.my_attendance, name="my_attendance"),
 ]

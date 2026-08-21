@@ -1,6 +1,70 @@
 (function () {
   "use strict";
 
+  // --- Shared focus trap (P: drawers & modal) --------------------------------
+  // One narrow focus-management implementation used by both the mobile sidebar
+  // drawer and the confirm modal. Tab is contained while a container is active;
+  // Escape and close handlers restore focus to the trigger separately.
+  var focusTrap = (function () {
+    var activeContainer = null;
+    var focusableSelector =
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+    function getFocusable() {
+      if (!activeContainer) return [];
+      return Array.prototype.filter.call(
+        activeContainer.querySelectorAll(focusableSelector),
+        function (el) {
+          return el.offsetParent !== null || el === document.activeElement;
+        }
+      );
+    }
+
+    function onKeydown(e) {
+      if (e.key !== "Tab" || !activeContainer) return;
+      var items = getFocusable();
+      if (!items.length) {
+        e.preventDefault();
+        return;
+      }
+      var first = items[0];
+      var last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      } else if (!activeContainer.contains(document.activeElement)) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+
+    return {
+      enable: function (container) {
+        if (!container) return;
+        if (activeContainer === container) return;
+        if (activeContainer) this.disable();
+        activeContainer = container;
+        document.addEventListener("keydown", onKeydown, true);
+      },
+      disable: function () {
+        if (!activeContainer) return;
+        document.removeEventListener("keydown", onKeydown, true);
+        activeContainer = null;
+      },
+    };
+  })();
+
+  // The mobile sidebar drawer dispatches these custom events from the layouts.
+  window.addEventListener("focus-trap:enable", function (e) {
+    focusTrap.enable(e.detail && e.detail.container);
+  });
+  window.addEventListener("focus-trap:disable", function () {
+    focusTrap.disable();
+  });
+
   // --- Global search dialog ---
   var dialog = document.getElementById("global-search-dialog");
   var trigger = document.getElementById("global-search-trigger");
@@ -155,7 +219,8 @@
   function showFeedback() {
     if (!feedbackEl) return;
     if (feedbackTimer) clearTimeout(feedbackTimer);
-    var msg = feedbackEl.getAttribute("data-msg-error") || "Request failed. Please try again.";
+    // The translated message always comes from base.html's data-msg-error.
+    var msg = feedbackEl.getAttribute("data-msg-error") || "";
     feedbackEl.textContent = msg;
     feedbackEl.classList.add("visible");
     feedbackTimer = setTimeout(function () {
@@ -261,8 +326,7 @@
   });
 
   // Init on page load and after HTMX swaps
-  document.addEventListener("DOMContentLoaded", function () { initAssessmentChoices(); });
-  document.addEventListener("htmx:afterSwap", function (e) { initAssessmentChoices(e.detail.target); });
+  document.addEventListener("DOMContentLoaded", function () { initAssessmentChoices(); });  document.addEventListener("htmx:afterSwap", function (e) { initAssessmentChoices(e.detail.target); });
 
   // --- Entrance exam choices ---
   function initEntranceChoices(container) {
@@ -345,6 +409,71 @@
 
   document.addEventListener("DOMContentLoaded", function () { initExamAutosave(); });
   document.addEventListener("htmx:afterSwap", function (e) { initExamAutosave(e.detail.target); });
+
+  // --- Normal assessment autosave ---
+  function initAssessmentAutosave(container) {
+    if (!container) container = document;
+    var form = container.querySelector("#assessment-take-form");
+    if (!form || form.dataset.autosaveInitialized === "true") return;
+    var autosaveUrl = form.getAttribute("data-autosave-url");
+    var csrf = form.querySelector("input[name='csrfmiddlewaretoken']");
+    var status = form.querySelector("#assessment-autosave-status");
+    if (!autosaveUrl || !csrf || !status) return;
+    form.dataset.autosaveInitialized = "true";
+    var pendingTimer = null;
+    var isSubmitting = false;
+
+    function collectAnswers() {
+      var answers = {};
+      var fields = form.querySelectorAll("input[name^='q_'], input[name^='question_'], textarea[name^='q_'], textarea[name^='question_'], select[name^='q_'], select[name^='question_']");
+      Array.prototype.forEach.call(fields, function (el) {
+        if (el.type === "radio" || el.type === "checkbox") {
+          if (el.checked) answers[el.name] = el.value;
+        } else {
+          answers[el.name] = el.value;
+        }
+      });
+      return answers;
+    }
+
+    function setStatus(message) {
+      status.textContent = message;
+    }
+
+    function save() {
+      if (isSubmitting) return;
+      setStatus(form.dataset.autosaveSaving || "Saving answers…");
+      return fetch(autosaveUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrf.value,
+        },
+        body: JSON.stringify({ answers: collectAnswers() }),
+        credentials: "same-origin",
+      }).then(function (response) {
+        if (!response.ok) throw new Error("autosave_failed");
+        setStatus(form.dataset.autosaveSaved || "Answers saved.");
+      }).catch(function () {
+        setStatus(form.dataset.autosaveFailed || "Autosave failed.");
+      });
+    }
+
+    function scheduleSave() {
+      window.clearTimeout(pendingTimer);
+      pendingTimer = window.setTimeout(save, 1200);
+    }
+
+    form.addEventListener("change", scheduleSave);
+    form.addEventListener("input", scheduleSave);
+    form.addEventListener("submit", function () {
+      isSubmitting = true;
+    });
+    window.setInterval(save, 30000);
+  }
+
+  document.addEventListener("DOMContentLoaded", function () { initAssessmentAutosave(); });
+  document.addEventListener("htmx:afterSwap", function (e) { initAssessmentAutosave(e.detail.target); });
 
   // --- Intake form choices ---
   var intakeChoiceIdx = 1;
@@ -437,33 +566,64 @@
   var cancelBtn = document.getElementById("confirm-modal-cancel");
   var backdrop = document.getElementById("confirm-modal-backdrop");
   var pendingForm = null;
+  var confirmTrigger = null;
+  var confirmSubmitting = false;
 
   function showConfirmModal(message, label) {
     if (!confirmModal) return;
+    confirmTrigger = document.activeElement;
     if (confirmMessage) confirmMessage.textContent = message;
-    if (confirmBtn) confirmBtn.textContent = label || "Delete";
+    // Label comes from data-confirm-label or the trigger's own translated
+    // text; the modal's default confirm button already renders {% trans "Delete" %}.
+    if (confirmBtn) confirmBtn.textContent = label || confirmBtn.getAttribute("data-default-label") || "";
     confirmModal.classList.remove("hidden");
+    // Isolate the background from keyboard + assistive tech while open.
+    var shell = document.querySelector("[data-page-shell]");
+    if (shell) shell.setAttribute("inert", "");
+    focusTrap.enable(confirmModal);
+    // Focus the safe (cancel) control first so Enter never triggers the
+    // destructive confirm by accident.
+    if (cancelBtn) cancelBtn.focus();
   }
 
-  function hideConfirmModal() {
+  function hideConfirmModal(restoreButtons) {
     if (!confirmModal) return;
+    if (confirmModal.classList.contains("hidden")) return;
     confirmModal.classList.add("hidden");
+    focusTrap.disable();
+    var shell = document.querySelector("[data-page-shell]");
+    if (shell) shell.removeAttribute("inert");
+    // Canceling must leave the original action usable: re-enable the submit
+    // buttons the global submit-guard disabled before the confirmation prompt.
+    if (restoreButtons !== false && pendingForm) {
+      var buttons = pendingForm.querySelectorAll("button[type='submit']");
+      Array.prototype.forEach.call(buttons, function (btn) { btn.disabled = false; });
+    }
     pendingForm = null;
+    if (confirmTrigger && confirmTrigger.focus) {
+      confirmTrigger.focus();
+    }
+    confirmTrigger = null;
   }
 
-  if (cancelBtn) cancelBtn.addEventListener("click", hideConfirmModal);
-  if (backdrop) backdrop.addEventListener("click", hideConfirmModal);
+  if (cancelBtn) cancelBtn.addEventListener("click", function () { hideConfirmModal(true); });
+  if (backdrop) backdrop.addEventListener("click", function () { hideConfirmModal(true); });
 
   document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape") hideConfirmModal();
+    if (e.key === "Escape") hideConfirmModal(true);
   });
 
   if (confirmBtn) {
     confirmBtn.addEventListener("click", function () {
+      if (confirmSubmitting) return;
       if (pendingForm) {
+        confirmSubmitting = true;
+        confirmBtn.disabled = true;
+        var buttons = pendingForm.querySelectorAll("button[type='submit']");
+        Array.prototype.forEach.call(buttons, function (btn) { btn.disabled = true; });
         pendingForm.submit();
       }
-      hideConfirmModal();
+      hideConfirmModal(false);
     });
   }
 
@@ -471,10 +631,36 @@
   document.addEventListener("submit", function (e) {
     var form = e.target;
     var msg = form.getAttribute("data-confirm");
+    if (!msg && form.hasAttribute("data-confirm-unanswered")) {
+      var unanswered = [];
+      var questionBlocks = form.querySelectorAll("[data-assessment-question]");
+      Array.prototype.forEach.call(questionBlocks, function (block) {
+        var controls = block.querySelectorAll("input[type='radio'], input[type='checkbox']");
+        var answered = controls.length
+          ? Array.prototype.some.call(controls, function (control) { return control.checked; })
+          : Array.prototype.some.call(
+              block.querySelectorAll("textarea, input:not([type='hidden']), select"),
+              function (control) { return String(control.value || "").trim() !== ""; }
+            );
+        if (!answered) unanswered.push(block.getAttribute("data-assessment-question"));
+      });
+      if (unanswered.length) {
+        e.preventDefault();
+        pendingForm = form;
+        var prefix = form.getAttribute("data-unanswered-prefix") || "Unanswered questions";
+        var suffix = form.getAttribute("data-unanswered-suffix") || "Submit them as empty values?";
+        showConfirmModal(
+          prefix + ": " + unanswered.join(", ") + ". " + suffix,
+          form.getAttribute("data-confirm-label") || "Submit"
+        );
+        return;
+      }
+    }
     if (!msg) return;
     e.preventDefault();
     pendingForm = form;
-    var label = form.getAttribute("data-confirm-label") || form.querySelector("[type='submit']")?.textContent?.trim() || "Delete";
+    var defaultLabel = confirmBtn ? confirmBtn.getAttribute("data-default-label") : "";
+    var label = form.getAttribute("data-confirm-label") || form.querySelector("[type='submit']")?.textContent?.trim() || defaultLabel;
     showConfirmModal(msg, label);
   });
 
@@ -491,7 +677,8 @@
         if (!msg) return;
         e.stopPropagation();
         pendingForm = form;
-        var label = btn.textContent?.trim() || "Delete";
+        var defaultLabel = confirmBtn ? confirmBtn.getAttribute("data-default-label") : "";
+        var label = btn.textContent?.trim() || defaultLabel;
         showConfirmModal(msg, label);
       }
     }
@@ -539,6 +726,29 @@
 
   document.addEventListener("DOMContentLoaded", function () { initProgramSelection(); });
   document.addEventListener("htmx:afterSwap", function (e) { initProgramSelection(e.detail.target); });
+
+  // Diploma applications capture attendance mode once. The server remains
+  // authoritative; this only keeps the course form from showing a Diploma
+  // field that does not apply to it.
+  function initStudentApplySelection(container) {
+    if (!container) container = document;
+    var typeSelect = container.querySelector("#program-type");
+    var modeField = container.querySelector("#delivery-mode-field");
+    var modeSelect = container.querySelector("#delivery-mode");
+    if (!typeSelect || !modeField || !modeSelect) return;
+    var sync = function () {
+      var isDiploma = typeSelect.value === "diploma";
+      modeField.classList.toggle("hidden", !isDiploma);
+      modeSelect.disabled = !isDiploma;
+      modeSelect.required = isDiploma;
+    };
+    typeSelect.removeEventListener("change", sync);
+    typeSelect.addEventListener("change", sync);
+    sync();
+  }
+
+  document.addEventListener("DOMContentLoaded", function () { initStudentApplySelection(); });
+  document.addEventListener("htmx:afterSwap", function (e) { initStudentApplySelection(e.detail.target); });
 
   // --- Registration wizard (multi-step) ---
   function initRegistrationWizard(container) {
@@ -641,5 +851,14 @@
   }
   document.addEventListener("DOMContentLoaded", initLucide);
   document.addEventListener("htmx:afterSettle", initLucide);
+
+  // --- Alpine init for HTMX-inserted content ---
+  // Inline x-data components (e.g. _expandable_text.html) must initialize when
+  // HTMX swaps new fragments in, not only on initial page load (P8-01).
+  document.addEventListener("htmx:afterSwap", function (e) {
+    if (window.Alpine && e.detail && e.detail.target) {
+      window.Alpine.initTree(e.detail.target);
+    }
+  });
 
 })();

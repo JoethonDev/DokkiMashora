@@ -6,6 +6,7 @@ Each method returns structured data — never rendered HTML.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 from django.db.models import Count, Q
@@ -34,7 +35,6 @@ from apps.academics.services import (
     diploma_progress_for_enrollment,
     get_visible_semester_ids_by_enrollment,
 )
-from apps.applications.models import ProgramApplication
 from apps.applications.constants import (
     DOCUMENT_REQUEST_STATUS_REQUESTED,
     PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
@@ -42,12 +42,13 @@ from apps.applications.constants import (
     PROGRAM_APP_STATUS_PAYMENT_PENDING,
     PROGRAM_APP_STATUS_REJECTED,
 )
+from apps.applications.models import ProgramApplication
 from apps.assessments.models import AssessmentAttempt, HomeworkSubmission
 from apps.assessments.services import get_student_assessments, get_student_attempts
+from apps.attendance.models import AttendanceRecord
 from apps.certificates.models import GeneratedCertificate
 from apps.communications.email_message import EmailMessage
 from apps.entrance_exams.constants import (
-    ATTEMPT_STATUS_ASSIGNED,
     ATTEMPT_STATUS_COMPLETED,
     ATTEMPT_STATUS_GRADED,
     ATTEMPT_STATUS_IN_PROGRESS,
@@ -67,9 +68,6 @@ from apps.progression.models import (
     StudentSemesterProgress,
 )
 from apps.students.services import check_apply_eligibility
-from apps.attendance.models import AttendanceRecord
-
-
 
 if TYPE_CHECKING:
     from apps.accounts.models import User
@@ -82,7 +80,7 @@ ALL_SECTIONS = [
     "assessment_attempts", "homework_submissions", "semester_progress",
     "promotion_decisions", "completions", "certificates", "eligibilities", "apply",
     "payments", "notifications", "grade_items",
-    "attendance", "open_assessments",
+    "attendance", "open_assessments", "actionable_attempts", "record_history",
 ]
 
 _SECTION_LOADERS: dict[str, tuple] = {
@@ -107,6 +105,8 @@ _SECTION_LOADERS: dict[str, tuple] = {
     "apply": ("apply", lambda p, u: _apply_eligibility(p)),
     "attendance": ("attendance", lambda p, u: _get_attendance(p)),
     "open_assessments": ("open_assessments", lambda p, u: _get_open_assessments(u)),
+    "actionable_attempts": ("actionable_attempts", lambda p, u: list(get_student_attempts(u))),
+    "record_history": ("record_history", lambda p, u: _get_record_history(p)),
 }
 
 
@@ -138,7 +138,6 @@ def get_dashboard_data(
     result.update(_home_context(result))
     return result
 
-
 def _home_context(data: dict) -> dict:
     """Build the student's actionable home from already-loaded sections."""
     from types import SimpleNamespace
@@ -148,15 +147,26 @@ def _home_context(data: dict) -> dict:
     applications = data.get("applications", [])
     open_applications = [a for a in applications if a.status != PROGRAM_APP_STATUS_REJECTED]
 
+    # Batch: one active waiver lookup for every open application (P5-02).
+    from apps.payments.constants import WAIVER_STATUS_ACTIVE
+    from apps.payments.models import PaymentWaiver
+    waived_app_ids = set(
+        PaymentWaiver.objects.filter(
+            application_id__in=[a.id for a in open_applications],
+            status=WAIVER_STATUS_ACTIVE,
+        ).values_list("application_id", flat=True)
+    ) if open_applications else set()
+
     for application in open_applications:
-        target = application.cohort.diploma.title if application.cohort_id and application.cohort.diploma_id else getattr(application.course, "title", _("Program"))
+        is_waived = application.id in waived_app_ids
         for request in application.document_requests.all():
             if request.status == DOCUMENT_REQUEST_STATUS_REQUESTED and request.expires_at > now:
                 actions.append({
                     "kind": "document", "priority": "urgent" if (request.expires_at - now).days < 7 else "normal",
                     "title": _("Upload requested documents"),
-                    "description": _("Waiting for your documents — use the secure upload link you received by email."),
-                    "url": reverse("students:applications"), "cta_label": _("Open applications"),
+                    "description": _("Waiting for your documents — open the upload from your applications."),
+                    "url": reverse("applications:my_document_upload", args=[application.id]),
+                    "cta_label": _("Upload documents"),
                     "due_at": request.expires_at, "blocked_reason": None,
                 })
         for request in application.intake_requests.all():
@@ -168,10 +178,17 @@ def _home_context(data: dict) -> dict:
                     "url": reverse("students:applications"), "cta_label": _("Open applications"),
                     "due_at": request.expires_at, "blocked_reason": None,
                 })
-        if application.status == PROGRAM_APP_STATUS_PAYMENT_PENDING:
+        if application.status == PROGRAM_APP_STATUS_PAYMENT_PENDING and not is_waived:
             actions.append({
                 "kind": "payment", "priority": "urgent", "title": _("Complete application payment"),
                 "description": _("Awaiting payment confirmation by the admissions office."),
+                "url": reverse("students:applications"), "cta_label": _("Open applications"),
+                "due_at": None, "blocked_reason": None,
+            })
+        elif application.status == PROGRAM_APP_STATUS_PAYMENT_PENDING and is_waived:
+            actions.append({
+                "kind": "payment", "priority": "normal", "title": _("Payment waived"),
+                "description": _("Your payment was waived by the admissions office."),
                 "url": reverse("students:applications"), "cta_label": _("Open applications"),
                 "due_at": None, "blocked_reason": None,
             })
@@ -188,7 +205,10 @@ def _home_context(data: dict) -> dict:
             })
 
     user = data["user"]
-    all_attempts = list(get_student_attempts(user))
+    all_attempts = data.get("actionable_attempts")
+    if all_attempts is None:
+        all_attempts = list(get_student_attempts(user))
+        data["actionable_attempts"] = all_attempts
     attempted_ids = {attempt.assessment_id for attempt in all_attempts}
     actionable_assessment_count = sum(
         attempt.status in {"assigned", "in_progress"} for attempt in all_attempts
@@ -285,6 +305,10 @@ def _home_context(data: dict) -> dict:
             "type": "diploma", "title": enrollment.cohort.diploma.title,
             "status": enrollment.status, "status_label": enrollment.get_status_display(),
             "enrollment_id": enrollment.id,
+            "detail_url": reverse("academics:student_diploma_detail", args=[enrollment.id]),
+            "can_open": enrollment.status == ENROLLMENT_STATUS_ACTIVE and (
+                enrollment.expires_at is None or enrollment.expires_at > timezone.now()
+            ),
             "expires_at": enrollment.expires_at,
             "lecture_count": progress["total_lectures"], "completed_count": progress["completed_count"],
             "progress_percent": progress["percent"],
@@ -308,7 +332,11 @@ def _home_context(data: dict) -> dict:
         "learning_cards": diploma_cards + data.get("active_courses", []) + data.get("expired_courses", []),
         "current_application": current_application,
         "summary": {
-            "active_learning_count": len(data.get("active_courses", [])),
+            "active_learning_count": len(data.get("active_courses", [])) + len([
+                e for e in data.get("diploma_enrollments", [])
+                if e.status == ENROLLMENT_STATUS_ACTIVE
+                and (e.expires_at is None or e.expires_at > timezone.now())
+            ]),
             "actionable_assessment_count": actionable_assessment_count,
             "open_entrance_exam_count": sum(
                 entry["readiness"]["state"] in ("ready", "in_progress")
@@ -451,6 +479,8 @@ def _get_active_courses(student_profile: StudentProfile) -> list[dict]:
         cards.append({
             "course_version": cv,
             "course": cv.course,
+            "detail_url": reverse("academics:student_course_detail", args=[cv.pk]),
+            "can_open": True,
             "lecture_count": progress["total_lectures"],
             "completed_count": progress["completed_count"],
             "progress_percent": progress["percent"],
@@ -507,7 +537,10 @@ def _exam_readiness(attempt: EntranceAttempt, now=None) -> dict:
     exam = attempt.exam
     access_url = reverse("entrance_exams:exam_access_token", args=[exam.access_token]) if exam.access_token else None
     decision = attempt_decision(attempt)
-    if attempt.status in (ATTEMPT_STATUS_COMPLETED, ATTEMPT_STATUS_GRADED):
+    # ``submitted_at`` is the durable "has taken the exam" marker. A submitted
+    # attempt is final even if a stale row still carries an in-progress status:
+    # it must never offer an exam action again.
+    if attempt.submitted_at or attempt.status in (ATTEMPT_STATUS_COMPLETED, ATTEMPT_STATUS_GRADED):
         if decision:
             state_label = decision["label"]
             tone = decision["tone"]
@@ -551,9 +584,20 @@ def get_application_row(application: ProgramApplication) -> dict:
     Only server-derivable safe actions are exposed: an open entrance exam or
     its result link. Document, intake, and payment steps show a clear pending
     state instead of a dead CTA, because their secure tokens are stored hashed
-    and cannot be reconstructed from the portal.
+    and cannot be reconstructed from the portal. Payment readiness is shown
+    distinctly: paid, waived (Admin waiver), or awaiting payment.
     """
+    from apps.applications.services import has_active_application_waiver, has_application_paid_record
+
     now = timezone.now()
+    is_paid = has_application_paid_record(application)
+    is_waived = has_active_application_waiver(application)
+    if is_paid:
+        payment_state = "paid"
+    elif is_waived:
+        payment_state = "waived"
+    else:
+        payment_state = "pending"
     row = {
         "program_title": (
             application.cohort.diploma.title if application.cohort_id and application.cohort.diploma_id
@@ -563,6 +607,7 @@ def get_application_row(application: ProgramApplication) -> dict:
         "submitted_at": application.created_at,
         "status": application.status,
         "status_label": application.get_status_display(),
+        "payment_state": payment_state,
         "documents_count": application.document_requests.count(),
         "next_step": None,
         "action_url": None,
@@ -572,7 +617,10 @@ def get_application_row(application: ProgramApplication) -> dict:
     if application.status == PROGRAM_APP_STATUS_INVITED:
         attempt = application.entrance_attempts.select_related("exam").first()
         exam = attempt.exam if attempt else None
-        if exam and exam.is_active and exam.access_token:
+        if attempt and attempt.submitted_at:
+            # The student already took the exam: never offer it again.
+            row["next_step"] = _("Your entrance exam has been submitted. Awaiting the admissions office decision.")
+        elif exam and exam.is_active and exam.access_token:
             if (not exam.open_at or exam.open_at <= now) and (not exam.close_at or exam.close_at > now):
                 row["action_url"] = reverse("entrance_exams:exam_access_token", args=[exam.access_token])
                 row["action_label"] = _("Open exam")
@@ -584,13 +632,20 @@ def get_application_row(application: ProgramApplication) -> dict:
         row["next_step"] = _("Your entrance exam has been submitted. Awaiting the admissions office decision.")
 
     if application.status == PROGRAM_APP_STATUS_PAYMENT_PENDING:
-        row["next_step"] = _("Awaiting payment confirmation by the admissions office.")
+        if payment_state == "waived":
+            row["next_step"] = _("Payment waived by the admissions office.")
+        elif payment_state == "paid":
+            row["next_step"] = _("Payment confirmed.")
+        else:
+            row["next_step"] = _("Awaiting payment confirmation by the admissions office.")
 
     doc_request = application.document_requests.filter(
         status=DOCUMENT_REQUEST_STATUS_REQUESTED, expires_at__gt=now,
     ).first()
     if doc_request:
-        row["next_step"] = _("Waiting for your documents — use the secure upload link you received by email.")
+        row["action_url"] = reverse("applications:my_document_upload", args=[application.id])
+        row["action_label"] = _("Upload documents")
+        row["next_step"] = _("Upload requested documents")
 
     intake_request = application.intake_requests.filter(
         status="requested", expires_at__gt=now,
@@ -607,14 +662,25 @@ def get_application_row(application: ProgramApplication) -> dict:
 
 
 def _get_assessment_attempts(user: User) -> list[AssessmentAttempt]:
-    return list(
+    """Return a safe profile projection for submitted assessment attempts."""
+    attempts = (
         get_student_attempts(user)
-        .filter(visible_to_student=True)
-        .select_related(
-            "assessment__course_version__course",
-            "graded_by",
-        )[:50]
+        .filter(submitted_at__isnull=False)
+        .select_related("assessment__course_version__course")[:50]
     )
+    return [
+        SimpleNamespace(
+            id=attempt.id,
+            assessment=attempt.assessment,
+            status=attempt.status,
+            status_label=attempt.get_status_display(),
+            submitted_at=attempt.submitted_at,
+            visible_to_student=bool(attempt.visible_to_student),
+            score_percent=attempt.score_percent if attempt.visible_to_student else None,
+            result_url=reverse("assessments:results", args=[attempt.assessment_id]) if attempt.visible_to_student else None,
+        )
+        for attempt in attempts
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -626,6 +692,7 @@ def _get_homework_submissions(user: User) -> list[HomeworkSubmission]:
     return list(
         HomeworkSubmission.objects.filter(student=user)
         .select_related("assessment__course_version__course", "reviewed_by", "attempt")
+        .prefetch_related("attachments")
         .order_by("-submitted_at")[:50]
     )
 
@@ -675,6 +742,124 @@ def _get_semester_progress(student_profile: StudentProfile) -> list[StudentSemes
         .select_related("semester", "diploma_enrollment__cohort__diploma")
         .order_by("semester__order")
     )
+
+
+# ---------------------------------------------------------------------------
+# Record history (P5-03)
+# ---------------------------------------------------------------------------
+
+
+def _get_record_history(student_profile: StudentProfile) -> dict:
+    """Immutable academic-history projection for the Record hub.
+
+    Composes exact enrollment history (each cohort stays a separate record),
+    immutable calculated Semester Evaluations, and authoritative final
+    progression outcomes — calculated result shown separately from the final
+    decision, with Interview Pending kept neutral and exceptional decisions
+    clearly marked. Never merges/copies grades or attendance across enrollments.
+    """
+    from apps.progression.constants import FINAL_PROGRESSION_STATUS_INTERVIEW_PENDING
+    from apps.progression.models import (
+        FinalProgressionOutcome,
+        SemesterEvaluation,
+        SemesterInterview,
+        SemesterRejoinPlan,
+    )
+
+    enrollments = list(
+        DiplomaEnrollment.objects.filter(student=student_profile)
+        .select_related("cohort__diploma", "entry_semester")
+        .order_by("-created_at")
+    )
+    enrollment_ids = [e.id for e in enrollments]
+    if not enrollment_ids:
+        return {"enrollments": [], "semester_rows": [], "rejoins": []}
+
+    evaluations = {
+        (ev.diploma_enrollment_id, ev.semester_id): ev
+        for ev in SemesterEvaluation.objects.filter(
+            student=student_profile,
+            diploma_enrollment_id__in=enrollment_ids,
+        ).select_related("semester")
+    }
+    outcomes = {
+        outcome.evaluation_id: outcome
+        for outcome in FinalProgressionOutcome.objects.filter(
+            student=student_profile,
+            diploma_enrollment_id__in=enrollment_ids,
+        ).select_related("semester")
+    }
+    interviews = {
+        interview.outcome_id: interview
+        for interview in SemesterInterview.objects.select_related("outcome").filter(
+            outcome__student=student_profile,
+            outcome__diploma_enrollment_id__in=enrollment_ids,
+        )
+    }
+    rejoins = list(
+        SemesterRejoinPlan.objects.filter(
+            student=student_profile,
+            from_enrollment_id__in=enrollment_ids,
+        ).select_related("from_enrollment__cohort__diploma", "to_enrollment__cohort__diploma", "failed_semester", "target_cohort__diploma")
+        .order_by("-created_at")
+    )
+
+    # Enrollment/cohort history as stable separate records. A rejoin creates a
+    # fresh enrollment; both remain distinct rows and are never merged.
+    enrollment_rows = []
+    for enrollment in enrollments:
+        rejoin_from = next((r for r in rejoins if r.from_enrollment_id == enrollment.id), None)
+        rejoin_to = next((r for r in rejoins if r.to_enrollment_id == enrollment.id), None)
+        enrollment_rows.append({
+            "enrollment": enrollment,
+            "cohort": enrollment.cohort,
+            "diploma": enrollment.cohort.diploma,
+            "entry_semester": enrollment.entry_semester,
+            "status": enrollment.status,
+            "status_label": enrollment.get_status_display(),
+            "rejoin_from": rejoin_from,
+            "rejoin_to": rejoin_to,
+            "semesters": [],
+        })
+
+    semester_rows = []
+    for (enrollment_id, _semester_id), evaluation in evaluations.items():
+        outcome = outcomes.get(evaluation.id)
+        interview = interviews.get(outcome.id) if outcome else None
+        row = {
+            "enrollment_id": enrollment_id,
+            "semester": evaluation.semester,
+            "calculated_result": evaluation.result,
+            "calculated_label": evaluation.get_result_display(),
+            "overall_percent": evaluation.overall_percent,
+            "attendance_percent": evaluation.attendance_percent,
+            "homework_percent": evaluation.homework_percent,
+            "semester_exam_percent": evaluation.semester_exam_percent,
+            "finalized_at": evaluation.finalized_at,
+            "outcome": None,
+        }
+        if outcome:
+            final_label = outcome.get_final_result_display() if outcome.final_result else _("Not decided")
+            row["outcome"] = {
+                "status": outcome.status,
+                "status_label": outcome.get_status_display(),
+                "is_interview_pending": outcome.status == FINAL_PROGRESSION_STATUS_INTERVIEW_PENDING,
+                "final_result": outcome.final_result,
+                "final_label": final_label,
+                "is_exceptional": bool(outcome.is_exceptional),
+                "reason": outcome.reason,
+                "decided_at": outcome.decided_at,
+                "interview_status": interview.get_status_display() if interview else None,
+            }
+        semester_rows.append(row)
+
+    semester_rows.sort(key=lambda row: (row["enrollment_id"], row["semester"].order))
+
+    return {
+        "enrollments": enrollment_rows,
+        "semester_rows": semester_rows,
+        "rejoins": rejoins,
+    }
 
 
 # ---------------------------------------------------------------------------

@@ -20,13 +20,10 @@
 </section>
 <section class="card-surface"><div class="section-head"><div>
       <p class="eyebrow">{% trans "Review" %}</p>
-      <h3>{% trans "Grading queue" %}</h3>
+      <h3>{% trans "Homework grading" %}</h3>
     </div>
   </div>
   <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-secondary"
-       href="{% url 'assessments:admin_grade_list' %}">{% trans "Open grading queue" %}</a>
-    <a class="btn-secondary" href="{% url 'assessments:admin_list' %}">{% trans "Assessments" %}</a>
-    <a class="btn-secondary"
-       href="{% url 'progression:admin_rejoin_plan_list' %}">{% trans "Progression" %}</a>
+       href="{% url 'assessments:admin_homework_list' %}">{% trans "Open Homework grading queue" %}</a>
   </div>
 </section>

@@ -1,30 +1,54 @@
-{% extends "ui/layouts/admin.html" %}
+﻿{% extends "ui/layouts/admin.html" %}
 {% load i18n ui_tags %}
 {% block title %}
   {{ assessment.title }}
 {% endblock %}
 {% block content %}
   <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=assessment.title description=assessment.description eyebrow=_("Assessment") back_button=True %}
-    <div class="actions-row"><a class="btn-ghost"
+    {% if assessment.is_legacy %}
+      <section class="card-surface">
+        <div class="flex flex-col gap-1">
+          {% include "ui/components/_status.html" with code="pending" label=_("Legacy assessment - read only") %}
+          {% if assessment.legacy_note %}<p class="text-sm text-muted m-0 mt-1">{{ assessment.legacy_note }}</p>{% endif %}
+        </div>
+      </section>
+    {% endif %}
+    {% if not assessment.is_legacy %}
+      <div class="actions-row"><a class="btn-ghost"
          href="{% url 'assessments:admin_grade_list' %}">{% trans "Grade queue" %}</a>
-      <a class="btn-primary"
-         href="{% url 'assessments:admin_edit' assessment.id %}">{% trans "Edit" %}</a>
-      <form method="post"
-            action="{% url 'assessments:admin_toggle' assessment.id %}"
-            class="m-0">{% csrf_token %}
-        <button class="btn-secondary" type="submit">{% if assessment.is_active %}
-            {% trans "Deactivate" %}
-          {% else %}
-            {% trans "Activate" %}
-          {% endif %}
-        </button>
-      </form>
-      <form method="post"
-            action="{% url 'assessments:admin_recalculate' assessment.id %}"
-            class="m-0">{% csrf_token %}
-        <button class="btn-secondary" type="submit">{% trans "Recalculate totals" %}</button>
-      </form>
-    </div>
+        <a class="btn-primary"
+           href="{% url 'assessments:admin_edit' assessment.id %}">{% trans "Edit" %}</a>
+        {% if assessment.assessment_type == "quiz" or assessment.assessment_type == "semester_exam" %}
+          <a class="btn-secondary"
+             href="{% url 'assessments:admin_exceptional_access' assessment.id %}">{% trans "Exceptional access" %}</a>
+        {% endif %}
+        {% if assessment.assessment_type == "semester_exam" %}
+          <a class="btn-secondary"
+             href="{% url 'assessments:admin_roster' assessment.id %}">{% trans "Exam Code Roster" %}</a>
+        {% endif %}
+        <form method="post"
+              action="{% url 'assessments:admin_toggle' assessment.id %}"
+              class="m-0">{% csrf_token %}
+          <button class="btn-secondary" type="submit">{% if assessment.is_active %}
+              {% trans "Deactivate" %}
+            {% else %}
+              {% trans "Activate" %}
+            {% endif %}
+          </button>
+        </form>
+        <form method="post"
+              action="{% url 'assessments:admin_recalculate' assessment.id %}"
+              class="m-0">{% csrf_token %}
+          <button class="btn-secondary" type="submit">{% trans "Recalculate totals" %}</button>
+        </form>
+        <form method="post"
+              action="{% url 'assessments:admin_delete' assessment.id %}"
+              data-confirm="{% trans 'Delete this assessment?' %}"
+              class="m-0">{% csrf_token %}
+          <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
+        </form>
+      </div>
+    {% endif %}
     <section class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Details" %}</p>
           <h3>{% trans "Assessment info" %}</h3>
@@ -45,7 +69,7 @@
         <div>
           <dt class="dt">{% trans "Active" %}</dt>
           <dd class="dd">
-            {% include "ui/components/_status.html" with code=assessment.is_active|yesno:"active,inactive" label=assessment.is_active|yesno:_("Active,Inactive") %}
+            {% include "ui/components/_status.html" with code=assessment.is_active|yesno:"active,inactive" label=assessment.is_active|boolean_label:"Active,Inactive" %}
           </dd>
         </div>
         {% if assessment.course_version %}
@@ -55,7 +79,7 @@
               {% trans "Course" %}
               :
               {{ assessment.course_version.course }}
-              —
+              &mdash;
               {{ assessment.course_version }}
             </dd>
           </div>
@@ -66,7 +90,7 @@
               {% trans "Diploma" %}
               :
               {{ assessment.cohort.diploma }}
-              —
+              &mdash;
               {{ assessment.semester }}
               (
               {{ assessment.cohort }}
@@ -79,6 +103,12 @@
             <dd class="dd">
               {{ assessment.semester }}
             </dd>
+          </div>
+        {% endif %}
+        {% if assessment.legacy_note %}
+          <div>
+            <dt class="dt">{% trans "Legacy note" %}</dt>
+            <dd class="dd">{{ assessment.legacy_note }}</dd>
           </div>
         {% endif %}
         {% if assessment.open_at %}
@@ -101,11 +131,12 @@
     </section>
     <section class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Structure" %}</p>
-          <h3>{% trans "Sections" %}</h3>
+          <h3>{% if is_diploma %}{% trans "Sections" %}{% else %}{% trans "Questions" %}{% endif %}</h3>
         </div>
-        <a class="btn-primary" href="{% url 'assessments:admin_section_create' assessment.id %}">{% trans "Add section" %}</a>
+        {% if is_diploma and not assessment.is_legacy %}<a class="btn-primary" href="{% url 'assessments:admin_section_create' assessment.id %}">{% trans "Add section" %}</a>{% endif %}
       </div>
-      {% if sections %}
+      {% if is_diploma %}
+        {% if sections %}
         <div class="divide-y divide-line">
           {% for section in sections %}
             <details class="group py-2 first:pt-0 last:pb-0">
@@ -115,25 +146,27 @@
                   <span class="text-xs font-bold text-muted uppercase shrink-0">#{{ section.order }}</span>
                   <strong class="truncate">{{ section.lecture.title }}</strong>
                   <span class="text-xs text-muted shrink-0">{% trans "MCQ" %}: {{ section.mcq_count }}</span>
-                  <span class="text-xs text-muted shrink-0">·</span>
+                  <span class="text-xs text-muted shrink-0">&middot;</span>
                   <span class="text-xs text-muted shrink-0">{% trans "Manual" %}: {{ section.manual_questions.count }}</span>
-                  <span class="text-xs text-muted shrink-0">·</span>
+                  <span class="text-xs text-muted shrink-0">&middot;</span>
                   <span class="text-xs text-muted shrink-0">{% trans "Grade" %}: {{ section.max_grade }}</span>
                   {% if section.mcq_count > section.available_count %}
                     <span class="status-pill-danger w-fit">{% trans "Not enough bank MCQs" %}</span>
                   {% endif %}
                 </div>
                 <div class="flex gap-2 shrink-0">
-                  <a class="btn-ghost btn-sm" href="{% url 'assessments:admin_section_edit' assessment.id section.id %}">{% trans "Edit" %}</a>
-                  <form method="post" action="{% url 'assessments:admin_section_delete' assessment.id section.id %}" data-confirm="{% trans 'Delete this section?' %}" class="inline m-0">{% csrf_token %}
-                    <button class="btn-danger text-xs py-1 px-2 min-h-0" type="submit">{% trans "Delete" %}</button>
-                  </form>
+                  {% if not assessment.is_legacy %}
+                    <a class="btn-ghost" href="{% url 'assessments:admin_section_edit' assessment.id section.id %}">{% trans "Edit" %}</a>
+                    <form method="post" action="{% url 'assessments:admin_section_delete' assessment.id section.id %}" data-confirm="{% trans 'Delete this section?' %}" class="inline m-0">{% csrf_token %}
+                      <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
+                    </form>
+                  {% endif %}
                 </div>
               </summary>
               <div class="mt-3 ps-6 border-s-2 border-line space-y-4">
                 {% if section.manual_questions.exists or section.preview_bank %}
                   <div>
-                    <p class="text-xs font-bold text-muted uppercase mb-3">{% trans "Preview — questions as they appear to students" %}</p>
+                    <p class="text-xs font-bold text-muted uppercase mb-3">{% trans "Preview - questions as they appear to students" %}</p>
                     {% for bq in section.preview_bank %}
                       <div class="border border-line rounded-sm p-3 mb-2 bg-surface-soft ms-1">
                         <div class="flex items-center gap-2 mb-1">
@@ -149,7 +182,7 @@
                             {% endfor %}</div>
                           {% endif %}
                         {% else %}
-                          <textarea class="form-textarea" rows="5" disabled placeholder="{% trans 'Written answer' %}"></textarea>
+                          <textarea class="form-textarea" rows="5" disabled placeholder="{% trans 'Written answer' %}" aria-label="{% trans 'Written answer' %}"></textarea>
                         {% endif %}
                       </div>
                     {% endfor %}
@@ -162,7 +195,7 @@
                             <span class="text-xs text-muted ms-auto">{{ mq.points }} {% trans "pts" %}</span>
                           </div>
                           <form method="post" action="{% url 'assessments:admin_section_manual_delete' assessment.id section.id mq.id %}" data-confirm="{% trans 'Delete this question?' %}" class="shrink-0 m-0">{% csrf_token %}
-                            <button class="btn-danger text-xs py-1 px-2 min-h-0" type="submit">{% trans "Delete" %}</button>
+                            {% if not assessment.is_legacy %}<button class="btn-danger" type="submit">{% trans "Delete" %}</button>{% endif %}
                           </form>
                         </div>
                         <p class="text-sm m-0">{{ mq.text }}</p>
@@ -173,7 +206,7 @@
                             {% endfor %}</div>
                           {% endif %}
                         {% else %}
-                          <textarea class="form-textarea" rows="5" disabled placeholder="{% trans 'Written answer' %}"></textarea>
+                          <textarea class="form-textarea" rows="5" disabled placeholder="{% trans 'Written answer' %}" aria-label="{% trans 'Written answer' %}"></textarea>
                         {% endif %}
                         {% if mq.rubric %}<details class="mt-1"><summary class="text-xs text-muted cursor-pointer">{% trans "Rubric" %}</summary><p class="text-xs text-muted mt-1 mb-0">{{ mq.rubric }}</p></details>{% endif %}
                       </div>
@@ -183,8 +216,8 @@
                   {% include "ui/components/_empty_state.html" with title=_("No questions in this section yet.") %}
                 {% endif %}
                 <div class="flex gap-2 flex-wrap pb-2">
-                  <a class="btn-ghost btn-sm" href="{% url 'assessments:admin_section_manual_create' assessment.id section.id %}">+ {% trans "Add manual question" %}</a>
-                  <a class="btn-ghost btn-sm" href="{% url 'assessments:admin_lecture_bank_list' assessment.cohort.diploma.id assessment.cohort.id assessment.semester.id section.lecture.id %}">{% trans "Manage question bank" %}</a>
+                  {% if not assessment.is_legacy %}<a class="btn-ghost" href="{% url 'assessments:admin_section_manual_create' assessment.id section.id %}">+ {% trans "Add manual question" %}</a>{% endif %}
+                  <a class="btn-ghost" href="{% url 'assessments:admin_lecture_bank_list' assessment.cohort.diploma.id assessment.cohort.id assessment.semester.id section.lecture.id %}">{% trans "Manage question bank" %}</a>
                 </div>
               </div>
             </details>
@@ -192,6 +225,39 @@
         </div>
       {% else %}
         {% include "ui/components/_empty_state.html" with title=_("No sections yet.") %}
+        {% endif %}
+      {% elif is_course_quiz %}
+        {% if assessment.questions.all %}
+          <div class="divide-y divide-line">
+            {% for question in assessment.questions.all %}
+              <div class="py-3 flex items-start justify-between gap-4">
+                <div class="min-w-0 space-y-1">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-xs font-bold text-muted uppercase">#{{ question.order }}</span>
+                    <span class="text-xs font-bold px-1.5 py-0.5 rounded-sm {% if question.question_type == 'mcq' %}bg-info-soft text-info-text{% else %}bg-warning-soft text-warning-text{% endif %}">{{ question.get_question_type_display }}</span>
+                    <span class="text-xs text-muted">{{ question.points }} {% trans "pts" %}</span>
+                  </div>
+                  <p class="m-0">{{ question.text }}</p>
+                </div>
+                {% if not assessment.is_legacy %}
+                  <div class="flex gap-2 shrink-0">
+                    <a class="btn-ghost" href="{% url 'assessments:admin_question_edit_form' assessment.id question.id %}">{% trans "Edit" %}</a>
+                    <form method="post" action="{% url 'assessments:admin_question_delete' assessment.id question.id %}" data-confirm="{% trans 'Delete this question?' %}" class="m-0">
+                      {% csrf_token %}<button class="btn-danger" type="submit">{% trans "Delete" %}</button>
+                    </form>
+                  </div>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          {% include "ui/components/_empty_state.html" with title=_("No questions yet.") %}
+        {% endif %}
+        {% if not assessment.is_legacy %}
+          <div class="mt-4"><a class="btn-primary" href="{% url 'assessments:admin_question_form' assessment.id %}">{% trans "Add question" %}</a></div>
+        {% endif %}
+      {% else %}
+        {% include "ui/components/_empty_state.html" with title=_("Homework is managed through student submissions.") %}
       {% endif %}
     </section>
     <section class="card-surface"><div class="section-head"><div>
@@ -215,12 +281,12 @@
                 <tr>
                   <td class="table-td">{{ attempt.student }}</td>
                   <td class="table-td">
-                    {{ attempt.score|default:'—' }}
+                    {{ attempt.score|default:'-' }}
                     /
                     {{ attempt.assessment.total_points }}
                   </td>
                   <td class="table-td">{% include "ui/components/_status.html" with code=attempt.status label=attempt.get_status_display %}</td>
-                  <td class="table-td">{{ attempt.submitted_at|date:"d/m/Y H:i"|default:'—' }}</td>
+                  <td class="table-td">{{ attempt.submitted_at|date:"d/m/Y H:i"|default:'-' }}</td>
                   <td class="table-td">
                     <a class="btn-secondary"
                        href="{% url 'assessments:admin_grade_detail' attempt.id %}">{% trans "Grade" %}</a>
@@ -236,7 +302,7 @@
               <div class="flex-1 min-w-0">
                 <strong class="block truncate">{{ attempt.student }}</strong>
                 {% include "ui/components/_status.html" with code=attempt.status label=attempt.get_status_display %}
-                <small class="block text-muted">{% trans "Score" %}: {{ attempt.score|default:'—' }} / {{ attempt.assessment.total_points }} &middot; {{ attempt.submitted_at|date:"d/m/Y H:i"|default:'—' }}</small>
+                <small class="block text-muted">{% trans "Score" %}: {{ attempt.score|default:'-' }} / {{ attempt.assessment.total_points }} &middot; {{ attempt.submitted_at|date:"d/m/Y H:i"|default:'-' }}</small>
               </div>
               <a class="btn-soft-primary shrink-0" href="{% url 'assessments:admin_grade_detail' attempt.id %}">{% trans "Grade" %}</a>
             </div>

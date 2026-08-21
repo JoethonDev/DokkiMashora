@@ -8,13 +8,40 @@ from django.utils.translation import gettext_lazy as _
 from apps.academics.models import Diploma
 from apps.core.models import TimeStampedModel
 from apps.progression.constants import (
+    CERTIFICATE_STATUS_AVAILABLE,
     CERTIFICATE_STATUS_CHOICES,
     CERTIFICATE_STATUS_GENERATED,
+    CERTIFICATE_STATUS_REGENERATION,
 )
 from apps.students.models import StudentProfile
 
 CERTIFICATE_LANGUAGE_CHOICES = (("ar", _("Arabic")), ("en", _("English")))
 CERTIFICATE_TEMPLATE_TYPE_CHOICES = (("completion", _("Completion")),)
+
+# P7-02: supported template source formats and their processing states.
+TEMPLATE_SOURCE_FORMAT_NONE = ""
+TEMPLATE_SOURCE_FORMAT_PDF = "pdf"
+TEMPLATE_SOURCE_FORMAT_PSD = "psd"
+TEMPLATE_SOURCE_FORMAT_CHOICES = (
+    (TEMPLATE_SOURCE_FORMAT_NONE, _("None (HTML template)")),
+    (TEMPLATE_SOURCE_FORMAT_PDF, _("PDF")),
+    (TEMPLATE_SOURCE_FORMAT_PSD, _("PSD")),
+)
+
+TEMPLATE_SOURCE_STATUS_NONE = "none"
+TEMPLATE_SOURCE_STATUS_PENDING = "pending"
+TEMPLATE_SOURCE_STATUS_READY = "ready"
+TEMPLATE_SOURCE_STATUS_FAILED = "failed"
+TEMPLATE_SOURCE_STATUS_CHOICES = (
+    (TEMPLATE_SOURCE_STATUS_NONE, _("None")),
+    (TEMPLATE_SOURCE_STATUS_PENDING, _("Processing")),
+    (TEMPLATE_SOURCE_STATUS_READY, _("Ready")),
+    (TEMPLATE_SOURCE_STATUS_FAILED, _("Failed")),
+)
+
+# Allowlisted dynamic field keys for placement mappings (P7-02/P7-03).
+ALLOWED_MAPPING_KEYS = ("student_name",)
+MAPPING_SCHEMA_VERSION = 1
 
 
 class CertificateCounter(models.Model):
@@ -61,6 +88,34 @@ class CertificateTemplate(TimeStampedModel):
     body_html = models.TextField(_("body HTML"), blank=True)
     active = models.BooleanField(_("active"), default=False)
     is_placeholder = models.BooleanField(_("is placeholder"), default=True)
+    # P7-02: protected source, preview, and validated field mapping. The source
+    # is stored by the storage service under a generated key (never a direct
+    # FileField path); preview is a protected PNG representation; mapping is a
+    # versioned JSON placement plan consumed by the format adapters.
+    source_format = models.CharField(
+        _("source format"),
+        max_length=10,
+        choices=TEMPLATE_SOURCE_FORMAT_CHOICES,
+        default=TEMPLATE_SOURCE_FORMAT_NONE,
+        blank=True,
+    )
+    source_status = models.CharField(
+        _("source status"),
+        max_length=10,
+        choices=TEMPLATE_SOURCE_STATUS_CHOICES,
+        default=TEMPLATE_SOURCE_STATUS_NONE,
+        blank=True,
+    )
+    source_storage_key = models.CharField(_("source storage key"), max_length=500, blank=True)
+    source_byte_size = models.PositiveIntegerField(_("source size (bytes)"), null=True, blank=True)
+    source_checksum = models.CharField(_("source checksum"), max_length=64, blank=True)
+    source_error = models.TextField(_("source error"), blank=True)
+    preview_storage_key = models.CharField(_("preview storage key"), max_length=500, blank=True)
+    preview_width = models.PositiveIntegerField(_("preview width"), null=True, blank=True)
+    preview_height = models.PositiveIntegerField(_("preview height"), null=True, blank=True)
+    preview_page_count = models.PositiveIntegerField(_("preview page count"), default=1)
+    field_mapping = models.JSONField(_("field mapping"), default=dict, blank=True)
+    mapping_schema_version = models.PositiveIntegerField(_("mapping schema version"), default=0)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
@@ -163,6 +218,20 @@ class GeneratedCertificate(TimeStampedModel):
             models.Index(fields=["student"]),
             models.Index(fields=["diploma_enrollment"]),
             models.Index(fields=["status"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["diploma_enrollment"],
+                condition=models.Q(
+                    diploma_enrollment__isnull=False,
+                    status__in=[
+                        CERTIFICATE_STATUS_GENERATED,
+                        CERTIFICATE_STATUS_AVAILABLE,
+                        CERTIFICATE_STATUS_REGENERATION,
+                    ],
+                ),
+                name="uq_active_certificate_per_enrollment",
+            ),
         ]
 
     def __str__(self):

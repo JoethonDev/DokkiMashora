@@ -67,6 +67,15 @@ PROGRAM_TYPE_CHOICES = (
     (PROGRAM_TYPE_COURSE, _("Course")),
 )
 
+# Diploma delivery is selected on the application and copied to each
+# Semester Exam code when the exam roster is generated.
+DELIVERY_MODE_ONLINE = "online"
+DELIVERY_MODE_OFFLINE = "offline"
+DELIVERY_MODE_CHOICES = (
+    (DELIVERY_MODE_ONLINE, _("Online")),
+    (DELIVERY_MODE_OFFLINE, _("Offline")),
+)
+
 # Decision action constants
 DECISION_ACTION_ACCOUNT_ACTIVATED = "account_activated"
 DECISION_ACTION_PAYMENT_PENDING = "payment_pending"

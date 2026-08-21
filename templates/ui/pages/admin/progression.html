@@ -138,7 +138,7 @@
         {% for item in progress_semesters %}
           <div class="flex gap-4 py-2.5 border-b border-line"><strong class="w-36 shrink-0">{{ item.semester }}</strong>
             <span>
-              {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:item.status %}
+              {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:'—' %}
             </span>
           </div>
         {% empty %}
@@ -182,7 +182,7 @@
                 <th class="table-th">{% trans "Name" %}</th>
                 <th class="table-th">{% trans "Type" %}</th>
                 <th class="table-th">{% trans "Weight" %}</th>
-                <th class="table-th">{% trans "Actions" %}</th>
+                <th class="table-th">{% trans "Weight" %}</th>
               </tr>
             </thead>
             <tbody>
@@ -194,20 +194,10 @@
                     {{ item.weight_percent }}
                     %
                   </td>
-                  <td class="table-td">
-                    <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-ghost"
-                         href="{% url 'progression:admin_component_edit' item.id %}">{% trans "Edit" %}</a>
-                      <form class="m-0"
-                            method="post"
-                            action="{% url 'progression:admin_component_delete' item.id %}" data-confirm="{% trans 'Deactivate this component?' %}">{% csrf_token %}
-                        <button class="btn-danger" type="submit">{% trans "Deactivate" %}</button>
-                      </form>
-                    </div>
-                  </td>
                 </tr>
               {% empty %}
                 <tr>
-                  <td class="table-td" colspan="4">{% trans "No components." %}</td>
+                  <td class="table-td" colspan="3">{% trans "No components." %}</td>
                 </tr>
               {% endfor %}
             </tbody>
@@ -220,29 +210,18 @@
                 <strong class="block truncate">{{ item.name }}</strong>
                 <small class="block text-muted">{{ item.get_component_type_display|default:item.component_type }} &middot; {{ item.weight_percent }}%</small>
               </div>
-              <div class="flex gap-2 shrink-0">
-                <a class="btn-ghost btn-sm" href="{% url 'progression:admin_component_edit' item.id %}">{% trans "Edit" %}</a>
-                <form class="m-0" method="post" action="{% url 'progression:admin_component_delete' item.id %}" data-confirm="{% trans 'Deactivate this component?' %}">{% csrf_token %}
-                  <button class="btn-danger text-xs py-1 px-2 min-h-0" type="submit">{% trans "Deactivate" %}</button>
-                </form>
-              </div>
             </div>
           {% empty %}
             <div class="border border-line rounded-sm p-4 text-center">{% include "ui/components/_empty_state.html" with title=_("No components.") %}</div>
           {% endfor %}
         </div>
-        <a class="btn-primary"
-           href="{% url 'progression:admin_component_create' cohort.id semester.id %}">{% trans "Create component" %}
-        </a>
       </section>
     {% elif workflow == 'component_create' or workflow == 'component_edit' %}
       <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
-        <label>
-          {% trans "Name" %}
+        <label class="field"><span class="field-label">{% trans "Name" %}</span>
           <input name="name" class="form-input" value="{{ component.name|default:'' }}" required>
         </label>
-        <label>
-          {% trans "Type" %}
+        <label class="field"><span class="field-label">{% trans "Type" %}</span>
           <select name="component_type" class="form-select" required>
             {% for value,label in component_type_choices %}
               <option value="{{ value }}"
@@ -250,18 +229,17 @@
             {% endfor %}
           </select>
         </label>
-        <label>
-          {% trans "Weight percent" %}
-          <input name="weight_percent" class="form-input"
+        <label class="field"><span class="field-label">{% trans "Weight of final grade (%)" %}</span>
+          <input name="weight_percent" class="form-input" type="number" min="0" max="100" step="0.01"
                  value="{{ component.weight_percent|default:'' }}"
                  required>
         </label>
-        <label>
-          {% trans "Required minimum percent" %}
-          <input name="required_min_percent" class="form-input"
-                 value="{{ component.required_min_percent|default:0 }}"></label>
-        <label>
-          {% trans "Order" %}
+        <label class="field"><span class="field-label">{% trans "Required minimum (%)" %}</span>
+          <input name="required_min_percent" class="form-input" type="number" min="0" max="100" step="0.01"
+                 value="{{ component.required_min_percent|default:0 }}">
+          <span class="field-help">{% trans "Enter a percentage from 0 to 100." %}</span>
+        </label>
+        <label class="field"><span class="field-label">{% trans "Order" %}</span>
           <input name="order" class="form-input" value="{{ component.order|default:'' }}" required>
         </label>
         <div class="flex flex-col gap-2 pt-4 border-t border-line"><label class="flex items-center gap-2 cursor-pointer">
@@ -292,18 +270,15 @@
           </div>
         </div>
         <form method="post">{% csrf_token %}
-          <label>
-            {% trans "Score" %}
-            <input name="score" class="form-input" value="{{ grade_item.score|default:'' }}" required>
+          <label class="field"><span class="field-label">{% trans "Score (points)" %}</span>
+            <input name="score" class="form-input" type="number" min="0" step="0.01" value="{{ grade_item.score|default:'' }}" required>
           </label>
-          <label>
-            {% trans "Maximum score" %}
-            <input name="max_score" class="form-input"
+          <label class="field"><span class="field-label">{% trans "Maximum score (points)" %}</span>
+            <input name="max_score" class="form-input" type="number" min="0" step="0.01"
                    value="{{ grade_item.max_score|default:'' }}"
                    required>
           </label>
-          <label>
-            {% trans "Notes" %}
+          <label class="field"><span class="field-label">{% trans "Notes" %}</span>
             <textarea name="notes" class="form-input">{{ grade_item.notes|default:'' }}
                                         </textarea>
           </label>
@@ -338,26 +313,22 @@
       </section>
     {% elif workflow == 'interview_request' %}
       <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
-        <label>
-          {% trans "Interview date/time" %}
+        <label class="field"><span class="field-label">{% trans "Interview date/time" %}</span>
           <input type="datetime-local" name="interview_at" class="form-input"></label>
-        <label>
-          {% trans "Notes" %}
+        <label class="field"><span class="field-label">{% trans "Notes" %}</span>
           <textarea name="notes" class="form-input"></textarea>
         </label>
         <button class="btn-primary" type="submit">{% trans "Request interview" %}</button>
       </form>
     {% elif workflow == 'interview_decision' %}
       <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
-        <label>
-          {% trans "Decision" %}
+        <label class="field"><span class="field-label">{% trans "Decision" %}</span>
           <select name="decision" class="form-select" required>
             <option value="pass">{% trans "Pass" %}</option>
             <option value="fail">{% trans "Fail" %}</option>
           </select>
         </label>
-        <label>
-          {% trans "Notes" %}
+        <label class="field"><span class="field-label">{% trans "Notes" %}</span>
           <textarea name="notes" class="form-input"></textarea>
         </label>
         <button class="btn-primary" type="submit">{% trans "Save decision" %}</button>
@@ -386,7 +357,7 @@
                 <tr>
                   <td class="table-td">{{ item.student.full_name|default:item.student }}</td>
                   <td class="table-td">
-                    {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:item.status %}
+                    {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:'—' %}
                   </td>
                   <td class="table-td">
                     <div class="flex gap-2.5 items-center flex-wrap">{% if item.status != 'active' %}
@@ -415,16 +386,16 @@
             <div class="mobile-card">
               <div class="flex-1 min-w-0">
                 <strong class="block truncate">{{ item.student.full_name|default:item.student }}</strong>
-                {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:item.status %}
+                {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:'—' %}
               </div>
               <div class="flex flex-col gap-1 shrink-0">
                 {% if item.status != 'active' %}
                   <form method="post" action="{% url 'progression:admin_activate_rejoin_plan' item.id %}" class="m-0">{% csrf_token %}
-                    <button class="btn-success text-xs py-1 px-2 min-h-0" type="submit">{% trans "Activate" %}</button>
+                    <button class="btn-success" type="submit">{% trans "Activate" %}</button>
                   </form>
                 {% endif %}
                 <form method="post" action="{% url 'progression:admin_cancel_rejoin_plan' item.id %}" class="m-0">{% csrf_token %}
-                  <button class="btn-danger text-xs py-1 px-2 min-h-0" type="submit">{% trans "Cancel" %}</button>
+                  <button class="btn-danger" type="submit">{% trans "Cancel" %}</button>
                 </form>
               </div>
             </div>
@@ -435,20 +406,17 @@
       </section>
     {% elif workflow == 'rejoin_create' %}
       <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
-        <label>
-          {% trans "Failed semester" %}
+        <label class="field"><span class="field-label">{% trans "Failed semester" %}</span>
           <select name="semester_id" class="form-select" required>
             {% for item in semesters %}<option value="{{ item.id }}">{{ item }}</option>{% endfor %}
           </select>
         </label>
-        <label>
-          {% trans "Target cohort" %}
+        <label class="field"><span class="field-label">{% trans "Target cohort" %}</span>
           <select name="cohort_id" class="form-select" required>
             {% for item in cohorts %}<option value="{{ item.id }}">{{ item }}</option>{% endfor %}
           </select>
         </label>
-        <label>
-          {% trans "Notes" %}
+        <label class="field"><span class="field-label">{% trans "Notes" %}</span>
           <textarea name="notes" class="form-input"></textarea>
         </label>
         <button class="btn-primary" type="submit">{% trans "Create rejoin plan" %}</button>

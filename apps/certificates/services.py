@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import date, timedelta
 from io import BytesIO
 
 from django.db import transaction
@@ -12,7 +12,7 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from apps.academics.models import DiplomaEnrollment
+from apps.academics.models import Diploma, DiplomaEnrollment
 from apps.progression.constants import (
     CERTIFICATE_STATUS_AVAILABLE,
     CERTIFICATE_STATUS_FAILED,
@@ -24,10 +24,24 @@ from apps.progression.constants import (
     PROMOTION_DECISION_GRADUATE,
 )
 from apps.progression.models import PromotionDecision, StudentDiplomaCompletion
-from apps.storage.services import storage_service
+from apps.storage.services import record_deferred_storage_deletion, storage_service
 from apps.students.models import StudentProfile
 
-from .models import CertificateCounter, CertificateTemplate, GeneratedCertificate
+from .models import (
+    CertificateCounter,
+    CertificateTemplate,
+    GeneratedCertificate,
+    TEMPLATE_SOURCE_FORMAT_NONE,
+    TEMPLATE_SOURCE_STATUS_NONE,
+    TEMPLATE_SOURCE_STATUS_READY,
+)
+from .source_adapters import (
+    render_source_preview,
+    source_checksum,
+    validate_field_mapping,
+    validate_source_format,
+    validate_source_size,
+)
 
 try:
     from weasyprint import HTML
@@ -89,6 +103,7 @@ def generate_certificate_pdf(
     enrollment: DiplomaEnrollment,
     *,
     actor=None,
+    regeneration_cert_id: int | None = None,
 ) -> GeneratedCertificate:
     completion = StudentDiplomaCompletion.objects.filter(
         diploma_enrollment=enrollment,
@@ -98,29 +113,45 @@ def generate_certificate_pdf(
     if not completion:
         raise ValueError(_("Student has not completed/graduated yet."))
 
-    template = CertificateTemplate.objects.filter(
-        diploma=enrollment.cohort.diploma,
-        active=True,
-    ).first()
-
-    if not template:
-        template = _create_placeholder_template(enrollment, actor)
-
     # Reserve the immutable record with its final number in a short transaction;
     # slow PDF render and storage work run outside it (T6). A previously failed
     # certificate is reused as-is so a retry never allocates a second number.
     with transaction.atomic():
+        locked_enrollment = DiplomaEnrollment.objects.select_for_update().get(pk=enrollment.pk)
+        Diploma.objects.select_for_update().get(pk=locked_enrollment.cohort.diploma_id)
+        template = CertificateTemplate.objects.filter(
+            diploma=locked_enrollment.cohort.diploma,
+            active=True,
+        ).first()
+        if not template:
+            template = _create_placeholder_template(locked_enrollment, actor)
         existing_active = GeneratedCertificate.objects.select_for_update().filter(
             diploma_enrollment=enrollment,
-            status__in=[CERTIFICATE_STATUS_GENERATED, CERTIFICATE_STATUS_AVAILABLE],
+            status__in=[
+                CERTIFICATE_STATUS_GENERATED,
+                CERTIFICATE_STATUS_AVAILABLE,
+                CERTIFICATE_STATUS_REGENERATION,
+            ],
         ).first()
         if existing_active:
-            raise ValueError(_("An active certificate already exists for this enrollment."))
+            stale_before = timezone.now() - timedelta(minutes=15)
+            if existing_active.status == CERTIFICATE_STATUS_AVAILABLE:
+                raise ValueError(_("An active certificate already exists for this enrollment."))
+            if (
+                existing_active.status == CERTIFICATE_STATUS_GENERATED
+                and existing_active.updated_at > stale_before
+            ):
+                raise ValueError(_("Certificate generation is already in progress."))
+            if (
+                existing_active.status == CERTIFICATE_STATUS_REGENERATION
+                and existing_active.pk != regeneration_cert_id
+                and existing_active.updated_at > stale_before
+            ):
+                raise ValueError(_("Certificate regeneration is already in progress."))
 
-        cert = GeneratedCertificate.objects.select_for_update().filter(
-            diploma_enrollment=enrollment,
-            status=CERTIFICATE_STATUS_FAILED,
-        ).first()
+        cert = existing_active or GeneratedCertificate.objects.select_for_update().filter(
+            diploma_enrollment=locked_enrollment, status=CERTIFICATE_STATUS_FAILED,
+        ).order_by("-generated_at").first()
         if cert is None:
             certificate_number = get_next_certificate_number(
                 enrollment.cohort.diploma_id, student.id,
@@ -137,12 +168,37 @@ def generate_certificate_pdf(
                     "diploma": enrollment.cohort.diploma.title,
                     "cohort": enrollment.cohort.name,
                     "completed_at": str(completion.completed_at) if completion.completed_at else None,
+                    "mapping_schema_version": template.mapping_schema_version,
                 },
             )
+        else:
+            cert.status = CERTIFICATE_STATUS_GENERATED
+            cert.certificate_template = template
+            cert.generated_by = actor
+            cert.save(update_fields=["status", "certificate_template", "generated_by", "updated_at"])
 
+    uploaded_key = ""
     try:
-        html = render_certificate_html(student, template, completion, cert.certificate_number)
-        pdf_bytes = _html_to_pdf(html)
+        # P7-03: current corrected name resolved at generation time.
+        student_name = (
+            student.user.full_name_ar
+            or student.user.full_name
+            or student.user.email
+        )
+
+        if template.source_status == TEMPLATE_SOURCE_STATUS_READY and template.source_storage_key and template.field_mapping:
+            source_bytes = storage_service.download_file(template.source_storage_key)
+            from .source_adapters import overlay_text_on_source
+            output_bytes = overlay_text_on_source(
+                source_bytes,
+                template.source_format,
+                template.field_mapping,
+                {"student_name": student_name},
+            )
+            pdf_bytes = output_bytes if template.source_format == "pdf" else _image_bytes_to_pdf(output_bytes)
+        else:
+            html = render_certificate_html(student, template, completion, cert.certificate_number)
+            pdf_bytes = _html_to_pdf(html)
 
         result = storage_service.upload_file(
             data=pdf_bytes,
@@ -152,26 +208,47 @@ def generate_certificate_pdf(
             allowed_types=[".pdf"],
             original_filename=f"certificate_{cert.certificate_number}.pdf",
         )
+        uploaded_key = result.key
 
         snapshot = dict(cert.metadata_snapshot or {})
         snapshot.pop("error", None)
+        snapshot["student_name"] = student_name
+        snapshot["mapping_schema_version"] = template.mapping_schema_version
         cert.pdf_storage_key = result.key
         cert.pdf_file_size = result.byte_size
         cert.status = CERTIFICATE_STATUS_AVAILABLE
         cert.metadata_snapshot = snapshot
         cert.save(update_fields=["pdf_storage_key", "pdf_file_size", "status", "metadata_snapshot"])
 
-    except (OSError, ValueError) as exc:
+    except Exception as exc:  # rendering and storage failures are retryable domain failures
         logger.exception("PDF generation failed for cert %s", cert.certificate_number)
         snapshot = dict(cert.metadata_snapshot or {})
         snapshot["error"] = str(exc)
         cert.status = CERTIFICATE_STATUS_FAILED
         cert.metadata_snapshot = snapshot
-        cert.save(update_fields=["status", "metadata_snapshot"])
-
-    # ponytail: broad Exception replaced with OSError/ValueError; any other error propagates to caller
+        cert.save(update_fields=["status", "metadata_snapshot", "updated_at"])
+        if uploaded_key:
+            try:
+                if not storage_service.delete_file(uploaded_key):
+                    record_deferred_storage_deletion(key=uploaded_key, error=str(exc))
+            except Exception as cleanup_exc:
+                record_deferred_storage_deletion(key=uploaded_key, error=str(cleanup_exc))
 
     return cert
+
+
+def _image_bytes_to_pdf(png_bytes: bytes) -> bytes:
+    """Wrap a PNG (PSD overlay output) into a single-page PDF via PIL."""
+    from PIL import Image
+    from reportlab.pdfgen import canvas as pdf_canvas
+
+    img = Image.open(BytesIO(png_bytes))
+    buf = BytesIO()
+    c = pdf_canvas.Canvas(buf, pagesize=(img.width, img.height))
+    c.drawImage(BytesIO(png_bytes), 0, 0, width=img.width, height=img.height)
+    c.showPage()
+    c.save()
+    return buf.getvalue()
 
 
 def _html_to_pdf(html: str) -> bytes:
@@ -215,6 +292,129 @@ def _create_placeholder_template(enrollment: DiplomaEnrollment, actor) -> Certif
     return template
 
 
+def ingest_certificate_source(
+    template: CertificateTemplate,
+    *,
+    data: bytes,
+    filename: str,
+    content_type: str,
+    actor=None,
+    field_mapping: dict | None = None,
+) -> CertificateTemplate:
+    """Validate, store, preview, and map a PDF/PSD certificate source (P7-02).
+
+    File validation and preview rendering run OUTSIDE DB transactions; the
+    template row is updated in a short transaction only after all slow work
+    succeeds, so invalid/oversized/malformed sources never leave authoritative
+    DB rows or untracked objects.
+    """
+    validate_source_size(data)
+    source_format = validate_source_format(filename, content_type)
+    preview = render_source_preview(data, source_format)
+    checksum = source_checksum(data)
+
+    if field_mapping:
+        normalized_mapping = validate_field_mapping(field_mapping, preview)
+    else:
+        normalized_mapping = {}
+
+    old_source_key = template.source_storage_key
+    old_preview_key = template.preview_storage_key
+    source_result = storage_service.upload_file(
+        data=data,
+        key_prefix=f"certificate_templates/{template.id}",
+        content_type=content_type,
+        max_size=25 * 1024 * 1024,
+        allowed_types=[".pdf", ".psd"],
+        original_filename=filename,
+    )
+    try:
+        preview_result = storage_service.upload_file(
+            data=preview.preview_bytes,
+            key_prefix=f"certificate_templates/{template.id}/preview",
+            content_type="image/png",
+            max_size=8 * 1024 * 1024,
+            allowed_types=[".png"],
+            original_filename="preview.png",
+        )
+    except Exception:
+        try:
+            if not storage_service.delete_file(source_result.key):
+                record_deferred_storage_deletion(key=source_result.key, error="Preview upload failed")
+        except Exception as cleanup_exc:
+            record_deferred_storage_deletion(key=source_result.key, error=str(cleanup_exc))
+        raise
+
+    template.source_format = source_format
+    template.source_status = TEMPLATE_SOURCE_STATUS_READY
+    template.source_storage_key = source_result.key
+    template.source_byte_size = source_result.byte_size
+    template.source_checksum = checksum
+    template.source_error = ""
+    template.preview_storage_key = preview_result.key
+    template.preview_width = preview.width
+    template.preview_height = preview.height
+    template.preview_page_count = preview.page_count
+    template.field_mapping = normalized_mapping
+    template.mapping_schema_version = 1
+    try:
+        template.save(update_fields=[
+            "source_format", "source_status", "source_storage_key", "source_byte_size",
+            "source_checksum", "source_error", "preview_storage_key", "preview_width",
+            "preview_height", "preview_page_count", "field_mapping",
+            "mapping_schema_version", "updated_at",
+        ])
+    except Exception:
+        for key in (source_result.key, preview_result.key):
+            try:
+                if not storage_service.delete_file(key):
+                    record_deferred_storage_deletion(key=key, error="Template database update failed")
+            except Exception as cleanup_exc:
+                record_deferred_storage_deletion(key=key, error=str(cleanup_exc))
+        raise
+    for key in (old_source_key, old_preview_key):
+        if key and key not in (source_result.key, preview_result.key):
+            try:
+                if not storage_service.delete_file(key):
+                    record_deferred_storage_deletion(key=key, error="Template source replaced")
+            except Exception as exc:
+                record_deferred_storage_deletion(key=key, error=str(exc))
+    return template
+
+
+def clear_certificate_source(template: CertificateTemplate) -> CertificateTemplate:
+    """Remove a template's source/preview mapping (Admin only)."""
+    old_source_key = template.source_storage_key
+    old_preview_key = template.preview_storage_key
+    template.source_format = TEMPLATE_SOURCE_FORMAT_NONE
+    template.source_status = TEMPLATE_SOURCE_STATUS_NONE
+    template.source_storage_key = ""
+    template.source_byte_size = None
+    template.source_checksum = ""
+    template.source_error = ""
+    template.preview_storage_key = ""
+    template.preview_width = None
+    template.preview_height = None
+    template.preview_page_count = 1
+    template.field_mapping = {}
+    template.mapping_schema_version = 0
+    template.save(update_fields=[
+        "source_format", "source_status", "source_storage_key", "source_byte_size",
+        "source_checksum", "source_error", "preview_storage_key", "preview_width",
+        "preview_height", "preview_page_count", "field_mapping",
+        "mapping_schema_version", "updated_at",
+    ])
+    for key in (old_source_key, old_preview_key):
+        if key:
+            try:
+                if not storage_service.delete_file(key):
+                    record_deferred_storage_deletion(key=key, error="Certificate source cleared")
+            except Exception as exc:
+                logger.exception("Failed to clean certificate template object %s", key)
+                record_deferred_storage_deletion(key=key, error=str(exc))
+    return template
+
+
 def revoke_certificate(
     cert: GeneratedCertificate,
     *,
@@ -223,14 +423,20 @@ def revoke_certificate(
 ) -> GeneratedCertificate:
     if not reason:
         raise ValueError(_("Reason is required for revocation."))
-    cert.status = CERTIFICATE_STATUS_REVOKED
-    cert.revoked_at = timezone.now()
-    cert.revoked_by = actor
-    cert.revoke_reason = reason
-    cert.save(
-        update_fields=["status", "revoked_at", "revoked_by", "revoke_reason"],
-    )
-    return cert
+    with transaction.atomic():
+        locked = GeneratedCertificate.objects.select_for_update().get(pk=cert.pk)
+        if locked.status != CERTIFICATE_STATUS_AVAILABLE:
+            raise ValueError(_("Only an available certificate can be revoked."))
+        locked.status = CERTIFICATE_STATUS_REVOKED
+        locked.revoked_at = timezone.now()
+        locked.revoked_by = actor
+        locked.revoke_reason = reason
+        locked.save(
+            update_fields=[
+                "status", "revoked_at", "revoked_by", "revoke_reason", "updated_at",
+            ],
+        )
+    return locked
 
 
 def regenerate_certificate(
@@ -241,18 +447,34 @@ def regenerate_certificate(
 ) -> GeneratedCertificate:
     if not reason:
         raise ValueError(_("Reason is required for regeneration."))
-    cert.status = CERTIFICATE_STATUS_REGENERATION
-    cert.save(update_fields=["status"])
+    if not cert.diploma_enrollment_id:
+        raise ValueError(_("This historical certificate is no longer linked to an enrollment."))
+    with transaction.atomic():
+        locked_enrollment = DiplomaEnrollment.objects.select_for_update().get(
+            pk=cert.diploma_enrollment_id,
+        )
+        locked = GeneratedCertificate.objects.select_for_update().select_related(
+            "student", "diploma_enrollment",
+        ).get(pk=cert.pk)
+        if locked.status != CERTIFICATE_STATUS_AVAILABLE:
+            raise ValueError(_("Only an available certificate can be regenerated."))
+        if locked.diploma_enrollment_id != locked_enrollment.pk:
+            raise ValueError(_("Certificate enrollment changed; refresh and try again."))
+        locked.status = CERTIFICATE_STATUS_REGENERATION
+        locked.save(update_fields=["status", "updated_at"])
 
-    PromotionDecision.objects.create(
-        student=cert.student,
-        diploma_enrollment=cert.diploma_enrollment,
-        decision_type=PROMOTION_DECISION_GRADUATE,
-        automatic=False,
-        reason=reason,
-        decided_by=actor,
-    )
+        PromotionDecision.objects.create(
+            student=locked.student,
+            diploma_enrollment=locked.diploma_enrollment,
+            decision_type=PROMOTION_DECISION_GRADUATE,
+            automatic=False,
+            reason=reason,
+            decided_by=actor,
+        )
 
     return generate_certificate_pdf(
-        cert.student, cert.diploma_enrollment, actor=actor,
+        locked.student,
+        locked.diploma_enrollment,
+        actor=actor,
+        regeneration_cert_id=locked.pk,
     )

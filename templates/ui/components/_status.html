@@ -1,4 +1,7 @@
-{% load ui_tags %}
-{% with tone=code|status_tone %}
-<span class="status-pill-{{ tone }}">{{ label|default:code }}</span>
+{% load ui_tags i18n %}
+{% with icon=icon|default:"" %}
+<span class="status-pill-{{ code|status_tone }}">
+  <span class="status-icon" aria-hidden="true">{% if icon %}{{ icon }}{% else %}{{ code|status_icon }}{% endif %}</span>
+  <span>{{ label|default:_("Unknown") }}</span>
+</span>
 {% endwith %}

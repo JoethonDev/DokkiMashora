@@ -1,0 +1,38 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n %}
+{% block title %}
+  {% trans "Reviewer dashboard" %}
+{% endblock %}
+{% block content %}
+  <div class="page-stack animate-enter-view">{% trans "Semester exam" as eyebrow %}
+    {% include "ui/components/_page_header.html" with title=_("Reviewer dashboard") eyebrow=eyebrow %}
+    {% if groups %}
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">{% for key,group in groups.items %}
+        <section class="card-surface">
+          <div class="section-head"><div><p class="eyebrow">{% trans "Assignment" %}</p><h2>{{ group.cohort }} · {{ group.semester }}</h2></div></div>
+           {% for item in group.assignments %}
+             <div class="flex items-center justify-between gap-2 border-t border-line py-3 first:border-t-0">
+               <div class="min-w-0">
+                  <strong class="block">{{ item.assignment.title }}</strong>
+                  <small class="block text-muted">{{ item.assignment.scope_label }} · {{ item.assignment.assessment|default:_('All Semester Exams') }} · {{ item.assignment.cluster|default:_('All assigned students') }}</small>
+                </div>
+                <div class="flex gap-2 flex-wrap justify-end">
+                  <a class="btn-soft" href="{% url 'assessments:reviewer_section_grading' item.assignment.id %}">{% trans "Offline grades" %} <span class="status">{{ item.ungraded }}</span></a>
+                  {% if item.claim %}
+                    <a class="btn-primary" href="{% url 'assessments:reviewer_online_grading' item.assignment.id %}">{% trans "Continue online submission" %}</a>
+                  {% else %}
+                    <form method="post" action="{% url 'assessments:reviewer_claim_submission' item.assignment.id %}">{% csrf_token %}<button class="btn-soft" type="submit">{% trans "Request online submission" %} <span class="status">{{ item.online_ungraded }}</span></button></form>
+                  {% endif %}
+                </div>
+             </div>
+          {% endfor %}
+        </section>
+      {% endfor %}
+      </div>
+    {% else %}
+      <section class="card-surface">
+        {% include "ui/components/_empty_state.html" with title=_("No active assignments.") message=_("You have no assigned grading work right now.") %}
+      </section>
+    {% endif %}
+  </div>
+{% endblock %}

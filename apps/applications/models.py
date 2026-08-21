@@ -13,6 +13,8 @@ from apps.students.models import StudentProfile
 from .constants import (
     ACTIVE_PROGRAM_APP_STATUSES,
     DECISION_ACTION_CHOICES,
+    DELIVERY_MODE_CHOICES,
+    DELIVERY_MODE_ONLINE,
     DOCUMENT_REQUEST_STATUS_CHOICES,
     DOCUMENT_REQUEST_STATUS_REQUESTED,
     DOCUMENT_REQUEST_STATUS_SUBMITTED,
@@ -40,6 +42,13 @@ class ProgramApplication(TimeStampedModel):
         max_length=10,
         choices=PROGRAM_TYPE_CHOICES,
         default=PROGRAM_TYPE_DIPLOMA,
+    )
+    delivery_mode = models.CharField(
+        _("Diploma delivery mode"),
+        max_length=10,
+        choices=DELIVERY_MODE_CHOICES,
+        default=DELIVERY_MODE_ONLINE,
+        help_text=_("How the student will attend Diploma delivery and Semester Exams."),
     )
     cohort = models.ForeignKey(
         "academics.Cohort",

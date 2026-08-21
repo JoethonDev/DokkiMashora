@@ -27,6 +27,10 @@
                 {{ application.cohort }}
               </dd>
             </div>
+            <div>
+              <dt class="dt">{% trans "Diploma attendance mode" %}</dt>
+              <dd class="dd">{{ application.get_delivery_mode_display }}</dd>
+            </div>
           {% endif %}
           <div>
             <dt class="dt">{% trans "Submitted" %}</dt>
@@ -64,6 +68,48 @@
           {% endif %}
         </dl>
       </article>
+      {% if request_doc_form or doc_request or doc_uploads %}
+        <article class="card-surface">
+          <div class="section-head"><div><p class="eyebrow">{% trans "Documents" %}</p><h3>{% trans "Application documents" %}</h3></div></div>
+          {% if doc_uploads %}
+            <p role="status">{% trans "Documents submitted." %}</p>
+            {% if is_paid %}
+              <p class="text-sm text-muted">{% trans "Payment received." %}</p>
+            {% elif is_waived %}
+              <p class="text-sm text-muted">{% trans "Payment has been waived for this application." %}</p>
+            {% elif can_record_payment %}
+              <p class="text-sm text-muted">{% trans "Documents received. Record payment to continue the application." %}</p>
+            {% elif can_grant_waiver %}
+              <p class="text-sm text-muted">{% trans "Documents received. Grant a payment waiver to continue the application." %}</p>
+            {% elif intake_state.can_request %}
+              <p class="text-sm text-muted">{% trans "Documents received. Request the required intake form to continue." %}</p>
+            {% elif can_activate %}
+              <p class="text-sm text-muted">{% trans "Documents received. The application is ready for activation." %}</p>
+            {% endif %}
+            {% for upload in doc_uploads %}
+              <div class="flex flex-wrap items-center gap-2.5 py-2 {% if not forloop.first %}border-t border-line{% endif %}">
+                <div class="min-w-0 flex-1">
+                  <strong class="block text-sm">{% blocktrans with n=forloop.counter %}Submission {{ n }}{% endblocktrans %}</strong>
+                  <small class="text-xs text-muted"><span dir="ltr" class="inline-block">{{ upload.submitted_at|date:"d/m/Y H:i" }}</span></small>
+                </div>
+                <div class="flex gap-2.5 items-center flex-wrap shrink-0">
+                  <a class="btn-secondary" href="{% url 'applications:download_persona' upload.id %}">{% trans "Download photo" %}</a>
+                  <a class="btn-secondary" href="{% url 'applications:download_attachments' upload.id %}">{% trans "Download attachments" %}</a>
+                </div>
+              </div>
+            {% endfor %}
+          {% elif doc_request %}
+            <p>{% trans "Request status" %}: {{ doc_request.get_status_display }}</p>
+            <p class="text-sm text-muted">{% trans "Expires" %}: <span dir="ltr" class="inline-block">{{ doc_request.expires_at|date:"d/m/Y H:i" }}</span></p>
+          {% endif %}
+          {% if request_doc_form %}
+            <form method="post" class="mt-4">{% csrf_token %}<input type="hidden" name="action" value="request_documents">
+              {% for field in request_doc_form %}{% include "ui/components/_field.html" %}{% endfor %}
+              <button class="btn-warning" type="submit">{% trans "Request documents" %}</button>
+            </form>
+          {% endif %}
+        </article>
+      {% endif %}
       {% if can_accept or can_reject %}
       <article class="card-surface"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Workflow" %}</p>
@@ -81,6 +127,7 @@
         </form>
         {% endif %}
         {% if can_reject %}
+        {% if can_accept %}{% include "ui/components/_form_section_divider.html" with title=_("Reject application") %}{% endif %}
         <form method="post">{% csrf_token %}
           <input type="hidden" name="action" value="reject">
           <div class="field"><label for="admin-notes-reject">{% trans "Reviewer notes" %}</label>
@@ -93,14 +140,6 @@
           <button class="btn-danger" type="submit">{% trans "Reject application" %}</button>
         </form>
         {% endif %}
-      </article>
-      {% elif decision_reason %}
-      <article class="card-surface"><div class="section-head"><div>
-            <p class="eyebrow">{% trans "Workflow" %}</p>
-            <h3>{% trans "Decision" %}</h3>
-          </div>
-        </div>
-        <p class="text-sm text-muted">{{ decision_reason }}</p>
       </article>
       {% endif %}
       {% if intake_state.required_form %}
@@ -130,9 +169,9 @@
           {% endif %}
         </article>
       {% endif %}
-      {% if application.status == "payment_pending" %}
+      {% if can_record_payment %}
         <article class="card-surface">
-          <div class="section-head"><div><p class="eyebrow">{% trans "Payments" %}</p><h3>{% trans "Record payment" %}</h3></div></div>
+          <div class="section-head"><div><p class="eyebrow">{% trans "Payments" %}</p><h3>{% trans "Complete payment step" %}</h3></div></div>
           <form method="post">{% csrf_token %}<input type="hidden" name="action" value="mark_paid">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
               <label class="field"><span class="field-label">{% trans "Amount" %}</span><input class="form-input" name="amount" type="number" min="0" step="0.01" required></label>
@@ -141,6 +180,29 @@
             <label class="field"><span class="field-label">{% trans "Notes" %}</span><textarea class="form-input" name="notes" rows="2"></textarea></label>
             <button class="btn-success" type="submit">{% trans "Record payment" %}</button>
           </form>
+        </article>
+      {% endif %}
+      {% if can_grant_waiver or can_revoke_waiver %}
+        <article class="card-surface">
+          <div class="section-head"><div><p class="eyebrow">{% trans "Waiver" %}</p><h3>{% trans "Payment waiver" %}</h3></div></div>
+          {% if is_waived and active_waiver %}
+            <p class="text-sm text-muted mb-2">{% trans "Payment has been waived for this application." %}</p>
+            <dl class="dl mb-3"><div><dt class="dt">{% trans "Reason" %}</dt><dd class="dd">{{ active_waiver.reason }}</dd></div>
+              <div><dt class="dt">{% trans "Granted by" %}</dt><dd class="dd">{{ active_waiver.granted_by.full_name|default:active_waiver.granted_by.email }}</dd></div>
+              <div><dt class="dt">{% trans "Granted at" %}</dt><dd class="dd">{{ active_waiver.granted_at|date:"d/m/Y H:i" }}</dd></div></dl>
+            {% if can_revoke_waiver %}
+              <form method="post">{% csrf_token %}<input type="hidden" name="action" value="revoke_waiver">
+                <label class="field"><span class="field-label">{% trans "Revoke reason" %}</span><textarea class="form-input" name="waiver_revoke_reason" rows="2"></textarea></label>
+                <button class="btn-danger" type="submit" data-confirm="{% trans 'Revoke this payment waiver?' %}">{% trans "Revoke waiver" %}</button>
+              </form>
+            {% endif %}
+          {% elif can_grant_waiver %}
+            <form method="post">{% csrf_token %}<input type="hidden" name="action" value="grant_waiver">
+              <label class="field"><span class="field-label">{% trans "Reason" %} <span aria-hidden="true">*</span></span><textarea class="form-input" name="waiver_reason" rows="2" required></textarea></label>
+              <p class="text-sm text-muted mb-3">{% trans "A waiver satisfies payment readiness without creating a payment record." %}</p>
+              <button class="btn-warning" type="submit" data-confirm="{% trans 'Grant a payment waiver for this application?' %}">{% trans "Grant payment waiver" %}</button>
+            </form>
+          {% endif %}
         </article>
       {% endif %}
       {% if application.program_type == "diploma" %}
@@ -153,27 +215,6 @@
           </form>
         </article>
         {% endif %}
-      {% endif %}
-      {% if request_doc_form or doc_request or doc_upload %}
-        <article class="card-surface">
-          <div class="section-head"><div><p class="eyebrow">{% trans "Documents" %}</p><h3>{% trans "Application documents" %}</h3></div></div>
-          {% if doc_upload %}
-            <p role="status">{% trans "Documents submitted." %}</p>
-            <div class="flex gap-2.5 items-center flex-wrap mt-3">
-              <a class="btn-secondary" href="{% url 'applications:download_persona' doc_upload.id %}">{% trans "Download photo" %}</a>
-              <a class="btn-secondary" href="{% url 'applications:download_attachments' doc_upload.id %}">{% trans "Download attachments" %}</a>
-            </div>
-          {% elif doc_request %}
-            <p>{% trans "Request status" %}: {{ doc_request.get_status_display }}</p>
-            <p class="text-sm text-muted">{% trans "Expires" %}: {{ doc_request.expires_at|date:"d/m/Y H:i" }}</p>
-          {% endif %}
-          {% if request_doc_form %}
-            <form method="post" class="mt-4">{% csrf_token %}<input type="hidden" name="action" value="request_documents">
-              {% for field in request_doc_form %}{% include "ui/components/_field.html" %}{% endfor %}
-              <button class="btn-warning" type="submit">{% trans "Request documents" %}</button>
-            </form>
-          {% endif %}
-        </article>
       {% endif %}
       {% if application.status == "entrance_submitted" %}
         <article class="card-surface">
@@ -190,13 +231,13 @@
           </form>
         </article>
       {% endif %}
-      {% if application.status == "ready_for_activation" %}
+      {% if can_activate %}
         <article class="card-surface">
           <div class="section-head"><div><p class="eyebrow">{% trans "Activation" %}</p><h3>{% trans "Complete application" %}</h3></div></div>
           <form method="post">{% csrf_token %}<input type="hidden" name="action" value="activate"><button class="btn-success" type="submit">{% trans "Activate application" %}</button></form>
         </article>
       {% endif %}
-      {% if application.status == "accepted" or application.status == "rejected" %}
+      {% if can_show_revert %}
         <article class="card-surface">
           <div class="section-head"><div><p class="eyebrow">{% trans "Decision" %}</p><h3>{% trans "Revert decision" %}</h3></div></div>
           <form method="post">{% csrf_token %}<input type="hidden" name="action" value="revert">
