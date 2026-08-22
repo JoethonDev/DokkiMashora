@@ -23,9 +23,9 @@ from apps.applications.services import (
     RegistrationData,
     find_duplicate,
     is_apply_target_open,
-    normalize_phone,
 )
 from apps.core.forms import StyledFormMixin
+from apps.core.phone import normalize_phone_number
 from apps.students.constants import EDUCATION_CHOICES, GENDER_CHOICES
 from apps.students.identity import (
     COUNTRY_CHOICES,
@@ -141,7 +141,7 @@ class RegistrationForm(StyledFormMixin, forms.Form):
         value = self.cleaned_data["phone"].strip()
         if not value:
             raise forms.ValidationError(_("Mobile number is required."))
-        normalized = normalize_phone(value)
+        normalized = normalize_phone_number(value)
         if len(normalized) < 7:
             raise forms.ValidationError(_("Enter a valid mobile number."))
         return value
@@ -202,7 +202,6 @@ class RegistrationForm(StyledFormMixin, forms.Form):
                 church=cleaned.get("church", ""),
                 priest_name=cleaned.get("priest_name", ""),
                 priest_contact=cleaned.get("priest_contact", ""),
-                age=0,
             )
             duplicate_on = find_duplicate(data)
             if duplicate_on:

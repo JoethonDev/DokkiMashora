@@ -1,4 +1,4 @@
-{% load i18n %}
+{% load i18n ui_tags %}
 <div id="student-content" class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=_("Student record") %}{% url 'students:details' as student_details_url %}{% include "ui/fragments/student/_student_hero_card.html" with eyebrow=_("Student record") title=student.full_name|default:user.get_full_name email=user.email pill_label=_("Released information") action_url=student_details_url action_label=_("Profile details") action_class="btn-soft" %}
   <nav class="flex gap-2.5 items-center flex-wrap" aria-label="{% trans 'Record sections' %}">
     <a class="btn-soft" href="#record-progress">{% trans "Progression" %}</a>
@@ -7,7 +7,7 @@
     <a class="btn-soft" href="#record-payments">{% trans "Payments" %}</a>
     <a class="btn-soft" href="#record-certificates">{% trans "Certificates" %}</a>
   </nav>
-  <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"><article class="stat-card"><div class="stat-icon bg-info-soft text-info-text">◉</div>
+  <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"><article class="stat-card">
       <div class="stat-body">
         <span>{% trans "Attendance rate" %}</span>
         <strong>
@@ -19,14 +19,14 @@
         </small>
       </div>
     </article>
-    <article class="stat-card"><div class="stat-icon bg-info-soft text-info-text">✓</div>
+    <article class="stat-card">
       <div class="stat-body">
         <span>{% trans "Released grades" %}</span>
         <strong>{{ grade_items|length }}</strong>
         <small>{% trans "Visible grade items" %}</small>
       </div>
     </article>
-    <article class="stat-card"><div class="stat-icon bg-warning-soft text-warning-text">¤</div>
+    <article class="stat-card">
       <div class="stat-body">
         <span>{% trans "Payments" %}</span>
         <strong>{{ payments.records|length }}</strong>
@@ -37,7 +37,7 @@
         </small>
       </div>
     </article>
-    <article class="stat-card"><div class="stat-icon bg-success-soft text-success-text">▣</div>
+    <article class="stat-card">
       <div class="stat-body">
         <span>{% trans "Certificates" %}</span>
         <strong>{{ certificates|length }}</strong>
@@ -66,17 +66,17 @@
               <tr>
                 <td class="table-td">{{ row.semester.title }}</td>
                 <td class="table-td">
-                  <span class="status-pill-{% if row.calculated_result == 'pass' %}success{% else %}danger{% endif %}">{{ row.calculated_label }}</span>
+                  {% include "ui/components/_status.html" with code=row.calculated_result label=row.calculated_label %}
                   <small class="block text-muted">{{ row.overall_percent|default:'—' }}%</small>
                 </td>
                 <td class="table-td">
                   {% if row.outcome %}
                     {% if row.outcome.is_exceptional %}
-                      <span class="status-pill-warning">{{ row.outcome.final_label }} {% trans "(exceptional)" %}</span>
+                      <span class="status-pill-warning"><span class="status-icon" aria-hidden="true">{{ "pending"|status_icon }}</span>{{ row.outcome.final_label }} {% trans "(exceptional)" %}</span>
                     {% elif row.outcome.final_result %}
-                      <span class="status-pill-{% if row.outcome.final_result == 'pass' %}success{% else %}danger{% endif %}">{{ row.outcome.final_label }}</span>
+                      {% include "ui/components/_status.html" with code=row.outcome.final_result label=row.outcome.final_label %}
                     {% else %}
-                      <span class="status-pill-neutral">{{ row.outcome.final_label }}</span>
+                      {% include "ui/components/_status.html" with code=row.outcome.final_result label=row.outcome.final_label %}
                     {% endif %}
                     {% if row.outcome.is_interview_pending %}
                       <small class="block text-muted">{% trans "Interview pending" %}</small>
@@ -103,7 +103,7 @@
           <div class="mobile-card">
             <div class="flex-1 min-w-0">
               <strong class="block truncate">{{ row.semester.title }}</strong>
-              <span class="status-pill-{% if row.calculated_result == 'pass' %}success{% else %}danger{% endif %}">{{ row.calculated_label }} · {{ row.overall_percent|default:'—' }}%</span>
+              <span class="status-pill-{% if row.calculated_result == 'pass' %}success{% else %}danger{% endif %}"><span class="status-icon" aria-hidden="true">{{ row.calculated_result|status_icon }}</span>{{ row.calculated_label }} · {{ row.overall_percent|default:'—' }}%</span>
               {% if row.outcome %}
                 {% if row.outcome.is_exceptional %}
                   <small class="block text-muted">{% trans "Final" %}: {{ row.outcome.final_label }} ({% trans "exceptional" %})</small>
@@ -119,7 +119,7 @@
         {% endfor %}
       </div>
     {% else %}
-      {% include "ui/components/_empty_state.html" with icon="◎" title=_("No released semester evaluations") message=_("Finalized semester evaluations will appear here.") %}
+      {% include "ui/components/_empty_state.html" with title=_("No released semester evaluations") message=_("Finalized semester evaluations will appear here.") %}
     {% endif %}
   </section>
   {% if record_history.enrollments %}
@@ -145,16 +145,16 @@
           <p class="eyebrow">{% trans "Attendance" %}</p>
           <h3>{% trans "Attendance history" %}</h3>
         </div>
+        <a class="btn-ghost" href="{% url 'attendance:my_attendance' %}">{% trans "View all" %}</a>
       </div>
       <div class="flex flex-col">{% for item in attendance.records|slice:":6" %}
           <div class="flex items-center gap-2.5">
-            <span class="avatar">◷</span>
             <span class="min-w-0 flex-1"><strong class="block"><span dir="ltr" class="inline-block">{{ item.session.date }}</span></strong>
               <small class="block">{{ item.session|default:'' }}</small></span>
             {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:'—' %}
           </div>
         {% empty %}
-          {% include "ui/components/_empty_state.html" with icon="◷" title=_("No released attendance") message=_("Attendance records will appear once released.") %}
+          {% include "ui/components/_empty_state.html" with title=_("No released attendance") message=_("Attendance records will appear once released.") %}
         {% endfor %}
       </div>
     </article>
@@ -166,13 +166,12 @@
       </div>
       <div class="flex flex-col">{% for item in assessment_attempts %}
              <div class="flex items-center gap-2.5">
-               <span class="avatar">{% if item.visible_to_student %}✓{% else %}◷{% endif %}</span>
                <span class="min-w-0 flex-1">{% if item.result_url %}<a class="link font-bold block" href="{{ item.result_url }}">{{ item.assessment.title }}</a>{% else %}<strong class="block">{{ item.assessment.title }}</strong>{% endif %}
                  <small class="block">{{ item.status_label }}</small></span>
                <span class="text-end shrink-0">{% if item.visible_to_student %}{{ item.score_percent|default:'—' }}{% else %}—{% endif %}</span>
              </div>
         {% empty %}
-           {% include "ui/components/_empty_state.html" with icon="✓" title=_("No submitted assessments") message=_("Submitted assessments will appear here. Released results will be available from this history.") %}
+           {% include "ui/components/_empty_state.html" with title=_("No submitted assessments") message=_("Submitted assessments will appear here. Released results will be available from this history.") %}
         {% endfor %}
       </div>
     </article>
@@ -218,7 +217,6 @@
       </div>
       <div class="flex flex-col">{% for item in payments.records %}
           <div class="flex items-center gap-2.5">
-            <span class="avatar">¤</span>
             <span class="min-w-0 flex-1"><strong class="block">
               <span dir="ltr" class="inline-block">{{ item.amount }}</span>
               {{ item.currency }}
@@ -229,7 +227,7 @@
           </span>
           </div>
         {% empty %}
-          {% include "ui/components/_empty_state.html" with icon="¤" title=_("No payment records") message=_("Released payment information will appear here.") %}
+          {% include "ui/components/_empty_state.html" with title=_("No payment records") message=_("Released payment information will appear here.") %}
         {% endfor %}
       </div>
     </article>
@@ -240,14 +238,14 @@
       </div>
     </div>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">{% for item in certificates %}
-        <article class="card-surface"><div class="w-12 h-12 rounded-md bg-brand-soft text-brand grid place-items-center font-black">▣</div>
+        <article class="card-surface">
           <h3>{{ item.diploma_enrollment.cohort.diploma|default:item }}</h3>
           <p><span dir="ltr" class="inline-block">{{ item.issued_at|date:"d/m/Y"|default:'' }}</span></p>
           <a class="btn-primary"
              href="{% url 'certificates:student_certificate_download' item.id %}">{% trans "Download certificate" %}
           </a></article>
       {% empty %}
-        {% include "ui/components/_empty_state.html" with icon="▣" title=_("No certificates available") message=_("Completed credentials will appear here when released.") fill=True %}
+        {% include "ui/components/_empty_state.html" with title=_("No certificates available") message=_("Completed credentials will appear here when released.") fill=True %}
       {% endfor %}
     </div>
   </section>
@@ -258,7 +256,6 @@
       </div>
       {% for item in exam_assignments %}
         <div class="flex flex-col"><div class="flex items-center gap-2.5">
-            <span class="avatar">◇</span>
             <p class="m-0 min-w-0 flex-1">
               <strong class="block">{{ item.exam.title }}</strong>
               <small class="block">{{ item.get_status_display|default:'—' }}</small>
@@ -276,7 +273,6 @@
       </div>
       {% for item in notifications %}
         <div class="flex flex-col"><div class="flex items-center gap-2.5">
-            <span class="avatar">✉</span>
             <p class="m-0 min-w-0 flex-1">
               <strong class="block">{{ item.title|default:item.subject }}</strong>
               <small class="block"><span dir="ltr" class="inline-block">{{ item.created_at|date:"d/m/Y" }}</span></small>

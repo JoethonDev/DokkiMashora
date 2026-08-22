@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import timedelta
 from typing import Any
 
 from django.conf import settings
 from django.core.mail import EmailMessage as DjangoEmailMessage
 from django.core.mail import get_connection
 from django.core.validators import validate_email
+from django.db import transaction
 from django.db.models import F, Q
 from django.template.exceptions import TemplateDoesNotExist
 from django.template.loader import render_to_string
@@ -24,6 +26,8 @@ from .constants import (
     DESIGN_BRANDED,
     DESIGN_CHOICES,
     EMAIL_STATUS_FAILED,
+    EMAIL_STATUS_PROCESSING,
+    EMAIL_STATUS_QUEUED,
     EMAIL_STATUS_SENT,
 )
 from .email_message import EmailMessage
@@ -60,19 +64,18 @@ def render_template(slug: str, context: dict[str, Any]) -> tuple[str, str]:
     return template.render(context)
 
 
-def send_templated_email(
+def _render_templated_email(
     slug: str,
-    to_email: str,
     context: dict[str, Any],
-    *,
-    sent_by=None,
-    cc: list[str] | None = None,
-) -> EmailMessage | None:
-    """Render a template, wrap in design, send via SMTP, and record the result.
+) -> tuple[EmailTemplate, str, str, str] | None:
+    """Render an email template into (template, subject, body, html_body).
 
-    Returns None silently if no active/enabled template exists for the slug.
-    Raises ValueError if a template variable has no matching context key, so
-    email content cannot silently lose values.
+    Reused by the synchronous ``send_templated_email`` and the canonical
+    ``queue_templated_email`` path so queueing and direct sending share the
+    exact same rendering pipeline (static design wrap + global footer). Returns
+    None when no active/enabled template exists. Raises ValueError when a
+    template variable has no matching context key, so email content cannot
+    silently lose values.
     """
     try:
         template = EmailTemplate.objects.get(slug=slug, is_active=True, is_enabled_for_action=True)
@@ -93,6 +96,29 @@ def send_templated_email(
         pass
     footer = get_global_footer()
     html_body = _wrap_in_design(body, template.design, footer)
+    return template, subject, body, html_body
+
+
+def send_templated_email(
+    slug: str,
+    to_email: str,
+    context: dict[str, Any],
+    *,
+    sent_by=None,
+    cc: list[str] | None = None,
+) -> EmailMessage | None:
+    """Render a template, wrap in design, send via SMTP synchronously, and record the result.
+
+    Returns None silently if no active/enabled template exists for the slug.
+    Raises ValueError if a template variable has no matching context key.
+
+    Kept synchronous so existing callers keep working; the canonical queueing
+    path is ``queue_templated_email``.
+    """
+    rendered = _render_templated_email(slug, context)
+    if rendered is None:
+        return None
+    _template, subject, body, html_body = rendered
     return send_email(
         template_slug=slug,
         to_email=to_email,
@@ -102,6 +128,32 @@ def send_templated_email(
         sent_by=sent_by,
         cc=cc or [],
     )
+
+
+def _send_over_smtp(*, to_email: str, subject: str, body: str, html_body: str | None, cc: list[str]) -> None:
+    """Perform the actual SMTP delivery; raises on failure.
+
+    Runs outside any DB transaction by design. Reused by the synchronous
+    ``send_email`` path and the background queue task so the SMTP mechanics stay
+    in one place.
+    """
+    connection = get_connection()
+    connection.open()
+    try:
+        payload = html_body or body
+        message = DjangoEmailMessage(
+            subject=subject,
+            body=payload,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[to_email],
+            cc=cc,
+            connection=connection,
+        )
+        if html_body:
+            message.content_subtype = "html"
+        message.send(fail_silently=False)
+    finally:
+        connection.close()
 
 
 def send_email(
@@ -115,7 +167,7 @@ def send_email(
     cc: list[str] | None = None,
     bulk_send: BulkEmailSend | None = None,
 ) -> EmailMessage:
-    """Send an email and record the result in EmailMessage."""
+    """Send an email synchronously and record the result in EmailMessage."""
     cc = cc or []
     record = EmailMessage.objects.create(
         template_slug=template_slug,
@@ -125,23 +177,16 @@ def send_email(
         body=body,
         sent_by=sent_by,
         bulk_send=bulk_send,
+        queued_at=timezone.now(),
     )
     try:
-        connection = get_connection()
-        connection.open()
-        payload = html_body or body
-        message = DjangoEmailMessage(
+        _send_over_smtp(
+            to_email=to_email,
             subject=subject,
-            body=payload,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[to_email],
+            body=body,
+            html_body=html_body,
             cc=cc,
-            connection=connection,
         )
-        if html_body:
-            message.content_subtype = "html"
-        message.send(fail_silently=False)
-        connection.close()
         record.status = EMAIL_STATUS_SENT
         record.sent_at = timezone.now()
         record.save(update_fields=["status", "sent_at", "updated_at"])
@@ -151,6 +196,150 @@ def send_email(
         record.error = str(exc)[:1000]
         record.save(update_fields=["status", "error", "updated_at"])
     return record
+
+
+def queue_templated_email(
+    slug: str,
+    to_email: str,
+    context: dict[str, Any],
+    *,
+    sent_by=None,
+    cc: list[str] | None = None,
+    reference: str | None = None,
+    idempotency_key: str | None = None,
+) -> EmailMessage | None:
+    """Canonical queueing interface: persist a QUEUED delivery and enqueue it.
+
+    Flow: business transaction -> commit -> ``transaction.on_commit`` -> Celery
+    task -> worker sends the email. SMTP delivery therefore never determines
+    whether the surrounding business transaction commits.
+
+    Returns the EmailMessage row so callers can show queued feedback; returns
+    None if no active/enabled template exists (same semantics as
+    ``send_templated_email``). With ``idempotency_key`` the call is
+    deduplicated: a second call with the same key returns the existing row
+    instead of double-queueing. A terminal FAILED row with the same key is
+    instead reset back to QUEUED and re-enqueued, so a re-run of a bulk action
+    after permanent delivery failure actually re-sends rather than silently
+    returning the stale row. The rendered subject and the final design-wrapped
+    HTML body are stored so the worker delivers exactly what was rendered at
+    queue time.
+    """
+    from apps.communications.tasks import send_queued_email_task
+
+    rendered = _render_templated_email(slug, context)
+    if rendered is None:
+        return None
+    _template, subject, body, html_body = rendered
+
+    defaults = {
+        "template_slug": slug,
+        "to_email": to_email,
+        "cc_emails": ", ".join(cc or []),
+        "subject": subject,
+        "body": html_body,
+        "status": EMAIL_STATUS_QUEUED,
+        "sent_by": sent_by,
+        "queued_at": timezone.now(),
+        "reference": reference or "",
+    }
+    if idempotency_key:
+        record, created = EmailMessage.objects.get_or_create(
+            idempotency_key=idempotency_key,
+            defaults=defaults,
+        )
+        if not created and record.status == EMAIL_STATUS_FAILED:
+            EmailMessage.objects.filter(pk=record.pk).update(
+                status=EMAIL_STATUS_QUEUED,
+                error="",
+                queued_at=timezone.now(),
+                updated_at=timezone.now(),
+            )
+            record.status = EMAIL_STATUS_QUEUED
+            record.error = ""
+            record.queued_at = timezone.now()
+        elif not created:
+            return record
+    else:
+        record = EmailMessage.objects.create(**defaults)
+
+    transaction.on_commit(lambda: send_queued_email_task.delay(record.id))
+    return record
+
+
+#: A PROCESSING row older than this lease is considered abandoned (crashed
+#: worker) and may be reclaimed by a later delivery attempt.
+EMAIL_DELIVERY_PROCESSING_LEASE_SECONDS = 600
+
+
+def deliver_queued_email(delivery_id: int) -> bool:
+    """Deliver one queued EmailMessage row over SMTP; raises on failure.
+
+    Lifecycle transition QUEUED -> PROCESSING (claim) -> SENT. Returns False
+    without sending when the row is already terminal (SENT/FAILED) or currently
+    claimed by another worker, so retries and duplicate executions never
+    double-send. Abandoned PROCESSING rows (started longer ago than the lease)
+    are reclaimed so a crashed worker cannot strand an email. DB state
+    transitions happen outside the SMTP call.
+    """
+    try:
+        row = EmailMessage.objects.get(pk=delivery_id)
+    except EmailMessage.DoesNotExist:
+        logger.warning("EmailMessage %s no longer exists; delivery skipped", delivery_id)
+        return False
+    if row.status in (EMAIL_STATUS_SENT, EMAIL_STATUS_FAILED):
+        return False
+    now = timezone.now()
+    stale_before = now - timedelta(seconds=EMAIL_DELIVERY_PROCESSING_LEASE_SECONDS)
+    claimed = EmailMessage.objects.filter(
+        Q(pk=row.pk)
+        & (
+            Q(status=EMAIL_STATUS_QUEUED)
+            | (Q(status=EMAIL_STATUS_PROCESSING) & Q(started_at__lt=stale_before))
+        )
+    ).update(
+        status=EMAIL_STATUS_PROCESSING,
+        started_at=now,
+        attempts=F("attempts") + 1,
+        updated_at=now,
+    )
+    if not claimed:
+        return False
+    _send_over_smtp(
+        to_email=row.to_email,
+        subject=row.subject,
+        body=row.body,
+        html_body=row.body,
+        cc=[c for c in (row.cc_emails or "").split(", ") if c],
+    )
+    EmailMessage.objects.filter(pk=row.pk).update(
+        status=EMAIL_STATUS_SENT,
+        sent_at=now,
+        error="",
+        updated_at=now,
+    )
+    return True
+
+
+def record_email_delivery_failure(delivery_id: int, error: str, *, final: bool) -> None:
+    """Record a delivery failure on an EmailMessage row.
+
+    Non-final failures return the row to QUEUED so the next Celery attempt can
+    claim it again; the last error is always persisted. Final failures become
+    FAILED so they stay observable in the admin/UI.
+    """
+    if final:
+        EmailMessage.objects.filter(pk=delivery_id).update(
+            status=EMAIL_STATUS_FAILED,
+            error=error[:1000],
+            updated_at=timezone.now(),
+        )
+    else:
+        EmailMessage.objects.filter(pk=delivery_id).update(
+            status=EMAIL_STATUS_QUEUED,
+            error=error[:1000],
+            updated_at=timezone.now(),
+        )
 
 
 RecipientEntry = dict[str, str]

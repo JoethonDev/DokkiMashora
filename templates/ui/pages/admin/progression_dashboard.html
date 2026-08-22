@@ -6,9 +6,9 @@
 {% block content %}
   <div class="page-stack animate-enter-view">{% trans "Academic operations" as eyebrow %}
     {% trans "Progression" as title %}
-    {% trans "Review semester progress, decisions, evaluations, interviews, and rejoin plans." as description %}
+    {% trans "Choose a Diploma, then a cohort and semester, to manage evaluations and decisions." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    <section class="card-surface mb-4">
+    <section class="card-surface">
       <div class="section-head"><div><p class="eyebrow">{% trans "Diplomas" %}</p><h3>{% trans "Manage progression" %}</h3></div></div>
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
         {% for diploma in diplomas %}
@@ -21,81 +21,5 @@
         {% endfor %}
       </div>
     </section>
-    <section class="card-surface"><form class="actions-row items-end mb-4" method="get"><label class="min-w-40"><span class="field-label">{% trans "Diploma" %}</span>
-            <select name="diploma_id" class="form-select"><option value="">{% trans "All" %}</option>
-              {% for diploma in diplomas %}
-                <option value="{{ diploma.id }}"
-                        {% if selected_diploma_id == diploma.id|stringformat:'s' %} selected {% endif %}>
-                  {{ diploma.title }}
-                </option>
-              {% endfor %}
-            </select>
-          </label>
-          <label class="min-w-40"><span class="field-label">{% trans "Cohort" %}</span>
-            <input name="cohort_id" class="form-input"
-                   value="{{ selected_cohort_id|default:'' }}"
-                   placeholder=" {% if not selected_diploma_id %} {% trans 'Choose a diploma first' %} {% endif %} "
-                   {% if not selected_diploma_id %} disabled {% endif %}>
-          </label>
-          <button class="btn-secondary" type="submit">{% trans "Filter" %}</button>
-          <a class="btn-ghost"
-             href="{% url 'progression:admin_dashboard' %}">{% trans "Reset" %}</a>
-        </form>
-        <div class="table-wrap hidden lg:block"><table class="table">
-            <thead>
-              <tr>
-                <th class="table-th">{% trans "Student" %}</th>
-                <th class="table-th">{% trans "Diploma / cohort" %}</th>
-                <th class="table-th">{% trans "Current semester" %}</th>
-                <th class="table-th">{% trans "Progress state" %}</th>
-                <th class="table-th">{% trans "Last decision / update" %}</th>
-                <th class="table-th">{% trans "Actions" %}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for row in students_data %}
-                <tr>
-                  <td class="table-td"><div class="flex flex-col"><strong>{{ row.student.full_name|default:row.student }}</strong></div>
-                  </td>
-                  <td class="table-td">{{ row.student.current_cohort|default:'—' }}</td>
-                  <td class="table-td">{{ row.semesters|length }}</td>
-                  <td class="table-td">
-                    {% include "ui/components/_status.html" with code=row.semesters.0.status|default:"unknown" label=row.semesters.0.get_status_display|default:"—" %}
-                  </td>
-                  <td class="table-td">{{ row.semesters.0.updated_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</td>
-                  <td class="table-td">
-                    <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-secondary"
-                         href="{% url 'progression:admin_student_detail' row.student.id %}">{% trans "Open" %}</a>
-                    </div>
-                  </td>
-                </tr>
-              {% empty %}
-                <tr>
-                  <td class="table-td" colspan="6">{% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No progression records found.") %}
-                  </td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-        <div class="card-stack lg:hidden">
-          {% for row in students_data %}
-            <div class="mobile-card">
-              <div class="flex-1 min-w-0">
-                <strong class="block truncate">{{ row.student.full_name|default:row.student }}</strong>
-                <small class="block text-muted">{{ row.student.current_cohort|default:'—' }}</small>
-                <small class="block text-muted">{{ row.semesters|length }} {% trans "semesters" %}</small>
-                {% include "ui/components/_status.html" with code=row.semesters.0.status|default:"unknown" label=row.semesters.0.get_status_display|default:"—" %}
-              </div>
-              <a class="btn-soft-primary shrink-0" href="{% url 'progression:admin_student_detail' row.student.id %}">{% trans "Open" %}</a>
-            </div>
-          {% empty %}
-            <div class="border border-line rounded-sm p-4 text-center">
-              {% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No progression records found.") %}
-            </div>
-          {% endfor %}
-        </div>
-        {% include "ui/components/_pagination.html" %}
-      </section>
   </div>
 {% endblock %}

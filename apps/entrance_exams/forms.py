@@ -107,18 +107,3 @@ EntranceChoiceFormSet = inlineformset_factory(
     extra=2,
     can_delete=True,
 )
-
-
-class EntranceGradeForm(StyledFormMixin, forms.Form):
-    score = forms.DecimalField(
-        label=_("Score"),
-        max_digits=5,
-        decimal_places=2,
-        required=True,
-        widget=forms.NumberInput(attrs={}),
-    )
-    feedback = forms.CharField(
-        label=_("Feedback"),
-        widget=forms.Textarea(attrs={}),
-        required=False,
-    )

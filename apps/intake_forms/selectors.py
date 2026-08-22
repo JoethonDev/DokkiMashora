@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from django.db.models import Prefetch
 
 from apps.academics.models import Cohort, CourseVersion
@@ -10,9 +8,6 @@ from apps.applications.models import ProgramApplication
 
 from .constants import INTAKE_REQUESTABLE_STATUSES
 from .models import IntakeForm, IntakeFormRequest, IntakeFormResponse
-
-if TYPE_CHECKING:
-    from apps.students.models import StudentProfile
 
 
 def get_application_intake_target(application: ProgramApplication) -> CourseVersion | Cohort | None:
@@ -58,18 +53,6 @@ def has_required_intake_response(application: ProgramApplication) -> bool:
         form=form,
         program_application=application,
     ).exists()
-
-
-def get_student_intake_requests(profile: StudentProfile) -> list[IntakeFormRequest]:
-    """Return open intake requests for a student's applications."""
-    return list(
-        IntakeFormRequest.objects.filter(
-            program_application__student=profile,
-            status="requested",
-        ).select_related(
-            "form", "program_application__cohort__diploma", "program_application__course",
-        )
-    )
 
 
 def get_intake_responses_for_target(target) -> list[dict]:

@@ -4,7 +4,6 @@ import csv
 import hashlib
 import io
 import logging
-import re
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -24,6 +23,7 @@ from apps.audit.constants import (
 )
 from apps.audit.services import record_audit_event
 from apps.core.permissions import validate_score
+from apps.core.phone import normalize_phone_number
 from apps.students.identity import normalize_identity_number
 from apps.students.models import StudentProfile
 
@@ -75,15 +75,6 @@ def normalize_national_id_for_matching(value: str) -> list[str]:
     return variants
 
 
-def normalize_phone(value: str) -> str:
-    cleaned = re.sub(r"[^\d+]", "", value.strip())
-    if cleaned.startswith("00"):
-        cleaned = "+" + cleaned[2:]
-    if cleaned.startswith("0") and not cleaned.startswith("+") and len(cleaned) == 11:
-        cleaned = "+2" + cleaned
-    return cleaned
-
-
 def parse_date(value: str) -> datetime | None:
     for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d", "%d-%m-%Y"):
         try:
@@ -118,7 +109,7 @@ def match_student(row: dict[str, str]) -> tuple[StudentProfile | None, str, str]
         item for item in normalize_national_id_for_matching(row.get("national_id", "")) if item
     ]
     email = row.get("email", "").strip().lower()
-    phone = normalize_phone(row.get("phone", ""))
+    phone = normalize_phone_number(row.get("phone", ""))
     candidates: dict[int, StudentProfile] = {}
     sources: dict[int, str] = {}
 
@@ -188,7 +179,7 @@ def _build_student_matcher(rows):
             item for item in normalize_national_id_for_matching(row.get("national_id", "")) if item
         )
         email = row.get("email", "").strip().lower()
-        phone = normalize_phone(row.get("phone", ""))
+        phone = normalize_phone_number(row.get("phone", ""))
         if email:
             emails.add(email)
         if phone:
@@ -213,7 +204,7 @@ def _build_student_matcher(rows):
         if email:
             by_email.setdefault(email, []).append(student)
         if student.phone:
-            by_phone.setdefault(normalize_phone(student.phone), []).append(student)
+            by_phone.setdefault(normalize_phone_number(student.phone), []).append(student)
 
     def resolve(row):
         matches = {}
@@ -222,7 +213,7 @@ def _build_student_matcher(rows):
             item for item in normalize_national_id_for_matching(row.get("national_id", "")) if item
         ]
         email = row.get("email", "").strip().lower()
-        phone = normalize_phone(row.get("phone", ""))
+        phone = normalize_phone_number(row.get("phone", ""))
         for value in identity_values:
             students = by_identity.get(value, [])
             if len(students) > 1:
@@ -356,17 +347,45 @@ def preview_upload(upload_id: int) -> PaymentUpload:
 
 
 def _find_existing_payment(row) -> PaymentRecord | None:
+    """Return the PaymentRecord this row should update, or None to create a new one.
+
+    Duplicate proof is business semantics, never the amount/date heuristic:
+    - a row with an external reference updates the matching reference for the
+      same student (a true re-imported duplicate row);
+    - otherwise an already-paid, non-deleted PaymentRecord for the same
+      application, diploma enrollment, or course enrollment is the same payment
+      business effect already applied and is updated instead.
+    Reference-less rows with no such target record create a new PaymentRecord
+    rather than collapsing distinct legitimate payments.
+    """
     if row.external_reference:
         return PaymentRecord.objects.filter(
             student=row.matched_student,
             external_reference=row.external_reference,
+            deleted_at__isnull=True,
         ).first()
-    return PaymentRecord.objects.filter(
-        student=row.matched_student,
-        amount=row.amount,
-        paid_at=row.paid_at,
-        currency=row.currency,
-    ).first()
+    if row.matched_application_id:
+        return PaymentRecord.objects.filter(
+            student=row.matched_student,
+            application_id=row.matched_application_id,
+            status=PAYMENT_STATUS_PAID,
+            deleted_at__isnull=True,
+        ).first()
+    if row.matched_diploma_enrollment_id:
+        return PaymentRecord.objects.filter(
+            student=row.matched_student,
+            diploma_enrollment_id=row.matched_diploma_enrollment_id,
+            status=PAYMENT_STATUS_PAID,
+            deleted_at__isnull=True,
+        ).first()
+    if row.matched_course_enrollment_id:
+        return PaymentRecord.objects.filter(
+            student=row.matched_student,
+            course_enrollment_id=row.matched_course_enrollment_id,
+            status=PAYMENT_STATUS_PAID,
+            deleted_at__isnull=True,
+        ).first()
+    return None
 
 
 @transaction.atomic
@@ -524,7 +543,7 @@ def parse_row_data(row: dict[str, str], row_number: int) -> dict[str, Any]:
         return {"status": ROW_STATUS_FAILED, "error_message": str(_("Invalid date: %(date)s") % {"date": row.get("payment_date", "")})}
     national_id = normalize_national_id(row.get("national_id", ""))
     email = row.get("email", "").strip().lower()
-    phone = normalize_phone(row.get("phone", ""))
+    phone = normalize_phone_number(row.get("phone", ""))
     if not any((national_id, email, phone)):
         return {
             "status": ROW_STATUS_FAILED,
@@ -737,24 +756,6 @@ def has_active_payment_waiver(application) -> bool:
         application=application,
         status=WAIVER_STATUS_ACTIVE,
     ).exists()
-
-
-def get_active_payment_waiver(application) -> PaymentWaiver | None:
-    return PaymentWaiver.objects.filter(
-        application=application,
-        status=WAIVER_STATUS_ACTIVE,
-    ).first()
-
-
-def _payment_requirement_satisfied(application) -> bool:
-    """Payment readiness: a paid record OR an active Admin waiver."""
-    return has_active_payment_waiver(application) or bool(
-        PaymentRecord.objects.filter(
-            application=application,
-            status=PAYMENT_STATUS_PAID,
-            deleted_at__isnull=True,
-        ).exists()
-    )
 
 
 @transaction.atomic

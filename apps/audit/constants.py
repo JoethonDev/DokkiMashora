@@ -56,6 +56,7 @@ ACTION_INTAKE_REQUEST_SENT = "intake_request.sent"
 ACTION_USER_CREATED = "user.created"
 ACTION_USER_UPDATED = "user.updated"
 ACTION_USER_DELETED = "user.deleted"
+ACTION_ATTENDANCE_SESSION_DELETED = "attendance.session_deleted"
 
 AUDIT_ACTION_CHOICES = (
     (ACTION_APPLICATION_STATUS_CHANGE, _("Application status change")),

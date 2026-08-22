@@ -7,10 +7,10 @@
   {% url 'students:applications' as applications_url %}
   <div class="page-stack animate-enter-view">{% if submitted %}
     {% include "ui/components/_page_header.html" with eyebrow=_("Intake form") title=_("Intake form submitted") back_url=applications_url back_label=_("Back to applications") %}
-    <section class="card-surface">{% include "ui/components/_empty_state.html" with icon="&#10003;" title=_("Form already submitted") message=_("Your intake form has already been submitted. Thank you.") %}</section>
+    <section class="card-surface">{% include "ui/components/_empty_state.html" with title=_("Form already submitted") message=_("Your intake form has already been submitted. Thank you.") %}</section>
   {% elif expired %}
     {% include "ui/components/_page_header.html" with eyebrow=_("Intake form") title=_("Intake form expired") back_url=applications_url back_label=_("Back to applications") %}
-    <section class="card-surface">{% include "ui/components/_empty_state.html" with icon="&#9888;" title=_("This link has expired") message=_("This intake form link has expired. If you still need to complete it, contact the admissions office for a new link.") %}</section>
+    <section class="card-surface">{% include "ui/components/_empty_state.html" with title=_("This link has expired") message=_("This intake form link has expired. If you still need to complete it, contact the admissions office for a new link.") %}</section>
   {% else %}
     {% include "ui/components/_page_header.html" with eyebrow=_("Intake form") title=form_instance.title description=form_instance.description back_url=applications_url back_label=_("Back to applications") %}
     <form class="card-surface max-w-form mx-auto w-full page-stack"

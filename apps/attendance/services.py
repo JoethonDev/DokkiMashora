@@ -2,15 +2,16 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+from decimal import Decimal
 
 from django.core.signing import TimestampSigner
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE
-from apps.academics.models import CourseEnrollment, DiplomaEnrollment
+from apps.academics.models import CourseEnrollment, DiplomaEnrollment, Semester
 
 from .constants import (
     ATTENDANCE_STATUS_EXCUSED,
@@ -202,30 +203,15 @@ def scan_attendance_token(
     return record, not created
 
 
-def get_attendance_summary(diploma_enrollment, semester) -> dict:
-    """Attendance summary for one enrollment/semester.
+def _build_attendance_summary(total_sessions, present_count, late_count, excused_count) -> dict:
+    """One canonical attendance summary projection (PERF-004).
 
-    The denominator counts only sessions whose attendance window has ended
-    (close_at passed) or that are already closed (L4); scheduled and open
-    future sessions must not lower attendance before they happen.
+    Shared by the single-enrollment and batch paths so the semantics are
+    identical everywhere: the denominator counts only sessions whose
+    attendance window has ended (close_at passed) or that are already closed
+    (L4); scheduled and open future sessions must not lower attendance before
+    they happen.
     """
-    now = timezone.now()
-    sessions = AttendanceSession.objects.filter(
-        cohort=diploma_enrollment.cohort,
-        semester=semester,
-    ).filter(
-        Q(status=SESSION_STATUS_CLOSED) | Q(close_at__lte=now),
-    )
-
-    total_sessions = sessions.count()
-    records = AttendanceRecord.objects.filter(
-        session__in=sessions,
-        diploma_enrollment=diploma_enrollment,
-    )
-
-    present_count = records.filter(status=ATTENDANCE_STATUS_PRESENT).count()
-    late_count = records.filter(status=ATTENDANCE_STATUS_LATE).count()
-    excused_count = records.filter(status=ATTENDANCE_STATUS_EXCUSED).count()
     total_attended = present_count + late_count
     attendance_percent = (
         round((total_attended / total_sessions) * 100, 2) if total_sessions > 0 else 0.0
@@ -239,3 +225,105 @@ def get_attendance_summary(diploma_enrollment, semester) -> dict:
         "total_attended": total_attended,
         "attendance_percent": attendance_percent,
     }
+
+
+def _ended_or_closed_sessions(cohort_ids, semester, now):
+    return AttendanceSession.objects.filter(
+        cohort_id__in=cohort_ids,
+        semester=semester,
+    ).filter(
+        Q(status=SESSION_STATUS_CLOSED) | Q(close_at__lte=now),
+    )
+
+
+def get_attendance_summary(diploma_enrollment, semester) -> dict:
+    """Attendance summary for one enrollment/semester (single aggregate path)."""
+    now = timezone.now()
+    sessions = _ended_or_closed_sessions(
+        [diploma_enrollment.cohort_id], semester, now,
+    )
+
+    counts = AttendanceRecord.objects.filter(
+        session__in=sessions,
+        diploma_enrollment=diploma_enrollment,
+    ).aggregate(
+        present_count=Count("id", filter=Q(status=ATTENDANCE_STATUS_PRESENT)),
+        late_count=Count("id", filter=Q(status=ATTENDANCE_STATUS_LATE)),
+        excused_count=Count("id", filter=Q(status=ATTENDANCE_STATUS_EXCUSED)),
+    )
+
+    return _build_attendance_summary(
+        sessions.count(),
+        counts["present_count"],
+        counts["late_count"],
+        counts["excused_count"],
+    )
+
+
+def get_attendance_summaries(diploma_enrollments, semester) -> dict[int, dict]:
+    """Attendance summaries for many enrollments in ONE set-based pass.
+
+    Returns ``{diploma_enrollment_id: summary_dict}``. Uses one grouped
+    aggregate for session totals (per cohort) and one grouped aggregate for
+    record counts (per enrollment/status), then builds each summary through the
+    same ``_build_attendance_summary`` projection used by the single path.
+    """
+    enrollments = list(diploma_enrollments)
+    if not enrollments:
+        return {}
+
+    now = timezone.now()
+    sessions = _ended_or_closed_sessions(
+        {e.cohort_id for e in enrollments}, semester, now,
+    )
+
+    session_totals = {
+        row["cohort_id"]: row["total"]
+        for row in sessions.values("cohort_id").annotate(total=Count("id"))
+    }
+
+    record_counts = {}
+    for row in AttendanceRecord.objects.filter(
+        session__in=sessions,
+        diploma_enrollment_id__in=[e.id for e in enrollments],
+    ).values("diploma_enrollment_id", "status").annotate(count=Count("id")):
+        record_counts.setdefault(row["diploma_enrollment_id"], {})[row["status"]] = row["count"]
+
+    summaries = {}
+    for enrollment in enrollments:
+        counts = record_counts.get(enrollment.id, {})
+        summaries[enrollment.id] = _build_attendance_summary(
+            session_totals.get(enrollment.cohort_id, 0),
+            counts.get(ATTENDANCE_STATUS_PRESENT, 0),
+            counts.get(ATTENDANCE_STATUS_LATE, 0),
+            counts.get(ATTENDANCE_STATUS_EXCUSED, 0),
+        )
+    return summaries
+
+
+def get_attendance_evaluation_percent(
+    enrollment: DiplomaEnrollment,
+    semester: Semester,
+    required_sessions: int | None = None,
+    summary: dict | None = None,
+) -> Decimal | None:
+    """Canonical attendance percent for one enrollment/semester (DECISION §13).
+
+    With ``required_sessions`` > 0 the percent is recorded attendances out of
+    the required number (e.g. 7 of 10 ⇒ 70%), capped at 100 and quantized to
+    0.01. Otherwise it falls back to attended / ended-closed sessions (the
+    ``attendance_percent`` from the summary). Returns ``None`` when no
+    countable session exists, so the component is not applicable. Accepts a
+    precomputed ``summary`` so batch callers reuse the set-based path.
+    """
+    if summary is None:
+        summary = get_attendance_summary(enrollment, semester)
+    if not summary["total_sessions"]:
+        return None
+    if required_sessions and required_sessions > 0:
+        attended = Decimal(summary["total_attended"])
+        return min(
+            (attended / Decimal(required_sessions) * Decimal("100")).quantize(Decimal("0.01")),
+            Decimal("100"),
+        )
+    return Decimal(str(summary["attendance_percent"]))

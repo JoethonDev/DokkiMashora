@@ -40,7 +40,7 @@
         </div>
       </article>
     {% empty %}
-      {% include "ui/components/_empty_state.html" with icon="◉" title=_("No learning content yet") message=_("Enrolments will appear here when they become available.") fill=True %}
+      {% include "ui/components/_empty_state.html" with title=_("No learning content yet") message=_("Enrolments will appear here when they become available.") fill=True %}
     {% endfor %}
   </section>
 </div>

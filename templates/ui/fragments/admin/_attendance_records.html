@@ -66,6 +66,6 @@
     </div>
     {% include "ui/components/_pagination.html" %}
   {% else %}
-    {% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No sessions found") message=_("Try changing the filters.") %}
+    {% include "ui/components/_empty_state.html" with title=_("No sessions found") message=_("Try changing the filters.") %}
   {% endif %}
 </section>

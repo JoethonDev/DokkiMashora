@@ -21,7 +21,7 @@ from .constants import (
     FIELD_TYPE_CHOICE,
     FIELD_TYPE_MULTI_CHOICE,
     INTAKE_REQUESTABLE_STATUSES,
-    INTAKE_REQUEST_STATUS_EXPIRED,
+    INTAKE_REQUEST_STATUS_CANCELLED,
     INTAKE_REQUEST_STATUS_SUBMITTED,
 )
 from .forms import IntakeFormBuildForm, IntakeFormFieldForm, IntakeFormSubmitForm
@@ -276,7 +276,7 @@ def admin_intake_request_send(request: HttpRequest, application_id: int) -> Http
             target_id=str(intake_request.pk),
             metadata={"application_id": str(application.pk)},
         )
-        messages.success(request, _("Intake form request sent."))
+        messages.success(request, _("Intake request created. Survey email queued."))
     except ValueError as exc:
         messages.error(request, str(exc))
     return redirect("applications:program_detail", application_id=application.pk)
@@ -309,9 +309,11 @@ def fill_intake_form(request: HttpRequest, token: str) -> HttpResponse:
             "application": application,
         })
 
+    if intake_request.status == INTAKE_REQUEST_STATUS_CANCELLED:
+        messages.error(request, _("This intake form request has been cancelled."))
+        return redirect("students:applications")
+
     if intake_request.expires_at <= timezone.now():
-        intake_request.status = INTAKE_REQUEST_STATUS_EXPIRED
-        intake_request.save(update_fields=["status"])
         return render(request, "ui/pages/student/intake_form.html", {
             "expired": True,
             "intake_request": intake_request,

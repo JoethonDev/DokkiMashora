@@ -40,11 +40,13 @@ TEMPLATE_SLUGS = (
 )
 
 EMAIL_STATUS_QUEUED = "queued"
+EMAIL_STATUS_PROCESSING = "processing"
 EMAIL_STATUS_SENT = "sent"
 EMAIL_STATUS_FAILED = "failed"
 
 EMAIL_STATUS_CHOICES = (
     (EMAIL_STATUS_QUEUED, _("Queued")),
+    (EMAIL_STATUS_PROCESSING, _("Processing")),
     (EMAIL_STATUS_SENT, _("Sent")),
     (EMAIL_STATUS_FAILED, _("Failed")),
 )

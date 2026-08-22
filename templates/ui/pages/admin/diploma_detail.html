@@ -33,6 +33,7 @@
                 </div>
                 <div class="flex gap-2 items-center shrink-0">
                   <a class="btn-ghost" href="{% url 'academics:admin_cohort_edit' diploma.id group.cohort.id %}">{% trans "Edit cohort" %}</a>
+                  <a class="btn-ghost" href="{% url 'intake_forms:admin_cohort_intake_responses' group.cohort.id %}">{% trans "Intake responses" %}</a>
                   <form method="post" action="{% url 'academics:admin_cohort_delete' diploma.id group.cohort.id %}" data-confirm="{% trans 'Delete this cohort and its delivery content?' %}" class="m-0">{% csrf_token %}
                     <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
                   </form>

@@ -9,6 +9,7 @@ urlpatterns = [
     path("manage/diploma/<int:diploma_id>/", views.admin_cohort_list, name="admin_cohort_list"),
     path("manage/diploma/<int:diploma_id>/cohort/<int:cohort_id>/", views.admin_semester_list, name="admin_semester_list"),
     path("manage/diploma/<int:diploma_id>/cohort/<int:cohort_id>/semester/<int:semester_id>/", views.admin_cohort_semester_progression, name="admin_cohort_semester_progression"),
+    path("manage/diploma/<int:diploma_id>/cohort/<int:cohort_id>/semester/<int:semester_id>/evaluation-settings/", views.admin_evaluation_config_edit, name="admin_evaluation_config_edit"),
     path("manage/bulk/sync/<int:cohort_id>/<int:semester_id>/", views.admin_semester_sync_all, name="admin_semester_sync_all"),
     path("manage/bulk/evaluate/<int:cohort_id>/<int:semester_id>/", views.admin_semester_evaluate_all, name="admin_semester_evaluate_all"),
     path("manage/bulk/auto-promote/<int:cohort_id>/<int:semester_id>/", views.admin_semester_auto_promote, name="admin_semester_auto_promote"),

@@ -16,28 +16,28 @@
         <small>{% trans "active" %}</small></span>
     </div>
   </section>
-  <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" aria-label="{% trans 'Summary' %}"><article class="stat-card"><div class="stat-icon bg-info-soft text-info-text">◉</div>
+  <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" aria-label="{% trans 'Summary' %}"><article class="stat-card">
     <div class="stat-body">
       <span>{% trans "Active learning" %}</span>
       <strong>{{ summary.active_learning_count|default:0 }}</strong>
       <small>{% trans "Programs and courses" %}</small>
     </div>
   </article>
-  <article class="stat-card"><div class="stat-icon bg-info-soft text-info-text">✓</div>
+  <article class="stat-card">
     <div class="stat-body">
       <span>{% trans "Assessments" %}</span>
       <strong>{{ summary.actionable_assessment_count|default:0 }}</strong>
       <small>{% trans "Ready for action" %}</small>
     </div>
   </article>
-  <article class="stat-card"><div class="stat-icon bg-warning-soft text-warning-text">◇</div>
+  <article class="stat-card">
     <div class="stat-body">
       <span>{% trans "Entrance exams" %}</span>
       <strong>{{ summary.open_entrance_exam_count|default:0 }}</strong>
       <small>{% trans "Open assignments" %}</small>
     </div>
   </article>
-  <article class="stat-card"><div class="stat-icon bg-success-soft text-success-text">▣</div>
+  <article class="stat-card">
     <div class="stat-body">
       <span>{% trans "Certificates" %}</span>
       <strong>{{ summary.available_certificate_count|default:0 }}</strong>
@@ -61,10 +61,9 @@
                 {% trans "Due" %}
                 <span dir="ltr" class="inline-block">{{ action.due_at }}</span>
               {% endif %}
-            </small></span>
-            <b class="shrink-0">→</b></a>
+            </small></span></a>
       {% empty %}
-        {% include "ui/components/_empty_state.html" with icon="✓" title=_("You are all caught up") message=_("There are no outstanding actions right now.") fill=True %}
+        {% include "ui/components/_empty_state.html" with title=_("You are all caught up") message=_("There are no outstanding actions right now.") fill=True %}
       {% endfor %}
     </div>
   </article>
@@ -82,7 +81,7 @@
       <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-soft" href="{% url 'students:applications' %}">{% trans "Open applications" %}</a>
       </div>
     {% else %}
-      {% url 'students:apply' as student_apply_url %}{% include "ui/components/_empty_state.html" with icon="+" title=_("No active application") message=_("Explore available programs and submit an application when you are ready.") href=student_apply_url action_label=_("Browse programs") fill=True %}
+      {% url 'students:apply' as student_apply_url %}{% include "ui/components/_empty_state.html" with title=_("No active application") message=_("Explore available programs and submit an application when you are ready.") href=student_apply_url action_label=_("Browse programs") fill=True %}
     {% endif %}
   </article>
 </section>
@@ -137,7 +136,7 @@
         </div>
       </article>
     {% empty %}
-      {% include "ui/components/_empty_state.html" with icon="◉" title=_("No learning enrolments yet") message=_("Your active programs and courses will appear here.") fill=True %}
+      {% include "ui/components/_empty_state.html" with title=_("No learning enrolments yet") message=_("Your active programs and courses will appear here.") fill=True %}
     {% endfor %}
   </div>
 </section>

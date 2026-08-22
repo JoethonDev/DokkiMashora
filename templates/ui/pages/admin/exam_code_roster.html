@@ -6,13 +6,32 @@
 {% block content %}
   <div class="page-stack animate-enter-view">{% trans "Exam Code Roster" as eyebrow %}
     {% include "ui/components/_page_header.html" with title=assessment eyebrow=eyebrow back_button=True %}
-    <section class="card-surface">
-      <div class="section-head"><div><p class="eyebrow">{% trans "Exam codes" %}</p><h2>{{ assessment }}</h2></div></div>
-      <div class="actions">
-        <form method="post" action="{% url 'assessments:admin_generate_codes' assessment.id %}">{% csrf_token %}
-          <button class="btn-ghost" type="submit">{% trans "Generate missing codes" %}</button>
-        </form>
-        <a class="btn-secondary" href="{% url 'assessments:admin_export_offline_codes' assessment.id %}">{% trans "Export offline codes" %}</a>
+    <section class="card-surface page-stack">
+      <div class="section-head"><div>
+          <p class="eyebrow">{% trans "Exam codes" %}</p>
+          <h2>{{ assessment }}</h2>
+          <p class="text-sm text-muted mt-1 mb-0">{% trans "Review each student's delivery mode and manage the anonymous codes for this exam." %}</p>
+        </div>
+      </div>
+      <div class="actions-row flex-wrap items-center justify-between gap-3 border-t border-line pt-4"
+           x-data="{ generating: false }">
+        <div class="text-sm text-muted">
+          <span class="font-bold text-text">{{ codes|length }}</span>
+          {% trans "codes in this roster" %}
+        </div>
+        <div class="actions-row flex-wrap">
+          <form method="post" action="{% url 'assessments:admin_generate_codes' assessment.id %}"
+                class="m-0" @submit="generating = true">
+            {% csrf_token %}
+            <button class="btn-primary" type="submit" :disabled="generating">
+              <span x-show="!generating">{% trans "Generate missing codes" %}</span>
+              <span x-show="generating" x-cloak>{% trans "Generating…" %}</span>
+            </button>
+          </form>
+          <a class="btn-secondary" href="{% url 'assessments:admin_export_offline_codes' assessment.id %}">
+            {% trans "Export offline codes" %}
+          </a>
+        </div>
       </div>
     </section>
     <div class="table-wrap hidden lg:block"><table class="table">
@@ -21,6 +40,7 @@
             <th class="table-th">{% trans "Code" %}</th>
             <th class="table-th">{% trans "Student" %}</th>
             <th class="table-th">{% trans "Mode" %}</th>
+            <th class="table-th">{% trans "Change mode" %}</th>
           </tr>
         </thead>
         <tbody>
@@ -29,10 +49,26 @@
               <td class="table-td">{{ code.code_number }}</td>
               <td class="table-td">{{ code.diploma_enrollment.student }}</td>
               <td class="table-td">{{ code.get_delivery_mode_display|default:'—' }}</td>
+              <td class="table-td">
+                <form method="post" action="{% url 'assessments:admin_change_roster_delivery_mode' assessment.id code.id %}"
+                      class="actions-row items-center" x-data="{ saving: false }" @submit="saving = true">
+                  {% csrf_token %}
+                  <label class="sr-only" for="delivery-mode-{{ code.id }}">{% trans "Delivery mode" %}</label>
+                  <select id="delivery-mode-{{ code.id }}" name="delivery_mode" class="form-select min-w-36">
+                    {% for value, label in delivery_mode_choices %}
+                      <option value="{{ value }}"{% if code.delivery_mode == value %} selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                  <button class="btn-ghost" type="submit" :disabled="saving">
+                    <span x-show="!saving">{% trans "Save" %}</span>
+                    <span x-show="saving" x-cloak>{% trans "Saving…" %}</span>
+                  </button>
+                </form>
+              </td>
             </tr>
           {% empty %}
             <tr>
-              <td class="table-td" colspan="3">
+              <td class="table-td" colspan="4">
                 {% include "ui/components/_empty_state.html" with title=_("No exam codes yet.") message=_("Generate codes for enrolled students.") compact=True %}
               </td>
             </tr>
@@ -47,6 +83,20 @@
             <strong class="block truncate">{{ code.code_number }}</strong>
             <small class="block text-muted">{{ code.diploma_enrollment.student }} &middot; {{ code.get_delivery_mode_display|default:'—' }}</small>
           </div>
+          <form method="post" action="{% url 'assessments:admin_change_roster_delivery_mode' assessment.id code.id %}"
+                class="actions-row items-center shrink-0 m-0" x-data="{ saving: false }" @submit="saving = true">
+            {% csrf_token %}
+            <label class="sr-only" for="mobile-delivery-mode-{{ code.id }}">{% trans "Delivery mode" %}</label>
+            <select id="mobile-delivery-mode-{{ code.id }}" name="delivery_mode" class="form-select min-w-32">
+              {% for value, label in delivery_mode_choices %}
+                <option value="{{ value }}"{% if code.delivery_mode == value %} selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            <button class="btn-ghost" type="submit" :disabled="saving">
+              <span x-show="!saving">{% trans "Save" %}</span>
+              <span x-show="saving" x-cloak>{% trans "Saving…" %}</span>
+            </button>
+          </form>
         </div>
       {% empty %}
         <div class="border border-line rounded-sm p-4 text-center">

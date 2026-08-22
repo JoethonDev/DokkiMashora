@@ -194,6 +194,7 @@
                             <span class="text-xs text-muted">({% trans "manual" %})</span>
                             <span class="text-xs text-muted ms-auto">{{ mq.points }} {% trans "pts" %}</span>
                           </div>
+                          {% if not assessment.is_legacy %}<a class="btn-ghost shrink-0" href="{% url 'assessments:admin_section_manual_edit' assessment.id section.id mq.id %}">{% trans "Edit" %}</a>{% endif %}
                           <form method="post" action="{% url 'assessments:admin_section_manual_delete' assessment.id section.id mq.id %}" data-confirm="{% trans 'Delete this question?' %}" class="shrink-0 m-0">{% csrf_token %}
                             {% if not assessment.is_legacy %}<button class="btn-danger" type="submit">{% trans "Delete" %}</button>{% endif %}
                           </form>

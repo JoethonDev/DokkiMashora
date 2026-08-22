@@ -5,16 +5,18 @@ from datetime import datetime
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Q
-from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from django.views.decorators.http import require_http_methods, require_POST
+from django.views.decorators.http import require_POST
 
 from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE
-from apps.academics.models import Cohort, CourseVersion, Semester
+from apps.academics.models import Cohort, CourseVersion, Diploma, DiplomaEnrollment, Semester
 from apps.academics.services import get_student_diploma_access
+from apps.audit.constants import ACTION_ATTENDANCE_SESSION_DELETED
+from apps.audit.services import record_audit_event
+from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import (
     GROUP_ADMIN,
@@ -26,6 +28,7 @@ from apps.core.permissions import (
     safe_int,
     student_required,
 )
+from apps.progression.models import SemesterEvaluationConfig
 
 from .constants import (
     ATTENDANCE_STATUS_EXCUSED,
@@ -38,27 +41,16 @@ from .constants import (
 from .models import AttendanceRecord, AttendanceSession
 from .services import (
     AttendanceScanError,
+    _build_attendance_summary,
     close_attendance_session,
+    get_attendance_evaluation_percent,
+    get_attendance_summaries,
     open_attendance_session,
     open_session,
     scan_attendance_token,
 )
 
 ADMIN_ONLY = (GROUP_SUPER_ADMIN, GROUP_ADMIN)
-
-
-@require_http_methods(["GET"])
-@login_required
-@role_required(*ROLE_ATTENDANCE_STAFF)
-def semester_options_by_cohort(request):
-    if not request.headers.get("HX-Request"):
-        raise Http404
-    cohort_id = request.GET.get("cohort_id")
-    semesters = Semester.objects.none()
-    if cohort_id:
-        cohort = get_object_or_404(Cohort, id=cohort_id)
-        semesters = Semester.objects.filter(diploma=cohort.diploma, is_active=True).order_by("order")
-    return render(request, "ui/fragments/admin/_attendance_semester_options.html", {"semesters": semesters})
 
 
 # ---------------------------------------------------------------------------
@@ -102,6 +94,8 @@ def attendance_session_list(request):
         "breadcrumb_items": [{"label": _("Attendance Sessions")}],
         "is_admin": is_admin(request.user),
     }
+    if is_htmx(request):
+        return render(request, "ui/fragments/admin/_attendance_records.html", ctx)
     return render(request, "ui/pages/admin/attendance_list.html", ctx)
 
 
@@ -113,6 +107,13 @@ def attendance_session_list(request):
 @login_required
 @role_required(*ADMIN_ONLY)
 def attendance_session_create(request):
+    """Create an attendance session with dependent target fields.
+
+    Validation errors re-render the form with the submitted selections
+    preserved instead of redirecting and wiping them.
+    """
+    form_errors = []
+    form_data = {}
     if request.method == "POST":
         target_type = request.POST.get("target_type")
         cohort_id = safe_int(request.POST.get("cohort_id"))
@@ -121,66 +122,92 @@ def attendance_session_create(request):
         title = request.POST.get("title", "")
         open_at_str = request.POST.get("open_at", "")
         close_at_str = request.POST.get("close_at", "")
+        form_data = {
+            "target_type": target_type,
+            "diploma_id": request.POST.get("diploma_id", ""),
+            "cohort_id": request.POST.get("cohort_id", ""),
+            "course_version_id": request.POST.get("course_version_id", ""),
+            "semester_id": request.POST.get("semester_id", ""),
+            "title": title,
+            "open_at": open_at_str,
+            "close_at": close_at_str,
+        }
 
+        open_at = None
+        close_at = None
         if not open_at_str or not close_at_str:
-            messages.error(request, _("Open and close times are required."))
-            return redirect("attendance:attendance_session_create")
-
-        try:
-            open_at = datetime.fromisoformat(open_at_str)
-            close_at = datetime.fromisoformat(close_at_str)
-            if timezone.is_naive(open_at):
-                open_at = timezone.make_aware(open_at)
-            if timezone.is_naive(close_at):
-                close_at = timezone.make_aware(close_at)
-        except (ValueError, TypeError):
-            messages.error(request, _("Invalid date/time format."))
-            return redirect("attendance:attendance_session_create")
+            form_errors.append(_("Open and close times are required."))
+        else:
+            try:
+                open_at = datetime.fromisoformat(open_at_str)
+                close_at = datetime.fromisoformat(close_at_str)
+                if timezone.is_naive(open_at):
+                    open_at = timezone.make_aware(open_at)
+                if timezone.is_naive(close_at):
+                    close_at = timezone.make_aware(close_at)
+            except (ValueError, TypeError):
+                form_errors.append(_("Invalid date/time format."))
 
         if target_type not in {"diploma", "course"}:
-            messages.error(request, _("Select a target type."))
-            return redirect("attendance:attendance_session_create")
-        if target_type == "diploma" and (not cohort_id or course_version_id):
-            messages.error(request, _("Select a cohort and no course version for a diploma session."))
-            return redirect("attendance:attendance_session_create")
-        if target_type == "course" and (not course_version_id or cohort_id or semester_id):
-            messages.error(request, _("Select a course version and no cohort or semester for a course session."))
-            return redirect("attendance:attendance_session_create")
-
-        if target_type == "diploma":
-            target = get_object_or_404(Cohort, id=cohort_id)
+            form_errors.append(_("Select a target type."))
+        elif target_type == "diploma":
+            if not cohort_id or course_version_id:
+                form_errors.append(_("Select a cohort and no course version for a diploma session."))
         else:
-            target = get_object_or_404(CourseVersion, id=course_version_id)
+            if not course_version_id or cohort_id or semester_id:
+                form_errors.append(
+                    _("Select a course version and no cohort or semester for a course session.")
+                )
 
-        semester = None
-        if semester_id:
-            semester = get_object_or_404(Semester, id=semester_id)
-            if cohort_id and semester.diploma_id != target.diploma_id:
-                messages.error(request, _("Semester does not belong to the selected cohort's diploma."))
-                return redirect("attendance:attendance_session_create")
+        if not form_errors:
+            if target_type == "diploma":
+                target = get_object_or_404(Cohort, id=cohort_id)
+            else:
+                target = get_object_or_404(CourseVersion, id=course_version_id)
 
-        try:
-            session = open_attendance_session(
-                target,
-                semester=semester,
-                open_at=open_at,
-                close_at=close_at,
-                actor=request.user,
-                title=title,
-            )
-            messages.success(request, _("Attendance session created."))
-            return redirect("attendance:attendance_session_detail", session.id)
-        except ValueError as exc:
-            messages.error(request, str(exc))
-            return redirect("attendance:attendance_session_create")
+            semester = None
+            if semester_id:
+                semester = get_object_or_404(Semester, id=semester_id)
+                if cohort_id and semester.diploma_id != target.diploma_id:
+                    form_errors.append(_("Semester does not belong to the selected cohort's diploma."))
 
-    cohorts = Cohort.objects.filter(is_active=True).select_related("diploma")
-    course_versions = CourseVersion.objects.filter(is_active=True).select_related("course")
-    semesters = Semester.objects.filter(is_active=True).order_by("diploma_id", "order")
+            if not form_errors:
+                try:
+                    session = open_attendance_session(
+                        target,
+                        semester=semester,
+                        open_at=open_at,
+                        close_at=close_at,
+                        actor=request.user,
+                        title=title,
+                    )
+                    messages.success(request, _("Attendance session created."))
+                    return redirect("attendance:attendance_session_detail", session.id)
+                except ValueError as exc:
+                    form_errors.append(str(exc))
+
+    cohorts = (
+        Cohort.objects.filter(is_active=True)
+        .select_related("diploma")
+        .order_by("diploma__title", "name")
+    )
+    course_versions = (
+        CourseVersion.objects.filter(is_active=True)
+        .select_related("course")
+        .order_by("course__title")
+    )
+    semesters = (
+        Semester.objects.filter(is_active=True)
+        .select_related("diploma")
+        .order_by("diploma_id", "order")
+    )
     ctx = {
         "cohorts": cohorts,
         "course_versions": course_versions,
         "semesters": semesters,
+        "diplomas": Diploma.objects.filter(is_active=True).order_by("title"),
+        "form_data": form_data,
+        "form_errors": form_errors,
         "breadcrumb_items": [
             {"label": _("Attendance Sessions"), "href": reverse("attendance:attendance_session_list")},
             {"label": _("Create Session")},
@@ -192,6 +219,45 @@ def attendance_session_create(request):
 # ---------------------------------------------------------------------------
 # Admin session detail
 # ---------------------------------------------------------------------------
+
+
+@login_required
+@role_required(*ADMIN_ONLY)
+@require_POST
+def attendance_session_delete(request, session_id):
+    """Delete an attendance session that has no recorded attendance history.
+
+    Sessions with records are preserved academic evidence and cannot be
+    deleted; the deletion of an empty session is audited.
+    """
+    session = get_object_or_404(
+        AttendanceSession.objects.select_related("cohort", "course_version", "semester"),
+        id=session_id,
+    )
+    if AttendanceRecord.objects.filter(session=session).exists():
+        messages.error(
+            request,
+            _("This session has recorded attendance and cannot be deleted."),
+        )
+        return redirect("attendance:attendance_session_detail", session.id)
+    info = str(session)
+    record_audit_event(
+        actor=request.user,
+        action=ACTION_ATTENDANCE_SESSION_DELETED,
+        target_type="attendance_session",
+        target_id=str(session.pk),
+        metadata={
+            "title": session.title,
+            "date": str(session.date),
+            "cohort_id": session.cohort_id,
+            "course_version_id": session.course_version_id,
+            "semester_id": session.semester_id,
+            "status": session.status,
+        },
+    )
+    session.delete()
+    messages.success(request, _("Attendance session deleted: %(session)s.") % {"session": info})
+    return redirect("attendance:attendance_session_list")
 
 
 @login_required
@@ -413,49 +479,51 @@ def my_attendance(request):
     now = timezone.now()
     ended_or_closed = Q(status=SESSION_STATUS_CLOSED) | Q(close_at__lte=now)
 
+    summaries = []
+
     enrollments = student_profile.diploma_enrollments.filter(
         status=ENROLLMENT_STATUS_ACTIVE,
     ).select_related("cohort__diploma")
 
-    summaries = []
+    # Reuse the canonical batch attendance summaries (one set-based pass per
+    # semester) and the same required-sessions capping the evaluation uses, so
+    # every diploma card shows exactly the percentage the evaluation uses
+    # (DECISION §13 — one attendance calculation everywhere).
+    pairs_by_semester: dict[int, list[DiplomaEnrollment]] = {}
+    semester_by_id: dict[int, Semester] = {}
+    cohort_ids: set[int] = set()
     for enrollment in enrollments:
         visible_semesters = get_student_diploma_access(enrollment)["visible_semesters"]
-        if not visible_semesters:
-            continue
-        semester_ids = [semester.id for semester in visible_semesters]
-        session_totals = {
-            row["semester_id"]: row["total"]
-            for row in AttendanceSession.objects.filter(
-                cohort=enrollment.cohort,
-                semester_id__in=semester_ids,
-            ).filter(ended_or_closed).values("semester_id").annotate(total=Count("id"))
-        }
-        record_counts = {}
-        for row in AttendanceRecord.objects.filter(
-            diploma_enrollment=enrollment,
-            session__semester_id__in=semester_ids,
-        ).filter(
-            Q(session__status=SESSION_STATUS_CLOSED) | Q(session__close_at__lte=now),
-        ).values("session__semester_id", "status").annotate(count=Count("id")):
-            record_counts.setdefault(row["session__semester_id"], {})[row["status"]] = row["count"]
         for semester in visible_semesters:
-            total_sessions = session_totals.get(semester.id, 0)
-            if total_sessions == 0:
+            pairs_by_semester.setdefault(semester.id, []).append(enrollment)
+            semester_by_id[semester.id] = semester
+            cohort_ids.add(enrollment.cohort_id)
+
+    required_by_key: dict[tuple[int, int], int] = {}
+    if semester_by_id:
+        required_by_key = {
+            (config.cohort_id, config.semester_id): config.attendance_required_sessions
+            for config in SemesterEvaluationConfig.objects.filter(
+                cohort_id__in=cohort_ids,
+                semester_id__in=list(semester_by_id),
+            )
+        }
+
+    for semester_id, enrollment_group in pairs_by_semester.items():
+        semester = semester_by_id[semester_id]
+        summaries_by_enrollment = get_attendance_summaries(enrollment_group, semester)
+        for enrollment in enrollment_group:
+            summary = summaries_by_enrollment.get(enrollment.id)
+            if summary is None or not summary["total_sessions"]:
                 continue
-            counts = record_counts.get(semester.id, {})
-            present_count = counts.get(ATTENDANCE_STATUS_PRESENT, 0)
-            late_count = counts.get(ATTENDANCE_STATUS_LATE, 0)
-            excused_count = counts.get(ATTENDANCE_STATUS_EXCUSED, 0)
-            total_attended = present_count + late_count
+            required = required_by_key.get((enrollment.cohort_id, semester_id))
             summaries.append({
                 "enrollment": enrollment,
                 "semester": semester,
-                "total_sessions": total_sessions,
-                "present_count": present_count,
-                "late_count": late_count,
-                "excused_count": excused_count,
-                "total_attended": total_attended,
-                "attendance_percent": round(total_attended / total_sessions * 100, 2),
+                **summary,
+                "attendance_percent": get_attendance_evaluation_percent(
+                    enrollment, semester, required, summary=summary,
+                ),
             })
 
     course_enrollments = student_profile.course_enrollments.filter(
@@ -474,17 +542,16 @@ def my_attendance(request):
             session__in=session_qs,
         ).values("status").annotate(count=Count("id")):
             record_counts[row["status"]] = row["count"]
-        present = record_counts.get(ATTENDANCE_STATUS_PRESENT, 0)
-        late = record_counts.get(ATTENDANCE_STATUS_LATE, 0)
+        summary = _build_attendance_summary(
+            total,
+            record_counts.get(ATTENDANCE_STATUS_PRESENT, 0),
+            record_counts.get(ATTENDANCE_STATUS_LATE, 0),
+            record_counts.get(ATTENDANCE_STATUS_EXCUSED, 0),
+        )
         summaries.append({
             "enrollment": ce,
             "course_title": str(ce.course_version.course.title),
-            "total_sessions": total,
-            "present_count": present,
-            "late_count": late,
-            "excused_count": record_counts.get(ATTENDANCE_STATUS_EXCUSED, 0),
-            "total_attended": present + late,
-            "attendance_percent": round((present + late) / total * 100, 2),
+            **summary,
         })
 
     ctx = {

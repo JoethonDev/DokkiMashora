@@ -387,7 +387,7 @@
                 </tr>
               {% empty %}
                 <tr>
-                <td class="table-td" colspan="6">{% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No messages have been sent.") %}
+                <td class="table-td" colspan="6">{% include "ui/components/_empty_state.html" with title=_("No messages have been sent.") %}
                 </td>
                 </tr>
               {% endfor %}
@@ -409,7 +409,7 @@
             </div>
           {% empty %}
             <div class="border border-line rounded-sm p-4 text-center">
-              {% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No messages have been sent.") %}
+              {% include "ui/components/_empty_state.html" with title=_("No messages have been sent.") %}
             </div>
           {% endfor %}
         </div>

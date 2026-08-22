@@ -28,7 +28,12 @@ class EmailMessageAdmin(admin.ModelAdmin):
         "status",
         "error",
         "sent_by",
+        "queued_at",
+        "started_at",
         "sent_at",
+        "attempts",
+        "idempotency_key",
+        "reference",
         "created_at",
         "updated_at",
     )

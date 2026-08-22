@@ -4,8 +4,7 @@
     {% if navigation %}
       <div class="mb-2"><div class="text-xs font-extrabold uppercase text-muted px-2.5 pb-1 pt-2 flex items-center gap-1.5">{% trans "Navigation" %}</div>
         {% for item in navigation %}
-          <a class="search-result-item flex items-center gap-2.5 p-2.5 rounded-sm no-underline text-text hover:bg-brand-soft" href="{{ item.url }}"><span class="w-8 h-8 rounded-sm bg-brand-soft text-brand grid place-items-center shrink-0">{{ item.icon|safe }}</span>
-            <span class="flex-1 min-w-0"><strong>{{ item.label }}</strong>
+          <a class="search-result-item flex items-center gap-2.5 p-2.5 rounded-sm no-underline text-text hover:bg-brand-soft" href="{{ item.url }}"><span class="flex-1 min-w-0"><strong>{{ item.label }}</strong>
               <small class="block text-muted text-xs mt-0.5">{{ item.section }}</small>
             </span>
           </a>
@@ -29,9 +28,7 @@
         <span class="bg-surface-soft rounded-full px-1.5 py-px text-xs">{{ group.items|length }}</span>
       </div>
       {% for item in group.items %}
-        <a class="search-result-item flex items-center gap-2.5 p-2.5 rounded-sm no-underline text-text hover:bg-brand-soft" href="{{ item.url }}">{% if group.name == "navigation" %}
-            <span class="w-8 h-8 rounded-sm bg-brand-soft text-brand grid place-items-center shrink-0">{{ item.icon|safe }}</span>
-          {% endif %}
+        <a class="search-result-item flex items-center gap-2.5 p-2.5 rounded-sm no-underline text-text hover:bg-brand-soft" href="{{ item.url }}">
           <span class="flex-1 min-w-0"><strong>{{ item.label }}</strong>
             {% if item.subtitle %}
               <small class="block text-muted text-xs mt-0.5">{{ item.subtitle }}</small>

@@ -24,7 +24,13 @@ from apps.storage.services import storage_service
 from apps.students.models import StudentProfile
 
 from .forms import CertificateTemplateForm
-from .models import CertificateTemplate, GeneratedCertificate
+from .models import (
+    FIELD_KEY_LABELS,
+    MAPPING_FIELD_REGISTRY,
+    MAPPING_SCHEMA_VERSION,
+    CertificateTemplate,
+    GeneratedCertificate,
+)
 from .services import (
     _image_bytes_to_pdf,
     clear_certificate_source,
@@ -32,8 +38,14 @@ from .services import (
     ingest_certificate_source,
     regenerate_certificate,
     revoke_certificate,
+    sample_field_values,
 )
-from .source_adapters import SourcePreview, overlay_text_on_source, validate_field_mapping
+from .source_adapters import (
+    FONT_REGISTRY,
+    SourcePreview,
+    overlay_text_on_source,
+    validate_field_mapping,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +122,7 @@ def admin_template_edit(request, template_id):
 @login_required
 @role_required(*ROLE_SENIOR_STAFF)
 def admin_template_preview(request, template_id):
-    """Protected preview of a stored PDF/PSD template source (P7-02)."""
+    """Protected preview of a stored PDF/JPG/legacy-PSD template source (P7-02)."""
     template = get_object_or_404(CertificateTemplate, id=template_id)
     if not template.preview_storage_key:
         messages.error(request, _("This template has no source preview."))
@@ -127,11 +139,11 @@ def admin_template_preview(request, template_id):
 @role_required(*ROLE_SENIOR_STAFF)
 @require_POST
 def admin_template_upload_source(request, template_id):
-    """Admin-only validated PDF/PSD source upload (P7-02)."""
+    """Admin-only validated PDF/JPG/JPEG source upload (P7-02)."""
     template = get_object_or_404(CertificateTemplate, id=template_id)
     file = request.FILES.get("source_file")
     if file is None:
-        messages.error(request, _("Select a PDF or PSD source file."))
+        messages.error(request, _("Select a PDF or JPG/JPEG source file."))
         return redirect("certificates:admin_template_edit", template_id=template.id)
     try:
         data = file.read()
@@ -167,16 +179,24 @@ def admin_template_clear_source(request, template_id):
 @login_required
 @role_required(*ROLE_SENIOR_STAFF)
 def admin_template_editor(request, template_id):
-    """Visual placement editor (P7-03): load preview, place Student Name, save mapping."""
+    """Visual placement editor (P7-03): load preview, place fields, save mapping."""
     template = get_object_or_404(CertificateTemplate, id=template_id)
     if template.source_status != "ready" or not template.preview_storage_key:
-        messages.error(request, _("Upload and preview a PDF/PSD source before editing placement."))
+        messages.error(request, _("Upload and preview a PDF/JPG source before editing placement."))
         return redirect("certificates:admin_template_edit", template_id=template.id)
     preview_url = storage_service.get_protected_download_url(
         template.preview_storage_key,
         user=request.user,
         permission_fn=lambda u: is_admin(u) or u.is_superuser,
     )
+    available_fields = [
+        {"key": key, "label": str(FIELD_KEY_LABELS.get(key, key))}
+        for key in MAPPING_FIELD_REGISTRY
+    ]
+    available_fonts = [
+        {"key": key, "label": label}
+        for key, (_filename, label) in FONT_REGISTRY.items()
+    ]
     ctx = {
         "template": template,
         "preview_url": preview_url,
@@ -184,6 +204,9 @@ def admin_template_editor(request, template_id):
         "preview_height": template.preview_height,
         "page_count": template.preview_page_count,
         "current_mapping": template.field_mapping,
+        "mapping_schema_version": template.mapping_schema_version or MAPPING_SCHEMA_VERSION,
+        "available_fields": available_fields,
+        "available_fonts": available_fonts,
         "mapping_save_url": reverse("certificates:admin_template_save_mapping", args=[template.id]),
         "preview_generate_url": reverse("certificates:admin_template_preview_generate", args=[template.id]),
         "breadcrumb_items": [
@@ -226,7 +249,7 @@ def admin_template_save_mapping(request, template_id):
         return JsonResponse({"error": str(exc)}, status=422)
 
     template.field_mapping = normalized
-    template.mapping_schema_version = 1
+    template.mapping_schema_version = MAPPING_SCHEMA_VERSION
     template.save(update_fields=["field_mapping", "mapping_schema_version", "updated_at"])
     return JsonResponse({"ok": True, "mapping": normalized})
 
@@ -275,7 +298,7 @@ def admin_template_preview_generate(request, template_id):
         source_bytes,
         template.source_format,
         mapping,
-        {"student_name": "Student Name"},
+        sample_field_values(),
     )
     pdf_bytes = output_bytes if template.source_format == "pdf" else _image_bytes_to_pdf(output_bytes)
     response = HttpResponse(pdf_bytes, content_type="application/pdf")

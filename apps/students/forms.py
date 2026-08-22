@@ -6,10 +6,11 @@ from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
+from apps.core.forms import StyledFormMixin
+from apps.core.phone import normalize_phone_number
 from apps.students.models import StudentProfile
 
 from .policies import EDITABLE_FIELDS
-from apps.core.forms import StyledFormMixin
 
 
 class StudentProfileUpdateForm(StyledFormMixin, forms.ModelForm):
@@ -27,7 +28,10 @@ class StudentProfileUpdateForm(StyledFormMixin, forms.ModelForm):
         phone = self.cleaned_data.get("phone", "").strip()
         if not phone:
             raise ValidationError(_("Phone number is required."))
-        qs = StudentProfile.objects.exclude(pk=self.instance.pk).filter(phone=phone)
+        normalized = normalize_phone_number(phone)
+        if len(normalized) < 7:
+            raise ValidationError(_("Enter a valid mobile number."))
+        qs = StudentProfile.objects.exclude(pk=self.instance.pk).filter(phone=normalized)
         if qs.exists():
             raise ValidationError(_("This phone number is already in use."))
-        return phone
+        return normalized

@@ -31,7 +31,32 @@
           <dt class="dt">{% trans "Exam stage" %}</dt>
           <dd class="dd">{% include "ui/components/_status.html" with code=attempt.exam_review_status label=attempt.get_exam_review_status_display %}</dd>
         </div>
+        <div>
+          <dt class="dt">{% trans "Student visibility" %}</dt>
+          <dd class="dd">
+            {% if attempt.visible_to_student %}
+              {% include "ui/components/_status.html" with code="released" label=_("Released") %}
+            {% else %}
+              {% include "ui/components/_status.html" with code="hidden" label=_("Hidden from student") %}
+            {% endif %}
+          </dd>
+        </div>
       </dl>
+      {% if attempt.status == 'graded' or attempt.status == 'released' %}
+        <div class="flex gap-2.5 items-center flex-wrap mt-4">
+          {% if attempt.visible_to_student %}
+            <form method="post" action="{% url 'assessments:admin_hide_grades' attempt.id %}" class="inline">{% csrf_token %}
+              <input type="hidden" name="next" value="{{ request.get_full_path }}">
+              <button class="btn-secondary" type="submit">{% trans "Hide grades from student" %}</button>
+            </form>
+          {% else %}
+            <form method="post" action="{% url 'assessments:admin_release_grades' attempt.id %}" class="inline">{% csrf_token %}
+              <input type="hidden" name="next" value="{{ request.get_full_path }}">
+              <button class="btn-primary" type="submit">{% trans "Release grades to student" %}</button>
+            </form>
+          {% endif %}
+        </div>
+      {% endif %}
       {% if not details.complete %}
         {% include "ui/components/_state_banner.html" with state="pending" label=_("Not all parts graded") description=_("Every configured exam part must be graded before the stage decision.") %}
       {% else %}

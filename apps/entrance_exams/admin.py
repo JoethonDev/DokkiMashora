@@ -23,7 +23,6 @@ class EntranceChoiceInline(admin.TabularInline):
 class EntranceAnswerInline(admin.TabularInline):
     model = EntranceAnswer
     extra = 0
-    readonly_fields = ("gemini_suggested_score", "gemini_suggested_feedback", "gemini_request_ref")
 
 
 @admin.register(EntranceExam)

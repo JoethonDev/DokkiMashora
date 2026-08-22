@@ -59,7 +59,7 @@
                 </tr>
               {% empty %}
                 <tr>
-                  <td class="table-td" colspan="6">{% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No progression records found.") %}
+                  <td class="table-td" colspan="6">{% include "ui/components/_empty_state.html" with title=_("No progression records found.") %}
                   </td>
                 </tr>
               {% endfor %}
@@ -79,7 +79,7 @@
             </div>
           {% empty %}
             <div class="border border-line rounded-sm p-4 text-center">
-              {% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No progression records found.") %}
+              {% include "ui/components/_empty_state.html" with title=_("No progression records found.") %}
             </div>
           {% endfor %}
         </div>

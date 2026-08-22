@@ -16,14 +16,14 @@
       hx-target="#diploma-results"
       hx-swap="outerHTML"
       hx-push-url="true"
-       hx-sync="this:replace"><div class="search-field"><span class="absolute inset-y-0 start-0 grid place-items-center ps-3 text-muted pointer-events-none">&#8981;</span>
+       hx-sync="this:replace"><div class="search-field">
        <input id="diploma-search"
               name="q"
               value="{{ search_value }}"
               type="search"
               placeholder="{% trans 'Search diplomas…' %}"
               aria-label="{% trans 'Search diplomas' %}"
-              class="form-input ps-10"></div>
+              class="form-input"></div>
      <label class="min-w-40"><span class="field-label">{% trans "Status" %}</span>
       <select id="diploma-status" name="is_active" class="form-select"><option value="">{% trans "All" %}</option>
         {% for option in filters.0.options %}

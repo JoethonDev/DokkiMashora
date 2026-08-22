@@ -21,11 +21,11 @@
               <td class="table-td">{{ item.submitted_at|date:"d/m/Y" }}</td>
               <td class="table-td">
                 <div class="flex flex-col gap-1 items-start">
-                  <span class="status-pill-info">{{ item.status_label }}</span>
+                  {% include "ui/components/_status.html" with code=item.status label=item.status_label %}
                   {% if item.payment_state == "waived" %}
-                    <span class="status-pill-warning">{% trans "Payment waived" %}</span>
+                    {% include "ui/components/_status.html" with code="payment_pending" label=_("Payment waived") %}
                   {% elif item.payment_state == "paid" %}
-                    <span class="status-pill-success">{% trans "Payment confirmed" %}</span>
+                    {% include "ui/components/_status.html" with code="paid" label=_("Payment confirmed") %}
                   {% endif %}
                 </div>
               </td>
@@ -41,7 +41,7 @@
             </tr>
           {% empty %}
             <tr>
-              <td colspan="4" class="table-td">{% url 'students:apply' as student_apply_url %}{% include "ui/components/_empty_state.html" with icon="▤" title=_("No applications yet") message=_("Your submitted applications will appear here.") href=student_apply_url action_label=_("Explore programs") %}
+              <td colspan="4" class="table-td">{% url 'students:apply' as student_apply_url %}{% include "ui/components/_empty_state.html" with title=_("No applications yet") message=_("Your submitted applications will appear here.") href=student_apply_url action_label=_("Explore programs") %}
               </td>
             </tr>
           {% endfor %}
@@ -54,7 +54,7 @@
           <div class="flex-1 min-w-0">
             <strong class="block truncate">{{ item.program_title }}</strong>
             <small class="block text-muted">{{ item.program_type_label }}</small>
-            <span class="status-pill-info">{{ item.status_label }}</span>
+            {% include "ui/components/_status.html" with code=item.status label=item.status_label %}
             <small class="block text-muted">{{ item.submitted_at|date:"d/m/Y" }}</small>
             {% if item.action_url %}
               <a class="btn-soft-primary shrink-0 mt-2" href="{{ item.action_url }}">{{ item.action_label }}</a>
@@ -65,7 +65,7 @@
         </div>
       {% empty %}
         <div class="border border-line rounded-sm p-4 text-center">
-          {% include "ui/components/_empty_state.html" with icon="▤" title=_("No applications yet") message=_("Your submitted applications will appear here.") href=student_apply_url action_label=_("Explore programs") %}
+          {% include "ui/components/_empty_state.html" with title=_("No applications yet") message=_("Your submitted applications will appear here.") href=student_apply_url action_label=_("Explore programs") %}
         </div>
       {% endfor %}
     </div>

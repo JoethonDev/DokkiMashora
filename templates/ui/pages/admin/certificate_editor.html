@@ -4,72 +4,113 @@
   {{ title|default:_("Placement editor") }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=_("Placement editor") eyebrow=_("Certificates") back_url=back_url back_label=back_label %}
+  <div class="page-stack">
+    {% include "ui/components/_page_header.html" with title=_("Placement editor") eyebrow=_("Certificates") back_url=back_url back_label=back_label %}
     {{ current_mapping|json_script:"certificate-current-mapping" }}
+    {{ available_fields|json_script:"certificate-available-fields" }}
+    {{ available_fonts|json_script:"certificate-available-fonts" }}
     <section id="certificate-editor"
              class="card-surface"
-             data-preview-url="{{ preview_url }}"
              data-preview-width="{{ preview_width }}"
              data-preview-height="{{ preview_height }}"
              data-page-count="{{ page_count }}"
+             data-schema-version="{{ mapping_schema_version }}"
              data-save-url="{{ mapping_save_url }}"
              data-generate-url="{{ preview_generate_url }}"
-             data-msg-saving="{% trans 'Saving…' %}"
-             data-msg-saved="{% trans 'Mapping saved.' %}"
-             data-msg-save-failed="{% trans 'Could not save mapping.' %}"
+             data-msg-saving="{% trans 'Saving layout…' %}"
+             data-msg-saved="{% trans 'Layout saved.' %}"
+             data-msg-save-failed="{% trans 'Could not save layout.' %}"
              data-msg-generating="{% trans 'Generating preview…' %}"
-             data-msg-generated="{% trans 'Generated preview ready.' %}"
+             data-msg-generated="{% trans 'Preview generated.' %}"
              data-msg-generate-failed="{% trans 'Could not generate preview.' %}"
              data-msg-network-error="{% trans 'Network error.' %}"
-             data-msg-placement-label="{% trans 'Placement of the student name field. Use arrow keys to move.' %}">
+             data-msg-no-fields="{% trans 'No fields placed yet.' %}"
+             data-msg-select-field="{% trans 'Select a field…' %}"
+             data-msg-reserved="{% trans 'Reserved' %}"
+             data-msg-page-word="{% trans 'page' %}"
+             data-msg-empty-hint="{% trans 'Add a dynamic field, then drag and resize it on the certificate.' %}"
+             data-msg-field-added="{% trans 'Field added.' %}"
+             data-msg-field-removed="{% trans 'Field removed.' %}"
+             data-msg-field-aria="{% blocktrans with label='{label}' page='{page}' %}{{ label }} field on page {{ page }}. Drag to move, drag the corner handle to resize, or use the arrow keys to move.{% endblocktrans %}"
+             data-msg-resize-aria="{% blocktrans with label='{label}' %}Resize {{ label }} field box. Drag the corner or use the arrow keys.{% endblocktrans %}">
       <div class="hidden" aria-hidden="true">{% csrf_token %}</div>
       <div class="section-head"><div>
             <p class="eyebrow">{% trans "Template" %}</p>
             <h3>{{ template.name }}</h3>
           </div>
         </div>
-      <p class="text-sm text-muted mb-3">{% trans "Drag the field box to place the student name, choose alignment and direction, then save the mapping." %}</p>
-      <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_18rem] gap-4">
-        <div class="relative border border-line rounded-md overflow-hidden bg-surface-inverse"
-             style="max-height: 70vh; overflow: auto;">
-          <img id="editor-preview" src="{{ preview_url }}" alt="{% trans 'Certificate template preview' %}" class="w-full h-auto block">
-          <div id="editor-field"
-               class="absolute border-2 border-brand bg-brand/10 text-center cursor-move select-none"
-               style="min-width: 120px; min-height: 32px; padding: 4px 8px;">
-            <span>{% trans "Student Name" %}</span>
+      <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_20rem] gap-4">
+        <div class="page-stack min-w-0">
+          <div id="editor-canvas-scroll"
+               class="border border-line rounded-md overflow-auto bg-surface-inverse"
+               style="max-height: 70vh;">
+            <div id="editor-canvas" class="relative">
+              <img id="editor-preview" src="{{ preview_url }}" alt="{% trans 'Certificate template preview' %}" class="w-full h-auto block">
+            </div>
           </div>
+          {% if page_count > 1 %}
+            <label class="field max-w-xs" id="editor-canvas-page-wrap"><span class="field-label" id="editor-canvas-page-label">{% trans "Canvas page" %}</span>
+              <select id="editor-canvas-page" class="form-select" aria-labelledby="editor-canvas-page-label"></select>
+            </label>
+          {% else %}
+            <input type="hidden" id="editor-canvas-page" value="1">
+          {% endif %}
+          <p id="editor-empty-hint" class="text-sm text-muted"></p>
         </div>
-        <div class="page-stack">
-          <label class="field"><span class="field-label">{% trans "Page" %}</span>
-            <select id="editor-page" class="form-select">
-              {% for page in ''|make_list %}{% endfor %}
-            </select>
-          </label>
-          <label class="field"><span class="field-label">{% trans "Font size" %}</span>
-            <input id="editor-font-size" class="form-input" type="number" min="4" max="120" value="28">
-          </label>
-          <label class="field"><span class="field-label">{% trans "Alignment" %}</span>
-            <select id="editor-align" class="form-select">
-              <option value="left">{% trans "Left" %}</option>
-              <option value="center" selected>{% trans "Center" %}</option>
-              <option value="right">{% trans "Right" %}</option>
-            </select>
-          </label>
-          <label class="field"><span class="field-label">{% trans "Direction" %}</span>
-            <select id="editor-direction" class="form-select">
-              <option value="rtl" selected>{% trans "Right-to-left (Arabic)" %}</option>
-              <option value="ltr">{% trans "Left-to-right (English)" %}</option>
-            </select>
-          </label>
-          <div class="flex gap-2.5 items-center flex-wrap">
-            <button class="btn-primary" type="button" data-editor-save>{% trans "Save mapping" %}</button>
-            <button class="btn-secondary" type="button" data-editor-generate>{% trans "Preview generated" %}</button>
+        <aside class="page-stack">
+          <div class="page-stack">
+            <p class="eyebrow">{% trans "Add field" %}</p>
+            <label class="field"><span class="field-label" id="editor-field-picker-label">{% trans "Field" %}</span>
+              <select id="editor-field-picker" class="form-select" aria-labelledby="editor-field-picker-label"></select>
+            </label>
+            <button type="button" class="btn-primary" id="editor-add-field">{% trans "Add field" %}</button>
           </div>
-          <p data-editor-status class="text-sm text-muted mt-2" role="status"></p>
-          <div data-editor-result class="hidden mt-3">
+          <div id="editor-field-settings" class="page-stack" hidden>
+            <p class="eyebrow">{% trans "Selected field" %}</p>
+            <label class="field"><span class="field-label" id="editor-field-select-label">{% trans "Field" %}</span>
+              <select id="editor-field-select" class="form-select" aria-labelledby="editor-field-select-label"></select>
+            </label>
+            {% if page_count > 1 %}
+              <label class="field"><span class="field-label" id="editor-field-page-label">{% trans "Page" %}</span>
+                <select id="editor-field-page" class="form-select" aria-labelledby="editor-field-page-label"></select>
+              </label>
+            {% else %}
+              <input type="hidden" id="editor-field-page" value="1">
+            {% endif %}
+            <label class="field"><span class="field-label" id="editor-font-size-label">{% trans "Font size" %}</span>
+              <input id="editor-font-size" class="form-input" type="number" min="4" max="120" step="1" value="28" aria-labelledby="editor-font-size-label">
+            </label>
+            <label class="field"><span class="field-label" id="editor-font-family-label">{% trans "Font family" %}</span>
+              <select id="editor-font-family" class="form-select" aria-labelledby="editor-font-family-label"></select>
+            </label>
+            <label class="field"><span class="field-label" id="editor-align-label">{% trans "Alignment" %}</span>
+              <select id="editor-align" class="form-select" aria-labelledby="editor-align-label">
+                <option value="left">{% trans "Left" %}</option>
+                <option value="center" selected>{% trans "Center" %}</option>
+                <option value="right">{% trans "Right" %}</option>
+              </select>
+            </label>
+            <label class="field"><span class="field-label" id="editor-direction-label">{% trans "Direction" %}</span>
+              <select id="editor-direction" class="form-select" aria-labelledby="editor-direction-label">
+                <option value="rtl" selected>{% trans "Right-to-left (Arabic)" %}</option>
+                <option value="ltr">{% trans "Left-to-right (English)" %}</option>
+              </select>
+            </label>
+            <button type="button" class="btn-ghost" id="editor-remove-field">{% trans "Remove field" %}</button>
+          </div>
+          <div class="flex gap-3 items-center flex-wrap">
+            <button class="btn-primary" type="button" data-editor-save>{% trans "Save layout" %}</button>
+            <button class="btn-secondary" type="button" data-editor-generate>{% trans "Preview generated certificate" %}</button>
+          </div>
+          <p data-editor-status class="text-sm mt-2 flex items-center gap-2 text-muted" role="status" aria-live="polite">
+            <span data-editor-status-icon class="status-icon" aria-hidden="true"></span>
+            <span data-editor-status-text></span>
+          </p>
+          <div data-editor-result class="hidden page-stack">
             <a class="btn-soft" href="#" target="_blank" rel="noopener" data-editor-result-link>{% trans "Open generated preview" %}</a>
+            <iframe data-editor-result-frame class="w-full border border-line rounded-sm" style="height: 32rem;" title="{% trans 'Generated certificate preview' %}" loading="lazy"></iframe>
           </div>
-        </div>
+        </aside>
       </div>
     </section>
   </div>

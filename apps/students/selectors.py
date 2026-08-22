@@ -6,6 +6,7 @@ Each method returns structured data — never rendered HTML.
 
 from __future__ import annotations
 
+from decimal import Decimal
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
@@ -29,10 +30,12 @@ from apps.academics.models import (
     DiplomaLectureWatchProgress,
     Lecture,
     LectureWatchProgress,
+    Semester,
 )
 from apps.academics.services import (
     course_progress_for_enrollment,
     diploma_progress_for_enrollment,
+    get_student_diploma_access,
     get_visible_semester_ids_by_enrollment,
 )
 from apps.applications.constants import (
@@ -43,9 +46,20 @@ from apps.applications.constants import (
     PROGRAM_APP_STATUS_REJECTED,
 )
 from apps.applications.models import ProgramApplication
-from apps.assessments.models import AssessmentAttempt, HomeworkSubmission
+from apps.assessments import constants as assessment_constants
+from apps.assessments.models import (
+    AssessmentAttempt,
+    AssessmentLectureSection,
+    HomeworkSubmission,
+    OfflineSectionGrade,
+    SemesterExamCode,
+)
 from apps.assessments.services import get_student_assessments, get_student_attempts
 from apps.attendance.models import AttendanceRecord
+from apps.attendance.services import (
+    get_attendance_evaluation_percent,
+    get_attendance_summaries,
+)
 from apps.certificates.models import GeneratedCertificate
 from apps.communications.email_message import EmailMessage
 from apps.entrance_exams.constants import (
@@ -63,6 +77,7 @@ from apps.progression.constants import (
 from apps.progression.models import (
     FinalExamEligibility,
     PromotionDecision,
+    SemesterEvaluationConfig,
     StudentDiplomaCompletion,
     StudentGradeItem,
     StudentSemesterProgress,
@@ -77,7 +92,7 @@ if TYPE_CHECKING:
 ALL_SECTIONS = [
     "identity", "applications", "intake_requests", "diploma_enrollments", "course_enrollments",
     "active_courses", "expired_courses", "exam_assignments",
-    "assessment_attempts", "homework_submissions", "semester_progress",
+    "assessment_attempts", "offline_exam_records", "homework_submissions", "semester_progress",
     "promotion_decisions", "completions", "certificates", "eligibilities", "apply",
     "payments", "notifications", "grade_items",
     "attendance", "open_assessments", "actionable_attempts", "record_history",
@@ -93,6 +108,7 @@ _SECTION_LOADERS: dict[str, tuple] = {
     "expired_courses": ("expired_courses", lambda p, u: _get_expired_courses(p)),
     "exam_assignments": ("exam_assignments", lambda p, u: _get_exam_assignments(p)),
     "assessment_attempts": ("assessment_attempts", lambda p, u: _get_assessment_attempts(u)),
+    "offline_exam_records": ("offline_exam_records", lambda p, u: _get_offline_exam_records(u)),
     "homework_submissions": ("homework_submissions", lambda p, u: _get_homework_submissions(u)),
     "semester_progress": ("semester_progress", lambda p, u: _get_semester_progress(p)),
     "promotion_decisions": ("promotion_decisions", lambda p, u: _get_promotion_decisions(p)),
@@ -684,6 +700,96 @@ def _get_assessment_attempts(user: User) -> list[AssessmentAttempt]:
 
 
 # ---------------------------------------------------------------------------
+# Offline exam records (recorded section grading, no questions)
+# ---------------------------------------------------------------------------
+
+
+def _get_offline_exam_records(user: User) -> list[SimpleNamespace]:
+    """Project the student's offline Semester Exam codes as grading records.
+
+    Each record shows the anonymous code, per-section grading state
+    (structure only — never questions), and the computed result only after
+    Admin release. Section scores stay hidden until release.
+    """
+    codes = list(
+        SemesterExamCode.objects.filter(
+            active=True,
+            delivery_mode=assessment_constants.DELIVERY_MODE_OFFLINE,
+            diploma_enrollment__student__user=user,
+        )
+        .select_related("assessment")
+        .order_by("-created_at")[:50]
+    )
+    if not codes:
+        return []
+    assessment_ids = {code.assessment_id for code in codes}
+    sections_by_assessment: dict[int, list] = {}
+    for section in AssessmentLectureSection.objects.filter(
+        assessment_id__in=assessment_ids,
+    ).select_related("lecture").order_by("order", "id"):
+        sections_by_assessment.setdefault(section.assessment_id, []).append(section)
+    grades_by_code: dict[int, dict[int, Decimal]] = {}
+    for grade in OfflineSectionGrade.objects.filter(exam_code__in=codes):
+        grades_by_code.setdefault(grade.exam_code_id, {})[grade.section_id] = grade.score
+    attempts_by_assessment = {
+        attempt.assessment_id: attempt
+        for attempt in AssessmentAttempt.objects.filter(
+            student=user,
+            assessment_id__in=assessment_ids,
+            status__in=[
+                assessment_constants.ATTEMPT_STATUS_GRADED,
+                assessment_constants.ATTEMPT_STATUS_RELEASED,
+            ],
+        ).order_by("-created_at")
+    }
+    records = []
+    for code in codes:
+        sections = sections_by_assessment.get(code.assessment_id, [])
+        grades = grades_by_code.get(code.id, {})
+        graded_count = sum(1 for section in sections if section.id in grades)
+        complete = bool(sections) and graded_count == len(sections)
+        attempt = attempts_by_assessment.get(code.assessment_id)
+        released = bool(attempt and attempt.visible_to_student)
+        if released:
+            status = attempt.status
+            status_label = attempt.get_status_display()
+        elif complete:
+            status = "graded"
+            status_label = _("Graded — awaiting release")
+        elif graded_count:
+            status = "under_review"
+            status_label = _("Under review")
+        else:
+            status = "assigned"
+            status_label = _("Awaiting grading")
+        records.append(
+            SimpleNamespace(
+                id=code.id,
+                assessment=code.assessment,
+                code_number=code.code_number,
+                status=status,
+                status_label=status_label,
+                graded_count=graded_count,
+                section_count=len(sections),
+                released=released,
+                score_percent=attempt.score_percent if released else None,
+                result_url=reverse("assessments:results", args=[code.assessment_id]) if released else None,
+                sections=[
+                    SimpleNamespace(
+                        id=section.id,
+                        label=str(section.lecture),
+                        max_grade=section.max_grade,
+                        graded=section.id in grades,
+                        score=grades.get(section.id) if released else None,
+                    )
+                    for section in sections
+                ],
+            )
+        )
+    return records
+
+
+# ---------------------------------------------------------------------------
 # Homework submissions
 # ---------------------------------------------------------------------------
 
@@ -713,13 +819,72 @@ def _get_attendance(student_profile: StudentProfile) -> dict:
     )
     counts = {status: totals[status] or 0 for status in ("present", "late", "excused", "absent")}
     total = totals["total"] or 0
-    attended = counts["present"] + counts["late"]
+    # The card percentage is the canonical evaluation-equivalent percentage
+    # (DECISION §13), not a record-based all-time count; the record list and
+    # counts stay the recent attendance history display.
     return {
         "records": records,
         "counts": counts,
         "total": total,
-        "attendance_percent": round(attended / total * 100, 2) if total else 0,
+        "attendance_percent": _canonical_attendance_percent(student_profile),
     }
+
+
+def _canonical_attendance_percent(student_profile: StudentProfile) -> Decimal:
+    """Canonical attendance percentage for the record card (DECISION §13).
+
+    Rolls up the per (enrollment, visible semester) evaluation-equivalent
+    percentage — required-count capped when the cohort/semester config defines
+    it, otherwise held-session — weighted by each semester's denominator, so
+    the student sees the same percentage the evaluation uses.
+    """
+    enrollments = list(
+        student_profile.diploma_enrollments.filter(status=ENROLLMENT_STATUS_ACTIVE)
+        .select_related("cohort")
+    )
+    pairs_by_semester: dict[int, list[DiplomaEnrollment]] = {}
+    semester_by_id: dict[int, Semester] = {}
+    cohort_ids: set[int] = set()
+    for enrollment in enrollments:
+        visible_semesters = get_student_diploma_access(enrollment)["visible_semesters"]
+        for semester in visible_semesters:
+            pairs_by_semester.setdefault(semester.id, []).append(enrollment)
+            semester_by_id[semester.id] = semester
+            cohort_ids.add(enrollment.cohort_id)
+
+    if not semester_by_id:
+        return Decimal("0")
+
+    required_by_key: dict[tuple[int, int], int] = {
+        (config.cohort_id, config.semester_id): config.attendance_required_sessions
+        for config in SemesterEvaluationConfig.objects.filter(
+            cohort_id__in=cohort_ids,
+            semester_id__in=list(semester_by_id),
+        )
+    }
+
+    total_percent = Decimal("0")
+    total_weight = 0
+    for semester_id, enrollment_group in pairs_by_semester.items():
+        semester = semester_by_id[semester_id]
+        summaries_by_enrollment = get_attendance_summaries(enrollment_group, semester)
+        for enrollment in enrollment_group:
+            summary = summaries_by_enrollment.get(enrollment.id)
+            if summary is None or not summary["total_sessions"]:
+                continue
+            required = required_by_key.get((enrollment.cohort_id, semester_id))
+            percent = get_attendance_evaluation_percent(
+                enrollment, semester, required, summary=summary,
+            )
+            if percent is None:
+                continue
+            basis = required if (required and required > 0) else summary["total_sessions"]
+            total_percent += percent * Decimal(basis)
+            total_weight += basis
+
+    if total_weight <= 0:
+        return Decimal("0")
+    return (total_percent / Decimal(total_weight)).quantize(Decimal("0.01"))
 
 
 # ---------------------------------------------------------------------------

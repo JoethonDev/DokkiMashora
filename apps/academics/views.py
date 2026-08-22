@@ -9,13 +9,13 @@ import uuid
 from decimal import Decimal
 
 import qrcode
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Count, Prefetch, Q
+from django.db.models import Count, OuterRef, Prefetch, Q, Subquery
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -51,12 +51,9 @@ from apps.academics.models import (
     Lecture,
     LectureAudioProgress,
     LectureWatchProgress,
-    StudentCluster,
     Semester,
+    StudentCluster,
 )
-from apps.assessments.constants import ATTEMPT_STATUS_ASSIGNED, ATTEMPT_STATUS_IN_PROGRESS
-from apps.assessments.models import AssessmentAttempt
-from apps.assessments.services import get_student_assessments
 from apps.academics.services import (
     _course_lecture_completion_map,
     _course_unlock_map,
@@ -85,9 +82,20 @@ from apps.academics.services import (
     start_lecture_audio,
     start_lecture_watch,
 )
+from apps.applications.constants import PROGRAM_APP_STATUS_REJECTED, PROGRAM_TYPE_DIPLOMA
+from apps.applications.models import ProgramApplication
+from apps.assessments.constants import (
+    ATTEMPT_STATUS_ASSIGNED,
+    ATTEMPT_STATUS_IN_PROGRESS,
+    DELIVERY_MODE_CHOICES,
+)
+from apps.assessments.models import AssessmentAttempt
+from apps.assessments.services import (
+    change_diploma_enrollment_delivery_mode,
+    get_student_assessments,
+)
 from apps.attendance.models import AttendanceCode
 from apps.attendance.services import build_attendance_qr_payload, get_attendance_summary
-from apps.progression.models import DiplomaProgressionRule, SemesterProgressionRule
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import (
@@ -100,6 +108,7 @@ from apps.core.permissions import (
 )
 from apps.core.views import safe_next_url
 from apps.intake_forms.models import IntakeForm
+from apps.progression.models import DiplomaProgressionRule, SemesterProgressionRule
 from apps.storage.services import record_deferred_storage_deletion, storage_service
 from apps.students.models import StudentProfile
 
@@ -333,62 +342,55 @@ def admin_semester_edit(request, diploma_id, semester_id):
         form = SemesterForm(request.POST, instance=semester, diploma=diploma)
         pass_percent_raw = request.POST.get("semester_pass_percent_override", "").strip()
         pass_percent = None
+        override_valid = True
         if pass_percent_raw:
             try:
                 parsed = Decimal(pass_percent_raw)
             except (ValueError, TypeError):
                 messages.error(request, _("Invalid semester pass percent override."))
+                override_valid = False
             else:
                 if not parsed.is_finite() or parsed < 0 or parsed > 100:
                     messages.error(request, _("Semester pass percent must be between 0 and 100."))
+                    override_valid = False
                 else:
                     pass_percent = parsed
         require_all = request.POST.get("semester_require_all_required") == "1"
         allow_missing = request.POST.get("semester_allow_missing_optional") == "1"
-        if form.is_valid() and pass_percent is not None:
-            form.save()
-            if diploma_rule:
-                if pass_percent:
-                    from apps.progression.services import save_progression_rule
+        if form.is_valid() and override_valid:
+            try:
+                with transaction.atomic():
+                    form.save()
+                    if diploma_rule and pass_percent is not None:
+                        from apps.progression.services import save_progression_rule
 
-                    semester_rule, _created = SemesterProgressionRule.objects.update_or_create(
-                        semester=semester,
-                        diploma_rule=diploma_rule,
-                        defaults={
-                            "pass_percent": pass_percent,
-                            "require_all_required_assessments": require_all,
-                            "allow_missing_optional_assessments": allow_missing,
-                            "is_active": True,
-                        },
-                    )
-                    try:
-                        save_progression_rule(semester_rule, request.user)
-                    except (ValueError, ValidationError) as exc:
-                        messages.error(request, str(exc))
-                        return render(
-                            request,
-                            "ui/pages/admin/academic_form.html",
-                            {
-                                "form": form,
-                                "title": _("Edit semester"),
-                                "diploma": diploma,
-                                "semester_pass_percent_override": str(pass_percent),
-                                "semester_require_all_required": require_all,
-                                "semester_allow_missing_optional": allow_missing,
-                                "next": next_url,
-                                "breadcrumb_items": _diploma_breadcrumbs(diploma) + [{"label": _("Edit semester")}],
+                        semester_rule, _created = SemesterProgressionRule.objects.update_or_create(
+                            semester=semester,
+                            diploma_rule=diploma_rule,
+                            defaults={
+                                "pass_percent": pass_percent,
+                                "require_all_required_assessments": require_all,
+                                "allow_missing_optional_assessments": allow_missing,
+                                "is_active": True,
                             },
                         )
-                elif semester_rule:
-                    from apps.progression.services import save_progression_rule
-
-                    semester_rule.is_active = False
-                    try:
                         save_progression_rule(semester_rule, request.user)
-                    except (ValueError, ValidationError) as exc:
-                        messages.error(request, str(exc))
-                        return redirect(next_url) if next_url else redirect("academics:admin_diploma_detail", diploma_id=diploma.id)
-                    semester_rule = None
+            except (ValueError, ValidationError) as exc:
+                messages.error(request, str(exc))
+                return render(
+                    request,
+                    "ui/pages/admin/academic_form.html",
+                    {
+                        "form": form,
+                        "title": _("Edit semester"),
+                        "diploma": diploma,
+                        "semester_pass_percent_override": str(pass_percent) if pass_percent is not None else pass_percent_raw,
+                        "semester_require_all_required": require_all,
+                        "semester_allow_missing_optional": allow_missing,
+                        "next": next_url,
+                        "breadcrumb_items": _diploma_breadcrumbs(diploma) + [{"label": _("Edit semester")}],
+                    },
+                )
             messages.success(request, _("Semester updated."))
             return redirect(next_url) if next_url else redirect("academics:admin_diploma_detail", diploma_id=diploma.id)
     else:
@@ -514,14 +516,6 @@ def admin_course_create(request):
         "ui/pages/admin/academic_form.html",
         {"form": form, "title": _("Create course"), "next": next_url, "diploma": None, "semesters": [], "diplomas": None},
     )
-
-
-@login_required
-@role_required(*ROLE_EXAM_STAFF)
-def admin_diploma_semester_options(request):
-    diploma_id = request.GET.get("diploma_id")
-    semesters = Diploma.objects.get(id=diploma_id).semesters.all() if diploma_id else []
-    return render(request, "ui/fragments/admin/_semester_options.html", {"semesters": semesters})
 
 
 @login_required
@@ -1409,11 +1403,18 @@ def admin_diploma_enrollment_list(request, diploma_id):
     q = request.GET.get("q", "")
     status_filter = request.GET.get("status", "")
     cohort_filter = request.GET.get("cohort", "")
+    application_mode = ProgramApplication.objects.filter(
+        student_id=OuterRef("student_id"),
+        cohort_id=OuterRef("cohort_id"),
+        program_type=PROGRAM_TYPE_DIPLOMA,
+    ).exclude(status=PROGRAM_APP_STATUS_REJECTED).order_by(
+        "-created_at", "-id",
+    ).values("delivery_mode")[:1]
     enrollments = DiplomaEnrollment.objects.filter(
         cohort__diploma=diploma
     ).select_related(
         "student", "student__user", "cohort"
-    ).order_by("-created_at")
+    ).annotate(application_delivery_mode=Subquery(application_mode)).order_by("-created_at")
     enrollments = enrollments.filter(enrollment_scope_filter(request.user, "diploma"))
     if status_filter:
         enrollments = enrollments.filter(status=status_filter)
@@ -1452,6 +1453,7 @@ def admin_diploma_enrollment_list(request, diploma_id):
         "diploma": diploma,
         "enrollment_type": "diploma",
         "cohorts": cohorts,
+        "delivery_mode_choices": DELIVERY_MODE_CHOICES,
     }
     if is_htmx(request):
         return render(request, "ui/fragments/admin/_enrollment_table.html", ctx)
@@ -1465,6 +1467,18 @@ def admin_diploma_enrollment_update(request, diploma_id, enrollment_id):
     """Update a diploma enrollment's status or cohort."""
     diploma = get_object_or_404(Diploma, id=diploma_id)
     enrollment = get_object_or_404(DiplomaEnrollment, id=enrollment_id, cohort__diploma=diploma)
+    if request.POST.get("action") == "change_delivery_mode":
+        try:
+            change_diploma_enrollment_delivery_mode(
+                enrollment.id,
+                request.POST.get("delivery_mode", "").strip(),
+                request.user,
+            )
+        except ValueError as exc:
+            messages.error(request, str(exc))
+        else:
+            messages.success(request, _("Student delivery mode updated."))
+        return redirect("academics:admin_diploma_enrollment_list", diploma_id=diploma.id)
     new_status = request.POST.get("status")
     new_cohort_id = request.POST.get("cohort_id")
     if new_status and new_status in dict(ENROLLMENT_STATUS_CHOICES):

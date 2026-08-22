@@ -370,46 +370,6 @@
   document.addEventListener("DOMContentLoaded", function () { initEntranceChoices(); });
   document.addEventListener("htmx:afterSwap", function (e) { initEntranceChoices(e.detail.target); });
 
-  // --- Entrance exam autosave (every 60 seconds) ---
-  function initExamAutosave() {
-    var form = document.getElementById("exam-take-form");
-    if (!form) return;
-    var snapshotUrl = form.getAttribute("data-snapshot-url");
-    var csrf = form.querySelector("input[name='csrfmiddlewaretoken']");
-    if (!snapshotUrl || !csrf) return;
-
-    function collectAnswers() {
-      var answers = {};
-      var fields = form.querySelectorAll("[name^='question_']");
-      Array.prototype.forEach.call(fields, function (el) {
-        var qid = el.name.replace("question_", "");
-        if (el.type === "radio") {
-          if (el.checked) answers[qid] = { choice: el.value };
-        } else if (el.tagName === "TEXTAREA") {
-          answers[qid] = { text: el.value };
-        }
-      });
-      return answers;
-    }
-
-    function save() {
-      fetch(snapshotUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRFToken": csrf.value,
-        },
-        body: JSON.stringify({ answers: collectAnswers() }),
-        credentials: "same-origin",
-      }).catch(function () { /* best-effort autosave; failures are ignored */ });
-    }
-
-    setInterval(save, 60000);
-  }
-
-  document.addEventListener("DOMContentLoaded", function () { initExamAutosave(); });
-  document.addEventListener("htmx:afterSwap", function (e) { initExamAutosave(e.detail.target); });
-
   // --- Normal assessment autosave ---
   function initAssessmentAutosave(container) {
     if (!container) container = document;

@@ -44,11 +44,6 @@ def widget_class(field):
 
 
 @register.filter
-def is_first_visible_field(field):
-    return bool(field.form.visible_fields()) and field.form.visible_fields()[0].name == field.name
-
-
-@register.filter
 def get_item(dictionary, key):
     """Return dictionary[key] or empty string."""
     if isinstance(dictionary, dict):

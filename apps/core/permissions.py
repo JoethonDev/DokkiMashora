@@ -100,14 +100,6 @@ ROLE_HOMEWORK_GRADING_STAFF = (GROUP_SUPER_ADMIN, GROUP_ADMIN, GROUP_MODERATOR)
 ROLE_REVIEWER = (GROUP_SUPER_ADMIN, GROUP_ADMIN, GROUP_REVIEWER)
 
 
-def is_super_admin(user) -> bool:
-    return bool(
-        user
-        and user.is_authenticated
-        and (user.is_superuser or _user_in_any_group(user, (GROUP_SUPER_ADMIN,)))
-    )
-
-
 def is_admin(user) -> bool:
     return bool(user and user.is_authenticated and _user_in_any_group(user, (GROUP_SUPER_ADMIN, GROUP_ADMIN)))
 
@@ -307,19 +299,6 @@ def enrollment_scope_filter(user, enrollment_model: str = "course") -> Q:
     if enrollment_model == "course":
         return Q(course_version_id__in=mod_cvs)
     return Q(cohort_id__in=mod_cohorts)
-
-
-def staff_required(view_func: Callable) -> Callable:
-    """Allow only staff (admins/moderators/superusers)."""
-
-    @wraps(view_func)
-    @login_required
-    def _wrapped(request, *args, **kwargs):
-        if not (request.user.is_staff or is_moderator(request.user)):
-            raise PermissionDenied
-        return view_func(request, *args, **kwargs)
-
-    return _wrapped
 
 
 def role_required(*group_names: str) -> Callable:

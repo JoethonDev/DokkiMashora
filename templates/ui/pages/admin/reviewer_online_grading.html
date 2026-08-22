@@ -8,24 +8,32 @@
      {% include "ui/components/_page_header.html" with title=assignment.title eyebrow=eyebrow back_button=True %}
     <section class="card-surface">
        <div class="section-head"><div><p class="eyebrow">{% trans "Online written grading" %}</p><h2>{{ assignment.title }}</h2></div></div>
-      <div class="state-banner state-banner-info mb-4"><div><strong>{% trans "Submission claimed" %}</strong><p class="m-0 mt-1 text-sm">{% trans "Finish and finalize this anonymous submission before requesting another one." %}</p></div></div>
+      <div class="state-banner state-banner-info mb-4"><div><strong>{% trans "Submission claimed" %}</strong>
+          {% if submission_code %}<p class="m-0 mt-1 text-sm">{% trans "Exam code" %}: <strong dir="ltr">{{ submission_code }}</strong></p>{% endif %}
+          <p class="m-0 mt-1 text-sm">{% trans "Grade every written question below, then finalize this anonymous submission before requesting another one." %}</p></div></div>
        {% include "ui/components/_pagination.html" with page_obj=online_items pagination_qs=pagination_qs %}
        <div class="space-y-4 mt-4">
         {% for item in online_items %}
           <div class="border border-line rounded-sm p-3">
-            <div class="flex items-center justify-between gap-2 flex-wrap">
-              <strong>{% trans "Code" %}: <span dir="ltr">{{ item.code_number }}</span></strong>
+            <div class="flex items-center justify-end gap-2 flex-wrap">
               <span>{% trans "Points" %}: {{ item.points }}</span>
               </div>
             <p class="text-sm font-bold mt-2 mb-1">{{ item.question_text }}</p>
             <p class="text-sm text-muted border-s-2 border-line ps-3">{{ item.answer_text }}</p>
-            <form method="post" class="flex items-end gap-2 flex-wrap mt-2">{% csrf_token %}
-              <input type="hidden" name="answer_id" value="{{ item.answer_id }}">
-              <label class="min-w-32"><span class="field-label">{% trans "Score (points)" %}</span>
-                <input name="score" class="form-input" type="number" step="0.01" min="0" max="{{ item.points }}" value="{{ item.score|default:'' }}" required>
-              </label>
-              <button class="btn-primary" type="submit">{% trans "Save grade" %}</button>
-            </form>
+            {% if item.score is not None %}
+              <div class="flex items-center justify-between gap-3 flex-wrap mt-3 pt-3 border-t border-line">
+                {% include "ui/components/_status.html" with code="graded" label=_("Graded") %}
+                <span dir="ltr" class="font-bold">{% trans "Score" %}: {{ item.score }} / {{ item.points }}</span>
+              </div>
+            {% else %}
+              <form method="post" class="flex items-end gap-2 flex-wrap mt-2">{% csrf_token %}
+                <input type="hidden" name="answer_id" value="{{ item.answer_id }}">
+                <label class="min-w-32"><span class="field-label">{% trans "Score (points)" %}</span>
+                  <input name="score" class="form-input" type="number" step="0.01" min="0" max="{{ item.points }}" value="{{ item.score|default:'' }}" required>
+                </label>
+                <button class="btn-primary" type="submit">{% trans "Save grade" %}</button>
+              </form>
+            {% endif %}
            </div>
          {% empty %}
            {% include "ui/components/_empty_state.html" with title=_("No written answers waiting") %}

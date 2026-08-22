@@ -41,17 +41,6 @@ STAFF_ROLE_GROUPS = (
     GROUP_SECRETARY,
 )
 
-# Mapping from group name to a stable slug used in code checks and tests.
-ROLE_SLUGS = {
-    GROUP_SUPER_ADMIN: "super_admin",
-    GROUP_ADMIN: "admin",
-    GROUP_MODERATOR: "moderator",
-    GROUP_TEACHER: "teacher",
-    GROUP_STUDENT: "student",
-    GROUP_REVIEWER: "reviewer",
-    GROUP_SECRETARY: "secretary",
-}
-
 # User status choices.
 USER_STATUS_ACTIVE = "active"
 USER_STATUS_INACTIVE = "inactive"

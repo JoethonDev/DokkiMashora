@@ -11,8 +11,7 @@
     <section class="card-surface">
       <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between mb-4">
         <form class="relative flex-1 max-w-xs" hx-get="{% url 'entrance_exams:admin_list' %}" hx-target="#exam-list-content" hx-replace-url="true">
-          <span class="absolute inset-y-0 start-0 grid place-items-center ps-3 text-muted pointer-events-none">&#8981;</span>
-          <input name="q" value="{{ q }}" class="form-input ps-10" hx-trigger="keyup changed delay:500ms" placeholder="{% trans 'Search exams…' %}" aria-label="{% trans 'Search exams' %}">
+          <input name="q" value="{{ q }}" class="form-input" hx-trigger="keyup changed delay:500ms" placeholder="{% trans 'Search exams…' %}" aria-label="{% trans 'Search exams' %}">
         </form>
         <a class="btn-primary" href="{% url 'entrance_exams:admin_create_exam' %}">{% trans "Create exam" %}</a>
       </div>
@@ -50,7 +49,7 @@
               </tr>
             {% empty %}
               <tr>
-                <td class="table-td" colspan="6">{% url 'entrance_exams:admin_create_exam' as admin_create_exam_url %}{% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No entrance exams created.") href=admin_create_exam_url action_label=_("Create exam") %}
+                <td class="table-td" colspan="6">{% url 'entrance_exams:admin_create_exam' as admin_create_exam_url %}{% include "ui/components/_empty_state.html" with title=_("No entrance exams created.") href=admin_create_exam_url action_label=_("Create exam") %}
                 </td>
               </tr>
             {% endfor %}
@@ -74,7 +73,7 @@
           </div>
         {% empty %}
           <div class="border border-line rounded-sm p-4 text-center">
-            {% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No entrance exams created.") href=admin_create_exam_url action_label=_("Create exam") %}
+            {% include "ui/components/_empty_state.html" with title=_("No entrance exams created.") href=admin_create_exam_url action_label=_("Create exam") %}
           </div>
         {% endfor %}
       </div>

@@ -3,7 +3,6 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
-import re
 from datetime import datetime
 from typing import Any
 
@@ -24,7 +23,8 @@ from apps.audit.constants import (
 from apps.audit.models import AuditEvent
 from apps.audit.services import record_audit_event
 from apps.communications.constants import TEMPLATE_ACTIVATION
-from apps.communications.services import send_templated_email
+from apps.communications.services import queue_templated_email
+from apps.core.phone import normalize_phone_number
 from apps.students.identity import normalize_identity_number, validate_identity_number
 from apps.students.models import StudentProfile
 
@@ -55,15 +55,6 @@ from .models import User, UserUpload, UserUploadRow
 REQUIRED_PROFILE_FIELDS = ["date_of_birth", "gender", "address", "education"]
 
 
-def normalize_phone(value: str) -> str:
-    cleaned = re.sub(r"[^\d+]", "", value.strip())
-    if cleaned.startswith("00"):
-        cleaned = "+" + cleaned[2:]
-    if cleaned.startswith("0") and not cleaned.startswith("+") and len(cleaned) == 11:
-        cleaned = "+2" + cleaned
-    return cleaned
-
-
 def parse_date(value: str) -> datetime | None:
     for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d", "%d-%m-%Y"):
         try:
@@ -89,26 +80,63 @@ def validate_csv_content(content: bytes) -> list[dict[str, str]]:
     return rows
 
 
-def match_user(row: dict[str, str]) -> tuple[User | None, str, str]:
-    email = row.get("email", "").strip().lower()
-    country_code = _get_country_code(row)
-    raw_national_id = row.get("national_id", "")
-    national_id = normalize_identity_number(country_code, raw_national_id) if raw_national_id else ""
-    phone = normalize_phone(row.get("phone", ""))
+def _load_import_user_scope() -> tuple[set[int], set[int]]:
+    """Return student and staff user ids once per import run."""
+    student_user_ids = set(User.objects.filter(groups__name=GROUP_STUDENT).values_list("id", flat=True))
+    staff_user_ids = set(
+        User.objects.filter(groups__name__in=STAFF_ROLE_GROUPS).values_list("id", flat=True)
+    )
+    return student_user_ids, staff_user_ids
+
+
+def _load_match_indexes(
+    emails: set[str], national_ids: set[str], phones: set[str]
+) -> tuple[dict[str, list[User]], dict[str, list[User]], dict[str, list[User]]]:
+    """Build in-memory identifier → candidate-users maps with a bounded query set.
+
+    Emails are lowercased at creation (``UserManager``), so an exact ``__in``
+    match is equivalent to the previous per-row ``email__iexact`` lookup.
+    """
+    email_index: dict[str, list[User]] = {}
+    if emails:
+        for u in User.objects.filter(email__in=emails).only("id", "email", "phone", "national_id"):
+            email_index.setdefault(u.email.lower(), []).append(u)
+    national_id_index: dict[str, list[User]] = {}
+    if national_ids:
+        for u in User.objects.filter(national_id__in=national_ids).only("id", "email", "phone", "national_id"):
+            national_id_index.setdefault(u.national_id, []).append(u)
+    phone_index: dict[str, list[User]] = {}
+    if phones:
+        for profile in (
+            StudentProfile.objects.filter(phone__in=phones)
+            .select_related("user")
+            .only("id", "user_id", "phone")
+        ):
+            phone_index.setdefault(profile.phone, []).append(profile.user)
+    return email_index, national_id_index, phone_index
+
+
+def _match_from_indexes(
+    *,
+    email: str,
+    national_id: str,
+    phone: str,
+    email_index: dict[str, list[User]],
+    national_id_index: dict[str, list[User]],
+    phone_index: dict[str, list[User]],
+    student_user_ids: set[int],
+    staff_user_ids: set[int],
+) -> tuple[User | None, str, str]:
     candidates: dict[int, User] = {}
     sources: dict[int, str] = {}
-
-    student_user_ids = set(User.objects.filter(groups__name=GROUP_STUDENT).values_list("id", flat=True))
-    staff_group_names = list(STAFF_ROLE_GROUPS)
-    staff_user_ids = set(User.objects.filter(groups__name__in=staff_group_names).values_list("id", flat=True))
 
     def _is_importable(u: User) -> bool:
         return u.id in student_user_ids and u.id not in staff_user_ids
 
     if email:
-        qs = User.objects.filter(email__iexact=email)
-        if qs.count() == 1:
-            u = qs.first()
+        matches = email_index.get(email, [])
+        if len(matches) == 1:
+            u = matches[0]
             if _is_importable(u):
                 candidates[u.id] = u
                 sources[u.id] = "email"
@@ -116,11 +144,11 @@ def match_user(row: dict[str, str]) -> tuple[User | None, str, str]:
                 return None, MATCH_METHOD_AMBIGUOUS, f"Email {email} belongs to a staff account; cannot modify"
 
     if national_id:
-        qs = User.objects.filter(national_id=national_id)
-        if qs.count() > 1:
+        matches = national_id_index.get(national_id, [])
+        if len(matches) > 1:
             return None, MATCH_METHOD_AMBIGUOUS, f"Multiple users match national ID {national_id}"
-        if qs.count() == 1:
-            u = qs.first()
+        if len(matches) == 1:
+            u = matches[0]
             if _is_importable(u):
                 candidates[u.id] = u
                 sources[u.id] = sources.get(u.id, "") + "+national_id"
@@ -128,9 +156,9 @@ def match_user(row: dict[str, str]) -> tuple[User | None, str, str]:
                 return None, MATCH_METHOD_AMBIGUOUS, f"National ID {national_id} belongs to a staff account; cannot modify"
 
     if phone:
-        qs = User.objects.filter(phone=phone)
-        if qs.count() == 1:
-            u = qs.first()
+        matches = phone_index.get(phone, [])
+        if len(matches) == 1:
+            u = matches[0]
             if _is_importable(u):
                 candidates[u.id] = u
                 sources[u.id] = sources.get(u.id, "") + "+phone"
@@ -158,6 +186,31 @@ def match_user(row: dict[str, str]) -> tuple[User | None, str, str]:
     return match, method, ""
 
 
+def match_user(row: dict[str, str]) -> tuple[User | None, str, str]:
+    """Match a single CSV row to an existing student user (kept for callers)."""
+    email = row.get("email", "").strip().lower()
+    country_code = _get_country_code(row)
+    raw_national_id = row.get("national_id", "")
+    national_id = normalize_identity_number(country_code, raw_national_id) if raw_national_id else ""
+    phone = normalize_phone_number(row.get("phone", ""))
+    student_user_ids, staff_user_ids = _load_import_user_scope()
+    email_index, national_id_index, phone_index = _load_match_indexes(
+        {email} if email else set(),
+        {national_id} if national_id else set(),
+        {phone} if phone else set(),
+    )
+    return _match_from_indexes(
+        email=email,
+        national_id=national_id,
+        phone=phone,
+        email_index=email_index,
+        national_id_index=national_id_index,
+        phone_index=phone_index,
+        student_user_ids=student_user_ids,
+        staff_user_ids=staff_user_ids,
+    )
+
+
 def _get_country_code(row: dict[str, str]) -> str:
     return (row.get("country_code", "") or "").strip().upper() or "EG"
 
@@ -177,7 +230,7 @@ def _parse_row_data(row: dict[str, str], row_number: int) -> dict[str, Any]:
             validate_identity_number(country_code, raw_national_id)
         except ValidationError as e:
             return {"status": ROW_STATUS_FAILED, "error_message": str(e)}
-    phone = normalize_phone(row.get("phone", ""))
+    phone = normalize_phone_number(row.get("phone", ""))
     return {
         "raw_data": row,
         "normalized_email": email,
@@ -213,9 +266,14 @@ def create_upload(original_filename: str, content: bytes, uploaded_by) -> UserUp
 def preview_upload(upload_id: int) -> UserUpload:
     upload = UserUpload.objects.get(id=upload_id)
     errors: list[str] = []
-    matched = unmatched = failed = 0
 
     rows = list(upload.rows.filter(status=ROW_STATUS_PARSED).order_by("row_number"))
+    student_user_ids, staff_user_ids = _load_import_user_scope()
+    email_index, national_id_index, phone_index = _load_match_indexes(
+        {r.normalized_email.lower() for r in rows if r.normalized_email},
+        {r.normalized_national_id for r in rows if r.normalized_national_id},
+        {r.normalized_phone for r in rows if r.normalized_phone},
+    )
     seen_emails: dict[str, int] = {}
     seen_national_ids: dict[str, int] = {}
     seen_phones: dict[str, int] = {}
@@ -231,39 +289,30 @@ def preview_upload(upload_id: int) -> UserUpload:
             first_row = row_by_email[email]
             first_row.status = ROW_STATUS_AMBIGUOUS
             first_row.error_message = f"Duplicate email within file (row {row.row_number})"
-            first_row.save(update_fields=["status", "error_message"])
             errors.append(f"Row {first_row.row_number}: {first_row.error_message}")
 
             row.status = ROW_STATUS_AMBIGUOUS
             row.error_message = f"Duplicate email within file (row {first_row.row_number})"
-            row.save(update_fields=["status", "error_message"])
-            failed += 1
             errors.append(f"Row {row.row_number}: {row.error_message}")
             continue
         if nid and nid in seen_national_ids:
             first_row = row_by_nid[nid]
             first_row.status = ROW_STATUS_AMBIGUOUS
             first_row.error_message = f"Duplicate national ID within file (row {row.row_number})"
-            first_row.save(update_fields=["status", "error_message"])
             errors.append(f"Row {first_row.row_number}: {first_row.error_message}")
 
             row.status = ROW_STATUS_AMBIGUOUS
             row.error_message = f"Duplicate national ID within file (row {first_row.row_number})"
-            row.save(update_fields=["status", "error_message"])
-            failed += 1
             errors.append(f"Row {row.row_number}: {row.error_message}")
             continue
         if phone and phone in seen_phones:
             first_row = row_by_phone[phone]
             first_row.status = ROW_STATUS_AMBIGUOUS
             first_row.error_message = f"Duplicate phone within file (row {row.row_number})"
-            first_row.save(update_fields=["status", "error_message"])
             errors.append(f"Row {first_row.row_number}: {first_row.error_message}")
 
             row.status = ROW_STATUS_AMBIGUOUS
             row.error_message = f"Duplicate phone within file (row {first_row.row_number})"
-            row.save(update_fields=["status", "error_message"])
-            failed += 1
             errors.append(f"Row {row.row_number}: {row.error_message}")
             continue
         seen_emails[email] = row.row_number
@@ -275,12 +324,20 @@ def preview_upload(upload_id: int) -> UserUpload:
             seen_phones[phone] = row.row_number
             row_by_phone[phone] = row
         data = row.raw_data
-        user, method, error = match_user(data)
+        user, method, error = _match_from_indexes(
+            email=email,
+            national_id=nid,
+            phone=phone,
+            email_index=email_index,
+            national_id_index=national_id_index,
+            phone_index=phone_index,
+            student_user_ids=student_user_ids,
+            staff_user_ids=staff_user_ids,
+        )
         if user:
             row.matched_user = user
             row.match_method = method
             row.status = ROW_STATUS_MATCHED
-            matched += 1
         else:
             if method == MATCH_METHOD_NONE:
                 # New user — validate required profile fields
@@ -288,16 +345,17 @@ def preview_upload(upload_id: int) -> UserUpload:
                 if missing:
                     row.status = ROW_STATUS_FAILED
                     row.error_message = f"Missing required profile fields: {', '.join(missing)}"
-                    failed += 1
                 else:
                     row.status = ROW_STATUS_UNMATCHED
-                    unmatched += 1
             else:
                 row.status = ROW_STATUS_FAILED if method != MATCH_METHOD_AMBIGUOUS else ROW_STATUS_AMBIGUOUS
                 row.error_message = error
-                failed += 1
             errors.append(f"Row {row.row_number}: {row.error_message or error}")
-        row.save(update_fields=["matched_user", "match_method", "status", "error_message"])
+
+    now = timezone.now()
+    for row in rows:
+        row.updated_at = now
+    upload.rows.bulk_update(rows, ["matched_user", "match_method", "status", "error_message", "updated_at"])
 
     matched = upload.rows.filter(status=ROW_STATUS_MATCHED).count()
     unmatched = upload.rows.filter(status=ROW_STATUS_UNMATCHED).count()
@@ -324,7 +382,7 @@ def _build_student_profile_data(row_raw: dict[str, str]) -> dict[str, Any]:
     raw_national_id = row_raw.get("national_id", "")
     profile_fields = {
         "full_name": row_raw.get("full_name", ""),
-        "phone": normalize_phone(row_raw.get("phone", "")),
+        "phone": normalize_phone_number(row_raw.get("phone", "")),
         "national_id": normalize_identity_number(country_code, raw_national_id) if raw_national_id else "",
         "country_code": country_code,
         "date_of_birth": None,
@@ -354,53 +412,123 @@ def confirm_upload(upload_id: int, confirmed_by) -> UserUpload:
 
     student_group = Group.objects.get(name=GROUP_STUDENT)
     errors: list[str] = []
-    created = updated = 0
 
-    for row in upload.rows.filter(status__in=[ROW_STATUS_MATCHED, ROW_STATUS_UNMATCHED]):
-        data = row.raw_data
-        try:
-            if row.matched_user:
-                user = row.matched_user
-                user.full_name = data.get("full_name", user.full_name)
-                user.phone = normalize_phone(data.get("phone", user.phone))
-                user.national_id = row.normalized_national_id or user.national_id
-                full_clean_needed = not (user.full_name and user.email)
-                if full_clean_needed:
-                    user.full_name = user.full_name or user.email
-                user.save(update_fields=["full_name", "phone", "national_id", "updated_at"])
-                row.action = "update"
-                updated += 1
-            else:
-                email = row.normalized_email
-                full_name = data.get("full_name", "")
-                user = User.objects.create_user(
-                    email=email,
-                    password=None,
-                    full_name=full_name,
-                    phone=row.normalized_phone,
-                    national_id=row.normalized_national_id,
-                    status=USER_STATUS_ACTIVE,
-                    is_active=True,
-                )
-                user.groups.add(student_group)
-                row.action = "create"
+    rows = list(
+        upload.rows.filter(status__in=[ROW_STATUS_MATCHED, ROW_STATUS_UNMATCHED]).order_by("row_number")
+    )
+    if not rows:
+        raise ValueError(_("No rows matched or unmatched; nothing to import"))
+
+    update_rows = [row for row in rows if row.matched_user_id]
+    create_rows = [row for row in rows if not row.matched_user_id]
+    created = len(create_rows)
+    updated = len(update_rows)
+
+    try:
+        # Matched users: fetch once and apply the CSV overrides.
+        matched_users = {
+            user.id: user
+            for user in User.objects.filter(id__in=[row.matched_user_id for row in update_rows])
+        }
+        users_to_update = []
+        for row in update_rows:
+            user = matched_users.get(row.matched_user_id)
+            if user is None:
+                # The matched account no longer exists; treat as a new user.
+                create_rows.append(row)
                 created += 1
+                updated -= 1
+                continue
+            data = row.raw_data
+            user.full_name = data.get("full_name", user.full_name)
+            user.national_id = row.normalized_national_id or user.national_id
+            if not (user.full_name and user.email):
+                user.full_name = user.full_name or user.email
+            user.updated_at = timezone.now()
+            users_to_update.append(user)
+        if users_to_update:
+            User.objects.bulk_update(users_to_update, ["full_name", "national_id", "updated_at"])
 
-            profile_data = _build_student_profile_data(data)
+        # New users: create in bulk, then attach the Student group in bulk.
+        new_users = []
+        for row in create_rows:
+            user = User(
+                email=row.normalized_email,
+                full_name=row.raw_data.get("full_name", ""),
+                national_id=row.normalized_national_id,
+                country_code=_get_country_code(row.raw_data),
+                status=USER_STATUS_ACTIVE,
+                is_active=True,
+                is_staff=False,
+                is_superuser=False,
+            )
+            user.set_unusable_password()
+            new_users.append(user)
+        if new_users:
+            User.objects.bulk_create(new_users)
+            student_group.user_set.add(*new_users)
+
+        # Profiles: merge per-user CSV fields (later rows override earlier,
+        # matching sequential update_or_create), then write in bulk.
+        new_user_by_row = dict(zip(create_rows, new_users, strict=False))
+        merged_profile_data: dict[int, dict[str, Any]] = {}
+        for row in update_rows:
+            user = matched_users.get(row.matched_user_id)
+            if user is None:
+                continue
+            profile_data = _build_student_profile_data(row.raw_data)
             if profile_data:
-                StudentProfile.objects.update_or_create(
-                    user=user,
-                    defaults=profile_data,
-                )
+                merged_profile_data.setdefault(user.id, {}).update(profile_data)
+        for row in create_rows:
+            profile_data = _build_student_profile_data(row.raw_data)
+            if profile_data:
+                merged_profile_data.setdefault(new_user_by_row[row].id, {}).update(profile_data)
 
+        users_by_id = dict(matched_users)
+        users_by_id.update({u.id: u for u in new_users})
+        existing_profiles = {
+            p.user_id: p for p in StudentProfile.objects.filter(user_id__in=merged_profile_data)
+        }
+        profile_fields: set[str] = set()
+        profiles_to_update = []
+        profiles_to_create = []
+        for user_id, profile_data in merged_profile_data.items():
+            if user_id in existing_profiles:
+                profile = existing_profiles[user_id]
+                for field, value in profile_data.items():
+                    setattr(profile, field, value)
+                profile.updated_at = timezone.now()
+                profiles_to_update.append(profile)
+                profile_fields.update(profile_data)
+            else:
+                profiles_to_create.append(StudentProfile(user=users_by_id[user_id], **profile_data))
+        if profiles_to_update:
+            StudentProfile.objects.bulk_update(
+                profiles_to_update,
+                list(profile_fields | {"updated_at"}),
+            )
+        if profiles_to_create:
+            StudentProfile.objects.bulk_create(profiles_to_create)
+
+        # Row audit records.
+        for row in update_rows:
+            user = matched_users.get(row.matched_user_id)
+            if user is None:
+                continue
             row.matched_user = user
-            row.status = ROW_STATUS_UPDATED if row.action == "update" else ROW_STATUS_CREATED
-            row.save(update_fields=["matched_user", "status", "action"])
-        except Exception as e:
-            errors.append(f"Row {row.row_number}: {e}")
-
-    if errors:
-        raise ValueError(_("Import failed for {count} row(s)").format(count=len(errors)))
+            row.status = ROW_STATUS_UPDATED
+            row.action = "update"
+            row.updated_at = timezone.now()
+        for row in create_rows:
+            row.matched_user = new_user_by_row[row]
+            row.status = ROW_STATUS_CREATED
+            row.action = "create"
+            row.updated_at = timezone.now()
+        if rows:
+            UserUploadRow.objects.bulk_update(rows, ["matched_user", "status", "action", "updated_at"])
+    except Exception as e:  # noqa: BLE001
+        errors.append(str(e))
+        raise ValueError(_("Import failed for {count} row(s)").format(count=len(errors))) from None
 
     upload.created_rows = created
     upload.updated_rows = updated
@@ -418,7 +546,7 @@ def confirm_upload(upload_id: int, confirmed_by) -> UserUpload:
     return upload
 
 
-def send_activation_email(user) -> None:
+def send_activation_email(user, *, idempotency_key: str | None = None, sent_by=None) -> None:
     from .tokens import generate_activation_token
 
     uidb64, token = generate_activation_token(user)
@@ -426,10 +554,12 @@ def send_activation_email(user) -> None:
     full_name = getattr(user, "full_name", "") or ""
     # The initial password is never delivered by email (S2-24); the activation
     # link is the one-time token and the password is set during activation.
-    send_templated_email(
+    queue_templated_email(
         TEMPLATE_ACTIVATION, user.email,
         {"full_name": full_name, "activation_url": activation_url, "email": user.email},
-        sent_by=None,
+        sent_by=sent_by,
+        idempotency_key=idempotency_key,
+        reference=f"user:{user.pk}",
     )
 
 

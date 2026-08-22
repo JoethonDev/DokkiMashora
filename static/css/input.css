@@ -1,4 +1,4 @@
-@tailwind base;
+﻿@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
@@ -25,6 +25,8 @@
   h3 { @apply text-lg sm:text-xl font-bold text-text tracking-tight; text-wrap: balance; }
   h4 { @apply text-base sm:text-lg font-bold text-text tracking-tight; text-wrap: balance; }
   h5, h6 { @apply font-bold text-text tracking-tight; text-wrap: balance; }
+  :where(h1,h2,h3,h4):lang(ar) { line-height: 1.45; letter-spacing: 0; }
+  :where(h1,h2):lang(ar) { padding-block: 0.12em; }
   :where(a) { text-underline-offset: .18em; }
   :where(hr) {
     @apply w-full border-0 border-t border-line my-5;
@@ -34,7 +36,7 @@
   }
   :where(legend) { @apply px-2 font-extrabold; }
   input[type="radio"],input[type="checkbox"] {
-    accent-color: #2b675f;
+    accent-color: #8A2E1A;
     @apply w-5 h-5 sm:w-4 sm:h-4 m-0 shrink-0;
   }
   :focus-visible {
@@ -58,7 +60,7 @@
 
 @layer components {
   .card-surface {
-    @apply bg-white border border-line rounded-2xl p-4 sm:p-6 shadow-card transition-shadow duration-200;
+    @apply bg-white border border-line rounded-md p-4 sm:p-6 shadow-card transition-shadow duration-200;
   }
   /* Cards without an explicit layout class use one comfortable vertical rhythm.
      Explicit flex/page-stack cards keep their own layout contract. */
@@ -67,6 +69,8 @@
     flex-direction: column;
     gap: 1rem;
   }
+  /* Grid children should not be forced flex — let grid control layout */
+  .grid > .card-surface:not(.flex):not(.page-stack) { display: block; }
   .card-surface-interactive {
     @apply card-surface hover:shadow-card-hover hover:border-surface-300 cursor-pointer transition-all duration-200;
   }
@@ -125,11 +129,11 @@
   }
   .form-checkbox {
     @apply w-5 h-5 sm:w-4 sm:h-4 m-0 shrink-0 rounded-sm;
-    accent-color: #2b675f;
+    accent-color: #8A2E1A;
   }
   .form-radio {
     @apply w-5 h-5 sm:w-4 sm:h-4 m-0 shrink-0 rounded-full;
-    accent-color: #2b675f;
+    accent-color: #8A2E1A;
   }
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-sm px-4 py-2.5 text-sm font-bold
@@ -167,7 +171,7 @@
     @apply bg-surface-strong;
   }
   .btn-secondary {
-    @apply btn bg-surface-strong border-line text-text;
+    @apply btn bg-surface-soft border border-line text-text;
   }
   .btn-secondary:hover {
     @apply bg-surface-strong shadow-sm;
@@ -286,7 +290,7 @@
   .mobile-card { @apply flex items-center gap-2.5 border border-line rounded-sm p-4 w-full overflow-hidden; }
 
   /* Landing page — decorative hero circles */
-  .landing-hero-deco { position: absolute; border-radius: 9999px; background: radial-gradient(circle, rgba(43, 103, 95, 0.08) 0%, transparent 70%); pointer-events: none; }
+  .landing-hero-deco { position: absolute; border-radius: 9999px; background: radial-gradient(circle, rgba(138, 46, 26, 0.08) 0%, transparent 70%); pointer-events: none; }
   .landing-hero-deco--1 { width: 500px; height: 500px; inset-inline-end: -200px; top: -200px; }
   .landing-hero-deco--2 { width: 350px; height: 350px; inset-inline-start: -120px; bottom: -150px; }
   .landing-hero-deco--3 { width: 200px; height: 200px; inset-inline-end: 30%; top: 10%; animation: float 6s ease-in-out infinite; }
@@ -298,7 +302,7 @@
   }
 
   /* Landing page — hero heading accent */
-  .hero-heading { @apply text-brand; }
+  .hero-heading { @apply text-text; }
   .hero-heading strong { color: inherit; }
 
   /* Landing page — section connector accent bar */
@@ -410,6 +414,27 @@
   from { opacity: 0; transform: translateX(-24px); }
   to   { opacity: 1; transform: none; }
 }
+
+/* ── Global search dialog — smooth open/close ── */
+dialog#global-search-dialog[open] { animation: dialogIn 220ms cubic-bezier(.2,.8,.2,1) }
+dialog#global-search-dialog::backdrop { background: rgba(15,19,17,.38); backdrop-filter: blur(2px); animation: backdropIn 220ms ease }
+dialog#global-search-dialog:not([open]) { opacity: 0 }
+@keyframes dialogIn { from { opacity:0; transform: translateY(8px) scale(.98)} to {opacity:1; transform:none} }
+@keyframes backdropIn { from {opacity:0} to {opacity:1} }
+
+/* Search field — avoid close button overlap */
+/* search input spacing handled by form pe-14 */
+
+/* Sidebar & topbar — smooth interactions */
+.sidebar-link, .btn, .btn-icon, .form-input, .tab { transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease }
+.sidebar-link:active, .btn:active { transform: scale(.98) }
+.search-result-item { transition: background-color 140ms ease, transform 140ms ease }
+.search-result-item:hover { transform: translateX(1px) }
+.search-result-item.active { transform: translateX(1px) }
+
+/* HTMX settle — smooth content swap */
+.htmx-settling #global-search-results { animation: searchResultsIn 180ms ease }
+@keyframes searchResultsIn { from { opacity:0; transform: translateY(4px)} to {opacity:1; transform:none} }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

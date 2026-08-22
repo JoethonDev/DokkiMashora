@@ -20,7 +20,7 @@ from apps.applications.services import (
     _record_decision,
     activate_application_if_ready,
 )
-from apps.communications.services import send_templated_email
+from apps.communications.services import queue_templated_email
 
 from .constants import (
     INTAKE_REQUESTABLE_STATUSES,
@@ -36,22 +36,6 @@ if TYPE_CHECKING:
     from django.contrib.auth.models import User
 
     from apps.applications.models import ProgramApplication
-
-
-def can_request_intake_form(application) -> bool:
-    """Check if an intake request can be sent for this application.
-
-    The application must still be in a pre-activation status (A6), a
-    required form must exist, and no response may be submitted yet.
-    """
-    if application.status not in INTAKE_REQUESTABLE_STATUSES:
-        return False
-    form = get_required_intake_form_for_application(application)
-    if form is None:
-        return False
-    if IntakeFormResponse.objects.filter(form=form, program_application=application).exists():
-        return False
-    return True
 
 
 def _hash_token(raw_token: str) -> str:
@@ -139,7 +123,12 @@ def _send_intake_request_email(application, form, raw_token, intake_request) -> 
         "expires_at": intake_request.expires_at.isoformat(),
         "staff_phone": "",
     }
-    send_templated_email("application_survey_request", email, context, sent_by=intake_request.requested_by)
+    queue_templated_email(
+        "application_survey_request", email, context,
+        sent_by=intake_request.requested_by,
+        idempotency_key=f"application:survey_request:app:{application.pk}:request:{intake_request.pk}",
+        reference=f"app:{application.pk}",
+    )
 
 
 def _get_program_title(application) -> str:
@@ -159,6 +148,42 @@ def get_intake_request_by_token(raw_token: str) -> IntakeFormRequest | None:
         ).get(token_hash=token_hash)
     except IntakeFormRequest.DoesNotExist:
         return None
+
+
+def expire_intake_request(intake_request) -> bool:
+    """Transition a single intake request to expired with a status guard.
+
+    Only a request still in ``requested`` may be expired; a cancelled or
+    submitted request is terminal and must never regress to expired. The row
+    is locked so the transition cannot race another state change. Returns True
+    when the transition was applied and False when the request was already
+    expired (idempotent).
+    """
+    with transaction.atomic():
+        request_row = IntakeFormRequest.objects.select_for_update().get(pk=intake_request.pk)
+        if request_row.status == INTAKE_REQUEST_STATUS_EXPIRED:
+            return False
+        if request_row.status != INTAKE_REQUEST_STATUS_REQUESTED:
+            raise ValueError(_("Only a requested intake form can be expired."))
+        request_row.status = INTAKE_REQUEST_STATUS_EXPIRED
+        request_row.save(update_fields=["status"])
+    return True
+
+
+def expire_stale_intake_requests() -> dict:
+    """Idempotent lifecycle normalization for expired intake requests.
+
+    Set-based conditional update: only ``requested`` requests whose expiry has
+    passed become expired; cancelled and submitted requests are never touched.
+    Read paths independently enforce expiry at render/submit time, so a delayed
+    run never grants access. Scheduler-facing, bounded, returns counts only.
+    """
+    now = timezone.now()
+    count = IntakeFormRequest.objects.filter(
+        status=INTAKE_REQUEST_STATUS_REQUESTED,
+        expires_at__lte=now,
+    ).update(status=INTAKE_REQUEST_STATUS_EXPIRED)
+    return {"intake_expired": count}
 
 
 @transaction.atomic
@@ -184,11 +209,12 @@ def submit_intake_form_response(
         form = intake_request.form
         if intake_request.status == INTAKE_REQUEST_STATUS_SUBMITTED:
             raise ValueError(_("This intake form request has already been submitted."))
+        if intake_request.status == INTAKE_REQUEST_STATUS_CANCELLED:
+            raise ValueError(_("This intake form request has been cancelled."))
         if intake_request.status == INTAKE_REQUEST_STATUS_EXPIRED:
             raise ValueError(_("This intake form request has expired."))
         if intake_request.expires_at <= timezone.now():
-            intake_request.status = INTAKE_REQUEST_STATUS_EXPIRED
-            intake_request.save(update_fields=["status"])
+            expire_intake_request(intake_request)
             raise ValueError(_("This intake form request has expired."))
     elif isinstance(request_or_form, IntakeForm):
         intake_request = None

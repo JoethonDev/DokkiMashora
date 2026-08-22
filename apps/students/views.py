@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 
 from django.contrib import messages
-from django.db import transaction
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.utils.translation import gettext_lazy as _
@@ -92,11 +91,8 @@ def edit_profile(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         form = StudentProfileUpdateForm(request.POST, instance=profile)
         if form.is_valid():
-            with transaction.atomic():
-                form.save()
-                if "phone" in form.changed_data:
-                    request.user.phone = form.cleaned_data["phone"]
-                    request.user.save(update_fields=["phone", "updated_at"])
+            # StudentProfile.phone is the single owner; no User.phone mirror.
+            form.save()
             messages.success(request, _("Profile updated."))
             return redirect("students:details")
     else:
@@ -157,7 +153,7 @@ def exam_results(request: HttpRequest) -> HttpResponse:
 def assessment_history(request: HttpRequest) -> HttpResponse:
     """Show normal assessment attempts, grades, feedback."""
     profile = _get_profile_or_404(request.user)
-    data = get_dashboard_data(profile, sections=["assessment_attempts"])
+    data = get_dashboard_data(profile, sections=["assessment_attempts", "offline_exam_records"])
     return _render_profile(request, "ui/pages/student/assessment_history.html", data)
 
 
@@ -168,10 +164,11 @@ def assessment_history(request: HttpRequest) -> HttpResponse:
 
 @student_required
 def progression_history(request: HttpRequest) -> HttpResponse:
-    """Show academic lifecycle -- semesters, promotions, completions."""
+    """Show academic lifecycle -- semesters, evaluations, promotions, completions."""
     profile = _get_profile_or_404(request.user)
     data = get_dashboard_data(profile, sections=[
         "semester_progress", "promotion_decisions", "completions", "eligibilities", "grade_items",
+        "record_history",
     ])
     return _render_profile(request, "ui/pages/student/progression.html", data)
 

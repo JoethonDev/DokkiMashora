@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import date
-
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
@@ -20,7 +18,6 @@ from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import ROLE_SENIOR_STAFF, is_admin, role_required, safe_int
 from apps.entrance_exams.services import assign_exam_for_application
-from apps.intake_forms.constants import INTAKE_REQUESTABLE_STATUSES  # noqa: E402
 from apps.intake_forms.selectors import get_application_intake_state  # noqa: E402
 from apps.intake_forms.services import request_intake_form_for_application  # noqa: E402
 from apps.payments.services import grant_payment_waiver, revoke_payment_waiver
@@ -52,13 +49,13 @@ from .constants import (
     PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED,
     PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
     PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
+    PROGRAM_APP_STATUS_INVITED,
     PROGRAM_APP_STATUS_PAYMENT_PENDING,
     PROGRAM_APP_STATUS_READY_FOR_ACTIVATION,
     PROGRAM_APP_STATUS_REJECTED,
     PROGRAM_APP_STATUS_SUBMITTED,
     PROGRAM_APP_STATUS_SURVEY_REQUESTED,
     PROGRAM_APP_STATUS_SURVEY_SUBMITTED,
-    PROGRAM_TYPE_COURSE,
 )
 from .documents import (
     get_application_document_upload,
@@ -70,10 +67,19 @@ from .documents import (
 from .forms import AdminDocumentRequestForm, RegistrationForm, StudentDocumentUploadForm
 from .models import ApplicationDocumentUpload, ProgramApplication
 from .services import (
+    ACTION_ACCEPT,
+    ACTION_ACTIVATE,
+    ACTION_GRANT_WAIVER,
+    ACTION_INVITE_TO_ENTRANCE,
+    ACTION_MARK_PAID,
+    ACTION_REJECT,
+    ACTION_REQUEST_DOCUMENTS,
+    ACTION_REQUEST_INTAKE,
+    ACTION_REQUEST_INTERVIEW,
     RegistrationData,
     accept_program_application,
     activate_application_if_ready,
-    can_activate_application,
+    allowed_application_actions,
     get_active_application_waiver,
     has_application_paid_record,
     invite_to_entrance_exam,
@@ -185,7 +191,6 @@ def register(request: HttpRequest) -> HttpResponse:
                     church=form.cleaned_data.get("church", ""),
                     priest_name=form.cleaned_data.get("priest_name", ""),
                     priest_contact=form.cleaned_data.get("priest_contact", ""),
-                    age=(date.today() - form.cleaned_data["date_of_birth"]).days // 365,
                     program_type=program_data["program_type"],
                     cohort_id=program_data["cohort_id"],
                     course_id=program_data["course_id"],
@@ -243,51 +248,6 @@ def review_queue_applications():
     queryset so the number on the dashboard matches the queue it links to.
     """
     return ProgramApplication.objects.filter(status__in=REVIEW_QUEUE_STATUSES)
-
-
-def _accept_allowed(status, program_type=None):
-    base = {PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED, PROGRAM_APP_STATUS_INTERVIEW_REQUESTED, PROGRAM_APP_STATUS_PAYMENT_PENDING}
-    if program_type == PROGRAM_TYPE_COURSE:
-        base |= {PROGRAM_APP_STATUS_SUBMITTED, PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED}
-    return status in base
-
-
-def _reject_allowed(status, program_type=None):
-    base = {PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED, PROGRAM_APP_STATUS_INTERVIEW_REQUESTED}
-    if program_type == PROGRAM_TYPE_COURSE:
-        base |= {PROGRAM_APP_STATUS_SUBMITTED, PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED, PROGRAM_APP_STATUS_PAYMENT_PENDING}
-    return status in base
-
-
-PAYMENT_ACTION_STATUSES = frozenset({
-    PROGRAM_APP_STATUS_PAYMENT_PENDING,
-    PROGRAM_APP_STATUS_DOCUMENTS_REQUESTED,
-    PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED,
-    PROGRAM_APP_STATUS_SURVEY_REQUESTED,
-    PROGRAM_APP_STATUS_SURVEY_SUBMITTED,
-    PROGRAM_APP_STATUS_READY_FOR_ACTIVATION,
-})
-COURSE_PAYMENT_ACTION_STATUSES = PAYMENT_ACTION_STATUSES | {PROGRAM_APP_STATUS_ACCEPTED}
-
-
-def _payment_action_status_ok(application) -> bool:
-    statuses = (
-        COURSE_PAYMENT_ACTION_STATUSES
-        if application.program_type == PROGRAM_TYPE_COURSE
-        else PAYMENT_ACTION_STATUSES
-    )
-    return application.status in statuses
-
-
-def _waiver_grant_status_ok(application) -> bool:
-    """Payment waiver is a payment-time action.
-
-    Payment remains a valid readiness gate while an application is moving
-    through its requested documents and intake steps.  The backend payment
-    service owns the final state validation; this helper only prepares the
-    Admin action for the detail page.
-    """
-    return _payment_action_status_ok(application)
 
 
 def _decision_unavailable_reason(application) -> str | None:
@@ -408,12 +368,13 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
         ).prefetch_related("entrance_attempts", "notes__actor"),
         pk=application_id,
     )
+    allowed_actions = allowed_application_actions(application)
 
     if request.method == "POST":
         action = request.POST.get("action")
         send_email = request.POST.get("send_email") == "on"
 
-        if action == "accept" and _accept_allowed(application.status, application.program_type):
+        if action == "accept" and ACTION_ACCEPT in allowed_actions:
             notes = (request.POST.get("admin_notes") or "").strip()
             try:
                 accept_program_application(application, request.user, notes=notes, send_email=send_email)
@@ -423,7 +384,7 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
                 messages.success(request, _("Application accepted."))
             return redirect("applications:program_detail", application_id=application.id)
 
-        if action == "reject" and _reject_allowed(application.status, application.program_type):
+        if action == "reject" and ACTION_REJECT in allowed_actions:
             reason = (request.POST.get("rejection_reason") or "").strip()
             if not reason:
                 messages.error(request, _("Rejection reason is required."))
@@ -465,7 +426,7 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
                 messages.success(request, _("Payment recorded and activation attempted."))
             return redirect("applications:program_detail", application_id=application.id)
 
-        if action == "request_documents" and is_admin(request.user) and application.status in (PROGRAM_APP_STATUS_ACCEPTED, PROGRAM_APP_STATUS_DOCUMENTS_REQUESTED) and application.program_type == "diploma":
+        if action == "request_documents" and is_admin(request.user) and ACTION_REQUEST_DOCUMENTS in allowed_actions:
             form = AdminDocumentRequestForm(request.POST)
             if form.is_valid():
                 try:
@@ -487,7 +448,7 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
             return redirect("applications:program_detail", application_id=application.id)
 
         if action == "request_intake" and is_admin(request.user):
-            if application.status not in INTAKE_REQUESTABLE_STATUSES:
+            if ACTION_REQUEST_INTAKE not in allowed_actions:
                 messages.error(request, _("Intake forms can only be requested for applications that are not yet rejected or activated."))
             else:
                 try:
@@ -495,10 +456,10 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
                 except ValueError as exc:
                     messages.error(request, str(exc))
                 else:
-                    messages.success(request, _("Intake request sent."))
+                    messages.success(request, _("Intake request created. Survey email queued."))
             return redirect("applications:program_detail", application_id=application.id)
 
-        if action == "request_interview" and application.status == PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED:
+        if action == "request_interview" and ACTION_REQUEST_INTERVIEW in allowed_actions:
             interview_at_str = (request.POST.get("interview_at") or "").strip()
             phone_number = (request.POST.get("phone_number") or "").strip()
             expires_at_str = (request.POST.get("expires_at") or "").strip()
@@ -537,10 +498,10 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
                 messages.success(request, _("Interview requested."))
             return redirect("applications:program_detail", application_id=application.id)
 
-        if action == "invite_to_entrance" and application.program_type == "diploma" and application.status in {"submitted", "account_activated", "invited_to_entrance"}:
+        if action == "invite_to_entrance" and (ACTION_INVITE_TO_ENTRANCE in allowed_actions or application.status == PROGRAM_APP_STATUS_INVITED):
             send_email = request.POST.get("send_email") == "on"
             try:
-                if application.status in {"submitted", "account_activated"}:
+                if application.status in (PROGRAM_APP_STATUS_SUBMITTED, PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED):
                     invite_to_entrance_exam(application, request.user)
                 assign_exam_for_application(application)
                 if send_email:
@@ -548,7 +509,7 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
             except ValueError as exc:
                 messages.error(request, str(exc))
             else:
-                messages.success(request, _("Entrance exam assigned." if not send_email else "Entrance exam assigned and invitation sent."))
+                messages.success(request, _("Entrance exam assigned." if not send_email else "Entrance exam assigned. Invitation email queued."))
             return redirect("applications:program_detail", application_id=application.id)
 
         if action == "grant_waiver" and is_admin(request.user):
@@ -639,19 +600,18 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
         is_admin(request.user)
         and not is_paid
         and not is_waived
-        and _payment_action_status_ok(application)
+        and ACTION_MARK_PAID in allowed_actions
     )
 
     # Document request state
     doc_request = get_latest_document_request(application)
     doc_upload = get_application_document_upload(application)
     request_doc_form = None
-    if is_admin(request.user) and application.status in (PROGRAM_APP_STATUS_ACCEPTED, PROGRAM_APP_STATUS_DOCUMENTS_REQUESTED) and application.program_type == "diploma":
+    if is_admin(request.user) and ACTION_REQUEST_DOCUMENTS in allowed_actions:
         request_doc_form = AdminDocumentRequestForm()
 
     # Intake form state
     intake_state = get_application_intake_state(application)
-    activation_check = can_activate_application(application)
 
     return render(
         request,
@@ -666,12 +626,12 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
             "active_waiver": active_waiver,
             "is_waived": is_waived,
             "can_record_payment": can_record_payment,
-            "can_activate": is_admin(request.user) and activation_check.ready,
+            "can_activate": is_admin(request.user) and ACTION_ACTIVATE in allowed_actions,
             "can_grant_waiver": (
                 is_admin(request.user)
                 and not is_waived
                 and not is_paid
-                and _waiver_grant_status_ok(application)
+                and ACTION_GRANT_WAIVER in allowed_actions
             ),
             "can_revoke_waiver": is_admin(request.user) and is_waived,
             "can_show_revert": (
@@ -687,11 +647,12 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
             ),
             "request_doc_form": request_doc_form,
             "intake_state": intake_state,
-            "can_accept": _accept_allowed(application.status, application.program_type),
-            "can_reject": _reject_allowed(application.status, application.program_type),
+            "can_accept": ACTION_ACCEPT in allowed_actions,
+            "can_reject": ACTION_REJECT in allowed_actions,
+            "can_invite_to_entrance": ACTION_INVITE_TO_ENTRANCE in allowed_actions,
+            "can_request_interview": ACTION_REQUEST_INTERVIEW in allowed_actions,
             "decision_reason": _decision_unavailable_reason(application)
-            if not (_accept_allowed(application.status, application.program_type)
-                    or _reject_allowed(application.status, application.program_type))
+            if not (ACTION_ACCEPT in allowed_actions or ACTION_REJECT in allowed_actions)
             else None,
         },
     )

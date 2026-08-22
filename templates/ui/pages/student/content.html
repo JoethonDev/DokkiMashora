@@ -34,6 +34,13 @@
       </article>
     </section>
   {% endif %}
+  {% if attendance_qr or course_attendance_qr %}
+    <section class="card-surface">
+      <div class="section-head"><div><p class="eyebrow">{% trans "Attendance" %}</p><h3>{% trans "Attendance QR" %}</h3></div></div>
+      <img src="{% if attendance_qr %}{{ attendance_qr }}{% else %}{{ course_attendance_qr }}{% endif %}" alt="{% trans 'Attendance QR code' %}" class="w-40 h-40">
+      <p class="text-sm text-muted mt-3">{% trans "Show this code when scanning your attendance." %}</p>
+    </section>
+  {% endif %}
   {% if lecture %}
     {% include "ui/components/_page_header.html" with eyebrow=_("Learning") title=lecture.title back_url=learning_back_url back_label=_("Back to learning") %}
     <section class="card-surface">
@@ -149,11 +156,11 @@
               </h3>
             </div>
             {% if item.id in completed_lecture_ids %}
-              <span class="status-pill-success">{% trans "Completed" %}</span>
+              {% include "ui/components/_status.html" with code="completed" label=_("Completed") %}
             {% elif unlocked %}
-              <span class="status-pill-info">{% trans "Available" %}</span>
+              {% include "ui/components/_status.html" with code="open" label=_("Available") %}
             {% else %}
-              <span class="status-pill-warning">{% trans "Locked" %}</span>
+              {% include "ui/components/_status.html" with code="restricted" label=_("Locked") %}
             {% endif %}
           </div>
           {% if item.description %}
@@ -168,7 +175,7 @@
         </article>
         {% endwith %}
       {% empty %}
-        {% include "ui/components/_empty_state.html" with icon="&#9654;" title=_("No lessons available") message=_("Published course content will appear here.") %}
+        {% include "ui/components/_empty_state.html" with title=_("No lessons available") message=_("Published course content will appear here.") %}
       {% endfor %}
     </section>
   {% endif %}

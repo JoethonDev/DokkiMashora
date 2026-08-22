@@ -5,6 +5,7 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -20,7 +21,7 @@ from apps.audit.constants import (
 )
 from apps.audit.services import record_audit_event
 from apps.communications.constants import TEMPLATE_PAYMENT_NOTIFICATION
-from apps.communications.services import send_templated_email
+from apps.communications.services import queue_templated_email
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import role_required, safe_date_str
@@ -299,20 +300,24 @@ def enrollment_payment_toggle(request, student_id, enrollment_type, enrollment_i
     action = request.POST.get("payment_action")
     if action == "mark_paid":
         record = mark_enrollment_paid(student, enrollment_type, enrollment_id, actor=request.user)
-        send_templated_email(
-            TEMPLATE_PAYMENT_NOTIFICATION,
-            student.user.email,
-            {
-                "full_name": student.full_name,
-                "amount": str(record.amount),
-                "currency": record.currency,
-                "due_at": record.due_at.strftime("%Y-%m-%d") if record.due_at else record.paid_at.strftime("%Y-%m-%d") if record.paid_at else "",
-                "reference": record.external_reference or str(record.id),
-                "status": record.get_status_display(),
-            },
-            sent_by=request.user,
+        transaction.on_commit(
+            lambda: queue_templated_email(
+                TEMPLATE_PAYMENT_NOTIFICATION,
+                student.user.email,
+                {
+                    "full_name": student.full_name,
+                    "amount": str(record.amount),
+                    "currency": record.currency,
+                    "due_at": record.due_at.strftime("%Y-%m-%d") if record.due_at else record.paid_at.strftime("%Y-%m-%d") if record.paid_at else "",
+                    "reference": record.external_reference or str(record.id),
+                    "status": record.get_status_display(),
+                },
+                sent_by=request.user,
+                idempotency_key=f"payment:notification:record:{record.pk}",
+                reference=f"payment_record:{record.pk}",
+            )
         )
-        messages.success(request, _("Enrollment marked as paid."))
+        messages.success(request, _("Enrollment marked as paid. Payment notification email queued."))
     elif action == "mark_unpaid":
         reason = request.POST.get("reason", "").strip() or _("Marked unpaid from the enrollment payment toggle")
         count = mark_enrollment_unpaid(student, enrollment_type, enrollment_id, actor=request.user, reason=reason)

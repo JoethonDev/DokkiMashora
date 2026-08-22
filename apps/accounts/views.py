@@ -35,8 +35,6 @@ from apps.academics.models import (
     TeacherAssignment,
 )
 from apps.academics.services import get_student_course_versions
-from apps.ai.models import GeminiReview
-from apps.ai.prompts import DEFAULT_PROMPT_VERSION
 from apps.applications.constants import (
     PROGRAM_APP_STATUS_ACCEPTED,
     PROGRAM_APP_STATUS_ACTIVATED,
@@ -65,6 +63,7 @@ from apps.audit.constants import (
 )
 from apps.audit.services import record_audit_event
 from apps.certificates.models import GeneratedCertificate
+from apps.communications.constants import TEMPLATE_ACTIVATION
 from apps.communications.email_message import EmailMessage as CommEmailMessage
 from apps.core.htmx import is_htmx
 from apps.core.models import LandingAnnouncement
@@ -75,6 +74,7 @@ from apps.core.permissions import (
     is_student,
     role_required,
 )
+from apps.core.templatetags.ui_tags import status_icon, status_tone
 from apps.core.views import safe_next_url
 from apps.entrance_exams.models import EntranceAttempt
 from apps.payments.constants import (
@@ -133,9 +133,9 @@ def post_login(request: HttpRequest) -> HttpResponse:
 def profile(request: HttpRequest) -> HttpResponse:
     """View and edit the current user's basic profile.
 
-    StudentProfile is the authoritative source for student identity and
-    contact fields; the User copies are mirrored so admin lists and the
-    student header keep showing the same values. Email stays on User only.
+    Phone is single-owner: for a student it lives on StudentProfile.phone only;
+    for a staff user (no profile) it lives on User.phone. Email stays on User
+    only.
     """
     profile = getattr(request.user, "student_profile", None)
     initial = {
@@ -148,14 +148,16 @@ def profile(request: HttpRequest) -> HttpResponse:
         if form.is_valid():
             full_name = form.cleaned_data["full_name"]
             phone = form.cleaned_data["phone"]
+            request.user.full_name = full_name
+            request.user.full_name_ar = form.cleaned_data.get("full_name_ar", "")
             if profile is not None:
                 profile.full_name = full_name
                 profile.phone = phone
                 profile.save(update_fields=["full_name", "phone", "updated_at"])
-            request.user.full_name = full_name
-            request.user.full_name_ar = form.cleaned_data.get("full_name_ar", "")
-            request.user.phone = phone
-            request.user.save(update_fields=["full_name", "full_name_ar", "phone", "updated_at"])
+                request.user.save(update_fields=["full_name", "full_name_ar", "updated_at"])
+            else:
+                request.user.phone = phone
+                request.user.save(update_fields=["full_name", "full_name_ar", "phone", "updated_at"])
             messages.success(request, _("Profile updated."))
             return redirect("accounts:profile")
     else:
@@ -232,13 +234,6 @@ def _dashboard_context(user: User) -> dict:
 
 
 def _admin_settings_data() -> dict:
-    ai_review_totals = GeminiReview.objects.aggregate(
-        total=Count("id"),
-        pending=Count("id", filter=Q(decision="pending")),
-        accepted=Count("id", filter=Q(decision="accepted")),
-        rejected=Count("id", filter=Q(decision="rejected")),
-    )
-    last_review = GeminiReview.objects.order_by("-created_at").values("created_at", "decision").first()
     email_health = CommEmailMessage.objects.aggregate(
         total=Count("id"),
         sent=Count("id", filter=Q(status="sent")),
@@ -246,16 +241,6 @@ def _admin_settings_data() -> dict:
     )
     last_email = CommEmailMessage.objects.order_by("-created_at").values("to_email", "created_at", "status").first()
     return {
-        "ai_config": {
-            "enabled": bool(django_settings.GEMINI_API_KEY),
-            "provider": "Gemini", "model": django_settings.GEMINI_MODEL,
-            "timeout": django_settings.GEMINI_TIMEOUT_SECONDS,
-            "prompt_version": DEFAULT_PROMPT_VERSION,
-            "review_count": ai_review_totals["total"], "review_pending": ai_review_totals["pending"],
-            "review_accepted": ai_review_totals["accepted"], "review_rejected": ai_review_totals["rejected"],
-            "last_review_at": last_review["created_at"] if last_review else None,
-            "last_review_decision": last_review["decision"] if last_review else None,
-        },
         "site_config": {
             "site_name": django_settings.SITE_NAME, "site_name_ar": django_settings.SITE_NAME_AR,
             "timezone": django_settings.TIME_ZONE, "language_code": "ar",
@@ -345,14 +330,17 @@ def admin_student_list(request):
         Q(groups__name=GROUP_STUDENT) | Q(student_profile__isnull=False)
     )
 
-    users = users.prefetch_related("groups").distinct()
+    users = users.select_related("student_profile").prefetch_related("groups").distinct()
 
     if status_filter:
         users = users.filter(status=status_filter)
 
     if q:
         users = users.filter(
-            Q(full_name__icontains=q) | Q(email__icontains=q) | Q(phone__icontains=q) | Q(national_id__icontains=q)
+            Q(full_name__icontains=q)
+            | Q(email__icontains=q)
+            | Q(student_profile__phone__icontains=q)
+            | Q(national_id__icontains=q)
         )
 
     users = users.order_by("-date_joined", "full_name")
@@ -519,7 +507,14 @@ def admin_user_resend_activation(request, user_id):
         messages.error(request, _("This account is already activated."))
     else:
         try:
-            send_activation_email(user_obj)
+            resent_count = CommEmailMessage.objects.filter(
+                to_email=user_obj.email, template_slug=TEMPLATE_ACTIVATION,
+            ).count()
+            send_activation_email(
+                user_obj,
+                sent_by=request.user,
+                idempotency_key=f"activation:resend:{user_obj.pk}:{resent_count}",
+            )
             record_audit_event(
                 actor=request.user,
                 action=ACTION_USER_UPDATED,
@@ -527,9 +522,9 @@ def admin_user_resend_activation(request, user_id):
                 target_id=str(user_obj.id),
                 metadata={"activation_email_resent": True, "email": user_obj.email},
             )
-            messages.success(request, _("Activation email sent."))
+            messages.success(request, _("Activation email queued."))
         except Exception:  # noqa: BLE001
-            messages.error(request, _("The activation email could not be sent. Please try again later."))
+            messages.error(request, _("The activation email could not be queued. Please try again later."))
     return redirect(target_url)
 
 
@@ -544,6 +539,7 @@ def admin_user_detail(request, user_id):
     context = {
         "user_obj": user_obj,
         "student_profile": profile,
+        "display_phone": profile.phone if profile else user_obj.phone,
         "back_url": back_url,
         "can_delete_student": bool(profile) and user_obj != request.user,
         "can_resend_activation": user_obj != request.user and not user_obj.is_active and user_obj.email_activated_at is None,
@@ -686,8 +682,24 @@ def admin_student_import(request):
 @login_required
 @role_required(*ROLE_SENIOR_STAFF)
 def admin_student_import_detail(request, upload_id):
-    upload = get_object_or_404(UserUpload.objects.prefetch_related("rows__matched_user"), id=upload_id)
-    return render(request, "ui/pages/admin/import.html", {"upload": upload})
+    upload = get_object_or_404(UserUpload, id=upload_id)
+    preview_rows = [
+        {
+            "row": row.row_number,
+            "email": row.normalized_email,
+            "status": row.status,
+            "status_label": row.get_status_display(),
+            "tone": status_tone(row.status),
+            "icon": status_icon(row.status),
+            "error": row.error_message,
+        }
+        for row in upload.rows.order_by("row_number")
+    ]
+    return render(
+        request,
+        "ui/pages/admin/import.html",
+        {"upload": upload, "preview_rows": preview_rows},
+    )
 
 
 @login_required
@@ -976,7 +988,13 @@ def resend_activation_email(request):
         email = request.POST.get("email", "").strip()
         user = User.objects.filter(email=email, is_active=False, email_activated_at__isnull=True).first()
         if user:
-            send_activation_email(user)
-        messages.success(request, _("If an inactive account exists, a new activation email was sent."))
+            resent_count = CommEmailMessage.objects.filter(
+                to_email=user.email, template_slug=TEMPLATE_ACTIVATION,
+            ).count()
+            send_activation_email(
+                user,
+                idempotency_key=f"activation:resend:{user.pk}:{resent_count}",
+            )
+        messages.success(request, _("If an inactive account exists, a new activation email was queued."))
         return redirect("accounts:login")
     return render(request, "ui/pages/public/resend_activation.html")

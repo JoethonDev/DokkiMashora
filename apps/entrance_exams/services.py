@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import TYPE_CHECKING
@@ -24,7 +25,7 @@ from apps.communications.constants import (
     TEMPLATE_ENTRANCE_EXAM_FAIL,
     TEMPLATE_ENTRANCE_EXAM_PASS,
 )
-from apps.communications.services import send_templated_email
+from apps.communications.services import queue_templated_email
 from apps.core.permissions import validate_score
 
 from .constants import (
@@ -37,6 +38,8 @@ from .constants import (
     RESULT_PASS,
 )
 from .models import EntranceAnswer, EntranceAttempt, EntranceChoice, EntranceExam, EntranceSnapshot
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
@@ -107,6 +110,19 @@ def start_attempt(attempt: EntranceAttempt) -> EntranceAttempt:
     return attempt
 
 
+def attempt_deadline(attempt: EntranceAttempt):
+    """Return the authoritative deadline for an attempt, or None.
+
+    The deadline is ``started_at + duration`` when the attempt has started,
+    otherwise ``now + duration`` (the countdown starts at page load).
+    """
+    exam = attempt.exam
+    if not exam.duration_minutes:
+        return None
+    base = attempt.started_at or timezone.now()
+    return base + timezone.timedelta(minutes=exam.duration_minutes)
+
+
 def submit_attempt(
     attempt: EntranceAttempt,
     answers: list[AnswerData],
@@ -119,10 +135,9 @@ def submit_attempt(
         raise ValueError(_("Exam is not active."))
     if exam.close_at and now > exam.close_at:
         raise ValueError(_("Exam has already closed."))
-    if attempt.started_at and exam.duration_minutes:
-        deadline = attempt.started_at + timezone.timedelta(minutes=exam.duration_minutes)
-        if now > deadline:
-            raise ValueError(_("Exam duration has expired."))
+    deadline = attempt_deadline(attempt)
+    if deadline and now > deadline:
+        raise ValueError(_("Exam duration has expired."))
     questions = list(exam.questions.all())
     question_map = {q.id: q for q in questions}
     # Answer coverage: every exam question must be answered exactly once,
@@ -137,6 +152,15 @@ def submit_attempt(
     if missing_ids:
         raise ValueError(_("Please answer all exam questions before submitting."))
     with transaction.atomic():
+        # Lock the attempt row so a concurrent submit/finalize is serialized
+        # instead of racing into a duplicate-answer IntegrityError.
+        locked = EntranceAttempt.objects.select_for_update().get(pk=attempt.pk)
+        if locked.status != ATTEMPT_STATUS_IN_PROGRESS:
+            raise ValueError(_("Exam can only be submitted from in_progress status."))
+        now = timezone.now()
+        deadline = attempt_deadline(locked)
+        if deadline and now > deadline:
+            raise ValueError(_("Exam duration has expired."))
         for answer_data in answers:
             question = question_map[answer_data.question_id]
             if question.question_type == QUESTION_TYPE_MCQ:
@@ -146,25 +170,24 @@ def submit_attempt(
                     id=answer_data.selected_choice_id, question=question,
                 ).first()
                 score = choice.score if choice else Decimal("0.00")
-                EntranceAnswer.objects.create(
-                    attempt=attempt,
+                EntranceAnswer.objects.update_or_create(
+                    attempt=locked,
                     question=question,
-                    selected_choice=choice,
-                    score=score,
+                    defaults={"selected_choice": choice, "score": score},
                 )
             else:
                 if answer_data.selected_choice_id is not None:
                     raise ValueError(_("Written answer must not carry a selected choice."))
-                EntranceAnswer.objects.create(
-                    attempt=attempt,
+                EntranceAnswer.objects.update_or_create(
+                    attempt=locked,
                     question=question,
-                    written_text=answer_data.written_text,
+                    defaults={"written_text": answer_data.written_text},
                 )
-        attempt.status = ATTEMPT_STATUS_COMPLETED
-        attempt.submitted_at = timezone.now()
-        attempt.save(update_fields=["status", "submitted_at"])
-        _recompute_attempt_grade(attempt)
-    return attempt
+        locked.status = ATTEMPT_STATUS_COMPLETED
+        locked.submitted_at = timezone.now()
+        locked.save(update_fields=["status", "submitted_at"])
+        _recompute_attempt_grade(locked)
+    return locked
 
 
 # ---------------------------------------------------------------------------
@@ -209,11 +232,6 @@ def _recompute_attempt_grade(attempt: EntranceAttempt, actor: User | None = None
         attempt.save(update_fields=["score"])
 
 
-def _compute_result(score: Decimal, total_score: Decimal, pass_percentage: Decimal) -> str:
-    percentage = (score / total_score * 100) if total_score else Decimal("0.00")
-    return RESULT_PASS if percentage >= pass_percentage else RESULT_FAIL
-
-
 def _update_program_application_from_result(
     attempt: EntranceAttempt,
     result: str,
@@ -242,24 +260,49 @@ def _update_program_application_from_result(
     if not attempt.exam.auto_send_results:
         return
 
-    slug = TEMPLATE_ENTRANCE_EXAM_PASS if result == RESULT_PASS else TEMPLATE_ENTRANCE_EXAM_FAIL
-    email_to = attempt.student.user.email
-    context = {
-        "full_name": attempt.student.full_name or "",
-        "exam_title": attempt.exam.title,
-        "cohort_name": attempt.exam.cohort.name or "",
-    }
-    record = send_templated_email(slug=slug, to_email=email_to, context=context, sent_by=actor)
-    if record:
-        PAEL.objects.create(
-            program_application=prog_app,
-            action=EMAIL_ACTION_NOTE,
-            template_slug=slug,
-            recipient=email_to,
-            sent_by=actor,
-            sent_at=record.sent_at or timezone.now(),
-            status=record.status or "sent",
+    # The result email is an external effect: schedule it after commit so an
+    # SMTP failure never rolls back the already-durable submission (BUG-004).
+    transaction.on_commit(
+        lambda: _send_result_email(attempt, result, actor),
+    )
+
+
+def _send_result_email(
+    attempt: EntranceAttempt,
+    result: str,
+    actor: User | None = None,
+) -> None:
+    """Send the entrance result email after the submission commit.
+
+    The email is best-effort: a send or PAEL failure is logged and never
+    raises into the caller (the submission has already committed).
+    """
+    try:
+        prog_app = attempt.program_application
+        slug = TEMPLATE_ENTRANCE_EXAM_PASS if result == RESULT_PASS else TEMPLATE_ENTRANCE_EXAM_FAIL
+        email_to = attempt.student.user.email
+        context = {
+            "full_name": attempt.student.full_name or "",
+            "exam_title": attempt.exam.title,
+            "cohort_name": attempt.exam.cohort.name or "",
+        }
+        record = queue_templated_email(
+            slug=slug, to_email=email_to, context=context, sent_by=actor,
+            idempotency_key=f"entrance_exam:result:attempt:{attempt.pk}",
+            reference=f"attempt:{attempt.pk}",
         )
+        if record:
+            PAEL.objects.create(
+                program_application=prog_app,
+                action=EMAIL_ACTION_NOTE,
+                template_slug=slug,
+                recipient=email_to,
+                sent_by=actor,
+                sent_at=record.queued_at or timezone.now(),
+                status=record.status or "queued",
+            )
+    except Exception:
+        logger.exception("Entrance result email failed for attempt %s", attempt.id)
 
 
 # ---------------------------------------------------------------------------
@@ -306,27 +349,6 @@ def get_pending_grading() -> list[EntranceAttempt]:
     )
 
 
-def get_active_exams_for_cohort(cohort_id: int) -> list[EntranceExam]:
-    now = timezone.now()
-    return list(
-        EntranceExam.objects.filter(
-            cohort_id=cohort_id,
-            is_active=True,
-            open_at__lte=now,
-            close_at__gte=now,
-        )
-    )
-
-
-def student_has_attempt(student: StudentProfile, exam: EntranceExam) -> EntranceAttempt | None:
-    return EntranceAttempt.objects.filter(
-        student=student,
-        exam=exam,
-    ).exclude(
-        status=ATTEMPT_STATUS_ASSIGNED,
-    ).first()
-
-
 # ---------------------------------------------------------------------------
 # Snapshot save & finalization
 # ---------------------------------------------------------------------------
@@ -344,39 +366,48 @@ def save_snapshot(attempt: EntranceAttempt, question_id: int, choice_id: int | N
         raise ValueError(_("Exam has not opened yet."))
     if exam.close_at and now > exam.close_at:
         raise ValueError(_("Exam has already closed."))
-    if attempt.started_at and exam.duration_minutes:
-        deadline = attempt.started_at + timezone.timedelta(minutes=exam.duration_minutes)
-        if now > deadline:
-            raise ValueError(_("Exam duration has expired."))
+    deadline = attempt_deadline(attempt)
+    if deadline and now > deadline:
+        raise ValueError(_("Exam duration has expired."))
     question = attempt.exam.questions.filter(id=question_id).first()
     if not question:
         return
-    snapshot, _created = EntranceSnapshot.objects.update_or_create(
-        attempt=attempt,
-        question=question,
-        defaults={
-            "selected_choice_id": choice_id,
-            "written_text": written_text,
-        },
-    )
+    with transaction.atomic():
+        locked = EntranceAttempt.objects.select_for_update().get(pk=attempt.pk)
+        if locked.status != ATTEMPT_STATUS_IN_PROGRESS:
+            raise ValueError(_("Exam can only be saved from in_progress status."))
+        now = timezone.now()
+        deadline = attempt_deadline(locked)
+        if deadline and now > deadline:
+            raise ValueError(_("Exam duration has expired."))
+        EntranceSnapshot.objects.update_or_create(
+            attempt=locked,
+            question=question,
+            defaults={
+                "selected_choice_id": choice_id,
+                "written_text": written_text,
+            },
+        )
 
 
 def finalize_attempt_from_snapshots(attempt: EntranceAttempt) -> EntranceAttempt:
     """Rebuild answers from the latest snapshots and submit the attempt.
 
-    Used when a student's browser fails to submit (timeout, crash, etc.)
-    and an admin triggers recovery. Bypasses deadline checks.
+    Used when a student's browser fails to submit (timeout, crash, expiry)
+    or an admin triggers recovery. Bypasses deadline checks. Idempotent:
+    a terminal attempt is returned unchanged.
     """
-    if attempt.status != ATTEMPT_STATUS_IN_PROGRESS:
-        return attempt
-    snapshots = EntranceSnapshot.objects.filter(attempt=attempt).select_related("question")
-    if not snapshots:
-        attempt.status = ATTEMPT_STATUS_COMPLETED
-        attempt.submitted_at = timezone.now()
-        attempt.save(update_fields=["status", "submitted_at"])
-        return attempt
-    questions = {q.id: q for q in attempt.exam.questions.all()}
     with transaction.atomic():
+        locked = EntranceAttempt.objects.select_for_update().get(pk=attempt.pk)
+        if locked.status != ATTEMPT_STATUS_IN_PROGRESS:
+            return locked
+        snapshots = EntranceSnapshot.objects.filter(attempt=locked).select_related("question")
+        if not snapshots:
+            locked.status = ATTEMPT_STATUS_COMPLETED
+            locked.submitted_at = timezone.now()
+            locked.save(update_fields=["status", "submitted_at"])
+            return locked
+        questions = {q.id: q for q in locked.exam.questions.all()}
         for snap in snapshots:
             question = questions.get(snap.question_id)
             if not question:
@@ -387,7 +418,7 @@ def finalize_attempt_from_snapshots(attempt: EntranceAttempt) -> EntranceAttempt
                 ).first() if snap.selected_choice_id else None
                 score = choice.score if choice else Decimal("0.00")
                 EntranceAnswer.objects.update_or_create(
-                    attempt=attempt,
+                    attempt=locked,
                     question=question,
                     defaults={
                         "selected_choice": choice,
@@ -396,17 +427,37 @@ def finalize_attempt_from_snapshots(attempt: EntranceAttempt) -> EntranceAttempt
                 )
             else:
                 EntranceAnswer.objects.update_or_create(
-                    attempt=attempt,
+                    attempt=locked,
                     question=question,
                     defaults={
                         "written_text": snap.written_text,
                     },
                 )
-        attempt.status = ATTEMPT_STATUS_COMPLETED
-        attempt.submitted_at = timezone.now()
-        attempt.save(update_fields=["status", "submitted_at"])
-        _recompute_attempt_grade(attempt)
-    return attempt
+        locked.status = ATTEMPT_STATUS_COMPLETED
+        locked.submitted_at = timezone.now()
+        locked.save(update_fields=["status", "submitted_at"])
+        _recompute_attempt_grade(locked)
+    return locked
+
+
+def finalize_expired_attempt(attempt: EntranceAttempt) -> EntranceAttempt:
+    """Idempotently finalize an attempt once its deadline has passed.
+
+    Reachable by the client at countdown zero. Only snapshots that reached
+    the backend before the deadline are used — localStorage is never
+    authoritative after expiry. Safe to call repeatedly: a terminal attempt
+    is returned unchanged with its current result/state.
+    """
+    with transaction.atomic():
+        locked = EntranceAttempt.objects.select_for_update().get(pk=attempt.pk)
+        if locked.status in (ATTEMPT_STATUS_COMPLETED, ATTEMPT_STATUS_GRADED):
+            return locked
+        if locked.status != ATTEMPT_STATUS_IN_PROGRESS:
+            raise ValueError(_("Exam can only be finalized from in_progress status."))
+        deadline = attempt_deadline(locked)
+        if deadline is None or timezone.now() <= deadline:
+            raise ValueError(_("Exam duration has not expired yet."))
+        return finalize_attempt_from_snapshots(locked)
 
 
 def finalize_all_pending_for_exam(exam: EntranceExam) -> int:

@@ -1,5 +1,5 @@
 {% extends "ui/layouts/student.html" %}
-{% load i18n %}
+{% load i18n static ui_tags %}
 {% block title %}
   {{ exam.title|default:_("Entrance exam") }}
 {% endblock %}
@@ -7,9 +7,26 @@
   <div class="page-stack animate-enter-view">{% if exam.description %}{% blocktrans asvar exam_description %}{{ exam.description }}{% endblocktrans %}{% endif %}
     {% url 'students:exam_results' as student_exam_results_url %}
     {% include "ui/components/_page_header.html" with eyebrow=_("Entrance exam") title=exam.title|default:_("Entrance exam") description=exam_description back_url=student_exam_results_url back_label=_("Back to exam results") %}
+    {% if questions %}
+      <div id="exam-timer"
+           class="card-surface flex items-center justify-between gap-4 py-4"
+           role="status"
+           aria-live="polite"
+           data-remaining-seconds="{{ remaining_seconds }}"
+           data-server-now="{{ timer_server_now|date:'c' }}"
+           data-deadline="{{ timer_deadline|date:'c' }}"
+           data-expired-label="{% trans 'Time expired. Your answers were submitted automatically.' %}">
+        <div>
+          <p class="eyebrow">{% trans "Time remaining" %}</p>
+          <p id="exam-timer-message" class="text-sm text-muted m-0">{% trans "The timer continues while you work and is enforced by the server." %}</p>
+        </div>
+        <strong id="exam-timer-value" class="shrink-0 text-2xl font-black tabular-nums" dir="ltr">--:--:--</strong>
+      </div>
+    {% endif %}
     <section class="card-surface">{% if questions %}
-        <div class="max-w-2xl mx-auto"><form method="post" action="{% url 'entrance_exams:submit_exam' token=access_token %}" id="exam-take-form" data-snapshot-url="{% url 'entrance_exams:save_exam_snapshot' token=access_token %}">{% csrf_token %}
+        <div class="max-w-2xl mx-auto"><form method="post" action="{% url 'entrance_exams:submit_exam' token=access_token %}" id="exam-take-form" data-snapshot-url="{% url 'entrance_exams:save_exam_snapshot' token=access_token %}" data-finalize-url="{% url 'entrance_exams:finalize_expired_exam' token=access_token %}" data-attempt-id="{{ attempt.id }}" data-exam-version="{{ exam_version }}">{% csrf_token %}
           {% for question in questions %}
+            {% with saved=snapshot_answers|dict_key:question.id %}
             <div class="border border-line rounded-sm p-4 mb-3 last:mb-0">
               <div class="flex items-start justify-between gap-4">
                 <div class="flex-1 min-w-0">
@@ -21,20 +38,21 @@
                   {% if question.question_type == 'mcq' %}
                     <div class="flex flex-col gap-1.5 mt-3 ps-2 border-s-2 border-line">
                       {% for choice in question.choices.all %}
-                        <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="radio" name="question_{{ question.id }}" value="{{ choice.id }}" class="form-radio"><span>{{ choice.text }}</span>
+                        <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="radio" name="question_{{ question.id }}" value="{{ choice.id }}" class="form-radio"{% if saved.selected_choice_id == choice.id %} checked{% endif %}><span>{{ choice.text }}</span>
                         </label>
                       {% endfor %}
                     </div>
                   {% else %}
                     <label class="sr-only" for="question_written_{{ question.id }}">{% blocktrans with question_text=question.text %}Answer for question: {{ question_text }}{% endblocktrans %}</label>
-                    <textarea id="question_written_{{ question.id }}" name="question_{{ question.id }}" class="form-textarea" rows="5" required aria-label="{% blocktrans with question_text=question.text %}Answer for question: {{ question_text }}{% endblocktrans %}"></textarea>
+                    <textarea id="question_written_{{ question.id }}" name="question_{{ question.id }}" class="form-textarea" rows="5" required aria-label="{% blocktrans with question_text=question.text %}Answer for question: {{ question_text }}{% endblocktrans %}">{{ saved.written_text }}</textarea>
                   {% endif %}
                 </div>
               </div>
             </div>
+            {% endwith %}
           {% endfor %}
           <button class="btn-primary" type="submit">{% trans "Submit exam" %}</button>
-          <p class="text-sm text-muted mt-3">{% blocktrans with interval=60 %}Your answers are saved automatically every {{ interval }} seconds.{% endblocktrans %}</p>
+          <p class="text-sm text-muted mt-3">{% trans "Your answers are saved automatically. You may leave the page and return to continue from where you stopped." %}</p>
         </form></div>
       {% elif is_results %}
         <div class="max-w-2xl mx-auto text-center">
@@ -46,9 +64,9 @@
             <p class="text-muted m-0">{% trans "Your answers have been received. The admissions office will review them and make a decision." %}</p>
             <div class="flex flex-wrap gap-2 justify-center mt-2">
               {% if decision %}
-                <span class="status-pill-{{ decision.tone }}">{{ decision.label }}</span>
+                {% include "ui/components/_status.html" with code=decision.code label=decision.label %}
               {% else %}
-                <span class="status-pill-info">{{ state_label }}</span>
+                {% include "ui/components/_status.html" with code="entrance_submitted" label=state_label %}
               {% endif %}
             </div>
           </div>
@@ -98,7 +116,8 @@
             {% endif %}
           {% endif %}
         </div>
-      {% endif %}
+{% endif %}
     </section>
   </div>
+  {% if questions %}<script src="{% static 'js/exam-timer.js' %}" defer></script>{% endif %}
 {% endblock %}

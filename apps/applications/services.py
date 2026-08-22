@@ -1,4 +1,4 @@
-"""Application business logic: duplicate checking, phone normalization, submission, and state machine."""
+"""Application business logic: duplicate checking, submission, and state machine."""
 
 from __future__ import annotations
 
@@ -23,10 +23,15 @@ from apps.audit.constants import ACTION_APPLICATION_DECISION_REVERTED
 from apps.audit.services import record_audit_event
 from apps.communications.constants import (
     TEMPLATE_ACCEPTANCE,
+    TEMPLATE_COURSE_PAYMENT_INSTRUCTIONS,
+    TEMPLATE_DIPLOMA_ENTRANCE_EXAM_SCHEDULE,
+    TEMPLATE_DIPLOMA_INTERVIEW_REQUEST,
     TEMPLATE_REJECTION,
 )
-from apps.communications.services import send_templated_email
+from apps.communications.services import queue_templated_email
 from apps.core.permissions import validate_score
+from apps.core.phone import normalize_phone_number
+from apps.intake_forms.constants import INTAKE_REQUESTABLE_STATUSES  # noqa: E402
 from apps.intake_forms.selectors import has_required_intake_response  # noqa: E402
 from apps.payments.constants import CURRENCY_EGP, PAYMENT_STATUS_PAID, WAIVER_STATUS_ACTIVE
 from apps.payments.models import PaymentRecord, PaymentWaiver
@@ -79,26 +84,6 @@ from apps.accounts.services import send_activation_email
 
 User = get_user_model()
 
-COUNTRY_CODES = {
-    "20": "EG",
-    "966": "SA",
-    "971": "AE",
-    "965": "KW",
-    "974": "QA",
-    "973": "BH",
-    "968": "OM",
-    "962": "JO",
-    "961": "LB",
-    "963": "SY",
-    "964": "IQ",
-    "970": "PS",
-    "212": "MA",
-    "213": "DZ",
-    "216": "TN",
-    "218": "LY",
-    "249": "SD",
-}
-
 logger = logging.getLogger(__name__)
 
 
@@ -120,28 +105,11 @@ class RegistrationData:
     church: str
     priest_name: str
     priest_contact: str
-    age: int
     country_code: str = COUNTRY_EG
     program_type: str | None = None
     cohort_id: int | None = None
     course_id: int | None = None
     delivery_mode: str = DELIVERY_MODE_ONLINE
-
-
-def normalize_phone(raw: str) -> str:
-    """Strip the country code, +, 00, and leading 0 from a phone number."""
-    digits = "".join(c for c in raw if c.isdigit())
-    if not digits:
-        return ""
-    if digits.startswith("00"):
-        digits = digits[2:]
-    for code in sorted(COUNTRY_CODES.keys(), key=len, reverse=True):
-        if digits.startswith(code) and len(digits) > len(code) + 6:
-            digits = digits[len(code):]
-            break
-    if digits.startswith("0"):
-        digits = digits[1:]
-    return digits
 
 
 def find_duplicate(data: RegistrationData) -> str | None:
@@ -168,11 +136,12 @@ def find_duplicate(data: RegistrationData) -> str | None:
         return "national_id"
     if User.objects.filter(email__iexact=data.email).exists():
         return "email"
-    normalized_input = normalize_phone(data.phone)
-    if normalized_input:
-        for user in User.objects.exclude(phone=""):
-            if normalize_phone(user.phone) == normalized_input:
-                return "phone"
+    normalized_phone = normalize_phone_number(data.phone)
+    if normalized_phone:
+        if StudentProfile.objects.filter(phone=normalized_phone).exists():
+            return "phone"
+        if User.objects.exclude(phone="").filter(phone=normalized_phone).exists():
+            return "phone"
     return None
 
 
@@ -213,11 +182,13 @@ def submit_registration(
     # user (S2-24); the password is established during account activation.
     user_password = secrets.token_urlsafe(16)
     normalized_id = normalize_identity_number(data.country_code, data.national_id)
+    normalized_phone = normalize_phone_number(data.phone)
+    # Students never store phone on User; StudentProfile.phone is the single
+    # owner (created below).
     user = User.objects.create_user(
         email=data.email,
         password=user_password,
         full_name=data.full_name,
-        phone=data.phone,
         country_code=data.country_code,
         national_id=normalized_id,
     )
@@ -232,7 +203,7 @@ def submit_registration(
         date_of_birth=data.date_of_birth,
         gender=data.gender,
         address=data.address,
-        phone=data.phone,
+        phone=normalized_phone,
         country_code=data.country_code,
         national_id=normalized_id,
         education=data.education,
@@ -277,9 +248,9 @@ def submit_registration(
 def _send_activation_email_safely(user) -> None:
     """Keep a committed registration successful if email configuration fails."""
     try:
-        send_activation_email(user)
+        send_activation_email(user, idempotency_key=f"activation:new:{user.pk}")
     except Exception:  # noqa: BLE001
-        logger.exception("Failed to send activation email for user_id=%s", user.pk)
+        logger.exception("Failed to queue activation email for user_id=%s", user.pk)
 
 
 def submit_program_application(
@@ -396,7 +367,7 @@ def _has_non_resend_email_log(application, action) -> bool:
     return ProgramApplicationEmailLog.objects.filter(
         program_application=application,
         action=action,
-        status="sent",
+        status__in=["sent", "queued"],
         is_resend=False,
     ).exists()
 
@@ -466,7 +437,11 @@ def _send_course_payment_instructions_email(prog_app, actor=None) -> None:
         "course_title": prog_app.course.title if prog_app.course else "",
         "staff_phone": "",
     }
-    send_templated_email("course_payment_instructions", email, context, sent_by=actor)
+    queue_templated_email(
+        TEMPLATE_COURSE_PAYMENT_INSTRUCTIONS, email, context, sent_by=actor,
+        idempotency_key=f"application:course_payment_instructions:app:{prog_app.pk}",
+        reference=f"app:{prog_app.pk}",
+    )
 
 
 def _send_diploma_entrance_schedule_email(prog_app, actor=None) -> None:
@@ -484,7 +459,11 @@ def _send_diploma_entrance_schedule_email(prog_app, actor=None) -> None:
         "exam_close_at": "",
     }
     # ponytail: no exam URL in context per Phase 2 rule
-    send_templated_email("diploma_entrance_exam_schedule", email, context, sent_by=actor)
+    queue_templated_email(
+        TEMPLATE_DIPLOMA_ENTRANCE_EXAM_SCHEDULE, email, context, sent_by=actor,
+        idempotency_key=f"application:diploma_entrance_schedule:app:{prog_app.pk}",
+        reference=f"app:{prog_app.pk}",
+    )
 
 
 def _log_email_send(application, action, template_slug, recipient, actor=None) -> None:
@@ -496,7 +475,7 @@ def _log_email_send(application, action, template_slug, recipient, actor=None) -
         recipient=recipient,
         sent_by=actor,
         sent_at=timezone.now(),
-        status="sent",
+        status="queued",
         is_resend=is_resend,
     )
 
@@ -680,7 +659,11 @@ def _send_interview_request_email(prog_app, metadata: dict) -> None:
         "phone_number": metadata.get("phone_number", ""),
         "expires_at": metadata.get("expires_at", ""),
     }
-    send_templated_email("diploma_interview_request", email, context, sent_by=None)
+    queue_templated_email(
+        TEMPLATE_DIPLOMA_INTERVIEW_REQUEST, email, context, sent_by=None,
+        idempotency_key=f"application:interview_request:app:{prog_app.pk}:{metadata.get('interview_at') or ''}",
+        reference=f"app:{prog_app.pk}",
+    )
     _log_email_send(prog_app, "diploma_interview_request", "diploma_interview_request", email)
 
 
@@ -1080,6 +1063,163 @@ LEGAL_PAYMENT_STATUSES = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Canonical available-action authority (BUG-006)
+# ---------------------------------------------------------------------------
+#
+# UI action visibility for a ProgramApplication is derived from this single
+# source so the buttons shown always match the exact gates the mutation
+# services enforce. Each status set mirrors the gate of the corresponding
+# transition function:
+#
+#   accept              -> accept_program_application
+#   reject              -> reject_program_application
+#   mark_paid           -> mark_application_paid (LEGAL_PAYMENT_STATUSES)
+#   request_intake      -> request_intake_form_for_application (INTAKE_REQUESTABLE_STATUSES)
+#   request_documents   -> request_documents_program_application
+#   request_interview   -> request_interview_program_application
+#   invite_to_entrance  -> invite_to_entrance_exam
+#   grant_waiver        -> grant_payment_waiver (payments WAIVER_LEGAL_APPLICATION_STATUSES)
+#   activate            -> activate_application_if_ready (readiness via can_activate_application)
+#
+# The mutation services keep their own validation: this projection only
+# drives display, and the backend re-checks every transition on mutation.
+
+ACTION_ACCEPT = "accept"
+ACTION_REJECT = "reject"
+ACTION_MARK_PAID = "mark_paid"
+ACTION_REQUEST_INTAKE = "request_intake"
+ACTION_REQUEST_DOCUMENTS = "request_documents"
+ACTION_REQUEST_INTERVIEW = "request_interview"
+ACTION_INVITE_TO_ENTRANCE = "invite_to_entrance"
+ACTION_GRANT_WAIVER = "grant_waiver"
+ACTION_ACTIVATE = "activate"
+
+_ACCEPT_ALLOWED_STATUSES = {
+    PROGRAM_TYPE_COURSE: frozenset({
+        PROGRAM_APP_STATUS_SUBMITTED,
+        PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED,
+        PROGRAM_APP_STATUS_PAYMENT_PENDING,
+    }),
+    PROGRAM_TYPE_DIPLOMA: frozenset({
+        PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
+        PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
+    }),
+}
+
+_REJECT_ALLOWED_STATUSES = {
+    PROGRAM_TYPE_COURSE: frozenset({
+        PROGRAM_APP_STATUS_SUBMITTED,
+        PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED,
+        PROGRAM_APP_STATUS_PAYMENT_PENDING,
+        PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
+        PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
+    }),
+    PROGRAM_TYPE_DIPLOMA: frozenset({
+        PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
+        PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
+    }),
+}
+
+_REQUEST_DOCUMENTS_ALLOWED_STATUSES = frozenset({
+    PROGRAM_APP_STATUS_ACCEPTED,
+    PROGRAM_APP_STATUS_DOCUMENTS_REQUESTED,
+})
+
+_INVITE_TO_ENTRANCE_ALLOWED_STATUSES = frozenset({
+    PROGRAM_APP_STATUS_SUBMITTED,
+    PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED,
+})
+
+
+def _waiver_legal_application_statuses() -> frozenset:
+    """Waiver-eligible statuses, taken from the payment mutation authority.
+
+    Imported lazily to avoid a module-load import cycle (payments.services
+    imports from apps.applications.services).
+    """
+    from apps.payments.services import WAIVER_LEGAL_APPLICATION_STATUSES
+
+    return frozenset(WAIVER_LEGAL_APPLICATION_STATUSES)
+
+
+def allowed_application_actions(application) -> frozenset[str]:
+    """Return the set of valid action keys for an application's current state.
+
+    The single source of truth for the admin detail page. Every allowed status
+    set matches the exact gate enforced by the corresponding mutation service
+    below, and each mutation service re-checks the transition when called.
+    """
+    status = application.status
+    program_type = application.program_type
+    allowed: set[str] = set()
+
+    if status in _ACCEPT_ALLOWED_STATUSES.get(program_type, frozenset()):
+        allowed.add(ACTION_ACCEPT)
+    if status in _REJECT_ALLOWED_STATUSES.get(program_type, frozenset()):
+        allowed.add(ACTION_REJECT)
+    if status in LEGAL_PAYMENT_STATUSES:
+        allowed.add(ACTION_MARK_PAID)
+    if status in INTAKE_REQUESTABLE_STATUSES:
+        allowed.add(ACTION_REQUEST_INTAKE)
+    if program_type == PROGRAM_TYPE_DIPLOMA and status in _REQUEST_DOCUMENTS_ALLOWED_STATUSES:
+        allowed.add(ACTION_REQUEST_DOCUMENTS)
+    if program_type == PROGRAM_TYPE_DIPLOMA and status == PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED:
+        allowed.add(ACTION_REQUEST_INTERVIEW)
+    if program_type == PROGRAM_TYPE_DIPLOMA and status in _INVITE_TO_ENTRANCE_ALLOWED_STATUSES:
+        allowed.add(ACTION_INVITE_TO_ENTRANCE)
+    if status in _waiver_legal_application_statuses():
+        allowed.add(ACTION_GRANT_WAIVER)
+    if can_activate_application(application).ready:
+        allowed.add(ACTION_ACTIVATE)
+
+    return frozenset(allowed)
+
+
+def _has_application_action(application, action: str) -> bool:
+    return action in allowed_application_actions(application)
+
+
+def can_accept_application(application) -> bool:
+    """Whether ``accept_program_application`` may run for this application."""
+    return _has_application_action(application, ACTION_ACCEPT)
+
+
+def can_reject_application(application) -> bool:
+    """Whether ``reject_program_application`` may run for this application."""
+    return _has_application_action(application, ACTION_REJECT)
+
+
+def can_mark_paid_application(application) -> bool:
+    """Whether ``mark_application_paid`` may run for this application."""
+    return _has_application_action(application, ACTION_MARK_PAID)
+
+
+def can_request_intake_application(application) -> bool:
+    """Whether ``request_intake_form_for_application`` may run (status gate)."""
+    return _has_application_action(application, ACTION_REQUEST_INTAKE)
+
+
+def can_request_documents_application(application) -> bool:
+    """Whether ``request_documents_program_application`` may run (status gate)."""
+    return _has_application_action(application, ACTION_REQUEST_DOCUMENTS)
+
+
+def can_request_interview_application(application) -> bool:
+    """Whether ``request_interview_program_application`` may run (status gate)."""
+    return _has_application_action(application, ACTION_REQUEST_INTERVIEW)
+
+
+def can_invite_to_entrance_application(application) -> bool:
+    """Whether ``invite_to_entrance_exam`` may run for this application."""
+    return _has_application_action(application, ACTION_INVITE_TO_ENTRANCE)
+
+
+def can_grant_waiver_application(application) -> bool:
+    """Whether ``grant_payment_waiver`` may run for this application."""
+    return _has_application_action(application, ACTION_GRANT_WAIVER)
+
+
 @transaction.atomic
 def mark_application_paid(
     application,
@@ -1168,7 +1308,11 @@ def _send_program_app_acceptance_email(prog_app) -> None:
         "diploma_title": prog_app.cohort.diploma.title if prog_app.cohort and prog_app.cohort.diploma else "",
         "program_type": prog_app.program_type or "",
     }
-    send_templated_email(TEMPLATE_ACCEPTANCE, email, context, sent_by=None)
+    queue_templated_email(
+        TEMPLATE_ACCEPTANCE, email, context, sent_by=None,
+        idempotency_key=f"application:acceptance:app:{prog_app.pk}",
+        reference=f"app:{prog_app.pk}",
+    )
 
 
 def _send_program_app_rejection_email(prog_app, reason: str) -> None:
@@ -1180,4 +1324,8 @@ def _send_program_app_rejection_email(prog_app, reason: str) -> None:
         "rejection_reason": reason,
         "cohort_name": prog_app.cohort.name if prog_app.cohort else "",
     }
-    send_templated_email(TEMPLATE_REJECTION, email, context, sent_by=None)
+    queue_templated_email(
+        TEMPLATE_REJECTION, email, context, sent_by=None,
+        idempotency_key=f"application:rejection:app:{prog_app.pk}",
+        reference=f"app:{prog_app.pk}",
+    )

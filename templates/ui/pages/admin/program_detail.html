@@ -205,8 +205,7 @@
           {% endif %}
         </article>
       {% endif %}
-      {% if application.program_type == "diploma" %}
-        {% if application.status == "account_activated" or application.status == "invited_to_entrance" %}
+      {% if can_invite_to_entrance or application.status == "invited_to_entrance" %}
         <article class="card-surface">
           <div class="section-head"><div><p class="eyebrow">{% trans "Entrance assessment" %}</p><h3>{% trans "Invite applicant" %}</h3></div></div>
           <form method="post">{% csrf_token %}<input type="hidden" name="action" value="invite_to_entrance">
@@ -214,9 +213,8 @@
             <button class="btn-primary" type="submit">{% trans "Assign entrance assessment" %}</button>
           </form>
         </article>
-        {% endif %}
       {% endif %}
-      {% if application.status == "entrance_submitted" %}
+      {% if can_request_interview %}
         <article class="card-surface">
           <div class="section-head"><div><p class="eyebrow">{% trans "Interview" %}</p><h3>{% trans "Request interview" %}</h3></div></div>
           <form method="post">{% csrf_token %}<input type="hidden" name="action" value="request_interview">

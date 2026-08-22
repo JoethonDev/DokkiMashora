@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Count, Exists, F, OuterRef, Q, Subquery, Sum
+from django.db.models import Count, Exists, F, Max, OuterRef, Q, Subquery, Sum
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -30,6 +30,7 @@ from apps.audit.constants import (
     ACTION_GRADE_CHANGED,
     ACTION_GRADE_HIDDEN,
     ACTION_GRADE_RELEASED,
+    ACTION_STUDENT_ACCESS_CHANGE,
 )
 from apps.audit.services import record_audit_event
 from apps.core.permissions import assessment_staff_scope_filter, is_admin, is_moderator, validate_score
@@ -142,13 +143,6 @@ class AssessmentAnswerData:
     question_id: int
     selected_choice_id: int | None = None
     written_text: str = ""
-
-
-@dataclass
-class GradingResult:
-    answer_id: int
-    score: Decimal
-    feedback: str
 
 
 # ---------------------------------------------------------------------------
@@ -1367,11 +1361,7 @@ def get_student_result_projection(attempt: AssessmentAttempt) -> dict:
         and attempt.assessment.semester_id and attempt.assessment.cohort_id
     )
     questions = []
-    if not show_scores:
-        # A submitted attempt is a status record until release. Do not expose
-        # the exam questions or submitted responses through the results URL.
-        questions = []
-    elif is_diploma:
+    if is_diploma:
         answers = {
             a.attempt_question_id: a
             for a in AssessmentAttemptSnapshotAnswer.objects.filter(
@@ -1415,6 +1405,9 @@ def get_student_result_projection(attempt: AssessmentAttempt) -> dict:
         "is_pass": attempt.is_pass if show_scores else None,
         "submitted_at": attempt.submitted_at,
         "graded_at": attempt.graded_at,
+        # The student's own questions/answers are reviewable read-only before
+        # release; scores, feedback, correctness flags, and answer keys are
+        # never projected until the attempt is released (P2-04).
         "questions": questions,
     }
 
@@ -1745,11 +1738,129 @@ def generate_exam_codes(assessment: Assessment, actor) -> int:
     return len(new_codes)
 
 
-def set_exam_code_delivery_mode(code_id: int, mode: str) -> SemesterExamCode:
-    code = SemesterExamCode.objects.get(pk=code_id)
-    code.delivery_mode = mode
-    code.save(update_fields=["delivery_mode"])
-    return code
+@transaction.atomic
+def change_diploma_enrollment_delivery_mode(
+    enrollment_id: int,
+    mode: str,
+    actor,
+    *,
+    source_code_id: int | None = None,
+) -> SemesterExamCode | None:
+    """Change a Diploma application's mode and safe code projections.
+
+    Printed codes and codes with academic activity are immutable historical
+    evidence. The application remains authoritative; mutable, unused codes
+    for the same enrollment are synchronized as operational projections.
+    """
+    if mode not in {DELIVERY_MODE_ONLINE, DELIVERY_MODE_OFFLINE}:
+        raise ValueError(_("Invalid delivery mode."))
+
+    enrollment = DiplomaEnrollment.objects.select_for_update().get(pk=enrollment_id)
+    source_code = None
+    if source_code_id is not None:
+        source_code = SemesterExamCode.objects.select_for_update().select_related(
+            "assessment",
+        ).get(pk=source_code_id, diploma_enrollment_id=enrollment.id)
+        if source_code.assessment.legacy_status != LEGACY_STATUS_ACTIVE:
+            raise ValueError(_("Legacy semester exam data is read-only."))
+
+    application = ProgramApplication.objects.select_for_update().filter(
+        student_id=enrollment.student_id,
+        cohort_id=enrollment.cohort_id,
+        program_type=PROGRAM_TYPE_DIPLOMA,
+    ).exclude(status=PROGRAM_APP_STATUS_REJECTED).order_by(
+        "-created_at", "-id",
+    ).first()
+    if application is None:
+        raise ValueError(_("No active Diploma application was found for this student."))
+
+    related_codes = list(
+        SemesterExamCode.objects.select_for_update().filter(
+            diploma_enrollment_id=enrollment.id,
+        )
+    )
+    related_assessment_ids = [item.assessment_id for item in related_codes]
+    attempted_assessment_ids = set(
+        AssessmentAttempt.objects.filter(
+            student__student_profile__id=enrollment.student_id,
+            assessment_id__in=related_assessment_ids,
+        ).values_list("assessment_id", flat=True)
+    )
+    graded_code_ids = set(
+        OfflineSectionGrade.objects.filter(
+            exam_code_id__in=[item.pk for item in related_codes],
+        ).values_list("exam_code_id", flat=True)
+    )
+    mutable_codes = [
+        item for item in related_codes
+        if not item.printed_at
+        and item.assessment_id not in attempted_assessment_ids
+        and item.pk not in graded_code_ids
+    ]
+    mutable_code_ids = {item.pk for item in mutable_codes}
+    if source_code is not None and source_code.pk not in mutable_code_ids:
+        raise ValueError(_("This exam code is historical and cannot change delivery mode."))
+
+    code_mode_changed = any(item.delivery_mode != mode for item in mutable_codes)
+    if application.delivery_mode == mode and not code_mode_changed:
+        return source_code
+
+    old_application_mode = application.delivery_mode
+    application.delivery_mode = mode
+    now = timezone.now()
+    application.updated_at = now
+    application.save(update_fields=["delivery_mode", "updated_at"])
+    for item in mutable_codes:
+        item.delivery_mode = mode
+        item.updated_at = now
+    SemesterExamCode.objects.bulk_update(mutable_codes, ["delivery_mode", "updated_at"])
+
+    record_audit_event(
+        actor=actor,
+        action=ACTION_STUDENT_ACCESS_CHANGE,
+        target_type="program_application",
+        target_id=str(application.pk),
+        metadata={
+            "student_id": enrollment.student_id,
+            "cohort_id": enrollment.cohort_id,
+            "assessment_id": source_code.assessment_id if source_code else None,
+            "exam_code_id": source_code.pk if source_code else None,
+            "old_delivery_mode": old_application_mode,
+            "new_delivery_mode": mode,
+            "updated_exam_code_ids": [item.pk for item in mutable_codes],
+        },
+    )
+    return source_code
+
+
+def change_exam_code_delivery_mode(code_id: int, mode: str, actor) -> SemesterExamCode:
+    """Change mode from a roster code while preserving application authority."""
+    code = SemesterExamCode.objects.only("diploma_enrollment_id").get(pk=code_id)
+    changed_code = change_diploma_enrollment_delivery_mode(
+        code.diploma_enrollment_id,
+        mode,
+        actor,
+        source_code_id=code_id,
+    )
+    return changed_code or SemesterExamCode.objects.get(pk=code_id)
+
+
+def _offline_code_grading_complete(exam_code: SemesterExamCode) -> bool:
+    """True when every configured section of the exam has a grade for this code."""
+    section_ids = set(
+        AssessmentLectureSection.objects.filter(
+            assessment_id=exam_code.assessment_id,
+        ).values_list("id", flat=True)
+    )
+    if not section_ids:
+        return False
+    graded_ids = set(
+        OfflineSectionGrade.objects.filter(
+            exam_code_id=exam_code.id,
+            section_id__in=section_ids,
+        ).values_list("section_id", flat=True)
+    )
+    return graded_ids >= section_ids
 
 
 def enter_offline_section_grade(
@@ -1775,6 +1886,10 @@ def enter_offline_section_grade(
         exam_code_id=exam_code_id, section_id=section_id,
         defaults={"score": score, "graded_by": grader},
     )
+    # Once the last section is graded, persist the offline attempt record so
+    # Admin review and the Semester Evaluation see the computed exam grade.
+    if _offline_code_grading_complete(exam_code):
+        finalize_offline_attempt(exam_code.id)
     return grade
 
 
@@ -1784,11 +1899,6 @@ def finalize_offline_attempt(exam_code_id: int) -> AssessmentAttempt:
     if assessment.legacy_status != LEGACY_STATUS_ACTIVE:
         raise ValueError(_("Legacy semester exam data is read-only."))
     with transaction.atomic():
-        attempt, _created = AssessmentAttempt.objects.get_or_create(
-            assessment=assessment, student=exam_code.diploma_enrollment.student.user,
-            attempt_number=1,
-            defaults={"status": ATTEMPT_STATUS_GRADED, "submitted_at": timezone.now()},
-        )
         total_score = Decimal("0")
         total_max = Decimal("0")
         all_graded = True
@@ -1799,15 +1909,20 @@ def finalize_offline_attempt(exam_code_id: int) -> AssessmentAttempt:
                 total_score += grade.score
             else:
                 all_graded = False
-        if all_graded:
-            attempt.score_points = total_score
-            if total_max > 0:
-                attempt.score_percent = (total_score / total_max * Decimal("100")).quantize(Decimal("0.01"))
-            attempt.is_pass = attempt.score_percent >= assessment.passing_score if attempt.score_percent else False
-            attempt.status = ATTEMPT_STATUS_GRADED
-            attempt.submitted_at = timezone.now()
-            attempt.visible_to_student = False
-            attempt.save()
+        if not all_graded or total_max <= 0:
+            raise ValueError(_("All exam sections must be graded before the offline attempt can be recorded."))
+        attempt, _created = AssessmentAttempt.objects.get_or_create(
+            assessment=assessment, student=exam_code.diploma_enrollment.student.user,
+            attempt_number=1,
+            defaults={"status": ATTEMPT_STATUS_GRADED, "submitted_at": timezone.now()},
+        )
+        attempt.score_points = total_score
+        attempt.score_percent = (total_score / total_max * Decimal("100")).quantize(Decimal("0.01"))
+        attempt.is_pass = attempt.score_percent >= assessment.passing_score
+        attempt.status = ATTEMPT_STATUS_GRADED
+        attempt.submitted_at = timezone.now()
+        attempt.visible_to_student = False
+        attempt.save()
     return attempt
 
 
@@ -1876,11 +1991,20 @@ def claim_next_reviewer_submission(assignment) -> ReviewerExamClaim:
     if active_claim:
         return active_claim
 
-    candidates = list(
+    candidate_ids = list(
         _reviewer_assignment_scope(locked_assignment)
-        .select_for_update(skip_locked=True)
-        .order_by("submitted_at", "id")[:25]
+        .order_by("submitted_at", "id")
+        .values_list("id", flat=True)[:25]
     )
+    # PostgreSQL forbids FOR UPDATE with DISTINCT, so lock the scoped
+    # candidates by primary key instead; skip_locked skips rows another
+    # reviewer transaction is currently claiming.
+    locked_by_id = {
+        attempt.pk: attempt
+        for attempt in AssessmentAttempt.objects.filter(pk__in=candidate_ids)
+        .select_for_update(skip_locked=True)
+    }
+    candidates = [locked_by_id[pk] for pk in candidate_ids if pk in locked_by_id]
     candidate = None
     section_id = None
     for possible in candidates:
@@ -1912,7 +2036,13 @@ def claim_next_reviewer_submission(assignment) -> ReviewerExamClaim:
 
 
 def reviewer_claim_items(claim):
-    """Return anonymous primitives for the claimed section only."""
+    """Return anonymous primitives for every written answer of the claim.
+
+    The claim reserves one anonymous attempt; the Reviewer grades ALL of its
+    written questions (every section within assignment scope) before
+    finalizing. Never includes student identity, enrollment, or attempt
+    objects.
+    """
     code_number = SemesterExamCode.objects.filter(
         assessment_id=claim.attempt.assessment_id,
         diploma_enrollment__student__user_id=claim.attempt.student_id,
@@ -1922,7 +2052,6 @@ def reviewer_claim_items(claim):
     return (
         AssessmentAttemptSnapshotAnswer.objects.filter(
             attempt_question__attempt_id=claim.attempt_id,
-            attempt_question__section_id=claim.section_id,
             attempt_question__question_type=QUESTION_TYPE_WRITTEN,
         )
         .annotate(
@@ -2017,36 +2146,244 @@ def get_reviewer_ungraded_count(assignment) -> int:
     return max(0, total - graded)
 
 
-def annotate_reviewer_ungraded_counts(assignments) -> dict[int, int]:
-    """Return offline availability counts for the supplied assignments."""
-    return {assignment.id: get_reviewer_ungraded_count(assignment) for assignment in assignments}
+def _reviewer_scope_maps(assignments):
+    """Resolve scoped assessments/sections for a batch of ReviewerAssignments.
 
-
-def get_reviewer_online_written_items(assignment):
-    """Anonymous written snapshot answers for a ReviewerAssignment (online only).
-
-    Returns primitive projections only: ``code_number``, written prompt,
-    answer text, points, and the gradeable answer id. Never includes student
-    identity, enrollment, or attempt objects.
+    Set-based counterpart of ``_reviewer_assignment_assessments`` evaluated
+    once across every supplied assignment. Returns primitive id mappings only:
+    ``{assignment_id: {assessment_id}}``, ``{assignment_id: {section_id}}``,
+    and ``{assessment_id: {section_id}}``. Never exposes student identity,
+    enrollment, or attempt objects.
     """
-    claim = get_active_reviewer_claim(assignment)
-    if not claim:
-        return AssessmentAttemptSnapshotAnswer.objects.none().values("id")
-    return reviewer_claim_items(claim)
+    assignments = list(assignments)
+    if not assignments:
+        return {}, {}, {}
+    cohort_ids = {assignment.cohort_id for assignment in assignments}
+    assessment_rows = list(
+        Assessment.objects.filter(
+            assessment_type=ASSESSMENT_TYPE_SEMESTER_EXAM,
+            legacy_status=LEGACY_STATUS_ACTIVE,
+            cohort_id__in=cohort_ids,
+        ).values("id", "cohort_id", "semester_id")
+    )
+    assessment_ids_by_cohort = {}
+    assessment_ids_by_cohort_semester = {}
+    for row in assessment_rows:
+        assessment_ids_by_cohort.setdefault(row["cohort_id"], set()).add(row["id"])
+        assessment_ids_by_cohort_semester.setdefault((row["cohort_id"], row["semester_id"]), set()).add(row["id"])
+
+    candidate_ids = {}
+    for assignment in assignments:
+        ids = set(assessment_ids_by_cohort.get(assignment.cohort_id, ()))
+        if assignment.semester_id:
+            ids &= set(assessment_ids_by_cohort_semester.get((assignment.cohort_id, assignment.semester_id), ()))
+        if assignment.scope == REVIEWER_SCOPE_EXAM and assignment.assessment_id:
+            ids &= {assignment.assessment_id}
+        elif assignment.scope == REVIEWER_SCOPE_SEMESTER and not assignment.semester_id:
+            ids = set()
+        elif assignment.scope != REVIEWER_SCOPE_COHORT:
+            ids = set()
+        if assignment.section_id:
+            ids &= {assignment.section.assessment_id}
+        candidate_ids[assignment.id] = ids
+
+    all_assessment_ids = set().union(*candidate_ids.values()) if candidate_ids else set()
+    section_rows = list(
+        AssessmentLectureSection.objects.filter(assessment_id__in=all_assessment_ids).values("id", "assessment_id")
+    )
+    sections_by_assessment = {}
+    for row in section_rows:
+        sections_by_assessment.setdefault(row["assessment_id"], set()).add(row["id"])
+
+    section_ids = {}
+    for assignment in assignments:
+        ids = set()
+        for assessment_id in candidate_ids[assignment.id]:
+            ids |= sections_by_assessment.get(assessment_id, set())
+        if assignment.section_id:
+            ids &= {assignment.section_id}
+        section_ids[assignment.id] = ids
+    return candidate_ids, section_ids, sections_by_assessment
+
+
+def annotate_reviewer_ungraded_counts(assignments) -> dict[int, int]:
+    """Return offline availability counts for the supplied assignments.
+
+    Set-based: scoped assessments/sections, their offline exam codes, and the
+    already-graded code/section pairs are loaded once and grouped in Python.
+    The query count is bounded by the batch, not by the number of assignments.
+    """
+    assignments = list(assignments)
+    if not assignments:
+        return {}
+    counts = {assignment.id: 0 for assignment in assignments}
+    candidate_ids, section_ids, sections_by_assessment = _reviewer_scope_maps(assignments)
+    all_assessment_ids = set().union(*(candidate_ids.values()))
+    if not all_assessment_ids:
+        return counts
+    cohort_ids = {assignment.cohort_id for assignment in assignments}
+
+    code_rows = list(
+        SemesterExamCode.objects.filter(
+            assessment_id__in=all_assessment_ids,
+            delivery_mode=DELIVERY_MODE_OFFLINE,
+            diploma_enrollment__cohort_id__in=cohort_ids,
+        ).values("id", "assessment_id", "active", "diploma_enrollment__cohort_id")
+    )
+    code_active = {row["id"]: row["active"] for row in code_rows}
+    code_assessment = {row["id"]: row["assessment_id"] for row in code_rows}
+    codes_by_assessment_cohort = {}
+    for row in code_rows:
+        codes_by_assessment_cohort.setdefault((row["assessment_id"], row["diploma_enrollment__cohort_id"]), set()).add(
+            row["id"]
+        )
+
+    cluster_ids = {assignment.cluster_id for assignment in assignments if assignment.cluster_id}
+    code_ids_by_cluster = {}
+    if cluster_ids:
+        cluster_q = Q()
+        for cluster_id in cluster_ids:
+            cluster_q |= Q(diploma_enrollment__student__cluster_memberships__cluster_id=cluster_id)
+        for code_id, cluster_id in (
+            SemesterExamCode.objects.filter(
+                cluster_q,
+                assessment_id__in=all_assessment_ids,
+                delivery_mode=DELIVERY_MODE_OFFLINE,
+                diploma_enrollment__cohort_id__in=cohort_ids,
+            )
+            .values_list("id", "diploma_enrollment__student__cluster_memberships__cluster_id")
+            .distinct()
+        ):
+            code_ids_by_cluster.setdefault(cluster_id, set()).add(code_id)
+
+    all_section_ids = set().union(*(section_ids.values()))
+    graded_by_code = {}
+    for code_id, section_id in (
+        OfflineSectionGrade.objects.filter(
+            section_id__in=all_section_ids,
+            exam_code__assessment_id__in=all_assessment_ids,
+            exam_code__delivery_mode=DELIVERY_MODE_OFFLINE,
+            exam_code__diploma_enrollment__cohort_id__in=cohort_ids,
+        ).values_list("exam_code_id", "section_id")
+    ):
+        graded_by_code.setdefault(code_id, set()).add(section_id)
+
+    for assignment in assignments:
+        ids = candidate_ids[assignment.id]
+        if not ids:
+            continue
+        grade_codes = set()
+        for assessment_id in ids:
+            grade_codes |= codes_by_assessment_cohort.get((assessment_id, assignment.cohort_id), set())
+        if assignment.cluster_id:
+            grade_codes &= code_ids_by_cluster.get(assignment.cluster_id, set())
+        active_by_assessment = {}
+        for code_id in grade_codes:
+            if code_active[code_id]:
+                assessment_id = code_assessment[code_id]
+                active_by_assessment[assessment_id] = active_by_assessment.get(assessment_id, 0) + 1
+        scoped_sections = section_ids[assignment.id]
+        total = sum(
+            code_count * len(sections_by_assessment.get(assessment_id, set()) & scoped_sections)
+            for assessment_id, code_count in active_by_assessment.items()
+        )
+        graded = sum(
+            len(graded_by_code.get(code_id, set()) & scoped_sections)
+            for code_id in grade_codes
+        )
+        counts[assignment.id] = max(0, total - graded)
+    return counts
 
 
 def annotate_reviewer_online_ungraded_counts(assignments) -> dict[int, int]:
-    """Count available anonymous submissions, excluding claimed submissions."""
+    """Count available anonymous online submissions per assignment.
+
+    Set-based: candidate attempts, newest-attempt state, unscored written
+    section coverage, cluster membership, and claim state are loaded once and
+    grouped in Python. The query count is bounded by the batch, not by the
+    number of assignments. Only primitive attempt ids flow through the
+    groupings; student identity is never exposed.
+    """
+    assignments = list(assignments)
+    if not assignments:
+        return {}
     counts = {assignment.id: 0 for assignment in assignments}
-    for assignment in assignments:
-        candidates = _reviewer_assignment_scope(assignment).exclude(
-            reviewer_exam_claims__isnull=False,
+    candidate_ids, _, _ = _reviewer_scope_maps(assignments)
+    all_assessment_ids = set().union(*(candidate_ids.values()))
+    if not all_assessment_ids:
+        return counts
+
+    attempt_rows = list(
+        AssessmentAttempt.objects.filter(
+            assessment_id__in=all_assessment_ids,
+            status__in=[ATTEMPT_STATUS_SUBMITTED, ATTEMPT_STATUS_UNDER_REVIEW, ATTEMPT_STATUS_GRADED],
+            assessment__exam_codes__active=True,
+            assessment__exam_codes__delivery_mode=DELIVERY_MODE_ONLINE,
+            assessment__exam_codes__diploma_enrollment__student__user_id=F("student_id"),
+            snapshot_questions__question_type=QUESTION_TYPE_WRITTEN,
+            snapshot_questions__answers__score__isnull=True,
         )
-        if assignment.cluster_id:
-            candidates = candidates.filter(
-                student__student_profile__cluster_memberships__cluster_id=assignment.cluster_id,
-            )
-        counts[assignment.id] = candidates.values("id").distinct().count()
+        .values("id", "assessment_id", "student_id", "attempt_number")
+        .distinct()
+    )
+    latest_number_by_student = {}
+    for row in (
+        AssessmentAttempt.objects.filter(assessment_id__in=all_assessment_ids)
+        .exclude(status__in=[ATTEMPT_STATUS_CANCELLED, ATTEMPT_STATUS_EXPIRED])
+        .values("assessment_id", "student_id")
+        .annotate(latest_number=Max("attempt_number"))
+    ):
+        latest_number_by_student[(row["assessment_id"], row["student_id"])] = row["latest_number"]
+    attempts_by_assessment = {}
+    for row in attempt_rows:
+        if row["attempt_number"] != latest_number_by_student.get((row["assessment_id"], row["student_id"])):
+            continue
+        attempts_by_assessment.setdefault(row["assessment_id"], []).append(row["id"])
+    candidate_attempt_ids = set().union(*(attempts_by_assessment.values()))
+
+    unscored_sections = {}
+    for attempt_id, section_id in (
+        AssessmentAttemptQuestion.objects.filter(
+            attempt_id__in=candidate_attempt_ids,
+            question_type=QUESTION_TYPE_WRITTEN,
+            answers__score__isnull=True,
+        )
+        .values_list("attempt_id", "section_id")
+        .distinct()
+    ):
+        unscored_sections.setdefault(attempt_id, set()).add(section_id)
+
+    cluster_ids = {assignment.cluster_id for assignment in assignments if assignment.cluster_id}
+    clusters_by_attempt = {}
+    if cluster_ids:
+        cluster_q = Q()
+        for cluster_id in cluster_ids:
+            cluster_q |= Q(student__student_profile__cluster_memberships__cluster_id=cluster_id)
+        for attempt_id, cluster_id in (
+            AssessmentAttempt.objects.filter(cluster_q, assessment_id__in=all_assessment_ids)
+            .values_list("id", "student__student_profile__cluster_memberships__cluster_id")
+            .distinct()
+        ):
+            clusters_by_attempt.setdefault(attempt_id, set()).add(cluster_id)
+
+    claimed_attempt_ids = set(
+        ReviewerExamClaim.objects.filter(attempt_id__in=candidate_attempt_ids)
+        .values_list("attempt_id", flat=True)
+        .distinct()
+    )
+
+    for assignment in assignments:
+        count = 0
+        for assessment_id in candidate_ids[assignment.id]:
+            for attempt_id in attempts_by_assessment.get(assessment_id, ()):
+                if assignment.section_id and assignment.section_id not in unscored_sections.get(attempt_id, ()):
+                    continue
+                if assignment.cluster_id and assignment.cluster_id not in clusters_by_attempt.get(attempt_id, ()):
+                    continue
+                if attempt_id in claimed_attempt_ids:
+                    continue
+                count += 1
+        counts[assignment.id] = count
     return counts
 
 
@@ -2075,12 +2412,16 @@ def reviewer_grade_section(exam_code_id: int, section_id: int, score: Decimal, g
         existing_grade = OfflineSectionGrade.objects.filter(
             exam_code_id=exam_code_id, section_id=section_id,
         ).first()
-        if existing_grade and existing_grade.graded_by_id != grader.id:
-            raise ValueError(_("This offline submission has already been graded by another Reviewer."))
+        if existing_grade:
+            raise ValueError(_("This exam section has already been graded."))
         grade, created = OfflineSectionGrade.objects.update_or_create(
             exam_code_id=exam_code_id, section_id=section_id,
             defaults={"score": score, "graded_by": grader},
         )
+        # Once the last assigned section is graded, persist the offline
+        # attempt record so Admin review and Semester Evaluation see it.
+        if _offline_code_grading_complete(code):
+            finalize_offline_attempt(code.id)
         record_audit_event(
             actor=grader,
             action=ACTION_GRADE_CHANGED,
@@ -2117,12 +2458,13 @@ def reviewer_grade_written_answer(answer_id: int, score: Decimal, grader, assign
         claim = ReviewerExamClaim.objects.filter(
             assignment=assignment,
             attempt=sq.attempt,
-            section=sq.section,
             claimed_by=grader,
             status=REVIEWER_CLAIM_IN_PROGRESS,
         ).first()
         if not claim:
             raise ValueError(_("Request and keep the anonymous submission before grading it."))
+        if answer.score is not None:
+            raise ValueError(_("This answer has already been graded."))
         if not _reviewer_assignment_assessments(assignment).filter(pk=assessment.pk).exists():
             raise ValueError(_("Answer is outside your assigned assessment."))
         if assignment.cohort_id != assessment.cohort_id or assignment.semester_id != assessment.semester_id:

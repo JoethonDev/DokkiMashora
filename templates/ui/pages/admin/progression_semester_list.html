@@ -28,7 +28,7 @@
           {% empty %}
             <tr>
               <td class="table-td" colspan="4">
-                {% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No semesters found.") %}
+                {% include "ui/components/_empty_state.html" with title=_("No semesters found.") %}
               </td>
             </tr>
           {% endfor %}
@@ -46,7 +46,7 @@
         </div>
       {% empty %}
         <div class="border border-line rounded-sm p-4 text-center">
-          {% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No semesters found.") %}
+          {% include "ui/components/_empty_state.html" with title=_("No semesters found.") %}
         </div>
       {% endfor %}
     </div>

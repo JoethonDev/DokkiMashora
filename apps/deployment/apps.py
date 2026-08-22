@@ -6,6 +6,3 @@ class DeploymentConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "apps.deployment"
     verbose_name = _("Deployment")
-
-    def ready(self) -> None:
-        from . import checks  # noqa: F401 - register system checks on import

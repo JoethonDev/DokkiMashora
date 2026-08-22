@@ -29,9 +29,6 @@ env = environ.Env(
     SITE_NAME=(str, "DokkiMashora LMS"),
     SITE_NAME_AR=(str, "دكى مشورة"),
     DEFAULT_FROM_EMAIL=(str, "no-reply@dokkimashora.local"),
-    GEMINI_API_KEY=(str, ""),
-    GEMINI_MODEL=(str, "gemini-1.5-flash"),
-    GEMINI_TIMEOUT_SECONDS=(int, 30),
     R2_ACCESS_KEY_ID=(str, ""),
     R2_SECRET_ACCESS_KEY=(str, ""),
     R2_BUCKET_NAME=(str, ""),
@@ -91,7 +88,7 @@ LOCAL_APPS = [
     "apps.certificates",
     "apps.payments",
     "apps.audit",
-    "apps.ai",
+    "apps.ai",  # retained only for schema-removal migration history (DECISION 35)
     "apps.deployment",
     "apps.intake_forms",
     "apps.attendance",
@@ -161,6 +158,13 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.academics.tasks.expire_stale_enrollments_task",
         "schedule": 86400.0,  # every 24h
     },
+    # DECISION #33: daily 30-day retention cleanup of temporary/ephemeral data
+    # (completed exam snapshots, email bodies, import raw payloads). Durable
+    # business history is never touched. Runs on the existing Celery broker.
+    "purge-ephemeral-data-daily": {
+        "task": "apps.core.tasks.purge_ephemeral_data_task",
+        "schedule": 86400.0,  # every 24h
+    },
 }
 
 # --- Custom user -------------------------------------------------------------
@@ -218,11 +222,6 @@ EMAIL_USE_TLS = env("EMAIL_USE_TLS")
 SITE_NAME = env("SITE_NAME")
 SITE_NAME_AR = env("SITE_NAME_AR")
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL")
-
-# --- Gemini ------------------------------------------------------------------
-GEMINI_API_KEY = env("GEMINI_API_KEY")
-GEMINI_MODEL = env("GEMINI_MODEL")
-GEMINI_TIMEOUT_SECONDS = env("GEMINI_TIMEOUT_SECONDS")
 
 # --- Cloudflare R2 -----------------------------------------------------------
 USE_R2_STORAGE = env("USE_R2_STORAGE")

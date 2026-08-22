@@ -30,7 +30,7 @@
             </tr>
           {% empty %}
             <tr>
-              <td colspan="4" class="table-td">{% include "ui/components/_empty_state.html" with icon="◇" title=_("No entrance exams") message=_("Assigned entrance exams will appear here.") %}
+              <td colspan="4" class="table-td">{% include "ui/components/_empty_state.html" with title=_("No entrance exams") message=_("Assigned entrance exams will appear here.") %}
               </td>
             </tr>
           {% endfor %}
@@ -54,7 +54,7 @@
         </div>
       {% empty %}
         <div class="border border-line rounded-sm p-4 text-center">
-          {% include "ui/components/_empty_state.html" with icon="◇" title=_("No entrance exams") message=_("Assigned entrance exams will appear here.") %}
+          {% include "ui/components/_empty_state.html" with title=_("No entrance exams") message=_("Assigned entrance exams will appear here.") %}
         </div>
       {% endfor %}
     </div>

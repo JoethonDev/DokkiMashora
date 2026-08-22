@@ -1,6 +1,5 @@
-from decimal import Decimal
-
 import uuid
+from decimal import Decimal
 
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
@@ -13,7 +12,6 @@ from apps.core.models import TimeStampedModel
 from .constants import (
     ATTEMPT_STATUS_ASSIGNED,
     ATTEMPT_STATUS_CHOICES,
-    GEMINI_DECISION_CHOICES,
     QUESTION_TYPE_CHOICES,
     QUESTION_TYPE_MCQ,
     RESULT_CHOICES,
@@ -315,28 +313,6 @@ class EntranceAnswer(TimeStampedModel):
         verbose_name=_("selected choice"),
     )
     written_text = models.TextField(_("written answer"), blank=True)
-    gemini_suggested_score = models.DecimalField(
-        _("Gemini suggested score"),
-        max_digits=5,
-        decimal_places=2,
-        null=True,
-        blank=True,
-    )
-    gemini_suggested_feedback = models.TextField(
-        _("Gemini suggested feedback"),
-        blank=True,
-    )
-    gemini_request_ref = models.CharField(
-        _("Gemini request reference"),
-        max_length=255,
-        blank=True,
-    )
-    gemini_decision = models.CharField(
-        _("Gemini decision"),
-        max_length=20,
-        choices=GEMINI_DECISION_CHOICES,
-        blank=True,
-    )
     score = models.DecimalField(
         _("final score"),
         max_digits=5,

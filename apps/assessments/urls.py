@@ -155,6 +155,11 @@ urlpatterns = [
     path("manage/<int:assessment_id>/exceptional-access/<int:override_id>/cancel/", views.admin_cancel_exceptional_access, name="admin_cancel_exceptional_access"),
     path("manage/<int:assessment_id>/roster/", views.admin_roster_list, name="admin_roster"),
     path("manage/<int:assessment_id>/roster/generate/", views.admin_generate_codes, name="admin_generate_codes"),
+    path(
+        "manage/<int:assessment_id>/roster/<int:code_id>/change-mode/",
+        views.admin_change_roster_delivery_mode,
+        name="admin_change_roster_delivery_mode",
+    ),
     path("manage/<int:assessment_id>/roster/export-offline/", views.admin_export_offline_codes, name="admin_export_offline_codes"),
     path("manage/<int:assessment_id>/offline-grades/", views.admin_offline_grade_entry, name="admin_offline_grade_entry"),
     path("manage/<int:assessment_id>/offline-grades/<int:code_id>/<int:section_id>/", views.admin_offline_grade_section, name="admin_offline_grade_section"),

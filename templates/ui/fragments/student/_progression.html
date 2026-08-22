@@ -46,6 +46,66 @@
       {% endfor %}
     </div>
   </section>
+  {% if record_history.semester_rows %}
+    <section class="card-surface"><div class="section-head"><div>
+          <p class="eyebrow">{% trans "Semester evaluations" %}</p>
+          <h3>{% trans "Finalized evaluation results" %}</h3>
+        </div>
+      </div>
+      <div class="table-wrap hidden lg:block"><table class="table">
+          <thead>
+            <tr>
+              <th class="table-th">{% trans "Semester" %}</th>
+              <th class="table-th">{% trans "Result" %}</th>
+              <th class="table-th">{% trans "Overall" %}</th>
+              <th class="table-th">{% trans "Final decision" %}</th>
+              <th class="table-th">{% trans "Finalized" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in record_history.semester_rows %}
+              <tr>
+                <td class="table-td"><strong>{{ row.semester }}</strong></td>
+                <td class="table-td">
+                  {% include "ui/components/_status.html" with code=row.calculated_result label=row.calculated_label %}
+                  {% if row.attendance_percent is not None or row.homework_percent is not None or row.semester_exam_percent is not None %}
+                    <small class="block text-muted mt-1" dir="ltr">{% trans "Attendance" %}: {% if row.attendance_percent is not None %}{{ row.attendance_percent|floatformat:2 }}%{% else %}—{% endif %} · {% trans "Homework" %}: {% if row.homework_percent is not None %}{{ row.homework_percent|floatformat:2 }}%{% else %}—{% endif %} · {% trans "Exam" %}: {% if row.semester_exam_percent is not None %}{{ row.semester_exam_percent|floatformat:2 }}%{% else %}—{% endif %}</small>
+                  {% endif %}
+                </td>
+                <td class="table-td"><span dir="ltr">{{ row.overall_percent|floatformat:2 }}%</span></td>
+                <td class="table-td">
+                  {% if row.outcome %}
+                    {% include "ui/components/_status.html" with code=row.outcome.status label=row.outcome.status_label %}
+                    {% if row.outcome.final_label %}<small class="block text-muted mt-1">{{ row.outcome.final_label }}</small>{% endif %}
+                    {% if row.outcome.interview_status %}<small class="block text-muted">{% trans "Interview" %}: {{ row.outcome.interview_status }}</small>{% endif %}
+                    {% if row.outcome.is_exceptional %}<small class="block text-muted">{% trans "Exceptional decision" %}</small>{% endif %}
+                  {% else %}
+                    <small class="text-muted">{% trans "Pending" %}</small>
+                  {% endif %}
+                </td>
+                <td class="table-td"><span dir="ltr">{{ row.finalized_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</span></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="card-stack lg:hidden">
+        {% for row in record_history.semester_rows %}
+          <div class="mobile-card">
+            <div class="flex-1 min-w-0">
+              <strong class="block break-words">{{ row.semester }}</strong>
+              {% include "ui/components/_status.html" with code=row.calculated_result label=row.calculated_label %}
+              <small class="block text-muted">{% trans "Overall" %}: <span dir="ltr">{{ row.overall_percent|floatformat:2 }}%</span></small>
+              {% if row.outcome %}
+                <small class="block text-muted">{% trans "Final decision" %}: {{ row.outcome.status_label }}{% if row.outcome.final_label %} · {{ row.outcome.final_label }}{% endif %}</small>
+              {% endif %}
+              <small class="block text-muted" dir="ltr">{{ row.finalized_at|date:"SHORT_DATETIME_FORMAT"|default:'' }}</small>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
   <section class="grid grid-cols-1 md:grid-cols-2 gap-4"><article class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Decisions" %}</p>
           <h3>{% trans "Promotion decisions" %}</h3>

@@ -1,17 +1,17 @@
-{% load i18n %}
+﻿{% load i18n %}
 <dialog id="global-search-dialog"
         class="relative border-0 rounded-md shadow-modal p-0 w-full max-w-lg max-h-dvh overflow-hidden"
         aria-labelledby="search-dialog-title"><button type="button"
-          class="absolute top-2.5 start-2.5 rtl:end-auto rtl:start-2.5 btn-icon z-10"
+          class="absolute top-3 end-3 btn-icon z-10"
           id="search-dialog-close-btn"
-          aria-label="{% trans 'Close' %}">&#10005;</button><form class="p-4 border-b border-line"
+          aria-label="{% trans 'Close' %}">&#10005;</button><form class="p-4 pe-14 border-b border-line"
         method="get"
         action="{% url 'core:workspace_search' %}"
         hx-get="{% url 'core:workspace_search' %}"
         hx-trigger="input changed delay:300ms from:#global-search-input, search from:#global-search-input"
         hx-target="#global-search-results"
         hx-swap="innerHTML"
-        hx-sync="this:replace"><div class="flex items-center gap-2.5"><span>&#8981;</span>
+        hx-sync="this:replace"><div class="flex items-center gap-2.5">
       <input type="search"
              name="q"
              id="global-search-input"

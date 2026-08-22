@@ -6,7 +6,7 @@
 {% block content %}
   <div class="page-stack animate-enter-view">{% trans "System" as eyebrow %}
     {% trans "Settings" as title %}
-    {% trans "Site configuration, email health, AI review settings, and announcements." as description %}
+    {% trans "Site configuration, email health, and announcements." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
     <section class="card-surface"><div class="section-head"><div>
           <p class="eyebrow">{% trans "General" %}</p>
@@ -78,45 +78,6 @@
           <dt class="dt">{% trans "Last attempt" %}</dt>
           <dd class="dd">
             {{ email_stats.last_time|default:'—' }}
-          </dd>
-        </div>
-      </dl>
-    </section>
-    <section class="card-surface"><div class="section-head"><div>
-          <p class="eyebrow">{% trans "AI" %}</p>
-          <h3>{% trans "AI review" %}</h3>
-        </div>
-      </div>
-      <dl class="dl"><div>
-          <dt class="dt">{% trans "Enabled" %}</dt>
-          <dd class="dd">
-            {{ ai_config.enabled|boolean_label:"Yes,No" }}
-          </dd>
-        </div>
-        <div>
-          <dt class="dt">{% trans "Provider / model" %}</dt>
-          <dd class="dd">
-            {{ ai_config.provider|default:'—' }}
-            /
-            {{ ai_config.model|default:'—' }}
-          </dd>
-        </div>
-        <div>
-          <dt class="dt">{% trans "Timeout" %}</dt>
-          <dd class="dd">
-            {{ ai_config.timeout|default:'—' }}
-          </dd>
-        </div>
-        <div>
-          <dt class="dt">{% trans "Prompt version" %}</dt>
-          <dd class="dd">
-            {{ ai_config.prompt_version|default:'—' }}
-          </dd>
-        </div>
-        <div>
-          <dt class="dt">{% trans "Reviews triggered" %}</dt>
-          <dd class="dd">
-            {{ ai_config.review_count|default:0 }}
           </dd>
         </div>
       </dl>

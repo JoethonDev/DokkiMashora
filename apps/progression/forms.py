@@ -66,7 +66,7 @@ class SemesterEvaluationConfigForm(StyledFormMixin, forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
-        status = cleaned.get("status")
+        status = cleaned.get("status") or EVALUATION_CONFIG_STATUS_ACTIVE
         if status == EVALUATION_CONFIG_STATUS_ACTIVE:
             total = (
                 (cleaned.get("attendance_weight_percent") or Decimal("0"))
@@ -82,3 +82,34 @@ class SemesterEvaluationConfigForm(StyledFormMixin, forms.ModelForm):
             if not cleaned.get("overall_min_percent"):
                 self.add_error("overall_min_percent", _("Overall minimum is required for an active configuration."))
         return cleaned
+
+
+class SemesterEvaluationSettingsForm(SemesterEvaluationConfigForm):
+    """Admin-workspace variant of the evaluation configuration form.
+
+    Cohort and semester come from the URL path and the configuration is
+    always ACTIVE, so only the weights/minimums are exposed.
+    """
+
+    class Meta(SemesterEvaluationConfigForm.Meta):
+        fields = [
+            "attendance_weight_percent",
+            "attendance_required_sessions",
+            "homework_weight_percent",
+            "semester_exam_weight_percent",
+            "attendance_min_percent",
+            "homework_min_percent",
+            "semester_exam_min_percent",
+            "overall_min_percent",
+        ]
+        labels = {
+            **SemesterEvaluationConfigForm.Meta.labels,
+            "attendance_required_sessions": _("Required attendance count"),
+        }
+        help_texts = {
+            **getattr(SemesterEvaluationConfigForm.Meta, "help_texts", {}),
+            "attendance_required_sessions": _(
+                "How many attendances a student must record this semester (e.g. 10). "
+                "Leave 0 to grade against the number of held sessions instead."
+            ),
+        }

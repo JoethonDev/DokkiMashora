@@ -15,14 +15,14 @@
   </div>
 </section>
 <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"><a class="stat-card"
-     href="{% url 'applications:program_list' %}?action_needed=review"><div class="stat-icon bg-info-soft text-info-text">&#9679;</div>
+     href="{% url 'applications:program_list' %}?action_needed=review">
     <div class="stat-body">
       <span>{% trans "Awaiting review" %}</span>
       <strong>{{ application_review_count }}</strong>
       <small>{% trans "Applications needing decision" %}</small>
     </div>
   </a>
-  <a class="stat-card" href="{% url 'assessments:admin_grade_list' %}"><div class="stat-icon bg-info-soft text-info-text">&#10003;</div>
+  <a class="stat-card" href="{% url 'assessments:admin_grade_list' %}">
     <div class="stat-body">
       <span>{% trans "Ungraded assessments" %}</span>
       <strong>{{ assessment_ungraded }}</strong>
@@ -30,7 +30,7 @@
     </div>
   </a>
   <a class="stat-card"
-     href="{% url 'attendance:attendance_session_list' %}"><div class="stat-icon bg-warning-soft text-warning-text">&#9888;</div>
+     href="{% url 'attendance:attendance_session_list' %}">
     <div class="stat-body">
       <span>{% trans "Attendance exceptions" %}</span>
       <strong>{{ attendance_exception_count }}</strong>
@@ -38,7 +38,7 @@
     </div>
   </a>
   <a class="stat-card"
-     href="{% url 'progression:admin_rejoin_plan_list' %}"><div class="stat-icon bg-danger-soft text-danger-text">&#8599;</div>
+     href="{% url 'progression:admin_rejoin_plan_list' %}">
     <div class="stat-body">
       <span>{% trans "Progression exceptions" %}</span>
       <strong>{{ progression_exception_count }}</strong>
@@ -84,8 +84,7 @@
                 {{ assessment_ungraded }}
                 {% trans "ungraded assessments" %}
               </strong><small class="text-muted">{% trans "Grading queue" %}</small></span>
-              <b class="ms-auto text-muted">&#8594;</b>
-            </a>
+              </a>
           {% endif %}
           {% if unmatched_upload_count > 0 %}
             <a class="flex items-center gap-2.5 py-2.5 no-underline text-inherit hover:text-brand" href="{% url 'payments:upload_list' %}"><span class="w-2.5 h-2.5 rounded-full bg-amber shrink-0"></span>
@@ -93,8 +92,7 @@
                 {{ unmatched_upload_count }}
                 {% trans "uploads with unmatched rows" %}
               </strong><small class="text-muted">{% trans "Payment import" %}</small></span>
-              <b class="ms-auto text-muted">&#8594;</b>
-            </a>
+              </a>
           {% endif %}
           {% if progression_exception_count > 0 %}
             <a class="flex items-center gap-2.5 py-2.5 no-underline text-inherit hover:text-brand" href="{% url 'progression:admin_rejoin_plan_list' %}"><span class="w-2.5 h-2.5 rounded-full bg-muted shrink-0"></span>
@@ -102,8 +100,7 @@
                 {{ progression_exception_count }}
                 {% trans "progression exceptions" %}
               </strong><small class="text-muted">{% trans "Student progression" %}</small></span>
-              <b class="ms-auto text-muted">&#8594;</b>
-            </a>
+              </a>
           {% endif %}
           {% if failed_email_count > 0 %}
             <a class="flex items-center gap-2.5 py-2.5 no-underline text-inherit hover:text-brand" href="{% url 'communications:bulk_email_history' %}"><span class="w-2.5 h-2.5 rounded-full bg-amber shrink-0"></span>
@@ -111,8 +108,7 @@
                 {{ failed_email_count }}
                 {% trans "failed application emails" %}
               </strong><small class="text-muted">{% trans "Email delivery" %}</small></span>
-              <b class="ms-auto text-muted">&#8594;</b>
-            </a>
+              </a>
           {% endif %}
           {% if unpublished_lecture_count > 0 %}
             <a class="flex items-center gap-2.5 py-2.5 no-underline text-inherit hover:text-brand" href="{% url 'academics:admin_course_list' %}"><span class="w-2.5 h-2.5 rounded-full bg-muted shrink-0"></span>
@@ -120,12 +116,11 @@
                 {{ unpublished_lecture_count }}
                 {% trans "unpublished lectures" %}
               </strong><small class="text-muted">{% trans "Course content" %}</small></span>
-              <b class="ms-auto text-muted">&#8594;</b>
-            </a>
+              </a>
           {% endif %}
         </div>
       {% else %}
-        {% include "ui/components/_empty_state.html" with icon="&#10003;" title=_("No urgent items") message=_("Everything is up to date.") fill=True %}
+        {% include "ui/components/_empty_state.html" with title=_("No urgent items") message=_("Everything is up to date.") fill=True %}
       {% endif %}
     {% endwith %}
   </article>

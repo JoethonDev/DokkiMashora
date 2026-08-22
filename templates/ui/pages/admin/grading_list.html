@@ -12,6 +12,7 @@
           <p class="eyebrow">{% trans "Queue" %}</p>
           <h3>{% trans "Assessment attempts" %}</h3>
         </div>
+        <a class="btn-ghost" href="{% url 'assessments:admin_exam_review_list' %}">{% trans "Semester exam review" %}</a>
       </div>
       {% if queue_page %}
         {% include "ui/components/_pagination.html" with page_obj=queue_page %}
@@ -56,7 +57,7 @@
           {% endfor %}
         </div>
       {% else %}
-        {% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No submissions are waiting for grading.") %}
+        {% include "ui/components/_empty_state.html" with title=_("No submissions are waiting for grading.") %}
       {% endif %}
     </section>
     <section class="card-surface"><div class="section-head"><div>
@@ -151,7 +152,7 @@
           </div>
         {% endwith %}
       {% else %}
-        {% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No submissions are waiting for grading.") %}
+        {% include "ui/components/_empty_state.html" with title=_("No submissions are waiting for grading.") %}
       {% endif %}
     </section>
   </div>

@@ -25,6 +25,8 @@
       </dl>
       <a class="btn-primary"
          href="{% url 'academics:admin_lecture_create' course.id version.id %}">{% trans "Add lecture" %}</a>
+      <a class="btn-ghost"
+         href="{% url 'intake_forms:admin_version_intake_responses' version.id %}">{% trans "Intake responses" %}</a>
       <form method="post" action="{% url 'academics:admin_version_delete' course.id version.id %}" data-confirm="{% trans 'Delete this course version and its lectures?' %}" class="inline m-0">{% csrf_token %}
         <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
       </form>

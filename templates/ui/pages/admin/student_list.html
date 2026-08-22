@@ -22,14 +22,13 @@
             hx-swap="outerHTML"
             hx-push-url="true"
             hx-sync="this:replace"><div class="search-field">
-            <span class="absolute inset-y-0 start-0 grid place-items-center ps-3 text-muted pointer-events-none">&#8981;</span>
 <input id="student-search"
 name="q"
 value="{{ search_value }}"
 type="search"
 placeholder="{% trans 'Name, email, phone, or national ID' %}"
 aria-label="{% trans 'Search students' %}"
-       class="form-input ps-10"></div>
+       class="form-input"></div>
         <label class="field-label">
           <span>{% trans "Status" %}</span>
           <select id="student-status" name="status" class="form-select"><option value="">{% trans "All statuses" %}</option>

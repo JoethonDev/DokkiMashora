@@ -56,11 +56,6 @@
                 </details>
               {% endif %}
             {% endif %}
-            {% if answer and answer.gemini_suggested_score is not None %}
-              <div class="mt-3 p-3 bg-info-soft border border-line rounded-sm text-sm">
-                <p class="m-0"><strong>{% trans "AI suggestion" %}:</strong> {% trans "Score" %} {{ answer.gemini_suggested_score|unlocalize }}{% if answer.gemini_suggested_feedback %} · {{ answer.gemini_suggested_feedback }}{% endif %}</p>
-              </div>
-            {% endif %}
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
               <label class="field"><span class="field-label">{% trans "Score" %}</span>
                 <input name="score_{{ question.id }}" class="form-input"

@@ -350,27 +350,6 @@ def _course_lecture_completion_map(student_profile, enrollment, lecture_qs) -> d
     return result
 
 
-def is_course_lecture_completed(student_profile, lecture, enrollment=None) -> bool:
-    """Course-only completion predicate for a single lecture."""
-    if not _lecture_has_trackable_media(lecture):
-        return True
-    if enrollment is None:
-        enrollment = _get_course_enrollment(student_profile, lecture.course_version)
-    if enrollment is None:
-        return False
-    if _lecture_has_video(lecture) and LectureWatchProgress.objects.filter(
-        lecture=lecture, student=student_profile, course_enrollment=enrollment,
-        status=WATCH_STATUS_COMPLETED,
-    ).exists():
-        return True
-    if _lecture_has_audio(lecture) and LectureAudioProgress.objects.filter(
-        lecture=lecture, student=student_profile, course_enrollment=enrollment,
-        status=WATCH_STATUS_COMPLETED,
-    ).exists():
-        return True
-    return False
-
-
 def _course_unlock_map(student_profile, enrollment, lecture_qs) -> dict[int, bool]:
     """Sequential unlock: each released/published lecture is open only when all
     previous released/published lectures are completed when video tracking is
@@ -454,15 +433,6 @@ def enroll_student_in_diploma(student_profile, cohort) -> DiplomaEnrollment:
 def assign_teacher_to_cohort(teacher, cohort, actor) -> TeacherAssignment:
     """Create or reactivate a teacher assignment for a cohort (delegates to new model)."""
     return assign_teacher(teacher, SCOPE_DIPLOMA_COHORT, actor, cohort_id=cohort.id)
-
-
-def revoke_teacher_cohort_assignment(
-    assignment: TeacherAssignment,
-    actor,
-    reason: str = "",
-) -> TeacherAssignment:
-    """Revoke a teacher assignment without deleting history (delegates to new model)."""
-    return revoke_teacher_assignment(assignment, actor, reason)
 
 
 def assign_moderator_to_students(

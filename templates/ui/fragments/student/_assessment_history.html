@@ -25,7 +25,7 @@
             </tr>
           {% empty %}
             <tr>
-              <td colspan="5" class="table-td">{% include "ui/components/_empty_state.html" with icon="✓" title=_("No assessment history") message=_("Completed assessments and released results will appear here.") %}
+              <td colspan="5" class="table-td">{% include "ui/components/_empty_state.html" with title=_("No assessment history") message=_("Completed assessments and released results will appear here.") %}
               </td>
             </tr>
           {% endfor %}
@@ -44,7 +44,7 @@
         </div>
       {% empty %}
         <div class="border border-line rounded-sm p-4 text-center">
-          {% include "ui/components/_empty_state.html" with icon="✓" title=_("No assessment history") message=_("Completed assessments and released results will appear here.") %}
+          {% include "ui/components/_empty_state.html" with title=_("No assessment history") message=_("Completed assessments and released results will appear here.") %}
         </div>
       {% endfor %}
     </div>

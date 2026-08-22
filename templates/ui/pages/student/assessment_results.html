@@ -67,11 +67,25 @@
           <div class="mt-4 state-banner state-banner-info">
             <div>
               <strong>{% trans "Your submission was recorded" %}</strong>
-              <p class="m-0 mt-1 text-sm">{% trans "You submitted this assessment successfully. The questions and responses remain unavailable until the result is released." %}</p>
+              <p class="m-0 mt-1 text-sm">{% trans "You can review your own answers below. Scores and feedback remain unavailable until the result is released." %}</p>
               {% if result_projection.submitted_at %}<p class="m-0 mt-1 text-sm">{% trans "Submitted" %}: {{ result_projection.submitted_at|date:"d/m/Y H:i" }}</p>{% endif %}
               {% if result_projection.graded_at %}<p class="m-0 mt-1 text-sm">{% trans "Graded" %}: {{ result_projection.graded_at|date:"d/m/Y H:i" }}</p>{% endif %}
             </div>
           </div>
+          {% if result_projection.questions %}
+            <div class="mt-6">
+              <h3>{% trans "Your answers" %}</h3>
+              <div class="mt-2 space-y-4">
+                {% for question in result_projection.questions %}
+                  <div class="border border-line rounded-sm p-3">
+                    <p class="text-sm font-bold m-0">{{ question.order }}. {{ question.text }}</p>
+                    {% if question.selected_text %}<p class="text-sm text-muted mt-1 mb-0">{% trans "Your answer" %}: {{ question.selected_text }}</p>{% endif %}
+                    {% if question.written_text %}<p class="text-sm text-muted mt-1 mb-0">{{ question.written_text }}</p>{% endif %}
+                  </div>
+                {% endfor %}
+              </div>
+            </div>
+          {% endif %}
         {% endif %}
       {% elif attempts %}
         <div class="table-wrap hidden lg:block"><table class="table">

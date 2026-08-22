@@ -38,8 +38,9 @@
       </div>
       <p data-scanner-status class="text-sm mt-2 text-muted" role="status">{% trans "Start the camera to begin scanning." %}</p>
       <p data-scanner-result class="status-pill hidden"></p>
-      {% if result %}
-        <p role="status" class="status-pill {% if result.status == 'duplicate' %}status-pill-warning{% else %}status-pill-success{% endif %}">
+{% if result %}
+        <p role="status" class="{% if result.status == 'duplicate' %}status-pill-warning{% else %}status-pill-success{% endif %}">
+          <span class="status-icon" aria-hidden="true">{% if result.status == 'duplicate' %}!{% else %}✓{% endif %}</span>
           {{ result.student_name }} &mdash; {% if result.status == 'duplicate' %}{% trans "Duplicate" %}{% else %}{% trans "Recorded" %}{% endif %}
         </p>
       {% endif %}

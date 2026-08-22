@@ -1,0 +1,32 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n %}
+{% block title %}{% trans "Resend application email" %}{% endblock %}
+{% block content %}
+  <div class="page-stack animate-enter-view">{% trans "Assessment operations" as eyebrow %}
+    {% trans "Resend application email" as default_title %}
+    {% trans "Confirm before re-queueing an application email for delivery." as description %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=default_title description=description back_button=True %}
+    <section class="card-surface max-w-form mx-auto w-full">
+      <div class="page-stack">
+        <div class="flex flex-col gap-3">
+          <div class="flex justify-between gap-3 py-2 border-b border-line"><span class="text-muted">{% trans "Student" %}</span><strong>{{ prog_app.student.full_name|default:prog_app.student }}</strong></div>
+          <div class="flex justify-between gap-3 py-2 border-b border-line"><span class="text-muted">{% trans "Recipient" %}</span><strong class="bidi" dir="ltr">{{ email_to|default:'—' }}</strong></div>
+          <div class="flex justify-between gap-3 py-2 border-b border-line"><span class="text-muted">{% trans "Email action" %}</span><strong>{{ action_label }}</strong></div>
+          <div class="flex justify-between gap-3 py-2 border-b border-line"><span class="text-muted">{% trans "Exam" %}</span><strong>{{ exam.title }}</strong></div>
+          <div class="flex justify-between gap-3 py-2 border-b border-line"><span class="text-muted">{% trans "Cohort" %}</span><strong>{{ exam.cohort.name|default:prog_app.cohort.name|default:'—' }}</strong></div>
+        </div>
+        <form method="post"
+              action="{% url 'entrance_exams:admin_app_email_resend' exam.id prog_app.id %}"
+              data-confirm="{% trans 'Queue this email resend for delivery?' %}"
+              data-confirm-label="{% trans 'Queue resend' %}">{% csrf_token %}
+          <input type="hidden" name="action" value="{{ action }}">
+          {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+          <div class="actions-row pt-4 border-t border-line">
+            <button class="btn-primary" type="submit">{% trans "Queue resend" %}</button>
+            <a class="btn-ghost" href="{{ next_url|default:'#' }}">{% trans "Cancel" %}</a>
+          </div>
+        </form>
+      </div>
+    </section>
+  </div>
+{% endblock %}

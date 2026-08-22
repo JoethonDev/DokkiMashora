@@ -5,42 +5,100 @@
 {% endblock %}
 {% block content %}
   <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=_("Create attendance session") eyebrow=_("Attendance") back_button=True %}
-    <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
-    <div class="field"><label for="target_type">{% trans "Target type" %}</label>
-      <select id="target_type" name="target_type" class="form-select"><option value="diploma">{% trans "Diploma" %}</option>
-        <option value="course">{% trans "Course" %}</option>
-      </select>
-    </div>
-    <div class="field"><label for="cohort_id">{% trans "Cohort" %}</label>
-      <select id="cohort_id" name="cohort_id" class="form-select"><option value="">{% trans "Select" %}</option>
-        {% for cohort in cohorts %}
-          <option value="{{ cohort.id }}">{{ cohort }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="field"><label for="course_version_id">{% trans "Course version" %}</label>
-      <select id="course_version_id" name="course_version_id" class="form-select"><option value="">{% trans "Select" %}</option>
-        {% for version in course_versions %}
-          <option value="{{ version.id }}">{{ version }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="field"><label for="semester_id">{% trans "Semester" %}</label>
-      <select id="semester_id" name="semester_id" class="form-select"><option value="">{% trans "Select" %}</option>
-        {% for semester in semesters %}
-          <option value="{{ semester.id }}">{{ semester }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="field"><label for="title">{% trans "Title" %}</label>
-      <input id="title" name="title" class="form-input"></div>
-    <div class="field"><label for="open_at">{% trans "Opens" %}</label>
-      <input id="open_at" name="open_at" type="datetime-local" class="form-input" required>
-    </div>
-    <div class="field"><label for="close_at">{% trans "Closes" %}</label>
-      <input id="close_at" name="close_at" type="datetime-local" class="form-input" required>
-    </div>
-    <button class="btn-primary" type="submit">{% trans "Create" %}</button>
-  </form>
+    <form class="card-surface max-w-form mx-auto w-full page-stack" method="post"
+          x-data="{
+            targetType: '{{ form_data.target_type|default:'diploma'|escapejs }}',
+            diplomaId: '{{ form_data.diploma_id|default:''|escapejs }}',
+            filterDiploma() {
+              const d = this.diplomaId;
+              [$refs.cohort, $refs.semester].forEach(select => {
+                Array.from(select.options).forEach(option => {
+                  const visible = !option.value || !d || option.dataset.diplomaId === d;
+                  option.hidden = !visible;
+                  option.disabled = !visible;
+                  if (!visible && option.selected) select.value = '';
+                });
+              });
+            },
+            resetTargets() {
+              if (this.targetType === 'course') {
+                this.diplomaId = '';
+                $refs.cohort.value = '';
+                $refs.semester.value = '';
+                this.filterDiploma();
+              } else {
+                $refs.course_version.value = '';
+              }
+            }
+          }"
+          x-init="filterDiploma()">{% csrf_token %}
+      {% if form_errors %}
+        <div class="py-4 px-5 border border-red rounded-md bg-red-soft text-red" role="alert">
+          {% for error in form_errors %}<p class="m-0">{{ error }}</p>{% endfor %}
+        </div>
+      {% endif %}
+      <label class="field"><span class="field-label">{% trans "Target type" %}</span>
+        <select name="target_type" class="form-select" x-model="targetType" @change="resetTargets()" required>
+          <option value="diploma"{% if form_data.target_type != 'course' %} selected{% endif %}>{% trans "Diploma" %}</option>
+          <option value="course"{% if form_data.target_type == 'course' %} selected{% endif %}>{% trans "Course" %}</option>
+        </select>
+      </label>
+
+      <div x-show="targetType === 'diploma'" x-cloak>
+        <div class="page-stack">
+          <label class="field"><span class="field-label">{% trans "Diploma" %}</span>
+            <select name="diploma_id" class="form-select" x-model="diplomaId" @change="filterDiploma()" :disabled="targetType !== 'diploma'">
+              <option value="">{% trans "Select" %}</option>
+              {% for diploma in diplomas %}
+                <option value="{{ diploma.id }}"{% if form_data.diploma_id == diploma.id|stringformat:'s' %} selected{% endif %}>{{ diploma.title }}</option>
+              {% endfor %}
+            </select>
+            <span class="field-help">{% trans "Choosing a Diploma narrows the cohort and semester lists." %}</span>
+          </label>
+          <label class="field"><span class="field-label">{% trans "Cohort" %}</span>
+            <select name="cohort_id" class="form-select" x-ref="cohort" @change="filterDiploma()" :disabled="targetType !== 'diploma'" required>
+              <option value="">{% trans "Select" %}</option>
+              {% for cohort in cohorts %}
+                <option value="{{ cohort.id }}" data-diploma-id="{{ cohort.diploma_id }}"{% if form_data.cohort_id == cohort.id|stringformat:'s' %} selected{% endif %}>{{ cohort }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="field"><span class="field-label">{% trans "Semester" %}</span>
+            <select name="semester_id" class="form-select" x-ref="semester" :disabled="targetType !== 'diploma'">
+              <option value="">{% trans "All semesters" %}</option>
+              {% for semester in semesters %}
+                <option value="{{ semester.id }}" data-diploma-id="{{ semester.diploma_id }}"{% if form_data.semester_id == semester.id|stringformat:'s' %} selected{% endif %}>{{ semester }}</option>
+              {% endfor %}
+            </select>
+            <span class="field-help">{% trans "Optional — leave empty to cover the whole cohort." %}</span>
+          </label>
+        </div>
+      </div>
+
+      <div x-show="targetType === 'course'" x-cloak>
+        <label class="field"><span class="field-label">{% trans "Course version" %}</span>
+          <select name="course_version_id" class="form-select" x-ref="course_version" :disabled="targetType !== 'course'" required>
+            <option value="">{% trans "Select" %}</option>
+            {% for version in course_versions %}
+              <option value="{{ version.id }}"{% if form_data.course_version_id == version.id|stringformat:'s' %} selected{% endif %}>{{ version }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+
+      <label class="field"><span class="field-label">{% trans "Title" %}</span>
+        <input name="title" class="form-input" value="{{ form_data.title }}">
+      </label>
+      <label class="field"><span class="field-label">{% trans "Opens" %}</span>
+        <input name="open_at" type="datetime-local" class="form-input" value="{{ form_data.open_at }}" required>
+      </label>
+      <label class="field"><span class="field-label">{% trans "Closes" %}</span>
+        <input name="close_at" type="datetime-local" class="form-input" value="{{ form_data.close_at }}" required>
+      </label>
+      <div class="flex gap-2.5 items-center flex-wrap pt-4 border-t border-line mt-5">
+        <button class="btn-primary" type="submit">{% trans "Create" %}</button>
+        <a class="btn-ghost" href="{% url 'attendance:attendance_session_list' %}">{% trans "Cancel" %}</a>
+      </div>
+    </form>
   </div>
 {% endblock %}

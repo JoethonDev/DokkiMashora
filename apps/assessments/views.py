@@ -41,6 +41,7 @@ from apps.assessments.constants import (
     ATTEMPT_STATUS_GRADED,
     ATTEMPT_STATUS_IN_PROGRESS,
     ATTEMPT_STATUS_RELEASED,
+    DELIVERY_MODE_CHOICES,
     DELIVERY_MODE_OFFLINE,
     LEGACY_STATUS_ACTIVE,
     QUESTION_TYPE_MCQ,
@@ -87,6 +88,7 @@ from apps.assessments.services import (
     autosave_attempt,
     can_reviewer_grade_code,
     cancel_assessment_access_override,
+    change_exam_code_delivery_mode,
     check_assessment_access,
     check_delivery_mode,
     claim_next_reviewer_submission,
@@ -1378,6 +1380,9 @@ def admin_release_grades(request, attempt_id):
         messages.success(request, _("Grades released to student."))
     except ValueError as exc:
         messages.error(request, str(exc))
+    next_url = safe_next_url(request.POST.get("next"))
+    if next_url:
+        return redirect(next_url)
     return redirect("assessments:admin_grade_detail", attempt_id=attempt_id)
 
 
@@ -1396,6 +1401,9 @@ def admin_hide_grades(request, attempt_id):
         messages.success(request, _("Grades hidden from student."))
     except ValueError as exc:
         messages.error(request, str(exc))
+    next_url = safe_next_url(request.POST.get("next"))
+    if next_url:
+        return redirect(next_url)
     return redirect("assessments:admin_grade_detail", attempt_id=attempt_id)
 
 
@@ -1900,7 +1908,9 @@ def admin_roster_list(request, assessment_id):
     assessment = get_object_or_404(Assessment.objects.prefetch_related("exam_codes__diploma_enrollment__student__user"), id=assessment_id)
     codes = assessment.exam_codes.select_related("diploma_enrollment__student__user__student_profile").all()
     return render(request, "ui/pages/admin/exam_code_roster.html", {
-        "assessment": assessment, "codes": codes,
+        "assessment": assessment,
+        "codes": codes,
+        "delivery_mode_choices": DELIVERY_MODE_CHOICES,
     })
 
 
@@ -1920,6 +1930,31 @@ def admin_generate_codes(request, assessment_id):
             messages.info(request, _("All codes already exist."))
     except ValueError as exc:
         messages.error(request, str(exc))
+    return redirect("assessments:admin_roster", assessment_id=assessment_id)
+
+
+@login_required
+@role_required(*ROLE_EXAM_STAFF)
+@require_POST
+def admin_change_roster_delivery_mode(request, assessment_id, code_id):
+    code = get_object_or_404(
+        SemesterExamCode,
+        pk=code_id,
+        assessment_id=assessment_id,
+    )
+    legacy_response = _legacy_redirect(request, code.assessment)
+    if legacy_response is not None:
+        return legacy_response
+    try:
+        change_exam_code_delivery_mode(
+            code.id,
+            request.POST.get("delivery_mode", "").strip(),
+            request.user,
+        )
+    except ValueError as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(request, _("Student delivery mode updated."))
     return redirect("assessments:admin_roster", assessment_id=assessment_id)
 
 
@@ -2050,6 +2085,7 @@ def reviewer_section_grading(request, assignment_id):
     section_id = safe_int(request.POST.get("section_id")) if request.method == "POST" else None
     score_raw = request.POST.get("score", "").strip() if request.method == "POST" else ""
     code = None
+    graded_code_number = ""
     section_rows = []
     if code_number:
         code = SemesterExamCode.objects.filter(
@@ -2090,21 +2126,26 @@ def reviewer_section_grading(request, assignment_id):
                     exam_code=code, section_id__in=[item.id for item in sections],
                 ).only("id", "section_id", "score")
             }
-            section_rows = [
-                {
-                    "section": item,
-                    "grade": grades.get(item.id),
-                    "score": score_raw if item.id == section_id and score_raw else (
-                        grades[item.id].score if item.id in grades else ""
-                    ),
-                }
-                for item in sections
-            ]
+            if sections and all(item.id in grades for item in sections):
+                graded_code_number = code.code_number
+                code = None
+            else:
+                section_rows = [
+                    {
+                        "section": item,
+                        "grade": grades.get(item.id),
+                        "score": score_raw if item.id == section_id and score_raw else (
+                            grades[item.id].score if item.id in grades else ""
+                        ),
+                    }
+                    for item in sections
+                ]
 
     return render(request, "ui/pages/admin/reviewer_section_grading.html", {
         "assignment": _reviewer_assignment_context(assignment),
         "code": code,
         "code_number": code_number,
+        "graded_code_number": graded_code_number,
         "section_rows": section_rows,
     })
 
@@ -2141,11 +2182,13 @@ def reviewer_online_grading(request, assignment_id):
 
     items = reviewer_claim_items(claim)
     page_obj, pagination_qs = paginate(request, items, per_page=20)
+    first_item = next(iter(page_obj), None)
     return render(request, "ui/pages/admin/reviewer_online_grading.html", {
         "assignment": _reviewer_assignment_context(assignment),
         "online_items": page_obj,
         "pagination_qs": pagination_qs,
         "claim_info": {"claimed_at": claim.claimed_at, "status": claim.status},
+        "submission_code": first_item.get("code_number") if first_item else "",
     })
 
 

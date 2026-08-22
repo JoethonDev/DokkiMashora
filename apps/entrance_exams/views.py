@@ -49,7 +49,7 @@ from apps.communications.constants import (
     TEMPLATE_ENTRANCE_EXAM_PASS,
     TEMPLATE_REJECTION,
 )
-from apps.communications.services import send_templated_email
+from apps.communications.services import queue_templated_email
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import ROLE_EXAM_STAFF, is_admin, role_required, safe_int, student_required
@@ -66,12 +66,14 @@ from .constants import (
     RESULT_PASS,
 )
 from .forms import EntranceChoiceForm, EntranceChoiceFormSet, EntranceExamForm, EntranceQuestionForm
-from .models import EntranceAttempt, EntranceChoice, EntranceExam, EntranceQuestion
+from .models import EntranceAttempt, EntranceChoice, EntranceExam, EntranceQuestion, EntranceSnapshot
 from .services import (
     AnswerData,
     assign_attempt,
+    attempt_deadline,
     attempt_decision,
     finalize_all_pending_for_exam,
+    finalize_expired_attempt,
     get_pending_grading,
     grade_answer,
     save_snapshot,
@@ -178,7 +180,12 @@ def start_exam(request, token):
 
 @student_required
 def take_exam(request, token):
-    """Render the exam-taking page with timer (token-based)."""
+    """Render the exam-taking page with a local countdown (token-based).
+
+    The server provides the authoritative deadline; the browser counts down
+    locally and never polls. The latest backend snapshot answers are hydrated
+    server-side so the page can restore work without localStorage.
+    """
     profile = _get_profile(request.user)
     exam = get_object_or_404(EntranceExam, access_token=token, is_active=True)
     attempt = get_object_or_404(EntranceAttempt, exam=exam, student=profile)
@@ -187,17 +194,22 @@ def take_exam(request, token):
     if attempt.submitted_at or attempt.status not in (ATTEMPT_STATUS_IN_PROGRESS, ATTEMPT_STATUS_ASSIGNED):
         return redirect("entrance_exams:results", token=token)
     now = timezone.now()
-    if attempt.started_at:
-        elapsed = (now - attempt.started_at).total_seconds()
-        remaining = max(0, int(exam.duration_minutes * 60 - elapsed))
-    else:
-        remaining = exam.duration_minutes * 60
+    deadline = attempt_deadline(attempt)
+    remaining = max(0, int((deadline - now).total_seconds())) if deadline else exam.duration_minutes * 60
     questions = exam.questions.prefetch_related("choices").all()
+    snapshot_answers = {
+        snap.question_id: snap
+        for snap in EntranceSnapshot.objects.filter(attempt=attempt)
+    }
     return render(request, "ui/pages/student/exam.html", {
         "exam": exam,
         "attempt": attempt,
         "questions": questions,
         "remaining_seconds": remaining,
+        "timer_deadline": deadline,
+        "timer_server_now": now,
+        "exam_version": exam.pk,
+        "snapshot_answers": snapshot_answers,
         "access_token": token,
         "student_id": request.user.pk,
     })
@@ -261,6 +273,30 @@ def save_exam_snapshot(request, token):
         return JsonResponse({"ok": True})
     except (json.JSONDecodeError, ValueError, TypeError):
         return JsonResponse({"ok": False, "error": _("Invalid data")}, status=400)
+
+
+@student_required
+@require_POST
+def finalize_expired_exam(request, token):
+    """Idempotently finalize an attempt when the client countdown reaches zero.
+
+    POST-only (CSRF-protected), safe to call repeatedly: a terminal attempt
+    returns its current state; a non-terminal attempt is finalized from the
+    latest backend snapshots only after the server independently confirms the
+    deadline has passed. localStorage is never trusted here.
+    """
+    profile = _get_profile(request.user)
+    exam = get_object_or_404(EntranceExam, access_token=token, is_active=True)
+    attempt = get_object_or_404(EntranceAttempt, exam=exam, student=profile)
+    try:
+        finalized = finalize_expired_attempt(attempt)
+    except ValueError as exc:
+        return JsonResponse({"ok": False, "error": str(exc)}, status=400)
+    return JsonResponse({
+        "ok": True,
+        "final": finalized.status in (ATTEMPT_STATUS_COMPLETED, ATTEMPT_STATUS_GRADED),
+        "redirect": reverse("entrance_exams:results", args=[token]),
+    })
 
 
 @student_required
@@ -750,6 +786,7 @@ def admin_delete_question(request, exam_id, question_id):
 
 def _eligible_applications(cohort, action, exam=None, status_filter=None):
     """Return ProgramApplications eligible for the given email action."""
+    dispatched_statuses = ["sent", "queued"]
     if action == EMAIL_ACTION_INVITATION:
         qs = ProgramApplication.objects.filter(cohort=cohort).select_related("student__user")
         if status_filter:
@@ -757,7 +794,7 @@ def _eligible_applications(cohort, action, exam=None, status_filter=None):
         else:
             qs = qs.filter(status__in=[PROGRAM_APP_STATUS_ACCEPTED, PROGRAM_APP_STATUS_INVITED, PROGRAM_APP_STATUS_REJECTED])
         already_sent = PAEL.objects.filter(
-            program_application__cohort=cohort, action=action, status="sent", is_resend=False,
+            program_application__cohort=cohort, action=action, status__in=dispatched_statuses, is_resend=False,
         ).values_list("program_application_id", flat=True)
         qs = qs.exclude(id__in=list(already_sent))
         return qs
@@ -770,7 +807,7 @@ def _eligible_applications(cohort, action, exam=None, status_filter=None):
         return ProgramApplication.objects.none()
 
     already_sent = PAEL.objects.filter(
-        program_application__cohort=cohort, action=action, status="sent", is_resend=False,
+        program_application__cohort=cohort, action=action, status__in=dispatched_statuses, is_resend=False,
     ).values_list("program_application_id", flat=True)
 
     return ProgramApplication.objects.filter(
@@ -781,11 +818,11 @@ def _eligible_applications(cohort, action, exam=None, status_filter=None):
 
 
 def _send_invitations(request, exam, cohort, student_ids):
-    """Send invitation/rejection emails to selected applications."""
+    """Queue invitation/rejection emails to selected applications."""
     apps = ProgramApplication.objects.filter(
         id__in=student_ids, cohort=cohort,
     ).select_related("student__user")
-    sent_count = failed_count = 0
+    queued_count = failed_count = 0
     for prog_app in apps:
         email_to = prog_app.student.user.email
         if not email_to:
@@ -816,9 +853,13 @@ def _send_invitations(request, exam, cohort, student_ids):
                 exam_close_at="",
             )
         try:
-            record = send_templated_email(slug=slug, to_email=email_to, context=context, sent_by=request.user)
+            record = queue_templated_email(
+                slug=slug, to_email=email_to, context=context, sent_by=request.user,
+                idempotency_key=f"entrance_exam:{action}:app:{prog_app.pk}",
+                reference=f"app:{prog_app.pk}",
+            )
         except Exception:
-            logger.exception("Exam assign email failed for application %s", prog_app.id)
+            logger.exception("Exam assign email queue failed for application %s", prog_app.id)
             failed_count += 1
             continue
         PAEL.objects.get_or_create(
@@ -827,21 +868,21 @@ def _send_invitations(request, exam, cohort, student_ids):
             defaults={
                 "template_slug": slug,
                 "recipient": email_to, "sent_by": request.user,
-                "sent_at": record.sent_at or timezone.now(),
-                "status": record.status or "failed",
+                "sent_at": (record.queued_at or timezone.now()) if record else timezone.now(),
+                "status": record.status if record else "failed",
             },
         )
-        if record and record.status == "sent":
-            sent_count += 1
+        if record is not None:
+            queued_count += 1
         else:
             failed_count += 1
     record_audit_event(
         actor=request.user, action=ACTION_BULK_EMAIL_SENT,
         target_type="entrance_exam", target_id=str(exam.id),
-        metadata={"action": "invitation", "count": len(student_ids), "sent": sent_count, "failed": failed_count},
+        metadata={"action": "invitation", "count": len(student_ids), "queued": queued_count, "failed": failed_count},
     )
-    msg = _("Sent %(sent)d invitations (%(failed)d failed).") % {"sent": sent_count, "failed": failed_count}
-    if sent_count:
+    msg = _("Queued %(queued)d invitations (%(failed)d could not be queued).") % {"queued": queued_count, "failed": failed_count}
+    if queued_count:
         messages.success(request, msg)
     else:
         messages.warning(request, msg)
@@ -849,12 +890,12 @@ def _send_invitations(request, exam, cohort, student_ids):
 
 
 def _send_results(request, exam, student_ids):
-    """Send result emails — auto-detects pass/fail from each attempt's result."""
+    """Queue result emails — auto-detects pass/fail from each attempt's result."""
     attempts = exam.attempts.filter(
         id__in=student_ids, status__in=[ATTEMPT_STATUS_COMPLETED, ATTEMPT_STATUS_GRADED],
         result__isnull=False,
     ).select_related("student__user", "program_application")
-    sent_count = failed_count = 0
+    queued_count = failed_count = 0
     pass_count = fail_count = 0
     for attempt in attempts:
         email_to = attempt.student.user.email
@@ -868,8 +909,8 @@ def _send_results(request, exam, student_ids):
             pass_count += 1
         else:
             fail_count += 1
-        if PAEL.objects.filter(program_application=prog_app, action=EMAIL_ACTION_EXAM_RESULT, status="sent").exists():
-            sent_count += 1
+        if PAEL.objects.filter(program_application=prog_app, action=EMAIL_ACTION_EXAM_RESULT, status__in=["sent", "queued"]).exists():
+            queued_count += 1
             continue
         context = {
             "full_name": attempt.student.full_name or "",
@@ -879,29 +920,33 @@ def _send_results(request, exam, student_ids):
         if attempt.result == RESULT_FAIL:
             context["rejection_reason"] = attempt.program_application.rejection_reason or ""
         try:
-            record = send_templated_email(slug=slug, to_email=email_to, context=context, sent_by=request.user)
+            record = queue_templated_email(
+                slug=slug, to_email=email_to, context=context, sent_by=request.user,
+                idempotency_key=f"entrance_exam:result:attempt:{attempt.pk}",
+                reference=f"attempt:{attempt.pk}",
+            )
         except Exception:
-            logger.exception("Exam result email failed for attempt %s", attempt.id)
+            logger.exception("Exam result email queue failed for attempt %s", attempt.id)
             failed_count += 1
             continue
-        if record and record.status == "sent":
+        if record is not None:
             PAEL.objects.create(
                 program_application=prog_app,
                 action=EMAIL_ACTION_EXAM_RESULT, template_slug=slug,
                 recipient=email_to, sent_by=request.user,
-                sent_at=record.sent_at or timezone.now(),
-                status=record.status or "sent",
+                sent_at=record.queued_at or timezone.now(),
+                status=record.status or "queued",
             )
-            sent_count += 1
+            queued_count += 1
         else:
             failed_count += 1
     record_audit_event(
         actor=request.user, action=ACTION_BULK_EMAIL_SENT,
         target_type="entrance_exam", target_id=str(exam.id),
-        metadata={"count": len(student_ids), "sent": sent_count, "failed": failed_count, "pass": pass_count, "fail": fail_count},
+        metadata={"count": len(student_ids), "queued": queued_count, "failed": failed_count, "pass": pass_count, "fail": fail_count},
     )
-    msg = _("Sent %(sent)d result emails (%(failed)d failed).") % {"sent": sent_count, "failed": failed_count}
-    if sent_count:
+    msg = _("Queued %(queued)d result emails (%(failed)d could not be queued).") % {"queued": queued_count, "failed": failed_count}
+    if queued_count:
         messages.success(request, msg)
     else:
         messages.warning(request, msg)
@@ -909,14 +954,14 @@ def _send_results(request, exam, student_ids):
 
 
 def _resend_emails(request, exam, cohort, log_ids):
-    """Bulk-resend selected email logs."""
+    """Bulk-queue resends for selected email logs."""
     if not log_ids:
         messages.warning(request, _("No emails selected."))
         return redirect("entrance_exams:admin_cohort_email", exam_id=exam.id)
     logs = PAEL.objects.filter(
         id__in=log_ids, program_application__cohort=cohort,
     ).select_related("program_application__student")
-    sent_count = failed_count = 0
+    queued_count = failed_count = 0
     for log in logs:
         email_to = log.recipient or (log.program_application.student.user.email if log.program_application else None)
         if not email_to:
@@ -934,28 +979,33 @@ def _resend_emails(request, exam, cohort, log_ids):
                 exam_open_at="",
                 exam_close_at="",
             )
+        resend_seq = PAEL.objects.filter(
+            program_application=log.program_application, action=log.action, is_resend=True,
+        ).count()
         try:
-            record = send_templated_email(
+            record = queue_templated_email(
                 slug=log.template_slug, to_email=email_to,
                 context=context, sent_by=request.user,
+                idempotency_key=f"entrance_exam:resend:{log.action}:app:{log.program_application_id}:{resend_seq}",
+                reference=f"app:{log.program_application_id}",
             )
         except Exception:
-            logger.exception("Resend bulk email failed for log %s", log.id)
+            logger.exception("Resend bulk email queue failed for log %s", log.id)
             failed_count += 1
             continue
         PAEL.objects.create(
             program_application=log.program_application,
             action=log.action, template_slug=log.template_slug,
             recipient=email_to, sent_by=request.user,
-            sent_at=record.sent_at or timezone.now(),
-            status=record.status or "failed", is_resend=True,
+            sent_at=(record.queued_at or timezone.now()) if record else timezone.now(),
+            status=record.status if record else "failed", is_resend=True,
         )
-        if record and record.status == "sent":
-            sent_count += 1
+        if record is not None:
+            queued_count += 1
         else:
             failed_count += 1
-    msg = _("Resent %(sent)d emails (%(failed)d failed).") % {"sent": sent_count, "failed": failed_count}
-    if sent_count:
+    msg = _("Queued %(queued)d email resends (%(failed)d could not be queued).") % {"queued": queued_count, "failed": failed_count}
+    if queued_count:
         messages.success(request, msg)
     else:
         messages.warning(request, msg)
@@ -1028,7 +1078,7 @@ def admin_cohort_email(request, exam_id):
     def _make_pq(**extra):
         return urlencode({"tab": tab, **extra})
 
-    return render(request, "ui/pages/admin/entrance_exams.html", {
+    ctx = {
         "exam": exam,
         "tab": tab,
         "result_filter": result_filter,
@@ -1043,14 +1093,22 @@ def admin_cohort_email(request, exam_id):
         "invitation_page": inv_page,
         "results_page": res_page,
         "history_page": hist_page,
-    })
+    }
+    if is_htmx(request):
+        return render(request, "ui/fragments/admin/_email_tab_content.html", ctx)
+    return render(request, "ui/pages/admin/entrance_exams.html", ctx)
 
 
 @login_required
 @require_http_methods(["GET", "POST"])
 @role_required(*ROLE_EXAM_STAFF)
 def admin_app_email_resend(request, exam_id, app_id):
-    """Resend an email to a single application with confirmation."""
+    """Resend an email to a single application with confirmation.
+
+    GET shows a confirmation/context page. POST validates the application,
+    resolves the email/template, and queues the resend through the canonical
+    Celery email service — the request never sends email directly.
+    """
     if not is_admin(request.user):
         raise PermissionDenied
     exam = get_object_or_404(EntranceExam, id=exam_id)
@@ -1059,6 +1117,7 @@ def admin_app_email_resend(request, exam_id, app_id):
         ProgramApplication.objects.select_related("student__user"),
         id=app_id, cohort=cohort,
     )
+    next_url = safe_next_url(request, default=reverse("entrance_exams:admin_detail", args=[exam_id]))
 
     if request.method == "GET":
         action = request.GET.get("action")
@@ -1071,23 +1130,26 @@ def admin_app_email_resend(request, exam_id, app_id):
             if action == EMAIL_ACTION_INVITATION
             else TEMPLATE_REJECTION
         )
-    return render(request, "ui/pages/admin/entrance_exams.html", {
+        action_label = dict(PAEL._meta.get_field("action").choices).get(action, action)
+        return render(request, "ui/pages/admin/entrance_exam_email_resend.html", {
             "exam": exam,
             "prog_app": prog_app,
             "action": action,
+            "action_label": action_label,
             "slug": slug,
             "email_to": email_to or "",
+            "next_url": next_url,
         })
 
     action = request.POST.get("action")
     if action not in (EMAIL_ACTION_INVITATION, EMAIL_ACTION_REJECTION):
         messages.error(request, _("Invalid email action."))
-        return redirect("entrance_exams:admin_detail", exam_id=exam.id)
+        return redirect(next_url)
 
     email_to = prog_app.student.user.email
     if not email_to:
         messages.error(request, _("Student has no email address."))
-        return redirect("entrance_exams:admin_detail", exam_id=exam.id)
+        return redirect(next_url)
 
     slug = (
         TEMPLATE_ENTRANCE_EXAM_INVITATION
@@ -1112,35 +1174,44 @@ def admin_app_email_resend(request, exam_id, app_id):
             rejection_reason=prog_app.rejection_reason or "",
             cohort_name=cohort.name or "",
         )
+    resend_seq = PAEL.objects.filter(
+        program_application=prog_app, action=action, is_resend=True,
+    ).count()
     try:
-        record = send_templated_email(
+        record = queue_templated_email(
             slug=slug, to_email=email_to,
             context=context,
             sent_by=request.user,
+            idempotency_key=f"entrance_exam:resend:{action}:app:{prog_app.pk}:{resend_seq}",
+            reference=f"app:{prog_app.pk}",
         )
     except Exception:
-        logger.exception("Resend single email failed for application %s", prog_app.id)
+        logger.exception("Resend single email queue failed for application %s", prog_app.id)
         PAEL.objects.create(
             program_application=prog_app,
             action=action, template_slug=slug, recipient=email_to,
-            status="failed", error="Exception during send", is_resend=True,
+            status="failed", error="Exception during queue", is_resend=True,
         )
-        messages.error(request, _("Failed to resend email."))
-        return redirect("entrance_exams:admin_detail", exam_id=exam.id)
+        messages.error(request, _("Failed to queue the resend email."))
+        return redirect(next_url)
+
+    if record is None:
+        messages.error(request, _("No active email template is available for this action."))
+        return redirect(next_url)
 
     PAEL.objects.create(
         program_application=prog_app,
         action=action, template_slug=slug, recipient=email_to,
-        sent_at=record.sent_at or timezone.now() if record else None,
-        sent_by=request.user, status=record.status if record else "failed", is_resend=True,
+        sent_at=record.queued_at or timezone.now(),
+        sent_by=request.user, status=record.status or "queued", is_resend=True,
     )
     record_audit_event(
         actor=request.user, action=ACTION_BULK_EMAIL_SENT,
         target_type="entrance_exam", target_id=str(exam.id),
         metadata={"action": "resend_" + action, "application_id": app_id, "status": record.status},
     )
-    messages.success(request, _("Email resent."))
-    return redirect(next_url) if next_url else redirect("entrance_exams:admin_detail", exam_id=exam.id)
+    messages.success(request, _("Resend email queued for delivery."))
+    return redirect(next_url)
 
 
 @login_required
@@ -1165,7 +1236,30 @@ def admin_email_log_list(request):
         )
     qs = qs.order_by("-sent_at", "-id")
     page_obj, pagination_qs = paginate(request, qs, per_page=25)
-    return render(request, "ui/pages/admin/entrance_exam_email_log.html", {
+    app_ids = [item.program_application_id for item in page_obj if item.program_application_id]
+    resend_exam_ids: dict[int, int] = {}
+    if app_ids:
+        attempt_exams = EntranceAttempt.objects.filter(
+            program_application_id__in=app_ids, exam_id__isnull=False,
+        ).order_by("-id")
+        for app_id, exam_id in attempt_exams.values_list("program_application_id", "exam_id"):
+            resend_exam_ids.setdefault(app_id, exam_id)
+        missing_apps = list(
+            ProgramApplication.objects.filter(
+                id__in=[a for a in app_ids if a not in resend_exam_ids],
+            ).select_related("cohort")
+        )
+        cohort_ids = {a.cohort_id for a in missing_apps if a.cohort_id}
+        cohort_exam_ids: dict[int, int] = {}
+        if cohort_ids:
+            for cohort_id, exam_id in EntranceExam.objects.filter(
+                cohort_id__in=cohort_ids, is_active=True,
+            ).order_by("-id").values_list("cohort_id", "id"):
+                cohort_exam_ids.setdefault(cohort_id, exam_id)
+        for app in missing_apps:
+            if app.cohort_id in cohort_exam_ids:
+                resend_exam_ids[app.pk] = cohort_exam_ids[app.cohort_id]
+    ctx = {
         "page_obj": page_obj,
         "pagination_qs": pagination_qs,
         "page_kind": "email_log",
@@ -1174,4 +1268,8 @@ def admin_email_log_list(request):
         "current_action": action,
         "current_status": status,
         "search_value": search,
-    })
+        "resend_exam_ids": resend_exam_ids,
+    }
+    if is_htmx(request):
+        return render(request, "ui/fragments/admin/_email_log_list.html", ctx)
+    return render(request, "ui/pages/admin/entrance_exam_email_log.html", ctx)

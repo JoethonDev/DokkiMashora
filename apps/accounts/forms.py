@@ -9,8 +9,8 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
-from apps.applications.services import normalize_phone as application_normalize_phone
 from apps.core.forms import StyledFormMixin
+from apps.core.phone import normalize_phone_number
 from apps.students.identity import (
     COUNTRY_CHOICES,
     identity_label,
@@ -46,10 +46,9 @@ class EmailAuthenticationForm(StyledFormMixin, AuthenticationForm):
 class ProfileForm(StyledFormMixin, forms.Form):
     """Edit the current user's own identity and contact fields.
 
-    StudentProfile is the authoritative source for a student's name and phone
-    (dashboards and detail pages read it); the User copies are kept in sync
-    because admin lists and the student header still read them. Email remains
-    on User only and is not editable here.
+    Phone is single-owner: for a student it lives on StudentProfile.phone only;
+    for a staff user (no profile) it lives on User.phone. Email remains on
+    User only and is not editable here.
     """
 
     full_name = forms.CharField(label=_("Full name"), max_length=150, widget=forms.TextInput())
@@ -64,21 +63,17 @@ class ProfileForm(StyledFormMixin, forms.Form):
         phone = (self.cleaned_data.get("phone") or "").strip()
         if not phone:
             raise ValidationError(_("Phone number is required."))
-        normalized = application_normalize_phone(phone)
+        normalized = normalize_phone_number(phone)
         if len(normalized) < 7:
             raise ValidationError(_("Enter a valid mobile number."))
         profile = getattr(self.user, "student_profile", None)
-        profile_pk = profile.pk if profile is not None else None
-        for other in User.objects.exclude(pk=self.user.pk).exclude(phone=""):
-            if application_normalize_phone(other.phone) == normalized:
-                raise ValidationError(_("This phone number is already in use."))
         if profile is not None:
-            for other in StudentProfile.objects.exclude(pk=profile_pk).exclude(phone=""):
-                if application_normalize_phone(other.phone) == normalized:
-                    raise ValidationError(_("This phone number is already in use."))
-        elif StudentProfile.objects.exclude(phone="").filter(phone=phone).exists():
+            qs = StudentProfile.objects.exclude(pk=profile.pk).filter(phone=normalized)
+        else:
+            qs = User.objects.exclude(pk=self.user.pk).exclude(phone="").filter(phone=normalized)
+        if qs.exists():
             raise ValidationError(_("This phone number is already in use."))
-        return phone
+        return normalized
 
 
 class ActivationConfirmForm(StyledFormMixin, forms.Form):
@@ -181,6 +176,7 @@ class UserEditForm(StyledFormMixin, forms.ModelForm):
     def __init__(self, *args, **kwargs):
         staff_only = kwargs.pop("staff_only", False)
         super().__init__(*args, **kwargs)
+        self.staff_only = staff_only
         self.fields["country_code"].choices = [("", _("Select country"))] + COUNTRY_CHOICES
         if staff_only:
             self.fields["role"].choices = [(role, _(role)) for role in ACTIVE_ROLE_GROUPS if role != GROUP_STUDENT]
@@ -221,21 +217,18 @@ class UserEditForm(StyledFormMixin, forms.ModelForm):
         phone = (self.cleaned_data.get("phone") or "").strip()
         if not phone:
             raise ValidationError(_("Phone number is required."))
-        normalized = application_normalize_phone(phone)
+        normalized = normalize_phone_number(phone)
         if len(normalized) < 7:
             raise ValidationError(_("Enter a valid mobile number."))
-        profile = getattr(self.instance, "student_profile", None)
-        profile_pk = profile.pk if profile is not None else None
-        for other in User.objects.exclude(pk=self.instance.pk).exclude(phone=""):
-            if application_normalize_phone(other.phone) == normalized:
-                raise ValidationError(_("This phone number is already in use."))
-        if profile is not None and profile_pk is not None:
-            for other in StudentProfile.objects.exclude(pk=profile_pk).exclude(phone=""):
-                if application_normalize_phone(other.phone) == normalized:
-                    raise ValidationError(_("This phone number is already in use."))
-        elif profile is None and StudentProfile.objects.exclude(phone="").filter(phone=phone).exists():
+        if self.staff_only:
+            qs = User.objects.exclude(pk=self.instance.pk).exclude(phone="").filter(phone=normalized)
+        else:
+            profile = getattr(self.instance, "student_profile", None)
+            profile_pk = profile.pk if profile is not None else None
+            qs = StudentProfile.objects.exclude(pk=profile_pk).filter(phone=normalized)
+        if qs.exists():
             raise ValidationError(_("This phone number is already in use."))
-        return phone
+        return normalized
 
     def clean_national_id(self):
         raw_id = (self.cleaned_data.get("national_id") or "").strip()
@@ -293,7 +286,10 @@ class UserEditForm(StyledFormMixin, forms.ModelForm):
         user.email = data["email"]
         user.full_name = data.get("full_name", "")
         user.full_name_ar = data.get("full_name_ar", "")
-        user.phone = data.get("phone", "")
+        # Phone is single-owner: staff keep it on User.phone; a student's phone
+        # lives on StudentProfile.phone only, and any stale User.phone copy is
+        # cleared here so the mirror never re-appears on edits.
+        user.phone = data.get("phone", "") if self.staff_only else ""
         user.country_code = data.get("country_code", user.country_code)
         user.national_id = data.get("national_id", "")
         requested_status = data.get("status", user.status)

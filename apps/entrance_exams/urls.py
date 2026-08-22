@@ -12,6 +12,7 @@ urlpatterns = [
     path("access/<uuid:token>/take/", views.take_exam, name="take_exam"),
     path("access/<uuid:token>/submit/", views.submit_exam, name="submit_exam"),
     path("access/<uuid:token>/snapshot/", views.save_exam_snapshot, name="save_exam_snapshot"),
+    path("access/<uuid:token>/finalize-expired/", views.finalize_expired_exam, name="finalize_expired_exam"),
     path("access/<uuid:token>/results/", views.exam_results, name="results"),
     path("manage/", views.admin_list, name="admin_list"),
     path("manage/cohorts-for-diploma/", views.admin_cohorts_for_diploma, name="admin_cohorts_for_diploma"),

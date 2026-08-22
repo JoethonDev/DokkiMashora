@@ -656,6 +656,15 @@ class SemesterEvaluationConfig(TimeStampedModel):
         max_digits=5, decimal_places=2, default=0,
         validators=[MinValueValidator(0), MaxValueValidator(100)],
     )
+    attendance_required_sessions = models.PositiveIntegerField(
+        _("required attendance sessions"),
+        default=0,
+        help_text=_(
+            "Required number of attendance records per student for this semester. "
+            "The evaluation computes recorded attendances out of this number; "
+            "0 uses the number of ended/closed sessions instead."
+        ),
+    )
     homework_min_percent = models.DecimalField(
         _("homework min percent"),
         max_digits=5, decimal_places=2, default=0,

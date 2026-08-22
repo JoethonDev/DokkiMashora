@@ -18,6 +18,9 @@
             <th class="table-th">{% trans "Student" %}</th>
             <th class="table-th">{% trans "Program" %}</th>
             <th class="table-th">{% trans "Status" %}</th>
+            {% if enrollment_type == "diploma" %}
+              <th class="table-th">{% trans "Delivery mode" %}</th>
+            {% endif %}
             <th class="table-th">{% trans "Activated" %}</th>
             <th class="table-th">{% trans "Enrolled" %}</th>
             <th class="table-th">{% trans "Actions" %}</th>
@@ -41,6 +44,34 @@
                 {% endif %}
               </td>
               <td>{% include "ui/components/_status.html" with code=e.status label=e.get_status_display %}</td>
+              {% if enrollment_type == "diploma" %}
+                <td>
+                  {% if e.application_delivery_mode %}
+                    <form method="post"
+                          action="{% url 'academics:admin_diploma_enrollment_update' diploma.id e.id %}"
+                          class="actions-row items-center"
+                          x-data="{ saving: false }"
+                          @submit="saving = true">
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="change_delivery_mode">
+                      <label class="sr-only" for="enrollment-mode-{{ e.id }}">{% trans "Delivery mode" %}</label>
+                      <select id="enrollment-mode-{{ e.id }}"
+                              name="delivery_mode"
+                              class="form-select min-w-32">
+                        {% for value, label in delivery_mode_choices %}
+                          <option value="{{ value }}"{% if e.application_delivery_mode == value %} selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                      </select>
+                      <button class="btn-ghost" type="submit" :disabled="saving">
+                        <span x-show="!saving">{% trans "Save" %}</span>
+                        <span x-show="saving" x-cloak>{% trans "Saving…" %}</span>
+                      </button>
+                    </form>
+                  {% else %}
+                    <span class="text-muted">—</span>
+                  {% endif %}
+                </td>
+              {% endif %}
               <td><span dir="ltr" class="inline-block">{{ e.activated_at|date:"DATE_FORMAT"|default:'—' }}</span></td>
               <td><span dir="ltr" class="inline-block">{{ e.created_at|date:"DATE_FORMAT"|default:'—' }}</span></td>
               <td>
@@ -67,6 +98,30 @@
             <strong class="block truncate">{{ e.student.full_name }}</strong>
             <small class="block text-muted truncate">{% if enrollment_type == "course" %}{{ e.course_version }}{% else %}{{ e.cohort }}{% endif %}</small>
             {% include "ui/components/_status.html" with code=e.status label=e.get_status_display %}
+            {% if enrollment_type == "diploma" and e.application_delivery_mode %}
+              <div class="mt-3 pt-3 border-t border-line">
+                <form method="post"
+                      action="{% url 'academics:admin_diploma_enrollment_update' diploma.id e.id %}"
+                      class="actions-row items-center"
+                      x-data="{ saving: false }"
+                      @submit="saving = true">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="change_delivery_mode">
+                  <label class="sr-only" for="mobile-enrollment-mode-{{ e.id }}">{% trans "Delivery mode" %}</label>
+                  <select id="mobile-enrollment-mode-{{ e.id }}"
+                          name="delivery_mode"
+                          class="form-select min-w-32">
+                    {% for value, label in delivery_mode_choices %}
+                      <option value="{{ value }}"{% if e.application_delivery_mode == value %} selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                  <button class="btn-ghost" type="submit" :disabled="saving">
+                    <span x-show="!saving">{% trans "Save" %}</span>
+                    <span x-show="saving" x-cloak>{% trans "Saving…" %}</span>
+                  </button>
+                </form>
+              </div>
+            {% endif %}
           </div>
           <a class="btn-soft-primary shrink-0"
              href="{% if enrollment_type == 'course' %}{% url 'academics:admin_course_enrollment_list' course.id %}?q={{ e.student.full_name|urlencode }}{% else %}{% url 'academics:admin_diploma_enrollment_list' diploma.id %}?q={{ e.student.full_name|urlencode }}{% endif %}">{% trans "View" %}</a>
@@ -74,7 +129,6 @@
       {% endfor %}
     </div>
   {% else %}
-    {% include "ui/components/_empty_state.html" with icon="&#9679;" title=_("No enrollments found") message=_("Try changing the search or filters.") %}
+    {% include "ui/components/_empty_state.html" with title=_("No enrollments found") message=_("Try changing the search or filters.") %}
   {% endif %}
 </section>
-

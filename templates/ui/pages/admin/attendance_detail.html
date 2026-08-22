@@ -24,6 +24,17 @@
                 <button class="btn-warning" type="submit">{% trans "Close session" %}</button>
               </form>
             {% endif %}
+            <span x-data="{ confirming: false }">
+              <button class="btn-ghost text-red" type="button" x-show="!confirming" @click="confirming = true">{% trans "Delete" %}</button>
+              <span x-show="confirming" x-cloak class="inline-flex gap-2 items-center">
+                <form method="post"
+                      action="{% url 'attendance:attendance_session_delete' session.id %}"
+                      class="inline">{% csrf_token %}
+                  <button class="btn-warning" type="submit">{% trans "Confirm delete" %}</button>
+                </form>
+                <button class="btn-ghost" type="button" @click="confirming = false">{% trans "Cancel" %}</button>
+              </span>
+            </span>
           </div>
         {% endif %}
       </div>

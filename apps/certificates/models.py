@@ -22,10 +22,12 @@ CERTIFICATE_TEMPLATE_TYPE_CHOICES = (("completion", _("Completion")),)
 TEMPLATE_SOURCE_FORMAT_NONE = ""
 TEMPLATE_SOURCE_FORMAT_PDF = "pdf"
 TEMPLATE_SOURCE_FORMAT_PSD = "psd"
+TEMPLATE_SOURCE_FORMAT_JPG = "jpg"
 TEMPLATE_SOURCE_FORMAT_CHOICES = (
     (TEMPLATE_SOURCE_FORMAT_NONE, _("None (HTML template)")),
     (TEMPLATE_SOURCE_FORMAT_PDF, _("PDF")),
     (TEMPLATE_SOURCE_FORMAT_PSD, _("PSD")),
+    (TEMPLATE_SOURCE_FORMAT_JPG, _("JPG/JPEG")),
 )
 
 TEMPLATE_SOURCE_STATUS_NONE = "none"
@@ -39,9 +41,48 @@ TEMPLATE_SOURCE_STATUS_CHOICES = (
     (TEMPLATE_SOURCE_STATUS_FAILED, _("Failed")),
 )
 
+# Extensible dynamic-field registry (P7-03 v2). The first two keys are resolved
+# today; the rest are reserved placeholders so the v2 layout schema is
+# forward-compatible (certificate_number, diploma, course, semester, cohort,
+# graduation_date) without schema churn.
+FIELD_KEY_STUDENT_NAME = "student_name"
+FIELD_KEY_DATE = "date"
+FIELD_KEY_CERTIFICATE_NUMBER = "certificate_number"
+FIELD_KEY_DIPLOMA = "diploma"
+FIELD_KEY_COURSE = "course"
+FIELD_KEY_SEMESTER = "semester"
+FIELD_KEY_COHORT = "cohort"
+FIELD_KEY_GRADUATION_DATE = "graduation_date"
+
+MAPPING_FIELD_REGISTRY = (
+    FIELD_KEY_STUDENT_NAME,
+    FIELD_KEY_DATE,
+    FIELD_KEY_CERTIFICATE_NUMBER,
+    FIELD_KEY_DIPLOMA,
+    FIELD_KEY_COURSE,
+    FIELD_KEY_SEMESTER,
+    FIELD_KEY_COHORT,
+    FIELD_KEY_GRADUATION_DATE,
+)
+
+# Display labels for the editor UI; the backend is the single source of truth.
+FIELD_KEY_LABELS = {
+    FIELD_KEY_STUDENT_NAME: _("Student Name"),
+    FIELD_KEY_DATE: _("Date"),
+    FIELD_KEY_CERTIFICATE_NUMBER: _("Certificate number"),
+    FIELD_KEY_DIPLOMA: _("Diploma"),
+    FIELD_KEY_COURSE: _("Course"),
+    FIELD_KEY_SEMESTER: _("Semester"),
+    FIELD_KEY_COHORT: _("Cohort"),
+    FIELD_KEY_GRADUATION_DATE: _("Graduation date"),
+}
+
 # Allowlisted dynamic field keys for placement mappings (P7-02/P7-03).
-ALLOWED_MAPPING_KEYS = ("student_name",)
-MAPPING_SCHEMA_VERSION = 1
+ALLOWED_MAPPING_KEYS = MAPPING_FIELD_REGISTRY
+# Layout schema version. v2 adds width/height (normalized 0..1) per field box;
+# v1 mappings without width/height still load (renderer treats them as a
+# zero-size point box preserving legacy placement).
+MAPPING_SCHEMA_VERSION = 2
 
 
 class CertificateCounter(models.Model):

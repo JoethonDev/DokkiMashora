@@ -17,8 +17,8 @@
     {% if page_mode == "waiver_list" %}
       <section class="card-surface">
         <form class="actions-row items-end mb-4" method="get" hx-get="{% url 'payments:waiver_list' %}" hx-trigger="input changed delay:300ms from:#waiver-student-search, change from:select, submit" hx-target="#waiver-rows" hx-swap="outerHTML" hx-push-url="true" hx-sync="this:replace">
-          <div class="search-field"><span class="absolute inset-y-0 start-0 grid place-items-center ps-3 text-muted pointer-events-none">&#8981;</span>
-            <input id="waiver-student-search" name="student_q" value="{{ current_student_q|default:'' }}" type="search" placeholder="{% trans 'Search student…' %}" aria-label="{% trans 'Search students' %}" class="form-input ps-10">
+          <div class="search-field">
+            <input id="waiver-student-search" name="student_q" value="{{ current_student_q|default:'' }}" type="search" placeholder="{% trans 'Search student…' %}" aria-label="{% trans 'Search students' %}" class="form-input">
           </div>
           <label class="min-w-40"><span class="field-label">{% trans "Status" %}</span>
             <select name="status" class="form-select">
@@ -97,8 +97,8 @@
     {% elif page_mode == "record_list" %}
       <section class="card-surface">
         <form class="actions-row items-end mb-4" method="get" hx-get="{% url 'payments:index' %}" hx-trigger="input changed delay:300ms from:#payment-student-search, change from:select, submit" hx-target="#payment-records" hx-swap="outerHTML" hx-push-url="true" hx-sync="this:replace">
-          <div class="search-field"><span class="absolute inset-y-0 start-0 grid place-items-center ps-3 text-muted pointer-events-none">&#8981;</span>
-            <input id="payment-student-search" name="student_q" value="{{ current_student_q|default:'' }}" type="search" placeholder="{% trans 'Search student…' %}" aria-label="{% trans 'Search students' %}" class="form-input ps-10">
+          <div class="search-field">
+            <input id="payment-student-search" name="student_q" value="{{ current_student_q|default:'' }}" type="search" placeholder="{% trans 'Search student…' %}" aria-label="{% trans 'Search students' %}" class="form-input">
           </div>
           <label class="min-w-40"><span class="field-label">{% trans "Status" %}</span>
             <select name="status" class="form-select">

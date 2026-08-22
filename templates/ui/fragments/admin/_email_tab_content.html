@@ -1,0 +1,137 @@
+        {% load i18n %}
+        {% if tab == 'invitation' %}
+          <form class="actions-row items-end mb-4" hx-get="{% url 'entrance_exams:admin_cohort_email' exam.id %}" hx-target="#email-tab-content" hx-replace-url="true"><input type="hidden" name="tab" value="invitation"><div class="search-field"><input name="iq" value="{{ iq }}" class="form-input" hx-trigger="keyup changed delay:500ms" aria-label="{% trans 'Search invitations' %}"></div><button class="btn-secondary" type="submit">{% trans "Search" %}</button>
+          </form>
+          <form method="post">{% csrf_token %}
+            <input type="hidden" name="tab" value="invitation">
+            {% if invitation_page %}
+              <div class="table-wrap hidden lg:block"><table class="table">
+                <thead>
+                  <tr>
+                    <th class="table-th">{% trans "Select" %}</th>
+                    <th class="table-th">{% trans "Student" %}</th>
+                    <th class="table-th">{% trans "Status" %}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in invitation_page %}
+                    <tr>
+                      <td class="table-td"><input type="checkbox" class="form-checkbox" name="student_ids" value="{{ item.student.id }}"></td>
+                      <td class="table-td">{{ item.student.full_name|default:item.student }}</td>
+                      <td class="table-td">{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table></div>
+              <div class="card-stack lg:hidden">
+                {% for item in invitation_page %}
+                  <div class="mobile-card">
+                    <label class="flex items-center gap-2 cursor-pointer shrink-0"><input type="checkbox" class="form-checkbox" name="student_ids" value="{{ item.student.id }}"></label>
+                    <div class="flex-1 min-w-0">
+                      <strong class="block truncate">{{ item.student.full_name|default:item.student }}</strong>
+                      {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+              <button class="btn-primary mt-4" type="submit">{% trans "Send invitations" %}</button>
+              {% include "ui/components/_pagination.html" with page_obj=invitation_page pagination_qs=inv_pagination_qs %}
+            {% else %}
+              <p>{% trans "No invitation candidates." %}</p>
+            {% endif %}
+          </form>
+        {% elif tab == 'results' %}
+          <form class="actions-row items-end mb-4" hx-get="{% url 'entrance_exams:admin_cohort_email' exam.id %}" hx-target="#email-tab-content" hx-replace-url="true"><input type="hidden" name="tab" value="results"><div class="search-field"><input name="rq" value="{{ rq }}" class="form-input" hx-trigger="keyup changed delay:500ms" aria-label="{% trans 'Search results' %}"></div><label class="min-w-40"><span class="field-label">{% trans "Result" %}</span><select name="result" class="form-select" hx-trigger="change" aria-label="{% trans 'Result' %}"><option value="">{% trans "All results" %}</option>
+              <option value="pass"{% if result_filter == 'pass' %} selected{% endif %}>{% trans "Pass" %}</option>
+              <option value="fail"{% if result_filter == 'fail' %} selected{% endif %}>{% trans "Fail" %}</option>
+            </select></label>
+            <button class="btn-secondary" type="submit">{% trans "Filter" %}</button>
+          </form>
+          <form method="post">{% csrf_token %}
+            <input type="hidden" name="tab" value="results">
+            {% if results_page %}
+              <div class="table-wrap hidden lg:block"><table class="table">
+                <thead>
+                  <tr>
+                    <th class="table-th">{% trans "Select" %}</th>
+                    <th class="table-th">{% trans "Student" %}</th>
+                    <th class="table-th">{% trans "Result" %}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in results_page %}
+                    <tr>
+                      <td class="table-td"><input type="checkbox" class="form-checkbox" name="student_ids" value="{{ item.student.id }}"></td>
+                      <td class="table-td">{{ item.student.full_name|default:item.student }}</td>
+                      <td class="table-td">{% include "ui/components/_status.html" with code=item.result label=item.get_result_display|default:'—' %}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table></div>
+              <div class="card-stack lg:hidden">
+                {% for item in results_page %}
+                  <div class="mobile-card">
+                    <label class="flex items-center gap-2 cursor-pointer shrink-0"><input type="checkbox" class="form-checkbox" name="student_ids" value="{{ item.student.id }}"></label>
+                    <div class="flex-1 min-w-0">
+                      <strong class="block truncate">{{ item.student.full_name|default:item.student }}</strong>
+                      {% include "ui/components/_status.html" with code=item.result label=item.get_result_display|default:'—' %}
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+              <button class="btn-primary mt-4" type="submit">{% trans "Send results" %}</button>
+              {% include "ui/components/_pagination.html" with page_obj=results_page pagination_qs=res_pagination_qs %}
+            {% else %}
+              <p>{% trans "No results." %}</p>
+            {% endif %}
+          </form>
+        {% else %}
+          <form class="actions-row items-end mb-4" hx-get="{% url 'entrance_exams:admin_cohort_email' exam.id %}" hx-target="#email-tab-content" hx-replace-url="true"><input type="hidden" name="tab" value="history"><div class="search-field"><input name="hq" value="{{ hq }}" class="form-input" hx-trigger="keyup changed delay:500ms" aria-label="{% trans "Search history" %}"></div><button class="btn-secondary" type="submit">{% trans "Search" %}</button>
+          </form>
+          <form method="post">{% csrf_token %}
+            <input type="hidden" name="tab" value="history">
+            {% if history_page %}
+              <div class="table-wrap hidden lg:block"><table class="table">
+                <thead>
+                  <tr>
+                    <th class="table-th">{% trans "Select" %}</th>
+                    <th class="table-th">{% trans "Recipient" %}</th>
+                    <th class="table-th">{% trans "Action" %}</th>
+                    <th class="table-th">{% trans "Status" %}</th>
+                    <th class="table-th">{% trans "Sent" %}</th>
+                    <th class="table-th">{% trans "Actions" %}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in history_page %}
+                    <tr>
+                      <td class="table-td"><input type="checkbox" class="form-checkbox" name="log_ids" value="{{ item.id }}"></td>
+                      <td class="table-td">{{ item.recipient }}</td>
+                      <td class="table-td">{{ item.get_action_display|default:item.action }}</td>
+                      <td class="table-td">{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
+                      <td class="table-td"><span class="bidi" dir="ltr">{{ item.sent_at|date:"d/m/Y H:i"|default:'—' }}</span></td>
+                      <td class="table-td">{% if item.action == 'entrance_exam_invitation' or item.action == 'rejection' %}<a class="btn-ghost" href="{% url 'entrance_exams:admin_app_email_resend' exam.id item.program_application.id %}?action={{ item.action }}&next={{ request.get_full_path|urlencode }}">{% trans "Resend" %}</a>{% endif %}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table></div>
+              <div class="card-stack lg:hidden">
+                {% for item in history_page %}
+                  <div class="mobile-card">
+                    <label class="flex items-center gap-2 cursor-pointer shrink-0"><input type="checkbox" class="form-checkbox" name="log_ids" value="{{ item.id }}"></label>
+                    <div class="flex-1 min-w-0">
+                      <strong class="block truncate">{{ item.recipient }}</strong>
+                      {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
+                      <small class="block text-muted">{{ item.get_action_display|default:item.action }} &middot; {{ item.sent_at|date:"d/m/Y H:i"|default:'—' }}</small>
+                    </div>
+                    {% if item.action == 'entrance_exam_invitation' or item.action == 'rejection' %}<a class="btn-ghost shrink-0" href="{% url 'entrance_exams:admin_app_email_resend' exam.id item.program_application.id %}?action={{ item.action }}&next={{ request.get_full_path|urlencode }}">{% trans "Resend" %}</a>{% endif %}
+                  </div>
+                {% endfor %}
+              </div>
+              <button class="btn-primary mt-4" type="submit">{% trans "Resend emails" %}</button>
+              {% include "ui/components/_pagination.html" with page_obj=history_page pagination_qs=hist_pagination_qs %}
+            {% else %}
+              <p>{% trans "No email history." %}</p>
+            {% endif %}
+          </form>
+        {% endif %}

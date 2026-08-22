@@ -21,11 +21,11 @@
   <td class="table-td">
     {% if row.interview %}
       {% if row.interview.decision_type == "request_interview" %}
-          <span class="status-pill-warning">{% trans "Requested" %}</span>
+          {% include "ui/components/_status.html" with code="pending" label=_("Requested") %}
         {% elif row.interview.decision_type == "interview_pass" %}
-          <span class="status-pill-success">{% trans "Passed" %}</span>
+          {% include "ui/components/_status.html" with code="passed" label=_("Passed") %}
         {% elif row.interview.decision_type == "interview_fail" %}
-          <span class="status-pill-danger">{% trans "Failed" %}</span>
+          {% include "ui/components/_status.html" with code="failed" label=_("Failed") %}
         {% endif %}
     {% else %}
       —

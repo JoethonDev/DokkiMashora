@@ -1,0 +1,77 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="page-stack animate-enter-view">
+  <form method="post" class="card-surface max-w-form mx-auto w-full page-stack">{% csrf_token %}
+    {% if form.non_field_errors %}
+      <div class="py-4 px-5 border border-red rounded-md bg-red-soft text-red" role="alert">{% for error in form.non_field_errors %}<p class="m-0">{{ error }}</p>{% endfor %}</div>
+    {% endif %}
+    <div class="section-head"><div>
+        <p class="eyebrow">{{ semester.title }}</p>
+        <h2>{% trans "Evaluation settings" %}</h2>
+      </div>
+    </div>
+    <p class="text-sm text-muted m-0">{% trans "Set how strongly each component counts (weights must total 100%) and the minimum required result for each. Components with no assessments created are skipped automatically." %}</p>
+
+    <div>
+      <h3 class="text-xs font-black uppercase tracking-wider text-muted m-0 mb-3">{% trans "Component weights" %}</h3>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="form-group">
+          <label class="field-label" for="{{ form.attendance_weight_percent.id_for_label }}">{{ form.attendance_weight_percent.label }}</label>
+          {{ form.attendance_weight_percent }}
+          {% if form.attendance_weight_percent.errors %}<div class="text-red text-xs mt-1" role="alert">{{ form.attendance_weight_percent.errors }}</div>{% endif %}
+        </div>
+        <div class="form-group">
+          <label class="field-label" for="{{ form.homework_weight_percent.id_for_label }}">{{ form.homework_weight_percent.label }}</label>
+          {{ form.homework_weight_percent }}
+          {% if form.homework_weight_percent.errors %}<div class="text-red text-xs mt-1" role="alert">{{ form.homework_weight_percent.errors }}</div>{% endif %}
+        </div>
+        <div class="form-group">
+          <label class="field-label" for="{{ form.semester_exam_weight_percent.id_for_label }}">{{ form.semester_exam_weight_percent.label }}</label>
+          {{ form.semester_exam_weight_percent }}
+          {% if form.semester_exam_weight_percent.errors %}<div class="text-red text-xs mt-1" role="alert">{{ form.semester_exam_weight_percent.errors }}</div>{% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h3 class="text-xs font-black uppercase tracking-wider text-muted m-0 mb-3">{% trans "Minimums and overall pass mark" %}</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="form-group">
+          <label class="field-label" for="{{ form.attendance_required_sessions.id_for_label }}">{{ form.attendance_required_sessions.label }}</label>
+          {{ form.attendance_required_sessions }}
+          <p class="field-help m-0">{{ form.attendance_required_sessions.help_text }}</p>
+          {% if form.attendance_required_sessions.errors %}<div class="text-red text-xs mt-1" role="alert">{{ form.attendance_required_sessions.errors }}</div>{% endif %}
+        </div>
+        <div class="form-group">
+          <label class="field-label" for="{{ form.attendance_min_percent.id_for_label }}">{{ form.attendance_min_percent.label }}</label>
+          {{ form.attendance_min_percent }}
+          {% if form.attendance_min_percent.errors %}<div class="text-red text-xs mt-1" role="alert">{{ form.attendance_min_percent.errors }}</div>{% endif %}
+        </div>
+        <div class="form-group">
+          <label class="field-label" for="{{ form.homework_min_percent.id_for_label }}">{{ form.homework_min_percent.label }}</label>
+          {{ form.homework_min_percent }}
+          {% if form.homework_min_percent.errors %}<div class="text-red text-xs mt-1" role="alert">{{ form.homework_min_percent.errors }}</div>{% endif %}
+        </div>
+        <div class="form-group">
+          <label class="field-label" for="{{ form.semester_exam_min_percent.id_for_label }}">{{ form.semester_exam_min_percent.label }}</label>
+          {{ form.semester_exam_min_percent }}
+          {% if form.semester_exam_min_percent.errors %}<div class="text-red text-xs mt-1" role="alert">{{ form.semester_exam_min_percent.errors }}</div>{% endif %}
+        </div>
+        <div class="form-group">
+          <label class="field-label" for="{{ form.overall_min_percent.id_for_label }}">{{ form.overall_min_percent.label }}</label>
+          {{ form.overall_min_percent }}
+          <p class="field-help m-0">{% trans "Applies to the weighted final result after applicable components." %}</p>
+          {% if form.overall_min_percent.errors %}<div class="text-red text-xs mt-1" role="alert">{{ form.overall_min_percent.errors }}</div>{% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="flex gap-2.5 items-center flex-wrap pt-4 border-t border-line mt-5">
+      <button class="btn-primary" type="submit">{% trans "Save settings" %}</button>
+      <a class="btn-ghost" href="{% url 'progression:admin_cohort_semester_progression' diploma.id cohort.id semester.id %}">{% trans "Cancel" %}</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

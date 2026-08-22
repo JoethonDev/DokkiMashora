@@ -50,7 +50,6 @@ urlpatterns = [
     # Admin: courses
     path("manage/courses/", views.admin_course_list, name="admin_course_list"),
     path("manage/courses/create/", views.admin_course_create, name="admin_course_create"),
-    path("manage/diplomas/semester-options/", views.admin_diploma_semester_options, name="admin_diploma_semester_options"),
     path("manage/courses/<int:course_id>/", views.admin_course_detail, name="admin_course_detail"),
     path("manage/courses/<int:course_id>/edit/", views.admin_course_edit, name="admin_course_edit"),
     path("manage/courses/<int:course_id>/delete/", views.admin_course_delete, name="admin_course_delete"),

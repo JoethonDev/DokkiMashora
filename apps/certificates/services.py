@@ -28,12 +28,15 @@ from apps.storage.services import record_deferred_storage_deletion, storage_serv
 from apps.students.models import StudentProfile
 
 from .models import (
-    CertificateCounter,
-    CertificateTemplate,
-    GeneratedCertificate,
+    FIELD_KEY_DATE,
+    FIELD_KEY_STUDENT_NAME,
+    MAPPING_SCHEMA_VERSION,
     TEMPLATE_SOURCE_FORMAT_NONE,
     TEMPLATE_SOURCE_STATUS_NONE,
     TEMPLATE_SOURCE_STATUS_READY,
+    CertificateCounter,
+    CertificateTemplate,
+    GeneratedCertificate,
 )
 from .source_adapters import (
     render_source_preview,
@@ -96,6 +99,38 @@ def render_certificate_html(
         return t.render(Context(context))
 
     return render_to_string("certificates/default_certificate.html", context)
+
+
+def sample_field_values(*, today=None) -> dict[str, str]:
+    """Sample values for preview rendering (never persisted, never issued)."""
+    today = today or date.today()
+    return {
+        FIELD_KEY_STUDENT_NAME: "Student Name",
+        FIELD_KEY_DATE: today.strftime("%Y-%m-%d"),
+    }
+
+
+def resolve_certificate_field_values(
+    student: StudentProfile,
+    enrollment: DiplomaEnrollment,
+    completion: StudentDiplomaCompletion,
+    certificate_number: str,
+    *,
+    today=None,
+) -> dict[str, str]:
+    """Resolve values for the registered dynamic fields (P7-03 v2).
+
+    Only fields with a resolver today (student_name, date) are returned;
+    reserved placeholder fields (certificate_number, diploma, course, semester,
+    cohort, graduation_date) are intentionally absent so the renderer skips
+    them until their resolvers are wired. ``student_name`` keeps the current
+    corrected-name contract: full_name_ar, else full_name, else email.
+    """
+    user = student.user
+    return {
+        FIELD_KEY_STUDENT_NAME: user.full_name_ar or user.full_name or user.email,
+        FIELD_KEY_DATE: (today or date.today()).strftime("%Y-%m-%d"),
+    }
 
 
 def generate_certificate_pdf(
@@ -179,12 +214,13 @@ def generate_certificate_pdf(
 
     uploaded_key = ""
     try:
-        # P7-03: current corrected name resolved at generation time.
-        student_name = (
-            student.user.full_name_ar
-            or student.user.full_name
-            or student.user.email
+        # P7-03 v2: resolve values for all registered dynamic fields at
+        # generation time; student_name keeps the current corrected name
+        # (full_name_ar, else full_name, else email).
+        field_values = resolve_certificate_field_values(
+            student, enrollment, completion, cert.certificate_number,
         )
+        student_name = field_values.get(FIELD_KEY_STUDENT_NAME, "")
 
         if template.source_status == TEMPLATE_SOURCE_STATUS_READY and template.source_storage_key and template.field_mapping:
             source_bytes = storage_service.download_file(template.source_storage_key)
@@ -193,7 +229,7 @@ def generate_certificate_pdf(
                 source_bytes,
                 template.source_format,
                 template.field_mapping,
-                {"student_name": student_name},
+                field_values,
             )
             pdf_bytes = output_bytes if template.source_format == "pdf" else _image_bytes_to_pdf(output_bytes)
         else:
@@ -238,14 +274,14 @@ def generate_certificate_pdf(
 
 
 def _image_bytes_to_pdf(png_bytes: bytes) -> bytes:
-    """Wrap a PNG (PSD overlay output) into a single-page PDF via PIL."""
+    """Wrap a PNG (raster overlay output) into a single-page PDF via PIL."""
     from PIL import Image
     from reportlab.pdfgen import canvas as pdf_canvas
 
     img = Image.open(BytesIO(png_bytes))
     buf = BytesIO()
     c = pdf_canvas.Canvas(buf, pagesize=(img.width, img.height))
-    c.drawImage(BytesIO(png_bytes), 0, 0, width=img.width, height=img.height)
+    c.drawInlineImage(img, 0, 0, width=img.width, height=img.height)
     c.showPage()
     c.save()
     return buf.getvalue()
@@ -301,7 +337,7 @@ def ingest_certificate_source(
     actor=None,
     field_mapping: dict | None = None,
 ) -> CertificateTemplate:
-    """Validate, store, preview, and map a PDF/PSD certificate source (P7-02).
+    """Validate, store, preview, and map a PDF/JPG certificate source (P7-02).
 
     File validation and preview rendering run OUTSIDE DB transactions; the
     template row is updated in a short transaction only after all slow work
@@ -325,7 +361,7 @@ def ingest_certificate_source(
         key_prefix=f"certificate_templates/{template.id}",
         content_type=content_type,
         max_size=25 * 1024 * 1024,
-        allowed_types=[".pdf", ".psd"],
+        allowed_types=[".pdf", ".jpg", ".jpeg"],
         original_filename=filename,
     )
     try:
@@ -356,7 +392,7 @@ def ingest_certificate_source(
     template.preview_height = preview.height
     template.preview_page_count = preview.page_count
     template.field_mapping = normalized_mapping
-    template.mapping_schema_version = 1
+    template.mapping_schema_version = MAPPING_SCHEMA_VERSION
     try:
         template.save(update_fields=[
             "source_format", "source_status", "source_storage_key", "source_byte_size",
