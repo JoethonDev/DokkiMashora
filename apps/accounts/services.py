@@ -3,7 +3,6 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
-from datetime import datetime
 from typing import Any
 
 from django.conf import settings
@@ -20,11 +19,11 @@ from apps.audit.constants import (
     ACTION_USER_IMPORT_CONFIRMED,
     ACTION_USER_IMPORT_PREVIEWED,
 )
-from apps.audit.models import AuditEvent
 from apps.audit.services import record_audit_event
 from apps.communications.constants import TEMPLATE_ACTIVATION
 from apps.communications.services import queue_templated_email
-from apps.core.phone import normalize_phone_number
+from apps.core.dates import parse_date
+from apps.core.phone import normalize_phone
 from apps.students.identity import normalize_identity_number, validate_identity_number
 from apps.students.models import StudentProfile
 
@@ -53,15 +52,6 @@ from .constants import (
 from .models import User, UserUpload, UserUploadRow
 
 REQUIRED_PROFILE_FIELDS = ["date_of_birth", "gender", "address", "education"]
-
-
-def parse_date(value: str) -> datetime | None:
-    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d", "%d-%m-%Y"):
-        try:
-            return datetime.strptime(value.strip(), fmt).replace(tzinfo=timezone.get_current_timezone())
-        except ValueError:
-            continue
-    return None
 
 
 def validate_csv_content(content: bytes) -> list[dict[str, str]]:
@@ -192,7 +182,7 @@ def match_user(row: dict[str, str]) -> tuple[User | None, str, str]:
     country_code = _get_country_code(row)
     raw_national_id = row.get("national_id", "")
     national_id = normalize_identity_number(country_code, raw_national_id) if raw_national_id else ""
-    phone = normalize_phone_number(row.get("phone", ""))
+    phone = normalize_phone(row.get("phone", ""))
     student_user_ids, staff_user_ids = _load_import_user_scope()
     email_index, national_id_index, phone_index = _load_match_indexes(
         {email} if email else set(),
@@ -230,7 +220,7 @@ def _parse_row_data(row: dict[str, str], row_number: int) -> dict[str, Any]:
             validate_identity_number(country_code, raw_national_id)
         except ValidationError as e:
             return {"status": ROW_STATUS_FAILED, "error_message": str(e)}
-    phone = normalize_phone_number(row.get("phone", ""))
+    phone = normalize_phone(row.get("phone", ""))
     return {
         "raw_data": row,
         "normalized_email": email,
@@ -367,7 +357,7 @@ def preview_upload(upload_id: int) -> UserUpload:
     upload.error_summary = "\n".join(errors) if errors else ""
     upload.save(update_fields=["matched_rows", "unmatched_rows", "failed_rows", "status", "error_summary"])
 
-    AuditEvent.objects.create(
+    record_audit_event(
         actor=upload.uploaded_by,
         action=ACTION_USER_IMPORT_PREVIEWED,
         target_type="UserUpload",
@@ -382,7 +372,7 @@ def _build_student_profile_data(row_raw: dict[str, str]) -> dict[str, Any]:
     raw_national_id = row_raw.get("national_id", "")
     profile_fields = {
         "full_name": row_raw.get("full_name", ""),
-        "phone": normalize_phone_number(row_raw.get("phone", "")),
+        "phone": normalize_phone(row_raw.get("phone", "")),
         "national_id": normalize_identity_number(country_code, raw_national_id) if raw_national_id else "",
         "country_code": country_code,
         "date_of_birth": None,
@@ -536,7 +526,7 @@ def confirm_upload(upload_id: int, confirmed_by) -> UserUpload:
     upload.completed_at = timezone.now()
     upload.save(update_fields=["created_rows", "updated_rows", "failed_rows", "status", "completed_at"])
 
-    AuditEvent.objects.create(
+    record_audit_event(
         actor=confirmed_by,
         action=ACTION_USER_IMPORT_CONFIRMED,
         target_type="UserUpload",

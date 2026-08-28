@@ -7,10 +7,25 @@ from .models import CertificateTemplate
 
 
 class CertificateTemplateForm(StyledFormMixin, forms.ModelForm):
+    source_file = forms.FileField(
+        label=_("Certificate source"),
+        required=False,
+        help_text=_("Optional PDF or PSD certificate artwork. You can position all fields after upload."),
+        widget=forms.ClearableFileInput(attrs={
+            "accept": ".pdf,.psd,.jpg,.jpeg,application/pdf,image/vnd.adobe.photoshop,image/jpeg",
+        }),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Existing templates have a dedicated source replacement workflow
+        # below the model form. Keep the create form focused on the one-step
+        # source upload without duplicating that control on edit.
+        if self.instance and self.instance.pk:
+            self.fields.pop("source_file", None)
+
     class Meta:
         model = CertificateTemplate
-        # background_file is replaced by the validated PDF/PSD source upload
-        # (P7-02); existing HTML templates keep editing body_html.
         fields = [
             "name", "diploma", "language", "template_type",
             "body_html", "active", "is_placeholder",
@@ -25,9 +40,5 @@ class CertificateTemplateForm(StyledFormMixin, forms.ModelForm):
             "is_placeholder": forms.CheckboxInput(attrs={}),
         }
         help_texts = {
-            "body_html": _(
-                "Use Django template variables: "
-                "{{ student_name }}, {{ diploma_title }}, {{ cohort_name }}, "
-                "{{ completion_date }}, {{ certificate_number }}, {{ issue_date }}"
-            ),
+            "body_html": _("e.g., {{ student_name }}, {{ diploma_title }}"),
         }

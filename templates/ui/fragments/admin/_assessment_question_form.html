@@ -9,7 +9,7 @@
       <div id="assessment-choices"{% if form.question_type.value != 'mcq' %} class="hidden"{% endif %}>
         {% for choice in choices %}
           <div class="choice-row p-3 border border-line rounded-sm mb-2.5 flex items-start gap-3" data-choice-id="{{ choice.id }}">
-            <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
+            <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
               <div class="form-group">
                 <label for="choice_text_{{ choice.id }}" class="field-label">{% trans "Choice" %}</label>
                 <input type="text" class="form-input" name="choice_text_{{ choice.id }}" id="choice_text_{{ choice.id }}" value="{{ choice.text }}" required>
@@ -32,7 +32,7 @@
           </div>
         {% empty %}
           <div class="choice-row p-3 border border-line rounded-sm mb-2.5 flex items-start gap-3" data-choice-id="new_1">
-            <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
+            <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
               <div class="form-group">
                 <label for="choice_text_new_1" class="field-label">{% trans "Choice" %}</label>
                 <input type="text" class="form-input" name="choice_text_new_1" id="choice_text_new_1" required>
@@ -65,7 +65,7 @@
 </div>
 <template id="assessment-choice-template">
   <div class="choice-row p-3 border border-line rounded-sm mb-2.5 flex items-start gap-3" data-choice-id="__IDX__">
-    <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
+    <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
       <div class="form-group">
         <label class="field-label">{% trans "Choice" %}</label>
         <input type="text" class="form-input" name="choice_text___IDX__" required>

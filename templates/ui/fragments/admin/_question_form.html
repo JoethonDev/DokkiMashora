@@ -14,7 +14,7 @@
             {% for hidden in choice_form.hidden_fields %}
               {{ hidden }}
             {% endfor %}
-            <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
               {% include "ui/components/_field.html" with field=choice_form.text %}
               {% include "ui/components/_field.html" with field=choice_form.score %}
               {% include "ui/components/_field.html" with field=choice_form.order %}
@@ -41,7 +41,7 @@
 </div>
 <template id="choice-template">
   <div class="choice-row p-3 border border-line rounded-sm flex items-start gap-3">
-    <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3">
+    <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
       {% include "ui/components/_field.html" with field=formset.empty_form.text %}
       {% include "ui/components/_field.html" with field=formset.empty_form.score %}
       {% include "ui/components/_field.html" with field=formset.empty_form.order %}

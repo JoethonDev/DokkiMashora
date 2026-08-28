@@ -8,7 +8,7 @@
     {% include "ui/components/_breadcrumbs.html" with items=breadcrumb_items %}
     {% include "ui/components/_page_header.html" with title=title|default:_("Academic detail") description=description eyebrow=_("Academic") %}
   {% if version %}
-    <section class="card-surface"><h2>{{ version.label }}</h2>
+    <section class="card-surface flex flex-col gap-4"><h2>{{ version.label }}</h2>
       <dl class="dl">
         <dt class="dt">{% trans "Course" %}</dt>
         <dd class="dd">
@@ -33,7 +33,7 @@
     </section>
   {% endif %}
   {% if versions %}
-    <section class="card-surface"><h2>{% trans "Versions" %}</h2>
+    <section class="card-surface flex flex-col gap-4"><h2>{% trans "Versions" %}</h2>
       <div class="table-wrap hidden lg:block"><table class="table">
           <tbody>
             {% for item in versions %}
@@ -73,7 +73,7 @@
     </section>
   {% endif %}
   {% if lectures %}
-    <section class="card-surface"><h2>{% trans "Lectures" %}</h2>
+    <section class="card-surface flex flex-col gap-4"><h2>{% trans "Lectures" %}</h2>
       <div class="table-wrap hidden lg:block"><table class="table">
           <tbody>
             {% for item in lectures %}
@@ -112,7 +112,7 @@
     </section>
   {% endif %}
   {% if intake_forms %}
-    <section class="card-surface"><h2>{% trans "Intake forms" %}</h2>
+    <section class="card-surface flex flex-col gap-4"><h2>{% trans "Intake forms" %}</h2>
       {% for item in intake_forms %}
         <p>
           {{ item.title }}

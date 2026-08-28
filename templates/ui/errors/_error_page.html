@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="{% static 'css/tailwind.css' %}">
 </head>
 <body>
-  <main id="main" class="flex flex-col justify-center items-center gap-3 text-center">
+  <main id="main" class="flex flex-col justify-center items-center gap-4 text-center">
     <h1>{% block status_code %}{{ status_code|default:_("Error") }}{% endblock %}</h1>
     <p class="eyebrow">{% block page_title %}{{ title }}{% endblock %}</p>
     <p>{% block message %}{{ message }}{% endblock %}</p>

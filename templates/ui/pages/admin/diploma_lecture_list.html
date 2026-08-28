@@ -15,7 +15,7 @@
            href="{% url 'academics:admin_diploma_lecture_create' diploma.id cohort.id semester.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Add lecture" %}</a>
       </div>
     </div>
-    <section class="card-surface"><div class="section-head"><div>
+    <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Lectures" %}</p>
           <h3>{% trans "Lecture list" %}</h3>
         </div>

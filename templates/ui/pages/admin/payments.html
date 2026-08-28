@@ -15,8 +15,8 @@
     </nav>
 
     {% if page_mode == "waiver_list" %}
-      <section class="card-surface">
-        <form class="actions-row items-end mb-4" method="get" hx-get="{% url 'payments:waiver_list' %}" hx-trigger="input changed delay:300ms from:#waiver-student-search, change from:select, submit" hx-target="#waiver-rows" hx-swap="outerHTML" hx-push-url="true" hx-sync="this:replace">
+      <section class="card-surface flex flex-col gap-4">
+        <form class="actions-row items-end" method="get" hx-get="{% url 'payments:waiver_list' %}" hx-trigger="input changed delay:300ms from:#waiver-student-search, change from:select, submit" hx-target="#waiver-rows" hx-swap="outerHTML" hx-push-url="true" hx-sync="this:replace" hx-indicator="#global-loading">
           <div class="search-field">
             <input id="waiver-student-search" name="student_q" value="{{ current_student_q|default:'' }}" type="search" placeholder="{% trans 'Search student…' %}" aria-label="{% trans 'Search students' %}" class="form-input">
           </div>
@@ -56,7 +56,7 @@
                   <td class="table-td">
                     {% include "ui/components/_expandable_text.html" with text=item.reason clamp=2 %}
                   </td>
-                  <td class="table-td"><div class="flex flex-col">
+                  <td class="table-td"><div class="flex flex-col gap-1">
                     {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
                     <small>{{ item.granted_at|date:"SHORT_DATE_FORMAT"|default:'—' }}</small></div>
                   </td>
@@ -95,8 +95,8 @@
       </section>
 
     {% elif page_mode == "record_list" %}
-      <section class="card-surface">
-        <form class="actions-row items-end mb-4" method="get" hx-get="{% url 'payments:index' %}" hx-trigger="input changed delay:300ms from:#payment-student-search, change from:select, submit" hx-target="#payment-records" hx-swap="outerHTML" hx-push-url="true" hx-sync="this:replace">
+      <section class="card-surface flex flex-col gap-4">
+        <form class="actions-row items-end" method="get" hx-get="{% url 'payments:index' %}" hx-trigger="input changed delay:300ms from:#payment-student-search, change from:select, submit" hx-target="#payment-records" hx-swap="outerHTML" hx-push-url="true" hx-sync="this:replace" hx-indicator="#global-loading">
           <div class="search-field">
             <input id="payment-student-search" name="student_q" value="{{ current_student_q|default:'' }}" type="search" placeholder="{% trans 'Search student…' %}" aria-label="{% trans 'Search students' %}" class="form-input">
           </div>
@@ -147,7 +147,7 @@
                     {% endif %}
                   </td>
                   <td class="table-td">{{ item.amount|default:'—' }}{% if item.currency %} {{ item.currency }}{% endif %}</td>
-                  <td class="table-td"><div class="flex flex-col">
+                  <td class="table-td"><div class="flex flex-col gap-1">
                     {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
                     <small>{{ item.paid_at|default:item.created_at|date:"SHORT_DATE_FORMAT"|default:'—' }}</small></div>
                   </td>
@@ -200,7 +200,7 @@
       </div>
 
     {% elif page_mode == "record_detail" %}
-      <section class="card-surface">
+      <section class="card-surface flex flex-col gap-4">
         <div class="section-head"><div>
           <p class="eyebrow">{% trans "Payment" %}</p>
           <h2>{% trans "Payment record" %}</h2>
@@ -233,8 +233,8 @@
       </form>
 
     {% elif page_mode == "upload_list" %}
-      <section class="card-surface">
-        <form class="actions-row items-end mb-4" method="get" hx-get="{% url 'payments:upload_list' %}" hx-trigger="input changed delay:300ms from:#upload-search, change from:select, submit" hx-target="#upload-results" hx-swap="outerHTML" hx-push-url="true" hx-sync="this:replace">
+      <section class="card-surface flex flex-col gap-4">
+        <form class="actions-row items-end" method="get" hx-get="{% url 'payments:upload_list' %}" hx-trigger="input changed delay:300ms from:#upload-search, change from:select, submit" hx-target="#upload-results" hx-swap="outerHTML" hx-push-url="true" hx-sync="this:replace" hx-indicator="#global-loading">
           <label class="min-w-40"><span class="field-label">{% trans "Status" %}</span>
             <select id="upload-search" name="status" class="form-select">
               <option value="">{% trans "All" %}</option>
@@ -312,7 +312,7 @@
       </div>
 
     {% elif page_mode == "upload_detail" %}
-      <section class="card-surface">
+      <section class="card-surface flex flex-col gap-4">
         <div class="section-head"><div>
           <p class="eyebrow">{% trans "Upload" %}</p>
           <h2>{{ upload.original_filename }}</h2>

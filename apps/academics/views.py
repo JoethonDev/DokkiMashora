@@ -13,7 +13,6 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, OuterRef, Prefetch, Q, Subquery
 from django.http import Http404, HttpResponse, JsonResponse
@@ -96,7 +95,7 @@ from apps.assessments.services import (
 )
 from apps.attendance.models import AttendanceCode
 from apps.attendance.services import build_attendance_qr_payload, get_attendance_summary
-from apps.core.htmx import is_htmx
+from apps.core.htmx import hx_toast, is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import (
     ROLE_EXAM_STAFF,
@@ -1311,32 +1310,52 @@ def admin_diploma_lecture_preview(request, diploma_id, cohort_id, semester_id, l
     )
 
 
+def _enrollment_list_context(request, queryset):
+    """Shared enrollment filtering + pagination for course/diploma lists.
+
+    Applies enrollment_scope_filter (detected from queryset model), q on
+    student name/email, status filter, then paginates via ``paginate``.
+    Returns ``(page_obj, pagination_qs, search_value, status_filter)`` and
+    the filtered queryset is available as ``queryset`` after filtering
+    (caller may keep a reference before pagination if needed).
+    The caller keeps domain-specific extra filters (version/cohort) and
+    rendering (HTMX vs full page) while this helper owns the shared
+    search/status/scope/pagination/pagination_qs contract.
+    """
+    q = request.GET.get("q", "").strip()
+    status_filter = request.GET.get("status", "").strip()
+    model_name = queryset.model.__name__
+    scope = None
+    if model_name == "CourseEnrollment":
+        scope = "course"
+    elif model_name == "DiplomaEnrollment":
+        scope = "diploma"
+    if scope:
+        queryset = queryset.filter(enrollment_scope_filter(request.user, scope))
+    if status_filter:
+        queryset = queryset.filter(status=status_filter)
+    if q:
+        queryset = queryset.filter(
+            Q(student__user__full_name__icontains=q) | Q(student__user__email__icontains=q)
+        )
+    page_obj, pagination_qs = paginate(request, queryset, per_page=25)
+    return page_obj, pagination_qs, q, status_filter
+
+
 @login_required
 @role_required(*ROLE_EXAM_STAFF)
 def admin_course_enrollment_list(request, course_id):
     """Show who is enrolled in each version of a course."""
     course = get_object_or_404(Course, id=course_id)
-    q = request.GET.get("q", "")
-    status_filter = request.GET.get("status", "")
     version_filter = request.GET.get("version", "")
     enrollments = CourseEnrollment.objects.filter(
         course_version__course=course
     ).select_related(
         "student", "student__user", "course_version"
     ).order_by("-created_at")
-    enrollments = enrollments.filter(enrollment_scope_filter(request.user, "course"))
-    if status_filter:
-        enrollments = enrollments.filter(status=status_filter)
     if version_filter:
         enrollments = enrollments.filter(course_version_id=version_filter)
-    if q:
-        enrollments = enrollments.filter(
-            Q(student__user__full_name__icontains=q)
-            | Q(student__user__email__icontains=q)
-        )
-    paginator = Paginator(enrollments, 25)
-    page_number = request.GET.get("page", 1)
-    page_obj = paginator.get_page(page_number)
+    page_obj, pagination_qs, q, status_filter = _enrollment_list_context(request, enrollments)
     versions = CourseVersion.objects.filter(course=course)
     status_choices = [
         {"value": code, "label": str(label), "selected": status_filter == code}
@@ -1350,10 +1369,6 @@ def admin_course_enrollment_list(request, course_id):
         {"name": "status", "label": _("Enrollment Status"), "value": status_filter, "options": status_choices},
         {"name": "version", "label": _("Version"), "value": version_filter, "options": version_choices},
     ]
-    pagination_qs = request.GET.copy()
-    if "page" in pagination_qs:
-        del pagination_qs["page"]
-    pagination_qs = pagination_qs.urlencode()
     ctx = {
         "page_obj": page_obj,
         "search_value": q,
@@ -1400,8 +1415,6 @@ def admin_course_enrollment_migrate(request, course_id, enrollment_id):
 def admin_diploma_enrollment_list(request, diploma_id):
     """Show who is enrolled in a diploma, optionally filtered by cohort."""
     diploma = get_object_or_404(Diploma, id=diploma_id)
-    q = request.GET.get("q", "")
-    status_filter = request.GET.get("status", "")
     cohort_filter = request.GET.get("cohort", "")
     application_mode = ProgramApplication.objects.filter(
         student_id=OuterRef("student_id"),
@@ -1415,19 +1428,9 @@ def admin_diploma_enrollment_list(request, diploma_id):
     ).select_related(
         "student", "student__user", "cohort"
     ).annotate(application_delivery_mode=Subquery(application_mode)).order_by("-created_at")
-    enrollments = enrollments.filter(enrollment_scope_filter(request.user, "diploma"))
-    if status_filter:
-        enrollments = enrollments.filter(status=status_filter)
     if cohort_filter:
         enrollments = enrollments.filter(cohort_id=cohort_filter)
-    if q:
-        enrollments = enrollments.filter(
-            Q(student__user__full_name__icontains=q)
-            | Q(student__user__email__icontains=q)
-        )
-    paginator = Paginator(enrollments, 25)
-    page_number = request.GET.get("page", 1)
-    page_obj = paginator.get_page(page_number)
+    page_obj, pagination_qs, q, status_filter = _enrollment_list_context(request, enrollments)
     cohorts = diploma.cohorts.all()
     status_choices = [
         {"value": code, "label": str(label), "selected": status_filter == code}
@@ -1441,10 +1444,6 @@ def admin_diploma_enrollment_list(request, diploma_id):
         {"name": "status", "label": _("Enrollment Status"), "value": status_filter, "options": status_choices},
         {"name": "cohort", "label": _("Cohort"), "value": cohort_filter, "options": cohort_choices},
     ]
-    pagination_qs = request.GET.copy()
-    if "page" in pagination_qs:
-        del pagination_qs["page"]
-    pagination_qs = pagination_qs.urlencode()
     ctx = {
         "page_obj": page_obj,
         "search_value": q,
@@ -1499,8 +1498,7 @@ def admin_diploma_enrollment_update(request, diploma_id, enrollment_id):
         response = render(request, "ui/fragments/admin/_enrollment_row.html", {
             "e": enrollment, "diploma": diploma, "cohorts": cohorts, "enrollment_type": "diploma",
         })
-        response['HX-Trigger'] = json.dumps({'show-toast': {'message': msg, 'type': 'success'}})
-        return response
+        return hx_toast(response, msg, type="success")
     return redirect("academics:admin_diploma_enrollment_list", diploma_id=diploma.id)
 
 

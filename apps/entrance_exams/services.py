@@ -18,15 +18,14 @@ from apps.applications.constants import (
     PROGRAM_APP_STATUS_REJECTED,
     PROGRAM_TYPE_DIPLOMA,
 )
-from apps.applications.models import ProgramApplicationEmailLog as PAEL  # noqa: N817
 from apps.applications.services import mark_entrance_submitted, record_program_application_note
 from apps.audit.services import record_audit_event
 from apps.communications.constants import (
     TEMPLATE_ENTRANCE_EXAM_FAIL,
     TEMPLATE_ENTRANCE_EXAM_PASS,
 )
-from apps.communications.services import queue_templated_email
 from apps.core.permissions import validate_score
+from apps.core.scoring import compute_percent, is_passing
 
 from .constants import (
     ATTEMPT_STATUS_ASSIGNED,
@@ -222,8 +221,12 @@ def _recompute_attempt_grade(attempt: EntranceAttempt, actor: User | None = None
     attempt.score = total
     if all_graded:
         exam = attempt.exam
-        percentage = (total / exam.total_score * 100) if exam.total_score else Decimal("0.00")
-        attempt.result = RESULT_PASS if percentage >= exam.pass_percentage else RESULT_FAIL
+        percentage = compute_percent(total, exam.total_score)
+        # entrance exams always have a total_score; fallback to 0% when none
+        if percentage is None:
+            percentage = Decimal("0.00")
+        is_pass = is_passing(percentage, exam.pass_percentage)
+        attempt.result = RESULT_PASS if is_pass else RESULT_FAIL
         attempt.status = ATTEMPT_STATUS_GRADED
         attempt.graded_at = timezone.now()
         attempt.save(update_fields=["score", "status", "graded_at", "result"])
@@ -274,10 +277,14 @@ def _send_result_email(
 ) -> None:
     """Send the entrance result email after the submission commit.
 
-    The email is best-effort: a send or PAEL failure is logged and never
-    raises into the caller (the submission has already committed).
+    The email is best-effort: a send or log failure is logged and never
+    raises into the caller (the submission has already committed). Uses the
+    canonical queue pipeline so recipient, action, template, status, timestamps,
+    actor and idempotency are handled centrally and Celery updates the log.
     """
     try:
+        from apps.communications.services import queue_program_application_email
+
         prog_app = attempt.program_application
         slug = TEMPLATE_ENTRANCE_EXAM_PASS if result == RESULT_PASS else TEMPLATE_ENTRANCE_EXAM_FAIL
         email_to = attempt.student.user.email
@@ -286,21 +293,16 @@ def _send_result_email(
             "exam_title": attempt.exam.title,
             "cohort_name": attempt.exam.cohort.name or "",
         }
-        record = queue_templated_email(
-            slug=slug, to_email=email_to, context=context, sent_by=actor,
+        queue_program_application_email(
+            program_application=prog_app,
+            action=EMAIL_ACTION_NOTE,
+            template_slug=slug,
+            to_email=email_to,
+            context=context,
+            sent_by=actor,
             idempotency_key=f"entrance_exam:result:attempt:{attempt.pk}",
             reference=f"attempt:{attempt.pk}",
         )
-        if record:
-            PAEL.objects.create(
-                program_application=prog_app,
-                action=EMAIL_ACTION_NOTE,
-                template_slug=slug,
-                recipient=email_to,
-                sent_by=actor,
-                sent_at=record.queued_at or timezone.now(),
-                status=record.status or "queued",
-            )
     except Exception:
         logger.exception("Entrance result email failed for attempt %s", attempt.id)
 

@@ -9,7 +9,7 @@
     {% trans "Trace business actions and system changes." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
     {% if event %}
-      <section class="card-surface"><dl class="dl"><div>
+      <section class="card-surface flex flex-col gap-4"><dl class="dl"><div>
             <dt class="dt">{% trans "Event type" %}</dt>
             <dd class="dd">
               {{ event.get_action_display|default:event.action }}
@@ -65,7 +65,7 @@
         </dl>
       </section>
     {% elif page_obj %}
-      <section class="card-surface"><form class="actions-row items-end mb-4" method="get"><label class="min-w-40"><span class="field-label">{% trans "Action" %}</span>
+      <section class="card-surface flex flex-col gap-4"><form class="actions-row items-end" method="get"><label class="min-w-40"><span class="field-label">{% trans "Action" %}</span>
             <select name="action" class="form-select"><option value="">{% trans "All actions" %}</option>
               {% for value,label in action_choices %}
                 <option value="{{ value }}"

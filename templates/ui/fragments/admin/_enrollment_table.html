@@ -1,20 +1,11 @@
+{% extends "ui/components/_results_shell.html" %}
 {% load i18n ui_tags %}
-<section id="enrollment-results-boundary"
-         class="mt-3"
-         aria-live="polite">    <div class="section-head"><div>
-      <p class="eyebrow">{% trans "Enrollments" %}</p>
-      <h3>{% trans "Enrollments" %}</h3>
-    </div>
-    <div class="flex items-center gap-3">
-      <span class="text-sm font-medium text-muted">{% blocktranslate with count=page_obj.paginator.count %}total: {{ count }}{% endblocktranslate %}</span>
-      {% include "ui/components/_pagination.html" %}
-    </div>
-  </div>
-  {% if page_obj.object_list %}
-    <div class="table-wrap hidden lg:block"><table class="table">
-        <thead>
-          <tr>
-            <th class="table-th">#</th>
+{% block results_heading %}
+  <p class="eyebrow">{% trans "Enrollments" %}</p>
+  <h3>{% trans "Enrollments" %}</h3>
+{% endblock %}
+{% block table_head %}
+<th class="table-th">#</th>
             <th class="table-th">{% trans "Student" %}</th>
             <th class="table-th">{% trans "Program" %}</th>
             <th class="table-th">{% trans "Status" %}</th>
@@ -24,15 +15,14 @@
             <th class="table-th">{% trans "Activated" %}</th>
             <th class="table-th">{% trans "Enrolled" %}</th>
             <th class="table-th">{% trans "Actions" %}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for e in page_obj %}
+{% endblock %}
+{% block table_body %}
+{% for e in page_obj %}
             <tr>
               <td class="table-td text-muted">{{ page_obj.start_index|add:forloop.counter0 }}</td>
               <td>
                 <div class="flex items-center gap-2.5"><span class="rounded-full bg-brand-soft text-brand font-black grid place-items-center shrink-0 w-9 h-9 text-sm">{{ e.student.full_name|slice:":2"|upper }}</span>
-                  <span class="flex flex-col"><strong>{{ e.student.full_name }}</strong>
+                  <span class="flex flex-col gap-1"><strong>{{ e.student.full_name }}</strong>
                     <small><span dir="ltr" class="inline-block">{{ e.student.user.email }}</span></small></span>
                 </div>
               </td>
@@ -63,8 +53,8 @@
                         {% endfor %}
                       </select>
                       <button class="btn-ghost" type="submit" :disabled="saving">
-                        <span x-show="!saving">{% trans "Save" %}</span>
-                        <span x-show="saving" x-cloak>{% trans "Saving…" %}</span>
+                        <span x-show="!saving" x-transition.opacity>{% trans "Save" %}</span>
+                        <span x-show="saving" x-transition.opacity x-cloak>{% trans "Saving…" %}</span>
                       </button>
                     </form>
                   {% else %}
@@ -87,11 +77,9 @@
               </td>
             </tr>
           {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    <div class="card-stack lg:hidden">
-      {% for e in page_obj %}
+{% endblock %}
+{% block mobile_cards %}
+{% for e in page_obj %}
         <div class="mobile-card">
           <span class="rounded-full bg-brand-soft text-brand font-black grid place-items-center shrink-0 w-9 h-9 text-sm">{{ e.student.full_name|slice:":2"|upper }}</span>
           <div class="flex-1 min-w-0">
@@ -116,8 +104,8 @@
                     {% endfor %}
                   </select>
                   <button class="btn-ghost" type="submit" :disabled="saving">
-                    <span x-show="!saving">{% trans "Save" %}</span>
-                    <span x-show="saving" x-cloak>{% trans "Saving…" %}</span>
+                    <span x-show="!saving" x-transition.opacity>{% trans "Save" %}</span>
+                    <span x-show="saving" x-transition.opacity x-cloak>{% trans "Saving…" %}</span>
                   </button>
                 </form>
               </div>
@@ -127,8 +115,7 @@
              href="{% if enrollment_type == 'course' %}{% url 'academics:admin_course_enrollment_list' course.id %}?q={{ e.student.full_name|urlencode }}{% else %}{% url 'academics:admin_diploma_enrollment_list' diploma.id %}?q={{ e.student.full_name|urlencode }}{% endif %}">{% trans "View" %}</a>
         </div>
       {% endfor %}
-    </div>
-  {% else %}
-    {% include "ui/components/_empty_state.html" with title=_("No enrollments found") message=_("Try changing the search or filters.") %}
-  {% endif %}
-</section>
+{% endblock %}
+{% block empty_state %}
+  {% include "ui/components/_empty_state.html" with title=_("No enrollments found") message=_("Try changing the search or filters.") %}
+{% endblock %}

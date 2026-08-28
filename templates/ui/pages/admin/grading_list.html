@@ -8,7 +8,7 @@
     {% trans "Grading" as title %}
     {% trans "Review and score assessment attempts and homework submissions." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    <section class="card-surface"><div class="section-head"><div>
+    <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Queue" %}</p>
           <h3>{% trans "Assessment attempts" %}</h3>
         </div>
@@ -28,7 +28,7 @@
             <tbody>
               {% for item in queue_page %}
                 <tr>
-                  <td class="table-td"><div class="flex flex-col"><strong>{{ item.student.full_name|default:item.student }}</strong>
+                  <td class="table-td"><div class="flex flex-col gap-1"><strong>{{ item.student.full_name|default:item.student }}</strong>
                     <small>{{ item.student.email|default:'' }}</small></div>
                   </td>
                   <td class="table-td">{{ item.assessment.title|default:item.assessment }}</td>
@@ -60,7 +60,7 @@
         {% include "ui/components/_empty_state.html" with title=_("No submissions are waiting for grading.") %}
       {% endif %}
     </section>
-    <section class="card-surface"><div class="section-head"><div>
+    <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Queue" %}</p>
           <h3>{% trans "Homework submissions" %}</h3>
         </div>
@@ -80,7 +80,7 @@
               <tbody>
                 {% for item in rows %}
                   <tr>
-                    <td class="table-td"><div class="flex flex-col"><strong>{{ item.student.full_name|default:item.student }}</strong>
+                    <td class="table-td"><div class="flex flex-col gap-1"><strong>{{ item.student.full_name|default:item.student }}</strong>
                       <small>{{ item.student.email|default:'' }}</small></div>
                     </td>
                     <td class="table-td">{{ item.assessment.title|default:item.assessment }}</td>
@@ -123,7 +123,7 @@
               <tbody>
                 {% for item in rows %}
                   <tr>
-                    <td class="table-td"><div class="flex flex-col"><strong>{{ item.student.full_name|default:item.student }}</strong>
+                    <td class="table-td"><div class="flex flex-col gap-1"><strong>{{ item.student.full_name|default:item.student }}</strong>
                       <small>{{ item.student.email|default:'' }}</small></div>
                     </td>
                     <td class="table-td">{{ item.assessment.title|default:item.assessment }}</td>

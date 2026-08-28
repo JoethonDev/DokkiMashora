@@ -1,4 +1,4 @@
-﻿{% extends "ui/layouts/admin.html" %}
+{% extends "ui/layouts/admin.html" %}
 {% load i18n ui_tags %}
 {% block title %}
   {{ assessment.title }}
@@ -6,7 +6,7 @@
 {% block content %}
   <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=assessment.title description=assessment.description eyebrow=_("Assessment") back_button=True %}
     {% if assessment.is_legacy %}
-      <section class="card-surface">
+      <section class="card-surface flex flex-col gap-4">
         <div class="flex flex-col gap-1">
           {% include "ui/components/_status.html" with code="pending" label=_("Legacy assessment - read only") %}
           {% if assessment.legacy_note %}<p class="text-sm text-muted m-0 mt-1">{{ assessment.legacy_note }}</p>{% endif %}
@@ -49,7 +49,7 @@
         </form>
       </div>
     {% endif %}
-    <section class="card-surface"><div class="section-head"><div>
+    <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Details" %}</p>
           <h3>{% trans "Assessment info" %}</h3>
         </div>
@@ -129,7 +129,7 @@
         {% endif %}
       </dl>
     </section>
-    <section class="card-surface"><div class="section-head"><div>
+    <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Structure" %}</p>
           <h3>{% if is_diploma %}{% trans "Sections" %}{% else %}{% trans "Questions" %}{% endif %}</h3>
         </div>
@@ -141,7 +141,7 @@
           {% for section in sections %}
             <details class="group py-2 first:pt-0 last:pb-0">
               <summary class="flex items-center justify-between gap-4 cursor-pointer list-none py-2 [&::-webkit-details-marker]:hidden">
-                <div class="flex items-center gap-3 min-w-0 flex-1">
+                <div class="flex items-center gap-2.5 min-w-0 flex-1">
                   <span class="text-xs text-muted shrink-0 transition-transform group-open:rotate-90">&#9654;</span>
                   <span class="text-xs font-bold text-muted uppercase shrink-0">#{{ section.order }}</span>
                   <strong class="truncate">{{ section.lecture.title }}</strong>
@@ -168,7 +168,7 @@
                   <div>
                     <p class="text-xs font-bold text-muted uppercase mb-3">{% trans "Preview - questions as they appear to students" %}</p>
                     {% for bq in section.preview_bank %}
-                      <div class="border border-line rounded-sm p-3 mb-2 bg-surface-soft ms-1">
+                      <div class="border border-line rounded-sm p-4 mb-2 bg-surface-soft ms-1">
                         <div class="flex items-center gap-2 mb-1">
                           <span class="px-1.5 py-0.5 text-xs font-bold rounded-full {% if bq.question_type == 'mcq' %}bg-info-soft text-info-text{% else %}bg-warning-soft text-warning-text{% endif %}">{{ bq.get_question_type_display }}</span>
                           <span class="text-xs text-muted">({% trans "from bank" %})</span>
@@ -187,7 +187,7 @@
                       </div>
                     {% endfor %}
                     {% for mq in section.manual_questions.all %}
-                      <div class="border border-line rounded-sm p-3 mb-2 ms-1">
+                      <div class="border border-line rounded-sm p-4 mb-2 ms-1">
                         <div class="flex items-start gap-2 mb-1">
                           <div class="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
                             <span class="px-1.5 py-0.5 text-xs font-bold rounded-full {% if mq.question_type == 'mcq' %}bg-info-soft text-info-text{% else %}bg-warning-soft text-warning-text{% endif %}">{{ mq.get_question_type_display }}</span>
@@ -261,7 +261,7 @@
         {% include "ui/components/_empty_state.html" with title=_("Homework is managed through student submissions.") %}
       {% endif %}
     </section>
-    <section class="card-surface"><div class="section-head"><div>
+    <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Results" %}</p>
           <h3>{% trans "Attempts" %}</h3>
         </div>

@@ -25,7 +25,7 @@
           <td class="table-td">
             {% include "ui/components/_expandable_text.html" with text=item.reason clamp=2 %}
           </td>
-          <td class="table-td"><div class="flex flex-col">
+          <td class="table-td"><div class="flex flex-col gap-1">
             {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
             <small>{{ item.granted_at|date:"SHORT_DATE_FORMAT"|default:'—' }}</small></div>
           </td>

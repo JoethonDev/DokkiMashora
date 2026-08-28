@@ -6,7 +6,8 @@
       hx-trigger="submit, keyup changed delay:300ms from:input[name='q']"
       hx-target="#exceptional-access-enrollment-picker"
       hx-swap="innerHTML"
-      hx-push-url="false">
+      hx-push-url="false"
+      hx-indicator="#global-loading">
   <label class="field">
     <span class="field-label">{% trans "Search by name or email" %}</span>
     <input type="search" name="q" value="{{ query }}" class="form-input" autocomplete="off" autofocus>
@@ -21,7 +22,7 @@
 
 <div class="flex flex-col gap-2" aria-live="polite">
   {% for enrollment in page_obj %}
-    <label class="flex cursor-pointer items-start gap-3 rounded-sm border border-line bg-surface-soft p-3 transition hover:border-brand-200 hover:bg-brand-soft">
+    <label class="flex cursor-pointer items-start gap-2.5 rounded-sm border border-line bg-surface-soft p-4 transition hover:border-brand-200 hover:bg-brand-soft">
       <input type="checkbox"
              class="form-checkbox mt-1"
              name="{{ enrollment_field }}"
@@ -43,7 +44,7 @@
 </div>
 
 {% if page_obj.has_other_pages %}
-  <nav class="flex items-center justify-between gap-3 pt-4 flex-wrap" aria-label="{% trans 'Student pages' %}">
+  <nav class="flex items-center justify-between gap-2.5 pt-4 flex-wrap" aria-label="{% trans 'Student pages' %}">
     <p class="text-sm text-muted m-0">
       {% blocktranslate with first=page_obj.start_index last=page_obj.end_index total=page_obj.paginator.count %}Showing {{ first }}–{{ last }} of {{ total }}{% endblocktranslate %}
     </p>
@@ -54,7 +55,8 @@
            hx-get="{% url 'assessments:admin_exceptional_access_enrollments' assessment.id %}?q={{ query|urlencode }}&amp;page={{ page_obj.previous_page_number }}"
            hx-target="#exceptional-access-enrollment-picker"
            hx-swap="innerHTML"
-           hx-push-url="false">{% trans "Previous" %}</a>
+           hx-push-url="false"
+           hx-indicator="#global-loading">{% trans "Previous" %}</a>
       {% endif %}
       <span class="text-sm text-muted">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
       {% if page_obj.has_next %}
@@ -63,7 +65,8 @@
            hx-get="{% url 'assessments:admin_exceptional_access_enrollments' assessment.id %}?q={{ query|urlencode }}&amp;page={{ page_obj.next_page_number }}"
            hx-target="#exceptional-access-enrollment-picker"
            hx-swap="innerHTML"
-           hx-push-url="false">{% trans "Next" %}</a>
+           hx-push-url="false"
+           hx-indicator="#global-loading">{% trans "Next" %}</a>
       {% endif %}
     </div>
   </nav>

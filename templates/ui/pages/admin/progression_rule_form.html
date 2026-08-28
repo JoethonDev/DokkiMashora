@@ -5,39 +5,12 @@
 <div class="page-stack animate-enter-view">
   {% include "ui/components/_page_header.html" with eyebrow=_("Diploma") title=diploma.title description=_("Progression Rule") back_button=True %}
   <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
-    <div class="form-group">
-      <label class="field-label" for="semester_pass_percent">{% trans "Semester passing threshold (%)" %}</label>
-      <input class="form-input" type="number" id="semester_pass_percent" name="semester_pass_percent" value="{{ rule.semester_pass_percent }}" min="0" max="100" step="0.01" required>
-      <p class="field-help">{% trans "Enter the minimum semester result as a percentage from 0 to 100." %}</p>
-    </div>
-    <div class="form-group">
-      <label class="flex items-center gap-2 cursor-pointer">
-        <input class="form-checkbox" type="checkbox" name="require_all_semesters_passed" value="1" {% if rule.require_all_semesters_passed %}checked{% endif %}>
-        <span>{% trans "Require all semesters passed" %}</span>
-      </label>
-    </div>
-    <div class="form-group">
-      <label class="flex items-center gap-2 cursor-pointer">
-        <input class="form-checkbox" type="checkbox" name="auto_promote_enabled" value="1" {% if rule.auto_promote_enabled %}checked{% endif %}>
-        <span>{% trans "Auto promote enabled" %}</span>
-      </label>
-    </div>
-    <div class="form-group">
-      <label class="flex items-center gap-2 cursor-pointer">
-        <input class="form-checkbox" type="checkbox" name="allow_admin_override" value="1" {% if rule.allow_admin_override %}checked{% endif %}>
-        <span>{% trans "Allow admin override" %}</span>
-      </label>
-    </div>
-    <div class="form-group">
-      <label class="flex items-center gap-2 cursor-pointer">
-        <input class="form-checkbox" type="checkbox" name="allow_retake" value="1" {% if rule.allow_retake %}checked{% endif %}>
-        <span>{% trans "Allow retake" %}</span>
-      </label>
-    </div>
-    <div class="form-group">
-      <label class="field-label" for="max_retake_count">{% trans "Maximum retakes (number)" %}</label>
-      <input class="form-input" type="number" id="max_retake_count" name="max_retake_count" value="{{ rule.max_retake_count }}" min="0" step="1" required>
-    </div>
+    {% if form.non_field_errors %}
+      <div class="py-4 px-5 border border-red rounded-md bg-red-soft text-red" role="alert">{% for error in form.non_field_errors %}<p class="m-0">{{ error }}</p>{% endfor %}</div>
+    {% endif %}
+    {% for field in form %}
+      {% include "ui/components/_field.html" with field=field %}
+    {% endfor %}
     <div class="flex gap-2.5 items-center flex-wrap pt-4 border-t border-line mt-5">
       <button class="btn-primary" type="submit">{% trans "Save" %}</button>
       <a class="btn-ghost" href="{% url 'academics:admin_diploma_detail' diploma.id %}">{% trans "Cancel" %}</a>

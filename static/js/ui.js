@@ -525,17 +525,28 @@
   var confirmBtn = document.getElementById("confirm-modal-confirm");
   var cancelBtn = document.getElementById("confirm-modal-cancel");
   var backdrop = document.getElementById("confirm-modal-backdrop");
+  var reasonWrap = document.getElementById("confirm-modal-reason-wrap");
+  var reasonInput = document.getElementById("confirm-modal-reason");
+  var reasonError = document.getElementById("confirm-modal-reason-error");
   var pendingForm = null;
   var confirmTrigger = null;
   var confirmSubmitting = false;
+  var confirmReasonRequired = false;
 
-  function showConfirmModal(message, label) {
+  function showConfirmModal(message, label, reasonRequired) {
     if (!confirmModal) return;
     confirmTrigger = document.activeElement;
+    confirmReasonRequired = reasonRequired === true;
     if (confirmMessage) confirmMessage.textContent = message;
     // Label comes from data-confirm-label or the trigger's own translated
     // text; the modal's default confirm button already renders {% trans "Delete" %}.
     if (confirmBtn) confirmBtn.textContent = label || confirmBtn.getAttribute("data-default-label") || "";
+    if (reasonWrap) reasonWrap.classList.toggle("hidden", !confirmReasonRequired);
+    if (reasonInput) {
+      reasonInput.value = "";
+      reasonInput.setCustomValidity("");
+    }
+    if (reasonError) reasonError.classList.add("hidden");
     confirmModal.classList.remove("hidden");
     // Isolate the background from keyboard + assistive tech while open.
     var shell = document.querySelector("[data-page-shell]");
@@ -543,13 +554,15 @@
     focusTrap.enable(confirmModal);
     // Focus the safe (cancel) control first so Enter never triggers the
     // destructive confirm by accident.
-    if (cancelBtn) cancelBtn.focus();
+    if (confirmReasonRequired && reasonInput) reasonInput.focus();
+    else if (cancelBtn) cancelBtn.focus();
   }
 
   function hideConfirmModal(restoreButtons) {
     if (!confirmModal) return;
     if (confirmModal.classList.contains("hidden")) return;
     confirmModal.classList.add("hidden");
+    confirmReasonRequired = false;
     focusTrap.disable();
     var shell = document.querySelector("[data-page-shell]");
     if (shell) shell.removeAttribute("inert");
@@ -560,6 +573,7 @@
       Array.prototype.forEach.call(buttons, function (btn) { btn.disabled = false; });
     }
     pendingForm = null;
+    confirmSubmitting = false;
     if (confirmTrigger && confirmTrigger.focus) {
       confirmTrigger.focus();
     }
@@ -577,6 +591,20 @@
     confirmBtn.addEventListener("click", function () {
       if (confirmSubmitting) return;
       if (pendingForm) {
+        if (confirmReasonRequired) {
+          var reason = reasonInput ? reasonInput.value.trim() : "";
+          if (!reason) {
+            if (reasonError) reasonError.classList.remove("hidden");
+            if (reasonInput) reasonInput.focus();
+            return;
+          }
+          var reasonName = pendingForm.getAttribute("data-confirm-reason-name") || "reason";
+          var reasonField = Array.prototype.find.call(
+            pendingForm.querySelectorAll("input, textarea"),
+            function (field) { return field.name === reasonName; }
+          );
+          if (reasonField) reasonField.value = reason;
+        }
         confirmSubmitting = true;
         confirmBtn.disabled = true;
         var buttons = pendingForm.querySelectorAll("button[type='submit']");
@@ -611,7 +639,8 @@
         var suffix = form.getAttribute("data-unanswered-suffix") || "Submit them as empty values?";
         showConfirmModal(
           prefix + ": " + unanswered.join(", ") + ". " + suffix,
-          form.getAttribute("data-confirm-label") || "Submit"
+          form.getAttribute("data-confirm-label") || "Submit",
+          false
         );
         return;
       }
@@ -621,7 +650,7 @@
     pendingForm = form;
     var defaultLabel = confirmBtn ? confirmBtn.getAttribute("data-default-label") : "";
     var label = form.getAttribute("data-confirm-label") || form.querySelector("[type='submit']")?.textContent?.trim() || defaultLabel;
-    showConfirmModal(msg, label);
+    showConfirmModal(msg, label, form.getAttribute("data-confirm-reason-required") === "true");
   });
 
   // Intercept button clicks with data-confirm (for non-form use)
@@ -639,7 +668,7 @@
         pendingForm = form;
         var defaultLabel = confirmBtn ? confirmBtn.getAttribute("data-default-label") : "";
         var label = btn.textContent?.trim() || defaultLabel;
-        showConfirmModal(msg, label);
+        showConfirmModal(msg, label, false);
       }
     }
   });
@@ -651,6 +680,24 @@
     if (!checkbox) return;
     var details = container.querySelector("#program-details");
     if (!details) return;
+    // Alpine-managed wizard (x-data + x-show with x-transition) owns visibility.
+    // Keep only disabled-field semantics here to avoid fighting Alpine transitions.
+    if (details.hasAttribute("x-show") || details.closest("[x-data]")) {
+      var typeSelectA = container.querySelector("#id_program_type");
+      var diplomaFieldA = container.querySelector("#diploma-field");
+      var courseFieldA = container.querySelector("#course-field");
+      var syncDisabled = function () {
+        var apply = checkbox.checked;
+        var isDiploma = typeSelectA && typeSelectA.value === "diploma";
+        details.querySelectorAll("input, select, textarea").forEach(function (inp) { inp.disabled = !apply; });
+        if (diplomaFieldA) diplomaFieldA.querySelectorAll("input, select, textarea").forEach(function (inp) { inp.disabled = !apply || !isDiploma; });
+        if (courseFieldA) courseFieldA.querySelectorAll("input, select, textarea").forEach(function (inp) { inp.disabled = !apply || isDiploma; });
+      };
+      checkbox.addEventListener("change", syncDisabled);
+      if (typeSelectA) typeSelectA.addEventListener("change", syncDisabled);
+      syncDisabled();
+      return;
+    }
 
     var typeSelect = container.querySelector("#id_program_type");
     var diplomaField = container.querySelector("#diploma-field");
@@ -715,6 +762,8 @@
     if (!container) container = document;
     var wizard = container.querySelector("#registration-wizard");
     if (!wizard) return;
+    // Alpine wizard (x-data + x-show/x-transition) owns its own visibility; avoid fighting transitions.
+    if (wizard.hasAttribute("x-data")) return;
     var steps = Array.prototype.slice.call(wizard.querySelectorAll(".form-step"));
     if (!steps.length) return;
     var indicators = Array.prototype.slice.call(wizard.querySelectorAll("[data-wizard-step-index]"));
@@ -820,5 +869,41 @@
       window.Alpine.initTree(e.detail.target);
     }
   });
+
+  // Keep the persistent sidebar's active state in sync after content-only
+  // navigation replaces #main without rebuilding the shell. Only the longest
+  // prefix match becomes active so two items are never active at once.
+  function syncContentNavigation() {
+    var currentPath = window.location.pathname.replace(/\/+$/, "") || "/";
+    var links = document.querySelectorAll("[data-content-navigation] a[href]");
+    var bestLink = null;
+    var bestLen = -1;
+    for (var i = 0; i < links.length; i++) {
+      var link = links[i];
+      var linkPath;
+      try {
+        linkPath = new URL(link.href, window.location.href).pathname.replace(/\/+$/, "") || "/";
+      } catch (_error) {
+        continue;
+      }
+      var isMatch = currentPath === linkPath ||
+        (linkPath !== "/" && currentPath.indexOf(linkPath + "/") === 0);
+      // Clear all first so stale server-rendered active does not linger.
+      link.classList.remove("active");
+      link.removeAttribute("aria-current");
+      if (isMatch && linkPath.length > bestLen) {
+        bestLen = linkPath.length;
+        bestLink = link;
+      }
+    }
+    if (bestLink) {
+      bestLink.classList.add("active");
+      bestLink.setAttribute("aria-current", "page");
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", syncContentNavigation);
+  document.addEventListener("htmx:afterSwap", syncContentNavigation);
+  document.addEventListener("htmx:pushedIntoHistory", syncContentNavigation);
 
 })();

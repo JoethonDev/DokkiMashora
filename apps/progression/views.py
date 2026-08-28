@@ -17,7 +17,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_POST
 
-from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE
+from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE, ENROLLMENT_STATUS_RESTRICTED
 from apps.academics.models import (
     Cohort,
     Diploma,
@@ -34,6 +34,7 @@ from apps.audit.constants import (
 )
 from apps.audit.services import record_audit_event
 from apps.certificates.models import GeneratedCertificate
+from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import (
     ROLE_SENIOR_STAFF,
@@ -60,6 +61,7 @@ from .constants import (
     PROMOTION_DECISION_INTERVIEW_PASS,
     PROMOTION_DECISION_REQUEST_INTERVIEW,
     REJOIN_STATUS_ACTIVE,
+    REJOIN_STATUS_CANCELLED,
     REJOIN_STATUS_CHOICES,
     REJOIN_STATUS_PLANNED,
     SEMESTER_EVALUATION_FAIL,
@@ -68,9 +70,10 @@ from .constants import (
     SEMESTER_PROGRESS_FAILED,
     SEMESTER_PROGRESS_LOCKED,
     SEMESTER_PROGRESS_PASSED,
+    SEMESTER_PROGRESS_PASSED_CONFIRMED,
     SEMESTER_PROGRESS_PROMOTED,
 )
-from .forms import SemesterEvaluationSettingsForm
+from .forms import DiplomaProgressionRuleForm, SemesterEvaluationSettingsForm
 from .models import (
     DiplomaProgressionRule,
     FinalExamEligibility,
@@ -95,6 +98,7 @@ from .services import (
     create_rejoin_plan,
     evaluate_semester_components,
     evaluate_semester_evaluation,
+    exceptional_promote_semester,
     finalize_semester_evaluation,
     get_immediate_next_cohort,
     get_rejoin_eligibility_rows,
@@ -106,6 +110,7 @@ from .services import (
     mark_graduated,
     promote_academic_year,
     promote_semester,
+    reevaluate_semester_evaluation,
     request_final_interview,
     resolve_final_progression,
     save_progression_rule,
@@ -241,9 +246,12 @@ def admin_cohort_semester_progression(request, diploma_id, cohort_id, semester_i
 def admin_semester_sync_all(request, cohort_id, semester_id):
     cohort = get_object_or_404(Cohort, id=cohort_id)
     semester = get_object_or_404(Semester, id=semester_id, diploma_id=cohort.diploma_id)
-    enrollments = list(DiplomaEnrollment.objects.filter(cohort=cohort, status="active"))
+    enrollments = list(
+        DiplomaEnrollment.objects.filter(cohort=cohort, status="active").select_related("student")
+    )
     ok = 0
     fail = 0
+    failures = []
     with transaction.atomic():
         for enrollment in enrollments:
             try:
@@ -252,7 +260,12 @@ def admin_semester_sync_all(request, cohort_id, semester_id):
             except (ValueError, ValidationError) as exc:
                 logger.warning("Sync failed for enrollment %s: %s", enrollment.id, exc)
                 fail += 1
-    messages.success(request, _("Synced {ok} student(s). {fail} failed.").format(ok=ok, fail=fail))
+                failures.append(f"{enrollment.student}: {exc}")
+    message = _("Synced {ok} student(s). {fail} failed.").format(ok=ok, fail=fail)
+    if failures:
+        messages.warning(request, f"{message} " + _("Failures: ") + "; ".join(failures))
+    else:
+        messages.success(request, message)
     return redirect("progression:admin_cohort_semester_progression", diploma_id=cohort.diploma_id, cohort_id=cohort.id, semester_id=semester.id)
 
 
@@ -265,6 +278,7 @@ def admin_semester_evaluate_all(request, cohort_id, semester_id):
     enrollments = list(DiplomaEnrollment.objects.filter(cohort=cohort, status="active").select_related("student"))
     ok = 0
     fail = 0
+    failures = []
     # P2-06: per-enrollment atomic finalization (the service owns the lock);
     # failures are reported individually, never rolled back together.
     for enrollment in enrollments:
@@ -274,7 +288,40 @@ def admin_semester_evaluate_all(request, cohort_id, semester_id):
         except (ValueError, ValidationError) as exc:
             logger.warning("Evaluation failed for enrollment %s: %s", enrollment.id, exc)
             fail += 1
-    messages.success(request, _("Evaluated {ok} student(s). {fail} failed.").format(ok=ok, fail=fail))
+            failures.append(f"{enrollment.student}: {exc}")
+    message = _("Evaluated {ok} student(s). {fail} failed.").format(ok=ok, fail=fail)
+    if failures:
+        messages.warning(request, f"{message} " + _("Failures: ") + "; ".join(failures))
+    else:
+        messages.success(request, message)
+    return redirect("progression:admin_cohort_semester_progression", diploma_id=cohort.diploma_id, cohort_id=cohort.id, semester_id=semester.id)
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_POST
+def admin_semester_reevaluate_all(request, cohort_id, semester_id):
+    cohort = get_object_or_404(Cohort, id=cohort_id)
+    semester = get_object_or_404(Semester, id=semester_id, diploma_id=cohort.diploma_id)
+    enrollments = list(
+        DiplomaEnrollment.objects.filter(cohort=cohort, status="active").select_related("student")
+    )
+    ok = 0
+    fail = 0
+    failures = []
+    for enrollment in enrollments:
+        try:
+            reevaluate_semester_evaluation(enrollment, semester, actor=request.user)
+            ok += 1
+        except (ValueError, ValidationError) as exc:
+            logger.warning("Re-evaluation failed for enrollment %s: %s", enrollment.id, exc)
+            fail += 1
+            failures.append(f"{enrollment.student}: {exc}")
+    message = _("Re-evaluated {ok} student(s). {fail} failed.").format(ok=ok, fail=fail)
+    if failures:
+        messages.warning(request, f"{message} " + _("Failures: ") + "; ".join(failures))
+    else:
+        messages.success(request, message)
     return redirect("progression:admin_cohort_semester_progression", diploma_id=cohort.diploma_id, cohort_id=cohort.id, semester_id=semester.id)
 
 
@@ -524,10 +571,29 @@ def admin_student_detail(request, student_id):
         evaluation_targets = []
         failed_targets = []
         interview_requested = False
+        completed_statuses = {
+            SEMESTER_PROGRESS_COMPLETED,
+            SEMESTER_PROGRESS_PASSED,
+            SEMESTER_PROGRESS_PASSED_CONFIRMED,
+            SEMESTER_PROGRESS_PROMOTED,
+        }
+        entry_index = next(
+            (index for index, semester in enumerate(diploma_semesters)
+             if semester.id == enrollment.entry_semester_id),
+            0,
+        )
+        current_semester = next(
+            (
+                semester for semester in diploma_semesters[entry_index:]
+                if progress_status_by_semester.get((enrollment.id, semester.id)) not in completed_statuses
+            ),
+            None,
+        )
         for semester in diploma_semesters:
             key = (enrollment.id, semester.id)
             if key not in finalized_semesters:
-                evaluation_targets.append(semester)
+                if semester == current_semester:
+                    evaluation_targets.append(semester)
             else:
                 status, final_result = outcome_state.get(key, (FINAL_PROGRESSION_STATUS_PENDING, None))
                 if status == FINAL_PROGRESSION_STATUS_PENDING:
@@ -739,6 +805,33 @@ def admin_promote(request, student_id):
 @login_required
 @role_required(*ROLE_SENIOR_STAFF)
 @require_POST
+def admin_exceptional_promote(request, student_id):
+    student = _get_student_or_404(student_id)
+    enrollment = get_object_or_404(
+        DiplomaEnrollment,
+        id=request.POST.get("enrollment_id"),
+        student=student,
+    )
+    semester = get_object_or_404(Semester, id=request.POST.get("semester_id"))
+    try:
+        exceptional_promote_semester(
+            enrollment,
+            semester,
+            actor=request.user,
+            reason=request.POST.get("reason", ""),
+        )
+        messages.success(request, _("Exceptional promotion recorded."))
+    except (ValueError, ValidationError) as exc:
+        messages.error(request, str(exc))
+    next_url = _safe_redirect_url(request, request.POST.get("next"))
+    if next_url:
+        return redirect(next_url)
+    return redirect("progression:admin_student_detail", student_id=student.id)
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_POST
 def admin_promote_academic_year(request, student_id):
     student = _get_student_or_404(student_id)
     enrollment = get_object_or_404(DiplomaEnrollment, id=request.POST.get("enrollment_id"), student=student)
@@ -781,6 +874,9 @@ def admin_demote(request, student_id):
         except ValueError as exc:
             messages.error(request, str(exc))
 
+    next_url = _safe_redirect_url(request, request.POST.get("next"))
+    if next_url:
+        return redirect(next_url)
     return redirect("progression:admin_student_detail", student_id=student.id)
 
 
@@ -1019,8 +1115,6 @@ def admin_diploma_rule_edit(request, diploma_id):
             "semester_pass_percent": Decimal("50.00"),
             "final_exam_pass_percent": Decimal("50.00"),
             "require_all_semesters_passed": True,
-            # Kept on the model for historical rows; the deprecated separate
-            # Diploma final-exam workflow is not part of new progression.
             "require_final_exam": False,
             "auto_promote_enabled": False,
             "allow_admin_override": True,
@@ -1030,44 +1124,25 @@ def admin_diploma_rule_edit(request, diploma_id):
         },
     )
     if request.method == "POST":
-        errors = []
-        semester_pass = request.POST.get("semester_pass_percent", "").strip()
-        max_retake = request.POST.get("max_retake_count", "0").strip()
-        try:
-            parsed = Decimal(semester_pass) if semester_pass else Decimal("50.00")
-            if not parsed.is_finite() or parsed < 0 or parsed > 100:
-                errors.append(_("Semester pass percent must be between 0 and 100."))
-            else:
-                rule.semester_pass_percent = parsed
-        except (ValueError, TypeError):
-            errors.append(_("Invalid semester pass percent."))
-        try:
-            parsed = int(max_retake) if max_retake else 0
-            if parsed < 0:
-                errors.append(_("Max retake count cannot be negative."))
-            else:
-                rule.max_retake_count = parsed
-        except (ValueError, TypeError):
-            errors.append(_("Invalid max retake count."))
-        rule.require_all_semesters_passed = request.POST.get("require_all_semesters_passed") == "1"
-        rule.auto_promote_enabled = request.POST.get("auto_promote_enabled") == "1"
-        rule.allow_admin_override = request.POST.get("allow_admin_override") == "1"
-        rule.allow_retake = request.POST.get("allow_retake") == "1"
-        if not errors:
+        form = DiplomaProgressionRuleForm(request.POST, instance=rule)
+        if form.is_valid():
             try:
-                # S2-18/S2-19: save + full_clean() + bounded reevaluation are
-                # one atomic, actor-attributed step (never a hidden signal).
+                rule = form.save(commit=False)
                 save_progression_rule(rule, request.user)
                 messages.success(request, _("Progression rule updated."))
                 return redirect("academics:admin_diploma_detail", diploma_id=diploma.id)
             except (ValueError, ValidationError) as exc:
-                errors.append(str(exc))
-        for err in errors:
+                form.add_error(None, str(exc))
+        # form errors will be rendered via _field.html + non-field errors
+        for err in form.non_field_errors():
             messages.error(request, err)
+    else:
+        form = DiplomaProgressionRuleForm(instance=rule)
     ctx = {
         "workflow": "diploma_rule_edit",
         "diploma": diploma,
         "rule": rule,
+        "form": form,
         "breadcrumb_items": [
             {"label": _("Academics"), "href": reverse("academics:admin_diploma_list")},
             {"label": diploma.title, "href": reverse("academics:admin_diploma_detail", args=[diploma.id])},
@@ -1178,6 +1253,27 @@ def admin_grade_sync(request, enrollment_id, semester_id):
 
 @login_required
 @role_required(*ROLE_SENIOR_STAFF)
+@require_POST
+def admin_grade_reevaluate(request, enrollment_id, semester_id):
+    enrollment = get_object_or_404(DiplomaEnrollment, id=enrollment_id)
+    semester = get_object_or_404(Semester, id=semester_id)
+    try:
+        evaluation = reevaluate_semester_evaluation(enrollment, semester, actor=request.user)
+        messages.success(
+            request,
+            _("Semester re-evaluated: %(result)s (%(percent)s%%).")
+            % {"result": evaluation.get_result_display(), "percent": evaluation.overall_percent},
+        )
+    except (ValueError, ValidationError) as exc:
+        messages.error(request, str(exc))
+    next_url = _safe_redirect_url(request, request.POST.get("next"))
+    if next_url:
+        return redirect(next_url)
+    return redirect("progression:admin_student_detail", student_id=enrollment.student.id)
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
 def admin_semester_evaluation(request, enrollment_id, semester_id):
     enrollment = get_object_or_404(DiplomaEnrollment, id=enrollment_id)
     semester = get_object_or_404(Semester, id=semester_id)
@@ -1259,7 +1355,7 @@ def admin_request_interview(request, enrollment_id, semester_id):
                 messages.success(request, _("Interview requested."))
             except ValueError as exc:
                 messages.error(request, str(exc))
-        if request.headers.get("HX-Request"):
+        if is_htmx(request):
             return _render_semester_row(request, enrollment, semester)
         next_url = _safe_redirect_url(request, request.POST.get("next") or request.GET.get("next"))
         if next_url:
@@ -1380,7 +1476,7 @@ def admin_interview_inline_pass(request, enrollment_id, semester_id):
             messages.success(request, _("Interview passed."))
         except ValueError as exc:
             messages.error(request, str(exc))
-    if request.headers.get("HX-Request"):
+    if is_htmx(request):
         return _render_semester_row(request, enrollment, semester)
     return redirect("progression:admin_cohort_semester_progression", diploma_id=enrollment.cohort.diploma_id, cohort_id=enrollment.cohort_id, semester_id=semester.id)
 
@@ -1402,7 +1498,7 @@ def admin_interview_inline_fail(request, enrollment_id, semester_id):
             messages.success(request, _("Interview failed."))
         except ValueError as exc:
             messages.error(request, str(exc))
-    if request.headers.get("HX-Request"):
+    if is_htmx(request):
         return _render_semester_row(request, enrollment, semester)
     return redirect("progression:admin_cohort_semester_progression", diploma_id=enrollment.cohort.diploma_id, cohort_id=enrollment.cohort_id, semester_id=semester.id)
 
@@ -1456,13 +1552,35 @@ def _render_semester_row(request, enrollment, semester):
 @login_required
 @role_required(*ROLE_SENIOR_STAFF)
 def admin_rejoin_plan_list(request):
-    plans = SemesterRejoinPlan.objects.select_related(
+    plans = list(SemesterRejoinPlan.objects.select_related(
         "student__user", "from_enrollment__cohort", "failed_semester",
         "target_cohort", "planned_by", "to_enrollment__cohort",
-    ).all()
-    status = request.GET.get("status", "")
-    if status:
-        plans = plans.filter(status=status)
+    ).all())
+    for plan in plans:
+        if plan.status == REJOIN_STATUS_PLANNED:
+            plan.next_step = _("Next step: activate to move the student to the target cohort, or cancel the plan.")
+        elif plan.status == REJOIN_STATUS_ACTIVE:
+            plan.next_step = _("Next step: revoke to delete the replacement enrollment and restore the previous cohort.")
+        elif plan.status == REJOIN_STATUS_CANCELLED:
+            plan.next_step = _("Closed: kept as historical record; no action is required.")
+        else:
+            plan.next_step = _("Completed: kept as historical record.")
+        plan.can_restore_previous_enrollment = (
+            plan.status == REJOIN_STATUS_CANCELLED
+            and plan.from_enrollment.status == ENROLLMENT_STATUS_RESTRICTED
+            and plan.to_enrollment is not None
+            and plan.to_enrollment.status == ENROLLMENT_STATUS_ACTIVE
+        )
+    requested_status = request.GET.get("status", "")
+    if requested_status == "all":
+        status = "all"
+    elif requested_status in {value for value, _label in REJOIN_STATUS_CHOICES}:
+        status = requested_status
+    else:
+        status = "current"
+        plans = [plan for plan in plans if plan.status in {REJOIN_STATUS_PLANNED, REJOIN_STATUS_ACTIVE}]
+    if status not in {"all", "current"}:
+        plans = [plan for plan in plans if plan.status == status]
     ctx = {
         "workflow": "rejoin_list",
         "plans": plans,
@@ -1590,11 +1708,26 @@ def admin_activate_rejoin_plan(request, plan_id):
 @role_required(*ROLE_SENIOR_STAFF)
 @require_POST
 def admin_cancel_rejoin_plan(request, plan_id):
-    plan = get_object_or_404(SemesterRejoinPlan, id=plan_id)
+    plan = get_object_or_404(
+        SemesterRejoinPlan.objects.select_related("from_enrollment", "to_enrollment"),
+        id=plan_id,
+    )
     reason = request.POST.get("reason", "")
+    was_active = plan.status == REJOIN_STATUS_ACTIVE
+    was_recovery = (
+        plan.status == REJOIN_STATUS_CANCELLED
+        and plan.from_enrollment.status == ENROLLMENT_STATUS_RESTRICTED
+        and plan.to_enrollment is not None
+        and plan.to_enrollment.status == ENROLLMENT_STATUS_ACTIVE
+    )
     try:
         cancel_rejoin_plan(plan, actor=request.user, reason=reason)
-        messages.success(request, _("Rejoin plan cancelled."))
+        messages.success(
+            request,
+            _("Previous enrollment restored.")
+            if was_recovery
+            else _("Rejoin revoked.") if was_active else _("Rejoin plan cancelled."),
+        )
     except ValueError as exc:
         messages.error(request, str(exc))
     return redirect("progression:admin_rejoin_plan_list")

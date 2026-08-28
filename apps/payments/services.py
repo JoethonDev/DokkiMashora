@@ -4,7 +4,6 @@ import csv
 import hashlib
 import io
 import logging
-from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -23,7 +22,8 @@ from apps.audit.constants import (
 )
 from apps.audit.services import record_audit_event
 from apps.core.permissions import validate_score
-from apps.core.phone import normalize_phone_number
+from apps.core.dates import parse_date
+from apps.core.phone import normalize_phone
 from apps.students.identity import normalize_identity_number
 from apps.students.models import StudentProfile
 
@@ -75,15 +75,6 @@ def normalize_national_id_for_matching(value: str) -> list[str]:
     return variants
 
 
-def parse_date(value: str) -> datetime | None:
-    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d", "%d-%m-%Y"):
-        try:
-            return datetime.strptime(value.strip(), fmt).replace(tzinfo=timezone.get_current_timezone())
-        except ValueError:
-            continue
-    return None
-
-
 def validate_csv_content(content: bytes) -> list[dict[str, str]]:
     text = content.decode("utf-8-sig")
     reader = csv.DictReader(io.StringIO(text))
@@ -109,7 +100,7 @@ def match_student(row: dict[str, str]) -> tuple[StudentProfile | None, str, str]
         item for item in normalize_national_id_for_matching(row.get("national_id", "")) if item
     ]
     email = row.get("email", "").strip().lower()
-    phone = normalize_phone_number(row.get("phone", ""))
+    phone = normalize_phone(row.get("phone", ""))
     candidates: dict[int, StudentProfile] = {}
     sources: dict[int, str] = {}
 
@@ -179,7 +170,7 @@ def _build_student_matcher(rows):
             item for item in normalize_national_id_for_matching(row.get("national_id", "")) if item
         )
         email = row.get("email", "").strip().lower()
-        phone = normalize_phone_number(row.get("phone", ""))
+        phone = normalize_phone(row.get("phone", ""))
         if email:
             emails.add(email)
         if phone:
@@ -204,7 +195,7 @@ def _build_student_matcher(rows):
         if email:
             by_email.setdefault(email, []).append(student)
         if student.phone:
-            by_phone.setdefault(normalize_phone_number(student.phone), []).append(student)
+            by_phone.setdefault(normalize_phone(student.phone), []).append(student)
 
     def resolve(row):
         matches = {}
@@ -213,7 +204,7 @@ def _build_student_matcher(rows):
             item for item in normalize_national_id_for_matching(row.get("national_id", "")) if item
         ]
         email = row.get("email", "").strip().lower()
-        phone = normalize_phone_number(row.get("phone", ""))
+        phone = normalize_phone(row.get("phone", ""))
         for value in identity_values:
             students = by_identity.get(value, [])
             if len(students) > 1:
@@ -543,7 +534,7 @@ def parse_row_data(row: dict[str, str], row_number: int) -> dict[str, Any]:
         return {"status": ROW_STATUS_FAILED, "error_message": str(_("Invalid date: %(date)s") % {"date": row.get("payment_date", "")})}
     national_id = normalize_national_id(row.get("national_id", ""))
     email = row.get("email", "").strip().lower()
-    phone = normalize_phone_number(row.get("phone", ""))
+    phone = normalize_phone(row.get("phone", ""))
     if not any((national_id, email, phone)):
         return {
             "status": ROW_STATUS_FAILED,

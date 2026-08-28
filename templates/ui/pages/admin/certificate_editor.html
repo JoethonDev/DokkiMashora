@@ -10,7 +10,7 @@
     {{ available_fields|json_script:"certificate-available-fields" }}
     {{ available_fonts|json_script:"certificate-available-fonts" }}
     <section id="certificate-editor"
-             class="card-surface"
+             class="card-surface flex flex-col gap-4"
              data-preview-width="{{ preview_width }}"
              data-preview-height="{{ preview_height }}"
              data-page-count="{{ page_count }}"
@@ -98,7 +98,7 @@
             </label>
             <button type="button" class="btn-ghost" id="editor-remove-field">{% trans "Remove field" %}</button>
           </div>
-          <div class="flex gap-3 items-center flex-wrap">
+          <div class="flex gap-2.5 items-center flex-wrap">
             <button class="btn-primary" type="button" data-editor-save>{% trans "Save layout" %}</button>
             <button class="btn-secondary" type="button" data-editor-generate>{% trans "Preview generated certificate" %}</button>
           </div>

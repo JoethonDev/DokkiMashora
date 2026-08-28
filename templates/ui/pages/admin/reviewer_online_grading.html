@@ -6,7 +6,7 @@
 {% block content %}
   <div class="page-stack animate-enter-view">{% trans "Online written" as eyebrow %}
      {% include "ui/components/_page_header.html" with title=assignment.title eyebrow=eyebrow back_button=True %}
-    <section class="card-surface">
+    <section class="card-surface flex flex-col gap-4">
        <div class="section-head"><div><p class="eyebrow">{% trans "Online written grading" %}</p><h2>{{ assignment.title }}</h2></div></div>
       <div class="state-banner state-banner-info mb-4"><div><strong>{% trans "Submission claimed" %}</strong>
           {% if submission_code %}<p class="m-0 mt-1 text-sm">{% trans "Exam code" %}: <strong dir="ltr">{{ submission_code }}</strong></p>{% endif %}
@@ -14,14 +14,14 @@
        {% include "ui/components/_pagination.html" with page_obj=online_items pagination_qs=pagination_qs %}
        <div class="space-y-4 mt-4">
         {% for item in online_items %}
-          <div class="border border-line rounded-sm p-3">
+          <div class="border border-line rounded-sm p-4">
             <div class="flex items-center justify-end gap-2 flex-wrap">
               <span>{% trans "Points" %}: {{ item.points }}</span>
               </div>
             <p class="text-sm font-bold mt-2 mb-1">{{ item.question_text }}</p>
             <p class="text-sm text-muted border-s-2 border-line ps-3">{{ item.answer_text }}</p>
             {% if item.score is not None %}
-              <div class="flex items-center justify-between gap-3 flex-wrap mt-3 pt-3 border-t border-line">
+              <div class="flex items-center justify-between gap-2.5 flex-wrap mt-3 pt-3 border-t border-line">
                 {% include "ui/components/_status.html" with code="graded" label=_("Graded") %}
                 <span dir="ltr" class="font-bold">{% trans "Score" %}: {{ item.score }} / {{ item.points }}</span>
               </div>

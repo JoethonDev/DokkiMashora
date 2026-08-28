@@ -1,4 +1,4 @@
-﻿{% extends "ui/layouts/admin.html" %}
+{% extends "ui/layouts/admin.html" %}
 {% load i18n %}
 {% block title %}
   {% trans "Enrollments" %}
@@ -19,14 +19,14 @@
       {% trans "Manage diploma enrollment records." as description %}
     {% endif %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    <section class="card-surface"><form class="actions-row items-end mb-4"
+    <section class="card-surface flex flex-col gap-4"><form class="actions-row items-end"
       method="get"
       {% if enrollment_type == "course" %} hx-get="{% url 'academics:admin_course_enrollment_list' course.id %}" {% else %} hx-get="{% url 'academics:admin_diploma_enrollment_list' diploma.id %}" {% endif %}
       hx-trigger="input changed delay:300ms from:#enrollment-search, change from:select, submit"
-      hx-target="#enrollment-results-boundary"
+      hx-target="#results"
       hx-swap="outerHTML"
       hx-push-url="true"
-       hx-sync="this:replace"><div class="search-field">
+       hx-sync="this:replace" hx-indicator="#global-loading"><div class="search-field">
       <input id="enrollment-search"
              name="q"
              value="{{ search_value }}"

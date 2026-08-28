@@ -8,7 +8,7 @@
     <a class="btn-soft" href="#record-certificates">{% trans "Certificates" %}</a>
   </nav>
   <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"><article class="stat-card">
-      <div class="stat-body">
+      <div class="stat-body gap-1">
         <span>{% trans "Attendance rate" %}</span>
         <strong>
           {{ attendance.attendance_percent|default:0 }}
@@ -20,14 +20,14 @@
       </div>
     </article>
     <article class="stat-card">
-      <div class="stat-body">
+      <div class="stat-body gap-1">
         <span>{% trans "Released grades" %}</span>
         <strong>{{ grade_items|length }}</strong>
         <small>{% trans "Visible grade items" %}</small>
       </div>
     </article>
     <article class="stat-card">
-      <div class="stat-body">
+      <div class="stat-body gap-1">
         <span>{% trans "Payments" %}</span>
         <strong>{{ payments.records|length }}</strong>
         <small>
@@ -38,14 +38,14 @@
       </div>
     </article>
     <article class="stat-card">
-      <div class="stat-body">
+      <div class="stat-body gap-1">
         <span>{% trans "Certificates" %}</span>
         <strong>{{ certificates|length }}</strong>
         <small>{% trans "Available records" %}</small>
       </div>
     </article>
   </section>
-  <section id="record-progress" class="card-surface">
+  <section id="record-progress" class="card-surface flex flex-col gap-4">
     <div class="section-head"><div>
           <p class="eyebrow">{% trans "Semester evaluations" %}</p>
           <h3>{% trans "Calculated results and final decisions" %}</h3>
@@ -123,33 +123,35 @@
     {% endif %}
   </section>
   {% if record_history.enrollments %}
-  <section class="card-surface">
+  <section class="card-surface flex flex-col gap-4">
     <div class="section-head"><div>
           <p class="eyebrow">{% trans "Enrollment history" %}</p>
           <h3>{% trans "Cohorts and programs" %}</h3>
         </div>
       </div>
-    <div class="flex flex-col">{% for row in record_history.enrollments %}
-        <div class="border-t border-line py-3 first:border-t-0">
-          <strong>{{ row.diploma.title }} · {{ row.cohort.name }}</strong>
-          {% include "ui/components/_status.html" with code=row.status label=row.status_label %}
+    <div class="flex flex-col gap-4">{% for row in record_history.enrollments %}
+        <div class="flex flex-col gap-2 py-3 border-b border-line first:pt-0 last:border-b-0 last:pb-0">
+          <div class="flex flex-wrap items-center gap-2">
+            <strong>{{ row.diploma.title }} · {{ row.cohort.name }}</strong>
+            {% include "ui/components/_status.html" with code=row.status label=row.status_label %}
+          </div>
           {% if row.entry_semester %}<small class="block text-muted">{% trans "Entry semester" %}: {{ row.entry_semester.title }}</small>{% endif %}
-          {% if row.rejoin_from %}<small class="block text-muted">{% trans "Rejoined from this cohort" %}</small>{% endif %}
-          {% if row.rejoin_to %}<small class="block text-muted">{% trans "Rejoin entry into this cohort" %}</small>{% endif %}
+          {% if row.rejoin_from and row.rejoin_from.status == "active" %}<small class="block text-muted">{% trans "Rejoined from this cohort" %}</small>{% endif %}
+          {% if row.rejoin_to and row.rejoin_to.status == "active" %}<small class="block text-muted">{% trans "Rejoin entry into this cohort" %}</small>{% endif %}
         </div>
       {% endfor %}
     </div>
   </section>
   {% endif %}
-  <section class="grid grid-cols-1 md:grid-cols-2 gap-4"><article class="card-surface"><div class="section-head"><div>
+  <section class="grid grid-cols-1 md:grid-cols-2 gap-4"><article class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Attendance" %}</p>
           <h3>{% trans "Attendance history" %}</h3>
         </div>
         <a class="btn-ghost" href="{% url 'attendance:my_attendance' %}">{% trans "View all" %}</a>
       </div>
-      <div class="flex flex-col">{% for item in attendance.records|slice:":6" %}
-          <div class="flex items-center gap-2.5">
-            <span class="min-w-0 flex-1"><strong class="block"><span dir="ltr" class="inline-block">{{ item.session.date }}</span></strong>
+      <div class="flex flex-col gap-4">{% for item in attendance.records|slice:":6" %}
+          <div class="flex items-center gap-2.5 py-3 border-b border-line first:pt-0 last:border-b-0 last:pb-0">
+            <span class="min-w-0 flex-1 flex flex-col gap-1"><strong class="block"><span dir="ltr" class="inline-block">{{ item.session.date }}</span></strong>
               <small class="block">{{ item.session|default:'' }}</small></span>
             {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:'—' %}
           </div>
@@ -158,15 +160,15 @@
         {% endfor %}
       </div>
     </article>
-    <article class="card-surface"><div class="section-head"><div>
+    <article class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Assessments" %}</p>
            <h3>{% trans "Assessment history" %}</h3>
         </div>
         <a class="btn-ghost" href="{% url 'students:assessment_history' %}">{% trans "View all" %}</a>
       </div>
-      <div class="flex flex-col">{% for item in assessment_attempts %}
-             <div class="flex items-center gap-2.5">
-               <span class="min-w-0 flex-1">{% if item.result_url %}<a class="link font-bold block" href="{{ item.result_url }}">{{ item.assessment.title }}</a>{% else %}<strong class="block">{{ item.assessment.title }}</strong>{% endif %}
+      <div class="flex flex-col gap-4">{% for item in assessment_attempts %}
+             <div class="flex items-center gap-2.5 py-3 border-b border-line first:pt-0 last:border-b-0 last:pb-0">
+               <span class="min-w-0 flex-1 flex flex-col gap-1">{% if item.result_url %}<a class="link font-bold block" href="{{ item.result_url }}">{{ item.assessment.title }}</a>{% else %}<strong class="block">{{ item.assessment.title }}</strong>{% endif %}
                  <small class="block">{{ item.status_label }}</small></span>
                <span class="text-end shrink-0">{% if item.visible_to_student %}{{ item.score_percent|default:'—' }}{% else %}—{% endif %}</span>
              </div>
@@ -176,15 +178,15 @@
       </div>
     </article>
   </section>
-  <section class="grid grid-cols-1 md:grid-cols-2 gap-4"><article class="card-surface"><div class="section-head"><div>
+  <section class="grid grid-cols-1 md:grid-cols-2 gap-4"><article class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Progression" %}</p>
           <h3>{% trans "Academic history" %}</h3>
         </div>
         <a class="btn-ghost" href="{% url 'students:progression_history' %}">{% trans "View progression" %}</a>
       </div>
-      <div class="flex flex-col">{% for item in semester_progress %}
-          <div class="flex items-center gap-2.5">
-            <p class="m-0 min-w-0 flex-1">
+      <div class="flex flex-col gap-4">{% for item in semester_progress %}
+          <div class="flex items-center gap-2.5 py-3 border-b border-line first:pt-0 last:border-b-0">
+            <p class="m-0 min-w-0 flex-1 flex flex-col gap-1">
               <strong class="block">{{ item.semester }}</strong>
               <small class="block">
                 {{ item.get_status_display|default:'—' }}
@@ -197,8 +199,8 @@
           {% include "ui/components/_empty_state.html" with title=_("No progression records.") %}
         {% endfor %}
         {% for item in promotion_decisions %}
-          <div class="flex items-center gap-2.5">
-            <p class="m-0 min-w-0 flex-1">
+          <div class="flex items-center gap-2.5 py-3 border-b border-line last:border-b-0 last:pb-0">
+            <p class="m-0 min-w-0 flex-1 flex flex-col gap-1">
               <strong class="block">
                 {{ item.from_semester }}
                 →
@@ -210,14 +212,14 @@
         {% endfor %}
       </div>
     </article>
-    <article class="card-surface"><div class="section-head"><div>
+    <article class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Payments" %}</p>
           <h3>{% trans "Payment records" %}</h3>
         </div>
       </div>
-      <div class="flex flex-col">{% for item in payments.records %}
-          <div class="flex items-center gap-2.5">
-            <span class="min-w-0 flex-1"><strong class="block">
+      <div class="flex flex-col gap-4">{% for item in payments.records %}
+          <div class="flex items-center gap-2.5 py-3 border-b border-line first:pt-0 last:border-b-0 last:pb-0">
+            <span class="min-w-0 flex-1 flex flex-col gap-1"><strong class="block">
               <span dir="ltr" class="inline-block">{{ item.amount }}</span>
               {{ item.currency }}
             </strong>
@@ -232,15 +234,15 @@
       </div>
     </article>
   </section>
-  <section class="card-surface"><div class="section-head"><div>
+  <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
         <p class="eyebrow">{% trans "Credentials" %}</p>
         <h3>{% trans "Certificates" %}</h3>
       </div>
     </div>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">{% for item in certificates %}
-        <article class="card-surface">
+        <article class="card-surface flex flex-col gap-4">
           <h3>{{ item.diploma_enrollment.cohort.diploma|default:item }}</h3>
-          <p><span dir="ltr" class="inline-block">{{ item.issued_at|date:"d/m/Y"|default:'' }}</span></p>
+          <small class="text-muted"><span dir="ltr" class="inline-block">{{ item.issued_at|date:"d/m/Y"|default:'' }}</span></small>
           <a class="btn-primary"
              href="{% url 'certificates:student_certificate_download' item.id %}">{% trans "Download certificate" %}
           </a></article>
@@ -249,14 +251,15 @@
       {% endfor %}
     </div>
   </section>
-  <section class="grid grid-cols-1 md:grid-cols-2 gap-4"><article class="card-surface"><div class="section-head"><div>
+  <section class="grid grid-cols-1 md:grid-cols-2 gap-4"><article class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Entrance exams" %}</p>
           <h3>{% trans "Exam assignments" %}</h3>
         </div>
       </div>
+      <div class="flex flex-col gap-4">
       {% for item in exam_assignments %}
-        <div class="flex flex-col"><div class="flex items-center gap-2.5">
-            <p class="m-0 min-w-0 flex-1">
+        <div class="flex flex-col gap-4 py-3 border-b border-line first:pt-0 last:border-b-0 last:pb-0"><div class="flex items-center gap-4">
+            <p class="m-0 min-w-0 flex-1 flex flex-col gap-1">
               <strong class="block">{{ item.exam.title }}</strong>
               <small class="block">{{ item.get_status_display|default:'—' }}</small>
             </p>
@@ -265,15 +268,17 @@
       {% empty %}
         {% include "ui/components/_empty_state.html" with title=_("No entrance exam records.") %}
       {% endfor %}
+      </div>
     </article>
-    <article class="card-surface"><div class="section-head"><div>
+    <article class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Communications" %}</p>
           <h3>{% trans "Notifications" %}</h3>
         </div>
       </div>
+      <div class="flex flex-col gap-4">
       {% for item in notifications %}
-        <div class="flex flex-col"><div class="flex items-center gap-2.5">
-            <p class="m-0 min-w-0 flex-1">
+        <div class="flex flex-col gap-4 py-3 border-b border-line first:pt-0 last:border-b-0 last:pb-0"><div class="flex items-center gap-4">
+            <p class="m-0 min-w-0 flex-1 flex flex-col gap-1">
               <strong class="block">{{ item.title|default:item.subject }}</strong>
               <small class="block"><span dir="ltr" class="inline-block">{{ item.created_at|date:"d/m/Y" }}</span></small>
             </p>
@@ -282,6 +287,7 @@
       {% empty %}
         {% include "ui/components/_empty_state.html" with title=_("No communications released.") %}
       {% endfor %}
+      </div>
     </article>
   </section>
 </div>

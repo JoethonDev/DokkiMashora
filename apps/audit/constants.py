@@ -28,6 +28,7 @@ ACTION_RETAKE = "promotion.retake"
 ACTION_CERTIFICATE_GENERATED = "certificate.generated"
 ACTION_CERTIFICATE_REVOKED = "certificate.revoked"
 ACTION_CERTIFICATE_REGENERATED = "certificate.regenerated"
+ACTION_CERTIFICATE_TEMPLATE_DELETED = "certificate.template_deleted"
 ACTION_BULK_EMAIL_SENT = "bulk_email.sent"
 ACTION_APPLICATION_DECISION_REVERTED = "application.decision_reverted"
 ACTION_PAYMENT_UPLOAD_PREVIEWED = "payment.upload_previewed"
@@ -43,6 +44,7 @@ ACTION_EXAM_ACCESS_OVERRIDE_CANCELLED = "exam_access_override.cancelled"
 ACTION_EXAM_ACCESS_OVERRIDE_USED = "exam_access_override.used"
 ACTION_RULE_REEVALUATION = "progression.rule_reevaluation"
 ACTION_SEMESTER_FINALIZED = "progression.semester_finalized"
+ACTION_SEMESTER_REEVALUATED = "progression.semester_reevaluated"
 ACTION_STAFF_ASSIGNMENT_CREATED = "staff_assignment.created"
 ACTION_STAFF_ASSIGNMENT_REVOKED = "staff_assignment.revoked"
 ACTION_CLUSTER_CREATED = "cluster.created"
@@ -85,9 +87,11 @@ AUDIT_ACTION_CHOICES = (
     (ACTION_RETAKE, _("Retake")),
     (ACTION_RULE_REEVALUATION, _("Progression rule re-evaluation")),
     (ACTION_SEMESTER_FINALIZED, _("Semester finalized")),
+    (ACTION_SEMESTER_REEVALUATED, _("Semester re-evaluated")),
     (ACTION_CERTIFICATE_GENERATED, _("Certificate generated")),
     (ACTION_CERTIFICATE_REVOKED, _("Certificate revoked")),
     (ACTION_CERTIFICATE_REGENERATED, _("Certificate regenerated")),
+    (ACTION_CERTIFICATE_TEMPLATE_DELETED, _("Certificate template deleted")),
     (ACTION_BULK_EMAIL_SENT, _("Bulk email sent")),
     (ACTION_PAYMENT_UPLOAD_PREVIEWED, _("Payment upload previewed")),
     (ACTION_PAYMENT_UPLOAD_CONFIRMED, _("Payment upload confirmed")),

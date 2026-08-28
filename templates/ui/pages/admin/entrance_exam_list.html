@@ -8,9 +8,9 @@
     {% trans "Entrance exams" as default_title %}
     {% trans "Create exams, manage invitations, grade attempts, and inspect delivery history." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title|default:default_title description=description %}
-    <section class="card-surface">
-      <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between mb-4">
-        <form class="relative flex-1 max-w-xs" hx-get="{% url 'entrance_exams:admin_list' %}" hx-target="#exam-list-content" hx-replace-url="true">
+    <section class="card-surface flex flex-col gap-4">
+      <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+        <form class="relative flex-1 max-w-xs" hx-get="{% url 'entrance_exams:admin_list' %}" hx-target="#exam-list-content" hx-replace-url="true" hx-indicator="#global-loading">
           <input name="q" value="{{ q }}" class="form-input" hx-trigger="keyup changed delay:500ms" placeholder="{% trans 'Search exams…' %}" aria-label="{% trans 'Search exams' %}">
         </form>
         <a class="btn-primary" href="{% url 'entrance_exams:admin_create_exam' %}">{% trans "Create exam" %}</a>
@@ -29,11 +29,11 @@
           <tbody>
             {% for item in page_obj %}
               <tr>
-                <td class="table-td"><div class="flex flex-col gap-0.5"><strong>{{ item.title }}</strong>
+                <td class="table-td"><div class="flex flex-col gap-1"><strong>{{ item.title }}</strong>
                   {% if item.description %}{% include "ui/components/_expandable_text.html" with text=item.description clamp=2 muted=True %}{% else %}<small class="text-muted">—</small>{% endif %}</div>
                 </td>
                 <td class="table-td">{{ item.cohort|default:_("All") }}</td>
-                <td class="table-td"><div class="flex flex-col"><small><span class="bidi" dir="ltr">{{ item.open_at|date:"d/m/Y"|default:'—' }}</span></small>
+                <td class="table-td"><div class="flex flex-col gap-1"><small><span class="bidi" dir="ltr">{{ item.open_at|date:"d/m/Y"|default:'—' }}</span></small>
                   <small><span class="bidi" dir="ltr">{{ item.close_at|date:"d/m/Y"|default:'—' }}</span></small>
                 </div></td>
                 <td class="table-td">{{ item.total_questions|default:'—' }}</td>

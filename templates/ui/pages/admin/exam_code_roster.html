@@ -13,7 +13,7 @@
           <p class="text-sm text-muted mt-1 mb-0">{% trans "Review each student's delivery mode and manage the anonymous codes for this exam." %}</p>
         </div>
       </div>
-      <div class="actions-row flex-wrap items-center justify-between gap-3 border-t border-line pt-4"
+      <div class="actions-row flex-wrap items-center justify-between gap-2.5 border-t border-line pt-4"
            x-data="{ generating: false }">
         <div class="text-sm text-muted">
           <span class="font-bold text-text">{{ codes|length }}</span>
@@ -24,8 +24,8 @@
                 class="m-0" @submit="generating = true">
             {% csrf_token %}
             <button class="btn-primary" type="submit" :disabled="generating">
-              <span x-show="!generating">{% trans "Generate missing codes" %}</span>
-              <span x-show="generating" x-cloak>{% trans "Generating…" %}</span>
+              <span x-show="!generating" x-transition.opacity>{% trans "Generate missing codes" %}</span>
+              <span x-show="generating" x-transition.opacity x-cloak>{% trans "Generating…" %}</span>
             </button>
           </form>
           <a class="btn-secondary" href="{% url 'assessments:admin_export_offline_codes' assessment.id %}">
@@ -60,8 +60,8 @@
                     {% endfor %}
                   </select>
                   <button class="btn-ghost" type="submit" :disabled="saving">
-                    <span x-show="!saving">{% trans "Save" %}</span>
-                    <span x-show="saving" x-cloak>{% trans "Saving…" %}</span>
+                    <span x-show="!saving" x-transition.opacity>{% trans "Save" %}</span>
+                    <span x-show="saving" x-transition.opacity x-cloak>{% trans "Saving…" %}</span>
                   </button>
                 </form>
               </td>
@@ -93,8 +93,8 @@
               {% endfor %}
             </select>
             <button class="btn-ghost" type="submit" :disabled="saving">
-              <span x-show="!saving">{% trans "Save" %}</span>
-              <span x-show="saving" x-cloak>{% trans "Saving…" %}</span>
+              <span x-show="!saving" x-transition.opacity>{% trans "Save" %}</span>
+              <span x-show="saving" x-transition.opacity x-cloak>{% trans "Saving…" %}</span>
             </button>
           </form>
         </div>

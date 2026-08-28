@@ -9,7 +9,7 @@
     {% trans "Review semester progress, decisions, evaluations, interviews, and rejoin plans." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
     {% if workflow == 'dashboard' %}
-      <section class="card-surface"><form class="actions-row items-end mb-4" method="get"><label class="min-w-40"><span class="field-label">{% trans "Diploma" %}</span>
+      <section class="card-surface flex flex-col gap-4"><form class="actions-row items-end" method="get"><label class="min-w-40"><span class="field-label">{% trans "Diploma" %}</span>
             <select name="diploma_id" class="form-select"><option value="">{% trans "All" %}</option>
               {% for diploma in diplomas %}
                 <option value="{{ diploma.id }}"
@@ -43,7 +43,7 @@
             <tbody>
               {% for row in students_data %}
                 <tr>
-                  <td class="table-td"><div class="flex flex-col"><strong>{{ row.student.full_name|default:row.student }}</strong></div>
+                  <td class="table-td"><div class="flex flex-col gap-1"><strong>{{ row.student.full_name|default:row.student }}</strong></div>
                   </td>
                   <td class="table-td">{{ row.student.current_cohort|default:'—' }}</td>
                   <td class="table-td">{{ row.semesters|length }}</td>
@@ -86,7 +86,7 @@
         {% include "ui/components/_pagination.html" %}
       </section>
     {% elif workflow == 'student_detail' %}
-      <section class="card-surface"><div class="section-head"><div>
+      <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Student" %}</p>
             <h3>{{ student }}</h3>
           </div>
@@ -130,7 +130,7 @@
           </div>
         {% endfor %}
       </section>
-      <section class="card-surface"><div class="section-head"><div>
+      <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Progress" %}</p>
             <h3>{% trans "Semester progress" %}</h3>
           </div>
@@ -146,7 +146,7 @@
         {% endfor %}
       </section>
       {% if progress_components %}
-        <section class="card-surface"><div class="section-head"><div>
+        <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
               <p class="eyebrow">{% trans "Components" %}</p>
               <h3>{% trans "Progress components" %}</h3>
             </div>
@@ -163,7 +163,7 @@
         </section>
       {% endif %}
       {% if interviews %}
-        <section class="card-surface"><div class="section-head"><div>
+        <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
               <p class="eyebrow">{% trans "Interviews" %}</p>
               <h3>{% trans "Interview requests" %}</h3>
             </div>
@@ -176,7 +176,7 @@
         </section>
       {% endif %}
     {% elif workflow == 'component_list' %}
-      <section class="card-surface"><div class="table-wrap hidden lg:block"><table class="table">
+      <section class="card-surface flex flex-col gap-4"><div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>
                 <th class="table-th">{% trans "Name" %}</th>
@@ -237,7 +237,7 @@
         <label class="field"><span class="field-label">{% trans "Required minimum (%)" %}</span>
           <input name="required_min_percent" class="form-input" type="number" min="0" max="100" step="0.01"
                  value="{{ component.required_min_percent|default:0 }}">
-          <span class="field-help">{% trans "Enter a percentage from 0 to 100." %}</span>
+           <span class="field-help">{% trans "0–100" %}</span>
         </label>
         <label class="field"><span class="field-label">{% trans "Order" %}</span>
           <input name="order" class="form-input" value="{{ component.order|default:'' }}" required>
@@ -260,7 +260,7 @@
         <button class="btn-primary" type="submit">{% trans "Save component" %}</button>
       </form>
     {% elif workflow == 'custom_activity' %}
-      <section class="card-surface"><div class="section-head"><div>
+      <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Activity" %}</p>
             <h3>
               {{ enrollment.student }}
@@ -286,7 +286,7 @@
         </form>
       </section>
     {% elif workflow == 'semester_evaluation' %}
-      <section class="card-surface"><div class="section-head"><div>
+      <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Evaluation" %}</p>
             <h3>
               {{ enrollment.student }}
@@ -334,7 +334,7 @@
         <button class="btn-primary" type="submit">{% trans "Save decision" %}</button>
       </form>
     {% elif workflow == 'rejoin_list' %}
-      <section class="card-surface"><form class="actions-row items-end mb-4" method="get"><label class="min-w-40"><span class="field-label">{% trans "Status" %}</span>
+      <section class="card-surface flex flex-col gap-4"><form class="actions-row items-end" method="get"><label class="min-w-40"><span class="field-label">{% trans "Status" %}</span>
             <select name="status" class="form-select"><option value="">{% trans "All" %}</option>
               {% for value,label in rejoin_status_choices %}
                 <option value="{{ value }}"

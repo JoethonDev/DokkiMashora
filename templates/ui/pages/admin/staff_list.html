@@ -1,4 +1,4 @@
-﻿{% extends "ui/layouts/admin.html" %}
+{% extends "ui/layouts/admin.html" %}
 {% load i18n %}
 {% block title %}
   {% trans "Staff" %}
@@ -9,14 +9,14 @@
     {% trans "Staff" as title %}
     {% trans "Search, filter, and manage staff accounts." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    <section class="card-surface"><form class="actions-row items-end mb-4"
+    <section class="card-surface flex flex-col gap-4"><form class="actions-row items-end"
       method="get"
       hx-get="{% url 'accounts:admin_staff_list' %}"
       hx-trigger="input changed delay:300ms from:#staff-search, change from:select, submit"
-      hx-target="#staff-results"
+      hx-target="#results"
       hx-swap="outerHTML"
       hx-push-url="true"
-       hx-sync="this:replace"><div class="search-field">
+       hx-sync="this:replace" hx-indicator="#global-loading"><div class="search-field">
 <input id="staff-search"
 name="q"
 value="{{ search_value }}"

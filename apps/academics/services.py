@@ -140,132 +140,206 @@ def get_visible_lectures(student_profile, course_version):
         .order_by("order")
     )
 
+# ---------------------------------------------------------------------------
+# DUP-001 canonical diploma visibility (single + batch share one decision)
+# ---------------------------------------------------------------------------
+
+# TODO(phase5): remove 'passed' and 'completed' after migration
+_DIPLOMA_COMPLETED_STATUSES = {
+    SEMESTER_PROGRESS_COMPLETED,
+    SEMESTER_PROGRESS_PASSED,
+    SEMESTER_PROGRESS_PASSED_CONFIRMED,
+    SEMESTER_PROGRESS_PROMOTED,
+}
+_DIPLOMA_IN_PROGRESS_STATUSES = {
+    SEMESTER_PROGRESS_NOT_STARTED,
+    SEMESTER_PROGRESS_IN_PROGRESS,
+}
+
+
+def _requires_academic_year_promotion(
+    previous_semester: Semester,
+    next_semester: Semester,
+    years: list,
+    promotions: list,
+) -> bool:
+    """Pure year-boundary check (DUP-001 canonical).
+
+    Returns True when moving from previous to next crosses an academic year
+    and no matching PROMOTION_DECISION_ACADEMIC_YEAR_PROMOTE exists.
+    ``years`` is a list of CohortAcademicYear for the cohort, ``promotions``
+    is a list of PromotionDecision rows for the enrollment.
+    """
+    if not years:
+        return False
+    semesters_per_year = years[0].semesters_per_year
+    previous_year = ((previous_semester.order - 1) // semesters_per_year) + 1
+    next_year = ((next_semester.order - 1) // semesters_per_year) + 1
+    if previous_year == next_year:
+        return False
+    return not any(
+        p.from_semester_id == previous_semester.id and p.to_semester_id == next_semester.id
+        for p in promotions
+    )
+
+
+def _decide_visible_ids(
+    semesters: list[Semester],
+    progress_map: dict[int, StudentSemesterProgress],
+    years: list,
+    promotions: list,
+) -> list[int]:
+    """Canonical per-enrollment visibility decision (DUP-001).
+
+    Completed semesters are visible; the first non-completed semester is the
+    current one unless an academic-year promotion is pending, in which case
+    visibility stops before it. Single and batch paths share this exact logic.
+    """
+    semester_by_id = {s.id: s for s in semesters}
+    visible_ids: list[int] = []
+    for semester in semesters:
+        item = progress_map.get(semester.id)
+        if item and item.status in _DIPLOMA_COMPLETED_STATUSES:
+            visible_ids.append(semester.id)
+            continue
+        # First non-completed semester is the candidate "current"
+        if visible_ids:
+            previous = semester_by_id.get(visible_ids[-1])
+            if previous and _requires_academic_year_promotion(previous, semester, years, promotions):
+                break
+        visible_ids.append(semester.id)
+        break
+    return visible_ids
+
+
 def get_student_diploma_access(enrollment):
-    """Return only the completed and currently unlocked diploma semesters."""
+    """Return only the completed and currently unlocked diploma semesters.
+
+    Uses the canonical _decide_visible_ids decision; blocker metadata is
+    derived from the same inputs so single and batch remain equivalent.
+    """
     semesters = list(
         enrollment.cohort.diploma.semesters.filter(is_active=True).order_by("order")
     )
+    entry_index = next(
+        (index for index, semester in enumerate(semesters) if semester.id == enrollment.entry_semester_id),
+        0,
+    )
+    available_semesters = semesters[entry_index:]
     progress = {
         item.semester_id: item
         for item in StudentSemesterProgress.objects.filter(diploma_enrollment=enrollment)
     }
-    # TODO(phase5): remove 'passed' and 'completed' after migration
-    completed_statuses = {
-        SEMESTER_PROGRESS_COMPLETED,
-        SEMESTER_PROGRESS_PASSED,
-        SEMESTER_PROGRESS_PASSED_CONFIRMED,
-        SEMESTER_PROGRESS_PROMOTED,
-    }
-    visible = []
+    years = list(
+        CohortAcademicYear.objects.filter(cohort=enrollment.cohort).order_by("year_number")
+    )
+    promotions = list(
+        PromotionDecision.objects.filter(
+            diploma_enrollment=enrollment,
+            decision_type=PROMOTION_DECISION_ACADEMIC_YEAR_PROMOTE,
+        )
+    )
+    visible_ids = _decide_visible_ids(available_semesters, progress, years, promotions)
+    semester_by_id = {s.id: s for s in semesters}
+    visible = [semester_by_id[sid] for sid in visible_ids]
+
+    # Derive current / completed / hidden mirroring original semantics
     current = None
-    blockers = []
-    for semester in semesters:
-        item = progress.get(semester.id)
-        if item and item.status in completed_statuses:
-            visible.append(semester)
-            continue
-        if current is None:
-            if visible and _academic_year_promotion_pending(enrollment, visible[-1], semester):
-                blockers.append("academic_year_promotion_pending")
-                break
-            current = semester
-            visible.append(semester)
-            if item and item.status not in {SEMESTER_PROGRESS_NOT_STARTED, SEMESTER_PROGRESS_IN_PROGRESS}:
+    if visible:
+        last = visible[-1]
+        last_item = progress.get(last.id)
+        is_last_completed = bool(last_item and last_item.status in _DIPLOMA_COMPLETED_STATUSES)
+        if not is_last_completed:
+            current = last
+
+    blockers: list[str] = []
+    # Promotion blocker when visibility stopped before the next semester
+    if len(visible_ids) < len(available_semesters) and visible_ids:
+        next_semester = available_semesters[len(visible_ids)]
+        previous = semester_by_id.get(visible_ids[-1])
+        if previous and _requires_academic_year_promotion(previous, next_semester, years, promotions):
+            blockers.append("academic_year_promotion_pending")
+        elif current is not None:
+            item = progress.get(current.id)
+            if item and item.status not in _DIPLOMA_IN_PROGRESS_STATUSES:
                 blockers.append(item.status)
-        break
+    elif current is not None:
+        item = progress.get(current.id)
+        if item and item.status not in _DIPLOMA_IN_PROGRESS_STATUSES:
+            blockers.append(item.status)
+
     return {
         "completed_semesters": visible[:-1] if current else visible,
         "current_semester": current,
         "visible_semesters": visible,
-        "hidden_semesters": semesters[len(visible):],
+        "hidden_semesters": semesters[:entry_index] + available_semesters[len(visible):],
         "blockers": blockers,
     }
 
 
 def get_visible_semester_ids_by_enrollment(enrollments) -> dict[int, set[int]]:
-    """Batch diploma semester visibility checks for dashboard and assessment lists."""
+    """Batch diploma semester visibility checks for dashboard and assessment lists.
+
+    Preloads the same inputs as the single path and delegates to the canonical
+    _decide_visible_ids, so per-enrollment semantics are identical while the
+    query count stays constant.
+    """
     enrollments = list(enrollments)
     if not enrollments:
         return {}
 
     enrollment_ids = [enrollment.id for enrollment in enrollments]
-    semesters_by_diploma = {}
-    semesters_by_id = {}
+    semesters_by_diploma: dict[int, list[Semester]] = {}
     for semester in Semester.objects.filter(
         diploma_id__in={e.cohort.diploma_id for e in enrollments}, is_active=True,
     ).order_by("order"):
         semesters_by_diploma.setdefault(semester.diploma_id, []).append(semester)
-        semesters_by_id[semester.id] = semester
 
-    progress_by_enrollment = {}
-    for progress in StudentSemesterProgress.objects.filter(diploma_enrollment_id__in=enrollment_ids):
-        progress_by_enrollment.setdefault(progress.diploma_enrollment_id, {})[progress.semester_id] = progress
+    progress_by_enrollment: dict[int, dict[int, StudentSemesterProgress]] = {}
+    for prog in StudentSemesterProgress.objects.filter(diploma_enrollment_id__in=enrollment_ids):
+        progress_by_enrollment.setdefault(prog.diploma_enrollment_id, {})[prog.semester_id] = prog
 
-    years_by_cohort = {}
+    years_by_cohort: dict[int, list] = {}
     for year in CohortAcademicYear.objects.filter(
         cohort_id__in={e.cohort_id for e in enrollments},
     ).order_by("cohort_id", "year_number"):
         years_by_cohort.setdefault(year.cohort_id, []).append(year)
 
-    promotions_by_enrollment = {}
+    promotions_by_enrollment: dict[int, list] = {}
     for promotion in PromotionDecision.objects.filter(
         diploma_enrollment_id__in=enrollment_ids,
         decision_type=PROMOTION_DECISION_ACADEMIC_YEAR_PROMOTE,
     ):
         promotions_by_enrollment.setdefault(promotion.diploma_enrollment_id, []).append(promotion)
 
-    # TODO(phase5): remove 'passed' and 'completed' after migration
-    completed_statuses = {
-        SEMESTER_PROGRESS_COMPLETED,
-        SEMESTER_PROGRESS_PASSED,
-        SEMESTER_PROGRESS_PASSED_CONFIRMED,
-        SEMESTER_PROGRESS_PROMOTED,
-    }
-    visible_by_enrollment = {}
+    visible_by_enrollment: dict[int, set[int]] = {}
     for enrollment in enrollments:
-        visible_ids = []
         semesters = semesters_by_diploma.get(enrollment.cohort.diploma_id, [])
+        entry_index = next(
+            (index for index, semester in enumerate(semesters) if semester.id == enrollment.entry_semester_id),
+            0,
+        )
+        available_semesters = semesters[entry_index:]
         progress = progress_by_enrollment.get(enrollment.id, {})
         years = years_by_cohort.get(enrollment.cohort_id, [])
         promotions = promotions_by_enrollment.get(enrollment.id, [])
-        for semester in semesters:
-            item = progress.get(semester.id)
-            if item and item.status in completed_statuses:
-                visible_ids.append(semester.id)
-                continue
-            if visible_ids and years:
-                semesters_per_year = years[0].semesters_per_year
-                previous = semesters_by_id[visible_ids[-1]]
-                previous_year = ((previous.order - 1) // semesters_per_year) + 1
-                current_year = ((semester.order - 1) // semesters_per_year) + 1
-                if previous_year != current_year and not any(
-                    p.from_semester_id == previous.id and p.to_semester_id == semester.id
-                    for p in promotions
-                ):
-                    break
-            visible_ids.append(semester.id)
-            break
+        visible_ids = _decide_visible_ids(available_semesters, progress, years, promotions)
         visible_by_enrollment[enrollment.id] = set(visible_ids)
     return visible_by_enrollment
 
 
 def _academic_year_promotion_pending(enrollment, previous_semester, next_semester):
-    from apps.progression.models import CohortAcademicYear, PromotionDecision
-    from apps.progression.constants import PROMOTION_DECISION_ACADEMIC_YEAR_PROMOTE
-
+    """Legacy helper kept for import compatibility; delegates to canonical."""
     periods = list(CohortAcademicYear.objects.filter(cohort=enrollment.cohort).order_by("year_number"))
-    if not periods:
-        return False
-    previous_year = ((previous_semester.order - 1) // periods[0].semesters_per_year) + 1
-    next_year = ((next_semester.order - 1) // periods[0].semesters_per_year) + 1
-    if previous_year == next_year:
-        return False
-    return not PromotionDecision.objects.filter(
-        diploma_enrollment=enrollment,
-        from_semester=previous_semester,
-        to_semester=next_semester,
-        decision_type=PROMOTION_DECISION_ACADEMIC_YEAR_PROMOTE,
-    ).exists()
+    promotions = list(
+        PromotionDecision.objects.filter(
+            diploma_enrollment=enrollment,
+            from_semester=previous_semester,
+            to_semester=next_semester,
+            decision_type=PROMOTION_DECISION_ACADEMIC_YEAR_PROMOTE,
+        )
+    )
+    return _requires_academic_year_promotion(previous_semester, next_semester, periods, promotions)
 
 
 def can_access_course(student_profile, course_version) -> bool:

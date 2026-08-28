@@ -28,7 +28,7 @@
             <h3>{% trans "Submitted files" %}</h3>
             <ul class="mt-2 space-y-2">
               {% for attachment in homework_attachments %}
-                <li class="flex items-center justify-between gap-3 border-b border-line py-2">
+                <li class="flex items-center justify-between gap-2.5 border-b border-line py-2">
                   <a class="btn-soft" href="{{ homework_download_urls|dict_key:attachment.id }}">{{ attachment.original_filename }}</a>
                 </li>
               {% endfor %}
@@ -52,7 +52,7 @@
               <h3>{% trans "Your answers" %}</h3>
               <div class="mt-2 space-y-4">
                 {% for question in result_projection.questions %}
-                  <div class="border border-line rounded-sm p-3">
+                  <div class="border border-line rounded-sm p-4">
                     <p class="text-sm font-bold m-0">{{ question.order }}. {{ question.text }}</p>
                     {% if question.selected_text %}<p class="text-sm text-muted mt-1 mb-0">{% trans "Your answer" %}: {{ question.selected_text }}</p>{% endif %}
                     {% if question.written_text %}<p class="text-sm text-muted mt-1 mb-0">{{ question.written_text }}</p>{% endif %}
@@ -77,7 +77,7 @@
               <h3>{% trans "Your answers" %}</h3>
               <div class="mt-2 space-y-4">
                 {% for question in result_projection.questions %}
-                  <div class="border border-line rounded-sm p-3">
+                  <div class="border border-line rounded-sm p-4">
                     <p class="text-sm font-bold m-0">{{ question.order }}. {{ question.text }}</p>
                     {% if question.selected_text %}<p class="text-sm text-muted mt-1 mb-0">{% trans "Your answer" %}: {{ question.selected_text }}</p>{% endif %}
                     {% if question.written_text %}<p class="text-sm text-muted mt-1 mb-0">{{ question.written_text }}</p>{% endif %}

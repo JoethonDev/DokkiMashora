@@ -44,8 +44,8 @@ class AssessmentLectureSectionForm(StyledFormMixin, forms.ModelForm):
             "mcq_count": _("MCQ question count (number)"),
         }
         help_texts = {
-            "order": _("Enter the display order as a whole number."),
-            "mcq_count": _("Number of MCQ questions to draw from this lecture."),
+            "order": _("e.g., 1"),
+            "mcq_count": _("e.g., 5"),
         }
 
     def __init__(self, *args, assessment=None, **kwargs):
@@ -106,8 +106,8 @@ class AssessmentSectionManualQuestionForm(StyledFormMixin, forms.ModelForm):
             "order": _("Question order (number)"),
         }
         help_texts = {
-            "points": _("Raw points awarded for this question."),
-            "order": _("Enter the display order as a whole number."),
+            "points": _("e.g., 10"),
+            "order": _("e.g., 1"),
         }
 
     def save(self, commit=True):
@@ -182,9 +182,9 @@ class AssessmentForm(StyledFormMixin, forms.ModelForm):
             "penalty_percent": _("Wrong-answer penalty (%)"),
         }
         help_texts = {
-            "total_points": _("Raw points available across all questions."),
-            "passing_score": _("Enter a percentage from 0 to 100."),
-            "penalty_percent": _("Enter a percentage from 0 to 100."),
+            "total_points": _("e.g., 100"),
+            "passing_score": _("0–100"),
+            "penalty_percent": _("0–100"),
         }
 
     def __init__(self, *args, **kwargs):
@@ -337,7 +337,7 @@ class QuestionForm(StyledFormMixin, forms.ModelForm):
             "points": _("Points available (number)"),
         }
         help_texts = {
-            "points": _("Raw points awarded for this question."),
+            "points": _("e.g., 10"),
         }
 
 
@@ -369,5 +369,5 @@ class DiplomaLectureQuestionForm(StyledFormMixin, forms.ModelForm):
             "points": _("Points available (number)"),
         }
         help_texts = {
-            "points": _("Raw points awarded for this question."),
+            "points": _("e.g., 10"),
         }

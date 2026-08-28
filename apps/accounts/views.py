@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import csv
-import json
 from urllib.parse import quote
 
 from django.conf import settings as django_settings
@@ -11,7 +10,6 @@ from django.contrib import messages
 from django.contrib.auth import login as auth_login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView, LogoutView
-from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Q
 from django.db.models.deletion import ProtectedError
@@ -65,8 +63,9 @@ from apps.audit.services import record_audit_event
 from apps.certificates.models import GeneratedCertificate
 from apps.communications.constants import TEMPLATE_ACTIVATION
 from apps.communications.email_message import EmailMessage as CommEmailMessage
-from apps.core.htmx import is_htmx
+from apps.core.htmx import hx_toast, is_htmx
 from apps.core.models import LandingAnnouncement
+from apps.core.pagination import paginate
 from apps.core.permissions import (
     ROLE_ATTENDANCE_STAFF,
     ROLE_EXAM_STAFF,
@@ -345,9 +344,7 @@ def admin_student_list(request):
 
     users = users.order_by("-date_joined", "full_name")
 
-    paginator = Paginator(users, 15)
-    page_number = request.GET.get("page", 1)
-    page_obj = paginator.get_page(page_number)
+    page_obj, pagination_qs = paginate(request, users, per_page=15)
 
     status_choices = [
         {"value": code, "label": str(label), "selected": status_filter == code}
@@ -357,11 +354,6 @@ def admin_student_list(request):
     filters = [
         {"name": "status", "label": _("Status"), "value": status_filter, "options": status_choices},
     ]
-
-    pagination_qs = request.GET.copy()
-    if "page" in pagination_qs:
-        del pagination_qs["page"]
-    pagination_qs = pagination_qs.urlencode()
 
     ctx = {
         "page_obj": page_obj,
@@ -426,9 +418,7 @@ def admin_staff_list(request):
 
     users = users.order_by("full_name")
 
-    paginator = Paginator(users, 15)
-    page_number = request.GET.get("page", 1)
-    page_obj = paginator.get_page(page_number)
+    page_obj, pagination_qs = paginate(request, users, per_page=15)
 
     role_choices = [
         {"value": name, "label": _(name), "selected": role_filter == name}
@@ -443,11 +433,6 @@ def admin_staff_list(request):
         {"name": "role", "label": _("Role"), "value": role_filter, "options": role_choices},
         {"name": "status", "label": _("Status"), "value": status_filter, "options": status_choices},
     ]
-
-    pagination_qs = request.GET.copy()
-    if "page" in pagination_qs:
-        del pagination_qs["page"]
-    pagination_qs = pagination_qs.urlencode()
 
     ctx = {
         "page_obj": page_obj,
@@ -896,8 +881,7 @@ def admin_student_cluster_membership_add(request, cluster_id):
     messages.success(request, msg)
     if is_htmx(request):
         response = render(request, "ui/fragments/admin/_cluster_members.html", {"cluster": cluster})
-        response['HX-Trigger'] = json.dumps({'show-toast': {'message': msg, 'type': 'success'}})
-        return response
+        return hx_toast(response, msg, type="success")
     return redirect("academics:admin_diploma_detail", diploma_id=cluster.cohort.diploma_id)
 
 
@@ -918,8 +902,7 @@ def admin_student_cluster_membership_remove(request, cluster_id, membership_id):
     messages.success(request, msg)
     if is_htmx(request):
         response = render(request, "ui/fragments/admin/_cluster_members.html", {"cluster": membership.cluster})
-        response['HX-Trigger'] = json.dumps({'show-toast': {'message': msg, 'type': 'success'}})
-        return response
+        return hx_toast(response, msg, type="success")
     return redirect("academics:admin_diploma_detail", diploma_id=membership.cluster.cohort.diploma_id)
 
 

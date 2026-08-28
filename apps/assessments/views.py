@@ -11,7 +11,6 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Q
 from django.http import HttpResponse, JsonResponse
@@ -2462,10 +2461,11 @@ def admin_exceptional_access_enrollments(request, assessment_id):
         )
 
     query = request.GET.get("q", "").strip()[:100]
-    page_obj = Paginator(
+    page_obj, _pagination_qs = paginate(
+        request,
         _exceptional_access_enrollment_queryset(assessment, query=query),
-        25,
-    ).get_page(request.GET.get("page", 1))
+        per_page=25,
+    )
     return render(request, "ui/fragments/admin/_exceptional_access_enrollment_picker.html", {
         "assessment": assessment,
         "page_obj": page_obj,

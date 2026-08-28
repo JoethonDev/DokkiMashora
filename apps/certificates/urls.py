@@ -8,6 +8,7 @@ urlpatterns = [
     path("manage/templates/", views.admin_template_list, name="admin_template_list"),
     path("manage/templates/create/", views.admin_template_create, name="admin_template_create"),
     path("manage/templates/<int:template_id>/edit/", views.admin_template_edit, name="admin_template_edit"),
+    path("manage/templates/<int:template_id>/delete/", views.admin_template_delete, name="admin_template_delete"),
     path("manage/templates/<int:template_id>/preview/", views.admin_template_preview, name="admin_template_preview"),
     path("manage/templates/<int:template_id>/source/upload/", views.admin_template_upload_source, name="admin_template_upload_source"),
     path("manage/templates/<int:template_id>/source/clear/", views.admin_template_clear_source, name="admin_template_clear_source"),

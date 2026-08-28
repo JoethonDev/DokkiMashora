@@ -11,6 +11,7 @@
               hx-trigger="change"
               hx-target="#target-host"
               hx-swap="innerHTML"
+              hx-indicator="#global-loading"
               hx-vals='{"field_name": "target_id", "select_id": "target-id"}'>
         <option value="diploma"
                 {% if selected_program_type == 'diploma' %} selected {% endif %}>{% trans "Diploma" %}</option>
@@ -47,7 +48,7 @@
           <option value="{{ value }}"{% if selected_delivery_mode == value %} selected{% endif %}>{{ label }}</option>
         {% endfor %}
       </select>
-      <span class="field-help">{% trans "This choice is saved on your Diploma application and determines your Semester Exam delivery." %}</span>
+      <span class="field-help">{% trans "Saved on diploma · exam delivery" %}</span>
     </div>
     <button class="btn-primary" type="submit">{% trans "Submit application" %}</button>
   </form>

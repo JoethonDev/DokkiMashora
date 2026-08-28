@@ -124,7 +124,7 @@ def _registration_error_step(error_fields: set) -> int:
 @require_http_methods(["GET"])
 def program_targets(request: HttpRequest) -> HttpResponse:
     """Return program target fragments for HTMX."""
-    if not request.headers.get("HX-Request"):
+    if not is_htmx(request):
         raise Http404
     profile = getattr(request.user, "student_profile", None)
     kind = str(request.GET.get("kind") or request.GET.get("program_type") or "diploma").strip()

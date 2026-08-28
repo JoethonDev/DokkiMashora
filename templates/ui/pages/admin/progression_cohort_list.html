@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-stack animate-enter-view">
   {% include "ui/components/_page_header.html" with eyebrow=_("Progression") title=diploma.title description=_("Cohorts and semesters") back_button=True %}
-  <section class="card-surface">
+  <section class="card-surface flex flex-col gap-4">
     <div class="table-wrap hidden lg:block">
       <table class="table">
         <thead>
@@ -24,7 +24,7 @@
               <td class="table-td">
                 <div class="flex gap-2 flex-wrap">
                   {% for semester in semesters %}
-                    <a class="btn-ghost" href="{% url 'progression:admin_cohort_semester_progression' diploma.id cohort.id semester.id %}">{{ semester.title }}</a>
+                    <a class="inline-flex items-center justify-center gap-1 rounded-full px-3 py-1 text-xs font-bold no-underline border border-line bg-surface-soft text-text hover:bg-surface-strong hover:border-surface-300 hover:shadow-sm transition-colors duration-200" href="{% url 'progression:admin_cohort_semester_progression' diploma.id cohort.id semester.id %}">{{ semester.title }}</a>
                   {% empty %}
                     <span class="text-muted">—</span>
                   {% endfor %}
@@ -49,7 +49,7 @@
             <small class="block text-muted">{{ cohort.start_date|date:"d/m/Y" }} · {{ cohort.enrollment_count }} {% trans "enrollments" %}</small>
             <div class="flex gap-2 flex-wrap mt-2">
               {% for semester in semesters %}
-                <a class="btn-ghost" href="{% url 'progression:admin_cohort_semester_progression' diploma.id cohort.id semester.id %}">{{ semester.title }}</a>
+                <a class="inline-flex items-center justify-center gap-1 rounded-full px-3 py-1 text-xs font-bold no-underline border border-line bg-surface-soft text-text hover:bg-surface-strong hover:border-surface-300 hover:shadow-sm transition-colors duration-200" href="{% url 'progression:admin_cohort_semester_progression' diploma.id cohort.id semester.id %}">{{ semester.title }}</a>
               {% empty %}
                 <span class="text-muted">—</span>
               {% endfor %}

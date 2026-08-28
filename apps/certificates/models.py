@@ -41,10 +41,9 @@ TEMPLATE_SOURCE_STATUS_CHOICES = (
     (TEMPLATE_SOURCE_STATUS_FAILED, _("Failed")),
 )
 
-# Extensible dynamic-field registry (P7-03 v2). The first two keys are resolved
-# today; the rest are reserved placeholders so the v2 layout schema is
-# forward-compatible (certificate_number, diploma, course, semester, cohort,
-# graduation_date) without schema churn.
+# Extensible dynamic-field registry (P7-03 v2). All registered keys are
+# placeable in the editor; the registry remains the single allowlist for
+# mapping validation and future field additions.
 FIELD_KEY_STUDENT_NAME = "student_name"
 FIELD_KEY_DATE = "date"
 FIELD_KEY_CERTIFICATE_NUMBER = "certificate_number"

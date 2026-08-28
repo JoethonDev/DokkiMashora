@@ -164,7 +164,11 @@ class ProgramApplication(TimeStampedModel):
 
 
 class ProgramApplicationEmailLog(TimeStampedModel):
-    """Tracks emails sent for a program application."""
+    """Tracks emails sent for a program application.
+
+    Centralized through ``apps.communications.services.record_program_application_email_log``
+    (single write path) and updated via the canonical Celery delivery pipeline.
+    """
 
     program_application = models.ForeignKey(
         ProgramApplication, on_delete=models.CASCADE,
@@ -178,9 +182,25 @@ class ProgramApplicationEmailLog(TimeStampedModel):
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
         null=True, blank=True, related_name="program_application_email_logs",
     )
-    status = models.CharField(max_length=8, default="sent")
+    status = models.CharField(max_length=16, default="sent")
     error = models.TextField(blank=True)
     is_resend = models.BooleanField(default=False)
+    idempotency_key = models.CharField(
+        _("idempotency key"),
+        max_length=128,
+        null=True,
+        blank=True,
+        unique=True,
+        help_text=_("Idempotency key of the linked EmailMessage, if any."),
+    )
+    email_message = models.ForeignKey(
+        "communications.EmailMessage",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="application_logs",
+        verbose_name=_("email message"),
+    )
 
     class Meta:
         verbose_name = _("program application email log")

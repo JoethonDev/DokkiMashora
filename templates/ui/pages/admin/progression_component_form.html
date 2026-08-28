@@ -28,7 +28,7 @@
       <label class="field"><span class="field-label">{% trans "Required minimum (%)" %}</span>
         <input name="required_min_percent" class="form-input" type="number" min="0" max="100" step="0.01"
                value="{{ component.required_min_percent|default:0 }}">
-        <span class="field-help">{% trans "Enter a percentage from 0 to 100." %}</span>
+         <span class="field-help">{% trans "0–100" %}</span>
       </label>
       <label class="field"><span class="field-label">{% trans "Order" %}</span>
         <input name="order" class="form-input" value="{{ component.order|default:'' }}" required>

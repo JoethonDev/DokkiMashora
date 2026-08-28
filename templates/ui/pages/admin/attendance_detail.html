@@ -5,7 +5,7 @@
 {% endblock %}
 {% block content %}
   <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=session|stringformat:"s" eyebrow=_("Attendance session") back_button=True %}
-    <section class="card-surface"><div class="section-head"><div>
+    <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Session" %}</p>
           <h3>{% trans "Session info" %}</h3>
         </div>
@@ -25,8 +25,8 @@
               </form>
             {% endif %}
             <span x-data="{ confirming: false }">
-              <button class="btn-ghost text-red" type="button" x-show="!confirming" @click="confirming = true">{% trans "Delete" %}</button>
-              <span x-show="confirming" x-cloak class="inline-flex gap-2 items-center">
+              <button class="btn-ghost text-red" type="button" x-show="!confirming" x-transition.opacity @click="confirming = true">{% trans "Delete" %}</button>
+              <span x-show="confirming" x-transition.opacity x-cloak class="inline-flex gap-2 items-center">
                 <form method="post"
                       action="{% url 'attendance:attendance_session_delete' session.id %}"
                       class="inline">{% csrf_token %}
@@ -110,7 +110,7 @@
         {% endif %}
       </dl>
     </section>
-    <section class="card-surface"><div class="section-head"><div>
+    <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Records" %}</p>
           <h3>{% trans "Attendance records" %}</h3>
         </div>

@@ -9,8 +9,8 @@
     {% trans "Review each question and the student's answer, then record the final score and feedback." as description %}
     {% url 'entrance_exams:admin_grade_list' as grade_list_url %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title|default:default_title description=description back_url=grade_list_url back_label=_("Back to grading queue") %}
-    <section class="card-surface">
-      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+    <section class="card-surface flex flex-col gap-4">
+      <div class="flex flex-wrap items-center justify-between gap-2.5 mb-4">
         <div class="min-w-0">
           <h2 class="text-lg font-bold m-0">{{ attempt.exam }}</h2>
           <p class="text-muted m-0 mt-1">{{ attempt.student }}</p>
@@ -52,11 +52,11 @@
               {% if question.rubric %}
                 <details class="mt-3 text-sm">
                   <summary class="cursor-pointer text-muted">{% trans "Scoring rubric / model answer" %}</summary>
-                  <p class="mt-2 p-3 bg-surface-soft border border-line rounded-sm m-0 whitespace-pre-wrap">{{ question.rubric }}</p>
+                  <p class="mt-2 p-4 bg-surface-soft border border-line rounded-sm m-0 whitespace-pre-wrap">{{ question.rubric }}</p>
                 </details>
               {% endif %}
             {% endif %}
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
               <label class="field"><span class="field-label">{% trans "Score" %}</span>
                 <input name="score_{{ question.id }}" class="form-input"
                        value="{{ answer.score|unlocalize }}"
@@ -75,7 +75,7 @@
       </form>
     </section>
     {% if attempt.score is not None or can_accept_or_reject or can_request_interview %}
-    <section class="card-surface">
+    <section class="card-surface flex flex-col gap-4">
       <div class="section-head"><div>
           <p class="eyebrow">{% trans "Decision" %}</p>
           <h2>{% trans "Entrance result" %}</h2>
@@ -124,8 +124,8 @@
             </nav>
             <div class="mt-4">
               {% if 'pass' in change_targets %}
-                <form id="panel-pass" x-show="action==='pass'" x-cloak role="tabpanel" aria-labelledby="tab-pass" method="post" action="{% url 'entrance_exams:admin_attempt_decision' attempt.id %}">{% csrf_token %}<input type="hidden" name="action" value="accept">
-                  <div class="max-w-2xl border border-line rounded-sm p-4 flex flex-col gap-3">
+                <form id="panel-pass" x-show="action==='pass'" x-transition x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" x-cloak role="tabpanel" aria-labelledby="tab-pass" method="post" action="{% url 'entrance_exams:admin_attempt_decision' attempt.id %}">{% csrf_token %}<input type="hidden" name="action" value="accept">
+                  <div class="max-w-2xl border border-line rounded-sm p-4 flex flex-col gap-4">
                     <p class="text-sm text-muted m-0">{% trans "Accept the student based on this decision. The calculated score stays unchanged." %}</p>
                     <label class="field"><span class="field-label">{% trans "Reviewer notes" %}</span><textarea name="admin_notes" class="form-textarea" rows="2"></textarea></label>
                     <label class="flex items-center gap-2 text-sm"><input class="form-checkbox" type="checkbox" name="send_email" checked><span>{% trans "Send email notification" %}</span></label>
@@ -136,8 +136,8 @@
                 </form>
               {% endif %}
               {% if 'fail' in change_targets %}
-                <form id="panel-fail" x-show="action==='fail'" x-cloak role="tabpanel" aria-labelledby="tab-fail" method="post" action="{% url 'entrance_exams:admin_attempt_decision' attempt.id %}">{% csrf_token %}<input type="hidden" name="action" value="reject">
-                  <div class="max-w-2xl border border-line rounded-sm p-4 flex flex-col gap-3">
+                <form id="panel-fail" x-show="action==='fail'" x-transition x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" x-cloak role="tabpanel" aria-labelledby="tab-fail" method="post" action="{% url 'entrance_exams:admin_attempt_decision' attempt.id %}">{% csrf_token %}<input type="hidden" name="action" value="reject">
+                  <div class="max-w-2xl border border-line rounded-sm p-4 flex flex-col gap-4">
                     <p class="text-sm text-muted m-0">{% trans "Reject the student based on this decision. The calculated score stays unchanged." %}</p>
                     <label class="field"><span class="field-label">{% trans "Rejection reason" %} <span aria-hidden="true">*</span></span><textarea name="rejection_reason" class="form-textarea" rows="2" aria-required="true"></textarea></label>
                     <label class="field"><span class="field-label">{% trans "Reviewer notes" %}</span><textarea name="admin_notes" class="form-textarea" rows="1"></textarea></label>
@@ -149,10 +149,10 @@
                 </form>
               {% endif %}
               {% if 'interview' in change_targets %}
-                <form id="panel-interview" x-show="action==='interview'" x-cloak role="tabpanel" aria-labelledby="tab-interview" method="post" action="{% url 'entrance_exams:admin_attempt_decision' attempt.id %}">{% csrf_token %}<input type="hidden" name="action" value="request_interview">
-                  <div class="max-w-2xl border border-line rounded-sm p-4 flex flex-col gap-3">
+                <form id="panel-interview" x-show="action==='interview'" x-transition x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" x-cloak role="tabpanel" aria-labelledby="tab-interview" method="post" action="{% url 'entrance_exams:admin_attempt_decision' attempt.id %}">{% csrf_token %}<input type="hidden" name="action" value="request_interview">
+                  <div class="max-w-2xl border border-line rounded-sm p-4 flex flex-col gap-4">
                     <p class="text-sm text-muted m-0">{% trans "Interview is required before a final decision." %}</p>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <label class="field"><span class="field-label">{% trans "Interview date/time" %}</span><input class="form-input" name="interview_at" type="datetime-local"></label>
                       <label class="field"><span class="field-label">{% trans "Expiry date/time" %} <span aria-hidden="true">*</span></span><input class="form-input" name="expires_at" type="datetime-local" required></label>
                     </div>
@@ -169,7 +169,7 @@
           {% endif %}
           {% if can_undo_decision %}
             <form method="post" action="{% url 'entrance_exams:admin_attempt_decision' attempt.id %}" class="mt-4">{% csrf_token %}<input type="hidden" name="action" value="revert_decision">
-              <div class="max-w-2xl border border-line rounded-sm p-4 flex flex-col gap-3">
+              <div class="max-w-2xl border border-line rounded-sm p-4 flex flex-col gap-4">
                 <p class="text-sm text-muted m-0">{% trans "Return the application to the undecided state so it can be re-evaluated." %}</p>
                 <label class="field"><span class="field-label">{% trans "Reason" %}</span><textarea name="revert_reason" class="form-textarea" rows="1"></textarea></label>
                 <div class="actions-row">

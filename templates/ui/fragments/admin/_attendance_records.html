@@ -22,7 +22,7 @@
         <tbody>
           {% for s in sessions %}
             <tr>
-              <td class="table-td"><div class="flex flex-col"><strong>{{ s.title|default:_("Attendance") }}</strong>
+              <td class="table-td"><div class="flex flex-col gap-1"><strong>{{ s.title|default:_("Attendance") }}</strong>
                 <small>
                   {% trans "by" %}
                   {{ s.created_by.full_name }}

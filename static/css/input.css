@@ -12,7 +12,7 @@
     scroll-behavior: smooth;
     -webkit-tap-highlight-color: transparent;
     -webkit-text-size-adjust: 100%;
-    scrollbar-gutter: stable;
+    scrollbar-gutter: auto;
   }
   body {
     @apply m-0 bg-bg text-text font-sans antialiased min-h-screen flex flex-col overflow-x-hidden;
@@ -69,8 +69,12 @@
     flex-direction: column;
     gap: 1rem;
   }
-  /* Grid children should not be forced flex — let grid control layout */
-  .grid > .card-surface:not(.flex):not(.page-stack) { display: block; }
+  /* Grid children keep comfortable vertical rhythm — gap between header/body/elements */
+  .grid > .card-surface:not(.flex):not(.page-stack) {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
   .card-surface-interactive {
     @apply card-surface hover:shadow-card-hover hover:border-surface-300 cursor-pointer transition-all duration-200;
   }
@@ -208,7 +212,7 @@
   .page-stack     { @apply flex flex-col gap-4 sm:gap-5; }
   .aspect-video   { aspect-ratio: 16 / 9; }
   .section-head   { @apply flex items-center justify-between gap-4 mb-4 flex-wrap; }
-  .card-surface > .section-head { margin-bottom: 0; }
+  .card-surface > .section-head { border-bottom: 1px solid #E9DDC9; padding-bottom: 0.75rem; margin-bottom: 0.75rem; }
   .actions-row    { @apply flex items-center gap-2.5 flex-wrap; }
   .form-grid      { @apply grid grid-cols-1 md:grid-cols-2 gap-4; }
   .form-grid-full { @apply md:col-span-2; }
@@ -308,8 +312,8 @@
   /* Landing page — section connector accent bar */
   .section-accent { @apply w-12 h-1 rounded-full bg-gradient-to-r from-brand to-brand-strong mx-auto mb-4; }
 
-  /* Landing page — card hover lift */
-  .card-hover-lift { @apply transition-all duration-300 hover:-translate-y-1 hover:shadow-card-hover; }
+/* Landing page — card hover lift */
+.card-hover-lift { @apply transition-all duration-200 hover:-translate-y-1 hover:shadow-card-hover; transition-timing-function: cubic-bezier(.2,.8,.2,1); }
   /* Disable lift on touch devices so cards don't stick in a "hovered" state after tap */
   @media (hover: none) {
     .card-hover-lift:hover { transform: none; box-shadow: none; }
@@ -416,8 +420,8 @@
 }
 
 /* ── Global search dialog — smooth open/close ── */
-dialog#global-search-dialog[open] { animation: dialogIn 220ms cubic-bezier(.2,.8,.2,1) }
-dialog#global-search-dialog::backdrop { background: rgba(15,19,17,.38); backdrop-filter: blur(2px); animation: backdropIn 220ms ease }
+dialog#global-search-dialog[open] { animation: dialogIn 200ms cubic-bezier(.2,.8,.2,1) }
+dialog#global-search-dialog::backdrop { background: rgba(15,19,17,.38); backdrop-filter: blur(2px); animation: backdropIn 200ms cubic-bezier(.2,.8,.2,1) }
 dialog#global-search-dialog:not([open]) { opacity: 0 }
 @keyframes dialogIn { from { opacity:0; transform: translateY(8px) scale(.98)} to {opacity:1; transform:none} }
 @keyframes backdropIn { from {opacity:0} to {opacity:1} }
@@ -426,9 +430,9 @@ dialog#global-search-dialog:not([open]) { opacity: 0 }
 /* search input spacing handled by form pe-14 */
 
 /* Sidebar & topbar — smooth interactions */
-.sidebar-link, .btn, .btn-icon, .form-input, .tab { transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease }
+.sidebar-link, .btn, .btn-icon, .form-input, .tab { transition: background-color 200ms cubic-bezier(.2,.8,.2,1), color 200ms cubic-bezier(.2,.8,.2,1), border-color 200ms cubic-bezier(.2,.8,.2,1), transform 200ms cubic-bezier(.2,.8,.2,1), box-shadow 200ms cubic-bezier(.2,.8,.2,1), opacity 200ms cubic-bezier(.2,.8,.2,1) }
 .sidebar-link:active, .btn:active { transform: scale(.98) }
-.search-result-item { transition: background-color 140ms ease, transform 140ms ease }
+.search-result-item { transition: background-color 200ms cubic-bezier(.2,.8,.2,1), transform 200ms cubic-bezier(.2,.8,.2,1) }
 .search-result-item:hover { transform: translateX(1px) }
 .search-result-item.active { transform: translateX(1px) }
 

@@ -4,7 +4,7 @@
 {% block content %}
   <div class="page-stack animate-enter-view">
     {% include "ui/components/_page_header.html" with eyebrow=_('Lecture preview') title=lecture.title description=lecture.description breadcrumb_items=breadcrumb_items %}
-    <section class="card-surface">
+    <section class="card-surface flex flex-col gap-4">
       {% if youtube_video_id %}
         <div class="aspect-video overflow-hidden rounded-md bg-surface-inverse"><iframe class="w-full h-full" src="https://www.youtube-nocookie.com/embed/{{ youtube_video_id }}?rel=0&modestbranding=1&origin={{ request.scheme }}://{{ request.get_host }}&widget_referrer={{ request.scheme }}://{{ request.get_host }}" title="{{ lecture.title }}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div>
       {% elif lecture.youtube_url %}

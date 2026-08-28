@@ -1,4 +1,4 @@
-﻿{% extends "ui/layouts/admin.html" %}
+{% extends "ui/layouts/admin.html" %}
 {% load i18n %}
 {% block title %}
   {% trans "Applications" %}
@@ -9,14 +9,14 @@
     {% trans "Application review" as title %}
     {% trans "Search the queue, inspect applicant context, and make permissioned decisions." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    <section class="card-surface"><form class="actions-row items-end mb-4"
+    <section class="card-surface flex flex-col gap-4"><form class="actions-row items-end"
       method="get"
       hx-get="{% url 'applications:program_list' %}"
       hx-trigger="input changed delay:300ms from:#application-search, change from:select, submit"
-      hx-target="#application-results"
+      hx-target="#results"
       hx-swap="outerHTML"
       hx-push-url="true"
-       hx-sync="this:replace"><div class="search-field">
+       hx-sync="this:replace" hx-indicator="#global-loading"><div class="search-field">
 <input id="application-search"
 name="q"
 value="{{ search_value }}"

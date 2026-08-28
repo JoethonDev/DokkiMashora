@@ -1,5 +1,19 @@
 {% load form_tags %}
 {% with ftype=field|field_type %}
+{% with compact=compact|default:False %}
+{% if compact %}
+  {% if ftype == "checkbox" or ftype == "radio" %}
+    <label class="flex items-center gap-2 cursor-pointer{% if field.errors %} form-group-error{% endif %}" for="{{ field.id_for_label }}">
+      {{ field|widget_class }}
+      <span class="text-sm font-bold text-text">{{ field.label }}{% if field.field.required %} <span class="text-red" aria-hidden="true">*</span>{% endif %}</span>
+    </label>
+  {% else %}
+    <label class="field-label" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span class="text-red" aria-hidden="true">*</span>{% endif %}</label>
+    {{ field|widget_class }}
+  {% endif %}
+  {% if field.help_text %}<p id="{{ field.id_for_label }}-help" class="field-help">{{ field.help_text }}</p>{% endif %}
+  {% for error in field.errors %}<p id="{{ field.id_for_label }}-error" class="field-error" role="alert">{{ error }}</p>{% endfor %}
+{% else %}
 <div class="form-group{% if field.errors %} form-group-error{% endif %}">
   {% if ftype == "checkbox" or ftype == "radio" %}
     <label class="flex items-start gap-2 cursor-pointer" for="{{ field.id_for_label }}">
@@ -15,4 +29,6 @@
   {% if field.help_text %}<p id="{{ field.id_for_label }}-help" class="field-help">{{ field.help_text }}</p>{% endif %}
   {% for error in field.errors %}<p id="{{ field.id_for_label }}-error" class="field-error" role="alert">{{ error }}</p>{% endfor %}
 </div>
+{% endif %}
+{% endwith %}
 {% endwith %}

@@ -1,15 +1,14 @@
-﻿{% extends "ui/layouts/admin.html" %}
+{% extends "ui/layouts/admin.html" %}
 {% load i18n %}
 {% block title %}
   {% trans "Attendance sessions" %}
 {% endblock %}
-  {% trans "Attendance sessions" %}
 {% block content %}
   <div class="page-stack animate-enter-view">{% trans "Learning" as eyebrow %}
     {% trans "Attendance sessions" as title %}
     {% trans "Create, open, and monitor attendance sessions." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-     <section class="card-surface"><form class="actions-row items-end mb-4"
+     <section class="card-surface flex flex-col gap-4"><form class="actions-row items-end"
              method="get"
              hx-get="{% url 'attendance:attendance_session_list' %}"
              hx-trigger="change from:select, input changed delay:500ms from:input"
@@ -24,10 +23,10 @@
              {% endfor %}
            </select>
          </label>
-         <label class="min-w-40"><span class="field-label">{% trans "From" %}</span>
-           <input id="date-from" name="date_from" value="{{ date_from }}" type="date" class="form-input"></label>
-         <label class="min-w-40"><span class="field-label">{% trans "To" %}</span>
-           <input id="date-to" name="date_to" value="{{ date_to }}" type="date" class="form-input"></label>
+          <label class="min-w-40"><span class="field-label">{% trans "From" %}</span>
+            <input id="date-from" name="date_from" value="{{ date_from|default:'' }}" type="date" class="form-input"></label>
+          <label class="min-w-40"><span class="field-label">{% trans "To" %}</span>
+            <input id="date-to" name="date_to" value="{{ date_to|default:'' }}" type="date" class="form-input"></label>
          <label class="min-w-40"><span class="field-label">{% trans "Exception" %}</span>
            <select id="exception-filter" name="exception" class="form-select"><option value="">{% trans "None" %}</option>
              <option value="overdue" {% if exception == "overdue" %} selected {% endif %}>{% trans "Overdue" %}</option>

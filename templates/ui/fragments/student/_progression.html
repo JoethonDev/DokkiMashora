@@ -1,6 +1,6 @@
 {% load i18n %}
 <div id="student-content" class="page-stack animate-enter-view">{% url 'students:record' as student_record_url %}{% include "ui/components/_page_header.html" with eyebrow=_("Academic journey") title=_("Progression") description=_("Track semester decisions, completion, eligibility, released grades, and certificates.") back_url=student_record_url back_label=_("Open full record") %}
-  <section class="card-surface"><div class="section-head"><div>
+  <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
         <p class="eyebrow">{% trans "Progress" %}</p>
         <h3>{% trans "Semester progress" %}</h3>
       </div>
@@ -47,7 +47,7 @@
     </div>
   </section>
   {% if record_history.semester_rows %}
-    <section class="card-surface"><div class="section-head"><div>
+    <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Semester evaluations" %}</p>
           <h3>{% trans "Finalized evaluation results" %}</h3>
         </div>
@@ -106,21 +106,21 @@
       </div>
     </section>
   {% endif %}
-  <section class="grid grid-cols-1 md:grid-cols-2 gap-4"><article class="card-surface"><div class="section-head"><div>
+  <section class="grid grid-cols-1 md:grid-cols-2 gap-4"><article class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Decisions" %}</p>
           <h3>{% trans "Promotion decisions" %}</h3>
         </div>
       </div>
-      <div class="flex flex-col">{% for item in promotion_decisions %}
-          <div>
+      <div class="flex flex-col gap-4">{% for item in promotion_decisions %}
+          <div class="flex items-center gap-2.5 py-3 border-b border-line first:pt-0 last:border-b-0 last:pb-0">
             <i></i>
-            <p>
-              <strong>
+            <p class="m-0 min-w-0 flex-1 flex flex-col gap-1">
+              <strong class="block">
                 {{ item.from_semester }}
                 →
                 {{ item.to_semester }}
               </strong>
-              <small>
+              <small class="block">
                 {{ item.get_decision_type_display }}
                 ·
                 {{ item.decided_at|date:"d/m/Y" }}
@@ -132,20 +132,22 @@
         {% endfor %}
       </div>
     </article>
-    <article class="card-surface"><div class="section-head"><div>
+    <article class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Completion" %}</p>
           <h3>{% trans "Completion and certificates" %}</h3>
         </div>
       </div>
+      <div class="flex flex-col gap-4">
       {% for item in completions %}
-        <p>
+        <p class="flex items-center gap-2.5 py-3 border-b border-line first:pt-0 last:border-b-0 last:pb-0 m-0">
           {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:'—' %}
           {{ item.diploma_enrollment.cohort.diploma }}
         </p>
       {% endfor %}
+      </div>
     </article>
   </section>
-  <section class="card-surface"><div class="section-head"><div>
+  <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
         <p class="eyebrow">{% trans "Released results" %}</p>
         <h3>{% trans "Grade items" %}</h3>
       </div>

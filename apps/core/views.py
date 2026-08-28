@@ -26,6 +26,7 @@ from apps.accounts.models import User
 from apps.applications.models import ProgramApplication
 from apps.core.forms import LandingPageSettingsForm
 from apps.core.models import LandingAnnouncement, LandingPageSettings
+from apps.core.htmx import is_htmx
 from apps.core.navigation import workspace_navigation
 from apps.core.permissions import ROLE_SENIOR_STAFF, is_admin, role_required
 from apps.students.services import get_open_apply_targets
@@ -113,7 +114,7 @@ def workspace_search(request: HttpRequest) -> HttpResponse:
     nav = workspace_navigation(user)
     can_search_all = is_admin(user)
 
-    if request.headers.get("HX-Request") != "true":
+    if not is_htmx(request):
         return redirect("accounts:dashboard")
 
     results = []

@@ -25,7 +25,7 @@ from apps.applications.services import (
     is_apply_target_open,
 )
 from apps.core.forms import StyledFormMixin
-from apps.core.phone import normalize_phone_number
+from apps.core.phone import validate_phone
 from apps.students.constants import EDUCATION_CHOICES, GENDER_CHOICES
 from apps.students.identity import (
     COUNTRY_CHOICES,
@@ -100,13 +100,13 @@ class RegistrationForm(StyledFormMixin, forms.Form):
         country_code = normalize_country_code(cc_raw)
         self.fields["national_id"].label = identity_label(country_code)
         self.fields["national_id"].help_text = (
-            _("Enter 14 digits, for example 29001010100001.")
+            _("14 digits · e.g., 29001010100001")
             if country_code == "EG" else
-            _("Use the passport number as printed, for example A1234567.")
+            _("e.g., A1234567")
         )
         phone_prefix = {"EG": "+20", "SA": "+966", "AE": "+971", "US": "+1", "GB": "+44", "CA": "+1", "AU": "+61"}.get(country_code, "+country code")
         self.fields["phone"].help_text = _(
-            "Use international format, for example %(prefix)s 10 1234 5678."
+            "e.g., %(prefix)s 10 1234 5678"
         ) % {"prefix": phone_prefix}
 
     def _load_program_choices(self) -> None:
@@ -141,10 +141,7 @@ class RegistrationForm(StyledFormMixin, forms.Form):
         value = self.cleaned_data["phone"].strip()
         if not value:
             raise forms.ValidationError(_("Mobile number is required."))
-        normalized = normalize_phone_number(value)
-        if len(normalized) < 7:
-            raise forms.ValidationError(_("Enter a valid mobile number."))
-        return value
+        return validate_phone(value)
 
     def clean_country_code(self) -> str:
         cc = self.cleaned_data.get("country_code", "")

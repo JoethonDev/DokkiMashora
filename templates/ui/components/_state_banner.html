@@ -18,7 +18,7 @@ secondary actions through a shared available-actions partial once at least
 two pages need it. This partial is presentation only.
 {% endcomment %}
 <div class="flex flex-col gap-1" data-state-banner>
-  <div class="flex items-center gap-3 flex-wrap">
+  <div class="flex items-center gap-2.5 flex-wrap">
     {% include "ui/components/_status.html" with code=state label=label icon=icon %}
     {% if primary_action %}
       {% if primary_action.method == "POST" %}

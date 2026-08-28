@@ -8,7 +8,7 @@
     {% trans "Progression" as title %}
     {% trans "Review semester progress, decisions, evaluations, interviews, and rejoin plans." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description back_button=True %}
-    <section class="card-surface"><div class="section-head"><div>
+    <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Activity" %}</p>
             <h3>
               {{ enrollment.student }}

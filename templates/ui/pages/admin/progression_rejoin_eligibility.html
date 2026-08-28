@@ -5,7 +5,7 @@
   <div class="page-stack animate-enter-view">
     {% include "ui/components/_page_header.html" with eyebrow=_("Progression") title=_("Rejoin Eligibility") description=_("Students eligible for the immediately next cohort at the same failed semester.") back_button=True %}
     {% include "ui/components/_pagination.html" with page_obj=page_obj pagination_qs=pagination_qs %}
-    <section class="card-surface">
+    <section class="card-surface flex flex-col gap-4">
       {% if rows.object_list %}
         <div class="table-wrap hidden lg:block"><table class="table">
             <thead>

@@ -16,6 +16,8 @@
     if (!timer || !value) return;
     form.dataset.examTimerInitialized = "true";
 
+    var Core = window.CountdownCore;
+
     var snapshotUrl = form.getAttribute("data-snapshot-url");
     var finalizeUrl = form.getAttribute("data-finalize-url");
     var attemptId = form.getAttribute("data-attempt-id");
@@ -27,30 +29,12 @@
     var deadline = Date.parse(timer.getAttribute("data-deadline") || "");
     var initialSeconds = Number(timer.getAttribute("data-remaining-seconds") || 0);
     var loadedAt = Date.now();
-    var clockOffset = Number.isFinite(serverNow) ? Date.now() - serverNow : 0;
+    var clockOffset = Core.computeClockOffset(serverNow);
     var expired = false;
     var finalizing = false;
     var saveTimer = null;
     var saveInFlight = false;
     var periodicTimer = null;
-
-    function pad(number) {
-      return String(number).padStart(2, "0");
-    }
-
-    function getRemainingSeconds() {
-      if (Number.isFinite(deadline)) {
-        return Math.max(0, Math.ceil((deadline + clockOffset - Date.now()) / 1000));
-      }
-      return Math.max(0, initialSeconds - Math.floor((Date.now() - loadedAt) / 1000));
-    }
-
-    function format(seconds) {
-      var hours = Math.floor(seconds / 3600);
-      var minutes = Math.floor((seconds % 3600) / 60);
-      var remainder = seconds % 60;
-      return pad(hours) + ":" + pad(minutes) + ":" + pad(remainder);
-    }
 
     function collectAnswers() {
       var answers = {};
@@ -173,8 +157,15 @@
     }
 
     function render() {
-      var seconds = getRemainingSeconds();
-      value.textContent = format(seconds);
+      var seconds = Core.getRemainingSeconds({
+        deadline: deadline,
+        clockOffset: clockOffset,
+        initialSeconds: initialSeconds,
+        loadedAt: loadedAt,
+        serverNow: serverNow,
+        requireServerNow: false,
+      });
+      value.textContent = Core.formatHMS(seconds);
       if (seconds > 0 || expired) return;
       expire();
     }

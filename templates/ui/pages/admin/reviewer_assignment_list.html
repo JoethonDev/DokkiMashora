@@ -6,7 +6,7 @@
 {% block content %}
   <div class="page-stack animate-enter-view">{% trans "Semester exam" as eyebrow %}
     {% include "ui/components/_page_header.html" with title=_("Reviewer assignments") eyebrow=eyebrow %}
-    <section class="card-surface">
+    <section class="card-surface flex flex-col gap-4">
       <div class="table-wrap hidden lg:block"><table class="table">
           <thead>
             <tr>
@@ -59,7 +59,7 @@
       </div>
       {% include "ui/components/_pagination.html" %}
     </section>
-    <section class="card-surface">
+    <section class="card-surface flex flex-col gap-4">
       <div class="section-head"><div><p class="eyebrow">{% trans "Grading activity" %}</p><h2>{% trans "Claimed submissions" %}</h2></div></div>
       <div class="table-wrap hidden lg:block"><table class="table"><thead><tr><th class="table-th">{% trans "Assessment" %}</th><th class="table-th">{% trans "Section" %}</th><th class="table-th">{% trans "Reviewer" %}</th><th class="table-th">{% trans "Status" %}</th><th class="table-th">{% trans "Finalized by" %}</th></tr></thead><tbody>
         {% for claim in claims %}<tr><td class="table-td">{{ claim.attempt.assessment }}</td><td class="table-td">{{ claim.section }}</td><td class="table-td">{{ claim.claimed_by }}</td><td class="table-td">{{ claim.get_status_display }}</td><td class="table-td">{{ claim.finalized_by|default:'—' }}</td></tr>{% empty %}<tr><td class="table-td" colspan="5">{% trans "No grading claims yet." %}</td></tr>{% endfor %}

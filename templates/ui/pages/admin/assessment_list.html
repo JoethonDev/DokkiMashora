@@ -1,4 +1,4 @@
-﻿{% extends "ui/layouts/admin.html" %}
+{% extends "ui/layouts/admin.html" %}
 {% load i18n %}
 {% block title %}
   {% trans "Assessments" %}
@@ -12,14 +12,14 @@
     <div class="actions-row justify-end">
       <a class="btn-primary" href="{% url 'assessments:admin_create' %}">{% trans "Create assessment" %}</a>
     </div>
-    <section class="card-surface"><form class="actions-row items-end mb-4"
+    <section class="card-surface flex flex-col gap-4"><form class="actions-row items-end"
       method="get"
       hx-get="{% url 'assessments:admin_list' %}"
       hx-trigger="input changed delay:300ms from:#assessment-search, change from:select, submit"
-      hx-target="#assessment-results"
+      hx-target="#results"
       hx-swap="outerHTML"
       hx-push-url="true"
-       hx-sync="this:replace"><div class="search-field">
+       hx-sync="this:replace" hx-indicator="#global-loading"><div class="search-field">
       <input id="assessment-search"
              name="q"
              value="{{ search_value }}"

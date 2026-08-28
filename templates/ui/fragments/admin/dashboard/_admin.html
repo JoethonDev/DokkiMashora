@@ -80,7 +80,7 @@
       {% if assessment_ungraded > 0 or unmatched_upload_count > 0 or progression_exception_count > 0 or failed_email_count > 0 or unpublished_lecture_count > 0 %}
         <div class="flex flex-col divide-y divide-line">{% if assessment_ungraded > 0 %}
             <a class="flex items-center gap-2.5 py-2.5 no-underline text-inherit hover:text-brand" href="{% url 'assessments:admin_grade_list' %}"><span class="w-2.5 h-2.5 rounded-full bg-red shrink-0"></span>
-              <span class="flex flex-col min-w-0"><strong>
+              <span class="flex flex-col gap-1 min-w-0"><strong>
                 {{ assessment_ungraded }}
                 {% trans "ungraded assessments" %}
               </strong><small class="text-muted">{% trans "Grading queue" %}</small></span>
@@ -88,7 +88,7 @@
           {% endif %}
           {% if unmatched_upload_count > 0 %}
             <a class="flex items-center gap-2.5 py-2.5 no-underline text-inherit hover:text-brand" href="{% url 'payments:upload_list' %}"><span class="w-2.5 h-2.5 rounded-full bg-amber shrink-0"></span>
-              <span class="flex flex-col min-w-0"><strong>
+              <span class="flex flex-col gap-1 min-w-0"><strong>
                 {{ unmatched_upload_count }}
                 {% trans "uploads with unmatched rows" %}
               </strong><small class="text-muted">{% trans "Payment import" %}</small></span>
@@ -96,7 +96,7 @@
           {% endif %}
           {% if progression_exception_count > 0 %}
             <a class="flex items-center gap-2.5 py-2.5 no-underline text-inherit hover:text-brand" href="{% url 'progression:admin_rejoin_plan_list' %}"><span class="w-2.5 h-2.5 rounded-full bg-muted shrink-0"></span>
-              <span class="flex flex-col min-w-0"><strong>
+              <span class="flex flex-col gap-1 min-w-0"><strong>
                 {{ progression_exception_count }}
                 {% trans "progression exceptions" %}
               </strong><small class="text-muted">{% trans "Student progression" %}</small></span>
@@ -104,7 +104,7 @@
           {% endif %}
           {% if failed_email_count > 0 %}
             <a class="flex items-center gap-2.5 py-2.5 no-underline text-inherit hover:text-brand" href="{% url 'communications:bulk_email_history' %}"><span class="w-2.5 h-2.5 rounded-full bg-amber shrink-0"></span>
-              <span class="flex flex-col min-w-0"><strong>
+              <span class="flex flex-col gap-1 min-w-0"><strong>
                 {{ failed_email_count }}
                 {% trans "failed application emails" %}
               </strong><small class="text-muted">{% trans "Email delivery" %}</small></span>
@@ -112,7 +112,7 @@
           {% endif %}
           {% if unpublished_lecture_count > 0 %}
             <a class="flex items-center gap-2.5 py-2.5 no-underline text-inherit hover:text-brand" href="{% url 'academics:admin_course_list' %}"><span class="w-2.5 h-2.5 rounded-full bg-muted shrink-0"></span>
-              <span class="flex flex-col min-w-0"><strong>
+              <span class="flex flex-col gap-1 min-w-0"><strong>
                 {{ unpublished_lecture_count }}
                 {% trans "unpublished lectures" %}
               </strong><small class="text-muted">{% trans "Course content" %}</small></span>
@@ -131,7 +131,7 @@
       <a class="btn-ghost" href="{% url 'applications:program_list' %}">{% trans "View queue" %}</a>
     </div>
     <div class="flex flex-col divide-y divide-line">{% for item in recent_applications|slice:":5" %}
-        <div class="flex flex-wrap sm:flex-nowrap items-center gap-3 sm:gap-4 py-3 min-w-0">
+        <div class="flex flex-wrap sm:flex-nowrap items-center gap-2.5 sm:gap-4 py-3 min-w-0">
           <span class="avatar shrink-0">{{ item.student.full_name|slice:":2"|upper }}</span>
           <p class="min-w-0 flex-1 break-words">
             <strong>{{ item.student.full_name }}</strong>

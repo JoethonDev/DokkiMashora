@@ -13,6 +13,8 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.academics.models import Diploma, DiplomaEnrollment
+from apps.audit.constants import ACTION_CERTIFICATE_TEMPLATE_DELETED
+from apps.audit.services import record_audit_event
 from apps.progression.constants import (
     CERTIFICATE_STATUS_AVAILABLE,
     CERTIFICATE_STATUS_FAILED,
@@ -28,7 +30,13 @@ from apps.storage.services import record_deferred_storage_deletion, storage_serv
 from apps.students.models import StudentProfile
 
 from .models import (
+    FIELD_KEY_CERTIFICATE_NUMBER,
+    FIELD_KEY_COHORT,
+    FIELD_KEY_COURSE,
     FIELD_KEY_DATE,
+    FIELD_KEY_DIPLOMA,
+    FIELD_KEY_GRADUATION_DATE,
+    FIELD_KEY_SEMESTER,
     FIELD_KEY_STUDENT_NAME,
     MAPPING_SCHEMA_VERSION,
     TEMPLATE_SOURCE_FORMAT_NONE,
@@ -107,6 +115,12 @@ def sample_field_values(*, today=None) -> dict[str, str]:
     return {
         FIELD_KEY_STUDENT_NAME: "Student Name",
         FIELD_KEY_DATE: today.strftime("%Y-%m-%d"),
+        FIELD_KEY_CERTIFICATE_NUMBER: "DM-2026-0001",
+        FIELD_KEY_DIPLOMA: "Diploma title",
+        FIELD_KEY_COURSE: "Course title",
+        FIELD_KEY_SEMESTER: "Semester 1",
+        FIELD_KEY_COHORT: "Cohort 2026",
+        FIELD_KEY_GRADUATION_DATE: today.strftime("%Y-%m-%d"),
     }
 
 
@@ -118,18 +132,30 @@ def resolve_certificate_field_values(
     *,
     today=None,
 ) -> dict[str, str]:
-    """Resolve values for the registered dynamic fields (P7-03 v2).
+    """Resolve every registered dynamic field for a generated certificate.
 
-    Only fields with a resolver today (student_name, date) are returned;
-    reserved placeholder fields (certificate_number, diploma, course, semester,
-    cohort, graduation_date) are intentionally absent so the renderer skips
-    them until their resolvers are wired. ``student_name`` keeps the current
-    corrected-name contract: full_name_ar, else full_name, else email.
+    ``course`` is a compatibility field for templates shared with course
+    certificates; diploma completion has no single course relation, so the
+    diploma title is the stable program value for that field.
     """
     user = student.user
+    diploma = enrollment.cohort.diploma
+    completion_date = completion.completed_at or completion.graduated_at
+    latest_progress = (
+        enrollment.semester_progress
+        .select_related("semester")
+        .order_by("-semester__order", "-updated_at")
+        .first()
+    )
     return {
         FIELD_KEY_STUDENT_NAME: user.full_name_ar or user.full_name or user.email,
         FIELD_KEY_DATE: (today or date.today()).strftime("%Y-%m-%d"),
+        FIELD_KEY_CERTIFICATE_NUMBER: certificate_number,
+        FIELD_KEY_DIPLOMA: diploma.title,
+        FIELD_KEY_COURSE: diploma.title,
+        FIELD_KEY_SEMESTER: latest_progress.semester.title if latest_progress else "",
+        FIELD_KEY_COHORT: enrollment.cohort.name,
+        FIELD_KEY_GRADUATION_DATE: completion_date.strftime("%Y-%m-%d") if completion_date else "",
     }
 
 
@@ -337,7 +363,7 @@ def ingest_certificate_source(
     actor=None,
     field_mapping: dict | None = None,
 ) -> CertificateTemplate:
-    """Validate, store, preview, and map a PDF/JPG certificate source (P7-02).
+    """Validate, store, preview, and map a PDF/PSD/JPG certificate source (P7-02).
 
     File validation and preview rendering run OUTSIDE DB transactions; the
     template row is updated in a short transaction only after all slow work
@@ -361,7 +387,7 @@ def ingest_certificate_source(
         key_prefix=f"certificate_templates/{template.id}",
         content_type=content_type,
         max_size=25 * 1024 * 1024,
-        allowed_types=[".pdf", ".jpg", ".jpeg"],
+        allowed_types=[".pdf", ".psd", ".jpg", ".jpeg"],
         original_filename=filename,
     )
     try:
@@ -449,6 +475,48 @@ def clear_certificate_source(template: CertificateTemplate) -> CertificateTempla
                 logger.exception("Failed to clean certificate template object %s", key)
                 record_deferred_storage_deletion(key=key, error=str(exc))
     return template
+
+
+def _schedule_certificate_template_storage_cleanup(storage_keys) -> None:
+    """Remove template artifacts after the database delete commits."""
+    keys = tuple(dict.fromkeys(key for key in storage_keys if key))
+
+    def _cleanup():
+        for key in keys:
+            try:
+                if not storage_service.delete_file(key):
+                    record_deferred_storage_deletion(
+                        key=key,
+                        error="Certificate template deleted",
+                    )
+            except Exception as exc:  # noqa: BLE001 - cleanup is best-effort post-commit
+                logger.exception("Failed to clean certificate template object %s", key)
+                record_deferred_storage_deletion(key=key, error=str(exc))
+
+    transaction.on_commit(_cleanup)
+
+
+def delete_certificate_template(*, template: CertificateTemplate, actor) -> None:
+    """Delete an inactive template while preserving generated certificate history."""
+    with transaction.atomic():
+        locked = CertificateTemplate.objects.select_for_update().get(pk=template.pk)
+        if locked.active:
+            raise ValueError(_("Deactivate the template before deleting it."))
+
+        storage_keys = (locked.source_storage_key, locked.preview_storage_key)
+        record_audit_event(
+            actor=actor,
+            action=ACTION_CERTIFICATE_TEMPLATE_DELETED,
+            target_type="certificate_template",
+            target_id=str(locked.id),
+            metadata={
+                "name": locked.name,
+                "diploma_id": locked.diploma_id,
+                "source_format": locked.source_format,
+            },
+        )
+        locked.delete()
+        _schedule_certificate_template_storage_cleanup(storage_keys)
 
 
 def revoke_certificate(

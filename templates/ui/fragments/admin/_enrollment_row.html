@@ -1,7 +1,7 @@
 {% load i18n ui_tags %}
 <tr id="enrollment-{{ e.id }}"><td>
     <div class="flex items-center gap-2.5"><span class="rounded-full bg-brand-soft text-brand font-black grid place-items-center shrink-0 w-9 h-9 text-sm">{{ e.student.full_name|slice:":2"|upper }}</span>
-      <span class="flex flex-col"><strong>{{ e.student.full_name }}</strong>
+      <span class="flex flex-col gap-1"><strong>{{ e.student.full_name }}</strong>
         <small><span dir="ltr" class="inline-block">{{ e.student.user.email }}</span></small></span>
     </div>
   </td>

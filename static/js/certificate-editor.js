@@ -67,9 +67,6 @@
   var availableFonts = parseScript("certificate-available-fonts", []);
   var currentMapping = parseScript("certificate-current-mapping", {});
 
-  // Registry keys resolvable today (student_name + date); the remaining
-  // registry entries are reserved and shown as such in the picker.
-  var RESOLVED_KEYS = ["student_name", "date"];
   var DEFAULT_WIDTH = 0.5;
   var DEFAULT_HEIGHT = 0.08;
   var MIN_WIDTH = 0.03;
@@ -109,8 +106,6 @@
   function clamp(v, min, max) { return Math.min(max, Math.max(min, v)); }
   function clampFont(v) { return Math.round(clamp(v, 4, 120)); }
   function labelFor(key) { return fieldLabelMap[key] || key; }
-  function isResolved(key) { return RESOLVED_KEYS.indexOf(key) !== -1; }
-
   function cssFont(key) {
     var map = {
       cairo: "'Cairo', sans-serif",
@@ -152,8 +147,8 @@
     availableFields.forEach(function (f) {
       var opt = document.createElement("option");
       opt.value = f.key;
-      opt.textContent = isResolved(f.key) ? f.label : f.label + " (" + statusText.reserved + ")";
-      if (state.fields[f.key] || !isResolved(f.key)) opt.disabled = true;
+      opt.textContent = f.label;
+      if (state.fields[f.key]) opt.disabled = true;
       fieldPicker.appendChild(opt);
     });
     fieldPicker.value = "";

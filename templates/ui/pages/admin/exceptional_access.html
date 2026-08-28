@@ -8,7 +8,7 @@
     {% trans "Exceptional access" as eyebrow %}
     {% include "ui/components/_page_header.html" with title=assessment eyebrow=eyebrow back_button=True %}
 
-    <section class="card-surface">
+    <section class="card-surface flex flex-col gap-4">
       <div class="section-head">
         <div>
           <p class="eyebrow">{% trans "Exceptional access" %}</p>
@@ -46,7 +46,7 @@
             <p class="text-sm text-muted mt-1">{% trans "Search and select active students enrolled in this diploma cohort." %}</p>
           </div>
         {% endif %}
-        <div class="flex flex-col gap-3">
+        <div class="flex flex-col gap-4">
           <button type="button" class="btn-secondary" id="exceptional-access-open-picker">
             {% trans "Search and select students" %}
           </button>
@@ -86,7 +86,8 @@
                hx-trigger="load"
                hx-target="this"
                hx-swap="innerHTML"
-               hx-push-url="false">
+               hx-push-url="false"
+               hx-indicator="#global-loading">
             <p class="text-sm text-muted">{% trans "Loading eligible students…" %}</p>
           </div>
         </div>
@@ -96,7 +97,7 @@
       </div>
     </dialog>
 
-    <section class="card-surface">
+    <section class="card-surface flex flex-col gap-4">
       <div class="section-head"><div><p class="eyebrow">{% trans "Existing overrides" %}</p><h2>{% trans "Access windows" %}</h2></div></div>
       <div class="table-wrap hidden lg:block"><table class="table">
           <thead>

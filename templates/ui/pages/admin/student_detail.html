@@ -5,7 +5,7 @@
 {% endblock %}
 {% block content %}
   <div class="page-stack">{% include "ui/components/_page_header.html" with title=user_obj.full_name eyebrow=_("Student profile") back_button=True %}
-    <section class="card-surface">
+    <section class="card-surface flex flex-col gap-4">
       <div class="section-head"><div>
           <p class="eyebrow">{% trans "Identity" %}</p>
           <h3>{% trans "Account summary" %}</h3>
@@ -40,7 +40,7 @@
       </dl>
     </section>
     {% if student_profile %}
-      <section class="card-surface">
+      <section class="card-surface flex flex-col gap-4">
         <div class="section-head"><div><p class="eyebrow">{% trans "Student record" %}</p><h3>{% trans "Personal details" %}</h3></div></div>
         <dl class="dl">
           <div><dt class="dt">{% trans "Full name" %}</dt><dd class="dd">{{ student_profile.full_name }}</dd></div>
@@ -52,7 +52,7 @@
         </dl>
       </section>
       <section class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <article class="card-surface">
+        <article class="card-surface flex flex-col gap-4">
           <div class="section-head"><div>
               <p class="eyebrow">{% trans "Admissions" %}</p>
               <h3>{% trans "Applications" %}</h3>
@@ -105,7 +105,7 @@
             {% include "ui/components/_empty_state.html" with title=_("No applications") message=_("This student has not submitted any applications.") %}
           {% endif %}
         </article>
-        <article class="card-surface">
+        <article class="card-surface flex flex-col gap-4">
           <div class="section-head"><div>
               <p class="eyebrow">{% trans "Learning" %}</p>
               <h3>{% trans "Enrollments" %}</h3>
@@ -163,7 +163,7 @@
           {% endif %}
         </article>
       </section>
-      <section class="card-surface">
+      <section class="card-surface flex flex-col gap-4">
         <div class="section-head"><div>
             <p class="eyebrow">{% trans "Documents" %}</p>
             <h3>{% trans "Uploaded documents" %}</h3>
@@ -212,7 +212,7 @@
           {% include "ui/components/_empty_state.html" with title=_("No documents") message=_("No documents have been uploaded for this student.") %}
         {% endif %}
       </section>
-      <section class="card-surface">
+      <section class="card-surface flex flex-col gap-4">
         <div class="section-head"><div>
             <p class="eyebrow">{% trans "Finance and results" %}</p>
             <h3>{% trans "Recent records" %}</h3>

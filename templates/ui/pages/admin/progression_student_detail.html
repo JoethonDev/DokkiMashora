@@ -8,7 +8,7 @@
     {% trans "Progression" as title %}
     {% trans "Review semester progress, decisions, evaluations, interviews, and rejoin plans." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description back_button=True %}
-    <section class="card-surface"><div class="section-head"><div>
+    <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Student" %}</p>
             <h3>{{ student }}</h3>
           </div>
@@ -26,7 +26,7 @@
               <h4 class="m-0">{{ enrollment }}</h4>
             </div>
             {% if actions.primary %}
-            <div class="card-surface bg-brand-soft/40">
+            <div class="card-surface bg-brand-soft/40 flex flex-col gap-4">
               <div class="section-head"><div>
                     <p class="eyebrow">{% trans "Recommended action" %}</p>
                     <h5 class="m-0">{% trans "Next step" %}</h5>
@@ -41,7 +41,7 @@
                 <span class="text-sm font-bold text-text">{% trans "More actions" %}</span>
                 <span class="text-xs text-muted" aria-hidden="true">+</span>
               </summary>
-              <div class="px-4 pb-4 pt-1 flex flex-col gap-3">
+              <div class="px-4 pb-4 pt-1 flex flex-col gap-4">
                 {% for key in actions.contextual %}
                   {% include "ui/fragments/admin/_progression_action_form.html" with key=key actions=actions %}
                 {% endfor %}
@@ -55,7 +55,7 @@
           {% endwith %}
         {% endfor %}
       </section>
-      <section class="card-surface"><div class="section-head"><div>
+      <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Progress" %}</p>
             <h3>{% trans "Semester progress" %}</h3>
           </div>
@@ -71,7 +71,7 @@
         {% endfor %}
       </section>
       {% if progress_components %}
-        <section class="card-surface"><div class="section-head"><div>
+        <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
               <p class="eyebrow">{% trans "Components" %}</p>
               <h3>{% trans "Progress components" %}</h3>
             </div>
@@ -88,7 +88,7 @@
         </section>
       {% endif %}
       {% if interviews %}
-        <section class="card-surface"><div class="section-head"><div>
+        <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
               <p class="eyebrow">{% trans "Interviews" %}</p>
               <h3>{% trans "Interview requests" %}</h3>
             </div>

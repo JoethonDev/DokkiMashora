@@ -1,4 +1,4 @@
-﻿{% extends "ui/layouts/admin.html" %}
+{% extends "ui/layouts/admin.html" %}
 {% load i18n ui_tags %}
 {% block title %}
   {{ title|default:_("Entrance exam") }}
@@ -8,7 +8,7 @@
     {% trans "Entrance exam" as default_title %}
     {% trans "Create exams, manage invitations, grade attempts, and inspect delivery history." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title|default:default_title description=description back_button=True %}
-    <section class="card-surface"><div class="section-head"><div>
+    <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Exam" %}</p>
           <h2>{{ exam.title }}</h2>
         </div>
@@ -35,7 +35,7 @@
         </form>
       </div>
     </section>
-    <section class="card-surface"><div class="section-head"><div>
+    <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Content" %}</p>
           <h3>{% trans "Questions" %}</h3>
         </div>
@@ -82,7 +82,7 @@
       <a class="btn-primary mt-4"
          href="{% url 'entrance_exams:admin_add_question' exam.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Add question" %}</a>
     </section>
-    <section class="card-surface"><div class="section-head"><div>
+    <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Submissions" %}</p>
           <h3>{% trans "Exam submissions" %}</h3>
         </div>

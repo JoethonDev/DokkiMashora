@@ -6,7 +6,7 @@
 {% block content %}
   <div class="page-stack animate-enter-view">{% trans "Offline grading" as eyebrow %}
      {% include "ui/components/_page_header.html" with title=assignment.title eyebrow=eyebrow back_button=True %}
-    <section class="card-surface">
+    <section class="card-surface flex flex-col gap-4">
        <div class="section-head"><div><p class="eyebrow">{% trans "Reviewer grading" %}</p><h2>{{ assignment.title }}</h2></div></div>
         <form class="max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
          <label class="field"><span class="field-label">{% trans "Exam code" %}</span>
@@ -25,12 +25,12 @@
          <div class="page-stack">
             {% for row in section_rows %}
               {% if row.grade %}
-                <div class="flex items-center justify-between gap-3 flex-wrap border-b border-line pb-4 last:border-b-0">
+                <div class="flex items-center justify-between gap-2.5 flex-wrap border-b border-line pb-4 last:border-b-0">
                   <div>
                     <strong class="block">{{ row.section }}</strong>
                     <small class="text-muted">{% trans "Maximum" %}: {{ row.section.max_grade }}</small>
                   </div>
-                  <div class="flex items-center gap-3">
+                  <div class="flex items-center gap-2.5">
                     {% include "ui/components/_status.html" with code="graded" label=_('Graded') %}
                     <span dir="ltr">{{ row.grade.score }}</span>
                   </div>

@@ -5,17 +5,19 @@
 <div class="page-stack animate-enter-view">
   {% include "ui/components/_page_header.html" with eyebrow=_("Progression") title=semester.title description=cohort.name back_button=True %}
 
-  <section class="card-surface mb-4">
+  <section class="card-surface mb-4 flex flex-col gap-4">
     <div class="flex gap-2.5 items-center flex-wrap">
       <form method="post" action="{% url 'progression:admin_semester_sync_all' cohort.id semester.id %}" class="inline">{% csrf_token %}
         <button class="btn-secondary" type="submit">{% trans "Sync All" %}</button>
       </form>
-      <form method="post" action="{% url 'progression:admin_semester_evaluate_all' cohort.id semester.id %}" class="inline">{% csrf_token %}
-        <button class="btn-secondary" type="submit">{% trans "Evaluate All" %}</button>
-      </form>
+       <form method="post" action="{% url 'progression:admin_semester_evaluate_all' cohort.id semester.id %}" class="inline">{% csrf_token %}
+         <button class="btn-secondary" type="submit">{% trans "Evaluate All" %}</button>
+       </form>
+       <form method="post" action="{% url 'progression:admin_semester_reevaluate_all' cohort.id semester.id %}" class="inline">{% csrf_token %}
+         <button class="btn-secondary" type="submit">{% trans "Re-evaluate All" %}</button>
+       </form>
       <a class="btn-ghost" href="{% url 'progression:admin_evaluation_config_edit' diploma.id cohort.id semester.id %}">{% trans "Evaluation settings" %}</a>
       <a class="btn-ghost" href="{% url 'progression:admin_component_list' cohort.id semester.id %}">{% trans "Components" %}</a>
-      <a class="btn-ghost" href="{% url 'progression:admin_rejoin_eligibility' %}">{% trans "Rejoin eligibility" %}</a>
       <form method="post" action="{% url 'progression:admin_semester_auto_promote' cohort.id semester.id %}" class="inline">{% csrf_token %}
         <button class="btn-success" type="submit">{% trans "Auto-Promote" %}</button>
       </form>
@@ -25,7 +27,7 @@
 
   {% include "ui/components/_pagination.html" with page_obj=page_obj pagination_qs=pagination_qs %}
 
-  <section class="card-surface">
+  <section class="card-surface flex flex-col gap-4">
     <div class="table-wrap hidden lg:block">
       <table class="table">
         <thead>
@@ -52,10 +54,16 @@
                   <strong>{{ row.evaluation.overall_percent|floatformat:2 }}%</strong>
                   <small class="block text-muted">{% trans "Calculated" %}: {{ row.evaluation.get_result_display }}</small>
                 {% elif row.preview %}
-                  <strong>{{ row.preview.overall_percent|default:'—' }}</strong>
+                  <strong>{% if row.preview.overall_percent is not None %}{{ row.preview.overall_percent|floatformat:2 }}%{% else %}—{% endif %}</strong>
                   {% if row.preview.blocked %}
                     <small class="block text-muted">{% trans "Awaiting inputs" %}</small>
+                    {% for reason in row.preview.blocked_reasons %}
+                      <small class="block text-muted">{{ reason }}</small>
+                    {% endfor %}
                   {% endif %}
+                  {% for reason in row.preview.failure_reasons %}
+                    <small class="block text-muted">{{ reason }}</small>
+                  {% endfor %}
                 {% else %}
                   —
                 {% endif %}
@@ -88,19 +96,42 @@
                     <button class="btn-ghost" type="submit">{% trans "Sync" %}</button>
                   </form>
                   {% if not row.evaluation %}
-                    <form method="post" action="{% url 'progression:admin_evaluate_semester' row.student.id %}" class="inline">{% csrf_token %}
-                      <input type="hidden" name="enrollment_id" value="{{ row.enrollment.id }}">
-                      <input type="hidden" name="semester_id" value="{{ semester.id }}">
-                      <input type="hidden" name="next" value="{% url 'progression:admin_cohort_semester_progression' diploma.id cohort.id semester.id %}">
-                      <button class="btn-ghost" type="submit">{% trans "Finalize" %}</button>
-                    </form>
+                    {% if row.preview and not row.preview.blocked %}
+                      <form method="post" action="{% url 'progression:admin_evaluate_semester' row.student.id %}" class="inline">{% csrf_token %}
+                        <input type="hidden" name="enrollment_id" value="{{ row.enrollment.id }}">
+                        <input type="hidden" name="semester_id" value="{{ semester.id }}">
+                        <input type="hidden" name="next" value="{% url 'progression:admin_cohort_semester_progression' diploma.id cohort.id semester.id %}">
+                        <button class="btn-ghost" type="submit">{% trans "Finalize" %}</button>
+                      </form>
+                    {% endif %}
                   {% else %}
+                    <form method="post" action="{% url 'progression:admin_grade_reevaluate' row.enrollment.id semester.id %}" class="inline">{% csrf_token %}
+                      <input type="hidden" name="next" value="{% url 'progression:admin_cohort_semester_progression' diploma.id cohort.id semester.id %}">
+                      <button class="btn-ghost" type="submit">{% trans "Re-evaluate" %}</button>
+                    </form>
                     {% if not row.outcome or row.outcome.status != "resolved" %}
                       {% if not row.interview or row.interview.status != "requested" %}
                         <a class="btn-ghost" href="{% url 'progression:admin_request_interview' row.enrollment.id semester.id %}?next={% url 'progression:admin_cohort_semester_progression' diploma.id cohort.id semester.id %}">{% trans "Interview" %}</a>
-                        <form method="post" action="{% url 'progression:admin_confirm_pass' row.enrollment.id semester.id %}" class="inline">{% csrf_token %}
+                        {% if row.evaluation.result == "pass" %}
+                          <form method="post" action="{% url 'progression:admin_confirm_pass' row.enrollment.id semester.id %}" class="inline">{% csrf_token %}
+                            <input type="hidden" name="next" value="{% url 'progression:admin_cohort_semester_progression' diploma.id cohort.id semester.id %}">
+                            <button class="btn-ghost" type="submit">{% trans "Final Pass" %}</button>
+                          </form>
+                        {% endif %}
+                        {% if row.evaluation.result == "fail" %}
+                          <form method="post" action="{% url 'progression:admin_demote' row.student.id %}" class="inline">{% csrf_token %}
+                            <input type="hidden" name="enrollment_id" value="{{ row.enrollment.id }}">
+                            <input type="hidden" name="semester_id" value="{{ semester.id }}">
+                            <input type="hidden" name="next" value="{% url 'progression:admin_cohort_semester_progression' diploma.id cohort.id semester.id %}">
+                            <button class="btn-ghost" type="submit">{% trans "Final Fail" %}</button>
+                          </form>
+                        {% endif %}
+                        <form method="post" action="{% url 'progression:admin_exceptional_promote' row.student.id %}" class="inline flex gap-1 items-center">{% csrf_token %}
+                          <input type="hidden" name="enrollment_id" value="{{ row.enrollment.id }}">
+                          <input type="hidden" name="semester_id" value="{{ semester.id }}">
                           <input type="hidden" name="next" value="{% url 'progression:admin_cohort_semester_progression' diploma.id cohort.id semester.id %}">
-                          <button class="btn-ghost" type="submit">{% trans "Final Pass" %}</button>
+                          <input class="form-input" name="reason" required placeholder="{% trans 'Reason for exceptional promotion' %}">
+                          <button class="btn-warning" type="submit">{% trans "Exceptional Promote" %}</button>
                         </form>
                       {% endif %}
                     {% endif %}
@@ -126,7 +157,15 @@
             {% if row.components %}
               <small class="block text-muted" dir="ltr">{% trans "Exam" %}: {% if row.components.semester_exam is not None %}{{ row.components.semester_exam|floatformat:2 }}%{% else %}—{% endif %} · {% trans "Attendance" %}: {% if row.components.attendance is not None %}{{ row.components.attendance|floatformat:2 }}%{% else %}—{% endif %} · {% trans "Homework" %}: {% if row.components.homework is not None %}{{ row.components.homework|floatformat:2 }}%{% else %}—{% endif %}</small>
             {% endif %}
-            {% if row.evaluation %}<small class="block text-muted">{% trans "Calculated" %}: {{ row.evaluation.get_result_display }} ({{ row.evaluation.overall_percent|floatformat:2 }}%)</small>{% endif %}
+            {% if row.evaluation %}
+              <small class="block text-muted">{% trans "Calculated" %}: {{ row.evaluation.get_result_display }} ({{ row.evaluation.overall_percent|floatformat:2 }}%)</small>
+            {% elif row.preview %}
+              <small class="block text-muted">{% trans "Calculated" %}: {% if row.preview.overall_percent is not None %}{{ row.preview.overall_percent|floatformat:2 }}%{% else %}—{% endif %}</small>
+              {% if row.preview.blocked %}
+                {% for reason in row.preview.blocked_reasons %}<small class="block text-muted">{{ reason }}</small>{% endfor %}
+              {% endif %}
+              {% for reason in row.preview.failure_reasons %}<small class="block text-muted">{{ reason }}</small>{% endfor %}
+            {% endif %}
             {% if row.outcome %}<small class="block text-muted">{% trans "Final" %}: {{ row.outcome.get_final_result_display|default:row.outcome.get_status_display }}</small>{% endif %}
             {% if row.interview %}{% include "ui/components/_status.html" with code=row.interview.status label=row.interview.get_status_display %}{% endif %}
           </div>
@@ -134,12 +173,28 @@
             <form method="post" action="{% url 'progression:admin_grade_sync' row.enrollment.id semester.id %}" class="inline">{% csrf_token %}
               <button class="btn-ghost" type="submit">{% trans "Sync" %}</button>
             </form>
-            {% if not row.evaluation %}
+            {% if not row.evaluation and row.preview and not row.preview.blocked %}
               <form method="post" action="{% url 'progression:admin_evaluate_semester' row.student.id %}" class="inline">{% csrf_token %}
                 <input type="hidden" name="enrollment_id" value="{{ row.enrollment.id }}">
                 <input type="hidden" name="semester_id" value="{{ semester.id }}">
                 <button class="btn-ghost" type="submit">{% trans "Finalize" %}</button>
               </form>
+            {% elif row.evaluation %}
+              <form method="post" action="{% url 'progression:admin_grade_reevaluate' row.enrollment.id semester.id %}" class="inline">{% csrf_token %}
+                <input type="hidden" name="next" value="{% url 'progression:admin_cohort_semester_progression' diploma.id cohort.id semester.id %}">
+                <button class="btn-ghost" type="submit">{% trans "Re-evaluate" %}</button>
+              </form>
+              {% if not row.outcome or row.outcome.status != "resolved" %}
+                {% if not row.interview or row.interview.status != "requested" %}
+                  <form method="post" action="{% url 'progression:admin_exceptional_promote' row.student.id %}" class="inline flex flex-col gap-1">{% csrf_token %}
+                    <input type="hidden" name="enrollment_id" value="{{ row.enrollment.id }}">
+                    <input type="hidden" name="semester_id" value="{{ semester.id }}">
+                    <input type="hidden" name="next" value="{% url 'progression:admin_cohort_semester_progression' diploma.id cohort.id semester.id %}">
+                    <input class="form-input" name="reason" required placeholder="{% trans 'Reason for exceptional promotion' %}">
+                    <button class="btn-warning" type="submit">{% trans "Exceptional Promote" %}</button>
+                  </form>
+                {% endif %}
+              {% endif %}
             {% endif %}
           </div>
         </div>

@@ -6,7 +6,7 @@
 {% block content %}
   <div class="page-stack animate-enter-view">{% trans "Offline grading" as eyebrow %}
     {% include "ui/components/_page_header.html" with title=assessment eyebrow=eyebrow back_button=True %}
-    <section class="card-surface">
+    <section class="card-surface flex flex-col gap-4">
       <div class="section-head"><div><p class="eyebrow">{% trans "Offline grade entry" %}</p><h2>{{ assessment }}</h2></div></div>
       <form class="max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
         <label class="field"><span class="field-label">{% trans "Exam code" %}</span>

@@ -1,10 +1,10 @@
-﻿{% extends "ui/layouts/admin.html" %}
+{% extends "ui/layouts/admin.html" %}
 {% load i18n %}
 {% block title %}{{ exam.title|default:_("Entrance exam") }}{% endblock %}
 {% block content %}
   <div class="page-stack animate-enter-view">
     {% include "ui/components/_page_header.html" with eyebrow=_("Entrance exam preview") title=exam.title description=exam.description back_button=True %}
-    <section class="card-surface">
+    <section class="card-surface flex flex-col gap-4">
       {% if questions %}
         <div class="max-w-2xl mx-auto">
           {% for question in questions %}

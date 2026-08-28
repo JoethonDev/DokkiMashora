@@ -10,7 +10,7 @@ from django.utils.translation import gettext_lazy as _
 from apps.core.forms import StyledFormMixin
 
 from .constants import EVALUATION_CONFIG_STATUS_ACTIVE
-from .models import SemesterEvaluationConfig
+from .models import DiplomaProgressionRule, SemesterEvaluationConfig
 
 
 class SemesterEvaluationConfigForm(StyledFormMixin, forms.ModelForm):
@@ -55,13 +55,13 @@ class SemesterEvaluationConfigForm(StyledFormMixin, forms.ModelForm):
             "overall_min_percent": _("Overall passing minimum (%)"),
         }
         help_texts = {
-            "attendance_weight_percent": _("Percentage of the final evaluation; enter 0 to 100."),
-            "homework_weight_percent": _("Percentage of the final evaluation; enter 0 to 100."),
-            "semester_exam_weight_percent": _("Percentage of the final evaluation; enter 0 to 100."),
-            "attendance_min_percent": _("Required attendance result; enter 0 to 100."),
-            "homework_min_percent": _("Required homework result; enter 0 to 100."),
-            "semester_exam_min_percent": _("Required semester exam result; enter 0 to 100."),
-            "overall_min_percent": _("Required final result; enter 0 to 100."),
+            "attendance_weight_percent": _("0–100"),
+            "homework_weight_percent": _("0–100"),
+            "semester_exam_weight_percent": _("0–100"),
+            "attendance_min_percent": _("0–100"),
+            "homework_min_percent": _("0–100"),
+            "semester_exam_min_percent": _("0–100"),
+            "overall_min_percent": _("0–100"),
         }
 
     def clean(self):
@@ -108,8 +108,35 @@ class SemesterEvaluationSettingsForm(SemesterEvaluationConfigForm):
         }
         help_texts = {
             **getattr(SemesterEvaluationConfigForm.Meta, "help_texts", {}),
-            "attendance_required_sessions": _(
-                "How many attendances a student must record this semester (e.g. 10). "
-                "Leave 0 to grade against the number of held sessions instead."
-            ),
+            "attendance_required_sessions": _("e.g., 10 · 0 = auto"),
+        }
+
+
+class DiplomaProgressionRuleForm(StyledFormMixin, forms.ModelForm):
+    """Canonical form for DiplomaProgressionRule (DUP-016)."""
+
+    class Meta:
+        model = DiplomaProgressionRule
+        fields = [
+            "semester_pass_percent",
+            "require_all_semesters_passed",
+            "auto_promote_enabled",
+            "allow_admin_override",
+            "allow_retake",
+            "max_retake_count",
+        ]
+        widgets = {
+            "semester_pass_percent": forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
+            "max_retake_count": forms.NumberInput(attrs={"step": "1", "min": "0"}),
+        }
+        labels = {
+            "semester_pass_percent": _("Semester passing threshold (%)"),
+            "require_all_semesters_passed": _("Require all semesters passed"),
+            "auto_promote_enabled": _("Auto promote enabled"),
+            "allow_admin_override": _("Allow admin override"),
+            "allow_retake": _("Allow retake"),
+            "max_retake_count": _("Maximum retakes (number)"),
+        }
+        help_texts = {
+            "semester_pass_percent": _("0–100"),
         }

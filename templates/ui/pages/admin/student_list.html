@@ -1,4 +1,4 @@
-﻿{% extends "ui/layouts/admin.html" %}
+{% extends "ui/layouts/admin.html" %}
 {% load i18n %}
 {% block title %}
   {% trans "Students" %}
@@ -14,14 +14,14 @@
       <a class="btn-secondary" href="{% url 'accounts:admin_download_student_csv_template' %}">{% trans "Download import template" %}</a>
       <a class="btn-ghost" href="{% url 'accounts:admin_student_import' %}">{% trans "Import students" %}</a>
     </div>
-    <section class="card-surface"><form class="actions-row items-end mb-4"
+    <section class="card-surface flex flex-col gap-4"><form class="actions-row items-end"
             method="get"
             hx-get="{% url 'accounts:admin_student_list' %}"
             hx-trigger="input changed delay:300ms from:#student-search, change from:select, submit"
-            hx-target="#student-results"
+            hx-target="#results"
             hx-swap="outerHTML"
             hx-push-url="true"
-            hx-sync="this:replace"><div class="search-field">
+            hx-sync="this:replace" hx-indicator="#global-loading"><div class="search-field">
 <input id="student-search"
 name="q"
 value="{{ search_value }}"

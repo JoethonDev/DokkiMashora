@@ -11,7 +11,7 @@
     <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
       {% if selected_semester and target_cohort %}
       <input type="hidden" name="semester_id" value="{{ selected_semester.id }}">
-      <dl class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div><dt class="field-label">{% trans "Failed semester" %}</dt><dd>{{ selected_semester }}</dd></div>
         <div><dt class="field-label">{% trans "Target cohort" %}</dt><dd>{{ target_cohort }}</dd></div>
       </dl>

@@ -318,6 +318,7 @@ def deliver_queued_email(delivery_id: int) -> bool:
         error="",
         updated_at=now,
     )
+    _sync_application_log_from_delivery(row.pk, status=EMAIL_STATUS_SENT, error="")
     return True
 
 
@@ -334,12 +335,190 @@ def record_email_delivery_failure(delivery_id: int, error: str, *, final: bool) 
             error=error[:1000],
             updated_at=timezone.now(),
         )
+        _sync_application_log_from_delivery(delivery_id, status=EMAIL_STATUS_FAILED, error=error[:1000])
     else:
         EmailMessage.objects.filter(pk=delivery_id).update(
             status=EMAIL_STATUS_QUEUED,
             error=error[:1000],
             updated_at=timezone.now(),
         )
+        _sync_application_log_from_delivery(delivery_id, status=EMAIL_STATUS_QUEUED, error=error[:1000])
+
+
+def _sync_application_log_from_delivery(delivery_id: int, *, status: str, error: str = "") -> None:
+    """Keep the linked ProgramApplicationEmailLog in sync with EmailMessage status.
+
+    The link is via ``ProgramApplicationEmailLog.email_message_id`` set at
+    queue time. ``failure -> queued`` re-shows the log as queued so a retry
+    remains visible as pending.
+    """
+    try:
+        from apps.applications.models import ProgramApplicationEmailLog
+    except Exception:  # noqa: BLE001
+        return
+    now = timezone.now()
+    update_fields: dict[str, object] = {"status": status, "error": error, "updated_at": now}
+    if status == EMAIL_STATUS_SENT:
+        update_fields["sent_at"] = now
+    try:
+        ProgramApplicationEmailLog.objects.filter(email_message_id=delivery_id).update(**update_fields)
+    except Exception:  # noqa: BLE001
+        logger.exception("Failed to sync application email log for delivery %s", delivery_id)
+
+
+def record_program_application_email_log(
+    *,
+    program_application,
+    action: str,
+    template_slug: str,
+    recipient: str,
+    sent_by=None,
+    status: str = EMAIL_STATUS_QUEUED,
+    error: str = "",
+    is_resend: bool | None = None,
+    idempotency_key: str | None = None,
+    email_message=None,
+    sent_at=None,
+):
+    """Single canonical write path for ``ProgramApplicationEmailLog``.
+
+    Handles ``recipient``, ``action``, ``template``, ``status``, ``resend``,
+    ``error``, ``timestamps``, ``actor`` (``sent_by``) and ``idempotency``.
+    ``is_resend`` is derived from existing non-resend logs when not given.
+    When ``idempotency_key`` is given, a matching log is returned instead of
+    creating a duplicate (bulk-invitation idempotency).
+    """
+    from apps.applications.models import ProgramApplicationEmailLog
+
+    recipient = (recipient or "").strip()
+    if is_resend is None:
+        is_resend = ProgramApplicationEmailLog.objects.filter(
+            program_application=program_application,
+            action=action,
+            status__in=[EMAIL_STATUS_SENT, EMAIL_STATUS_QUEUED, EMAIL_STATUS_PROCESSING],
+            is_resend=False,
+        ).exists()
+    if idempotency_key:
+        existing = ProgramApplicationEmailLog.objects.filter(idempotency_key=idempotency_key).first()
+        if existing is not None:
+            return existing
+    now = sent_at or timezone.now()
+    # ``sent_at`` mirrors EmailMessage lifecycle: queued/processing -> queued_at,
+    # sent -> sent_at, failed -> now with error.
+    if status in (EMAIL_STATUS_QUEUED, EMAIL_STATUS_PROCESSING):
+        sent_at_value = now
+    elif status == EMAIL_STATUS_SENT:
+        sent_at_value = now
+    elif status == EMAIL_STATUS_FAILED:
+        sent_at_value = now if error else None
+    else:
+        sent_at_value = now
+    return ProgramApplicationEmailLog.objects.create(
+        program_application=program_application,
+        action=action,
+        template_slug=template_slug,
+        recipient=recipient,
+        sent_by=sent_by,
+        status=status,
+        error=error[:1000] if error else "",
+        is_resend=bool(is_resend),
+        idempotency_key=idempotency_key,
+        email_message=email_message,
+        sent_at=sent_at_value,
+    )
+
+
+def queue_program_application_email(
+    *,
+    program_application,
+    action: str,
+    template_slug: str,
+    to_email: str,
+    context: dict[str, Any],
+    sent_by=None,
+    idempotency_key: str | None = None,
+    reference: str | None = None,
+    is_resend: bool | None = None,
+    cc: list[str] | None = None,
+) -> tuple[EmailMessage | None, object | None]:
+    """Business action -> central email queue -> log.
+
+    Queues the templated email via ``queue_templated_email`` (Celery) and
+    records the application email log via the single ``record_program_application_email_log``
+    path. Returns ``(EmailMessage, ProgramApplicationEmailLog)``; ``(None, None)``
+    when no active template exists. Respects ``idempotency_key`` for dedup and
+    correctly sets ``is_resend``.
+
+    This is the canonical entry point for all application-bound emails
+    (including BUG-005 Option A resends).
+    """
+    from apps.applications.models import ProgramApplicationEmailLog
+
+    to_email = (to_email or "").strip()
+    if not to_email:
+        return None, None
+    if is_resend is None:
+        is_resend = ProgramApplicationEmailLog.objects.filter(
+            program_application=program_application,
+            action=action,
+            status__in=[EMAIL_STATUS_SENT, EMAIL_STATUS_QUEUED, EMAIL_STATUS_PROCESSING],
+            is_resend=False,
+        ).exists()
+    if reference is None:
+        reference = f"app:{program_application.pk}"
+    record = queue_templated_email(
+        template_slug,
+        to_email,
+        context,
+        sent_by=sent_by,
+        cc=cc,
+        reference=reference,
+        idempotency_key=idempotency_key,
+    )
+    if record is None:
+        # No active template: log a failed attempt so the audit trail is not silent.
+        log = record_program_application_email_log(
+            program_application=program_application,
+            action=action,
+            template_slug=template_slug,
+            recipient=to_email,
+            sent_by=sent_by,
+            status=EMAIL_STATUS_FAILED,
+            error="No active template",
+            is_resend=is_resend,
+            idempotency_key=idempotency_key,
+            email_message=None,
+        )
+        return None, log
+    # If EmailMessage was deduplicated (idempotency hit), reuse the existing log
+    # for that key instead of creating a duplicate application log.
+    if idempotency_key:
+        existing_log = ProgramApplicationEmailLog.objects.filter(idempotency_key=idempotency_key).first()
+        if existing_log is not None:
+            # Ensure the existing log points at the deduped EmailMessage
+            if existing_log.email_message_id != record.pk:
+                ProgramApplicationEmailLog.objects.filter(pk=existing_log.pk).update(email_message=record)
+            return record, existing_log
+    log = record_program_application_email_log(
+        program_application=program_application,
+        action=action,
+        template_slug=template_slug,
+        recipient=to_email,
+        sent_by=sent_by,
+        status=record.status or EMAIL_STATUS_QUEUED,
+        error=record.error or "",
+        is_resend=is_resend,
+        idempotency_key=idempotency_key or record.idempotency_key,
+        email_message=record,
+        sent_at=record.queued_at or timezone.now(),
+    )
+    return record, log
+
+
+# Backwards-compatible alias for the spec wording ``queue_email``.
+def queue_email(*args, **kwargs):  # noqa: ANN002, ANN201
+    """Alias to :func:`queue_program_application_email` for spec compliance."""
+    return queue_program_application_email(*args, **kwargs)
 
 
 RecipientEntry = dict[str, str]

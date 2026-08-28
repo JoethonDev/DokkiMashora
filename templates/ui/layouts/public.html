@@ -1,4 +1,4 @@
-﻿{% extends "ui/base.html" %}
+{% extends "ui/base.html" %}
 {% load i18n %}
 {% block shell %}
   <main id="main" tabindex="-1" class="bg-white min-h-screen focus:outline-none">    {% block public_header %}
@@ -6,11 +6,11 @@
         <div class="h-20 flex items-center justify-between page-container">
           <div class="flex items-center gap-2">
             <button class="btn-icon sm:hidden" type="button" @click="open=!open" :aria-expanded="open.toString()" aria-controls="public-mobile-nav" aria-label="{% trans 'Menu' %}">&#9776;</button>
-            <a class="flex items-center gap-3 no-underline text-inherit p-0" href="{% url 'core:landing' %}"><span class="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-50 to-brand-soft text-brand-strong grid place-items-center font-black shadow-card">DM</span>
+            <a class="flex items-center gap-4 no-underline text-inherit p-0" href="{% url 'core:landing' %}"><span class="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-50 to-brand-soft text-brand-strong grid place-items-center font-black shadow-card">DM</span>
               <span><strong class="block text-sm">DokkiMashora</strong>
                 <small class="block text-xs mt-0.5 text-muted">{% trans "Learning Management" %}</small></span></a>
           </div>
-          <nav class="hidden sm:flex gap-1.5" aria-label="{% trans 'Public navigation' %}"><a class="border-0 bg-transparent px-3 py-2 text-muted font-bold no-underline" href="{% url 'core:landing' %}#programs">{% trans "Programs" %}</a>
+          <nav class="hidden sm:flex gap-2.5" aria-label="{% trans 'Public navigation' %}"><a class="border-0 bg-transparent px-3 py-2 text-muted font-bold no-underline" href="{% url 'core:landing' %}#programs">{% trans "Programs" %}</a>
             <a class="border-0 bg-transparent px-3 py-2 text-muted font-bold no-underline" href="{% url 'core:landing' %}#courses">{% trans "Courses" %}</a>
           </nav>
           <div class="actions-row">
@@ -24,7 +24,7 @@
           </div>
         </div>
         <div id="public-mobile-nav" x-show="open" x-transition.opacity x-transition:enter="transition ease-out duration-200" x-transition:leave="transition ease-in duration-150" @click.away="open=false" class="sm:hidden border-t border-line bg-white" x-cloak>
-          <nav class="page-container py-2 flex flex-col" aria-label="{% trans 'Public navigation' %}">
+          <nav class="page-container py-2 flex flex-col gap-1" aria-label="{% trans 'Public navigation' %}">
             <a class="px-3 py-2.5 rounded-sm text-sm font-bold text-text hover:bg-surface-soft" href="{% url 'core:landing' %}#programs" @click="open=false">{% trans "Programs" %}</a>
             <a class="px-3 py-2.5 rounded-sm text-sm font-bold text-text hover:bg-surface-soft" href="{% url 'core:landing' %}#courses" @click="open=false">{% trans "Courses" %}</a>
           </nav>

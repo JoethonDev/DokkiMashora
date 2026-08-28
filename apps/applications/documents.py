@@ -16,7 +16,7 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 from PIL import Image, ImageOps
 
-from apps.communications.services import queue_templated_email
+from apps.communications.services import queue_program_application_email
 from apps.storage.services import (
     FileValidationError,
     record_deferred_storage_deletion,
@@ -462,7 +462,7 @@ def get_application_document_upload(application) -> ApplicationDocumentUpload | 
 
 
 def _send_document_upload_request_email(application, doc_request, raw_token) -> None:
-    """Queue the document upload request email."""
+    """Queue the document upload request email via the central pipeline."""
     email = application.student.user.email
     if not email:
         return
@@ -477,25 +477,13 @@ def _send_document_upload_request_email(application, doc_request, raw_token) -> 
         "expires_at": doc_request.expires_at.isoformat(),
         "staff_phone": "",
     }
-    record = queue_templated_email(
-        EMAIL_ACTION_DIPLOMA_DOCUMENT_UPLOAD_REQUEST, email, context,
-        sent_by=doc_request.requested_by,
-        idempotency_key=f"application:document_upload_request:app:{application.pk}:request:{doc_request.pk}",
-        reference=f"app:{application.pk}",
-    )
-    existing = ProgramApplicationEmailLog.objects.filter(
-        program_application=application,
-        action=EMAIL_ACTION_DIPLOMA_DOCUMENT_UPLOAD_REQUEST,
-        status__in=["sent", "queued"],
-        is_resend=False,
-    ).exists()
-    ProgramApplicationEmailLog.objects.create(
+    queue_program_application_email(
         program_application=application,
         action=EMAIL_ACTION_DIPLOMA_DOCUMENT_UPLOAD_REQUEST,
         template_slug=EMAIL_ACTION_DIPLOMA_DOCUMENT_UPLOAD_REQUEST,
-        recipient=email,
+        to_email=email,
+        context=context,
         sent_by=doc_request.requested_by,
-        sent_at=(record.queued_at or timezone.now()) if record else timezone.now(),
-        status=record.status if record else "failed",
-        is_resend=existing,
+        idempotency_key=f"application:document_upload_request:app:{application.pk}:request:{doc_request.pk}",
+        reference=f"app:{application.pk}",
     )

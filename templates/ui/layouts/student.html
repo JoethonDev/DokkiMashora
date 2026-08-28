@@ -1,4 +1,4 @@
-﻿{% extends "ui/base.html" %}
+{% extends "ui/base.html" %}
 {% load i18n %}
 {% block shell %}
   <div class="grid min-h-screen grid-cols-1 lg:grid-cols-shell"
@@ -8,10 +8,10 @@
        @sidebar-close.window="sidebarOpen=false; $nextTick(() => { document.body.classList.remove('overflow-hidden'); window.dispatchEvent(new CustomEvent('focus-trap:disable')); if (sidebarTrigger) sidebarTrigger.focus(); })"
        x-init="$watch('sidebarOpen', val => { document.body.classList.toggle('overflow-hidden', val); if (val && !isDesktop) { window.dispatchEvent(new CustomEvent('focus-trap:enable', {detail:{container: document.getElementById('student-sidebar')}})); setTimeout(() => { $refs.sidebarClose && $refs.sidebarClose.focus(); }, 80); } else if (!val) { window.dispatchEvent(new CustomEvent('focus-trap:disable')); if (sidebarTrigger) { $nextTick(() => sidebarTrigger.focus()); } } });
                  (() => { const mq = window.matchMedia('(min-width: 1024px)'); const sync = () => { isDesktop = mq.matches; if (isDesktop && sidebarOpen) { sidebarOpen=false; document.body.classList.remove('overflow-hidden'); window.dispatchEvent(new CustomEvent('focus-trap:disable')); } }; sync(); mq.addEventListener('change', sync); })()"
-       data-page-shell><div class="fixed inset-0 top-14 bg-surface-inverse/40 z-backdrop opacity-0 pointer-events-none transition-opacity"
+       data-page-shell><div class="fixed inset-0 top-14 bg-surface-inverse/40 z-backdrop opacity-0 pointer-events-none transition-opacity duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)]"
             :class="{open:sidebarOpen}"
             @click="sidebarOpen=false; $dispatch('sidebar-close')"></div><aside id="student-sidebar"
-            class="fixed -start-72 top-14 w-72 shadow-modal bg-surface-inverse text-white flex flex-col z-sidebar transition-all duration-300 ease lg:h-screen lg:sticky lg:top-0 lg:start-auto lg:w-sidebar lg:p-5 lg:shadow-none lg:transition-none"
+            class="fixed -start-72 top-14 w-72 shadow-modal bg-surface-inverse text-white flex flex-col gap-1 z-sidebar transition-all duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)] lg:h-screen lg:sticky lg:top-0 lg:start-auto lg:w-sidebar lg:p-5 lg:shadow-none lg:transition-none"
             :class="{open:sidebarOpen}"
             aria-label="{% trans 'Main navigation' %}"><a class="flex items-center gap-2.5 no-underline text-inherit p-2.5 pb-5" href="{% url 'students:dashboard' %}"><span class="w-10 h-10 rounded-md bg-gradient-to-br from-brand-50 to-brand-soft text-brand-strong grid place-items-center font-black shadow-card">DM</span>
       <span><strong class="block text-sm">DokkiMashora</strong><small class="block text-xs mt-0.5 text-white/60">{% trans "Student portal" %}</small></span>
@@ -21,7 +21,15 @@
               class="btn-icon lg:hidden self-end mb-1 border-white/20 bg-white/10 text-white"
               @click="sidebarOpen=false; $dispatch('sidebar-close')"
               aria-label="{% trans 'Close navigation' %}">&times;</button>
-      <nav class="overflow-y-auto scrollbar-none py-2 lg:block" aria-label="{% trans 'Student navigation' %}"><div class="sidebar-section">{% trans "My workspace" %}</div>
+       <nav class="overflow-y-auto scrollbar-none py-2 lg:block"
+            aria-label="{% trans 'Student navigation' %}"
+            data-content-navigation
+            hx-boost="true"
+            hx-target="#main"
+            hx-select="#main"
+            hx-swap="outerHTML"
+            hx-push-url="true"
+            hx-indicator="#global-loading"><div class="sidebar-section">{% trans "My workspace" %}</div>
         <a class="sidebar-link{% if request.resolver_match.url_name == 'dashboard' %} active{% endif %}"
            href="{% url 'students:dashboard' %}">
           {% trans "Dashboard" %}

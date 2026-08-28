@@ -8,7 +8,7 @@
     {% trans "Progression" as title %}
     {% trans "Choose a Diploma, then a cohort and semester, to manage evaluations and decisions." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    <section class="card-surface">
+    <section class="card-surface flex flex-col gap-4">
       <div class="section-head"><div><p class="eyebrow">{% trans "Diplomas" %}</p><h3>{% trans "Manage progression" %}</h3></div></div>
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
         {% for diploma in diplomas %}

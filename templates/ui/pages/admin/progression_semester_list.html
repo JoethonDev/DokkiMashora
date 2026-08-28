@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-stack animate-enter-view">
   {% include "ui/components/_page_header.html" with eyebrow=_("Progression") title=cohort.name description=_("Semesters") back_button=True %}
-  <section class="card-surface">
+  <section class="card-surface flex flex-col gap-4">
     <div class="table-wrap hidden lg:block">
       <table class="table">
         <thead>

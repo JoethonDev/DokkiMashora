@@ -7,11 +7,12 @@
   <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=diploma.title description=diploma.description eyebrow=_("Diploma") back_button=True %}
     <div class="flex gap-2.5 items-center flex-wrap mb-4">
       <a class="btn-primary" href="{% url 'academics:admin_diploma_edit' diploma.id %}">{% trans "Edit diploma" %}</a>
+      <a class="btn-ghost" href="{% url 'progression:admin_rejoin_eligibility' %}">{% trans "Rejoin eligibility" %}</a>
       <form method="post" action="{% url 'academics:admin_diploma_delete' diploma.id %}" data-confirm="{% trans 'Delete this diploma and its delivery content?' %}" class="m-0">{% csrf_token %}
         <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
       </form>
     </div>
-    <section class="card-surface"><div class="section-head"><div>
+    <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Structure" %}</p>
           <h3>{% trans "Cohorts &amp; Semesters" %}</h3>
         </div>
@@ -25,7 +26,7 @@
           {% for group in cohort_groups %}
             <details class="group" {% if forloop.first %}open{% endif %}>
               <summary class="flex items-center justify-between py-3 px-1 cursor-pointer list-none hover:bg-surface-soft rounded-sm transition-colors">
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2.5">
                   <span class="text-xs text-muted transition-transform group-open:rotate-90">&#9654;</span>
                   <strong>{{ group.cohort.name }}</strong>
                   {% include "ui/components/_status.html" with code=group.cohort.is_active|yesno:"active,inactive" label=group.cohort.is_active|boolean_label:"Active,Inactive" %}
@@ -103,8 +104,8 @@
                   </form>
                   <div class="space-y-3">
                     {% for cluster in group.cohort.clusters.all %}
-                      <div class="border border-line rounded-sm p-3">
-                        <div class="flex items-center justify-between gap-3 mb-3">
+                      <div class="border border-line rounded-sm p-4">
+                        <div class="flex items-center justify-between gap-2.5 mb-3">
                           <strong>{{ cluster.name }}</strong>
                           <span class="text-xs text-muted">{{ cluster.member_count }} {% trans "members" %}</span>
                         </div>
@@ -146,7 +147,7 @@
         {% include "ui/components/_empty_state.html" with title=_("No cohorts") message=_("No cohorts or semesters found for this diploma.") %}
       {% endif %}
     </section>
-    <section class="card-surface"><div class="section-head"><div>
+    <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Rules" %}</p>
           <h3>{% trans "Progression Rules" %}</h3>
         </div>
@@ -169,7 +170,7 @@
         {% endif %}
       {% endwith %}
     </section>
-    <section class="card-surface"><div class="section-head"><div>
+    <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Students" %}</p>
           <h3>{% trans "Enrollments" %}</h3>
         </div>

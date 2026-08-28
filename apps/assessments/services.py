@@ -34,6 +34,7 @@ from apps.audit.constants import (
 )
 from apps.audit.services import record_audit_event
 from apps.core.permissions import assessment_staff_scope_filter, is_admin, is_moderator, validate_score
+from apps.core.scoring import compute_percent, is_passing, mcq_score
 from apps.storage.services import record_deferred_storage_deletion, storage_service
 from apps.students.models import StudentProfile
 
@@ -522,14 +523,12 @@ def submit_assessment(attempt: AssessmentAttempt, answers: list[AssessmentAnswer
         attempt.status = status
         attempt.submitted_at = now
         attempt.score_points = total_score
-        if total_possible > 0:
-            attempt.score_percent = (total_score / total_possible) * Decimal("100.00")
+        attempt.score_percent = compute_percent(total_score, total_possible)
         if not has_ungraded:
             attempt.graded_at = now
-            attempt.is_pass = (
-                attempt.score_percent >= assessment.passing_score
-                if attempt.score_percent is not None else False
-            )
+            attempt.is_pass = is_passing(attempt.score_percent, assessment.passing_score)
+            if attempt.is_pass is None:
+                attempt.is_pass = False
         attempt.save(
             update_fields=[
                 "status", "submitted_at", "score_points", "score_percent",
@@ -603,9 +602,7 @@ def submit_diploma_assessment(attempt: AssessmentAttempt, answer_data: dict) -> 
                     except (KeyError, ValueError):
                         raise ValueError(_("Invalid choice for question %(order)d.") % {"order": sq.order}) from None
                     answer.selected_choice = choice
-                    answer.score = sq.points if choice.is_correct_snapshot else Decimal("0")
-                    if not choice.is_correct_snapshot and assessment.penalty_percent:
-                        answer.score = sq.points - (sq.points * assessment.penalty_percent / Decimal("100"))
+                    answer.score = mcq_score(sq.points, bool(choice.is_correct_snapshot), assessment.penalty_percent)
                     total_earned += answer.score
                 else:
                     answer.selected_choice = None
@@ -626,12 +623,9 @@ def submit_diploma_assessment(attempt: AssessmentAttempt, answer_data: dict) -> 
             answer.save()
 
         attempt_ref.score_points = total_earned
-        if total_possible > 0:
-            attempt_ref.score_percent = (total_earned / total_possible * Decimal("100")).quantize(Decimal("0.01"))
-        attempt_ref.is_pass = (
-            attempt_ref.score_percent >= assessment.passing_score
-            if attempt_ref.score_percent is not None else False
-        )
+        attempt_ref.score_percent = compute_percent(total_earned, total_possible)
+        is_pass = is_passing(attempt_ref.score_percent, assessment.passing_score)
+        attempt_ref.is_pass = is_pass if is_pass is not None else False
         if has_written:
             attempt_ref.status = ATTEMPT_STATUS_UNDER_REVIEW
         else:
@@ -730,12 +724,7 @@ def _score_mcq_answer(
 ) -> Decimal:
     if choice is None:
         return Decimal("0.00")
-    if choice.is_correct:
-        return question.points
-    if assessment.penalty_percent > 0:
-        penalty = question.points * (assessment.penalty_percent / Decimal("100.00"))
-        return max(Decimal("0.00"), question.points - penalty)
-    return Decimal("0.00")
+    return mcq_score(question.points, bool(choice.is_correct), assessment.penalty_percent)
 
 
 # ---------------------------------------------------------------------------
@@ -977,15 +966,11 @@ def _update_diploma_attempt_grade(attempt: AssessmentAttempt) -> None:
     attempt.score_points = total
     total_possible = sum(sq.points for sq in snapshot_questions)
     assessment = attempt.assessment
-    if total_possible > 0:
-        attempt.score_percent = (total / total_possible * Decimal("100")).quantize(Decimal("0.01"))
+    attempt.score_percent = compute_percent(total, total_possible)
     if all_graded:
         attempt.status = ATTEMPT_STATUS_GRADED
         attempt.graded_at = timezone.now()
-        attempt.is_pass = (
-            attempt.score_percent >= assessment.passing_score
-            if attempt.score_percent is not None else None
-        )
+        attempt.is_pass = is_passing(attempt.score_percent, assessment.passing_score)
         attempt.save(update_fields=["score_points", "score_percent", "status", "graded_at", "is_pass"])
     else:
         attempt.save(update_fields=["score_points", "score_percent"])
@@ -1015,10 +1000,12 @@ def grade_homework(submission_id: int, score: Decimal, feedback: str, grader) ->
         if submission.assessment.total_points <= 0:
             raise ValueError(_("Assessment total points must be positive."))
         attempt.score_points = score
-        attempt.score_percent = (score / submission.assessment.total_points * Decimal("100")).quantize(Decimal("0.01"))
+        attempt.score_percent = compute_percent(score, submission.assessment.total_points)
         attempt.graded_at = now
         attempt.graded_by = grader
-        attempt.is_pass = attempt.score_percent >= submission.assessment.passing_score
+        attempt.is_pass = is_passing(attempt.score_percent, submission.assessment.passing_score)
+        if attempt.is_pass is None:
+            attempt.is_pass = False
         attempt.status = ATTEMPT_STATUS_GRADED
         attempt.save(update_fields=[
             "score_points", "score_percent", "graded_at", "graded_by", "is_pass", "status",
@@ -1040,15 +1027,11 @@ def _update_attempt_grade(attempt: AssessmentAttempt):
     attempt.score_points = total
     assessment = attempt.assessment
     total_possible = sum(q.points for q in assessment.questions.all())
-    if total_possible > 0:
-        attempt.score_percent = (total / total_possible) * Decimal("100.00")
+    attempt.score_percent = compute_percent(total, total_possible)
     if all_graded:
         attempt.status = ATTEMPT_STATUS_GRADED
         attempt.graded_at = timezone.now()
-        attempt.is_pass = (
-            attempt.score_percent >= assessment.passing_score
-            if attempt.score_percent is not None else None
-        )
+        attempt.is_pass = is_passing(attempt.score_percent, assessment.passing_score)
         attempt.save(
             update_fields=[
                 "score_points", "score_percent", "status",
@@ -1229,7 +1212,7 @@ def _semester_exam_attempt_details(attempt: AssessmentAttempt) -> dict:
                 graded_count += 1
                 earned += answer.score
         complete = bool(snapshot_questions) and graded_count == len(snapshot_questions)
-        percent = (earned / total_points * Decimal("100")).quantize(Decimal("0.01")) if total_points else None
+        percent = compute_percent(earned, total_points)
         return {"is_online": True, "complete": complete, "percent": percent}
 
     code = SemesterExamCode.objects.filter(
@@ -1247,7 +1230,7 @@ def _semester_exam_attempt_details(attempt: AssessmentAttempt) -> dict:
     total_max = sum(section.max_grade for section in sections)
     earned = sum(grades[s.id].score for s in sections if s.id in grades)
     complete = len(grades) == len(sections)
-    percent = (earned / total_max * Decimal("100")).quantize(Decimal("0.01")) if total_max else None
+    percent = compute_percent(earned, total_max)
     return {"is_online": False, "complete": complete, "percent": percent}
 
 
@@ -1917,8 +1900,10 @@ def finalize_offline_attempt(exam_code_id: int) -> AssessmentAttempt:
             defaults={"status": ATTEMPT_STATUS_GRADED, "submitted_at": timezone.now()},
         )
         attempt.score_points = total_score
-        attempt.score_percent = (total_score / total_max * Decimal("100")).quantize(Decimal("0.01"))
-        attempt.is_pass = attempt.score_percent >= assessment.passing_score
+        attempt.score_percent = compute_percent(total_score, total_max)
+        attempt.is_pass = is_passing(attempt.score_percent, assessment.passing_score)
+        if attempt.is_pass is None:
+            attempt.is_pass = False
         attempt.status = ATTEMPT_STATUS_GRADED
         attempt.submitted_at = timezone.now()
         attempt.visible_to_student = False

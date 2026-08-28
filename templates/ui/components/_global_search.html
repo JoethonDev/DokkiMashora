@@ -1,4 +1,4 @@
-﻿{% load i18n %}
+{% load i18n %}
 <dialog id="global-search-dialog"
         class="relative border-0 rounded-md shadow-modal p-0 w-full max-w-lg max-h-dvh overflow-hidden"
         aria-labelledby="search-dialog-title"><button type="button"
@@ -11,7 +11,8 @@
         hx-trigger="input changed delay:300ms from:#global-search-input, search from:#global-search-input"
         hx-target="#global-search-results"
         hx-swap="innerHTML"
-        hx-sync="this:replace"><div class="flex items-center gap-2.5">
+        hx-sync="this:replace"
+        hx-indicator="#global-loading"><div class="flex items-center gap-2.5">
       <input type="search"
              name="q"
              id="global-search-input"

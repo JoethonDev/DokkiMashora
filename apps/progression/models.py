@@ -731,11 +731,11 @@ class SemesterEvaluationConfig(TimeStampedModel):
 
 
 class SemesterEvaluation(TimeStampedModel):
-    """Immutable calculated Semester Evaluation snapshot (P2-05).
+    """Calculated Semester Evaluation snapshot (P2-05).
 
-    Created once by the finalization service (P2-06) and never mutated.
-    Component/config/source snapshots preserve the exact inputs used at
-    finalization time.
+    Created by the finalization service (P2-06). Explicit Admin
+    re-evaluation may replace the snapshot and records the replacement in
+    audit history.
     """
 
     diploma_enrollment = models.ForeignKey(

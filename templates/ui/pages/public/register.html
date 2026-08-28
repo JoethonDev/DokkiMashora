@@ -28,31 +28,52 @@
             </div>
           {% endif %}
           {% if registration_steps %}
-            <div id="registration-wizard" data-initial-step="{{ registration_error_step }}">
+            <div id="registration-wizard"
+                 x-data="{ current: (parseInt('{{ registration_error_step|default:1 }}')||1)-1, total: {{ registration_steps|length }}, validateStep(idx){ const step=document.querySelector('[data-step=\''+idx+'\']'); if(!step) return true; const fields=step.querySelectorAll('input,select,textarea'); for(let i=0;i<fields.length;i++){ const f=fields[i]; if(f.disabled||f.readOnly) continue; if(!f.checkValidity()){ f.reportValidity(); return false; } } return true; } }"
+                 x-init="current=Math.max(0, Math.min(total-1, current))"
+                 data-initial-step="{{ registration_error_step }}">
               <ol class="flex flex-wrap items-center gap-2 mb-6 list-none p-0" aria-label="{% trans 'Registration steps' %}">
                 {% for step in registration_steps %}
-                  <li class="text-xs font-bold px-3 py-1.5 rounded-full bg-line text-muted" data-wizard-step-index="{{ forloop.counter0 }}" data-wizard-step-target="{{ forloop.counter0 }}">
+                  <li class="text-xs font-bold px-3 py-1.5 rounded-full transition-colors duration-200" :class="current === {{ forloop.counter0 }} ? 'bg-brand-strong text-white' : 'bg-line text-muted'" data-wizard-step-index="{{ forloop.counter0 }}" data-wizard-step-target="{{ forloop.counter0 }}">
                     <span>{{ forloop.counter }}. </span>{{ step.title }}
                   </li>
                 {% endfor %}
               </ol>
               {% for step in registration_steps %}
-                <div class="form-step{% if not forloop.first %} hidden{% endif %}" data-step="{{ forloop.counter0 }}">
+                <div class="form-step" data-step="{{ forloop.counter0 }}"
+                     x-show="current === {{ forloop.counter0 }}"
+                     x-transition
+                     x-transition:enter="transition ease-out duration-200"
+                     x-transition:enter-start="opacity-0 translate-y-1"
+                     x-transition:enter-end="opacity-100 translate-y-0"
+                     x-transition:leave="transition ease-in duration-150"
+                     x-transition:leave-start="opacity-100"
+                     x-transition:leave-end="opacity-0"
+                     {% if not forloop.first %}x-cloak{% endif %}>
                   {% for field in form %}
                     {% if field.name in step.fields and field.name not in registration_program_fields %}
                       {% include "ui/components/_field.html" %}
                     {% endif %}
                   {% endfor %}
                   {% if forloop.last and form.apply_program %}
-                    <div id="program-selection" class="page-stack">
+                    <div id="program-selection" class="page-stack" x-data="{ apply: false, programType: 'diploma' }" x-init="apply=document.getElementById('id_apply_program')?.checked||false; programType=document.getElementById('id_program_type')?.value||'diploma'; document.getElementById('id_apply_program')?.addEventListener('change', e=>apply=e.target.checked); document.getElementById('id_program_type')?.addEventListener('change', e=>programType=e.target.value)">
                       {% include "ui/components/_field.html" with field=form.apply_program %}
-                      <div id="program-details" class="page-stack hidden">
+                      <div id="program-details" class="page-stack"
+                           x-show="apply"
+                           x-transition
+                           x-transition:enter="transition ease-out duration-200"
+                           x-transition:enter-start="opacity-0 translate-y-1"
+                           x-transition:enter-end="opacity-100 translate-y-0"
+                           x-transition:leave="transition ease-in duration-150"
+                           x-transition:leave-start="opacity-100"
+                           x-transition:leave-end="opacity-0"
+                           x-cloak>
                         {% include "ui/components/_field.html" with field=form.program_type %}
-                        <div id="diploma-field" class="hidden">
+                        <div id="diploma-field" x-show="programType === 'diploma'" x-transition x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
                           {% include "ui/components/_field.html" with field=form.diploma %}
                           {% include "ui/components/_field.html" with field=form.delivery_mode %}
                         </div>
-                        <div id="course-field" class="hidden">
+                        <div id="course-field" x-show="programType !== 'diploma'" x-transition x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" x-cloak>
                           {% include "ui/components/_field.html" with field=form.program_target %}
                         </div>
                       </div>
@@ -60,11 +81,11 @@
                   {% endif %}
                 </div>
               {% endfor %}
-              <div class="flex items-center justify-between gap-3 mt-6">
-                <button type="button" class="btn-ghost" data-wizard-prev hidden>{% trans "Back" %}</button>
+              <div class="flex items-center justify-between gap-2.5 mt-6">
+                <button type="button" class="btn-ghost" x-show="current > 0" x-transition.opacity @click="current--">{% trans "Back" %}</button>
                 <div class="flex-1"></div>
-                <button type="button" class="btn-primary" data-wizard-next>{% trans "Next" %}</button>
-                <button type="submit" class="btn-primary" data-wizard-submit hidden>{% trans "Create account" %}</button>
+                <button type="button" class="btn-primary" x-show="current < total - 1" x-transition.opacity @click="if(validateStep(current)) current++">{% trans "Next" %}</button>
+                <button type="submit" class="btn-primary" x-show="current === total - 1" x-transition.opacity x-cloak>{% trans "Create account" %}</button>
               </div>
             </div>
           {% else %}
@@ -74,15 +95,24 @@
               {% endif %}
             {% endfor %}
             {% if form.apply_program %}
-              <div id="program-selection" class="page-stack">
+              <div id="program-selection" class="page-stack" x-data="{ apply: false, programType: 'diploma' }" x-init="apply=document.getElementById('id_apply_program')?.checked||false; programType=document.getElementById('id_program_type')?.value||'diploma'; document.getElementById('id_apply_program')?.addEventListener('change', e=>apply=e.target.checked); document.getElementById('id_program_type')?.addEventListener('change', e=>programType=e.target.value)">
                 {% include "ui/components/_field.html" with field=form.apply_program %}
-                <div id="program-details" class="page-stack hidden">
+                <div id="program-details" class="page-stack"
+                     x-show="apply"
+                     x-transition
+                     x-transition:enter="transition ease-out duration-200"
+                     x-transition:enter-start="opacity-0 translate-y-1"
+                     x-transition:enter-end="opacity-100 translate-y-0"
+                     x-transition:leave="transition ease-in duration-150"
+                     x-transition:leave-start="opacity-100"
+                     x-transition:leave-end="opacity-0"
+                     x-cloak>
                   {% include "ui/components/_field.html" with field=form.program_type %}
-                  <div id="diploma-field" class="hidden">
+                  <div id="diploma-field" x-show="programType === 'diploma'" x-transition x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
                     {% include "ui/components/_field.html" with field=form.diploma %}
                     {% include "ui/components/_field.html" with field=form.delivery_mode %}
                   </div>
-                  <div id="course-field" class="hidden">
+                  <div id="course-field" x-show="programType !== 'diploma'" x-transition x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" x-cloak>
                     {% include "ui/components/_field.html" with field=form.program_target %}
                   </div>
                 </div>

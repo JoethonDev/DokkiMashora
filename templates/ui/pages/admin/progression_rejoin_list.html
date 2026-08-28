@@ -8,8 +8,16 @@
     {% trans "Progression" as title %}
     {% trans "Review semester progress, decisions, evaluations, interviews, and rejoin plans." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    <section class="card-surface"><form class="actions-row items-end mb-4" method="get"><label class="min-w-40"><span class="field-label">{% trans "Status" %}</span>
-            <select name="status" class="form-select"><option value="">{% trans "All" %}</option>
+    <section class="card-surface flex flex-col gap-4">
+      <div class="border border-line rounded-sm bg-surface-soft p-4 text-sm text-muted">
+        <p class="m-0"><strong class="text-text">{% trans "Planned" %}:</strong> {% trans "The plan is ready. Activate it to move the student to the next cohort." %}</p>
+        <p class="m-0 mt-2"><strong class="text-text">{% trans "Active" %}:</strong> {% trans "The student has moved. Revoke it to delete the new enrollment and restore the previous cohort." %}</p>
+        <p class="m-0 mt-2"><strong class="text-text">{% trans "Cancelled" %}:</strong> {% trans "The plan is closed and kept only as history." %}</p>
+      </div>
+      <form class="actions-row items-end" method="get"><label class="min-w-40"><span class="field-label">{% trans "Status" %}</span>
+            <select name="status" class="form-select">
+              <option value="current" {% if current_status == 'current' %}selected{% endif %}>{% trans "Current plans" %}</option>
+              <option value="all" {% if current_status == 'all' %}selected{% endif %}>{% trans "All statuses" %}</option>
               {% for value,label in rejoin_status_choices %}
                 <option value="{{ value }}"
                         {% if current_status == value %} selected {% endif %}>{{ label }}</option>
@@ -32,19 +40,28 @@
                   <td class="table-td">{{ item.student.full_name|default:item.student }}</td>
                   <td class="table-td">
                     {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:'—' %}
+                    <small class="block text-muted mt-1">{{ item.next_step }}</small>
                   </td>
                   <td class="table-td">
-                    <div class="flex gap-2.5 items-center flex-wrap">{% if item.status != 'active' %}
+                    <div class="flex gap-2.5 items-center flex-wrap">
+                      {% if item.status == 'planned' %}
                         <form method="post"
                               action="{% url 'progression:admin_activate_rejoin_plan' item.id %}">{% csrf_token %}
                           <button class="btn-success" type="submit">{% trans "Activate" %}</button>
                         </form>
                       {% endif %}
-                      <form method="post"
-                            action="{% url 'progression:admin_cancel_rejoin_plan' item.id %}">{% csrf_token %}
-                        <label class="field"><span class="field-label">{% trans "Cancellation reason" %}</span><input name="reason" class="form-input" value=""></label>
-                        <button class="btn-danger" type="submit">{% trans "Cancel" %}</button>
-                      </form>
+                      {% if item.status == 'planned' or item.status == 'active' or item.can_restore_previous_enrollment %}
+                        <form method="post"
+                              action="{% url 'progression:admin_cancel_rejoin_plan' item.id %}"
+                              class="m-0"
+                              data-confirm="{% if item.status == 'active' %}{% trans 'Revoke this rejoin? The replacement enrollment will be deleted and the previous enrollment restored.' %}{% elif item.can_restore_previous_enrollment %}{% trans 'Restore the previous enrollment and remove the replacement enrollment?' %}{% else %}{% trans 'Cancel this planned rejoin?' %}{% endif %}"
+                              data-confirm-label="{% if item.status == 'active' %}{% trans 'Revoke rejoin' %}{% elif item.can_restore_previous_enrollment %}{% trans 'Restore enrollment' %}{% else %}{% trans 'Cancel plan' %}{% endif %}"
+                              data-confirm-reason-required="true"
+                              data-confirm-reason-name="reason">{% csrf_token %}
+                          <input type="hidden" name="reason" value="">
+                          <button class="btn-danger" type="submit">{% if item.status == 'active' %}{% trans "Revoke rejoin" %}{% elif item.can_restore_previous_enrollment %}{% trans "Restore previous enrollment" %}{% else %}{% trans "Cancel plan" %}{% endif %}</button>
+                        </form>
+                      {% endif %}
                     </div>
                   </td>
                 </tr>
@@ -62,16 +79,24 @@
               <div class="flex-1 min-w-0">
                 <strong class="block truncate">{{ item.student.full_name|default:item.student }}</strong>
                 {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:'—' %}
+                <small class="block text-muted mt-1">{{ item.next_step }}</small>
               </div>
               <div class="flex flex-col gap-1 shrink-0">
-                {% if item.status != 'active' %}
+                {% if item.status == 'planned' %}
                   <form method="post" action="{% url 'progression:admin_activate_rejoin_plan' item.id %}" class="m-0">{% csrf_token %}
                     <button class="btn-success" type="submit">{% trans "Activate" %}</button>
                   </form>
                 {% endif %}
-                <form method="post" action="{% url 'progression:admin_cancel_rejoin_plan' item.id %}" class="m-0">{% csrf_token %}
-                  <button class="btn-danger" type="submit">{% trans "Cancel" %}</button>
-                </form>
+                {% if item.status == 'planned' or item.status == 'active' or item.can_restore_previous_enrollment %}
+                  <form method="post" action="{% url 'progression:admin_cancel_rejoin_plan' item.id %}" class="m-0"
+                        data-confirm="{% if item.status == 'active' %}{% trans 'Revoke this rejoin? The replacement enrollment will be deleted and the previous enrollment restored.' %}{% elif item.can_restore_previous_enrollment %}{% trans 'Restore the previous enrollment and remove the replacement enrollment?' %}{% else %}{% trans 'Cancel this planned rejoin?' %}{% endif %}"
+                        data-confirm-label="{% if item.status == 'active' %}{% trans 'Revoke rejoin' %}{% elif item.can_restore_previous_enrollment %}{% trans 'Restore enrollment' %}{% else %}{% trans 'Cancel plan' %}{% endif %}"
+                        data-confirm-reason-required="true"
+                        data-confirm-reason-name="reason">{% csrf_token %}
+                    <input type="hidden" name="reason" value="">
+                    <button class="btn-danger" type="submit">{% if item.status == 'active' %}{% trans "Revoke rejoin" %}{% elif item.can_restore_previous_enrollment %}{% trans "Restore previous enrollment" %}{% else %}{% trans "Cancel plan" %}{% endif %}</button>
+                  </form>
+                {% endif %}
               </div>
             </div>
           {% empty %}

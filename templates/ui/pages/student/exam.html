@@ -56,7 +56,7 @@
         </form></div>
       {% elif is_results %}
         <div class="max-w-2xl mx-auto text-center">
-          <div class="flex flex-col items-center gap-3 py-4">
+          <div class="flex flex-col items-center gap-4 py-4">
             <div class="flex items-center justify-center gap-2.5">
               <span class="text-2xl leading-none" aria-hidden="true">✓</span>
               <h2 class="text-lg font-bold m-0">{% trans "Exam submitted" %}</h2>
@@ -119,5 +119,6 @@
 {% endif %}
     </section>
   </div>
-  {% if questions %}<script src="{% static 'js/exam-timer.js' %}" defer></script>{% endif %}
+  {% if questions %}<script src="{% static 'js/countdown-core.js' %}" defer></script>
+  <script src="{% static 'js/exam-timer.js' %}" defer></script>{% endif %}
 {% endblock %}

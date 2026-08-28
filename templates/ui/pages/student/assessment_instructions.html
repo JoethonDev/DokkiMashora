@@ -104,7 +104,7 @@
           <div class="mt-5 pt-5 border-t border-line">
             <h3 class="text-base font-bold mb-3">{% trans "Included lectures" %}</h3>
             <ul class="flex flex-col gap-2">
-              {% for section in sections %}<li class="flex items-start justify-between gap-3 border-b border-line pb-2 last:border-0 last:pb-0"><span>{{ section.order }}. {{ section.lecture.title }}</span><span class="text-sm text-muted">{{ section.max_grade }} {% trans "points" %}</span></li>{% endfor %}
+              {% for section in sections %}<li class="flex items-start justify-between gap-2.5 border-b border-line pb-2 last:border-0 last:pb-0"><span>{{ section.order }}. {{ section.lecture.title }}</span><span class="text-sm text-muted">{{ section.max_grade }} {% trans "points" %}</span></li>{% endfor %}
             </ul>
           </div>
         {% endif %}

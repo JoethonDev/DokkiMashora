@@ -13,6 +13,7 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE, ENROLLMENT_STATUS_RESTRICTED
 from apps.academics.models import Cohort, Diploma, DiplomaEnrollment, Semester
+from apps.attendance.models import AttendanceSession
 from apps.assessments.constants import (
     ASSESSMENT_TYPE_HOMEWORK,
     ASSESSMENT_TYPE_SEMESTER_EXAM,
@@ -206,7 +207,12 @@ def aggregate_semester_scores(student_profile: StudentProfile, semester: Semeste
 # ---------------------------------------------------------------------------
 
 
-from apps.audit.constants import ACTION_RULE_REEVALUATION, ACTION_SEMESTER_FINALIZED
+from apps.audit.constants import (
+    ACTION_PROMOTION,
+    ACTION_RULE_REEVALUATION,
+    ACTION_SEMESTER_FINALIZED,
+    ACTION_SEMESTER_REEVALUATED,
+)
 from apps.audit.services import record_audit_event
 
 REEVALUATION_CHUNK_SIZE = 100
@@ -546,25 +552,6 @@ def finalize_semester(
 # ---------------------------------------------------------------------------
 
 
-def _attendance_evaluation_percent(
-    enrollment: DiplomaEnrollment,
-    semester: Semester,
-    required_sessions: int | None = None,
-    summary: dict | None = None,
-) -> Decimal | None:
-    """Attendance percent for the evaluation.
-
-    With ``required_sessions`` > 0 the percent is recorded attendances out of
-    the required number (e.g. 7 of 10 ⇒ 70%), capped at 100. Otherwise it
-    falls back to attended / ended-closed sessions. Returns ``None`` when no
-    countable session exists, so the component is not applicable. Accepts a
-    precomputed ``summary`` so cohort loops can use the batch attendance path.
-    """
-    return get_attendance_evaluation_percent(
-        enrollment, semester, required_sessions, summary=summary,
-    )
-
-
 def _homework_best_scores(
     enrollment: DiplomaEnrollment, semester: Semester,
 ) -> tuple[Decimal, Decimal] | None:
@@ -579,6 +566,7 @@ def _homework_best_scores(
             cohort=enrollment.cohort,
             assessment_type=ASSESSMENT_TYPE_HOMEWORK,
             is_active=True,
+            legacy_status=LEGACY_STATUS_ACTIVE,
         )
     )
     if not assessments:
@@ -602,10 +590,12 @@ def _homework_best_scores(
 
 
 def _homework_evaluation_percent(enrollment: DiplomaEnrollment, semester: Semester) -> Decimal | None:
+    from apps.core.scoring import compute_percent
+
     aggregate = _homework_best_scores(enrollment, semester)
-    if aggregate is None or aggregate[1] <= 0:
+    if aggregate is None:
         return None
-    return (aggregate[0] / aggregate[1] * Decimal("100")).quantize(Decimal("0.01"))
+    return compute_percent(aggregate[0], aggregate[1])
 
 
 def _semester_exam_evaluation_percent(enrollment: DiplomaEnrollment, semester: Semester) -> Decimal | None:
@@ -633,6 +623,7 @@ def evaluate_semester_evaluation(
     enrollment: DiplomaEnrollment,
     semester: Semester,
     attendance_summary: dict | None = None,
+    attendance_source_exists: bool | None = None,
 ) -> dict:
     """Pure calculator shared by preview and finalization (P2-06).
 
@@ -652,12 +643,14 @@ def evaluate_semester_evaluation(
         return {
             "config": None, "blocked": True,
             "blocked_reasons": [_("No evaluation configuration for this cohort/semester.")],
+            "failure_reasons": [],
             "parts": [], "overall_percent": None, "overall_min": None, "passed": False,
         }
     if config.status != EVALUATION_CONFIG_STATUS_ACTIVE:
         return {
             "config": config, "blocked": True,
             "blocked_reasons": [_("Evaluation configuration is incomplete and requires remediation.")],
+            "failure_reasons": [],
             "parts": [], "overall_percent": None, "overall_min": None, "passed": False,
         }
     homework_applicable = Assessment.objects.filter(
@@ -674,7 +667,12 @@ def evaluate_semester_evaluation(
         is_active=True,
         legacy_status=LEGACY_STATUS_ACTIVE,
     ).exists()
-    attendance_percent = _attendance_evaluation_percent(
+    if attendance_source_exists is None:
+        attendance_source_exists = AttendanceSession.objects.filter(
+            cohort=enrollment.cohort,
+            semester=semester,
+        ).exists()
+    attendance_percent = get_attendance_evaluation_percent(
         enrollment, semester, config.attendance_required_sessions,
         summary=attendance_summary,
     )
@@ -685,7 +683,7 @@ def evaluate_semester_evaluation(
             "percent": attendance_percent,
             "weight": config.attendance_weight_percent,
             "min": config.attendance_min_percent,
-            "applicable": attendance_percent is not None,
+            "applicable": attendance_source_exists,
         },
         {
             "key": "homework",
@@ -711,13 +709,14 @@ def evaluate_semester_evaluation(
             and part["percent"] >= part["min"]
         )
     blocked_reasons = []
+    failure_reasons = []
     for part in parts:
         if not part["applicable"]:
             continue
         if part["percent"] is None:
             blocked_reasons.append(_("%(label)s has no graded result yet.") % {"label": part["label"]})
         elif part["percent"] < part["min"]:
-            blocked_reasons.append(
+            failure_reasons.append(
                 _("%(label)s is below its minimum of %(min)s%%.") % {"label": part["label"], "min": part["min"]}
             )
     graded_parts = [part for part in parts if part["applicable"] and part["percent"] is not None]
@@ -730,12 +729,14 @@ def evaluate_semester_evaluation(
     passed = (
         overall is not None
         and not blocked_reasons
+        and not failure_reasons
         and overall >= config.overall_min_percent
     )
     return {
         "config": config,
         "blocked": bool(blocked_reasons),
         "blocked_reasons": blocked_reasons,
+        "failure_reasons": failure_reasons,
         "parts": parts,
         "overall_percent": overall,
         "overall_min": config.overall_min_percent,
@@ -750,15 +751,22 @@ def finalize_semester_evaluation(
     actor=None,
     attendance_summary: dict | None = None,
 ) -> SemesterEvaluation:
-    """Finalize the exact Semester Evaluation once, immutably (P2-06).
+    """Finalize the exact Semester Evaluation once (P2-06).
 
     Idempotent: an existing evaluation for the enrollment+semester is returned
-    and never rewritten. The slow grade-item provenance sync runs outside the
-    evaluation lock; the locked step recalculates from live sources and creates
-    one immutable snapshot.
+    and never rewritten by this operation. The slow grade-item provenance sync
+    runs outside the evaluation lock; the locked step recalculates from live
+    sources and creates the snapshot.
     """
     if semester.diploma_id != enrollment.cohort.diploma_id:
         raise ValueError(_("Semester does not belong to the enrollment's diploma."))
+    existing = SemesterEvaluation.objects.filter(
+        diploma_enrollment=enrollment, semester=semester,
+    ).first()
+    if existing is not None:
+        return existing
+    if enrollment.status != ENROLLMENT_STATUS_ACTIVE:
+        raise ValueError(_("Enrollment is not active."))
     # Provenance sync outside the evaluation lock.
     sync_all_grade_items(enrollment, semester, actor=actor, attendance_summary=attendance_summary)
     with transaction.atomic():
@@ -771,8 +779,13 @@ def finalize_semester_evaluation(
             enrollment, semester, attendance_summary=attendance_summary,
         )
         if calc["blocked"] or calc["overall_percent"] is None:
-            reasons = "; ".join(calc["blocked_reasons"]) or _("missing inputs")
-            raise ValueError(_("Semester evaluation cannot be finalized: %(reasons)s.") % {"reasons": reasons})
+            reasons = "; ".join(str(r) for r in calc["blocked_reasons"]) or str(_("missing inputs"))
+            tmpl = str(_("Semester evaluation cannot be finalized: %(reasons)s."))
+            try:
+                msg = tmpl % {"reasons": reasons, "error": reasons}
+            except Exception:
+                msg = f"Semester evaluation cannot be finalized: {reasons}"
+            raise ValueError(msg)
         config = calc["config"]
         evaluation = SemesterEvaluation.objects.create(
             diploma_enrollment=enrollment,
@@ -812,6 +825,106 @@ def finalize_semester_evaluation(
                 "overall_percent": str(evaluation.overall_percent),
             },
         )
+    return evaluation
+
+
+@transaction.atomic
+def reevaluate_semester_evaluation(
+    enrollment: DiplomaEnrollment,
+    semester: Semester,
+    *,
+    actor=None,
+) -> SemesterEvaluation:
+    """Replace an existing evaluation with a fresh, audited calculation.
+
+    This is an explicit Admin correction path. Any linked final progression
+    outcome is returned to pending so the old decision cannot survive a new
+    calculated result.
+    """
+    if semester.diploma_id != enrollment.cohort.diploma_id:
+        raise ValueError(_("Semester does not belong to the enrollment's diploma."))
+    if enrollment.status != ENROLLMENT_STATUS_ACTIVE:
+        raise ValueError(_("Enrollment is not active."))
+
+    evaluation = SemesterEvaluation.objects.select_for_update().filter(
+        diploma_enrollment=enrollment, semester=semester,
+    ).first()
+    if evaluation is None:
+        raise ValueError(_("Finalize the semester evaluation before re-evaluating it."))
+
+    outcome = FinalProgressionOutcome.objects.select_for_update().filter(
+        evaluation=evaluation,
+    ).first()
+    if outcome and SemesterInterview.objects.filter(outcome=outcome).exists():
+        raise ValueError(_("An evaluation with an interview cannot be re-evaluated."))
+
+    sync_all_grade_items(enrollment, semester, actor=actor)
+    calc = evaluate_semester_evaluation(enrollment, semester)
+    if calc["blocked"] or calc["overall_percent"] is None:
+        reasons = "; ".join(str(r) for r in calc["blocked_reasons"]) or str(_("missing inputs"))
+        raise ValueError(_("Semester evaluation cannot be re-evaluated: %(reasons)s.") % {"reasons": reasons})
+
+    previous = {
+        "result": evaluation.result,
+        "overall_percent": str(evaluation.overall_percent),
+        "attendance_percent": str(evaluation.attendance_percent),
+        "homework_percent": str(evaluation.homework_percent),
+        "semester_exam_percent": str(evaluation.semester_exam_percent),
+    }
+    config = calc["config"]
+    evaluation.result = SEMESTER_EVALUATION_PASS if calc["passed"] else SEMESTER_EVALUATION_FAIL
+    evaluation.overall_percent = calc["overall_percent"]
+    evaluation.attendance_percent = calc["parts"][0]["percent"]
+    evaluation.homework_percent = calc["parts"][1]["percent"]
+    evaluation.semester_exam_percent = calc["parts"][2]["percent"]
+    evaluation.config_snapshot = {
+        "attendance_weight_percent": str(config.attendance_weight_percent),
+        "homework_weight_percent": str(config.homework_weight_percent),
+        "semester_exam_weight_percent": str(config.semester_exam_weight_percent),
+        "attendance_min_percent": str(config.attendance_min_percent),
+        "homework_min_percent": str(config.homework_min_percent),
+        "semester_exam_min_percent": str(config.semester_exam_min_percent),
+        "overall_min_percent": str(config.overall_min_percent),
+    }
+    evaluation.source_snapshot = {
+        "attendance_percent": str(calc["parts"][0]["percent"]),
+        "homework_percent": str(calc["parts"][1]["percent"]),
+        "semester_exam_percent": str(calc["parts"][2]["percent"]),
+    }
+    evaluation.finalized_by = actor
+    evaluation.save()
+
+    if outcome:
+        outcome.calculated_result = evaluation.result
+        outcome.status = FINAL_PROGRESSION_STATUS_PENDING
+        outcome.final_result = ""
+        outcome.is_exceptional = None
+        outcome.reason = ""
+        outcome.decided_by = None
+        outcome.decided_at = None
+        outcome.save(update_fields=[
+            "calculated_result", "status", "final_result", "is_exceptional",
+            "reason", "decided_by", "decided_at", "updated_at",
+        ])
+
+    record_audit_event(
+        actor=actor,
+        action=ACTION_SEMESTER_REEVALUATED,
+        target_type="enrollment",
+        target_id=str(enrollment.id),
+        metadata={
+            "semester_id": semester.id,
+            "evaluation_id": evaluation.id,
+            "before": previous,
+            "after": {
+                "result": evaluation.result,
+                "overall_percent": str(evaluation.overall_percent),
+                "attendance_percent": str(evaluation.attendance_percent),
+                "homework_percent": str(evaluation.homework_percent),
+                "semester_exam_percent": str(evaluation.semester_exam_percent),
+            },
+        },
+    )
     return evaluation
 
 
@@ -859,6 +972,10 @@ def get_semester_progression_rows(cohort: Cohort, semester: Semester, enrollment
     needs_previews = not config_blocked and any(
         enrollment.id not in evaluations for enrollment in enrollments
     )
+    attendance_source_exists = (
+        AttendanceSession.objects.filter(cohort=cohort, semester=semester).exists()
+        if needs_previews else None
+    )
     attendance_summaries = (
         get_attendance_summaries(enrollments, semester) if needs_previews else {}
     )
@@ -893,6 +1010,7 @@ def get_semester_progression_rows(cohort: Cohort, semester: Semester, enrollment
                 preview = evaluate_semester_evaluation(
                     enrollment, semester,
                     attendance_summary=attendance_summaries.get(enrollment.id),
+                    attendance_source_exists=attendance_source_exists,
                 )
                 row["preview"] = preview
                 if preview is not None:
@@ -975,6 +1093,19 @@ def resolve_final_progression(
             "overall_percent": str(evaluation.overall_percent),
         },
     )
+    if final_result == SEMESTER_EVALUATION_FAIL:
+        StudentSemesterProgress.objects.update_or_create(
+            diploma_enrollment=evaluation.diploma_enrollment,
+            semester=evaluation.semester,
+            defaults={
+                "student": evaluation.student,
+                "cohort": evaluation.diploma_enrollment.cohort,
+                "status": SEMESTER_PROGRESS_FAILED,
+                "failed_at": now,
+                "decided_by": actor,
+                "decision_reason": reason.strip() or _("Final fail."),
+            },
+        )
     record_audit_event(
         actor=actor,
         action=ACTION_SEMESTER_FINALIZED,
@@ -1100,27 +1231,36 @@ def promote_semester(
     actor=None,
     reason: str = "",
     automatic: bool = False,
+    exceptional: bool = False,
 ) -> PromotionDecision:
     """Canonical promotion state machine (BUG-019/BUG-020).
 
     Manual, automatic, bulk, and individual promotion entry points all
     converge here. The pass decision is the canonical synchronized evaluation:
-    the finalized, immutable ``SemesterEvaluation`` created by
+    the finalized ``SemesterEvaluation`` created by
     ``finalize_semester_evaluation`` from the exact two-level rule
-    (component minimums AND weighted overall). Promotion is only eligible for
-    a calculated PASS. The service validates the current promotion state (no
-    duplicate/conflicting decisions, no pending interview, not locked) and
-    creates exactly one ``PromotionDecision`` row before advancing the
-    student's semester progress.
+    (component minimums AND weighted overall). Ordinary promotion requires a
+    calculated PASS. A calculated FAIL, or an explicit exceptional promotion
+    of a PASS, may use the reason-required exceptional path. The service
+    validates the current promotion state (no duplicate/conflicting
+    decisions, no pending interview, not locked) and creates exactly one
+    ``PromotionDecision`` row before advancing the student's semester
+    progress.
     """
     if semester.diploma_id != enrollment.cohort.diploma_id:
         raise ValueError(_("Semester does not belong to the enrollment's diploma."))
+    if enrollment.status != ENROLLMENT_STATUS_ACTIVE:
+        raise ValueError(_("Enrollment is not active."))
+    if exceptional and automatic:
+        raise ValueError(_("Exceptional promotion cannot be automatic."))
+    if exceptional and not reason.strip():
+        raise ValueError(_("A reason is required for exceptional promotion."))
     evaluation = SemesterEvaluation.objects.select_for_update().filter(
         diploma_enrollment=enrollment, semester=semester,
     ).first()
     if evaluation is None:
         raise ValueError(_("Finalize the semester evaluation before promotion."))
-    if evaluation.result != SEMESTER_EVALUATION_PASS:
+    if not exceptional and evaluation.result != SEMESTER_EVALUATION_PASS:
         raise ValueError(_("Cannot promote: the calculated semester evaluation is FAIL."))
 
     outcome = FinalProgressionOutcome.objects.select_for_update().filter(
@@ -1152,9 +1292,12 @@ def promote_semester(
             diploma=enrollment.cohort.diploma, order=semester.order + 1,
         ).first()
     )
-    decision_type = (
-        PROMOTION_DECISION_AUTO_PROMOTE if automatic else PROMOTION_DECISION_MANUAL_PROMOTE
-    )
+    if exceptional:
+        decision_type = PROMOTION_DECISION_OVERRIDE_PASS
+    elif automatic:
+        decision_type = PROMOTION_DECISION_AUTO_PROMOTE
+    else:
+        decision_type = PROMOTION_DECISION_MANUAL_PROMOTE
     decision = PromotionDecision.objects.create(
         student=enrollment.student,
         diploma_enrollment=enrollment,
@@ -1175,6 +1318,7 @@ def promote_semester(
         metadata={
             "evaluation_id": evaluation.id,
             "calculated_result": evaluation.result,
+            "exceptional": exceptional,
             "overall_percent": str(evaluation.overall_percent),
         },
     )
@@ -1184,7 +1328,7 @@ def promote_semester(
     resolved_outcome = _get_or_create_progression_outcome(evaluation)
     if resolved_outcome.status != FINAL_PROGRESSION_STATUS_RESOLVED:
         resolved_outcome.final_result = SEMESTER_EVALUATION_PASS
-        resolved_outcome.is_exceptional = False
+        resolved_outcome.is_exceptional = exceptional
         resolved_outcome.reason = reason.strip()
         resolved_outcome.decided_by = actor
         resolved_outcome.decided_at = now
@@ -1193,6 +1337,21 @@ def promote_semester(
             "final_result", "is_exceptional", "reason",
             "decided_by", "decided_at", "status", "updated_at",
         ])
+    if exceptional:
+        record_audit_event(
+            actor=actor,
+            action=ACTION_PROMOTION,
+            target_type="enrollment",
+            target_id=str(enrollment.id),
+            metadata={
+                "semester_id": semester.id,
+                "evaluation_id": evaluation.id,
+                "calculated_result": evaluation.result,
+                "final_result": SEMESTER_EVALUATION_PASS,
+                "exceptional": True,
+                "reason": reason.strip(),
+            },
+        )
     StudentSemesterProgress.objects.update_or_create(
         diploma_enrollment=enrollment,
         semester=semester,
@@ -1216,6 +1375,23 @@ def promote_semester(
             },
         )
     return decision
+
+
+def exceptional_promote_semester(
+    enrollment: DiplomaEnrollment,
+    semester: Semester,
+    *,
+    actor=None,
+    reason: str = "",
+) -> PromotionDecision:
+    """Promote through the explicit reason-required exceptional path."""
+    return promote_semester(
+        enrollment,
+        semester,
+        actor=actor,
+        reason=reason,
+        exceptional=True,
+    )
 
 
 def auto_promote_students(
@@ -1952,6 +2128,7 @@ def sync_semester_exam_grade_item(diploma_enrollment, semester, actor=None) -> S
         cohort=diploma_enrollment.cohort,
         assessment_type=ASSESSMENT_TYPE_SEMESTER_EXAM,
         is_active=True,
+        legacy_status=LEGACY_STATUS_ACTIVE,
     )
     best = (
         AssessmentAttempt.objects.filter(
@@ -1996,7 +2173,7 @@ def sync_attendance_grade_item(
         cohort=diploma_enrollment.cohort, semester=semester,
     ).first()
     required = config.attendance_required_sessions if config else None
-    attendance_percent = _attendance_evaluation_percent(
+    attendance_percent = get_attendance_evaluation_percent(
         diploma_enrollment, semester, required, summary=summary,
     )
 
@@ -2018,13 +2195,13 @@ def sync_homework_assessment_grade_item(diploma_enrollment, semester, actor=None
     if component is None:
         return None
 
+    from apps.core.scoring import compute_percent
+
     aggregate = _homework_best_scores(diploma_enrollment, semester)
     if aggregate is None:
         return None
     total_earned, total_max = aggregate
-    score_percent = None
-    if total_max > 0:
-        score_percent = (total_earned / total_max * Decimal("100")).quantize(Decimal("0.01"))
+    score_percent = compute_percent(total_earned, total_max)
 
     item, _created = StudentGradeItem.objects.update_or_create(
         component=component,
@@ -2043,6 +2220,8 @@ def sync_all_grade_items(
 ) -> dict:
     if semester.diploma_id != diploma_enrollment.cohort.diploma_id:
         raise ValueError(_("Semester does not belong to the enrollment's diploma."))
+    if diploma_enrollment.status != ENROLLMENT_STATUS_ACTIVE:
+        raise ValueError(_("Enrollment is not active."))
     with transaction.atomic():
         return {
             "semester_exam": sync_semester_exam_grade_item(diploma_enrollment, semester, actor=actor),
@@ -2135,8 +2314,19 @@ def get_rejoin_eligibility_rows(*, offset=0, limit=25):
     target semester is finalized.
     """
     rows = []
+    current_failed_outcome = FinalProgressionOutcome.objects.filter(
+        diploma_enrollment_id=OuterRef("from_enrollment_id"),
+        semester_id=OuterRef("failed_semester_id"),
+        status=FINAL_PROGRESSION_STATUS_RESOLVED,
+        final_result=SEMESTER_EVALUATION_FAIL,
+    )
     plans_qs = SemesterRejoinPlan.objects.filter(
         status__in=[REJOIN_STATUS_PLANNED, REJOIN_STATUS_ACTIVE],
+    ).annotate(
+        source_failed=Exists(current_failed_outcome),
+    ).filter(
+        source_failed=True,
+        status=REJOIN_STATUS_PLANNED,
     ).select_related("student__user", "from_enrollment__cohort", "failed_semester", "target_cohort")
     plan_count = plans_qs.count()
 
@@ -2145,13 +2335,19 @@ def get_rejoin_eligibility_rows(*, offset=0, limit=25):
         failed_semester_id=OuterRef("semester_id"),
         status__in=[REJOIN_STATUS_PLANNED, REJOIN_STATUS_ACTIVE],
     )
+    active_replacement_for_outcome = DiplomaEnrollment.objects.filter(
+        student_id=OuterRef("student_id"),
+        cohort__diploma_id=OuterRef("evaluation__diploma_enrollment__cohort__diploma_id"),
+        status=ENROLLMENT_STATUS_ACTIVE,
+    ).exclude(id=OuterRef("diploma_enrollment_id"))
     resolved_failed = (
         FinalProgressionOutcome.objects.filter(
             status=FINAL_PROGRESSION_STATUS_RESOLVED,
             final_result=SEMESTER_EVALUATION_FAIL,
         )
         .annotate(has_plan=Exists(active_plan_for_outcome))
-        .filter(has_plan=False)
+        .annotate(has_active_replacement=Exists(active_replacement_for_outcome))
+        .filter(has_plan=False, has_active_replacement=False)
         .select_related(
             "evaluation__diploma_enrollment__cohort",
             "evaluation__semester",
@@ -2299,6 +2495,13 @@ def activate_rejoin_plan(plan, *, actor) -> SemesterRejoinPlan:
             status=ENROLLMENT_STATUS_ACTIVE,
             entry_semester=plan_ref.failed_semester,
         )
+        StudentSemesterProgress.objects.create(
+            student=plan_ref.student,
+            diploma_enrollment=new_enrollment,
+            cohort=plan_ref.target_cohort,
+            semester=plan_ref.failed_semester,
+            status=SEMESTER_PROGRESS_NOT_STARTED,
+        )
         plan_ref.to_enrollment = new_enrollment
         plan_ref.status = REJOIN_STATUS_ACTIVE
         plan_ref.activated_at = timezone.now()
@@ -2318,16 +2521,40 @@ def activate_rejoin_plan(plan, *, actor) -> SemesterRejoinPlan:
 
 def cancel_rejoin_plan(plan, *, actor, reason: str = "") -> SemesterRejoinPlan:
     with transaction.atomic():
-        plan.status = REJOIN_STATUS_CANCELLED
-        plan.save(update_fields=["status", "updated_at"])
-
-        PromotionDecision.objects.create(
-            student=plan.student,
-            diploma_enrollment=plan.to_enrollment or plan.from_enrollment,
-            from_semester=plan.failed_semester,
-            decision_type=PROMOTION_DECISION_REJOIN_CANCELLED,
-            reason=reason or _("Rejoin plan cancelled."),
-            decided_by=actor,
+        plan_ref = SemesterRejoinPlan.objects.select_for_update().get(pk=plan.pk)
+        source = DiplomaEnrollment.objects.select_for_update().get(pk=plan_ref.from_enrollment_id)
+        target = (
+            DiplomaEnrollment.objects.select_for_update().get(pk=plan_ref.to_enrollment_id)
+            if plan_ref.to_enrollment_id else None
         )
+        recoverable_cancel = (
+            plan_ref.status == REJOIN_STATUS_CANCELLED
+            and source.status == ENROLLMENT_STATUS_RESTRICTED
+            and target is not None
+            and target.status == ENROLLMENT_STATUS_ACTIVE
+        )
+        if plan_ref.status not in {REJOIN_STATUS_PLANNED, REJOIN_STATUS_ACTIVE} and not recoverable_cancel:
+            raise ValueError(_("Only planned or active rejoin plans can be cancelled."))
 
-    return plan
+        if plan_ref.status == REJOIN_STATUS_ACTIVE or recoverable_cancel:
+            if target is None:
+                raise ValueError(_("The active rejoin has no replacement enrollment."))
+            target.delete()
+            source.status = ENROLLMENT_STATUS_ACTIVE
+            source.save(update_fields=["status", "updated_at"])
+
+        if plan_ref.status != REJOIN_STATUS_CANCELLED:
+            plan_ref.status = REJOIN_STATUS_CANCELLED
+            plan_ref.save(update_fields=["status", "updated_at"])
+
+        if not recoverable_cancel:
+            PromotionDecision.objects.create(
+                student=plan_ref.student,
+                diploma_enrollment=source,
+                from_semester=plan_ref.failed_semester,
+                decision_type=PROMOTION_DECISION_REJOIN_CANCELLED,
+                reason=reason or _("Rejoin plan cancelled."),
+                decided_by=actor,
+            )
+
+    return plan_ref

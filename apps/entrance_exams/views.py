@@ -49,8 +49,11 @@ from apps.communications.constants import (
     TEMPLATE_ENTRANCE_EXAM_PASS,
     TEMPLATE_REJECTION,
 )
-from apps.communications.services import queue_templated_email
-from apps.core.htmx import is_htmx
+from apps.communications.services import (
+    queue_program_application_email,
+    record_program_application_email_log,
+)
+from apps.core.htmx import hx_toast, is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import ROLE_EXAM_STAFF, is_admin, role_required, safe_int, student_required
 from apps.core.views import safe_next_url
@@ -343,7 +346,7 @@ def admin_list(request):
 @role_required(*ROLE_EXAM_STAFF)
 def admin_cohorts_for_diploma(request):
     """Return cohort <option>s filtered by diploma (HTMX)."""
-    if not request.headers.get("HX-Request"):
+    if not is_htmx(request):
         raise Http404
     if not is_admin(request.user):
         raise PermissionDenied
@@ -776,11 +779,7 @@ def admin_delete_question(request, exam_id, question_id):
     messages.success(request, msg)
     if is_htmx(request):
         response = HttpResponse(status=204)
-        response["HX-Trigger"] = json.dumps({
-            "question-saved": None,
-            "show-toast": {"message": msg, "type": "success"},
-        })
-        return response
+        return hx_toast(response, msg, type="success", extra_events={"question-saved": None})
     return redirect(next_url) if next_url else redirect("entrance_exams:admin_detail", exam_id=exam.id)
 
 
@@ -853,8 +852,13 @@ def _send_invitations(request, exam, cohort, student_ids):
                 exam_close_at="",
             )
         try:
-            record = queue_templated_email(
-                slug=slug, to_email=email_to, context=context, sent_by=request.user,
+            record, _log = queue_program_application_email(
+                program_application=prog_app,
+                action=action,
+                template_slug=slug,
+                to_email=email_to,
+                context=context,
+                sent_by=request.user,
                 idempotency_key=f"entrance_exam:{action}:app:{prog_app.pk}",
                 reference=f"app:{prog_app.pk}",
             )
@@ -862,16 +866,6 @@ def _send_invitations(request, exam, cohort, student_ids):
             logger.exception("Exam assign email queue failed for application %s", prog_app.id)
             failed_count += 1
             continue
-        PAEL.objects.get_or_create(
-            program_application=prog_app,
-            action=action,
-            defaults={
-                "template_slug": slug,
-                "recipient": email_to, "sent_by": request.user,
-                "sent_at": (record.queued_at or timezone.now()) if record else timezone.now(),
-                "status": record.status if record else "failed",
-            },
-        )
         if record is not None:
             queued_count += 1
         else:
@@ -920,8 +914,13 @@ def _send_results(request, exam, student_ids):
         if attempt.result == RESULT_FAIL:
             context["rejection_reason"] = attempt.program_application.rejection_reason or ""
         try:
-            record = queue_templated_email(
-                slug=slug, to_email=email_to, context=context, sent_by=request.user,
+            record, _log = queue_program_application_email(
+                program_application=prog_app,
+                action=EMAIL_ACTION_EXAM_RESULT,
+                template_slug=slug,
+                to_email=email_to,
+                context=context,
+                sent_by=request.user,
                 idempotency_key=f"entrance_exam:result:attempt:{attempt.pk}",
                 reference=f"attempt:{attempt.pk}",
             )
@@ -930,13 +929,6 @@ def _send_results(request, exam, student_ids):
             failed_count += 1
             continue
         if record is not None:
-            PAEL.objects.create(
-                program_application=prog_app,
-                action=EMAIL_ACTION_EXAM_RESULT, template_slug=slug,
-                recipient=email_to, sent_by=request.user,
-                sent_at=record.queued_at or timezone.now(),
-                status=record.status or "queued",
-            )
             queued_count += 1
         else:
             failed_count += 1
@@ -983,23 +975,21 @@ def _resend_emails(request, exam, cohort, log_ids):
             program_application=log.program_application, action=log.action, is_resend=True,
         ).count()
         try:
-            record = queue_templated_email(
-                slug=log.template_slug, to_email=email_to,
-                context=context, sent_by=request.user,
+            record, _log = queue_program_application_email(
+                program_application=log.program_application,
+                action=log.action,
+                template_slug=log.template_slug,
+                to_email=email_to,
+                context=context,
+                sent_by=request.user,
                 idempotency_key=f"entrance_exam:resend:{log.action}:app:{log.program_application_id}:{resend_seq}",
                 reference=f"app:{log.program_application_id}",
+                is_resend=True,
             )
         except Exception:
             logger.exception("Resend bulk email queue failed for log %s", log.id)
             failed_count += 1
             continue
-        PAEL.objects.create(
-            program_application=log.program_application,
-            action=log.action, template_slug=log.template_slug,
-            recipient=email_to, sent_by=request.user,
-            sent_at=(record.queued_at or timezone.now()) if record else timezone.now(),
-            status=record.status if record else "failed", is_resend=True,
-        )
         if record is not None:
             queued_count += 1
         else:
@@ -1178,19 +1168,23 @@ def admin_app_email_resend(request, exam_id, app_id):
         program_application=prog_app, action=action, is_resend=True,
     ).count()
     try:
-        record = queue_templated_email(
-            slug=slug, to_email=email_to,
+        record, _log = queue_program_application_email(
+            program_application=prog_app,
+            action=action,
+            template_slug=slug,
+            to_email=email_to,
             context=context,
             sent_by=request.user,
             idempotency_key=f"entrance_exam:resend:{action}:app:{prog_app.pk}:{resend_seq}",
             reference=f"app:{prog_app.pk}",
+            is_resend=True,
         )
     except Exception:
         logger.exception("Resend single email queue failed for application %s", prog_app.id)
-        PAEL.objects.create(
+        record_program_application_email_log(
             program_application=prog_app,
             action=action, template_slug=slug, recipient=email_to,
-            status="failed", error="Exception during queue", is_resend=True,
+            sent_by=request.user, status="failed", error="Exception during queue", is_resend=True,
         )
         messages.error(request, _("Failed to queue the resend email."))
         return redirect(next_url)
@@ -1198,13 +1192,6 @@ def admin_app_email_resend(request, exam_id, app_id):
     if record is None:
         messages.error(request, _("No active email template is available for this action."))
         return redirect(next_url)
-
-    PAEL.objects.create(
-        program_application=prog_app,
-        action=action, template_slug=slug, recipient=email_to,
-        sent_at=record.queued_at or timezone.now(),
-        sent_by=request.user, status=record.status or "queued", is_resend=True,
-    )
     record_audit_event(
         actor=request.user, action=ACTION_BULK_EMAIL_SENT,
         target_type="entrance_exam", target_id=str(exam.id),

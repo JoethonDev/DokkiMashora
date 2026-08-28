@@ -9,6 +9,7 @@
             class="btn-ghost"
             hx-get="{{ load_url }}"
             hx-target="#{{ loader_id }}"
-            hx-swap="outerHTML">{% trans "Load more" %}</button>
+            hx-swap="outerHTML"
+            hx-indicator="#global-loading">{% trans "Load more" %}</button>
   {% endif %}
 </div>

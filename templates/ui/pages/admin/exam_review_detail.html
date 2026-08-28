@@ -5,7 +5,7 @@
 {% endblock %}
 {% block content %}
   <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with eyebrow=_("Assessments") title=_("Semester Exam review") back_button=True %}
-    <section class="card-surface"><div class="section-head"><div>
+    <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Review" %}</p>
           <h3>
             {{ attempt.student }}

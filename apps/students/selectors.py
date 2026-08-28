@@ -73,11 +73,13 @@ from apps.intake_forms.models import IntakeFormRequest
 from apps.payments.selectors import get_enrollment_payment_status, get_student_payment_summary
 from apps.progression.constants import (
     CERTIFICATE_STATUS_AVAILABLE,
+    REJOIN_STATUS_ACTIVE,
 )
 from apps.progression.models import (
     FinalExamEligibility,
     PromotionDecision,
     SemesterEvaluationConfig,
+    SemesterRejoinPlan,
     StudentDiplomaCompletion,
     StudentGradeItem,
     StudentSemesterProgress,
@@ -272,7 +274,7 @@ def _home_context(data: dict) -> dict:
     open_by_cv = {a.course_version_id: a for a in open_assessments if a.course_version_id}
 
     diploma_cards = []
-    enrollments = data.get("diploma_enrollments", [])
+    enrollments = _get_student_visible_diploma_enrollments(data.get("diploma_enrollments", []))
     student = data["student"]
     lectures_by_cohort = {}
     progress_by_enrollment = {}
@@ -349,7 +351,7 @@ def _home_context(data: dict) -> dict:
         "current_application": current_application,
         "summary": {
             "active_learning_count": len(data.get("active_courses", [])) + len([
-                e for e in data.get("diploma_enrollments", [])
+                e for e in enrollments
                 if e.status == ENROLLMENT_STATUS_ACTIVE
                 and (e.expires_at is None or e.expires_at > timezone.now())
             ]),
@@ -427,6 +429,29 @@ def _get_diploma_enrollments(student_profile: StudentProfile) -> list[DiplomaEnr
         .select_related("cohort__diploma")
         .order_by("-created_at")
     )
+
+
+def _get_student_visible_diploma_enrollments(enrollments: list[DiplomaEnrollment]) -> list[DiplomaEnrollment]:
+    """Return enrollments that represent the student's current learning view.
+
+    A rejoin keeps the source enrollment as history, but the active target is
+    the only enrollment that may appear in student learning. Restricted rows
+    never expose a second, non-actionable learning card.
+    """
+    if not enrollments:
+        return []
+    student_id = enrollments[0].student_id
+    active_rejoin_sources = set(
+        SemesterRejoinPlan.objects.filter(
+            student_id=student_id,
+            status=REJOIN_STATUS_ACTIVE,
+        ).values_list("from_enrollment_id", flat=True)
+    )
+    return [
+        enrollment for enrollment in enrollments
+        if enrollment.status != ENROLLMENT_STATUS_RESTRICTED
+        and enrollment.id not in active_rejoin_sources
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -838,10 +863,10 @@ def _canonical_attendance_percent(student_profile: StudentProfile) -> Decimal:
     it, otherwise held-session — weighted by each semester's denominator, so
     the student sees the same percentage the evaluation uses.
     """
-    enrollments = list(
+    enrollments = _get_student_visible_diploma_enrollments(list(
         student_profile.diploma_enrollments.filter(status=ENROLLMENT_STATUS_ACTIVE)
         .select_related("cohort")
-    )
+    ))
     pairs_by_semester: dict[int, list[DiplomaEnrollment]] = {}
     semester_by_id: dict[int, Semester] = {}
     cohort_ids: set[int] = set()
@@ -969,10 +994,16 @@ def _get_record_history(student_profile: StudentProfile) -> dict:
         .order_by("-created_at")
     )
 
-    # Enrollment/cohort history as stable separate records. A rejoin creates a
-    # fresh enrollment; both remain distinct rows and are never merged.
+    # Student-facing enrollment preview uses the effective enrollment only. The
+    # source row and its academic history remain queryable in semester_rows.
     enrollment_rows = []
+    visible_enrollment_ids = {
+        enrollment.id
+        for enrollment in _get_student_visible_diploma_enrollments(enrollments)
+    }
     for enrollment in enrollments:
+        if enrollment.id not in visible_enrollment_ids:
+            continue
         rejoin_from = next((r for r in rejoins if r.from_enrollment_id == enrollment.id), None)
         rejoin_to = next((r for r in rejoins if r.to_enrollment_id == enrollment.id), None)
         enrollment_rows.append({
@@ -1033,11 +1064,25 @@ def _get_record_history(student_profile: StudentProfile) -> dict:
 
 
 def _get_promotion_decisions(student_profile: StudentProfile) -> list[PromotionDecision]:
-    return list(
+    decisions = list(
         PromotionDecision.objects.filter(student=student_profile)
         .select_related("from_semester", "to_semester", "decided_by")
-        .order_by("-decided_at")[:50]
+        .order_by("-decided_at", "-id")[:50]
     )
+
+    # The student projection shows only the latest administrative action for
+    # each enrollment/starting-semester scope. Older rows remain untouched and
+    # are still available to staff through the audit/progression views.
+    latest_by_scope = {}
+    for decision in decisions:
+        if decision.diploma_enrollment_id or decision.from_semester_id:
+            scope = (decision.diploma_enrollment_id, decision.from_semester_id)
+        else:
+            # Keep legacy unscoped rows independent rather than hiding them all
+            # behind one shared ``(None, None)`` key.
+            scope = ("legacy", decision.id)
+        latest_by_scope.setdefault(scope, decision)
+    return list(latest_by_scope.values())
 
 
 # ---------------------------------------------------------------------------

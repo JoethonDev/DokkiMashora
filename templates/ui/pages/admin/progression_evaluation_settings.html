@@ -17,54 +17,20 @@
     <div>
       <h3 class="text-xs font-black uppercase tracking-wider text-muted m-0 mb-3">{% trans "Component weights" %}</h3>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div class="form-group">
-          <label class="field-label" for="{{ form.attendance_weight_percent.id_for_label }}">{{ form.attendance_weight_percent.label }}</label>
-          {{ form.attendance_weight_percent }}
-          {% if form.attendance_weight_percent.errors %}<div class="text-red text-xs mt-1" role="alert">{{ form.attendance_weight_percent.errors }}</div>{% endif %}
-        </div>
-        <div class="form-group">
-          <label class="field-label" for="{{ form.homework_weight_percent.id_for_label }}">{{ form.homework_weight_percent.label }}</label>
-          {{ form.homework_weight_percent }}
-          {% if form.homework_weight_percent.errors %}<div class="text-red text-xs mt-1" role="alert">{{ form.homework_weight_percent.errors }}</div>{% endif %}
-        </div>
-        <div class="form-group">
-          <label class="field-label" for="{{ form.semester_exam_weight_percent.id_for_label }}">{{ form.semester_exam_weight_percent.label }}</label>
-          {{ form.semester_exam_weight_percent }}
-          {% if form.semester_exam_weight_percent.errors %}<div class="text-red text-xs mt-1" role="alert">{{ form.semester_exam_weight_percent.errors }}</div>{% endif %}
-        </div>
+        {% include "ui/components/_field.html" with field=form.attendance_weight_percent %}
+        {% include "ui/components/_field.html" with field=form.homework_weight_percent %}
+        {% include "ui/components/_field.html" with field=form.semester_exam_weight_percent %}
       </div>
     </div>
 
     <div>
       <h3 class="text-xs font-black uppercase tracking-wider text-muted m-0 mb-3">{% trans "Minimums and overall pass mark" %}</h3>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="form-group">
-          <label class="field-label" for="{{ form.attendance_required_sessions.id_for_label }}">{{ form.attendance_required_sessions.label }}</label>
-          {{ form.attendance_required_sessions }}
-          <p class="field-help m-0">{{ form.attendance_required_sessions.help_text }}</p>
-          {% if form.attendance_required_sessions.errors %}<div class="text-red text-xs mt-1" role="alert">{{ form.attendance_required_sessions.errors }}</div>{% endif %}
-        </div>
-        <div class="form-group">
-          <label class="field-label" for="{{ form.attendance_min_percent.id_for_label }}">{{ form.attendance_min_percent.label }}</label>
-          {{ form.attendance_min_percent }}
-          {% if form.attendance_min_percent.errors %}<div class="text-red text-xs mt-1" role="alert">{{ form.attendance_min_percent.errors }}</div>{% endif %}
-        </div>
-        <div class="form-group">
-          <label class="field-label" for="{{ form.homework_min_percent.id_for_label }}">{{ form.homework_min_percent.label }}</label>
-          {{ form.homework_min_percent }}
-          {% if form.homework_min_percent.errors %}<div class="text-red text-xs mt-1" role="alert">{{ form.homework_min_percent.errors }}</div>{% endif %}
-        </div>
-        <div class="form-group">
-          <label class="field-label" for="{{ form.semester_exam_min_percent.id_for_label }}">{{ form.semester_exam_min_percent.label }}</label>
-          {{ form.semester_exam_min_percent }}
-          {% if form.semester_exam_min_percent.errors %}<div class="text-red text-xs mt-1" role="alert">{{ form.semester_exam_min_percent.errors }}</div>{% endif %}
-        </div>
-        <div class="form-group">
-          <label class="field-label" for="{{ form.overall_min_percent.id_for_label }}">{{ form.overall_min_percent.label }}</label>
-          {{ form.overall_min_percent }}
-          <p class="field-help m-0">{% trans "Applies to the weighted final result after applicable components." %}</p>
-          {% if form.overall_min_percent.errors %}<div class="text-red text-xs mt-1" role="alert">{{ form.overall_min_percent.errors }}</div>{% endif %}
-        </div>
+        {% include "ui/components/_field.html" with field=form.attendance_required_sessions %}
+        {% include "ui/components/_field.html" with field=form.attendance_min_percent %}
+        {% include "ui/components/_field.html" with field=form.homework_min_percent %}
+        {% include "ui/components/_field.html" with field=form.semester_exam_min_percent %}
+        {% include "ui/components/_field.html" with field=form.overall_min_percent %}
       </div>
     </div>
 

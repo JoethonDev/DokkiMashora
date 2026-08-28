@@ -28,7 +28,7 @@
             {% endif %}
           </td>
           <td class="table-td"><span dir="ltr" class="inline-block">{{ item.amount|default:'—' }}</span>{% if item.currency %} <span dir="ltr" class="inline-block">{{ item.currency }}</span>{% endif %}</td>
-          <td class="table-td"><div class="flex flex-col">
+          <td class="table-td"><div class="flex flex-col gap-1">
             {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
             <small><span dir="ltr" class="inline-block">{{ item.paid_at|default:item.created_at|date:"SHORT_DATE_FORMAT"|default:'—' }}</span></small></div>
           </td>

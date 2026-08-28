@@ -1,6 +1,6 @@
         {% load i18n %}
         {% if tab == 'invitation' %}
-          <form class="actions-row items-end mb-4" hx-get="{% url 'entrance_exams:admin_cohort_email' exam.id %}" hx-target="#email-tab-content" hx-replace-url="true"><input type="hidden" name="tab" value="invitation"><div class="search-field"><input name="iq" value="{{ iq }}" class="form-input" hx-trigger="keyup changed delay:500ms" aria-label="{% trans 'Search invitations' %}"></div><button class="btn-secondary" type="submit">{% trans "Search" %}</button>
+          <form class="actions-row items-end mb-4" hx-get="{% url 'entrance_exams:admin_cohort_email' exam.id %}" hx-target="#email-tab-content" hx-replace-url="true" hx-indicator="#global-loading"><input type="hidden" name="tab" value="invitation"><div class="search-field"><input name="iq" value="{{ iq }}" class="form-input" hx-trigger="keyup changed delay:500ms" aria-label="{% trans 'Search invitations' %}"></div><button class="btn-secondary" type="submit">{% trans "Search" %}</button>
           </form>
           <form method="post">{% csrf_token %}
             <input type="hidden" name="tab" value="invitation">
@@ -41,7 +41,7 @@
             {% endif %}
           </form>
         {% elif tab == 'results' %}
-          <form class="actions-row items-end mb-4" hx-get="{% url 'entrance_exams:admin_cohort_email' exam.id %}" hx-target="#email-tab-content" hx-replace-url="true"><input type="hidden" name="tab" value="results"><div class="search-field"><input name="rq" value="{{ rq }}" class="form-input" hx-trigger="keyup changed delay:500ms" aria-label="{% trans 'Search results' %}"></div><label class="min-w-40"><span class="field-label">{% trans "Result" %}</span><select name="result" class="form-select" hx-trigger="change" aria-label="{% trans 'Result' %}"><option value="">{% trans "All results" %}</option>
+          <form class="actions-row items-end mb-4" hx-get="{% url 'entrance_exams:admin_cohort_email' exam.id %}" hx-target="#email-tab-content" hx-replace-url="true" hx-indicator="#global-loading"><input type="hidden" name="tab" value="results"><div class="search-field"><input name="rq" value="{{ rq }}" class="form-input" hx-trigger="keyup changed delay:500ms" aria-label="{% trans 'Search results' %}"></div><label class="min-w-40"><span class="field-label">{% trans "Result" %}</span><select name="result" class="form-select" hx-trigger="change" aria-label="{% trans 'Result' %}"><option value="">{% trans "All results" %}</option>
               <option value="pass"{% if result_filter == 'pass' %} selected{% endif %}>{% trans "Pass" %}</option>
               <option value="fail"{% if result_filter == 'fail' %} selected{% endif %}>{% trans "Fail" %}</option>
             </select></label>
@@ -86,7 +86,7 @@
             {% endif %}
           </form>
         {% else %}
-          <form class="actions-row items-end mb-4" hx-get="{% url 'entrance_exams:admin_cohort_email' exam.id %}" hx-target="#email-tab-content" hx-replace-url="true"><input type="hidden" name="tab" value="history"><div class="search-field"><input name="hq" value="{{ hq }}" class="form-input" hx-trigger="keyup changed delay:500ms" aria-label="{% trans "Search history" %}"></div><button class="btn-secondary" type="submit">{% trans "Search" %}</button>
+          <form class="actions-row items-end mb-4" hx-get="{% url 'entrance_exams:admin_cohort_email' exam.id %}" hx-target="#email-tab-content" hx-replace-url="true" hx-indicator="#global-loading"><input type="hidden" name="tab" value="history"><div class="search-field"><input name="hq" value="{{ hq }}" class="form-input" hx-trigger="keyup changed delay:500ms" aria-label="{% trans "Search history" %}"></div><button class="btn-secondary" type="submit">{% trans "Search" %}</button>
           </form>
           <form method="post">{% csrf_token %}
             <input type="hidden" name="tab" value="history">

@@ -8,7 +8,7 @@
     {% trans "Staff assignments" as title %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=staff_role back_button=True %}
     <p class="text-muted">{{ staff_user }}</p>
-    <section class="card-surface"><div class="section-head"><div>
+    <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Teaching" %}</p>
           <h3>{% trans "Teacher assignments" %}</h3>
         </div>
@@ -49,12 +49,12 @@
         {% endfor %}
       </div>
     </section>
-    <section class="card-surface"><div class="section-head"><div>
+    <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Moderation" %}</p>
           <h3>{% trans "Moderator assignments" %}</h3>
         </div>
       </div>
-      <form class="actions-row items-end mb-4"
+      <form class="actions-row items-end"
             method="post"
             action="{% url 'accounts:admin_moderator_assignment_create' staff_user.id %}">{% csrf_token %}
         <label class="min-w-40"><span class="field-label">{% trans "Course version" %}</span>

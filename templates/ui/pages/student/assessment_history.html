@@ -54,14 +54,14 @@
           {% for record in offline_exam_records %}
             <div class="mobile-card">
               <div class="flex-1 min-w-0">
-                <div class="flex items-center justify-between gap-3 flex-wrap">
+                <div class="flex items-center justify-between gap-2.5 flex-wrap">
                   {% if record.result_url %}<a class="link font-bold block break-words" href="{{ record.result_url }}">{{ record.assessment }}</a>{% else %}<strong class="block break-words">{{ record.assessment }}</strong>{% endif %}
                   {% include "ui/components/_status.html" with code=record.status label=record.status_label %}
                 </div>
                 <small class="block text-muted mt-1">{% trans "Exam code" %}: <span dir="ltr">{{ record.code_number }}</span> · {% trans "Sections graded" %}: <span dir="ltr">{{ record.graded_count }}/{{ record.section_count }}</span>{% if record.released %} · {% trans "Score" %}: <span dir="ltr">{{ record.score_percent|floatformat:2 }}%</span>{% endif %}</small>
                 <ul class="mt-2 space-y-1 m-0 p-0 list-none">
                   {% for section in record.sections %}
-                    <li class="flex items-center justify-between gap-3 text-sm border-b border-line py-1 last:border-b-0">
+                    <li class="flex items-center justify-between gap-2.5 text-sm border-b border-line py-1 last:border-b-0">
                       <span class="min-w-0 truncate">{{ section.label }}</span>
                       <span class="flex items-center gap-2 shrink-0">
                         <small class="text-muted">{% trans "Max" %}: <span dir="ltr">{{ section.max_grade }}</span></small>

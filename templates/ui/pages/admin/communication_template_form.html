@@ -9,7 +9,7 @@
     {% trans "Edit an email template." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description back_button=True %}
     {% if rendered_html %}
-      <section class="card-surface"><div class="section-head"><div>
+      <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Preview" %}</p>
             <h3>{{ template.name }}</h3>
           </div>

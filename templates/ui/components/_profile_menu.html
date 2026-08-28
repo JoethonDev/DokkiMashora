@@ -1,9 +1,9 @@
 {% load i18n %}
-<div class="mt-auto pt-3 border-t border-white/20 relative" x-data="{open:false}">
+<div class="mt-auto pt-3 border-t border-white/20 relative" x-data="{open:false}" @click.outside="open=false" @keydown.escape.window="open=false">
   <button class="w-full flex items-center gap-2.5 bg-transparent text-white border-0 rounded-sm p-2.5 hover:bg-white/10 cursor-pointer"
-          @click="open=!open"
-          aria-haspopup="true"
-          :aria-expanded="open">
+           @click.stop="open=!open"
+           aria-haspopup="true"
+           :aria-expanded="open">
     <span class="w-9 h-9 rounded-full bg-brand-soft text-brand font-black grid place-items-center shrink-0">{{ user.get_full_name|slice:":2"|upper }}</span>
     <span class="flex-1 text-start min-w-0">
       <strong class="block text-sm">{{ user.get_full_name|default:user.email }}</strong>
@@ -12,7 +12,7 @@
   </button>
   <div class="absolute start-0 end-0 bottom-14 bg-surface border border-line rounded-sm p-1.5 shadow-modal opacity-0 translate-y-2 scale-95 pointer-events-none transition-all duration-150"
        :class="open && '!opacity-100 !translate-y-0 !scale-100 !pointer-events-auto'"
-       x-cloak>
+        x-cloak>
     <a class="block w-full text-start border-0 bg-transparent p-2.5 rounded-sm text-text no-underline hover:bg-surface-soft"
        href="{% url 'accounts:profile' %}">{% trans "Profile" %}</a>
     <form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}

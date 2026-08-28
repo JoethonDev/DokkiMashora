@@ -8,7 +8,7 @@
     {% trans "Progression" as title %}
     {% trans "Review semester progress, decisions, evaluations, interviews, and rejoin plans." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description back_button=True %}
-    <section class="card-surface"><div class="section-head"><div>
+    <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Evaluation" %}</p>
             <h3>
               {{ enrollment.student }}
@@ -22,6 +22,7 @@
           {% for reason in result.blocked_reasons %}<p class="text-sm text-muted mt-1 mb-0">{{ reason }}</p>{% endfor %}
         {% else %}
           {% include "ui/components/_state_banner.html" with state=result.passed|yesno:"passed,failed" label=result.passed|boolean_label:"Pass,Fail" %}
+          {% for reason in result.failure_reasons %}<p class="text-sm text-muted mt-1 mb-0">{{ reason }}</p>{% endfor %}
         {% endif %}
         {% if result.config %}
           <dl class="dl mt-4">

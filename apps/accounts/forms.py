@@ -10,7 +10,7 @@ from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
 from apps.core.forms import StyledFormMixin
-from apps.core.phone import normalize_phone_number
+from apps.core.phone import validate_phone
 from apps.students.identity import (
     COUNTRY_CHOICES,
     identity_label,
@@ -63,9 +63,7 @@ class ProfileForm(StyledFormMixin, forms.Form):
         phone = (self.cleaned_data.get("phone") or "").strip()
         if not phone:
             raise ValidationError(_("Phone number is required."))
-        normalized = normalize_phone_number(phone)
-        if len(normalized) < 7:
-            raise ValidationError(_("Enter a valid mobile number."))
+        normalized = validate_phone(phone)
         profile = getattr(self.user, "student_profile", None)
         if profile is not None:
             qs = StudentProfile.objects.exclude(pk=profile.pk).filter(phone=normalized)
@@ -217,9 +215,7 @@ class UserEditForm(StyledFormMixin, forms.ModelForm):
         phone = (self.cleaned_data.get("phone") or "").strip()
         if not phone:
             raise ValidationError(_("Phone number is required."))
-        normalized = normalize_phone_number(phone)
-        if len(normalized) < 7:
-            raise ValidationError(_("Enter a valid mobile number."))
+        normalized = validate_phone(phone)
         if self.staff_only:
             qs = User.objects.exclude(pk=self.instance.pk).exclude(phone="").filter(phone=normalized)
         else:
@@ -350,7 +346,7 @@ class UserEditForm(StyledFormMixin, forms.ModelForm):
 class UserUploadForm(StyledFormMixin, forms.Form):
     csv_file = forms.FileField(
         label=_("CSV file"),
-        help_text=_("Upload a CSV file with columns: email, full_name"),
+        help_text=_("CSV: email, full_name"),
         widget=forms.FileInput(attrs={"accept": ".csv"}),
     )
 

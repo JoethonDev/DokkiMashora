@@ -80,7 +80,7 @@
         </form>
       </section>
     {% elif draft %}
-      <section class="card-surface"><div class="section-head"><div>
+      <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Preview" %}</p>
             <h3>{{ draft.subject }}</h3>
           </div>
@@ -118,7 +118,7 @@
         </form>
       </div>
     {% elif send %}
-      <section class="card-surface"><div class="section-head"><div>
+      <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Sent" %}</p>
             <h3>{{ send.subject }}</h3>
           </div>
@@ -227,7 +227,7 @@
       </form>
     {% elif template %}
       {% if rendered_html %}
-        <section class="card-surface"><div class="section-head"><div>
+        <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
               <p class="eyebrow">{% trans "Preview" %}</p>
               <h3>{{ template.name }}</h3>
             </div>
@@ -294,7 +294,7 @@
            href="{% url 'communications:admin_template_preview' template.slug %}">{% trans "Preview template" %}</a>
       {% endif %}
     {% elif templates %}
-      <section class="card-surface"><div class="table-wrap hidden lg:block"><table class="table">
+      <section class="card-surface flex flex-col gap-4"><div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>
                 <th class="table-th">{% trans "Template" %}</th>
@@ -352,7 +352,7 @@
            href="{% url 'communications:admin_footer_edit' %}">{% trans "Edit footer" %}</a>
       </div>
     {% elif page_obj %}
-      <section class="card-surface"><div class="table-wrap hidden lg:block"><table class="table">
+      <section class="card-surface flex flex-col gap-4"><div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>
                 <th class="table-th">{% trans "Subject" %}</th>

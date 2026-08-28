@@ -201,6 +201,29 @@ def attendance_session_create(request):
         .select_related("diploma")
         .order_by("diploma_id", "order")
     )
+    # For exposing required attendance count (how many times we ask for) per DOKKIMASHORA evaluation config
+    import json
+
+    from apps.progression.models import SemesterEvaluationConfig
+
+    evaluation_configs = SemesterEvaluationConfig.objects.filter(
+        cohort__in=cohorts, semester__in=semesters
+    ).select_related("cohort", "semester")
+    required_map = {}
+    for cfg in evaluation_configs:
+        key = f"{cfg.cohort_id}:{cfg.semester_id}"
+        required_map[key] = cfg.attendance_required_sessions
+    # Also handle whole-cohort (semester null) case: 0 means no semester filter
+    session_counts_qs = AttendanceSession.objects.values("cohort_id", "semester_id").annotate(
+        cnt=Count("id")
+    )
+    session_counts = {}
+    for row in session_counts_qs:
+        sem_id = row["semester_id"] or 0
+        key = f"{row['cohort_id']}:{sem_id}"
+        session_counts[key] = row["cnt"]
+    required_map_json = json.dumps(required_map)
+    session_counts_json = json.dumps(session_counts)
     ctx = {
         "cohorts": cohorts,
         "course_versions": course_versions,
@@ -208,6 +231,8 @@ def attendance_session_create(request):
         "diplomas": Diploma.objects.filter(is_active=True).order_by("title"),
         "form_data": form_data,
         "form_errors": form_errors,
+        "required_map_json": required_map_json,
+        "session_counts_json": session_counts_json,
         "breadcrumb_items": [
             {"label": _("Attendance Sessions"), "href": reverse("attendance:attendance_session_list")},
             {"label": _("Create Session")},

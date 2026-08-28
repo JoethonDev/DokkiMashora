@@ -10,7 +10,7 @@
         <button class="btn-danger" type="submit">{% trans "Delete course" %}</button>
       </form>
     </div>
-    <section class="card-surface"><div class="section-head"><div>
+    <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Versions" %}</p>
           <h3>{% trans "Course versions" %}</h3>
         </div>
@@ -68,7 +68,7 @@
         {% include "ui/components/_empty_state.html" with title=_("No versions") message=_("No versions found for this course.") %}
       {% endif %}
     </section>
-    <section class="card-surface"><div class="section-head"><div>
+    <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Content" %}</p>
           <h3>{% trans "Lectures" %}</h3>
         </div>
@@ -122,7 +122,7 @@
         {% include "ui/components/_empty_state.html" with title=_("No lectures") message=_("No lectures found for this course.") %}
       {% endif %}
     </section>
-    <section class="card-surface"><div class="section-head"><div>
+    <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Students" %}</p>
           <h3>{% trans "Enrollments" %}</h3>
         </div>

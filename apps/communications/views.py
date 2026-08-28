@@ -19,6 +19,7 @@ from apps.academics.constants import ENROLLMENT_STATUS_CHOICES
 from apps.academics.models import Cohort, Diploma
 from apps.audit.constants import ACTION_BULK_EMAIL_SENT
 from apps.audit.services import record_audit_event
+from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import ROLE_SENIOR_STAFF, role_required, safe_int
 
@@ -341,7 +342,7 @@ def admin_template_preview(request, slug):
 @role_required(*ROLE_SENIOR_STAFF)
 def admin_template_variables(request, slug: str):
     """HTMX partial: available variables for the given slug."""
-    if not request.headers.get("HX-Request"):
+    if not is_htmx(request):
         raise Http404
     avail = AVAILABLE_VARIABLES_BY_SLUG.get(slug, {})
     all_vars = avail.get("optional", []) + avail.get("required", [])

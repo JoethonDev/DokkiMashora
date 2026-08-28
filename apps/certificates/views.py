@@ -34,6 +34,7 @@ from .models import (
 from .services import (
     _image_bytes_to_pdf,
     clear_certificate_source,
+    delete_certificate_template,
     generate_certificate_pdf,
     ingest_certificate_source,
     regenerate_certificate,
@@ -75,9 +76,31 @@ def admin_template_create(request):
     if request.method == "POST":
         form = CertificateTemplateForm(request.POST, request.FILES)
         if form.is_valid():
+            source_file = form.cleaned_data.get("source_file")
             template = form.save(commit=False)
             template.created_by = request.user
             template.save()
+            if source_file is not None:
+                try:
+                    ingest_certificate_source(
+                        template,
+                        data=source_file.read(),
+                        filename=source_file.name,
+                        content_type=source_file.content_type or "",
+                        actor=request.user,
+                    )
+                except ValueError as exc:
+                    messages.error(request, str(exc))
+                    return redirect("certificates:admin_template_edit", template_id=template.id)
+                except Exception:
+                    logger.exception("Certificate source upload failed for new template %s", template.id)
+                    messages.error(
+                        request,
+                        _("The template was created, but the source could not be processed. Check the format and try again."),
+                    )
+                    return redirect("certificates:admin_template_edit", template_id=template.id)
+                messages.success(request, _("Template created and source uploaded."))
+                return redirect("certificates:admin_template_edit", template_id=template.id)
             messages.success(request, _("Template created."))
             return redirect("certificates:admin_template_list")
     else:
@@ -121,6 +144,21 @@ def admin_template_edit(request, template_id):
 
 @login_required
 @role_required(*ROLE_SENIOR_STAFF)
+@require_POST
+def admin_template_delete(request, template_id):
+    """Delete an inactive certificate template and its stored artwork."""
+    template = get_object_or_404(CertificateTemplate, id=template_id)
+    try:
+        delete_certificate_template(template=template, actor=request.user)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect("certificates:admin_template_edit", template_id=template.id)
+    messages.success(request, _("Certificate template deleted."))
+    return redirect("certificates:admin_template_list")
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
 def admin_template_preview(request, template_id):
     """Protected preview of a stored PDF/JPG/legacy-PSD template source (P7-02)."""
     template = get_object_or_404(CertificateTemplate, id=template_id)
@@ -139,11 +177,11 @@ def admin_template_preview(request, template_id):
 @role_required(*ROLE_SENIOR_STAFF)
 @require_POST
 def admin_template_upload_source(request, template_id):
-    """Admin-only validated PDF/JPG/JPEG source upload (P7-02)."""
+    """Admin-only validated PDF/PSD source upload (P7-02)."""
     template = get_object_or_404(CertificateTemplate, id=template_id)
     file = request.FILES.get("source_file")
     if file is None:
-        messages.error(request, _("Select a PDF or JPG/JPEG source file."))
+        messages.error(request, _("Select a PDF, PSD, or JPG/JPEG source file."))
         return redirect("certificates:admin_template_edit", template_id=template.id)
     try:
         data = file.read()

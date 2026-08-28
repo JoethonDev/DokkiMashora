@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-
 from django.contrib import messages
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
@@ -13,7 +11,7 @@ from django.views.decorators.http import require_http_methods
 from apps.academics.models import Cohort, Course
 from apps.applications.constants import DELIVERY_MODE_CHOICES, DELIVERY_MODE_ONLINE
 from apps.applications.services import is_apply_target_open
-from apps.core.htmx import is_htmx
+from apps.core.htmx import hx_toast, is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import student_required
 
@@ -240,7 +238,7 @@ def apply(request: HttpRequest) -> HttpResponse:
             error_message = _("Please select a program.")
             messages.error(request, error_message)
             response = _render_profile(request, "ui/pages/student/apply.html", context)
-            response['HX-Trigger'] = json.dumps({'show-toast': {'message': str(error_message), 'type': 'error'}})
+            response = hx_toast(response, str(error_message), type='error')
             return response
 
         if program_type == "diploma":
@@ -249,26 +247,26 @@ def apply(request: HttpRequest) -> HttpResponse:
                 error_message = _("Invalid cohort selected.")
                 messages.error(request, error_message)
                 response = _render_profile(request, "ui/pages/student/apply.html", context)
-                response['HX-Trigger'] = json.dumps({'show-toast': {'message': str(error_message), 'type': 'error'}})
+                response = hx_toast(response, str(error_message), type='error')
                 return response
             if not is_apply_target_open(cohort=cohort):
                 error_message = _("This program is no longer accepting applications.")
                 messages.error(request, error_message)
                 response = _render_profile(request, "ui/pages/student/apply.html", context)
-                response['HX-Trigger'] = json.dumps({'show-toast': {'message': str(error_message), 'type': 'error'}})
+                response = hx_toast(response, str(error_message), type='error')
                 return response
             if delivery_mode not in dict(DELIVERY_MODE_CHOICES):
                 error_message = _("Please select an attendance mode.")
                 messages.error(request, error_message)
                 response = _render_profile(request, "ui/pages/student/apply.html", context)
-                response['HX-Trigger'] = json.dumps({'show-toast': {'message': str(error_message), 'type': 'error'}})
+                response = hx_toast(response, str(error_message), type='error')
                 return response
             target_eligibility = check_apply_eligibility(profile, cohort=cohort)
             if not target_eligibility["allowed"]:
                 reason = target_eligibility["reason"] or _("You are not eligible to apply.")
                 messages.error(request, reason)
                 response = _render_profile(request, "ui/pages/student/apply.html", context)
-                response['HX-Trigger'] = json.dumps({'show-toast': {'message': str(reason), 'type': 'error'}})
+                response = hx_toast(response, str(reason), type='error')
                 return response
             try:
                 submit_apply_application(profile, cohort=cohort, delivery_mode=delivery_mode)
@@ -276,7 +274,7 @@ def apply(request: HttpRequest) -> HttpResponse:
                 error_message = str(exc)
                 messages.error(request, error_message)
                 response = _render_profile(request, "ui/pages/student/apply.html", context)
-                response['HX-Trigger'] = json.dumps({'show-toast': {'message': error_message, 'type': 'error'}})
+                response = hx_toast(response, error_message, type='error')
                 return response
         elif program_type == "course":
             course_id = target_id.removeprefix("course_")
@@ -285,20 +283,20 @@ def apply(request: HttpRequest) -> HttpResponse:
                 error_message = _("Invalid course selected.")
                 messages.error(request, error_message)
                 response = _render_profile(request, "ui/pages/student/apply.html", context)
-                response['HX-Trigger'] = json.dumps({'show-toast': {'message': str(error_message), 'type': 'error'}})
+                response = hx_toast(response, str(error_message), type='error')
                 return response
             if not is_apply_target_open(course=course):
                 error_message = _("This course is not currently accepting applications.")
                 messages.error(request, error_message)
                 response = _render_profile(request, "ui/pages/student/apply.html", context)
-                response['HX-Trigger'] = json.dumps({'show-toast': {'message': str(error_message), 'type': 'error'}})
+                response = hx_toast(response, str(error_message), type='error')
                 return response
             target_eligibility = check_apply_eligibility(profile, course=course)
             if not target_eligibility["allowed"]:
                 reason = target_eligibility["reason"] or _("You are not eligible to apply.")
                 messages.error(request, reason)
                 response = _render_profile(request, "ui/pages/student/apply.html", context)
-                response['HX-Trigger'] = json.dumps({'show-toast': {'message': str(reason), 'type': 'error'}})
+                response = hx_toast(response, str(reason), type='error')
                 return response
             try:
                 submit_apply_application(profile, course=course)
@@ -306,13 +304,13 @@ def apply(request: HttpRequest) -> HttpResponse:
                 error_message = str(exc)
                 messages.error(request, error_message)
                 response = _render_profile(request, "ui/pages/student/apply.html", context)
-                response['HX-Trigger'] = json.dumps({'show-toast': {'message': error_message, 'type': 'error'}})
+                response = hx_toast(response, error_message, type='error')
                 return response
         else:
             error_message = _("Invalid program type.")
             messages.error(request, error_message)
             response = _render_profile(request, "ui/pages/student/apply.html", context)
-            response['HX-Trigger'] = json.dumps({'show-toast': {'message': str(error_message), 'type': 'error'}})
+            response = hx_toast(response, str(error_message), type='error')
             return response
 
         messages.success(request, _("Your application has been submitted."))

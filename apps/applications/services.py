@@ -28,9 +28,12 @@ from apps.communications.constants import (
     TEMPLATE_DIPLOMA_INTERVIEW_REQUEST,
     TEMPLATE_REJECTION,
 )
-from apps.communications.services import queue_templated_email
+from apps.communications.services import (
+    queue_program_application_email,
+    record_program_application_email_log,
+)
 from apps.core.permissions import validate_score
-from apps.core.phone import normalize_phone_number
+from apps.core.phone import normalize_phone
 from apps.intake_forms.constants import INTAKE_REQUESTABLE_STATUSES  # noqa: E402
 from apps.intake_forms.selectors import has_required_intake_response  # noqa: E402
 from apps.payments.constants import CURRENCY_EGP, PAYMENT_STATUS_PAID, WAIVER_STATUS_ACTIVE
@@ -53,6 +56,8 @@ from .constants import (
     DECISION_ACTION_REVERT,
     DELIVERY_MODE_CHOICES,
     DELIVERY_MODE_ONLINE,
+    EMAIL_ACTION_ACCEPTANCE,
+    EMAIL_ACTION_REJECTION,
     PROGRAM_APP_STATUS_ACCEPTED,
     PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED,
     PROGRAM_APP_STATUS_ACTIVATED,
@@ -136,7 +141,7 @@ def find_duplicate(data: RegistrationData) -> str | None:
         return "national_id"
     if User.objects.filter(email__iexact=data.email).exists():
         return "email"
-    normalized_phone = normalize_phone_number(data.phone)
+    normalized_phone = normalize_phone(data.phone)
     if normalized_phone:
         if StudentProfile.objects.filter(phone=normalized_phone).exists():
             return "phone"
@@ -182,7 +187,7 @@ def submit_registration(
     # user (S2-24); the password is established during account activation.
     user_password = secrets.token_urlsafe(16)
     normalized_id = normalize_identity_number(data.country_code, data.national_id)
-    normalized_phone = normalize_phone_number(data.phone)
+    normalized_phone = normalize_phone(data.phone)
     # Students never store phone on User; StudentProfile.phone is the single
     # owner (created below).
     user = User.objects.create_user(
@@ -400,7 +405,6 @@ def send_post_activation_application_email(application, actor=None, force_resend
         if not force_resend and _has_non_resend_email_log(application, email_action):
             return
         transaction.on_commit(lambda: _send_course_payment_instructions_email(application, actor))
-        _log_email_send(application, email_action, "course_payment_instructions", application.student.user.email, actor)
         _advance_to(application, PROGRAM_APP_STATUS_PAYMENT_PENDING, DECISION_ACTION_PAYMENT_PENDING, actor)
 
     elif application.program_type == PROGRAM_TYPE_DIPLOMA:
@@ -411,7 +415,6 @@ def send_post_activation_application_email(application, actor=None, force_resend
         if not force_resend and _has_non_resend_email_log(application, email_action):
             return
         transaction.on_commit(lambda: _send_diploma_entrance_schedule_email(application, actor))
-        _log_email_send(application, email_action, "diploma_entrance_exam_schedule", application.student.user.email, actor)
         _advance_to(application, PROGRAM_APP_STATUS_INVITED, DECISION_ACTION_INVITED_TO_ENTRANCE, actor)
 
 
@@ -437,8 +440,13 @@ def _send_course_payment_instructions_email(prog_app, actor=None) -> None:
         "course_title": prog_app.course.title if prog_app.course else "",
         "staff_phone": "",
     }
-    queue_templated_email(
-        TEMPLATE_COURSE_PAYMENT_INSTRUCTIONS, email, context, sent_by=actor,
+    queue_program_application_email(
+        program_application=prog_app,
+        action="course_payment_instructions",
+        template_slug=TEMPLATE_COURSE_PAYMENT_INSTRUCTIONS,
+        to_email=email,
+        context=context,
+        sent_by=actor,
         idempotency_key=f"application:course_payment_instructions:app:{prog_app.pk}",
         reference=f"app:{prog_app.pk}",
     )
@@ -459,24 +467,29 @@ def _send_diploma_entrance_schedule_email(prog_app, actor=None) -> None:
         "exam_close_at": "",
     }
     # ponytail: no exam URL in context per Phase 2 rule
-    queue_templated_email(
-        TEMPLATE_DIPLOMA_ENTRANCE_EXAM_SCHEDULE, email, context, sent_by=actor,
+    queue_program_application_email(
+        program_application=prog_app,
+        action="diploma_entrance_exam_schedule",
+        template_slug=TEMPLATE_DIPLOMA_ENTRANCE_EXAM_SCHEDULE,
+        to_email=email,
+        context=context,
+        sent_by=actor,
         idempotency_key=f"application:diploma_entrance_schedule:app:{prog_app.pk}",
         reference=f"app:{prog_app.pk}",
     )
 
 
 def _log_email_send(application, action, template_slug, recipient, actor=None) -> None:
-    is_resend = _has_non_resend_email_log(application, action)
-    ProgramApplicationEmailLog.objects.create(
+    # Canonical single write path — keep for any legacy direct callers, but
+    # new queue paths should call queue_program_application_email instead.
+    record_program_application_email_log(
         program_application=application,
         action=action,
         template_slug=template_slug,
         recipient=recipient,
         sent_by=actor,
-        sent_at=timezone.now(),
         status="queued",
-        is_resend=is_resend,
+        is_resend=None,
     )
 
 
@@ -572,7 +585,7 @@ def accept_program_application(application, actor, notes: str = "", send_email: 
         metadata={"student_id": application.student_id, "send_email": send_email},
     )
     if send_email:
-        transaction.on_commit(lambda: _send_program_app_acceptance_email(application))
+        transaction.on_commit(lambda: _send_program_app_acceptance_email(application, actor=actor))
 
     # Trigger intake request for course applications that are already paid
     if application.program_type == PROGRAM_TYPE_COURSE:
@@ -603,7 +616,7 @@ def reject_program_application(application, actor, reason: str, notes: str = "",
         metadata={"reason": reason, "student_id": application.student_id, "send_email": send_email},
     )
     if send_email:
-        transaction.on_commit(lambda: _send_program_app_rejection_email(application, reason))
+        transaction.on_commit(lambda: _send_program_app_rejection_email(application, reason, actor=actor))
 
 
 @transaction.atomic
@@ -659,12 +672,16 @@ def _send_interview_request_email(prog_app, metadata: dict) -> None:
         "phone_number": metadata.get("phone_number", ""),
         "expires_at": metadata.get("expires_at", ""),
     }
-    queue_templated_email(
-        TEMPLATE_DIPLOMA_INTERVIEW_REQUEST, email, context, sent_by=None,
+    queue_program_application_email(
+        program_application=prog_app,
+        action="diploma_interview_request",
+        template_slug=TEMPLATE_DIPLOMA_INTERVIEW_REQUEST,
+        to_email=email,
+        context=context,
+        sent_by=None,
         idempotency_key=f"application:interview_request:app:{prog_app.pk}:{metadata.get('interview_at') or ''}",
         reference=f"app:{prog_app.pk}",
     )
-    _log_email_send(prog_app, "diploma_interview_request", "diploma_interview_request", email)
 
 
 def revert_program_application_decision(application, actor, reason: str = "") -> None:
@@ -777,9 +794,9 @@ def change_entrance_decision(
     )
     if send_email:
         if target == PROGRAM_APP_STATUS_ACCEPTED:
-            transaction.on_commit(lambda: _send_program_app_acceptance_email(application))
+            transaction.on_commit(lambda: _send_program_app_acceptance_email(application, actor=actor))
         elif target == PROGRAM_APP_STATUS_REJECTED:
-            transaction.on_commit(lambda: _send_program_app_rejection_email(application, reason))
+            transaction.on_commit(lambda: _send_program_app_rejection_email(application, reason, actor=actor))
         elif target == PROGRAM_APP_STATUS_INTERVIEW_REQUESTED:
             transaction.on_commit(lambda: _send_interview_request_email(application, metadata))
 
@@ -1298,7 +1315,7 @@ def _build_application_snapshot(application) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _send_program_app_acceptance_email(prog_app) -> None:
+def _send_program_app_acceptance_email(prog_app, actor=None) -> None:
     email = prog_app.student.user.email
     if not email:
         return
@@ -1308,14 +1325,22 @@ def _send_program_app_acceptance_email(prog_app) -> None:
         "diploma_title": prog_app.cohort.diploma.title if prog_app.cohort and prog_app.cohort.diploma else "",
         "program_type": prog_app.program_type or "",
     }
-    queue_templated_email(
-        TEMPLATE_ACCEPTANCE, email, context, sent_by=None,
-        idempotency_key=f"application:acceptance:app:{prog_app.pk}",
-        reference=f"app:{prog_app.pk}",
-    )
+    try:
+        queue_program_application_email(
+            program_application=prog_app,
+            action=EMAIL_ACTION_ACCEPTANCE,
+            template_slug=TEMPLATE_ACCEPTANCE,
+            to_email=email,
+            context=context,
+            sent_by=actor,
+            idempotency_key=f"application:acceptance:app:{prog_app.pk}",
+            reference=f"app:{prog_app.pk}",
+        )
+    except Exception:
+        logger.exception("Acceptance email queue failed for application %s", prog_app.pk)
 
 
-def _send_program_app_rejection_email(prog_app, reason: str) -> None:
+def _send_program_app_rejection_email(prog_app, reason: str, actor=None) -> None:
     email = prog_app.student.user.email
     if not email:
         return
@@ -1324,8 +1349,16 @@ def _send_program_app_rejection_email(prog_app, reason: str) -> None:
         "rejection_reason": reason,
         "cohort_name": prog_app.cohort.name if prog_app.cohort else "",
     }
-    queue_templated_email(
-        TEMPLATE_REJECTION, email, context, sent_by=None,
-        idempotency_key=f"application:rejection:app:{prog_app.pk}",
-        reference=f"app:{prog_app.pk}",
-    )
+    try:
+        queue_program_application_email(
+            program_application=prog_app,
+            action=EMAIL_ACTION_REJECTION,
+            template_slug=TEMPLATE_REJECTION,
+            to_email=email,
+            context=context,
+            sent_by=actor,
+            idempotency_key=f"application:rejection:app:{prog_app.pk}",
+            reference=f"app:{prog_app.pk}",
+        )
+    except Exception:
+        logger.exception("Rejection email queue failed for application %s", prog_app.pk)

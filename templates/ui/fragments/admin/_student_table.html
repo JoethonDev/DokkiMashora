@@ -1,34 +1,25 @@
+{% extends "ui/components/_results_shell.html" %}
 {% load i18n ui_tags %}
-<div id="student-results" aria-live="polite">
-  <div class="section-head"><div>
-      <p class="eyebrow">{% trans "Directory" %}</p>
-      <h3>{% trans "Students" %}</h3>
-    </div>
-    <div class="flex items-center gap-3">
-      <span class="text-sm font-medium text-muted">{{ page_obj.paginator.count }} {% trans "total" %}</span>
-      {% include "ui/components/_pagination.html" %}
-    </div>
-  </div>
-  {% if page_obj.object_list %}
-    <div class="table-wrap hidden lg:block"><table class="table">
-        <thead>
-          <tr>
-            <th class="table-th">#</th>
+{% block results_heading %}
+  <p class="eyebrow">{% trans "Directory" %}</p>
+  <h3>{% trans "Students" %}</h3>
+{% endblock %}
+{% block table_head %}
+<th class="table-th">#</th>
             <th class="table-th">{% trans "Student" %}</th>
             <th class="table-th">{% trans "Contact" %}</th>
             <th class="table-th">{% trans "Status" %}</th>
             <th class="table-th">{% trans "Joined" %}</th>
             <th class="table-th">{% trans "Last sign-in" %}</th>
             <th class="table-th">{% trans "Actions" %}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for student in page_obj %}
+{% endblock %}
+{% block table_body %}
+{% for student in page_obj %}
             <tr>
               <td class="table-td text-muted">{{ page_obj.start_index|add:forloop.counter0 }}</td>
               <td class="table-td">
                 <div class="flex items-center gap-2.5"><span class="rounded-full bg-brand-soft text-brand font-black grid place-items-center shrink-0 w-9 h-9">{{ student.full_name|slice:":2"|upper }}</span>
-                  <span class="flex flex-col"><strong>{{ student.full_name }}</strong>
+                  <span class="flex flex-col gap-1"><strong>{{ student.full_name }}</strong>
                     <small><span class="bidi">{{ student.national_id|default:'—' }}</span></small></span>
                 </div>
               </td>
@@ -49,11 +40,9 @@
               </td>
             </tr>
           {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    <div class="card-stack lg:hidden">
-      {% for student in page_obj %}
+{% endblock %}
+{% block mobile_cards %}
+{% for student in page_obj %}
         <div class="mobile-card"><span class="rounded-full bg-brand-soft text-brand font-black grid place-items-center shrink-0 w-9 h-9">{{ student.full_name|slice:":2"|upper }}</span>
           <div class="flex-1 min-w-0"><strong class="block truncate">{{ student.full_name }}</strong>
             {% include "ui/components/_status.html" with code=student.status label=student.get_status_display %}
@@ -62,8 +51,7 @@
            <div class="flex gap-2 shrink-0"><a class="btn-soft-primary" href="{% url 'accounts:admin_user_detail' student.id %}">{% trans "View" %}</a><form method="post" action="{% url 'accounts:admin_user_delete' student.id %}" data-confirm="{% trans 'Delete this student account? Only students without historical records can be deleted.' %}" class="inline m-0">{% csrf_token %}<button class="btn-danger" type="submit">{% trans "Delete" %}</button></form>{% if not student.is_active and not student.email_activated_at %}<form method="post" action="{% url 'accounts:admin_user_resend_activation' student.id %}" data-confirm="{% trans 'Send a new activation email to this user?' %}" class="inline m-0">{% csrf_token %}<button class="btn-ghost" type="submit">{% trans "Resend activation" %}</button></form>{% endif %}</div>
         </div>
       {% endfor %}
-    </div>
-  {% else %}
-    {% include "ui/components/_empty_state.html" with title=_("No students found") message=_("Try changing the search or status filter.") %}
-  {% endif %}
-</div>
+{% endblock %}
+{% block empty_state %}
+  {% include "ui/components/_empty_state.html" with title=_("No students found") message=_("Try changing the search or status filter.") %}
+{% endblock %}

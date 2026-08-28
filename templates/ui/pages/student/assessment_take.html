@@ -33,7 +33,7 @@
               <h3>{% trans "Submitted files" %}</h3>
               <ul class="mt-2 space-y-2">
                 {% for attachment in homework_attachments %}
-                  <li class="flex items-center justify-between gap-3 border-b border-line py-2">
+                  <li class="flex items-center justify-between gap-2.5 border-b border-line py-2">
                     <a class="btn-soft" href="{{ homework_download_urls|dict_key:attachment.id }}">{{ attachment.original_filename }}</a>
                   </li>
                 {% endfor %}
@@ -46,7 +46,7 @@
               <h3>{% trans "Draft files" %}</h3>
               <ul class="mt-2 space-y-2">
                 {% for attachment in homework_attachments %}
-                  <li class="flex items-center justify-between gap-3 border-b border-line py-2">
+                  <li class="flex items-center justify-between gap-2.5 border-b border-line py-2">
                     <a class="btn-soft" href="{{ homework_download_urls|dict_key:attachment.id }}">{{ attachment.original_filename }}</a>
                     <form method="post"
                           action="{% url 'assessments:homework_remove_attachment' assessment.id attachment.id %}"
@@ -95,7 +95,7 @@
           data-autosave-saved="{% trans 'Answers saved.' %}"
           data-autosave-failed="{% trans 'Autosave could not reach the server. You can continue and try again.' %}">{% csrf_token %}
           <p id="assessment-autosave-status" class="text-sm text-muted mb-5" role="status" aria-live="polite">{% trans "Answers are saved automatically while you work." %}</p>
-          <div class="flex flex-col gap-3">
+          <div class="flex flex-col gap-4">
             {% if is_diploma_random %}
               {% for question in snapshot_questions %}
                 {% with saved=saved_snapshot_answers|dict_key:question.id %}
@@ -164,5 +164,6 @@
       </div>
     </section>
   </div>
-  {% if attempt and timer_enabled %}<script src="{% static 'js/assessment-timer.js' %}" defer></script>{% endif %}
+  {% if attempt and timer_enabled %}<script src="{% static 'js/countdown-core.js' %}" defer></script>
+  <script src="{% static 'js/assessment-timer.js' %}" defer></script>{% endif %}
 {% endblock %}

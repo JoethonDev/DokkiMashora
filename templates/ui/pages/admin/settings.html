@@ -8,7 +8,7 @@
     {% trans "Settings" as title %}
     {% trans "Site configuration, email health, and announcements." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    <section class="card-surface"><div class="section-head"><div>
+    <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "General" %}</p>
           <h3>{% trans "Site configuration" %}</h3>
         </div>
@@ -45,7 +45,7 @@
         </div>
       </dl>
     </section>
-    <section class="card-surface"><div class="section-head"><div>
+    <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Email" %}</p>
           <h3>{% trans "Email health" %}</h3>
         </div>
@@ -83,7 +83,7 @@
       </dl>
     </section>
     {% if active_announcement %}
-      <section class="card-surface"><div class="section-head"><div>
+      <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Notice" %}</p>
             <h3>{% trans "Active announcement" %}</h3>
           </div>

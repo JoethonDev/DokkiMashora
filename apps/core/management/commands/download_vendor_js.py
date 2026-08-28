@@ -24,8 +24,6 @@ MAX_DOWNLOAD_BYTES = 10 * 1024 * 1024
 CHUNK_SIZE = 64 * 1024
 
 FILES: dict[str, str] = {
-    "tailwind.min.js": "https://cdn.tailwindcss.com/3.4.16",
-    # "tailwind.min.js" alternate: "https://cdn.tailwindcss.com/3.4.16",
     "htmx.min.js": "https://cdn.jsdelivr.net/npm/htmx.org@1.9.12/dist/htmx.min.js",
     "htmx-loading-states.min.js": "https://cdn.jsdelivr.net/npm/htmx.org@1.9.12/dist/ext/loading-states.js",
     "alpine.min.js": "https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js",

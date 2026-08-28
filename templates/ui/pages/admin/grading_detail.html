@@ -11,7 +11,7 @@
       <p>{{ submission.student }} - {{ submission.assessment }}</p>
     {% endif %}
     {% if attempt %}
-      <section class="card-surface mb-4">
+      <section class="card-surface mb-4 flex flex-col gap-4">
         <div class="section-head"><div>
               <p class="eyebrow">{% trans "Grades" %}</p>
               <h3>{% trans "Release / hide" %}</h3>
@@ -33,7 +33,7 @@
       </section>
     {% endif %}
   {% if submission %}
-    <section class="card-surface">
+    <section class="card-surface flex flex-col gap-4">
       {% include "ui/components/_status.html" with code=submission.status label=submission.get_status_display %}
       <p class="text-sm text-muted mt-2 mb-0">
         {% trans "Submitted" %}
@@ -45,7 +45,7 @@
           <h3>{% trans "Submitted files" %}</h3>
           <ul class="mt-2 space-y-2">
             {% for attachment in attachments %}
-              <li class="flex items-center justify-between gap-3 border-b border-line py-2">
+              <li class="flex items-center justify-between gap-2.5 border-b border-line py-2">
                 <a class="btn-soft" href="{{ attachment_download_urls|dict_key:attachment.id }}">{{ attachment.original_filename }}</a>
               </li>
             {% endfor %}
@@ -95,7 +95,7 @@
               {% endif %}
             </div>
           </div>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
             <label class="field"><span class="field-label">{% trans "Score" %}</span>
               <input name="score_sq_{{ question.order }}" class="form-input"
                      value="{{ answer.score|default:'' }}"
@@ -138,7 +138,7 @@
               {% endif %}
             </div>
           </div>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
             <label class="field"><span class="field-label">{% trans "Score" %}</span>
               <input name="score_{{ question.id }}" class="form-input"
                      value="{{ answer.score|default:'' }}"

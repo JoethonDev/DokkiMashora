@@ -8,10 +8,10 @@ Pipeline contract (format-neutral):
       -> generated output (implemented by P7-03 generation)
 
 PDF uses PyMuPDF (fitz): pages are rendered to PNG previews and field placement
-overlays text directly onto the source page. Raster sources (legacy PSD rows and
-new JPG/JPEG) use PIL: the flattened composite is rendered to a PNG preview and
-PIL draws placed fields. The formats intentionally use different adapters; there
-is no common conversion.
+overlays text directly onto the source page. Raster sources (PSD and JPG/JPEG)
+use PIL: the flattened composite is rendered to a PNG preview and PIL draws
+placed fields. The formats intentionally use different adapters; there is no
+common conversion.
 
 Rendering rules are shared: preview-generate and final export both call
 ``overlay_text_on_source`` so there is no duplicated rendering logic. Text is
@@ -56,6 +56,10 @@ logger = logging.getLogger(__name__)
 
 _MAX_SOURCE_BYTES = 25 * 1024 * 1024  # 25 MB
 _PREVIEW_DPI = 120
+_PREVIEW_PIXEL_TO_PDF_POINT = 72 / _PREVIEW_DPI
+# PyMuPDF receives a baseline point, while the browser editor positions the
+# visible field box from its top edge.
+_PDF_BASELINE_OFFSET = 0.7
 _MAX_PREVIEW_BYTES = 8 * 1024 * 1024  # 8 MB
 _IMAGE_PREVIEW_WIDTH = 1400  # raster preview/design reference width
 
@@ -98,7 +102,8 @@ class FieldPlacement:
     """One validated dynamic-field placement (P7-03 schema v2).
 
     Coordinates are normalized fractions of the page (0..1) so they are
-    resolution-independent; ``font_size`` is in preview points and ``align``
+    resolution-independent; ``font_size`` is in preview pixels at the design
+    preview DPI and ``align``
     is left/center/right; ``direction`` is ltr/rtl. ``width``/``height`` define
     the field box (normalized 0..1). v1 mappings without width/height default
     to 0.0 and are rendered as a zero-size point box (legacy placement).
@@ -118,15 +123,22 @@ class FieldPlacement:
 def validate_source_format(filename: str, content_type: str) -> str:
     """Return the detected source format or raise ValueError.
 
-    New uploads accept PDF and JPG/JPEG only (PSD support was dropped for new
-    uploads; legacy PSD rows keep their stored format and render path).
+    Certificate artwork uploads accept PDF and PSD. The extension is checked
+    as well as the browser-provided content type so renamed files cannot
+    bypass format validation.
     """
     name = (filename or "").lower()
+    content_type = (content_type or "").lower()
     if name.endswith(".pdf") or content_type == "application/pdf":
         return TEMPLATE_SOURCE_FORMAT_PDF
+    if (
+        name.endswith(".psd")
+        or content_type in {"image/vnd.adobe.photoshop", "application/vnd.adobe.photoshop"}
+    ):
+        return TEMPLATE_SOURCE_FORMAT_PSD
     if name.endswith((".jpg", ".jpeg")) or content_type == "image/jpeg":
         return TEMPLATE_SOURCE_FORMAT_JPG
-    raise ValueError(_("Unsupported certificate source. Upload a PDF or JPG/JPEG file."))
+    raise ValueError(_("Unsupported certificate source. Upload a PDF, PSD, or JPG/JPEG file."))
 
 
 def validate_source_size(data: bytes) -> None:
@@ -374,7 +386,10 @@ def _overlay_on_pdf(data: bytes, mapping_fields: dict, field_values: dict[str, s
                 page.insert_font(fontname=fontname, fontfile=font_file)
                 registered[page_number].add(fontname)
 
-            font_size = float(placement["font_size"])
+            # The editor stores a pixel size relative to the 120-DPI preview.
+            # Convert it to PDF points so the generated PDF has the same
+            # apparent size as the saved editor layout.
+            font_size = float(placement["font_size"]) * _PREVIEW_PIXEL_TO_PDF_POINT
             rect = page.rect
             x0 = rect.width * placement["x"]
             y0 = rect.height * placement["y"]
@@ -395,7 +410,7 @@ def _overlay_on_pdf(data: bytes, mapping_fields: dict, field_values: dict[str, s
             align = placement.get("align", "center")
             direction = placement.get("direction", "rtl")
 
-            draw_y = y0
+            draw_y = y0 + (font_size * _PDF_BASELINE_OFFSET)
             for line in lines:
                 display = _shaped_display_text(line, direction)
                 line_w = measure(display)

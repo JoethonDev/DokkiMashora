@@ -8,7 +8,7 @@
     {% trans "Email log" as default_title %}
     {% trans "Create exams, manage invitations, grade attempts, and inspect delivery history." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title|default:default_title description=description back_button=True %}
-    <section class="card-surface"><div id="email-log-content">
+    <section class="card-surface flex flex-col gap-4"><div id="email-log-content">
     {% include "ui/fragments/admin/_email_log_list.html" %}
     </div></section>
     </div>

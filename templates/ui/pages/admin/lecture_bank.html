@@ -1,4 +1,4 @@
-﻿{% extends "ui/layouts/admin.html" %}
+{% extends "ui/layouts/admin.html" %}
 {% load i18n %}
 {% block title %}
   {{ title|default:lecture.title }}
@@ -6,7 +6,7 @@
 {% block content %}
   <div class="page-stack animate-enter-view">{% trans "Question bank" as eyebrow %}
     {% include "ui/components/_page_header.html" with title=lecture.title eyebrow=eyebrow back_button=True %}
-    <section class="card-surface"><div class="section-head"><div>
+    <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Question bank" %}</p>
           <h2>{{ lecture.title }}</h2>
           <p class="text-muted">{{ cohort }} &middot; {{ semester }}</p>

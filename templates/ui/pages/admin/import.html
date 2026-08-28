@@ -6,7 +6,7 @@
 {% block content %}
   <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=_("Import students") eyebrow=_("Students") %}
     {% if upload %}
-      <section class="card-surface">
+      <section class="card-surface flex flex-col gap-4">
         <div class="section-head">
           <div>
             <h2>{{ upload.original_filename }}</h2>

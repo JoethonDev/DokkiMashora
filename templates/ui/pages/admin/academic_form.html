@@ -10,14 +10,14 @@
       {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
       {% if reviewers %}
         <div class="space-y-4" x-data="{scope: '{{ reviewer_scope|escapejs }}', filterOptions() { const cohort = $refs.cohort.options[$refs.cohort.selectedIndex]; const diplomaId = cohort ? cohort.dataset.diplomaId : ''; Array.from($refs.semester.options).forEach(option => { const visible = !option.value || !diplomaId || option.dataset.diplomaId === diplomaId; option.hidden = !visible; option.disabled = !visible; if (!visible && option.selected) $refs.semester.value = ''; }); Array.from($refs.assessment.options).forEach(option => { const visible = !option.value || !cohort || option.dataset.cohortId === cohort.value; option.hidden = !visible; option.disabled = !visible; if (!visible && option.selected) $refs.assessment.value = ''; }); }}" x-init="filterOptions()">
-          <label class="field"><span class="field-label">{% trans "Reviewers" %}</span><select class="form-select" name="reviewers" multiple size="5" required>{% for reviewer in reviewers %}<option value="{{ reviewer.id }}">{{ reviewer.get_full_name|default:reviewer.email }}</option>{% endfor %}</select><span class="field-help">{% trans "Hold Ctrl/Cmd to select multiple reviewers." %}</span></label>
-          <label class="field"><span class="field-label">{% trans "Assignment scope" %}</span><select class="form-select" name="scope" x-model="scope" @change="if (scope === 'cohort') { $refs.semester.value = ''; $refs.assessment.value = ''; } else if (scope === 'semester') { $refs.assessment.value = ''; }" required><option value="">{% trans "Select" %}</option>{% for value,label in reviewer_scope_choices %}<option value="{{ value }}"{% if value == reviewer_scope %} selected{% endif %}>{{ label }}</option>{% endfor %}</select><span class="field-help">{% trans "Choose one level. A broader assignment blocks narrower assignments for the same Reviewer." %}</span></label>
+          <label class="field"><span class="field-label">{% trans "Reviewers" %}</span><select class="form-select" name="reviewers" multiple size="5" required>{% for reviewer in reviewers %}<option value="{{ reviewer.id }}">{{ reviewer.get_full_name|default:reviewer.email }}</option>{% endfor %}</select><span class="field-help">{% trans "Ctrl/Cmd + click" %}</span></label>
+          <label class="field"><span class="field-label">{% trans "Assignment scope" %}</span><select class="form-select" name="scope" x-model="scope" @change="if (scope === 'cohort') { $refs.semester.value = ''; $refs.assessment.value = ''; } else if (scope === 'semester') { $refs.assessment.value = ''; }" required><option value="">{% trans "Select" %}</option>{% for value,label in reviewer_scope_choices %}<option value="{{ value }}"{% if value == reviewer_scope %} selected{% endif %}>{{ label }}</option>{% endfor %}</select><span class="field-help">{% trans "One level only" %}</span></label>
           <label class="field"><span class="field-label">{% trans "Cohort" %}</span><select class="form-select" name="cohort" x-ref="cohort" @change="filterOptions(); $refs.semester.value = ''; $refs.assessment.value = '';" required><option value="">{% trans "Select" %}</option>{% for cohort in cohorts %}<option value="{{ cohort.id }}" data-diploma-id="{{ cohort.diploma_id }}"{% if cohort.id|stringformat:'s' == reviewer_cohort %} selected{% endif %}>{{ cohort }}</option>{% endfor %}</select></label>
-          <div x-show="scope === 'semester'" x-cloak>
+          <div x-show="scope === 'semester'" x-transition x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" x-cloak>
             <label class="field"><span class="field-label">{% trans "Semester" %}</span><select class="form-select" name="semester" x-ref="semester" :disabled="scope !== 'semester'"><option value="">{% trans "Select" %}</option>{% for semester in semesters %}<option value="{{ semester.id }}" data-diploma-id="{{ semester.diploma_id }}"{% if semester.id|stringformat:'s' == reviewer_semester %} selected{% endif %}>{{ semester }}</option>{% endfor %}</select></label>
           </div>
-          <div x-show="scope === 'semester_exam'" x-cloak>
-            <label class="field"><span class="field-label">{% trans "Semester Exam" %}</span><select class="form-select" name="assessment" x-ref="assessment" :disabled="scope !== 'semester_exam'"><option value="">{% trans "Select" %}</option>{% for exam in semester_exams %}<option value="{{ exam.id }}" data-cohort-id="{{ exam.cohort_id }}"{% if exam.id|stringformat:'s' == reviewer_assessment %} selected{% endif %}>{{ exam }}</option>{% endfor %}</select><span class="field-help">{% trans "The Reviewer can receive both online and offline work within this scope." %}</span></label>
+          <div x-show="scope === 'semester_exam'" x-transition x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" x-cloak>
+            <label class="field"><span class="field-label">{% trans "Semester Exam" %}</span><select class="form-select" name="assessment" x-ref="assessment" :disabled="scope !== 'semester_exam'"><option value="">{% trans "Select" %}</option>{% for exam in semester_exams %}<option value="{{ exam.id }}" data-cohort-id="{{ exam.cohort_id }}"{% if exam.id|stringformat:'s' == reviewer_assessment %} selected{% endif %}>{{ exam }}</option>{% endfor %}</select><span class="field-help">{% trans "Online & offline" %}</span></label>
           </div>
           <label class="field"><span class="field-label">{% trans "Cluster (optional)" %}</span><select class="form-select" name="cluster"><option value="">{% trans "All assigned students" %}</option>{% for cluster in clusters %}<option value="{{ cluster.id }}"{% if cluster.id|stringformat:'s' == reviewer_cluster %} selected{% endif %}>{{ cluster }}</option>{% endfor %}</select></label>
         </div>
@@ -30,7 +30,7 @@
         <div class="form-group">
           <label class="field-label" for="semester_pass_percent_override">{% trans "Semester passing threshold override (%)" %}</label>
           <input class="form-input" type="number" id="semester_pass_percent_override" name="semester_pass_percent_override" value="{{ semester_pass_percent_override }}" min="0" max="100" step="0.01" placeholder="{% trans 'Keep current override' %}">
-          <p class="field-help">{% trans "Enter a percentage from 0 to 100, or leave empty to keep the current semester override unchanged." %}</p>
+          <p class="field-help">{% trans "0–100 or empty" %}</p>
         </div>
         <div class="form-group">
           <label class="flex items-center gap-2 cursor-pointer">
@@ -51,7 +51,7 @@
           <div id="assessment-choices"{% if form.question_type.value != 'mcq' %} class="hidden"{% endif %}>
             {% for choice in choices %}
               <div class="choice-row p-3 border border-line rounded-sm mb-2.5 flex items-start gap-3" data-choice-id="{{ choice.id }}">
-                <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
+                <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
                   <div class="form-group">
                     <label for="choice_text_{{ choice.id }}" class="field-label">{% trans "Choice" %}</label>
                     <input type="text" class="form-input" name="choice_text_{{ choice.id }}" id="choice_text_{{ choice.id }}" value="{{ choice.text }}" required>
@@ -74,7 +74,7 @@
               </div>
             {% empty %}
               <div class="choice-row p-3 border border-line rounded-sm mb-2.5 flex items-start gap-3" data-choice-id="new_1">
-                <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
+                <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
                   <div class="form-group">
                     <label for="choice_text_new_1" class="field-label">{% trans "Choice" %}</label>
                     <input type="text" class="form-input" name="choice_text_new_1" id="choice_text_new_1" required>
@@ -101,7 +101,7 @@
         </fieldset>
         <template id="assessment-choice-template">
           <div class="choice-row p-3 border border-line rounded-sm mb-2.5 flex items-start gap-3" data-choice-id="__IDX__">
-            <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
+            <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
               <div class="form-group">
                 <label class="field-label">{% trans "Choice" %}</label>
                 <input type="text" class="form-input" name="choice_text___IDX__" required>

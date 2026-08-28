@@ -9,36 +9,82 @@
           x-data="{
             targetType: '{{ form_data.target_type|default:'diploma'|escapejs }}',
             diplomaId: '{{ form_data.diploma_id|default:''|escapejs }}',
+            cohortId: '{{ form_data.cohort_id|default:''|escapejs }}',
+            semesterId: '{{ form_data.semester_id|default:''|escapejs }}',
+            requiredMap: (() => { try { return JSON.parse('{{ required_map_json|default:'{}'|escapejs }}'); } catch(e) { return {}; } })(),
+            sessionCounts: (() => { try { return JSON.parse('{{ session_counts_json|default:'{}'|escapejs }}'); } catch(e) { return {}; } })(),
+            initForm() {
+              this.filterDiploma();
+              this.$watch('diplomaId', () => this.filterDiploma());
+            },
             filterDiploma() {
               const d = this.diplomaId;
-              [$refs.cohort, $refs.semester].forEach(select => {
+              [this.$refs.cohort, this.$refs.semester].forEach(select => {
+                if (!select) return;
                 Array.from(select.options).forEach(option => {
-                  const visible = !option.value || !d || option.dataset.diplomaId === d;
+                  const visible = !option.value || !d || String(option.dataset.diplomaId) === String(d);
                   option.hidden = !visible;
+                  option.style.display = visible ? '' : 'none';
                   option.disabled = !visible;
-                  if (!visible && option.selected) select.value = '';
+                  if (!visible && option.selected) {
+                    select.value = '';
+                    if (select === this.$refs.cohort) this.cohortId = '';
+                    if (select === this.$refs.semester) this.semesterId = '';
+                  }
                 });
               });
             },
             resetTargets() {
               if (this.targetType === 'course') {
                 this.diplomaId = '';
-                $refs.cohort.value = '';
-                $refs.semester.value = '';
-                this.filterDiploma();
+                this.cohortId = '';
+                this.semesterId = '';
+                if (this.$refs.cohort) this.$refs.cohort.value = '';
+                if (this.$refs.semester) this.$refs.semester.value = '';
+                this.$nextTick(() => this.filterDiploma());
               } else {
-                $refs.course_version.value = '';
+                if (this.$refs.course_version) this.$refs.course_version.value = '';
+                this.$nextTick(() => this.filterDiploma());
               }
+            },
+            get requiredCount() {
+              if (this.targetType !== 'diploma') return null;
+              const cohortId = this.cohortId;
+              const semesterId = this.semesterId;
+              if (!cohortId) return null;
+              const key = `${cohortId}:${semesterId}`;
+              if (semesterId && this.requiredMap[key] !== undefined) return this.requiredMap[key];
+              if (semesterId) return null;
+              return null;
+            },
+            get sessionCount() {
+              if (this.targetType !== 'diploma') return null;
+              const cohortId = this.cohortId;
+              const semesterId = this.semesterId;
+              if (!cohortId) return null;
+              const key = `${cohortId}:${semesterId || 0}`;
+              return this.sessionCounts[key] ?? null;
+            },
+            get requiredHelpText() {
+              const req = this.requiredCount;
+              const existing = this.sessionCount;
+              if (req === null || req === undefined) return '';
+              if (req === 0) {
+                const totalLabel = existing !== null ? `{{ _("Existing sessions for this selection:")|escapejs }} ${existing}` : '';
+                return `{{ _("Attendance is graded against held sessions (required = 0 — uses ended/closed count).")|escapejs }} ${totalLabel}`;
+              }
+              const existingLabel = existing !== null ? ` · {{ _("Existing sessions:")|escapejs }} ${existing} / ${req}` : '';
+              return `{{ _("Required attendances for this semester:")|escapejs }} ${req}${existingLabel}`;
             }
           }"
-          x-init="filterDiploma()">{% csrf_token %}
+          x-init="initForm()">{% csrf_token %}
       {% if form_errors %}
         <div class="py-4 px-5 border border-red rounded-md bg-red-soft text-red" role="alert">
           {% for error in form_errors %}<p class="m-0">{{ error }}</p>{% endfor %}
         </div>
       {% endif %}
       <label class="field"><span class="field-label">{% trans "Target type" %}</span>
-        <select name="target_type" class="form-select" x-model="targetType" @change="resetTargets()" required>
+        <select id="id_target_type" name="target_type" class="form-select" x-model="targetType" @change="resetTargets()" required>
           <option value="diploma"{% if form_data.target_type != 'course' %} selected{% endif %}>{% trans "Diploma" %}</option>
           <option value="course"{% if form_data.target_type == 'course' %} selected{% endif %}>{% trans "Course" %}</option>
         </select>
@@ -47,16 +93,16 @@
       <div x-show="targetType === 'diploma'" x-cloak>
         <div class="page-stack">
           <label class="field"><span class="field-label">{% trans "Diploma" %}</span>
-            <select name="diploma_id" class="form-select" x-model="diplomaId" @change="filterDiploma()" :disabled="targetType !== 'diploma'">
+            <select id="id_diploma_id" name="diploma_id" class="form-select" x-model="diplomaId" @change="filterDiploma()" :disabled="targetType !== 'diploma'">
               <option value="">{% trans "Select" %}</option>
               {% for diploma in diplomas %}
                 <option value="{{ diploma.id }}"{% if form_data.diploma_id == diploma.id|stringformat:'s' %} selected{% endif %}>{{ diploma.title }}</option>
               {% endfor %}
             </select>
-            <span class="field-help">{% trans "Choosing a Diploma narrows the cohort and semester lists." %}</span>
+            <span class="field-help">{% trans "Filters cohorts & semesters" %}</span>
           </label>
           <label class="field"><span class="field-label">{% trans "Cohort" %}</span>
-            <select name="cohort_id" class="form-select" x-ref="cohort" @change="filterDiploma()" :disabled="targetType !== 'diploma'" required>
+            <select id="id_cohort_id" name="cohort_id" class="form-select" x-ref="cohort" x-model="cohortId" :disabled="targetType !== 'diploma'" :required="targetType === 'diploma'">
               <option value="">{% trans "Select" %}</option>
               {% for cohort in cohorts %}
                 <option value="{{ cohort.id }}" data-diploma-id="{{ cohort.diploma_id }}"{% if form_data.cohort_id == cohort.id|stringformat:'s' %} selected{% endif %}>{{ cohort }}</option>
@@ -64,20 +110,28 @@
             </select>
           </label>
           <label class="field"><span class="field-label">{% trans "Semester" %}</span>
-            <select name="semester_id" class="form-select" x-ref="semester" :disabled="targetType !== 'diploma'">
+            <select id="id_semester_id" name="semester_id" class="form-select" x-ref="semester" x-model="semesterId" :disabled="targetType !== 'diploma'">
               <option value="">{% trans "All semesters" %}</option>
               {% for semester in semesters %}
                 <option value="{{ semester.id }}" data-diploma-id="{{ semester.diploma_id }}"{% if form_data.semester_id == semester.id|stringformat:'s' %} selected{% endif %}>{{ semester }}</option>
               {% endfor %}
             </select>
-            <span class="field-help">{% trans "Optional — leave empty to cover the whole cohort." %}</span>
+            <span class="field-help">{% trans "Empty = all semesters" %}</span>
           </label>
+          <div x-show="targetType === 'diploma' && cohortId" x-transition class="p-3 rounded-md bg-amber-soft/40 border border-amber/20 text-sm" x-cloak>
+            <div class="flex items-start gap-2">
+              <span class="text-amber shrink-0">●</span>
+              <div>
+                <p class="m-0 font-bold text-text" x-text="requiredHelpText || '{{ _("Select cohort & semester")|escapejs }}'"></p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
       <div x-show="targetType === 'course'" x-cloak>
         <label class="field"><span class="field-label">{% trans "Course version" %}</span>
-          <select name="course_version_id" class="form-select" x-ref="course_version" :disabled="targetType !== 'course'" required>
+          <select id="id_course_version_id" name="course_version_id" class="form-select" x-ref="course_version" :disabled="targetType !== 'course'" :required="targetType === 'course'">
             <option value="">{% trans "Select" %}</option>
             {% for version in course_versions %}
               <option value="{{ version.id }}"{% if form_data.course_version_id == version.id|stringformat:'s' %} selected{% endif %}>{{ version }}</option>

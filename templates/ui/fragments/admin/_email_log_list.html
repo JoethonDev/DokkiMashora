@@ -1,5 +1,5 @@
 {% load i18n ui_tags %}
-<form class="actions-row items-end mb-4" hx-get="{% url 'entrance_exams:admin_email_log_list' %}" hx-target="#email-log-content" hx-replace-url="true"><div class="search-field">
+<form class="actions-row items-end mb-4" hx-get="{% url 'entrance_exams:admin_email_log_list' %}" hx-target="#email-log-content" hx-replace-url="true" hx-indicator="#global-loading"><div class="search-field">
                           <input name="q" class="form-input"
                    value="{{ search_value }}"
                    type="search"

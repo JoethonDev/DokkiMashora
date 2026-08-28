@@ -23,10 +23,7 @@
         <div class="flex items-center gap-4 pt-4 border-t border-line">
           {% for field in form %}
             {% if field.name == "is_required" or field.name == "is_active" %}
-              <label class="flex items-center gap-2 cursor-pointer" for="{{ field.id_for_label }}">
-                {{ field|widget_class }}
-                <span class="text-sm font-bold text-text">{{ field.label }}</span>
-              </label>
+              {% include "ui/components/_field.html" with field=field compact=True %}
             {% endif %}
           {% endfor %}
         </div>
@@ -35,7 +32,7 @@
         </div>
       </form>
     {% elif intake_form %}
-      <section class="card-surface"><div class="section-head"><div>
+      <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Form" %}</p>
             <h3>{{ intake_form.title }}</h3>
           </div>
@@ -59,7 +56,7 @@
           </form>
         </div>
       </section>
-      <section class="card-surface"><div class="section-head"><div>
+      <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Fields" %}</p>
             <h3>{% trans "Form fields" %}</h3>
           </div>
@@ -121,10 +118,7 @@
             <div class="flex items-center gap-4 pt-4 border-t border-line">
               {% for field in field_form %}
                 {% if field.name == "required" %}
-                  <label class="flex items-center gap-2 cursor-pointer" for="{{ field.id_for_label }}">
-                    {{ field|widget_class }}
-                    <span class="text-sm font-bold text-text">{{ field.label }}</span>
-                  </label>
+                  {% include "ui/components/_field.html" with field=field compact=True %}
                 {% endif %}
               {% endfor %}
             </div>
@@ -140,15 +134,15 @@
           </template>
         {% endif %}
       </section>
-      <section class="card-surface"><div class="section-head"><div>
+      <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Responses" %}</p>
             <h3>{% trans "Form responses" %}</h3>
           </div>
         </div>
         {% if responses %}
           <div class="divide-y divide-line">{% for item in responses %}
-            <div class="flex gap-3 py-4 first:pt-0 last:pb-0">
-              <div class="flex flex-col items-center shrink-0">
+            <div class="flex gap-2.5 py-4 first:pt-0 last:pb-0">
+              <div class="flex flex-col gap-1 items-center shrink-0">
                 <span class="w-2.5 h-2.5 rounded-full border-2 border-line bg-surface mt-1.5"></span>
                 {% if not forloop.last %}<span class="w-px flex-1 bg-line mt-1.5"></span>{% endif %}
               </div>
@@ -166,7 +160,7 @@
         {% endif %}
       </section>
     {% elif target %}
-      <section class="card-surface"><div class="section-head"><div>
+      <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Target" %}</p>
             <h3>{{ target.name|default:target|default:_("Intake target") }}</h3>
           </div>
@@ -183,7 +177,7 @@
         {% endfor %}
       </section>
     {% elif response %}
-      <section class="card-surface"><div class="section-head"><div>
+      <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Response" %}</p>
             <h3>{{ form_obj.title|default:_("Intake response") }}</h3>
           </div>
@@ -200,7 +194,7 @@
         </dl>
       </section>
     {% elif page_obj %}
-      <section class="card-surface"><div class="table-wrap hidden lg:block"><table class="table">
+      <section class="card-surface flex flex-col gap-4"><div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>
                 <th class="table-th">{% trans "Form" %}</th>
@@ -214,7 +208,7 @@
             <tbody>
               {% for item in page_obj %}
                 <tr>
-                  <td class="table-td"><div class="flex flex-col gap-0.5"><strong>{{ item.title }}</strong>
+                  <td class="table-td"><div class="flex flex-col gap-1"><strong>{{ item.title }}</strong>
                     {% if item.description %}{% include "ui/components/_expandable_text.html" with text=item.description clamp=2 muted=True %}{% else %}<small class="text-muted">—</small>{% endif %}</div>
                   </td>
                   <td class="table-td">
@@ -226,7 +220,7 @@
                       —
                     {% endif %}
                   </td>
-                  <td class="table-td"><div class="flex flex-col"><strong>
+                  <td class="table-td"><div class="flex flex-col gap-1"><strong>
                       {% if item.course_version %}
                         {{ item.course_version.course }}
                       {% elif item.cohort %}

@@ -26,11 +26,11 @@
         <section class="card-surface max-w-form mx-auto w-full page-stack">
           <div class="section-head"><div>
                 <p class="eyebrow">{% trans "Background" %}</p>
-                <h3>{% trans "PDF / PSD source" %}</h3>
+                <h3>{% trans "Certificate artwork source" %}</h3>
               </div>
             </div>
           {% if template.source_status == "ready" %}
-            <p class="text-sm text-muted mb-3">{% trans "Source ready" %} · {% if template.source_format == "pdf" %}PDF{% else %}PSD{% endif %} · {{ template.preview_page_count }} {% trans "page(s)" %}</p>
+            <p class="text-sm text-muted mb-3">{% trans "Source ready" %} · {{ template.get_source_format_display }} · {{ template.preview_page_count }} {% trans "page(s)" %}</p>
             <div class="flex gap-2.5 items-center flex-wrap">
               <a class="btn-secondary" href="{% url 'certificates:admin_template_preview' template.id %}" target="_blank" rel="noopener">{% trans "View preview" %}</a>
               <a class="btn-primary" href="{% url 'certificates:admin_template_editor' template.id %}">{% trans "Edit placement" %}</a>
@@ -41,18 +41,21 @@
           {% elif template.source_status == "failed" %}
             <p class="text-sm text-red">{{ template.source_error|default:_("Source processing failed.") }}</p>
           {% else %}
-            <p class="text-sm text-muted mb-3">{% trans "No PDF/PSD background uploaded. The HTML body above is used instead." %}</p>
+            <p class="text-sm text-muted mb-3">{% trans "No PDF/PSD artwork uploaded. The HTML body above is used instead." %}</p>
           {% endif %}
           <form class="mt-4 flex items-end gap-2.5 flex-wrap" method="post" action="{% url 'certificates:admin_template_upload_source' template.id %}" enctype="multipart/form-data">{% csrf_token %}
-            <label class="field"><span class="field-label">{% trans "PDF or PSD source" %}</span>
-              <input class="form-input" type="file" name="source_file" accept=".pdf,.psd,application/pdf,image/vnd.adobe.photoshop" required>
+            <label class="field"><span class="field-label">{% trans "PDF or PSD artwork" %}</span>
+              <input class="form-input" type="file" name="source_file" accept=".pdf,.psd,.jpg,.jpeg,application/pdf,image/vnd.adobe.photoshop,image/jpeg" required>
             </label>
             <button class="btn-primary" type="submit">{% trans "Upload source" %}</button>
+          </form>
+          <form method="post" action="{% url 'certificates:admin_template_delete' template.id %}" class="m-0" data-confirm="{% trans 'Delete this certificate template? Generated certificates will be preserved.' %}">{% csrf_token %}
+            <button class="btn-danger" type="submit">{% trans "Delete template" %}</button>
           </form>
         </section>
       {% endif %}
     {% elif template %}
-      <section class="card-surface"><div class="section-head"><div>
+      <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Template" %}</p>
             <h3>{{ template }}</h3>
           </div>
@@ -64,11 +67,16 @@
     {% elif templates is not None %}
       <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {% for item in templates %}
-          <article class="card-surface">
+          <article class="card-surface flex flex-col gap-4">
             <h3>{{ item }}</h3>
             {% if item.description %}<p>{{ item.description }}</p>{% endif %}
             {% if item.diploma %}<p class="text-muted">{{ item.diploma }}</p>{% endif %}
+          <div class="flex gap-2.5 items-center flex-wrap">
             <a class="btn-ghost" href="{% url 'certificates:admin_template_edit' item.id %}">{% trans "Edit" %}</a>
+            <form method="post" action="{% url 'certificates:admin_template_delete' item.id %}" class="m-0" data-confirm="{% trans 'Delete this certificate template? Generated certificates will be preserved.' %}">{% csrf_token %}
+              <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
+            </form>
+          </div>
           </article>
         {% empty %}
           {% include "ui/components/_empty_state.html" with title=_("No certificate templates yet.") fill=True %}
@@ -76,7 +84,7 @@
       </section>
       {% include "ui/components/_pagination.html" %}
     {% elif page_obj is not None %}
-      <section class="card-surface"><div class="table-wrap hidden lg:block"><table class="table">
+      <section class="card-surface flex flex-col gap-4"><div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>
                 <th class="table-th">{% trans "Certificate number" %}</th>
