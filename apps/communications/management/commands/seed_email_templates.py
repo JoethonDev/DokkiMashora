@@ -49,23 +49,22 @@ DEFAULT_TEMPLATES = {
         ),
     },
     TEMPLATE_ENTRANCE_EXAM_PASS: {
-        "name": "Entrance exam passed",
-        "subject": "You passed the entrance exam",
+        "name": "Entrance exam review notice",
+        "subject": "Your entrance exam was submitted",
         "body": (
             "Hello {{ full_name }},\n\n"
-            "Congratulations! You have passed the entrance exam '{{ exam_title }}'.\n\n"
-            "Your application has been accepted. We will contact you with the next steps.\n\n"
+            "Your entrance exam '{{ exam_title }}' has been submitted successfully.\n\n"
+            "The admissions office will review your submission and contact you with the next steps.\n\n"
             "Thank you,\nDokkiMashora admissions"
         ),
     },
     TEMPLATE_ENTRANCE_EXAM_FAIL: {
-        "name": "Entrance exam failed",
-        "subject": "Entrance exam result",
+        "name": "Entrance exam review notice",
+        "subject": "Your entrance exam was submitted",
         "body": (
             "Hello {{ full_name }},\n\n"
-            "Thank you for taking the entrance exam '{{ exam_title }}'.\n\n"
-            "Unfortunately, you did not pass at this time.\n\n"
-            "You are welcome to apply again in a future cycle.\n\n"
+            "Your entrance exam '{{ exam_title }}' has been submitted successfully.\n\n"
+            "The admissions office will review your submission and contact you with the next steps.\n\n"
             "DokkiMashora admissions"
         ),
     },

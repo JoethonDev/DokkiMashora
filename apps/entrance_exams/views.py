@@ -20,13 +20,12 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from django.views.decorators.http import require_http_methods, require_POST
+from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from apps.academics.models import Cohort
 from apps.applications.constants import (
     EMAIL_ACTION_EXAM_RESULT,
     PROGRAM_APP_STATUS_ACCEPTED,
-    PROGRAM_APP_STATUS_ACTIVATED,
     PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
     PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
     PROGRAM_APP_STATUS_INVITED,
@@ -70,7 +69,6 @@ from .forms import EntranceChoiceForm, EntranceChoiceFormSet, EntranceExamForm, 
 from .models import EntranceAttempt, EntranceChoice, EntranceExam, EntranceQuestion, EntranceSnapshot
 from .services import (
     AnswerData,
-    assign_attempt,
     attempt_deadline,
     attempt_decision,
     finalize_all_pending_for_exam,
@@ -78,6 +76,8 @@ from .services import (
     get_pending_grading,
     grade_answer,
     queue_entrance_invitation_email,
+    resolve_assigned_attempt,
+    resolve_exam_access_token,
     save_snapshot,
     start_attempt,
     submit_attempt,
@@ -93,28 +93,24 @@ def _get_profile(user):
         raise Http404 from None
 
 
+def _resolve_public_attempt(request, token):
+    """Resolve the shared token and then the student's exact assignment."""
+    try:
+        exam = resolve_exam_access_token(token)
+    except EntranceExam.DoesNotExist:
+        raise Http404 from None
+    profile = _get_profile(request.user)
+    try:
+        attempt = resolve_assigned_attempt(exam, profile)
+    except EntranceAttempt.DoesNotExist:
+        raise PermissionDenied(_("This entrance exam access is not available.")) from None
+    return profile, exam, attempt
+
+
 @student_required
 def exam_access_token(request, token):
     """Show exam instructions via access token. Students never see integer IDs."""
-    profile = _get_profile(request.user)
-    exam = get_object_or_404(EntranceExam, access_token=token, is_active=True)
-    prog_app = ProgramApplication.objects.filter(
-        student=profile,
-        cohort=exam.cohort,
-        status__in=[
-            PROGRAM_APP_STATUS_INVITED,
-            PROGRAM_APP_STATUS_ACCEPTED,
-            PROGRAM_APP_STATUS_ACTIVATED,
-            PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
-        ],
-    ).first()
-    if not prog_app:
-        raise PermissionDenied(_("You do not have an application for this cohort."))
-    attempt = EntranceAttempt.objects.filter(
-        exam=exam, program_application=prog_app,
-    ).first()
-    if not attempt:
-        attempt = assign_attempt(exam, prog_app, profile)
+    _profile, exam, attempt = _resolve_public_attempt(request, token)
     # Reopening the issued link after submission must resolve the completed
     # state and route to results; the attempt is never re-taken (E3).
     # ``submitted_at`` is the durable "has taken the exam" marker: even if a
@@ -141,11 +137,15 @@ def exam_access_token(request, token):
 
 
 @student_required
+@require_GET
 def exam_qr_code(request, token):
     """Return a QR code PNG for the exam access URL."""
+    _resolve_public_attempt(request, token)
     exam_url = request.build_absolute_uri(reverse("entrance_exams:exam_access_token", args=[token]))
 
-    return _qr_response(exam_url)
+    response = _qr_response(exam_url)
+    response["Cache-Control"] = "private, no-store"
+    return response
 
 
 def _qr_response(exam_url):
@@ -175,11 +175,7 @@ def student_list(request):
 @require_POST
 def start_exam(request, token):
     """Start an entrance exam (POST only, token-based)."""
-    profile = _get_profile(request.user)
-    exam = get_object_or_404(EntranceExam, access_token=token, is_active=True)
-    attempt = get_object_or_404(
-        EntranceAttempt, exam=exam, student=profile,
-    )
+    _profile, _exam, attempt = _resolve_public_attempt(request, token)
     try:
         start_attempt(attempt)
     except ValueError as exc:
@@ -196,13 +192,13 @@ def take_exam(request, token):
     locally and never polls. The latest backend snapshot answers are hydrated
     server-side so the page can restore work without localStorage.
     """
-    profile = _get_profile(request.user)
-    exam = get_object_or_404(EntranceExam, access_token=token, is_active=True)
-    attempt = get_object_or_404(EntranceAttempt, exam=exam, student=profile)
+    _profile, exam, attempt = _resolve_public_attempt(request, token)
     # A submitted attempt is final: never render the exam page again, even if
     # a stale row still carries an in-progress status.
     if attempt.submitted_at or attempt.status not in (ATTEMPT_STATUS_IN_PROGRESS, ATTEMPT_STATUS_ASSIGNED):
         return redirect("entrance_exams:results", token=token)
+    if attempt.status == ATTEMPT_STATUS_ASSIGNED:
+        return redirect("entrance_exams:exam_access_token", token=token)
     now = timezone.now()
     deadline = attempt_deadline(attempt)
     remaining = max(0, int((deadline - now).total_seconds())) if deadline else exam.duration_minutes * 60
@@ -229,14 +225,19 @@ def take_exam(request, token):
 @require_http_methods(["POST"])
 def submit_exam(request, token):
     """Submit an entrance exam (POST only, token-based)."""
-    profile = _get_profile(request.user)
-    exam = get_object_or_404(EntranceExam, access_token=token, is_active=True)
-    attempt = get_object_or_404(EntranceAttempt, exam=exam, student=profile)
+    _profile, exam, attempt = _resolve_public_attempt(request, token)
+    if attempt.submitted_at or attempt.status in (ATTEMPT_STATUS_COMPLETED, ATTEMPT_STATUS_GRADED):
+        return redirect("entrance_exams:results", token=token)
     answers = []
     questions = {q.id: q for q in exam.questions.all()}
-    for key, value in request.POST.items():
+    for key in request.POST:
         if not key.startswith("question_"):
             continue
+        values = request.POST.getlist(key)
+        if len(values) != 1:
+            messages.error(request, _("Each exam question can only be answered once."))
+            return redirect("entrance_exams:take_exam", token=token)
+        value = values[0]
         qid = safe_int(key.removeprefix("question_"))
         if qid is None:
             messages.error(request, _("Invalid question."))
@@ -246,7 +247,10 @@ def submit_exam(request, token):
             messages.error(request, _("Unknown question."))
             return redirect("entrance_exams:take_exam", token=token)
         if question.question_type == "mcq":
-            choice_id = int(value) if value.isdigit() else None
+            choice_id = safe_int(value) if value else None
+            if value and choice_id is None:
+                messages.error(request, _("Invalid choice."))
+                return redirect("entrance_exams:take_exam", token=token)
             answers.append(AnswerData(question_id=qid, selected_choice_id=choice_id))
         else:
             answers.append(AnswerData(question_id=qid, written_text=value))
@@ -263,23 +267,29 @@ def submit_exam(request, token):
 @require_POST
 def save_exam_snapshot(request, token):
     """Save periodic answer snapshots for auto-recovery (AJAX, returns JSON)."""
-    profile = _get_profile(request.user)
-    exam = get_object_or_404(EntranceExam, access_token=token, is_active=True)
-    attempt = get_object_or_404(EntranceAttempt, exam=exam, student=profile, status=ATTEMPT_STATUS_IN_PROGRESS)
+    _profile, _exam, attempt = _resolve_public_attempt(request, token)
     try:
         data = json.loads(request.body)
         answers = data.get("answers", {})
-        for qid_str, value in answers.items():
-            qid = int(qid_str)
-            if isinstance(value, dict):
-                choice_id = value.get("choice")
-                written = value.get("text", "")
-            elif isinstance(value, str):
-                choice_id = int(value) if value.isdigit() else None
-                written = ""
-            else:
-                continue
-            save_snapshot(attempt, qid, choice_id=choice_id, written_text=written)
+        if not isinstance(answers, dict):
+            raise ValueError
+        with transaction.atomic():
+            for qid_str, value in answers.items():
+                qid = safe_int(qid_str)
+                if qid is None:
+                    raise ValueError
+                if isinstance(value, dict):
+                    choice_value = value.get("choice")
+                    choice_id = safe_int(choice_value) if choice_value not in (None, "") else None
+                    written = value.get("text", "")
+                elif isinstance(value, str):
+                    choice_id = safe_int(value) if value else None
+                    written = ""
+                else:
+                    raise ValueError
+                if isinstance(value, dict) and choice_value not in (None, "") and choice_id is None:
+                    raise ValueError
+                save_snapshot(attempt, qid, choice_id=choice_id, written_text=written)
         return JsonResponse({"ok": True})
     except (json.JSONDecodeError, ValueError, TypeError):
         return JsonResponse({"ok": False, "error": _("Invalid data")}, status=400)
@@ -295,9 +305,7 @@ def finalize_expired_exam(request, token):
     latest backend snapshots only after the server independently confirms the
     deadline has passed. localStorage is never trusted here.
     """
-    profile = _get_profile(request.user)
-    exam = get_object_or_404(EntranceExam, access_token=token, is_active=True)
-    attempt = get_object_or_404(EntranceAttempt, exam=exam, student=profile)
+    _profile, _exam, attempt = _resolve_public_attempt(request, token)
     try:
         finalized = finalize_expired_attempt(attempt)
     except ValueError as exc:
@@ -312,9 +320,9 @@ def finalize_expired_exam(request, token):
 @student_required
 def exam_results(request, token):
     """Show entrance exam status (token-based). Grades are never exposed."""
-    profile = _get_profile(request.user)
-    exam = get_object_or_404(EntranceExam, access_token=token)
-    attempt = get_object_or_404(EntranceAttempt, exam=exam, student=profile)
+    _profile, exam, attempt = _resolve_public_attempt(request, token)
+    if not attempt.submitted_at and attempt.status not in (ATTEMPT_STATUS_COMPLETED, ATTEMPT_STATUS_GRADED):
+        return redirect("entrance_exams:exam_access_token", token=token)
     decision = attempt_decision(attempt)
     state_label = decision["label"] if decision else _("Submitted — awaiting review")
     return render(request, "ui/pages/student/exam.html", {
@@ -392,6 +400,7 @@ def admin_detail(request, exam_id):
 
 @login_required
 @role_required(*ROLE_EXAM_STAFF)
+@require_GET
 def admin_exam_qr_code(request, exam_id):
     """Return the current active exam access QR for authorized exam staff."""
     if not is_admin(request.user):
@@ -402,7 +411,9 @@ def admin_exam_qr_code(request, exam_id):
     exam_url = request.build_absolute_uri(
         reverse("entrance_exams:exam_access_token", args=[exam.access_token])
     )
-    return _qr_response(exam_url)
+    response = _qr_response(exam_url)
+    response["Cache-Control"] = "private, no-store"
+    return response
 
 
 @login_required
@@ -481,12 +492,15 @@ def admin_toggle_active(request, exam_id):
     """Toggle entrance exam active/inactive. Regenerates access token."""
     if not is_admin(request.user):
         raise PermissionDenied
-    exam = get_object_or_404(EntranceExam, id=exam_id)
     next_url = safe_next_url(request)
-    exam.is_active = not exam.is_active
-    exam.save(update_fields=["is_active", "updated_at"])
-    if exam.is_active:
-        exam.regenerate_access_token()
+    with transaction.atomic():
+        exam = get_object_or_404(
+            EntranceExam.objects.select_for_update(), id=exam_id,
+        )
+        exam.is_active = not exam.is_active
+        exam.save(update_fields=["is_active", "updated_at"])
+        if exam.is_active:
+            exam.regenerate_access_token()
     status = _("activated") if exam.is_active else _("deactivated")
     messages.success(request, _("Entrance exam %(status)s.") % {"status": status})
     return redirect(next_url) if next_url else redirect("entrance_exams:admin_detail", exam_id=exam.id)
@@ -581,9 +595,9 @@ def admin_grade_attempt(request, attempt_id):
     change_targets = []
     if application.status in decision_allowed or application.status in (PROGRAM_APP_STATUS_ACCEPTED, PROGRAM_APP_STATUS_REJECTED):
         if application.status != PROGRAM_APP_STATUS_ACCEPTED:
-            change_targets.append("pass")
+            change_targets.append("accept")
         if application.status != PROGRAM_APP_STATUS_REJECTED:
-            change_targets.append("fail")
+            change_targets.append("reject")
         if application.status != PROGRAM_APP_STATUS_INTERVIEW_REQUESTED:
             change_targets.append("interview")
     return render(request, "ui/pages/admin/entrance_exam_grade_attempt.html", {
@@ -615,7 +629,7 @@ def _parse_local_datetime(value: str):
 @role_required(*ROLE_EXAM_STAFF)
 @require_POST
 def admin_attempt_decision(request, attempt_id):
-    """Admin decision for a graded entrance attempt: pass / fail / interview / revert.
+    """Admin decision for an entrance attempt: accept / reject / interview / revert.
 
     The decision transitions the attempt's ProgramApplication through
     ``change_entrance_decision``, which stays available while the application is
@@ -818,9 +832,9 @@ def _eligible_applications(cohort, action, exam=None, status_filter=None):
     if action == EMAIL_ACTION_INVITATION:
         qs = ProgramApplication.objects.filter(cohort=cohort).select_related("student__user")
         if status_filter:
-            qs = qs.filter(status=status_filter)
+            qs = qs.filter(status=PROGRAM_APP_STATUS_INVITED) if status_filter == PROGRAM_APP_STATUS_INVITED else qs.none()
         else:
-            qs = qs.filter(status__in=[PROGRAM_APP_STATUS_ACCEPTED, PROGRAM_APP_STATUS_INVITED, PROGRAM_APP_STATUS_REJECTED])
+            qs = qs.filter(status=PROGRAM_APP_STATUS_INVITED)
         already_sent = PAEL.objects.filter(
             program_application__cohort=cohort, action=action, status__in=dispatched_statuses, is_resend=False,
         ).values_list("program_application_id", flat=True)
@@ -908,10 +922,10 @@ def _send_invitations(request, exam, cohort, student_ids):
 
 
 def _send_results(request, exam, student_ids):
-    """Queue result emails — auto-detects pass/fail from each attempt's result."""
+    """Queue neutral submitted/awaiting-review emails for selected attempts."""
     attempts = exam.attempts.filter(
         id__in=student_ids, status__in=[ATTEMPT_STATUS_COMPLETED, ATTEMPT_STATUS_GRADED],
-        result__isnull=False,
+        result__in=[RESULT_PASS, RESULT_FAIL],
     ).select_related("student__user", "program_application")
     queued_count = failed_count = 0
     pass_count = fail_count = 0
@@ -935,8 +949,6 @@ def _send_results(request, exam, student_ids):
             "exam_title": exam.title,
             "cohort_name": exam.cohort.name or "",
         }
-        if attempt.result == RESULT_FAIL:
-            context["rejection_reason"] = attempt.program_application.rejection_reason or ""
         try:
             record, _log = queue_program_application_email(
                 program_application=prog_app,
@@ -1038,17 +1050,19 @@ def admin_cohort_email(request, exam_id):
 
     if request.method == "POST":
         tab = request.POST.get("tab")
-        student_ids = request.POST.getlist("student_ids")
+        application_ids = request.POST.getlist("application_ids")
+        attempt_ids = request.POST.getlist("attempt_ids")
         log_ids = request.POST.getlist("log_ids")
         if tab == "history":
             return _resend_emails(request, exam, cohort, log_ids)
-        if not student_ids:
+        selected_ids = application_ids if tab == "invitation" else attempt_ids
+        if not selected_ids:
             messages.warning(request, _("No students selected."))
             return redirect("entrance_exams:admin_cohort_email", exam_id=exam.id)
         if tab == "invitation":
-            return _send_invitations(request, exam, cohort, student_ids)
+            return _send_invitations(request, exam, cohort, application_ids)
         elif tab == "results":
-            return _send_results(request, exam, student_ids)
+            return _send_results(request, exam, attempt_ids)
         messages.error(request, _("Invalid tab."))
         return redirect("entrance_exams:admin_cohort_email", exam_id=exam.id)
 
@@ -1068,7 +1082,7 @@ def admin_cohort_email(request, exam_id):
 
     results_qs = exam.attempts.filter(
         status__in=[ATTEMPT_STATUS_COMPLETED, ATTEMPT_STATUS_GRADED],
-        result__isnull=False,
+        result__in=[RESULT_PASS, RESULT_FAIL],
     ).select_related("student__user", "program_application")
     if tab == "results" and rq:
         results_qs = results_qs.filter(
@@ -1138,6 +1152,9 @@ def admin_app_email_resend(request, exam_id, app_id):
         if action not in (EMAIL_ACTION_INVITATION, EMAIL_ACTION_REJECTION):
             messages.error(request, _("Invalid email action."))
             return redirect("entrance_exams:admin_detail", exam_id=exam.id)
+        if action == EMAIL_ACTION_INVITATION and prog_app.status != PROGRAM_APP_STATUS_INVITED:
+            messages.error(request, _("This application is not eligible for an entrance exam invitation."))
+            return redirect(next_url)
         email_to = prog_app.student.user.email
         slug = (
             TEMPLATE_ENTRANCE_EXAM_INVITATION
@@ -1200,6 +1217,9 @@ def admin_app_email_resend(request, exam_id, app_id):
                 reference=f"app:{prog_app.pk}",
                 is_resend=True,
             )
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect(next_url)
     except Exception:
         logger.exception("Resend single email queue failed for application %s", prog_app.id)
         record_program_application_email_log(

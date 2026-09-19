@@ -112,38 +112,38 @@
           <h3>{% trans "Decision actions" %}</h3>
           {% if can_change_decision %}
             <nav class="tab-track w-max max-w-full overflow-auto mt-3" role="tablist" aria-label="{% trans 'Decision action' %}" data-decision-tablist>
-              {% if 'pass' in change_targets %}
-                <button class="tab {% if change_default == 'pass' %}tab-active{% endif %}" data-decision-tab="pass" role="tab" aria-selected="{% if change_default == 'pass' %}true{% else %}false{% endif %}" aria-controls="panel-pass" id="tab-pass" type="button">{% trans "Pass" %}</button>
+              {% if 'accept' in change_targets %}
+                <button class="tab {% if change_default == 'accept' %}tab-active{% endif %}" data-decision-tab="accept" role="tab" aria-selected="{% if change_default == 'accept' %}true{% else %}false{% endif %}" aria-controls="panel-accept" id="tab-accept" type="button">{% trans "Accept" %}</button>
               {% endif %}
               {% if 'interview' in change_targets %}
                 <button class="tab {% if change_default == 'interview' %}tab-active{% endif %}" data-decision-tab="interview" role="tab" aria-selected="{% if change_default == 'interview' %}true{% else %}false{% endif %}" aria-controls="panel-interview" id="tab-interview" type="button">{% trans "Interview" %}</button>
               {% endif %}
-              {% if 'fail' in change_targets %}
-                <button class="tab {% if change_default == 'fail' %}tab-active{% endif %}" data-decision-tab="fail" role="tab" aria-selected="{% if change_default == 'fail' %}true{% else %}false{% endif %}" aria-controls="panel-fail" id="tab-fail" type="button">{% trans "Fail" %}</button>
+              {% if 'reject' in change_targets %}
+                <button class="tab {% if change_default == 'reject' %}tab-active{% endif %}" data-decision-tab="reject" role="tab" aria-selected="{% if change_default == 'reject' %}true{% else %}false{% endif %}" aria-controls="panel-reject" id="tab-reject" type="button">{% trans "Reject" %}</button>
               {% endif %}
             </nav>
             <div class="mt-4">
-              {% if 'pass' in change_targets %}
-                <form id="panel-pass" data-decision-panel="pass" {% if change_default != 'pass' %}hidden{% endif %} role="tabpanel" aria-labelledby="tab-pass" method="post" action="{% url 'entrance_exams:admin_attempt_decision' attempt.id %}">{% csrf_token %}<input type="hidden" name="action" value="accept">
+              {% if 'accept' in change_targets %}
+                <form id="panel-accept" data-decision-panel="accept" {% if change_default != 'accept' %}hidden{% endif %} role="tabpanel" aria-labelledby="tab-accept" method="post" action="{% url 'entrance_exams:admin_attempt_decision' attempt.id %}">{% csrf_token %}<input type="hidden" name="action" value="accept">
                   <div class="max-w-2xl border border-line rounded-sm p-4 flex flex-col gap-4">
                     <p class="text-sm text-muted m-0">{% trans "Accept the student based on this decision. The calculated score stays unchanged." %}</p>
                     <label class="field"><span class="field-label">{% trans "Reviewer notes" %}</span><textarea name="admin_notes" class="form-textarea" rows="2"></textarea></label>
                     <label class="flex items-center gap-2 text-sm"><input class="form-checkbox" type="checkbox" name="send_email" checked><span>{% trans "Send email notification" %}</span></label>
                     <div class="actions-row">
-                      <button class="btn-success" type="submit">{% trans "Pass student" %}</button>
+                      <button class="btn-success" type="submit">{% trans "Accept application" %}</button>
                     </div>
                   </div>
                 </form>
               {% endif %}
-              {% if 'fail' in change_targets %}
-                <form id="panel-fail" data-decision-panel="fail" {% if change_default != 'fail' %}hidden{% endif %} role="tabpanel" aria-labelledby="tab-fail" method="post" action="{% url 'entrance_exams:admin_attempt_decision' attempt.id %}">{% csrf_token %}<input type="hidden" name="action" value="reject">
+              {% if 'reject' in change_targets %}
+                <form id="panel-reject" data-decision-panel="reject" {% if change_default != 'reject' %}hidden{% endif %} role="tabpanel" aria-labelledby="tab-reject" method="post" action="{% url 'entrance_exams:admin_attempt_decision' attempt.id %}">{% csrf_token %}<input type="hidden" name="action" value="reject">
                   <div class="max-w-2xl border border-line rounded-sm p-4 flex flex-col gap-4">
                     <p class="text-sm text-muted m-0">{% trans "Reject the student based on this decision. The calculated score stays unchanged." %}</p>
                     <label class="field"><span class="field-label">{% trans "Rejection reason" %} <span aria-hidden="true">*</span></span><textarea name="rejection_reason" class="form-textarea" rows="2" aria-required="true"></textarea></label>
                     <label class="field"><span class="field-label">{% trans "Reviewer notes" %}</span><textarea name="admin_notes" class="form-textarea" rows="1"></textarea></label>
                     <label class="flex items-center gap-2 text-sm"><input class="form-checkbox" type="checkbox" name="send_email" checked><span>{% trans "Send email notification" %}</span></label>
                     <div class="actions-row">
-                      <button class="btn-danger" type="submit">{% trans "Fail student" %}</button>
+                      <button class="btn-danger" type="submit">{% trans "Reject application" %}</button>
                     </div>
                   </div>
                 </form>

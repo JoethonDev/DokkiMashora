@@ -16,7 +16,7 @@
                 <tbody>
                   {% for item in invitation_page %}
                     <tr>
-                      <td class="table-td"><input type="checkbox" class="form-checkbox" name="student_ids" value="{{ item.student.id }}"></td>
+                      <td class="table-td"><input type="checkbox" class="form-checkbox" name="application_ids" value="{{ item.id }}"></td>
                       <td class="table-td">{{ item.student.full_name|default:item.student }}</td>
                       <td class="table-td">{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
                     </tr>
@@ -26,7 +26,7 @@
               <div class="card-stack lg:hidden">
                 {% for item in invitation_page %}
                   <div class="mobile-card">
-                    <label class="flex items-center gap-2 cursor-pointer shrink-0"><input type="checkbox" class="form-checkbox" name="student_ids" value="{{ item.student.id }}"></label>
+                    <label class="flex items-center gap-2 cursor-pointer shrink-0"><input type="checkbox" class="form-checkbox" name="application_ids" value="{{ item.id }}"></label>
                     <div class="flex-1 min-w-0">
                       <strong class="block truncate">{{ item.student.full_name|default:item.student }}</strong>
                       {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
@@ -61,7 +61,7 @@
                 <tbody>
                   {% for item in results_page %}
                     <tr>
-                      <td class="table-td"><input type="checkbox" class="form-checkbox" name="student_ids" value="{{ item.student.id }}"></td>
+                      <td class="table-td"><input type="checkbox" class="form-checkbox" name="attempt_ids" value="{{ item.id }}"></td>
                       <td class="table-td">{{ item.student.full_name|default:item.student }}</td>
                       <td class="table-td">{% include "ui/components/_status.html" with code=item.result label=item.get_result_display|default:'—' %}</td>
                     </tr>
@@ -71,7 +71,7 @@
               <div class="card-stack lg:hidden">
                 {% for item in results_page %}
                   <div class="mobile-card">
-                    <label class="flex items-center gap-2 cursor-pointer shrink-0"><input type="checkbox" class="form-checkbox" name="student_ids" value="{{ item.student.id }}"></label>
+                    <label class="flex items-center gap-2 cursor-pointer shrink-0"><input type="checkbox" class="form-checkbox" name="attempt_ids" value="{{ item.id }}"></label>
                     <div class="flex-1 min-w-0">
                       <strong class="block truncate">{{ item.student.full_name|default:item.student }}</strong>
                       {% include "ui/components/_status.html" with code=item.result label=item.get_result_display|default:'—' %}
