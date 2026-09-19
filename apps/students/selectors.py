@@ -10,7 +10,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
-from django.db.models import Count, Exists, OuterRef, Q
+from django.db.models import Count, Exists, OuterRef, Prefetch, Q
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -383,7 +383,21 @@ def get_student_application_queryset(student_profile: StudentProfile):
         )
         .prefetch_related(
             "document_requests__upload",
-            "intake_requests",
+            Prefetch(
+                "intake_requests",
+                queryset=IntakeFormRequest.objects.order_by("-requested_at", "-id"),
+            ),
+            "intake_responses",
+            Prefetch(
+                "course__versions",
+                queryset=(
+                    CourseVersion.objects.filter(is_active=True)
+                    .order_by("-created_at", "-id")
+                    .prefetch_related("intake_forms")
+                ),
+                to_attr="_active_intake_versions",
+            ),
+            "cohort__intake_forms",
             "entrance_attempts__exam",
         )
         .order_by("-created_at", "-id")

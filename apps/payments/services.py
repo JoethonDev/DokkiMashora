@@ -19,6 +19,7 @@ from apps.applications import services as application_services
 from apps.applications.constants import PROGRAM_TYPE_DIPLOMA
 from apps.applications.models import ProgramApplication
 from apps.audit.constants import (
+    ACTION_PAYMENT_RECORD_DELETED,
     ACTION_PAYMENT_RECORD_UPDATED,
     ACTION_PAYMENT_WAIVER_GRANTED,
     ACTION_PAYMENT_WAIVER_REVOKED,
@@ -501,44 +502,27 @@ def _apply_payment_rows(upload: PaymentUpload, plans, confirmed_by) -> None:
         target_type, target_snapshot = _build_target_snapshot(
             row, diploma_enrollment, course_enrollment,
         )
-        if existing:
-            existing.amount = row.amount
-            existing.paid_at = row.paid_at
-            existing.status = PAYMENT_STATUS_PAID
-            existing.notes = row.raw_data.get("notes", "")
-            existing.imported_by = confirmed_by
-            existing.application = app
-            existing.diploma_enrollment = diploma_enrollment
-            existing.course_enrollment = course_enrollment
-            if target_type:
-                existing.target_type = target_type
-                existing.target_snapshot = target_snapshot
-            target_ref = row.raw_data.get("target_ref", "")
-            if target_ref:
-                existing.target_ref = target_ref
-            existing.save(update_fields=["amount", "paid_at", "status", "notes", "imported_by",
-                                          "application", "diploma_enrollment", "course_enrollment",
-                                          "target_type", "target_snapshot", "target_ref", "updated_at"])
-            row.status = ROW_STATUS_UPDATED
-        else:
-            PaymentRecord.objects.create(
-                student=student,
-                upload_row=row,
-                external_reference=row.external_reference or "",
-                amount=row.amount,
-                currency=row.currency,
-                status=PAYMENT_STATUS_PAID,
-                paid_at=row.paid_at,
-                notes=row.raw_data.get("notes", ""),
-                imported_by=confirmed_by,
-                application=app,
-                diploma_enrollment=diploma_enrollment,
-                course_enrollment=course_enrollment,
-                target_type=row.raw_data.get("target_type", target_type),
-                target_ref=row.raw_data.get("target_ref", ""),
-                target_snapshot=target_snapshot,
-            )
-            row.status = ROW_STATUS_CREATED
+        record = reconcile_payment_record(
+            actor=confirmed_by,
+            record_id=existing.pk if existing else None,
+            student=student,
+            application=app,
+            amount=row.amount,
+            status=PAYMENT_STATUS_PAID,
+            paid_at=row.paid_at,
+            external_reference=row.external_reference or "",
+            notes=row.raw_data.get("notes", ""),
+            diploma_enrollment=diploma_enrollment,
+            course_enrollment=course_enrollment,
+            target_type=row.raw_data.get("target_type", target_type),
+            target_ref=row.raw_data.get("target_ref", ""),
+            target_snapshot=target_snapshot,
+            source="import",
+        )
+        if not existing:
+            record.upload_row = row
+            record.save(update_fields=["upload_row", "updated_at"])
+        row.status = ROW_STATUS_UPDATED if existing else ROW_STATUS_CREATED
         row.save(update_fields=["status"])
 
 
@@ -605,6 +589,204 @@ def create_upload(original_filename: str, content: bytes, uploaded_by) -> Paymen
 
 
 @transaction.atomic
+def reconcile_payment_record(
+    *,
+    actor,
+    status: str,
+    amount: Decimal | int,
+    record_id: int | None = None,
+    student: StudentProfile | None = None,
+    application=None,
+    paid_at=None,
+    due_at=None,
+    external_reference: str = "",
+    notes: str = "",
+    diploma_enrollment=None,
+    course_enrollment=None,
+    target_type: str = "",
+    target_ref: str = "",
+    target_snapshot: dict | None = None,
+    reason: str = "",
+    source: str = "manual",
+    attempt_activation: bool = False,
+    soft_delete: bool = False,
+) -> PaymentRecord:
+    """Own every manual/import payment status write and its reconciliation.
+
+    Every application-linked paid write enforces the admissions gates, including
+    imports. Non-application financial records remain independent of admissions;
+    activation is always attempted only through the normal readiness service.
+    A paid-to-unpaid correction cannot leave an active application without a
+    proven payment/waiver dependency or a rollback of the exact activation.
+    """
+    valid_statuses = {value for value, _label in PaymentRecord._meta.get_field("status").choices}
+    if status not in valid_statuses:
+        raise ValueError(_("Invalid payment status."))
+
+    record = None
+    if record_id is not None:
+        record = PaymentRecord.objects.select_for_update().select_related(
+            "application", "student", "diploma_enrollment", "course_enrollment",
+        ).get(pk=record_id)
+        if application is None:
+            application = record.application
+        elif record.application_id and record.application_id != application.pk:
+            raise ValueError(_("The payment record does not belong to this application."))
+        if student is None:
+            student = record.student
+        elif record.student_id != student.pk:
+            raise ValueError(_("The payment record does not belong to this student."))
+
+    locked_application = None
+    if application is not None:
+        locked_application = ProgramApplication.objects.select_for_update().get(pk=application.pk)
+        if student is None:
+            student = locked_application.student
+        elif locked_application.student_id != student.pk:
+            raise ValueError(_("The payment application does not belong to this student."))
+
+    if student is None:
+        raise ValueError(_("A student is required for a payment record."))
+
+    effective_paid_after = status == PAYMENT_STATUS_PAID and not soft_delete
+    was_paid = bool(record and record.status == PAYMENT_STATUS_PAID and record.deleted_at is None)
+
+    if (
+        locked_application is not None
+        and status == PAYMENT_STATUS_PAID
+        and not was_paid
+    ):
+        if locked_application.status not in application_services.LEGAL_PAYMENT_STATUSES:
+            raise ValueError(_("Cannot record payment for the current application status."))
+        if (
+            locked_application.program_type == PROGRAM_TYPE_DIPLOMA
+            and not application_services.has_application_documents_submitted(locked_application)
+        ):
+            raise ValueError(_("Application documents must be submitted before recording payment."))
+        if not application_services.has_required_intake_response(locked_application):
+            raise ValueError(_("Required intake form must be submitted before recording payment."))
+        if application_services.has_active_application_waiver(locked_application):
+            raise ValueError(_("An active payment waiver already exists for this application."))
+
+    if effective_paid_after:
+        duplicate_qs = PaymentRecord.objects.filter(
+            student=student,
+            status=PAYMENT_STATUS_PAID,
+            deleted_at__isnull=True,
+        )
+        if locked_application is not None:
+            duplicate_qs = duplicate_qs.filter(application=locked_application)
+        elif diploma_enrollment is not None:
+            duplicate_qs = duplicate_qs.filter(diploma_enrollment=diploma_enrollment)
+        elif course_enrollment is not None:
+            duplicate_qs = duplicate_qs.filter(course_enrollment=course_enrollment)
+        if record is not None:
+            duplicate_qs = duplicate_qs.exclude(pk=record.pk)
+        if duplicate_qs.exists():
+            raise ValueError(_("Payment already recorded for this target."))
+
+    if paid_at is None and effective_paid_after:
+        paid_at = timezone.now()
+    amount_dec = validate_score(amount or 0)
+    before = None
+    if record is not None:
+        before = {
+            "status": record.status,
+            "deleted_at": record.deleted_at.isoformat() if record.deleted_at else None,
+            "amount": str(record.amount),
+            "paid_at": record.paid_at.isoformat() if record.paid_at else None,
+        }
+        record.amount = amount_dec
+        record.status = status
+        record.paid_at = paid_at
+        record.due_at = due_at
+        record.external_reference = external_reference
+        record.notes = notes
+        record.imported_by = actor
+        if application is not None:
+            record.application = locked_application
+        if diploma_enrollment is not None:
+            record.diploma_enrollment = diploma_enrollment
+        if course_enrollment is not None:
+            record.course_enrollment = course_enrollment
+        if target_type:
+            record.target_type = target_type
+        if target_ref:
+            record.target_ref = target_ref
+        if target_snapshot is not None:
+            record.target_snapshot = target_snapshot
+        if soft_delete:
+            record.deleted_at = timezone.now()
+            record.deleted_by = actor
+        record.save()
+    else:
+        record = PaymentRecord.objects.create(
+            student=student,
+            application=locked_application,
+            amount=amount_dec,
+            currency=CURRENCY_EGP,
+            status=status,
+            paid_at=paid_at,
+            due_at=due_at,
+            external_reference=external_reference,
+            notes=notes,
+            imported_by=actor,
+            diploma_enrollment=diploma_enrollment,
+            course_enrollment=course_enrollment,
+            target_type=target_type,
+            target_ref=target_ref,
+            target_snapshot=target_snapshot or {},
+        )
+
+    if locked_application is not None and was_paid and not effective_paid_after:
+        other_paid = PaymentRecord.objects.filter(
+            application=locked_application,
+            status=PAYMENT_STATUS_PAID,
+            deleted_at__isnull=True,
+        ).exclude(pk=record.pk).exists()
+        has_waiver = application_services.has_active_application_waiver(locked_application)
+        if locked_application.status == "activated" and not other_paid and not has_waiver:
+            rollback = application_services.rollback_payment_activation(
+                locked_application.pk,
+                record.pk,
+                actor=actor,
+                reason=reason,
+            )
+            if not rollback["rolled_back"]:
+                raise ValueError(_(
+                    "This correction is not proven to own the active access. Use a governed correction workflow."
+                ))
+    elif locked_application is None and was_paid and not effective_paid_after:
+        enrollment = diploma_enrollment or course_enrollment or getattr(record, "diploma_enrollment", None) or getattr(record, "course_enrollment", None)
+        if enrollment is not None and enrollment.status == "active":
+            raise ValueError(_(
+                "This correction would remove payment from active access without a proven activation dependency."
+            ))
+
+    record_audit_event(
+        actor=actor,
+        action=ACTION_PAYMENT_RECORD_DELETED if soft_delete else ACTION_PAYMENT_RECORD_UPDATED,
+        target_type="PaymentRecord",
+        target_id=str(record.pk),
+        metadata={
+            "source": source,
+            "reason": reason,
+            "before": before,
+            "after": {
+                "status": record.status,
+                "deleted_at": record.deleted_at.isoformat() if record.deleted_at else None,
+                "amount": str(record.amount),
+                "paid_at": record.paid_at.isoformat() if record.paid_at else None,
+            },
+        },
+    )
+
+    if locked_application is not None and attempt_activation and effective_paid_after:
+        application_services.activate_application_if_ready(locked_application, actor=actor)
+    return record
+
+
+@transaction.atomic
 def mark_enrollment_paid(
     student: StudentProfile,
     enrollment_type: str,
@@ -617,45 +799,33 @@ def mark_enrollment_paid(
     Snapshots the target enrollment name so financial history survives
     target deletion.
     """
-    paid_amount = validate_score(amount)
-
-    kwargs: dict = {
-        "student": student,
-        "amount": paid_amount,
-        "currency": CURRENCY_EGP,
-        "status": PAYMENT_STATUS_PAID,
-        "paid_at": timezone.now(),
-        "imported_by": actor,
-        "notes": f"Manual payment by {actor.email}",
-        "target_type": enrollment_type,
-    }
     if enrollment_type == "diploma":
         enrollment = DiplomaEnrollment.objects.select_for_update().get(pk=enrollment_id, student=student)
-        kwargs["diploma_enrollment"] = enrollment
-        kwargs["target_ref"] = str(enrollment.id)
-        kwargs["target_snapshot"] = {
+        target_snapshot = {
             "cohort_name": enrollment.cohort.name if enrollment.cohort else "",
             "diploma_title": enrollment.cohort.diploma.title if enrollment.cohort and enrollment.cohort.diploma else "",
         }
     elif enrollment_type == "course":
         enrollment = CourseEnrollment.objects.select_for_update().get(pk=enrollment_id, student=student)
-        kwargs["course_enrollment"] = enrollment
-        kwargs["target_ref"] = str(enrollment.id)
-        kwargs["target_snapshot"] = {
+        target_snapshot = {
             "course_title": enrollment.course_version.course.title if enrollment.course_version and enrollment.course_version.course else "",
             "course_version_name": enrollment.course_version.label if enrollment.course_version else "",
         }
     else:
         raise ValueError(_("Invalid enrollment type: {t}").format(t=enrollment_type))
-    # Guard: duplicate payment (exclude soft-deleted records)
-    dup_filter = {"student": student, "status": PAYMENT_STATUS_PAID, "deleted_at__isnull": True}
-    if enrollment_type == "diploma":
-        dup_filter["diploma_enrollment_id"] = enrollment_id
-    else:
-        dup_filter["course_enrollment_id"] = enrollment_id
-    if PaymentRecord.objects.filter(**dup_filter).exists():
-        raise ValueError(_("Payment already recorded for this enrollment."))
-    return PaymentRecord.objects.create(**kwargs)
+    return reconcile_payment_record(
+        actor=actor,
+        student=student,
+        amount=amount,
+        status=PAYMENT_STATUS_PAID,
+        notes=f"Manual payment by {actor.email}",
+        diploma_enrollment=enrollment if enrollment_type == "diploma" else None,
+        course_enrollment=enrollment if enrollment_type == "course" else None,
+        target_type=enrollment_type,
+        target_ref=str(enrollment.id),
+        target_snapshot=target_snapshot,
+        source="enrollment",
+    )
 
 
 @transaction.atomic
@@ -679,39 +849,26 @@ def mark_enrollment_unpaid(
         filters["course_enrollment_id"] = enrollment_id
     else:
         raise ValueError(_("Invalid enrollment type: {t}").format(t=enrollment_type))
-    records = list(PaymentRecord.objects.filter(**filters).order_by("id"))
+    records = list(PaymentRecord.objects.select_for_update().filter(**filters).order_by("id"))
     if not records:
         return 0
-    before = [
-        {
-            "id": record.id,
-            "amount": str(record.amount),
-            "status": record.status,
-            "paid_at": record.paid_at.isoformat() if record.paid_at else None,
-        }
-        for record in records
-    ]
-    count = PaymentRecord.objects.filter(pk__in=[record.pk for record in records]).update(
-        status=PAYMENT_STATUS_UNPAID
-    )
-    record_audit_event(
-        actor=actor,
-        action=ACTION_PAYMENT_RECORD_UPDATED,
-        target_type="PaymentRecord",
-        target_id=str(records[0].id),
-        metadata={
-            "student_id": student.id,
-            "enrollment_type": enrollment_type,
-            "enrollment_id": enrollment_id,
-            "reason": reason,
-            "before": before,
-            "after": [
-                {**state, "status": PAYMENT_STATUS_UNPAID}
-                for state in before
-            ],
-        },
-    )
-    return count
+    for record in records:
+        reconcile_payment_record(
+            actor=actor,
+            record_id=record.pk,
+            student=student,
+            amount=record.amount,
+            status=PAYMENT_STATUS_UNPAID,
+            paid_at=record.paid_at,
+            due_at=record.due_at,
+            external_reference=record.external_reference,
+            notes=record.notes,
+            diploma_enrollment=record.diploma_enrollment,
+            course_enrollment=record.course_enrollment,
+            reason=reason,
+            source="enrollment",
+        )
+    return len(records)
 
 
 # ---------------------------------------------------------------------------
@@ -785,6 +942,8 @@ def grant_payment_waiver(application, actor, *, reason: str) -> PaymentWaiver:
     locked = ProgramApplication.objects.select_for_update().get(pk=application.pk)
     if locked.status not in WAIVER_LEGAL_APPLICATION_STATUSES:
         raise ValueError(_("Cannot grant a payment waiver for the current application status."))
+    if application_services.has_application_paid_record(locked):
+        raise ValueError(_("A payment waiver cannot be granted after payment has been recorded."))
     if (
         locked.program_type == PROGRAM_TYPE_DIPLOMA
         and not application_services.has_application_documents_submitted(locked)

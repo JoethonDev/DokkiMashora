@@ -270,7 +270,7 @@ def admin_intake_request_send(request: HttpRequest, application_id: int) -> Http
         raise PermissionDenied
     application = get_object_or_404(ProgramApplication, pk=application_id)
     if application.status not in INTAKE_REQUESTABLE_STATUSES:
-        messages.error(request, _("Intake forms can only be requested for applications that are not yet rejected or activated."))
+        messages.error(request, _("Intake forms can only be requested after the admissions decision and required document submission."))
         return redirect("applications:program_detail", application_id=application.pk)
     try:
         intake_request = request_intake_form_for_application(
@@ -284,7 +284,7 @@ def admin_intake_request_send(request: HttpRequest, application_id: int) -> Http
             metadata={"application_id": str(application.pk)},
         )
         messages.success(request, _("Intake request created. Survey email queued."))
-    except ValueError as exc:
+    except (ValueError, PermissionError) as exc:
         messages.error(request, str(exc))
     return redirect("applications:program_detail", application_id=application.pk)
 
@@ -356,6 +356,13 @@ def _render_intake_form(
         messages.error(request, _("This intake form request has been cancelled."))
         return redirect("students:applications")
 
+    if not intake_request.form.is_open():
+        return render(request, "ui/pages/student/intake_form.html", {
+            "closed": True,
+            "intake_request": intake_request,
+            "application": application,
+        })
+
     if intake_request.expires_at <= timezone.now():
         return render(request, "ui/pages/student/intake_form.html", {
             "expired": True,
@@ -387,7 +394,7 @@ def _render_intake_form(
                 )
                 messages.success(request, _("Intake form submitted successfully."))
                 return redirect("students:applications")
-            except ValueError as exc:
+            except (ValueError, PermissionError) as exc:
                 messages.error(request, str(exc))
         else:
             for _field, errs in submit_form.errors.items():

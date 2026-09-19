@@ -8,14 +8,11 @@ from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_POST
 
 from apps.accounts.constants import GROUP_ADMIN, GROUP_SUPER_ADMIN
 from apps.audit.constants import (
-    ACTION_PAYMENT_RECORD_DELETED,
-    ACTION_PAYMENT_RECORD_UPDATED,
     ACTION_PAYMENT_UPLOAD_CONFIRMED,
     ACTION_PAYMENT_UPLOAD_PREVIEWED,
 )
@@ -49,6 +46,7 @@ from .services import (
     mark_enrollment_paid,
     mark_enrollment_unpaid,
     preview_upload,
+    reconcile_payment_record,
 )
 
 ROLE_PAYMENT_STAFF = (GROUP_SUPER_ADMIN, GROUP_ADMIN)
@@ -255,6 +253,7 @@ def payment_record_detail(request, record_id):
 
 @login_required
 @role_required(*ROLE_PAYMENT_STAFF)
+@transaction.atomic
 def payment_record_edit(request, record_id):
     record = get_object_or_404(
         PaymentRecord.objects.select_related("student__user"),
@@ -263,31 +262,26 @@ def payment_record_edit(request, record_id):
     )
     form = PaymentRecordEditForm(request.POST or None, instance=record)
     if request.method == "POST" and form.is_valid():
-        old_values = {
-            "amount": str(record.amount),
-            "status": record.status,
-            "paid_at": record.paid_at.isoformat() if record.paid_at else None,
-            "external_reference": record.external_reference,
-        }
-        form.save()
-        record_audit_event(
-            actor=request.user,
-            action=ACTION_PAYMENT_RECORD_UPDATED,
-            target_type="PaymentRecord",
-            target_id=str(record.id),
-            metadata={
-                "student_id": record.student_id,
-                "before": old_values,
-                "after": {
-                    "amount": str(record.amount),
-                    "status": record.status,
-                    "paid_at": record.paid_at.isoformat() if record.paid_at else None,
-                    "external_reference": record.external_reference,
-                },
-            },
-        )
-        messages.success(request, _("Payment record updated."))
-        return redirect("payments:record_detail", record_id=record.id)
+        try:
+            reconcile_payment_record(
+                actor=request.user,
+                record_id=record.id,
+                student=record.student,
+                application=record.application,
+                amount=form.cleaned_data["amount"],
+                status=form.cleaned_data["status"],
+                paid_at=form.cleaned_data.get("paid_at"),
+                due_at=form.cleaned_data.get("due_at"),
+                external_reference=form.cleaned_data.get("external_reference", ""),
+                notes=form.cleaned_data.get("notes", ""),
+                reason=(request.POST.get("reason") or "").strip(),
+                source="manual",
+            )
+        except ValueError as exc:
+            messages.error(request, str(exc))
+        else:
+            messages.success(request, _("Payment record updated."))
+            return redirect("payments:record_detail", record_id=record.id)
     return render(request, "ui/pages/admin/payments.html", {"page_mode": "record_edit", "form": form, "record": record, "title": _("Payment record")})
 
 
@@ -333,23 +327,33 @@ def enrollment_payment_toggle(request, student_id, enrollment_type, enrollment_i
 @require_POST
 @login_required
 @role_required(*ROLE_PAYMENT_STAFF)
+@transaction.atomic
 def payment_record_delete(request, record_id):
-    record = get_object_or_404(PaymentRecord, id=record_id, deleted_at__isnull=True)
-    record.deleted_at = timezone.now()
-    record.deleted_by = request.user
-    record.save(update_fields=["deleted_at", "deleted_by", "updated_at"])
-    record_audit_event(
-        actor=request.user,
-        action=ACTION_PAYMENT_RECORD_DELETED,
-        target_type="PaymentRecord",
-        target_id=str(record.id),
-        metadata={
-            "student_id": record.student_id,
-            "amount": str(record.amount),
-            "status": record.status,
-        },
+    record = get_object_or_404(
+        PaymentRecord.objects.select_related("student", "application"),
+        id=record_id,
+        deleted_at__isnull=True,
     )
-    messages.success(request, _("Payment record deleted."))
+    try:
+        reconcile_payment_record(
+            actor=request.user,
+            record_id=record.id,
+            student=record.student,
+            application=record.application,
+            amount=record.amount,
+            status=record.status,
+            paid_at=record.paid_at,
+            due_at=record.due_at,
+            external_reference=record.external_reference,
+            notes=record.notes,
+            reason=(request.POST.get("reason") or "").strip(),
+            source="manual",
+            soft_delete=True,
+        )
+    except ValueError as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(request, _("Payment record deleted."))
     return redirect("payments:record_list")
 
 

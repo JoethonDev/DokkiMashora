@@ -132,6 +132,13 @@ class IntakeFormRequest(models.Model):
             models.Index(fields=["program_application", "status"]),
             models.Index(fields=["form", "status"]),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["form", "program_application"],
+                condition=models.Q(status=INTAKE_REQUEST_STATUS_REQUESTED),
+                name="uq_one_open_intake_request",
+            ),
+        ]
 
     def __str__(self):
         return f"Request for {self.form} ({self.get_status_display()})"
@@ -157,6 +164,15 @@ class IntakeFormResponse(models.Model):
     def __str__(self):
         return f"Response for {self.form} by {self.student}"
 
+    def clean(self):
+        super().clean()
+        if self.request_id:
+            if self.request.form_id != self.form_id:
+                raise ValidationError(_("The intake response form does not match its request."))
+            if self.request.program_application_id != self.program_application_id:
+                raise ValidationError(_("The intake response application does not match its request."))
+            if self.student_id != self.request.program_application.student_id:
+                raise ValidationError(_("The intake response student does not match its application."))
 
 class IntakeFormAnswer(models.Model):
     response = models.ForeignKey(

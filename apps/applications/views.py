@@ -476,7 +476,7 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
 
         if action == "request_intake" and is_admin(request.user):
             if ACTION_REQUEST_INTAKE not in allowed_actions:
-                messages.error(request, _("Intake forms can only be requested for applications that are not yet rejected or activated."))
+                messages.error(request, _("Intake forms can only be requested after the admissions decision and required document submission."))
             else:
                 try:
                     request_intake_form_for_application(application, request.user, send_email=True)

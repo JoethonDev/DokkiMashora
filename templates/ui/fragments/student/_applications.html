@@ -1,4 +1,4 @@
-{% load i18n %}
+{% load i18n ui_tags %}
 <div id="student-content" class="page-stack animate-enter-view">{% url 'students:apply' as student_apply_url %}{% include "ui/components/_page_header.html" with eyebrow=_("Admissions") title=_("My applications") description=_("Follow submitted applications, requested documents, and decisions.") actions_template="ui/fragments/student/_page_header_actions.html" header_action_url=student_apply_url header_action_label=_("Start an application") header_action_class="btn-primary" %}
   <section class="card-surface"><div class="actions-row"><a class="btn-soft" href="{% url 'students:apply' %}">{% trans "Apply to a program" %}</a>
     </div>
@@ -33,6 +33,9 @@
                   <div class="flex flex-wrap gap-2">
                     {% for action in item.available_actions %}
                       <a class="btn-secondary" href="{{ action.url }}">{{ action.label }}</a>
+                      {% if action.kind == "intake" and action.due_at %}
+                        <small class="text-xs text-muted">{% trans "Expires" %}: <span dir="ltr" class="bidi">{{ action.due_at|ui_datetime }}</span></small>
+                      {% endif %}
                     {% endfor %}
                   </div>
                 {% elif item.next_step %}
@@ -67,6 +70,9 @@
               <div class="flex flex-wrap gap-2 mt-2">
                 {% for action in item.available_actions %}
                   <a class="btn-soft-primary shrink-0" href="{{ action.url }}">{{ action.label }}</a>
+                  {% if action.kind == "intake" and action.due_at %}
+                    <small class="block w-full text-xs text-muted">{% trans "Expires" %}: <span dir="ltr" class="bidi">{{ action.due_at|ui_datetime }}</span></small>
+                  {% endif %}
                 {% endfor %}
               </div>
             {% elif item.next_step %}

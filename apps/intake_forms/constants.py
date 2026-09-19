@@ -4,15 +4,10 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.applications.constants import (
     PROGRAM_APP_STATUS_ACCEPTED,
-    PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED,
     PROGRAM_APP_STATUS_DOCUMENTS_REQUESTED,
     PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED,
-    PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
-    PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
-    PROGRAM_APP_STATUS_INVITED,
     PROGRAM_APP_STATUS_PAYMENT_PENDING,
     PROGRAM_APP_STATUS_READY_FOR_ACTIVATION,
-    PROGRAM_APP_STATUS_SUBMITTED,
     PROGRAM_APP_STATUS_SURVEY_REQUESTED,
     PROGRAM_APP_STATUS_SURVEY_SUBMITTED,
 )
@@ -48,15 +43,11 @@ INTAKE_REQUEST_STATUS_CHOICES = (
 )
 
 # Application statuses from which an intake (survey) request may still be sent.
-# Terminal (rejected) and activated applications must never regress into the
-# intake stage; every other live status may precede or already be in it (A6).
+# Intake is a post-decision gate. Pre-decision statuses intentionally stay out
+# of this set so a stale link or an over-eager admin action cannot bypass the
+# entrance/interview decision and, for Diploma, the document stage.
 INTAKE_REQUESTABLE_STATUSES = (
-    PROGRAM_APP_STATUS_SUBMITTED,
-    PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED,
     PROGRAM_APP_STATUS_PAYMENT_PENDING,
-    PROGRAM_APP_STATUS_INVITED,
-    PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
-    PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
     PROGRAM_APP_STATUS_ACCEPTED,
     PROGRAM_APP_STATUS_DOCUMENTS_REQUESTED,
     PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED,

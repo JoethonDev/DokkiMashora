@@ -1,7 +1,7 @@
 {% extends "ui/layouts/student.html" %}
 {% load i18n %}
 {% block title %}
-  {% if submitted %}{% trans "Intake form submitted" %}{% elif expired %}{% trans "Intake form expired" %}{% else %}{{ form_instance.title }}{% endif %}
+  {% if submitted %}{% trans "Intake form submitted" %}{% elif expired %}{% trans "Intake form expired" %}{% elif closed %}{% trans "Intake form closed" %}{% else %}{{ form_instance.title }}{% endif %}
 {% endblock %}
 {% block content %}
   {% url 'students:applications' as applications_url %}
@@ -11,6 +11,9 @@
   {% elif expired %}
     {% include "ui/components/_page_header.html" with eyebrow=_("Intake form") title=_("Intake form expired") back_url=applications_url back_label=_("Back to applications") %}
     <section class="card-surface">{% include "ui/components/_empty_state.html" with title=_("This link has expired") message=_("This intake form link has expired. If you still need to complete it, contact the admissions office for a new link.") %}</section>
+  {% elif closed %}
+    {% include "ui/components/_page_header.html" with eyebrow=_("Intake form") title=_("Intake form closed") back_url=applications_url back_label=_("Back to applications") %}
+    <section class="card-surface">{% include "ui/components/_empty_state.html" with title=_("This required form is closed") message=_("This required intake form is not currently open. The admissions office must open or replace it before you can submit a response.") %}</section>
   {% else %}
     {% include "ui/components/_page_header.html" with eyebrow=_("Intake form") title=form_instance.title description=form_instance.description back_url=applications_url back_label=_("Back to applications") %}
     <form class="card-surface max-w-form mx-auto w-full page-stack"

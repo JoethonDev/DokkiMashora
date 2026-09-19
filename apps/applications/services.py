@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import secrets
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from django.contrib.auth import get_user_model
@@ -16,7 +16,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
-from apps.academics.constants import ENROLLMENT_STATUS_PENDING
+from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE, ENROLLMENT_STATUS_PENDING
 from apps.academics.models import Cohort, Course, CourseEnrollment, CourseVersion, DiplomaEnrollment
 from apps.academics.services import activate_course_enrollment, activate_diploma_enrollment
 from apps.accounts.constants import GROUP_STUDENT, USER_STATUS_INACTIVE
@@ -34,24 +34,22 @@ from apps.communications.constants import (
 from apps.communications.services import (
     queue_program_application_email,
 )
-from apps.core.permissions import validate_score
 from apps.core.phone import normalize_phone
 from apps.entrance_exams.models import EntranceAttempt
 from apps.intake_forms import services as intake_services
 from apps.intake_forms.constants import (  # noqa: E402
-    INTAKE_REQUEST_STATUS_REQUESTED,
-    INTAKE_REQUEST_STATUS_SUBMITTED,
     INTAKE_REQUESTABLE_STATUSES,
 )
 from apps.intake_forms.models import IntakeForm, IntakeFormResponse
 from apps.intake_forms.selectors import (  # noqa: E402
     ACTIVE_COURSE_VERSION_ORDERING,
     REQUIRED_INTAKE_FORM_ORDERING,
-    get_required_intake_form_for_application,
+    get_intake_requirement_states,
+    get_required_intake_forms_for_application,
     has_required_intake_response,
 )
 from apps.payments import services as payment_services
-from apps.payments.constants import CURRENCY_EGP, PAYMENT_STATUS_PAID, WAIVER_STATUS_ACTIVE
+from apps.payments.constants import PAYMENT_STATUS_PAID, WAIVER_STATUS_ACTIVE
 from apps.payments.models import PaymentRecord, PaymentWaiver
 from apps.students.identity import (
     COUNTRY_EG,
@@ -410,14 +408,33 @@ def send_post_activation_application_email(application, actor=None, force_resend
     Emails are sent via on_commit so they only fire after the transaction commits.
     """
     locked = ProgramApplication.objects.select_for_update().get(pk=application.pk)
-    allowed = [PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED, PROGRAM_APP_STATUS_ACCEPTED, PROGRAM_APP_STATUS_PAYMENT_PENDING, PROGRAM_APP_STATUS_INVITED]
+    allowed = [
+        PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED,
+        PROGRAM_APP_STATUS_ACCEPTED,
+        PROGRAM_APP_STATUS_PAYMENT_PENDING,
+    ]
     allowed.append(PROGRAM_APP_STATUS_SURVEY_SUBMITTED)
     if locked.status not in allowed:
         raise ValueError(_("Application must be in account_activated status to send post-activation email."))
 
-    form = intake_services.get_required_intake_form_for_application(locked)
-    if form and not has_required_intake_response(locked):
+    # Diploma applications still have to enter the entrance-assessment path
+    # after account activation. Their document request is issued after the
+    # admissions decision; only then may a required intake form be requested.
+    diploma_initial_activation = (
+        locked.program_type == PROGRAM_TYPE_DIPLOMA
+        and locked.status == PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED
+    )
+    # Course applications wait for the admissions decision before the survey
+    # is requested. Diploma applications use this initial account-activation
+    # hook only to enter the entrance-assessment path.
+    course_pre_decision = (
+        locked.program_type == PROGRAM_TYPE_COURSE
+        and locked.status == PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED
+    )
+    if not has_required_intake_response(locked) and not diploma_initial_activation and not course_pre_decision:
         intake_services.ensure_required_intake_request(locked, actor=actor)
+        return
+    if course_pre_decision:
         return
 
     if locked.program_type == PROGRAM_TYPE_COURSE:
@@ -581,7 +598,6 @@ def accept_program_application(application, actor, notes: str = "", send_email: 
         allowed = {PROGRAM_APP_STATUS_SUBMITTED, PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED, PROGRAM_APP_STATUS_PAYMENT_PENDING}
     else:
         allowed = {
-            PROGRAM_APP_STATUS_INVITED,
             PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
             PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
         }
@@ -985,7 +1001,7 @@ def can_activate_application(application) -> ActivationCheck:
         PROGRAM_APP_STATUS_READY_FOR_ACTIVATION,
     ):
         reasons.append("not_accepted_or_documents_not_submitted")
-    if application.status == PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED and not has_application_documents_submitted(application):
+    if not has_application_documents_submitted(application):
         reasons.append("documents_not_uploaded")
     if not application.cohort:
         reasons.append("no_cohort_target")
@@ -1038,7 +1054,11 @@ def activate_application_if_ready(application, actor=None) -> ActivationResult:
             course_version=cv,
             defaults={"status": ENROLLMENT_STATUS_PENDING},
         )
-        activate_course_enrollment(enrollment)
+        enrollment_status_before = enrollment.status
+        enrollment_activated_at_before = enrollment.activated_at.isoformat() if enrollment.activated_at else None
+        enrollment_expires_at_before = enrollment.expires_at.isoformat() if enrollment.expires_at else None
+        if enrollment.status != ENROLLMENT_STATUS_ACTIVE:
+            activate_course_enrollment(enrollment)
         enrollment_type = "course"
         enrollment_id = enrollment.pk
     else:
@@ -1048,7 +1068,11 @@ def activate_application_if_ready(application, actor=None) -> ActivationResult:
             cohort=locked.cohort,
             defaults={"status": ENROLLMENT_STATUS_PENDING},
         )
-        activate_diploma_enrollment(enrollment)
+        enrollment_status_before = enrollment.status
+        enrollment_activated_at_before = enrollment.activated_at.isoformat() if enrollment.activated_at else None
+        enrollment_expires_at_before = enrollment.expires_at.isoformat() if enrollment.expires_at else None
+        if enrollment.status != ENROLLMENT_STATUS_ACTIVE:
+            activate_diploma_enrollment(enrollment)
         enrollment_type = "diploma"
         enrollment_id = enrollment.pk
 
@@ -1071,6 +1095,10 @@ def activate_application_if_ready(application, actor=None) -> ActivationResult:
             "payment_record_id": _find_paid_record_id(locked),
             "payment_waiver_id": _active_application_waiver_id(locked),
             "enrollment_created": created,
+            "enrollment_changed_by_activation": enrollment_status_before != ENROLLMENT_STATUS_ACTIVE,
+            "enrollment_status_before": enrollment_status_before,
+            "enrollment_activated_at_before": enrollment_activated_at_before,
+            "enrollment_expires_at_before": enrollment_expires_at_before,
             "enrollment_id": enrollment_id,
             "enrollment_type": enrollment_type,
             "activated_by": actor.email if actor else "",
@@ -1095,6 +1123,66 @@ def activate_application_if_ready(application, actor=None) -> ActivationResult:
         enrollment=enrollment,
         reasons=[],
     )
+
+
+def _restore_activation_enrollment(metadata: dict, *, activation_created_at=None):
+    """Restore enrollment state only when this activation changed it.
+
+    New activation decisions persist the exact pre-activation fields. Older
+    decisions retain the previous created-enrollment fallback for compatibility.
+    """
+    enrollment_id = metadata.get("enrollment_id")
+    enrollment_type = metadata.get("enrollment_type")
+    should_restore = metadata.get("enrollment_changed_by_activation")
+    has_prior_snapshot = "enrollment_status_before" in metadata
+    if not enrollment_id:
+        return None
+
+    if enrollment_type == "diploma":
+        enrollment = DiplomaEnrollment.objects.select_for_update().filter(pk=enrollment_id).first()
+    elif enrollment_type == "course":
+        enrollment = CourseEnrollment.objects.select_for_update().filter(pk=enrollment_id).first()
+    else:
+        enrollment = None
+    if enrollment is None:
+        return None
+    if should_restore is None:
+        if "enrollment_created" in metadata:
+            should_restore = bool(metadata.get("enrollment_created"))
+        elif activation_created_at is not None:
+            should_restore = enrollment.created_at >= activation_created_at - timedelta(seconds=10)
+        else:
+            should_restore = False
+    if not should_restore:
+        return None
+    if enrollment.status != ENROLLMENT_STATUS_ACTIVE:
+        raise ValueError(_(
+            "The enrollment changed after activation; access correction was not applied."
+        ))
+
+    if has_prior_snapshot:
+        enrollment.status = metadata.get("enrollment_status_before") or ENROLLMENT_STATUS_PENDING
+        try:
+            enrollment.activated_at = (
+                datetime.fromisoformat(metadata["enrollment_activated_at_before"])
+                if metadata.get("enrollment_activated_at_before")
+                else None
+            )
+            enrollment.expires_at = (
+                datetime.fromisoformat(metadata["enrollment_expires_at_before"])
+                if metadata.get("enrollment_expires_at_before")
+                else None
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValueError(_(
+                "The activation history is invalid; access correction was not applied."
+            )) from exc
+    else:
+        enrollment.status = ENROLLMENT_STATUS_PENDING
+        enrollment.activated_at = None
+        enrollment.expires_at = None
+    enrollment.save(update_fields=["status", "activated_at", "expires_at", "updated_at"])
+    return enrollment
 
 
 @transaction.atomic
@@ -1133,38 +1221,20 @@ def rollback_waiver_activation(application_id, waiver_id, actor=None, reason: st
             "application_status_after": locked.status,
             "enrollment_reset": False,
         }
+    if metadata.get("enrollment_changed_by_activation") is False:
+        return {
+            "rolled_back": False,
+            "application_status_before": locked.status,
+            "application_status_after": locked.status,
+            "enrollment_reset": False,
+        }
 
     old_status = locked.status
     restored_status = activation.old_status
-    enrollment_id = metadata.get("enrollment_id")
-    enrollment_type = metadata.get("enrollment_type")
-    enrollment_created = metadata.get("enrollment_created")
-    if enrollment_created is None and enrollment_id:
-        # Older activation decisions did not persist this flag. The timestamp
-        # fallback only treats an enrollment created immediately before that
-        # activation as belonging to the activation being rolled back.
-        if enrollment_type == "diploma":
-            legacy_enrollment = DiplomaEnrollment.objects.filter(pk=enrollment_id).first()
-        elif enrollment_type == "course":
-            legacy_enrollment = CourseEnrollment.objects.filter(pk=enrollment_id).first()
-        else:
-            legacy_enrollment = None
-        enrollment_created = bool(
-            legacy_enrollment
-            and legacy_enrollment.created_at >= activation.created_at - timedelta(seconds=10)
-        )
-
-    enrollment = None
-    if enrollment_created and enrollment_id:
-        if enrollment_type == "diploma":
-            enrollment = DiplomaEnrollment.objects.select_for_update().filter(pk=enrollment_id).first()
-        elif enrollment_type == "course":
-            enrollment = CourseEnrollment.objects.select_for_update().filter(pk=enrollment_id).first()
-        if enrollment:
-            enrollment.status = ENROLLMENT_STATUS_PENDING
-            enrollment.activated_at = None
-            enrollment.expires_at = None
-            enrollment.save(update_fields=["status", "activated_at", "expires_at", "updated_at"])
+    enrollment = _restore_activation_enrollment(
+        metadata,
+        activation_created_at=activation.created_at,
+    )
 
     locked.status = restored_status
     locked.save(update_fields=["status", "updated_at"])
@@ -1177,8 +1247,8 @@ def rollback_waiver_activation(application_id, waiver_id, actor=None, reason: st
         reason=reason,
         metadata={
             "payment_waiver_id": str(waiver_id),
-            "enrollment_id": enrollment_id,
-            "enrollment_type": enrollment_type,
+            "enrollment_id": metadata.get("enrollment_id"),
+            "enrollment_type": metadata.get("enrollment_type"),
             "enrollment_reset": enrollment is not None,
         },
     )
@@ -1192,8 +1262,75 @@ def rollback_waiver_activation(application_id, waiver_id, actor=None, reason: st
             "new_status": restored_status,
             "reason": reason,
             "payment_waiver_id": str(waiver_id),
-            "enrollment_id": enrollment_id,
+            "enrollment_id": metadata.get("enrollment_id"),
             "enrollment_reset": enrollment is not None,
+        },
+    )
+    return {
+        "rolled_back": True,
+        "application_status_before": old_status,
+        "application_status_after": restored_status,
+        "enrollment_reset": enrollment is not None,
+    }
+
+
+@transaction.atomic
+def rollback_payment_activation(application_id, payment_record_id, actor=None, reason: str = "") -> dict:
+    """Rollback only an activation proven to depend on one payment record."""
+    locked = ProgramApplication.objects.select_for_update().get(pk=application_id)
+    result = {
+        "rolled_back": False,
+        "application_status_before": locked.status,
+        "application_status_after": locked.status,
+        "enrollment_reset": False,
+    }
+    if locked.status != PROGRAM_APP_STATUS_ACTIVATED:
+        return result
+    if has_active_application_waiver(locked) or has_application_paid_record(locked):
+        return result
+
+    activation = locked.decisions.filter(
+        action=DECISION_ACTION_ACTIVATE,
+    ).order_by("-created_at", "-id").first()
+    metadata = activation.metadata if activation else {}
+    if not activation or str(metadata.get("payment_record_id") or "") != str(payment_record_id):
+        return result
+    if metadata.get("enrollment_changed_by_activation") is False:
+        return result
+
+    enrollment = _restore_activation_enrollment(
+        metadata,
+        activation_created_at=activation.created_at,
+    )
+
+    old_status = locked.status
+    restored_status = activation.old_status
+    locked.status = restored_status
+    locked.save(update_fields=["status", "updated_at"])
+    record_program_application_note(
+        locked,
+        actor,
+        note=_("Payment correction rolled back access created by this payment."),
+        metadata={
+            "payment_record_id": str(payment_record_id),
+            "enrollment_id": metadata.get("enrollment_id"),
+            "enrollment_type": metadata.get("enrollment_type"),
+            "enrollment_reset": enrollment is not None,
+            "reason": reason,
+        },
+    )
+    record_audit_event(
+        actor=actor,
+        action=ACTION_APPLICATION_STATUS_CHANGE,
+        target_type="program_application",
+        target_id=str(locked.pk),
+        metadata={
+            "old_status": old_status,
+            "new_status": restored_status,
+            "payment_record_id": str(payment_record_id),
+            "enrollment_id": metadata.get("enrollment_id"),
+            "enrollment_reset": enrollment is not None,
+            "reason": reason,
         },
     )
     return {
@@ -1350,7 +1487,6 @@ _ACCEPT_ALLOWED_STATUSES = {
         PROGRAM_APP_STATUS_PAYMENT_PENDING,
     }),
     PROGRAM_TYPE_DIPLOMA: frozenset({
-        PROGRAM_APP_STATUS_INVITED,
         PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
         PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
     }),
@@ -1392,11 +1528,18 @@ def _waiver_legal_application_statuses() -> frozenset:
 
 
 def _has_required_intake_form(application) -> bool:
-    """Return the same open required-form gate used by intake services."""
+    """Return whether an unresolved required form can currently be requested."""
     cached = getattr(application, "_has_required_intake_form", None)
     if cached is not None:
         return bool(cached)
-    return get_required_intake_form_for_application(application) is not None
+    required_forms = get_required_intake_forms_for_application(application)
+    response_form_ids = set(
+        IntakeFormResponse.objects.filter(
+            program_application=application,
+            form_id__in=[form.pk for form in required_forms],
+        ).values_list("form_id", flat=True)
+    )
+    return any(form.is_open() and form.pk not in response_form_ids for form in required_forms)
 
 
 def _has_entrance_attempt(application) -> bool:
@@ -1444,10 +1587,7 @@ def _application_action_predicates() -> dict[str, Q]:
             PROGRAM_APP_STATUS_READY_FOR_ACTIVATION,
         ),
         cohort_id__isnull=False,
-    ) & (
-        ~status(status=PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED)
-        | status(_has_submitted_documents=True)
-    )
+    ) & status(_has_submitted_documents=True)
 
     return {
         ACTION_ACCEPT: accept,
@@ -1463,6 +1603,7 @@ def _application_action_predicates() -> dict[str, Q]:
             status(status__in=INTAKE_REQUESTABLE_STATUSES)
             & status(_has_required_intake_form=True)
             & ~status(_has_required_intake_response=True)
+            & documents_ready
         ),
         ACTION_REQUEST_DOCUMENTS: status(
             program_type=PROGRAM_TYPE_DIPLOMA,
@@ -1510,44 +1651,37 @@ def annotate_application_action_readiness(queryset):
         course_id=OuterRef(OuterRef("course_id")),
         is_active=True,
     ).order_by(*ACTIVE_COURSE_VERSION_ORDERING)
-    course_forms = IntakeForm.objects.filter(
+    course_required_forms = IntakeForm.objects.filter(
         is_active=True,
         is_required=True,
         course_version_id=Subquery(latest_course_version.values("pk")[:1]),
-    ).filter(
+    )
+    course_open_forms = course_required_forms.filter(
         Q(open_at__isnull=True) | Q(open_at__lte=now),
         Q(close_at__isnull=True) | Q(close_at__gt=now),
     ).order_by(*REQUIRED_INTAKE_FORM_ORDERING)
-    diploma_forms = IntakeForm.objects.filter(
+    diploma_required_forms = IntakeForm.objects.filter(
         is_active=True,
         is_required=True,
         cohort_id=OuterRef("cohort_id"),
-    ).filter(
+    )
+    diploma_open_forms = diploma_required_forms.filter(
         Q(open_at__isnull=True) | Q(open_at__lte=now),
         Q(close_at__isnull=True) | Q(close_at__gt=now),
     ).order_by(*REQUIRED_INTAKE_FORM_ORDERING)
 
-    course_response_forms = IntakeForm.objects.filter(
-        is_active=True,
-        is_required=True,
-        course_version_id=Subquery(
-            CourseVersion.objects.filter(
-                course_id=OuterRef(OuterRef(OuterRef("course_id"))),
-                is_active=True,
-            ).order_by(*ACTIVE_COURSE_VERSION_ORDERING).values("pk")[:1]
-        ),
-    ).filter(
-        Q(open_at__isnull=True) | Q(open_at__lte=now),
-        Q(close_at__isnull=True) | Q(close_at__gt=now),
-    ).order_by(*REQUIRED_INTAKE_FORM_ORDERING)
-    diploma_response_forms = IntakeForm.objects.filter(
-        is_active=True,
-        is_required=True,
-        cohort_id=OuterRef(OuterRef("cohort_id")),
-    ).filter(
-        Q(open_at__isnull=True) | Q(open_at__lte=now),
-        Q(close_at__isnull=True) | Q(close_at__gt=now),
-    ).order_by(*REQUIRED_INTAKE_FORM_ORDERING)
+    course_missing_response_forms = course_required_forms.exclude(
+        responses__program_application_id=OuterRef("pk"),
+    )
+    diploma_missing_response_forms = diploma_required_forms.exclude(
+        responses__program_application_id=OuterRef("pk"),
+    )
+    course_open_missing_response_forms = course_open_forms.exclude(
+        responses__program_application_id=OuterRef("pk"),
+    )
+    diploma_open_missing_response_forms = diploma_open_forms.exclude(
+        responses__program_application_id=OuterRef("pk"),
+    )
 
     annotated = queryset.annotate(
         _has_paid_record=Exists(
@@ -1568,20 +1702,12 @@ def annotate_application_action_readiness(queryset):
                 request__program_application_id=OuterRef("pk"),
             )
         ),
-        _has_course_required_intake_form=Exists(course_forms),
-        _has_diploma_required_intake_form=Exists(diploma_forms),
-        _has_course_required_intake_response=Exists(
-            IntakeFormResponse.objects.filter(
-                program_application_id=OuterRef("pk"),
-                form_id=Subquery(course_response_forms.values("pk")[:1]),
-            )
-        ),
-        _has_diploma_required_intake_response=Exists(
-            IntakeFormResponse.objects.filter(
-                program_application_id=OuterRef("pk"),
-                form_id=Subquery(diploma_response_forms.values("pk")[:1]),
-            )
-        ),
+        _has_course_required_intake_form=Exists(course_open_missing_response_forms),
+        _has_diploma_required_intake_form=Exists(diploma_open_missing_response_forms),
+        _has_course_required_intake_requirement=Exists(course_required_forms),
+        _has_diploma_required_intake_requirement=Exists(diploma_required_forms),
+        _has_course_missing_intake_response=Exists(course_missing_response_forms),
+        _has_diploma_missing_intake_response=Exists(diploma_missing_response_forms),
         _has_active_course_version=Exists(
             CourseVersion.objects.filter(
                 course_id=OuterRef("course_id"),
@@ -1609,22 +1735,22 @@ def annotate_application_action_readiness(queryset):
         _has_required_intake_response=Case(
             When(
                 program_type=PROGRAM_TYPE_COURSE,
-                _has_course_required_intake_form=False,
+                _has_course_required_intake_requirement=False,
                 then=Value(True),
             ),
             When(
                 program_type=PROGRAM_TYPE_COURSE,
-                _has_course_required_intake_response=True,
+                _has_course_missing_intake_response=False,
                 then=Value(True),
             ),
             When(
                 program_type=PROGRAM_TYPE_DIPLOMA,
-                _has_diploma_required_intake_form=False,
+                _has_diploma_required_intake_requirement=False,
                 then=Value(True),
             ),
             When(
                 program_type=PROGRAM_TYPE_DIPLOMA,
-                _has_diploma_required_intake_response=True,
+                _has_diploma_missing_intake_response=False,
                 then=Value(True),
             ),
             default=Value(False),
@@ -1684,7 +1810,12 @@ def allowed_application_actions(application) -> frozenset[str]:
         and intake_gate_satisfied
     ):
         allowed.add(ACTION_MARK_PAID)
-    if status in INTAKE_REQUESTABLE_STATUSES and has_required_form and not has_required_response:
+    if (
+        status in INTAKE_REQUESTABLE_STATUSES
+        and has_required_form
+        and not has_required_response
+        and documents_gate_satisfied
+    ):
         allowed.add(ACTION_REQUEST_INTAKE)
     if (
         program_type == PROGRAM_TYPE_DIPLOMA
@@ -1814,7 +1945,6 @@ def get_application_portal_projection(application, *, now=None) -> dict:
         payment_state, payment_state_label = "pending", _("Payment pending")
 
     document_requests = list(application.document_requests.all())
-    intake_requests = list(application.intake_requests.all())
     entrance_attempts = list(application.entrance_attempts.all())
 
     submitted_documents = False
@@ -1846,24 +1976,26 @@ def get_application_portal_projection(application, *, now=None) -> dict:
     else:
         documents_state, documents_state_label = "not_requested", _("Documents not requested")
 
-    open_intake_request = next(
-        (
-            request for request in intake_requests
-            if request.status == INTAKE_REQUEST_STATUS_REQUESTED and request.expires_at > now
-        ),
-        None,
-    )
-    has_intake_response = any(
-        request.status == INTAKE_REQUEST_STATUS_SUBMITTED for request in intake_requests
-    ) or application.status == PROGRAM_APP_STATUS_SURVEY_SUBMITTED
-    if has_intake_response:
+    intake_requirement_states = get_intake_requirement_states(application, now=now)
+    pending_intake_states = [
+        state for state in intake_requirement_states if not state["has_response"]
+    ]
+    open_intake_states = [
+        state for state in pending_intake_states if state["open_request"] is not None
+    ]
+    has_intake_response = bool(intake_requirement_states) and not pending_intake_states
+    if not intake_requirement_states or has_intake_response:
         intake_state, intake_state_label = "submitted", _("Survey submitted")
-    elif open_intake_request:
+    elif open_intake_states:
         intake_state, intake_state_label = "requested", _("Survey requested")
+    elif any(state["state"] == "expired" for state in pending_intake_states):
+        intake_state, intake_state_label = "expired", _("Required survey expired")
+    elif any(state["state"] == "closed" for state in pending_intake_states):
+        intake_state, intake_state_label = "closed", _("Required survey is closed")
     elif application.status == PROGRAM_APP_STATUS_SURVEY_REQUESTED:
         intake_state, intake_state_label = "requested", _("Survey requested")
     else:
-        intake_state, intake_state_label = "not_requested", _("Survey not requested")
+        intake_state, intake_state_label = "available", _("Required survey is ready")
 
     actions = []
     next_step = None
@@ -1910,10 +2042,11 @@ def get_application_portal_projection(application, *, now=None) -> dict:
             "priority": "urgent" if (open_document_request.expires_at - now).days < 7 else "normal",
             "due_at": open_document_request.expires_at,
         })
-    if open_intake_request:
+    for intake_state_item in open_intake_states:
+        open_intake_request = intake_state_item["open_request"]
         actions.append({
             "kind": "intake",
-            "title": _("Complete the survey"),
+            "title": intake_state_item["form"].title,
             "description": _("A required survey is waiting for your response."),
             "label": _("Open survey"),
             "url": reverse("intake_forms:student_intake_form", args=[open_intake_request.pk]),
@@ -1935,6 +2068,15 @@ def get_application_portal_projection(application, *, now=None) -> dict:
         PROGRAM_APP_STATUS_SURVEY_SUBMITTED,
     } and (is_paid or is_waived):
         next_step = _("Your application is ready for activation by the admissions office.")
+
+    if (
+        pending_intake_states
+        and not open_intake_states
+        and any(state["state"] in {"closed", "expired"} for state in pending_intake_states)
+    ):
+        next_step = _(
+            "A required survey needs admissions attention before payment or activation can continue."
+        )
 
     if len(actions) > 1:
         next_step = _("Complete the available application actions.")
@@ -2014,60 +2156,26 @@ def mark_application_paid(
     external_reference="",
     notes="",
 ) -> object:
-    """Create a paid PaymentRecord linked to the application and attempt activation.
-
-    Returns the PaymentRecord.
-    """
-    locked = ProgramApplication.objects.select_for_update().get(pk=application.pk)
-    if locked.status == PROGRAM_APP_STATUS_REJECTED:
-        raise ValueError(_("Cannot record payment for a rejected application."))
-    if locked.status == PROGRAM_APP_STATUS_ACTIVATED:
-        raise ValueError(_("Application is already activated."))
-    if locked.status not in LEGAL_PAYMENT_STATUSES:
-        raise ValueError(_("Cannot record payment in current application status."))
-    if locked.program_type == PROGRAM_TYPE_DIPLOMA and not has_application_documents_submitted(locked):
-        raise ValueError(_("Application documents must be submitted before recording payment."))
-    if not has_required_intake_response(locked):
-        raise ValueError(_("Required intake form must be submitted before recording payment."))
-    if has_active_application_waiver(locked):
-        raise ValueError(_("An active payment waiver already exists for this application."))
-    # Guard: duplicate payment (exclude soft-deleted records)
-    if PaymentRecord.objects.filter(
-        student=locked.student, application=locked, status=PAYMENT_STATUS_PAID, deleted_at__isnull=True
-    ).exists():
-        raise ValueError(_("Payment already recorded for this application."))
-
-    if paid_at is None:
-        paid_at = timezone.now()
-
-    # Validate amount
-    amount_dec = validate_score(amount or 0)
-
-    record = PaymentRecord.objects.create(
-        student=locked.student,
-        application=locked,
-        amount=amount_dec,
-        currency=CURRENCY_EGP,
+    """Reconcile an application payment through the canonical payment path."""
+    record = payment_services.reconcile_payment_record(
+        actor=actor,
+        application=application,
+        amount=amount,
         status=PAYMENT_STATUS_PAID,
         paid_at=paid_at,
         external_reference=external_reference,
         notes=notes,
-        imported_by=actor,
-        target_type=locked.program_type,
-        target_snapshot=_build_application_snapshot(locked),
+        target_type=application.program_type,
+        target_snapshot=_build_application_snapshot(application),
+        source="application",
+        attempt_activation=True,
     )
-
-    # Attempt activation — idempotent, may not be ready
-    result = activate_application_if_ready(application, actor=actor)
-    # Trigger intake request if activation blocked by missing intake
-    if not result.activated and "intake_form_required" in result.reasons:
-        _attempt_intake_request_safe(application, actor=actor)
     record_audit_event(
         actor=actor,
         action="application.paid",
         target_type="program_application",
         target_id=str(application.pk),
-        metadata={"amount": str(amount_dec), "external_reference": external_reference, "payment_record_id": str(record.pk)},
+        metadata={"amount": str(record.amount), "external_reference": external_reference, "payment_record_id": str(record.pk)},
     )
     return record
 

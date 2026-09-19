@@ -23,6 +23,7 @@ from apps.storage.services import (
     storage_service,
 )
 
+from . import services as application_services
 from .constants import (
     DECISION_ACTION_REQUEST_DOCUMENTS,
     DECISION_ACTION_SUBMIT_DOCUMENTS,
@@ -40,10 +41,8 @@ from .models import (
     ApplicationDocumentUpload,
     ProgramApplication,
     ProgramApplicationDecision,
-    ProgramApplicationEmailLog,
     ProgramApplicationNote,
 )
-from . import services as application_services
 
 logger = logging.getLogger(__name__)
 
@@ -307,8 +306,8 @@ def submit_application_documents(
     # Check ownership and state under short-lived locks. Storage and image/PDF
     # processing must not hold database locks or run inside a transaction.
     with transaction.atomic():
-        locked_request = ApplicationDocumentRequest.objects.select_for_update().get(pk=request_obj.pk)
         locked_app = ProgramApplication.objects.select_for_update().get(pk=application.pk)
+        locked_request = ApplicationDocumentRequest.objects.select_for_update().get(pk=request_obj.pk)
 
         if locked_request.status != DOCUMENT_REQUEST_STATUS_REQUESTED:
             raise ValueError(_("This document request is no longer open."))
@@ -351,8 +350,8 @@ def submit_application_documents(
         # Re-lock and re-check after storage work so a concurrent submission
         # cannot create a second logical upload for the same request.
         with transaction.atomic():
-            locked_request = ApplicationDocumentRequest.objects.select_for_update().get(pk=request_obj.pk)
             locked_app = ProgramApplication.objects.select_for_update().get(pk=application.pk)
+            locked_request = ApplicationDocumentRequest.objects.select_for_update().get(pk=request_obj.pk)
             if locked_request.status != DOCUMENT_REQUEST_STATUS_REQUESTED:
                 raise ValueError(_("This document request is no longer open."))
             if locked_request.expires_at <= timezone.now():

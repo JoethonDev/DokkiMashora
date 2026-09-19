@@ -5,15 +5,18 @@ import secrets
 from typing import TYPE_CHECKING
 
 from django.conf import settings
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from apps.applications import services as application_services
 from apps.applications.constants import (
+    DECISION_ACTION_REQUEST_SURVEY,
+    DECISION_ACTION_SUBMIT_SURVEY,
     EMAIL_ACTION_APPLICATION_SURVEY_REQUEST,
     PROGRAM_APP_STATUS_SURVEY_REQUESTED,
     PROGRAM_APP_STATUS_SURVEY_SUBMITTED,
+    PROGRAM_TYPE_DIPLOMA,
 )
 from apps.applications.models import ProgramApplication
 from apps.communications.services import queue_program_application_email
@@ -26,7 +29,11 @@ from .constants import (
     INTAKE_REQUESTABLE_STATUSES,
 )
 from .models import IntakeForm, IntakeFormAnswer, IntakeFormRequest, IntakeFormResponse
-from .selectors import get_required_intake_form_for_application
+from .selectors import (
+    get_open_required_intake_forms_for_application,
+    get_required_intake_forms_for_application,
+    has_required_intake_response,
+)
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
@@ -46,22 +53,54 @@ def request_intake_form_for_application(
     expires_at=None,
     form=None,
     send_email=True,
+    replace_existing=True,
 ) -> IntakeFormRequest:
-    """Create an intake form request, send email, and set status to survey_requested."""
+    """Create or replace one exact required intake request under an app lock."""
     with transaction.atomic():
         locked = ProgramApplication.objects.select_for_update().get(pk=application.pk)
         if locked.status not in INTAKE_REQUESTABLE_STATUSES:
-            raise ValueError(_("Intake forms can only be requested for applications that are not yet rejected or activated."))
+            raise ValueError(_("Intake forms can only be requested after the admissions decision and required document submission."))
+        if locked.program_type == PROGRAM_TYPE_DIPLOMA:
+            from apps.applications.documents import has_application_documents_submitted
 
-        required_form = get_required_intake_form_for_application(locked)
+            if not has_application_documents_submitted(locked):
+                raise ValueError(_("Submit the required documents before requesting the survey."))
+
+        required_forms = get_required_intake_forms_for_application(locked)
+        required_form = form
         if required_form is None:
+            required_form = next(
+                (
+                    candidate for candidate in required_forms
+                    if candidate.is_open()
+                    and not IntakeFormResponse.objects.filter(
+                        form=candidate, program_application=locked,
+                    ).exists()
+                ),
+                None,
+            )
+        if required_form is None:
+            if required_forms:
+                raise ValueError(_(
+                    "A required intake form is closed or expired. Admissions must open or replace it before requesting a response."
+                ))
             raise ValueError(_("No required intake form exists for this application."))
-        if form is not None and form.pk != required_form.pk:
+        if required_form.pk not in {candidate.pk for candidate in required_forms}:
             raise ValueError(_("The selected intake form is not required for this application."))
-        form = required_form
+        if not required_form.is_open():
+            raise ValueError(_("The required intake form is closed or expired. Open it before requesting a response."))
 
-        if IntakeFormResponse.objects.filter(form=form, program_application=locked).exists():
+        if IntakeFormResponse.objects.filter(form=required_form, program_application=locked).exists():
             raise ValueError(_("Intake form already submitted for this application."))
+
+        open_request = IntakeFormRequest.objects.filter(
+            form=required_form,
+            program_application=locked,
+            status=INTAKE_REQUEST_STATUS_REQUESTED,
+            expires_at__gt=timezone.now(),
+        ).first()
+        if open_request and not replace_existing:
+            return open_request
 
         if expires_at is None:
             expires_at = timezone.now() + timezone.timedelta(days=7)
@@ -70,7 +109,7 @@ def request_intake_form_for_application(
         token_hash = _hash_token(raw_token)
 
         IntakeFormRequest.objects.filter(
-            form=form, program_application=locked,
+            form=required_form, program_application=locked,
             status=INTAKE_REQUEST_STATUS_REQUESTED,
         ).update(
             status=INTAKE_REQUEST_STATUS_CANCELLED,
@@ -78,18 +117,29 @@ def request_intake_form_for_application(
             cancelled_by=actor,
         )
 
-        intake_request = IntakeFormRequest.objects.create(
-            form=form,
-            program_application=locked,
-            status=INTAKE_REQUEST_STATUS_REQUESTED,
-            token_hash=token_hash,
-            expires_at=expires_at,
-            requested_by=actor,
-            requested_at=timezone.now(),
-        )
+        try:
+            with transaction.atomic():
+                intake_request = IntakeFormRequest.objects.create(
+                    form=required_form,
+                    program_application=locked,
+                    status=INTAKE_REQUEST_STATUS_REQUESTED,
+                    token_hash=token_hash,
+                    expires_at=expires_at,
+                    requested_by=actor,
+                    requested_at=timezone.now(),
+                )
+        except IntegrityError:
+            existing = IntakeFormRequest.objects.filter(
+                form=required_form,
+                program_application=locked,
+                status=INTAKE_REQUEST_STATUS_REQUESTED,
+            ).first()
+            if existing:
+                raise ValueError(_("An intake request is already open for this requirement.")) from None
+            raise
 
         old_status = locked.status
-        if locked.status not in (PROGRAM_APP_STATUS_SURVEY_REQUESTED, PROGRAM_APP_STATUS_SURVEY_SUBMITTED):
+        if locked.status != PROGRAM_APP_STATUS_SURVEY_REQUESTED:
             _set_status(locked, PROGRAM_APP_STATUS_SURVEY_REQUESTED)
             application_services._record_decision(
                 locked, "request_survey",
@@ -97,7 +147,7 @@ def request_intake_form_for_application(
             )
 
         if send_email:
-            transaction.on_commit(lambda: _send_intake_request_email(locked, form, raw_token, intake_request))
+            transaction.on_commit(lambda: _send_intake_request_email(locked, required_form, raw_token, intake_request))
 
         return intake_request
 
@@ -188,7 +238,6 @@ def expire_stale_intake_requests() -> dict:
     return {"intake_expired": count}
 
 
-@transaction.atomic
 def submit_intake_form_response(
     request_or_form: IntakeFormRequest | IntakeForm,
     actor: User,
@@ -196,49 +245,76 @@ def submit_intake_form_response(
     application: ProgramApplication,
     answers: dict,
 ) -> IntakeFormResponse:
-    """Submit intake form answers and attempt activation.
+    response = _submit_intake_form_response_atomic(
+        request_or_form,
+        actor,
+        application=application,
+        answers=answers,
+    )
+    if response is None:
+        raise ValueError(_("This intake form request has expired."))
+    return response
 
-    The request's application, the supplied application, and the actor must
-    form one consistent tuple (A7): the intake request is locked and must
-    belong to the supplied application before any response row is created.
-    """
-    if isinstance(request_or_form, IntakeFormRequest):
-        intake_request = IntakeFormRequest.objects.select_for_update().select_related(
-            "form", "program_application",
-        ).get(pk=request_or_form.pk)
-        if intake_request.program_application_id != application.pk:
-            raise ValueError(_("This intake form link does not belong to this application."))
-        form = intake_request.form
-        if intake_request.status == INTAKE_REQUEST_STATUS_SUBMITTED:
-            raise ValueError(_("This intake form request has already been submitted."))
-        if intake_request.status == INTAKE_REQUEST_STATUS_CANCELLED:
-            raise ValueError(_("This intake form request has been cancelled."))
-        if intake_request.status == INTAKE_REQUEST_STATUS_EXPIRED:
-            raise ValueError(_("This intake form request has expired."))
-        if intake_request.expires_at <= timezone.now():
-            expire_intake_request(intake_request)
-            raise ValueError(_("This intake form request has expired."))
-    elif isinstance(request_or_form, IntakeForm):
-        intake_request = None
-        form = request_or_form
-    else:
+
+@transaction.atomic
+def _submit_intake_form_response_atomic(
+    request_or_form: IntakeFormRequest | IntakeForm,
+    actor: User,
+    *,
+    application: ProgramApplication,
+    answers: dict,
+) -> IntakeFormResponse | None:
+    """Submit one owned request and advance only after all requirements pass."""
+    if not isinstance(request_or_form, IntakeFormRequest):
         raise ValueError(_("Invalid request or form."))
 
-    # ponytail: service-level ownership guard — actor must match the application's student user
+    # Lock the application first, matching the application-owned workflow
+    # services, then lock the exact request under that application.
+    application = ProgramApplication.objects.select_for_update().select_related(
+        "student__user",
+    ).get(pk=application.pk)
+    intake_request = IntakeFormRequest.objects.select_for_update().select_related(
+        "form", "program_application",
+    ).get(pk=request_or_form.pk)
+    if intake_request.program_application_id != application.pk:
+        raise ValueError(_("This intake form link does not belong to this application."))
     if application.student.user_id != actor.pk:
         raise PermissionError(_("You do not own this application."))
+    if intake_request.program_application.student_id != application.student_id:
+        raise ValueError(_("This intake form request has invalid ownership."))
+    if application.status not in INTAKE_REQUESTABLE_STATUSES:
+        raise ValueError(_("This intake form is no longer available for the application."))
+    if application.program_type == PROGRAM_TYPE_DIPLOMA:
+        from apps.applications.documents import has_application_documents_submitted
 
-    # Lock the application row so the response creation and status transition
-    # cannot race another submission for the same application.
-    application = ProgramApplication.objects.select_for_update().get(pk=application.pk)
+        if not has_application_documents_submitted(application):
+            raise ValueError(_("Application documents must be submitted before completing the intake form."))
+    if intake_request.status == INTAKE_REQUEST_STATUS_SUBMITTED:
+        raise ValueError(_("This intake form request has already been submitted."))
+    if intake_request.status == INTAKE_REQUEST_STATUS_CANCELLED:
+        raise ValueError(_("This intake form request has been cancelled."))
+    if intake_request.status == INTAKE_REQUEST_STATUS_EXPIRED:
+        raise ValueError(_("This intake form request has expired."))
+    if intake_request.expires_at <= timezone.now():
+        intake_request.status = INTAKE_REQUEST_STATUS_EXPIRED
+        intake_request.save(update_fields=["status"])
+        # Return normally so the transaction commits the durable expiry state;
+        # the public wrapper raises the user-facing validation error after the
+        # atomic block has exited.
+        return None
 
+    form = intake_request.form
+    if not form.is_open():
+        raise ValueError(_("This required intake form is closed or expired."))
+    if form.pk not in {
+        required_form.pk for required_form in get_required_intake_forms_for_application(application)
+    }:
+        raise ValueError(_("This intake form is not required for the application."))
     if IntakeFormResponse.objects.filter(form=form, program_application=application).exists():
         raise ValueError(_("A response for this form already exists."))
 
     active_fields = {str(f.pk): f for f in form.fields.filter(is_active=True)}
-    given_field_ids = set(answers.keys())
-    valid_field_ids = set(active_fields.keys())
-    unknown = given_field_ids - valid_field_ids
+    unknown = set(answers.keys()) - set(active_fields.keys())
     if unknown:
         raise ValueError(_("Unknown field IDs: {}").format(", ".join(str(x) for x in unknown)))
 
@@ -249,50 +325,75 @@ def submit_intake_form_response(
         request=intake_request,
         submitted_at=timezone.now(),
     )
+    IntakeFormAnswer.objects.bulk_create([
+        IntakeFormAnswer(response=response, field=active_fields[str(field_id)], value=value)
+        for field_id, value in answers.items()
+    ])
 
-    answer_objs = []
-    for field_id, value in answers.items():
-        field = active_fields[str(field_id)]
-        answer_objs.append(
-            IntakeFormAnswer(
-                response=response, field=field, value=value,
-            )
+    intake_request.status = INTAKE_REQUEST_STATUS_SUBMITTED
+    intake_request.submitted_at = timezone.now()
+    intake_request.save(update_fields=["status", "submitted_at"])
+
+    all_responses = has_required_intake_response(application)
+    response_metadata = {
+        "form_id": form.pk,
+        "request_id": intake_request.pk,
+        "all_required_forms_submitted": all_responses,
+    }
+    if all_responses and application.status != PROGRAM_APP_STATUS_SURVEY_SUBMITTED:
+        old_status = application.status
+        application.status = PROGRAM_APP_STATUS_SURVEY_SUBMITTED
+        application.save(update_fields=["status", "updated_at"])
+        application_services._record_decision(
+            application, DECISION_ACTION_SUBMIT_SURVEY,
+            old_status, PROGRAM_APP_STATUS_SURVEY_SUBMITTED, actor,
+            metadata=response_metadata,
         )
-    IntakeFormAnswer.objects.bulk_create(answer_objs)
+    elif not all_responses and application.status != PROGRAM_APP_STATUS_SURVEY_REQUESTED:
+        old_status = application.status
+        application.status = PROGRAM_APP_STATUS_SURVEY_REQUESTED
+        application.save(update_fields=["status", "updated_at"])
+        application_services._record_decision(
+            application, DECISION_ACTION_REQUEST_SURVEY,
+            old_status, PROGRAM_APP_STATUS_SURVEY_REQUESTED, actor,
+            metadata=response_metadata,
+        )
+    else:
+        application_services._record_decision(
+            application,
+            DECISION_ACTION_SUBMIT_SURVEY,
+            application.status,
+            application.status,
+            actor,
+            metadata=response_metadata,
+        )
 
-    if intake_request:
-        intake_request.status = INTAKE_REQUEST_STATUS_SUBMITTED
-        intake_request.submitted_at = timezone.now()
-        intake_request.save(update_fields=["status", "submitted_at"])
-
-    old_status = application.status
-    application.status = PROGRAM_APP_STATUS_SURVEY_SUBMITTED
-    application.save(update_fields=["status", "updated_at"])
-    application_services._record_decision(
-        application, "submit_survey",
-        old_status, PROGRAM_APP_STATUS_SURVEY_SUBMITTED, actor,
-    )
-
-    result = application_services.activate_application_if_ready(application, actor=actor)
-    if not result.activated:
-        application_services.send_post_activation_application_email(application, actor=actor)
+    if all_responses:
+        result = application_services.activate_application_if_ready(application, actor=actor)
+        if not result.activated:
+            application_services.send_post_activation_application_email(application, actor=actor)
 
     return response
 
 
 def ensure_required_intake_request(application, actor=None) -> IntakeFormRequest | None:
-    """Create an intake request if a required form exists and no response yet."""
-    form = get_required_intake_form_for_application(application)
-    if form is None:
-        return None
-    if IntakeFormResponse.objects.filter(form=form, program_application=application).exists():
-        return None
-    existing_open = IntakeFormRequest.objects.filter(
-        form=form, program_application=application,
-        status=INTAKE_REQUEST_STATUS_REQUESTED,
-    ).first()
-    if existing_open:
-        return existing_open
-    return request_intake_form_for_application(
-        application, actor=actor, form=form, send_email=True,
-    )
+    """Ensure one open request exists for the first unresolved open form."""
+    for form in get_open_required_intake_forms_for_application(application):
+        if IntakeFormResponse.objects.filter(form=form, program_application=application).exists():
+            continue
+        existing_open = IntakeFormRequest.objects.filter(
+            form=form,
+            program_application=application,
+            status=INTAKE_REQUEST_STATUS_REQUESTED,
+            expires_at__gt=timezone.now(),
+        ).first()
+        if existing_open:
+            return existing_open
+        return request_intake_form_for_application(
+            application,
+            actor=actor,
+            form=form,
+            send_email=True,
+            replace_existing=False,
+        )
+    return None

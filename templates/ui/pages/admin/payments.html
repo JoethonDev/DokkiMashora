@@ -226,6 +226,7 @@
         {% for field in form %}
           {% include "ui/components/_field.html" %}
         {% endfor %}
+        <label class="field"><span class="field-label">{% trans "Correction reason" %}</span><textarea class="form-input" name="reason" rows="2">{{ request.POST.reason|default:'' }}</textarea><small class="text-xs text-muted">{% trans "Payment status changes are reconciled with application access and audit history." %}</small></label>
         <div class="actions-row">
           <button class="btn-primary" type="submit">{% trans "Save" %}</button>
           <a class="btn-ghost" href="{% url 'payments:record_detail' record.id %}">{% trans "Cancel" %}</a>
