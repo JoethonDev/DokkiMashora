@@ -3,6 +3,11 @@
 {% block results_heading %}
   <p class="eyebrow">{% trans "Queue" %}</p>
   <h3>{% trans "Applications" %}</h3>
+  {% if date_filter_errors %}
+    <div class="alert-warning mt-2" role="alert">
+      {% for error in date_filter_errors %}<p class="m-0">{{ error }}</p>{% endfor %}
+    </div>
+  {% endif %}
 {% endblock %}
 {% block table_head %}
 <th class="table-th">#</th>
@@ -35,12 +40,8 @@
               <td class="table-td"><span dir="ltr" class="inline-block">{{ app.created_at|date:"DATE_FORMAT"|default:'—' }}</span></td>
               <td class="table-td">{% include "ui/components/_status.html" with code=app.status label=app.get_status_display %}</td>
               <td class="table-td">
-                {% if app.status == "submitted" or app.status == "entrance_submitted" or app.status == "interview_requested" %}
-                  {% trans "Review" %}
-                {% elif app.status == "payment_pending" %}
-                  {% trans "Payment" %}
-                {% elif app.status == "accepted" or app.status == "documents_requested" %}
-                  {% trans "Documents" %}
+                {% if app.queue_projection.next_action_label %}
+                  {{ app.queue_projection.next_action_label }}
                 {% else %}
                   —
                 {% endif %}
@@ -61,6 +62,9 @@
             <strong class="block truncate">{{ app.student.full_name }}</strong>
             <small class="block text-muted truncate">{% if app.cohort %}{{ app.cohort.diploma }}{% else %}{{ app.course }}{% endif %}</small>
             {% include "ui/components/_status.html" with code=app.status label=app.get_status_display %}
+            {% if app.queue_projection.next_action_label %}
+              <small class="block text-muted">{{ app.queue_projection.next_action_label }}</small>
+            {% endif %}
           </div>
           <a class="btn-soft-primary shrink-0" href="{% url 'applications:program_detail' app.id %}">{% trans "Review" %}</a>
         </div>

@@ -10,7 +10,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
-from django.db.models import Count, Q
+from django.db.models import Count, Exists, OuterRef, Q
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -39,13 +39,21 @@ from apps.academics.services import (
     get_visible_semester_ids_by_enrollment,
 )
 from apps.applications.constants import (
+    DOCUMENT_REQUEST_STATUS_CANCELLED,
+    DOCUMENT_REQUEST_STATUS_EXPIRED,
     DOCUMENT_REQUEST_STATUS_REQUESTED,
+    DOCUMENT_REQUEST_STATUS_SUBMITTED,
+    PROGRAM_APP_STATUS_ACTIVATED,
+    PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED,
     PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
     PROGRAM_APP_STATUS_INVITED,
     PROGRAM_APP_STATUS_PAYMENT_PENDING,
+    PROGRAM_APP_STATUS_READY_FOR_ACTIVATION,
     PROGRAM_APP_STATUS_REJECTED,
+    PROGRAM_APP_STATUS_SURVEY_REQUESTED,
+    PROGRAM_APP_STATUS_SURVEY_SUBMITTED,
 )
-from apps.applications.models import ProgramApplication
+from apps.applications.models import ApplicationDocumentUpload, ProgramApplication
 from apps.applications.services import has_active_application_waiver, has_application_paid_record
 from apps.assessments import constants as assessment_constants
 from apps.assessments.models import (
@@ -70,10 +78,10 @@ from apps.entrance_exams.constants import (
 )
 from apps.entrance_exams.models import EntranceAttempt
 from apps.entrance_exams.services import attempt_decision
-from apps.intake_forms.constants import INTAKE_REQUEST_STATUS_REQUESTED
+from apps.intake_forms.constants import INTAKE_REQUEST_STATUS_REQUESTED, INTAKE_REQUEST_STATUS_SUBMITTED
 from apps.intake_forms.models import IntakeFormRequest
 from apps.payments.constants import WAIVER_STATUS_ACTIVE
-from apps.payments.models import PaymentWaiver
+from apps.payments.models import PaymentRecord, PaymentWaiver
 from apps.payments.selectors import get_enrollment_payment_status, get_student_payment_summary
 from apps.progression.constants import (
     CERTIFICATE_STATUS_AVAILABLE,
@@ -402,11 +410,40 @@ def _identity_summary(profile: StudentProfile, user: User) -> dict:
 
 
 def _get_applications(student_profile: StudentProfile) -> list[ProgramApplication]:
-    return list(
+    return list(get_student_application_queryset(student_profile))
+
+
+def get_student_application_queryset(student_profile: StudentProfile):
+    """Return the bounded, prefetched application projection source.
+
+    Payment and waiver flags are batchable SQL annotations. Document, intake,
+    and entrance relations are prefetched once so the row presenter can expose
+    multiple simultaneous actions without per-application queries.
+    """
+    return (
         ProgramApplication.objects.filter(student=student_profile)
         .select_related("reviewed_by", "cohort__diploma", "course")
-        .prefetch_related("document_requests", "intake_requests")
-        .order_by("-created_at")
+        .annotate(
+            _has_paid_record=Exists(
+                PaymentRecord.objects.filter(
+                    application_id=OuterRef("pk"),
+                    status="paid",
+                    deleted_at__isnull=True,
+                )
+            ),
+            _has_active_waiver=Exists(
+                PaymentWaiver.objects.filter(
+                    application_id=OuterRef("pk"),
+                    status=WAIVER_STATUS_ACTIVE,
+                )
+            ),
+        )
+        .prefetch_related(
+            "document_requests__upload",
+            "intake_requests",
+            "entrance_attempts__exam",
+        )
+        .order_by("-created_at", "-id")
     )
 
 
@@ -625,21 +662,84 @@ def _get_exam_assignments(profile) -> list[dict]:
 
 
 def get_application_row(application: ProgramApplication) -> dict:
-    """Project one application into a status-focused portal row (A1/A2).
+    """Project one application into one stable desktop/mobile row shape.
 
-    Only server-derivable safe actions are exposed: an open entrance exam,
-    an authenticated survey request, or its result link. Payment readiness is
-    shown distinctly: paid, waived (Admin waiver), or awaiting payment.
+    ``available_actions`` is append-only for each independently actionable
+    requirement. It deliberately does not use one mutable ``action_url`` as
+    the source of truth, so a document request cannot hide a survey or exam.
     """
     now = timezone.now()
-    is_paid = has_application_paid_record(application)
-    is_waived = has_active_application_waiver(application)
+    is_paid = getattr(application, "_has_paid_record", None)
+    if is_paid is None:
+        is_paid = has_application_paid_record(application)
+    is_waived = getattr(application, "_has_active_waiver", None)
+    if is_waived is None:
+        is_waived = has_active_application_waiver(application)
     if is_paid:
         payment_state = "paid"
+        payment_state_label = _("Payment confirmed")
     elif is_waived:
         payment_state = "waived"
+        payment_state_label = _("Payment waived")
     else:
         payment_state = "pending"
+        payment_state_label = _("Payment pending")
+
+    document_requests = list(application.document_requests.all())
+    intake_requests = list(application.intake_requests.all())
+    entrance_attempts = list(application.entrance_attempts.all())
+
+    submitted_documents = False
+    for request in document_requests:
+        if request.status != DOCUMENT_REQUEST_STATUS_SUBMITTED:
+            continue
+        try:
+            if request.upload is not None:
+                submitted_documents = True
+                break
+        except ApplicationDocumentUpload.DoesNotExist:
+            continue
+    open_document_request = next(
+        (
+            request
+            for request in document_requests
+            if request.status == DOCUMENT_REQUEST_STATUS_REQUESTED
+            and request.expires_at > now
+        ),
+        None,
+    )
+    if submitted_documents:
+        documents_state, documents_state_label = "submitted", _("Documents submitted")
+    elif open_document_request:
+        documents_state, documents_state_label = "requested", _("Documents requested")
+    elif any(request.status == DOCUMENT_REQUEST_STATUS_EXPIRED for request in document_requests):
+        documents_state, documents_state_label = "expired", _("Documents request expired")
+    elif any(request.status == DOCUMENT_REQUEST_STATUS_CANCELLED for request in document_requests):
+        documents_state, documents_state_label = "cancelled", _("Documents request cancelled")
+    else:
+        documents_state, documents_state_label = "not_requested", _("Documents not requested")
+
+    open_intake_request = next(
+        (
+            request
+            for request in intake_requests
+            if request.status == INTAKE_REQUEST_STATUS_REQUESTED
+            and request.expires_at > now
+        ),
+        None,
+    )
+    has_intake_response = any(
+        request.status == INTAKE_REQUEST_STATUS_SUBMITTED for request in intake_requests
+    ) or application.status == PROGRAM_APP_STATUS_SURVEY_SUBMITTED
+    if has_intake_response:
+        intake_state, intake_state_label = "submitted", _("Survey submitted")
+    elif open_intake_request:
+        intake_state, intake_state_label = "requested", _("Survey requested")
+    elif application.status == PROGRAM_APP_STATUS_SURVEY_REQUESTED:
+        intake_state, intake_state_label = "requested", _("Survey requested")
+    else:
+        intake_state, intake_state_label = "not_requested", _("Survey not requested")
+
     row = {
         "program_title": (
             application.cohort.diploma.title if application.cohort_id and application.cohort.diploma_id
@@ -650,22 +750,44 @@ def get_application_row(application: ProgramApplication) -> dict:
         "status": application.status,
         "status_label": application.get_status_display(),
         "payment_state": payment_state,
-        "documents_count": application.document_requests.count(),
+        "payment_state_label": payment_state_label,
+        "documents_state": documents_state,
+        "documents_state_label": documents_state_label,
+        "intake_state": intake_state,
+        "intake_state_label": intake_state_label,
+        "activation_state": (
+            "activated" if application.status == PROGRAM_APP_STATUS_ACTIVATED
+            else "pending"
+        ),
+        "activation_state_label": (
+            _("Application activated")
+            if application.status == PROGRAM_APP_STATUS_ACTIVATED
+            else _("Awaiting activation")
+        ),
+        "documents_count": sum(
+            request.status == DOCUMENT_REQUEST_STATUS_SUBMITTED
+            for request in document_requests
+        ),
+        "available_actions": [],
         "next_step": None,
         "action_url": None,
         "action_label": None,
     }
 
     if application.status == PROGRAM_APP_STATUS_INVITED:
-        attempt = application.entrance_attempts.select_related("exam").first()
+        attempt = entrance_attempts[0] if entrance_attempts else None
         exam = attempt.exam if attempt else None
         if attempt and attempt.submitted_at:
             # The student already took the exam: never offer it again.
             row["next_step"] = _("Your entrance exam has been submitted. Awaiting the admissions office decision.")
         elif exam and exam.is_active and exam.access_token:
             if (not exam.open_at or exam.open_at <= now) and (not exam.close_at or exam.close_at > now):
-                row["action_url"] = reverse("entrance_exams:exam_access_token", args=[exam.access_token])
-                row["action_label"] = _("Open exam")
+                row["available_actions"].append({
+                    "kind": "entrance",
+                    "label": _("Open exam"),
+                    "url": reverse("entrance_exams:exam_access_token", args=[exam.access_token]),
+                    "method": "GET",
+                })
             else:
                 row["next_step"] = _("Your entrance assessment is scheduled. Use the link you received by email when it opens.")
         else:
@@ -673,29 +795,52 @@ def get_application_row(application: ProgramApplication) -> dict:
     elif application.status == PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED:
         row["next_step"] = _("Your entrance exam has been submitted. Awaiting the admissions office decision.")
 
+    if open_document_request:
+        row["available_actions"].append({
+            "kind": "documents",
+            "label": _("Upload documents"),
+            "url": reverse("applications:my_document_upload", args=[application.id]),
+            "method": "GET",
+        })
+    if open_intake_request:
+        row["available_actions"].append({
+            "kind": "survey",
+            "label": _("Open survey"),
+            "url": reverse("intake_forms:student_intake_form", args=[open_intake_request.pk]),
+            "method": "GET",
+        })
+
     if application.status == PROGRAM_APP_STATUS_PAYMENT_PENDING:
         if payment_state == "waived":
             row["next_step"] = _("Payment waived by the admissions office.")
         elif payment_state == "paid":
-            row["next_step"] = _("Payment confirmed.")
+            row["next_step"] = _("Payment confirmed; awaiting activation.")
         else:
             row["next_step"] = _("Awaiting payment confirmation by the admissions office.")
+            row["available_actions"].append({
+                "kind": "payment",
+                "label": _("View payment status"),
+                "url": reverse("students:applications"),
+                "method": "GET",
+            })
+    elif application.status in {
+        PROGRAM_APP_STATUS_READY_FOR_ACTIVATION,
+        PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED,
+        PROGRAM_APP_STATUS_SURVEY_SUBMITTED,
+    } and (is_paid or is_waived):
+        row["next_step"] = _("Your application is ready for activation by the admissions office.")
+        row["available_actions"].append({
+            "kind": "activation",
+            "label": _("View activation status"),
+            "url": reverse("students:applications"),
+            "method": "GET",
+        })
 
-    doc_request = application.document_requests.filter(
-        status=DOCUMENT_REQUEST_STATUS_REQUESTED, expires_at__gt=now,
-    ).first()
-    if doc_request:
-        row["action_url"] = reverse("applications:my_document_upload", args=[application.id])
-        row["action_label"] = _("Upload documents")
-        row["next_step"] = _("Upload requested documents")
-
-    intake_request = application.intake_requests.filter(
-        status=INTAKE_REQUEST_STATUS_REQUESTED, expires_at__gt=now,
-    ).first()
-    if intake_request:
-        row["action_url"] = reverse("intake_forms:student_intake_form", args=[intake_request.pk])
-        row["action_label"] = _("Open survey")
-        row["next_step"] = _("Complete the required survey before continuing.")
+    if row["available_actions"]:
+        row["action_url"] = row["available_actions"][0]["url"]
+        row["action_label"] = row["available_actions"][0]["label"]
+    if len(row["available_actions"]) > 1:
+        row["next_step"] = _("Complete the available application actions.")
 
     return row
 

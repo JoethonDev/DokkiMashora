@@ -41,7 +41,7 @@ class RegistrationForm(StyledFormMixin, forms.Form):
     full_name = forms.CharField(label=_("Full name (4 parts)"), max_length=200, widget=forms.TextInput(attrs={}))
     date_of_birth = forms.DateField(
         label=_("Date of birth"),
-        widget=forms.DateInput(attrs={"type": "date", "max": date.today().isoformat()}),
+        widget=forms.DateInput(attrs={"type": "date"}),
     )
     gender = forms.ChoiceField(label=_("Gender"), choices=GENDER_CHOICES, widget=forms.Select(attrs={}))
     address = forms.CharField(label=_("Address"), max_length=255, widget=forms.TextInput(attrs={}))
@@ -95,6 +95,10 @@ class RegistrationForm(StyledFormMixin, forms.Form):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+        # Set browser guidance when the form is constructed so a long-lived
+        # worker never serves yesterday's DOB maximum. ``clean_date_of_birth``
+        # remains the authoritative server-side validation.
+        self.fields["date_of_birth"].widget.attrs["max"] = timezone.localdate().isoformat()
         self._load_program_choices()
         cc_raw = (self.data.get("country_code") if self.data else None) or self.initial.get("country_code") or "EG"
         country_code = normalize_country_code(cc_raw)
@@ -133,7 +137,7 @@ class RegistrationForm(StyledFormMixin, forms.Form):
 
     def clean_date_of_birth(self) -> date:
         value: date = self.cleaned_data["date_of_birth"]
-        if value >= date.today():
+        if value >= timezone.localdate():
             raise forms.ValidationError(_("Date of birth must be in the past."))
         return value
 

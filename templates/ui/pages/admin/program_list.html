@@ -12,7 +12,7 @@
     <section class="card-surface flex flex-col gap-4"><form class="actions-row items-end"
       method="get"
       hx-get="{% url 'applications:program_list' %}"
-      hx-trigger="input changed delay:300ms from:#application-search, change from:select, submit"
+      hx-trigger="input changed delay:300ms from:#application-search, change from:select, change from:input[type='date'], submit"
       hx-target="#results"
       hx-swap="outerHTML"
       hx-push-url="true"
@@ -36,6 +36,12 @@ aria-label="{% trans 'Search applications' %}"
         </select>
       </label>
     {% endfor %}
+    <label class="min-w-40"><span class="field-label">{% trans "From date" %}</span>
+      <input class="form-input" type="date" name="from" value="{{ from_filter }}" aria-label="{% trans 'From date' %}">
+    </label>
+    <label class="min-w-40"><span class="field-label">{% trans "To date" %}</span>
+      <input class="form-input" type="date" name="to" value="{{ to_filter }}" aria-label="{% trans 'To date' %}">
+    </label>
     <button class="btn-secondary" type="submit">{% trans "Filter" %}</button>
     <a class="btn-ghost"
        href="{% url 'applications:program_list' %}">{% trans "Reset" %}</a>

@@ -22,16 +22,19 @@
               <td class="table-td">
                 <div class="flex flex-col gap-1 items-start">
                   {% include "ui/components/_status.html" with code=item.status label=item.status_label %}
-                  {% if item.payment_state == "waived" %}
-                    {% include "ui/components/_status.html" with code="payment_pending" label=_("Payment waived") %}
-                  {% elif item.payment_state == "paid" %}
-                    {% include "ui/components/_status.html" with code="paid" label=_("Payment confirmed") %}
-                  {% endif %}
+                  {% include "ui/components/_status.html" with code=item.payment_state label=item.payment_state_label %}
+                  {% include "ui/components/_status.html" with code=item.documents_state label=item.documents_state_label %}
+                  {% include "ui/components/_status.html" with code=item.intake_state label=item.intake_state_label %}
+                  {% include "ui/components/_status.html" with code=item.activation_state label=item.activation_state_label %}
                 </div>
               </td>
               <td class="table-td">
-                {% if item.action_url %}
-                  <a class="btn-secondary" href="{{ item.action_url }}">{{ item.action_label }}</a>
+                {% if item.available_actions %}
+                  <div class="flex flex-wrap gap-2">
+                    {% for action in item.available_actions %}
+                      <a class="btn-secondary" href="{{ action.url }}">{{ action.label }}</a>
+                    {% endfor %}
+                  </div>
                 {% elif item.next_step %}
                   <span class="text-muted">{{ item.next_step }}</span>
                 {% else %}
@@ -55,9 +58,17 @@
             <strong class="block truncate">{{ item.program_title }}</strong>
             <small class="block text-muted">{{ item.program_type_label }}</small>
             {% include "ui/components/_status.html" with code=item.status label=item.status_label %}
+            {% include "ui/components/_status.html" with code=item.payment_state label=item.payment_state_label %}
+            {% include "ui/components/_status.html" with code=item.documents_state label=item.documents_state_label %}
+            {% include "ui/components/_status.html" with code=item.intake_state label=item.intake_state_label %}
+            {% include "ui/components/_status.html" with code=item.activation_state label=item.activation_state_label %}
             <small class="block text-muted">{{ item.submitted_at|date:"d/m/Y" }}</small>
-            {% if item.action_url %}
-              <a class="btn-soft-primary shrink-0 mt-2" href="{{ item.action_url }}">{{ item.action_label }}</a>
+            {% if item.available_actions %}
+              <div class="flex flex-wrap gap-2 mt-2">
+                {% for action in item.available_actions %}
+                  <a class="btn-soft-primary shrink-0" href="{{ action.url }}">{{ action.label }}</a>
+                {% endfor %}
+              </div>
             {% elif item.next_step %}
               <small class="block text-muted mt-2">{{ item.next_step }}</small>
             {% endif %}

@@ -16,7 +16,7 @@ from django.views.decorators.http import require_http_methods
 from apps.academics.models import Cohort
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
-from apps.core.permissions import ROLE_SENIOR_STAFF, is_admin, role_required, safe_int
+from apps.core.permissions import ROLE_SENIOR_STAFF, is_admin, role_required, safe_date_str, safe_int
 from apps.entrance_exams.services import assign_exam_for_application, queue_entrance_invitation_email
 from apps.intake_forms.selectors import get_application_intake_state  # noqa: E402
 from apps.intake_forms.services import request_intake_form_for_application  # noqa: E402
@@ -77,11 +77,15 @@ from .services import (
     ACTION_REQUEST_DOCUMENTS,
     ACTION_REQUEST_INTAKE,
     ACTION_REQUEST_INTERVIEW,
+    ACTION_REVERT,
+    APPLICATION_QUEUE_STATUS_PRIORITY,
     RegistrationData,
     accept_program_application,
     activate_application_if_ready,
     allowed_application_actions,
+    filter_applications_for_action,
     get_active_application_waiver,
+    get_application_action_projection,
     has_application_paid_record,
     invite_to_entrance_exam,
     mark_application_paid,
@@ -252,7 +256,7 @@ def review_queue_applications():
     Both the admin review queue and the dashboard count must use this exact
     queryset so the number on the dashboard matches the queue it links to.
     """
-    return ProgramApplication.objects.filter(status__in=REVIEW_QUEUE_STATUSES)
+    return filter_applications_for_action(ProgramApplication.objects.all(), "review")
 
 
 def _decision_unavailable_reason(application) -> str | None:
@@ -293,8 +297,11 @@ def program_application_list(request: HttpRequest) -> HttpResponse:
         "student__user", "reviewed_by", "cohort__diploma", "course"
     ).order_by(
         Case(
-            When(status__in=APPLICATION_LIST_TERMINAL_STATUSES, then=Value(1)),
-            default=Value(0),
+            *[
+                When(status=status, then=Value(priority))
+                for status, priority in APPLICATION_QUEUE_STATUS_PRIORITY.items()
+            ],
+            default=Value(999),
             output_field=IntegerField(),
         ),
         "-created_at",
@@ -312,16 +319,22 @@ def program_application_list(request: HttpRequest) -> HttpResponse:
         applications = applications.filter(cohort_id=cohort_filter)
     if student_filter and student_filter.isdigit():
         applications = applications.filter(student_id=int(student_filter))
-    if action_filter == "review":
-        applications = applications.filter(status__in=REVIEW_QUEUE_STATUSES)
-    elif action_filter == "payment":
-        applications = applications.filter(status=PROGRAM_APP_STATUS_PAYMENT_PENDING)
-    elif action_filter == "documents":
-        applications = applications.filter(status__in=(PROGRAM_APP_STATUS_ACCEPTED, PROGRAM_APP_STATUS_DOCUMENTS_REQUESTED))
-    if from_filter:
-        applications = applications.filter(created_at__date__gte=from_filter)
-    if to_filter:
-        applications = applications.filter(created_at__date__lte=to_filter)
+    if action_filter:
+        applications = filter_applications_for_action(applications, action_filter)
+
+    date_filter_errors = []
+    date_from = safe_date_str(from_filter)
+    date_to = safe_date_str(to_filter)
+    if from_filter and not date_from:
+        date_filter_errors.append(_("Enter a valid start date in YYYY-MM-DD format."))
+    if to_filter and not date_to:
+        date_filter_errors.append(_("Enter a valid end date in YYYY-MM-DD format."))
+    if date_from and date_to and date_from > date_to:
+        date_filter_errors.append(_("The start date must be before or equal to the end date."))
+    if date_from and not (date_to and date_from > date_to):
+        applications = applications.filter(created_at__date__gte=date_from)
+    if date_to and not (date_from and date_from > date_to):
+        applications = applications.filter(created_at__date__lte=date_to)
     filters = [
         {
             "name": "status",
@@ -345,6 +358,9 @@ def program_application_list(request: HttpRequest) -> HttpResponse:
                 {"value": "review", "label": _("Review decision"), "selected": action_filter == "review"},
                 {"value": "payment", "label": _("Payment"), "selected": action_filter == "payment"},
                 {"value": "documents", "label": _("Documents"), "selected": action_filter == "documents"},
+                {"value": "survey", "label": _("Survey"), "selected": action_filter == "survey"},
+                {"value": "entrance", "label": _("Entrance assessment"), "selected": action_filter == "entrance"},
+                {"value": "activation", "label": _("Activation"), "selected": action_filter == "activation"},
             ],
         },
         {
@@ -358,6 +374,8 @@ def program_application_list(request: HttpRequest) -> HttpResponse:
         },
     ]
     page_obj, pagination_qs = paginate(request, applications, per_page=15)
+    for application in page_obj:
+        application.queue_projection = get_application_action_projection(application)
     context = {
         "page_obj": page_obj,
         "pagination_qs": pagination_qs,
@@ -365,6 +383,7 @@ def program_application_list(request: HttpRequest) -> HttpResponse:
         "filters": filters,
         "from_filter": from_filter,
         "to_filter": to_filter,
+        "date_filter_errors": date_filter_errors,
     }
     if is_htmx(request):
         return render(request, "ui/fragments/admin/_program_table.html", context)
@@ -411,7 +430,7 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
                 messages.warning(request, _("Application rejected."))
             return redirect("applications:program_detail", application_id=application.id)
 
-        if action == "revert" and application.status in {PROGRAM_APP_STATUS_ACCEPTED, PROGRAM_APP_STATUS_REJECTED}:
+        if action == "revert" and ACTION_REVERT in allowed_actions:
             try:
                 revert_program_application_decision(
                     application,
@@ -424,7 +443,7 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
                 messages.info(request, _("Application reverted."))
                 return redirect("applications:program_detail", application_id=application.id)
 
-        if action == "mark_paid" and is_admin(request.user):
+        if action == "mark_paid" and is_admin(request.user) and ACTION_MARK_PAID in allowed_actions:
             try:
                 mark_application_paid(
                     application,
@@ -534,7 +553,7 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
                 messages.success(request, _("Entrance exam assigned." if not send_email else "Entrance exam assigned. Invitation email queued."))
             return redirect("applications:program_detail", application_id=application.id)
 
-        if action == "grant_waiver" and is_admin(request.user):
+        if action == "grant_waiver" and is_admin(request.user) and ACTION_GRANT_WAIVER in allowed_actions:
             try:
                 waiver = grant_payment_waiver(
                     application,
@@ -567,7 +586,7 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
                     messages.info(request, _("Payment waiver revoked."))
             return redirect("applications:program_detail", application_id=application.id)
 
-        if action == "activate" and is_admin(request.user):
+        if action == "activate" and is_admin(request.user) and ACTION_ACTIVATE in allowed_actions:
             try:
                 result = activate_application_if_ready(application, actor=request.user)
             except ValueError as exc:
@@ -635,12 +654,14 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
 
     # Intake form state
     intake_state = get_application_intake_state(application)
+    workflow_projection = get_application_action_projection(application)
 
     return render(
         request,
         "ui/pages/admin/program_detail.html",
         {
             "application": application,
+            "workflow_projection": workflow_projection,
             "decisions": decisions,
             "decision_display_rows": decision_display_rows,
             "pagination_qs": decisions_qs,
@@ -658,8 +679,7 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
             ),
             "can_revoke_waiver": is_admin(request.user) and is_waived,
             "can_show_revert": (
-                application.status in {PROGRAM_APP_STATUS_ACCEPTED, PROGRAM_APP_STATUS_REJECTED}
-                and not application.entrance_attempts.all()
+                ACTION_REVERT in workflow_projection["available_action_keys"]
             ),
             "doc_request": doc_request,
             "doc_upload": doc_upload,
