@@ -101,6 +101,10 @@ def _render_templated_email(
         return None
     subject, body = template.render(context)
     missing = [v for v in template.variable_names() if v not in context]
+    if "language_code" in template.body and "language_code" not in context:
+        missing.append("language_code")
+    if "{{ subject }}" in template.subject and "subject" not in context:
+        missing.append("subject")
     if missing:
         raise ValueError(
             _("Template '%(slug)s' is missing context variables: %(missing)s")

@@ -50,22 +50,36 @@ DEFAULT_TEMPLATES = {
     },
     TEMPLATE_ENTRANCE_EXAM_PASS: {
         "name": "Entrance exam review notice",
-        "subject": "Your entrance exam was submitted",
+        "subject": "{{ subject }}",
         "body": (
+            "{% if language_code == 'en' %}"
             "Hello {{ full_name }},\n\n"
             "Your entrance exam '{{ exam_title }}' has been submitted successfully.\n\n"
             "The admissions office will review your submission and contact you with the next steps.\n\n"
             "Thank you,\nDokkiMashora admissions"
+            "{% else %}"
+            "مرحبًا {{ full_name }}،\n\n"
+            "تم تقديم امتحان القبول '{{ exam_title }}' بنجاح.\n\n"
+            "ستقوم إدارة القبول بمراجعة طلبك والتواصل معك بشأن الخطوات التالية.\n\n"
+            "شكرًا،\nإدارة القبول في دُكّي مشورة"
+            "{% endif %}"
         ),
     },
     TEMPLATE_ENTRANCE_EXAM_FAIL: {
         "name": "Entrance exam review notice",
-        "subject": "Your entrance exam was submitted",
+        "subject": "{{ subject }}",
         "body": (
+            "{% if language_code == 'en' %}"
             "Hello {{ full_name }},\n\n"
             "Your entrance exam '{{ exam_title }}' has been submitted successfully.\n\n"
             "The admissions office will review your submission and contact you with the next steps.\n\n"
-            "DokkiMashora admissions"
+            "Thank you,\nDokkiMashora admissions"
+            "{% else %}"
+            "مرحبًا {{ full_name }}،\n\n"
+            "تم تقديم امتحان القبول '{{ exam_title }}' بنجاح.\n\n"
+            "ستقوم إدارة القبول بمراجعة طلبك والتواصل معك بشأن الخطوات التالية.\n\n"
+            "شكرًا،\nإدارة القبول في دُكّي مشورة"
+            "{% endif %}"
         ),
     },
     TEMPLATE_EXAM_INVITATION: {

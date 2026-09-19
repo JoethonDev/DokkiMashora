@@ -98,6 +98,8 @@ ALL_VARIABLE_SAMPLES: dict[str, str] = {
     "exam_url": "https://example.com/exam/123",
     "exam_open_at": "١ يونيو ٢٠٢٦",
     "exam_close_at": "١٥ يونيو ٢٠٢٦",
+    "language_code": "ar",
+    "subject": "تم تقديم امتحان القبول",
     "rejection_reason": "لم يستوفِ متطلبات القبول",
     "activation_url": "https://example.com/activate/abc123",
     "phone_number": "01234567890",
@@ -121,11 +123,11 @@ AVAILABLE_VARIABLES_BY_SLUG: dict[str, dict[str, list[str]]] = {
     },
     TEMPLATE_ENTRANCE_EXAM_PASS: {
         "required": [],
-        "optional": ["full_name", "exam_title", "cohort_name"],
+        "optional": ["full_name", "exam_title", "cohort_name", "language_code", "subject"],
     },
     TEMPLATE_ENTRANCE_EXAM_FAIL: {
         "required": [],
-        "optional": ["full_name", "exam_title", "rejection_reason"],
+        "optional": ["full_name", "exam_title", "cohort_name", "language_code", "subject"],
     },
     TEMPLATE_EXAM_INVITATION: {
         "required": [],
@@ -190,8 +192,8 @@ DESIGN_CHOICES = (
 SAMPLE_CONTEXT_BY_SLUG: dict[str, dict[str, str]] = {
     TEMPLATE_REGISTRATION_RECEIVED: {"full_name": "ماري جرجس", "email": "mary@example.com", "national_id": "12345678901234", "phone": "01234567890", "password": "1234567890"},
     TEMPLATE_ENTRANCE_EXAM_INVITATION: {"full_name": "ماري جرجس", "email": "mary@example.com", "phone_number": "01234567890", "exam_title": "امتحان القبول للدبلومة", "cohort_name": "دفعة ٢٠٢٦", "exam_url": "https://example.com/exam/123", "exam_open_at": "١ يونيو ٢٠٢٦", "exam_close_at": "١٥ يونيو ٢٠٢٦"},
-    TEMPLATE_ENTRANCE_EXAM_PASS: {"full_name": "ماري جرجس", "exam_title": "امتحان القبول للدبلومة"},
-    TEMPLATE_ENTRANCE_EXAM_FAIL: {"full_name": "ماري جرجس", "exam_title": "امتحان القبول للدبلومة", "rejection_reason": "لم يحقق الدرجة المطلوبة"},
+    TEMPLATE_ENTRANCE_EXAM_PASS: {"full_name": "ماري جرجس", "exam_title": "امتحان القبول للدبلومة", "cohort_name": "دفعة ٢٠٢٦", "language_code": "ar", "subject": "تم تقديم امتحان القبول"},
+    TEMPLATE_ENTRANCE_EXAM_FAIL: {"full_name": "ماري جرجس", "exam_title": "امتحان القبول للدبلومة", "cohort_name": "دفعة ٢٠٢٦", "language_code": "ar", "subject": "تم تقديم امتحان القبول"},
     TEMPLATE_EXAM_INVITATION: {"full_name": "ماري جرجس", "email": "mary@example.com", "exam_title": "امتحان القبول", "exam_url": "https://example.com/exam/123"},
     TEMPLATE_ACCEPTANCE: {"full_name": "ماري جرجس", "cohort_name": "دفعة ٢٠٢٦", "diploma_title": "دبلومة الدراسات اللاهوتية"},
     TEMPLATE_REJECTION: {"full_name": "ماري جرجس", "cohort_name": "دفعة ٢٠٢٦", "rejection_reason": "لم يستوفِ متطلبات القبول"},
