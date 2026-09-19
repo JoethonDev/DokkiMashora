@@ -9,13 +9,13 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
+from apps.applications import services as application_services
 from apps.applications.constants import (
     EMAIL_ACTION_APPLICATION_SURVEY_REQUEST,
     PROGRAM_APP_STATUS_SURVEY_REQUESTED,
     PROGRAM_APP_STATUS_SURVEY_SUBMITTED,
 )
 from apps.applications.models import ProgramApplication
-from apps.applications import services as application_services
 from apps.communications.services import queue_program_application_email
 
 from .constants import (
@@ -48,54 +48,58 @@ def request_intake_form_for_application(
     send_email=True,
 ) -> IntakeFormRequest:
     """Create an intake form request, send email, and set status to survey_requested."""
-    if application.status not in INTAKE_REQUESTABLE_STATUSES:
-        raise ValueError(_("Intake forms can only be requested for applications that are not yet rejected or activated."))
-    if form is None:
-        form = get_required_intake_form_for_application(application)
-    if form is None:
-        raise ValueError(_("No required intake form exists for this application."))
+    with transaction.atomic():
+        locked = ProgramApplication.objects.select_for_update().get(pk=application.pk)
+        if locked.status not in INTAKE_REQUESTABLE_STATUSES:
+            raise ValueError(_("Intake forms can only be requested for applications that are not yet rejected or activated."))
 
-    if IntakeFormResponse.objects.filter(form=form, program_application=application).exists():
-        raise ValueError(_("Intake form already submitted for this application."))
+        required_form = get_required_intake_form_for_application(locked)
+        if required_form is None:
+            raise ValueError(_("No required intake form exists for this application."))
+        if form is not None and form.pk != required_form.pk:
+            raise ValueError(_("The selected intake form is not required for this application."))
+        form = required_form
 
-    if expires_at is None:
-        expires_at = timezone.now() + timezone.timedelta(days=7)
+        if IntakeFormResponse.objects.filter(form=form, program_application=locked).exists():
+            raise ValueError(_("Intake form already submitted for this application."))
 
-    raw_token = secrets.token_urlsafe(32)
-    token_hash = _hash_token(raw_token)
+        if expires_at is None:
+            expires_at = timezone.now() + timezone.timedelta(days=7)
 
-    # Cancel any existing open requests
-    IntakeFormRequest.objects.filter(
-        form=form, program_application=application,
-        status=INTAKE_REQUEST_STATUS_REQUESTED,
-    ).update(
-        status=INTAKE_REQUEST_STATUS_CANCELLED,
-        cancelled_at=timezone.now(),
-        cancelled_by=actor,
-    )
+        raw_token = secrets.token_urlsafe(32)
+        token_hash = _hash_token(raw_token)
 
-    intake_request = IntakeFormRequest.objects.create(
-        form=form,
-        program_application=application,
-        status=INTAKE_REQUEST_STATUS_REQUESTED,
-        token_hash=token_hash,
-        expires_at=expires_at,
-        requested_by=actor,
-        requested_at=timezone.now(),
-    )
-
-    old_status = application.status
-    if application.status not in (PROGRAM_APP_STATUS_SURVEY_REQUESTED, PROGRAM_APP_STATUS_SURVEY_SUBMITTED):
-        _set_status(application, PROGRAM_APP_STATUS_SURVEY_REQUESTED)
-        application_services._record_decision(
-            application, "request_survey",
-            old_status, PROGRAM_APP_STATUS_SURVEY_REQUESTED, actor,
+        IntakeFormRequest.objects.filter(
+            form=form, program_application=locked,
+            status=INTAKE_REQUEST_STATUS_REQUESTED,
+        ).update(
+            status=INTAKE_REQUEST_STATUS_CANCELLED,
+            cancelled_at=timezone.now(),
+            cancelled_by=actor,
         )
 
-    if send_email:
-        transaction.on_commit(lambda: _send_intake_request_email(application, form, raw_token, intake_request))
+        intake_request = IntakeFormRequest.objects.create(
+            form=form,
+            program_application=locked,
+            status=INTAKE_REQUEST_STATUS_REQUESTED,
+            token_hash=token_hash,
+            expires_at=expires_at,
+            requested_by=actor,
+            requested_at=timezone.now(),
+        )
 
-    return intake_request
+        old_status = locked.status
+        if locked.status not in (PROGRAM_APP_STATUS_SURVEY_REQUESTED, PROGRAM_APP_STATUS_SURVEY_SUBMITTED):
+            _set_status(locked, PROGRAM_APP_STATUS_SURVEY_REQUESTED)
+            application_services._record_decision(
+                locked, "request_survey",
+                old_status, PROGRAM_APP_STATUS_SURVEY_REQUESTED, actor,
+            )
+
+        if send_email:
+            transaction.on_commit(lambda: _send_intake_request_email(locked, form, raw_token, intake_request))
+
+        return intake_request
 
 
 def _set_status(application, new_status):

@@ -6,7 +6,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import Case, IntegerField, Q, Value, When
+from django.db.models import Q
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -78,11 +78,11 @@ from .services import (
     ACTION_REQUEST_INTAKE,
     ACTION_REQUEST_INTERVIEW,
     ACTION_REVERT,
-    APPLICATION_QUEUE_STATUS_PRIORITY,
     RegistrationData,
     accept_program_application,
     activate_application_if_ready,
     allowed_application_actions,
+    annotate_application_action_readiness,
     filter_applications_for_action,
     get_active_application_waiver,
     get_application_action_projection,
@@ -293,17 +293,12 @@ def program_application_list(request: HttpRequest) -> HttpResponse:
     cohort_filter = request.GET.get("cohort", "")
     student_filter = request.GET.get("student_id", "")
     q = request.GET.get("q", "")
-    applications = ProgramApplication.objects.select_related(
-        "student__user", "reviewed_by", "cohort__diploma", "course"
+    applications = annotate_application_action_readiness(
+        ProgramApplication.objects.select_related(
+            "student__user", "reviewed_by", "cohort__diploma", "course"
+        )
     ).order_by(
-        Case(
-            *[
-                When(status=status, then=Value(priority))
-                for status, priority in APPLICATION_QUEUE_STATUS_PRIORITY.items()
-            ],
-            default=Value(999),
-            output_field=IntegerField(),
-        ),
+        "_queue_priority",
         "-created_at",
         "-id",
     )

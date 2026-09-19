@@ -11,11 +11,13 @@ from typing import TYPE_CHECKING
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.db import transaction
+from django.db.models import BooleanField, Case, Exists, IntegerField, OuterRef, Q, Subquery, Value, When
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from apps.academics.constants import ENROLLMENT_STATUS_PENDING
-from apps.academics.models import Cohort, Course, CourseEnrollment, DiplomaEnrollment
+from apps.academics.models import Cohort, Course, CourseEnrollment, CourseVersion, DiplomaEnrollment
 from apps.academics.services import activate_course_enrollment, activate_diploma_enrollment
 from apps.accounts.constants import GROUP_STUDENT, USER_STATUS_INACTIVE
 from apps.applications import documents as application_documents
@@ -34,9 +36,18 @@ from apps.communications.services import (
 )
 from apps.core.permissions import validate_score
 from apps.core.phone import normalize_phone
+from apps.entrance_exams.models import EntranceAttempt
 from apps.intake_forms import services as intake_services
-from apps.intake_forms.constants import INTAKE_REQUESTABLE_STATUSES  # noqa: E402
-from apps.intake_forms.selectors import has_required_intake_response  # noqa: E402
+from apps.intake_forms.constants import (  # noqa: E402
+    INTAKE_REQUEST_STATUS_REQUESTED,
+    INTAKE_REQUEST_STATUS_SUBMITTED,
+    INTAKE_REQUESTABLE_STATUSES,
+)
+from apps.intake_forms.models import IntakeForm, IntakeFormResponse
+from apps.intake_forms.selectors import (  # noqa: E402
+    get_required_intake_form_for_application,
+    has_required_intake_response,
+)
 from apps.payments import services as payment_services
 from apps.payments.constants import CURRENCY_EGP, PAYMENT_STATUS_PAID, WAIVER_STATUS_ACTIVE
 from apps.payments.models import PaymentRecord, PaymentWaiver
@@ -59,6 +70,10 @@ from .constants import (
     DECISION_ACTION_REVERT,
     DELIVERY_MODE_CHOICES,
     DELIVERY_MODE_ONLINE,
+    DOCUMENT_REQUEST_STATUS_CANCELLED,
+    DOCUMENT_REQUEST_STATUS_EXPIRED,
+    DOCUMENT_REQUEST_STATUS_REQUESTED,
+    DOCUMENT_REQUEST_STATUS_SUBMITTED,
     EMAIL_ACTION_ACCEPTANCE,
     EMAIL_ACTION_REJECTION,
     PROGRAM_APP_STATUS_ACCEPTED,
@@ -79,6 +94,7 @@ from .constants import (
     PROGRAM_TYPE_DIPLOMA,
 )
 from .models import (
+    ApplicationDocumentUpload,
     ProgramApplication,
     ProgramApplicationDecision,
     ProgramApplicationEmailLog,
@@ -871,11 +887,17 @@ class ActivationResult:
 
 def has_application_documents_submitted(application) -> bool:
     """Check if a complete document upload exists for this application."""
+    cached = getattr(application, "_has_submitted_documents", None)
+    if cached is not None:
+        return bool(cached)
     return application_documents.has_application_documents_submitted(application)
 
 
 def has_application_paid_record(application) -> bool:
     """Check if a paid, non-deleted PaymentRecord exists for this application."""
+    cached = getattr(application, "_has_paid_record", None)
+    if cached is not None:
+        return bool(cached)
     return PaymentRecord.objects.filter(
         application=application,
         status=PAYMENT_STATUS_PAID,
@@ -885,6 +907,9 @@ def has_application_paid_record(application) -> bool:
 
 def has_active_application_waiver(application) -> bool:
     """Check if an active Admin payment waiver exists for this application."""
+    cached = getattr(application, "_has_active_waiver", None)
+    if cached is not None:
+        return bool(cached)
     return PaymentWaiver.objects.filter(
         application=application,
         status=WAIVER_STATUS_ACTIVE,
@@ -894,6 +919,17 @@ def has_active_application_waiver(application) -> bool:
 def has_application_payment_readiness(application) -> bool:
     """Payment readiness: satisfied payment OR a valid recorded Admin waiver."""
     return has_application_paid_record(application) or has_active_application_waiver(application)
+
+
+def has_active_course_version(application) -> bool:
+    """Return whether a Course application has an active version to enroll."""
+    cached = getattr(application, "_has_active_course_version", None)
+    if cached is not None:
+        return bool(cached)
+    return bool(
+        application.course_id
+        and CourseVersion.objects.filter(course_id=application.course_id, is_active=True).exists()
+    )
 
 
 def _active_application_waiver_id(application) -> str | None:
@@ -931,6 +967,8 @@ def can_activate_application(application) -> ActivationCheck:
             reasons.append("not_accepted")
         if not application.course:
             reasons.append("no_course_target")
+        elif not has_active_course_version(application):
+            reasons.append("no_active_course_version")
         if not has_application_payment_readiness(application):
             reasons.append("not_paid")
         # Phase 5: required intake check
@@ -945,7 +983,7 @@ def can_activate_application(application) -> ActivationCheck:
         PROGRAM_APP_STATUS_READY_FOR_ACTIVATION,
     ):
         reasons.append("not_accepted_or_documents_not_submitted")
-    if application.status == PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED and not application.submitted_document_upload:
+    if application.status == PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED and not has_application_documents_submitted(application):
         reasons.append("documents_not_uploaded")
     if not application.cohort:
         reasons.append("no_cohort_target")
@@ -960,6 +998,9 @@ def can_activate_application(application) -> ActivationCheck:
 
 def _has_required_intake_check(application) -> bool:
     """Check if required intake form is satisfied. True if no form or response exists."""
+    cached = getattr(application, "_has_required_intake_response", None)
+    if cached is not None:
+        return bool(cached)
     return has_required_intake_response(application)
 
 
@@ -1202,9 +1243,10 @@ LEGAL_PAYMENT_STATUSES = {
 # ---------------------------------------------------------------------------
 #
 # UI action visibility for a ProgramApplication is derived from this single
-# source so the buttons shown always match the exact gates the mutation
-# services enforce. Each status set mirrors the gate of the corresponding
-# transition function:
+# source so the buttons shown always match the exact read gates used by the
+# mutation services. Each status set mirrors the gate of the corresponding
+# transition function, while the Exists annotations below make the same gates
+# available before queue pagination:
 #
 #   accept              -> accept_program_application
 #   reject              -> reject_program_application
@@ -1216,8 +1258,7 @@ LEGAL_PAYMENT_STATUSES = {
 #   grant_waiver        -> grant_payment_waiver (payments WAIVER_LEGAL_APPLICATION_STATUSES)
 #   activate            -> activate_application_if_ready (readiness via can_activate_application)
 #
-# The mutation services keep their own validation: this projection only
-# drives display, and the backend re-checks every transition on mutation.
+# The mutation services still re-check every transition under a row lock.
 
 ACTION_ACCEPT = "accept"
 ACTION_REJECT = "reject"
@@ -1348,49 +1389,325 @@ def _waiver_legal_application_statuses() -> frozenset:
     return frozenset(payment_services.WAIVER_LEGAL_APPLICATION_STATUSES)
 
 
-def allowed_application_actions(application) -> frozenset[str]:
-    """Return the set of valid action keys for an application's current state.
+def _has_required_intake_form(application) -> bool:
+    """Return the same open required-form gate used by intake services."""
+    cached = getattr(application, "_has_required_intake_form", None)
+    if cached is not None:
+        return bool(cached)
+    return get_required_intake_form_for_application(application) is not None
 
-    The single source of truth for the admin detail page. Every allowed status
-    set matches the exact gate enforced by the corresponding mutation service
-    below, and each mutation service re-checks the transition when called.
+
+def _has_entrance_attempt(application) -> bool:
+    cached = getattr(application, "_has_entrance_attempt", None)
+    if cached is not None:
+        return bool(cached)
+    return application.entrance_attempts.exists()
+
+
+def _application_action_predicates() -> dict[str, Q]:
+    """Return SQL predicates for the exact application action gates.
+
+    The aliases referenced here are installed by
+    ``annotate_application_action_readiness``. They intentionally mirror the
+    read helpers consumed by ``allowed_application_actions`` so list filters,
+    dashboard counts, queue ordering, and detail presentation share one gate.
     """
+    status = Q
+    documents_ready = (
+        ~status(program_type=PROGRAM_TYPE_DIPLOMA)
+        | status(_has_submitted_documents=True)
+    )
+    intake_ready = status(_has_required_intake_response=True)
+    payment_ready = status(_has_paid_record=True) | status(_has_active_waiver=True)
+    account_ready = status(student__user__email_activated_at__isnull=False)
+
+    accept = Q()
+    reject = Q()
+    for program_type, statuses in _ACCEPT_ALLOWED_STATUSES.items():
+        accept |= status(program_type=program_type, status__in=statuses)
+    for program_type, statuses in _REJECT_ALLOWED_STATUSES.items():
+        reject |= status(program_type=program_type, status__in=statuses)
+
+    course_activation = status(
+        program_type=PROGRAM_TYPE_COURSE,
+        status__in=(PROGRAM_APP_STATUS_ACCEPTED, PROGRAM_APP_STATUS_PAYMENT_PENDING),
+        course_id__isnull=False,
+        _has_active_course_version=True,
+    )
+    diploma_activation = status(
+        program_type=PROGRAM_TYPE_DIPLOMA,
+        status__in=(
+            PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED,
+            PROGRAM_APP_STATUS_PAYMENT_PENDING,
+            PROGRAM_APP_STATUS_READY_FOR_ACTIVATION,
+        ),
+        cohort_id__isnull=False,
+    ) & (
+        ~status(status=PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED)
+        | status(_has_submitted_documents=True)
+    )
+
+    return {
+        ACTION_ACCEPT: accept,
+        ACTION_REJECT: reject,
+        ACTION_MARK_PAID: (
+            status(status__in=LEGAL_PAYMENT_STATUSES)
+            & ~status(_has_paid_record=True)
+            & ~status(_has_active_waiver=True)
+            & documents_ready
+            & intake_ready
+        ),
+        ACTION_REQUEST_INTAKE: (
+            status(status__in=INTAKE_REQUESTABLE_STATUSES)
+            & status(_has_required_intake_form=True)
+            & ~status(_has_required_intake_response=True)
+        ),
+        ACTION_REQUEST_DOCUMENTS: status(
+            program_type=PROGRAM_TYPE_DIPLOMA,
+            status__in=_REQUEST_DOCUMENTS_ALLOWED_STATUSES,
+            cohort_id__isnull=False,
+            student__user__email_activated_at__isnull=False,
+        ),
+        ACTION_REQUEST_INTERVIEW: status(
+            program_type=PROGRAM_TYPE_DIPLOMA,
+            status=PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
+        ),
+        ACTION_INVITE_TO_ENTRANCE: status(
+            program_type=PROGRAM_TYPE_DIPLOMA,
+            status__in=_INVITE_TO_ENTRANCE_ALLOWED_STATUSES,
+        ),
+        ACTION_GRANT_WAIVER: (
+            status(status__in=_waiver_legal_application_statuses())
+            & ~status(_has_paid_record=True)
+            & ~status(_has_active_waiver=True)
+            & documents_ready
+            & intake_ready
+        ),
+        ACTION_ACTIVATE: (
+            account_ready
+            & payment_ready
+            & intake_ready
+            & (course_activation | diploma_activation)
+        ),
+        ACTION_REVERT: (
+            status(status__in=(PROGRAM_APP_STATUS_ACCEPTED, PROGRAM_APP_STATUS_REJECTED))
+            & ~status(_has_entrance_attempt=True)
+        ),
+    }
+
+
+def annotate_application_action_readiness(queryset):
+    """Annotate a queryset with the set-based readiness used by the queue.
+
+    The annotations mirror the instance read helpers below. They let the
+    queue order and filter before pagination without invoking one read query
+    per row in the presenter.
+    """
+    now = timezone.now()
+    latest_course_version = CourseVersion.objects.filter(
+        course_id=OuterRef("course_id"),
+        is_active=True,
+    ).order_by("-created_at", "-id")
+    course_forms = IntakeForm.objects.filter(
+        is_active=True,
+        is_required=True,
+        course_version_id=Subquery(latest_course_version.values("pk")[:1]),
+    ).filter(
+        Q(open_at__isnull=True) | Q(open_at__lte=now),
+        Q(close_at__isnull=True) | Q(close_at__gt=now),
+    )
+    diploma_forms = IntakeForm.objects.filter(
+        is_active=True,
+        is_required=True,
+        cohort_id=OuterRef("cohort_id"),
+    ).filter(
+        Q(open_at__isnull=True) | Q(open_at__lte=now),
+        Q(close_at__isnull=True) | Q(close_at__gt=now),
+    )
+
+    course_response_forms = IntakeForm.objects.filter(
+        is_active=True,
+        is_required=True,
+        course_version_id=Subquery(
+            CourseVersion.objects.filter(
+                course_id=OuterRef(OuterRef("course_id")),
+                is_active=True,
+            ).order_by("-created_at", "-id").values("pk")[:1]
+        ),
+    ).filter(
+        Q(open_at__isnull=True) | Q(open_at__lte=now),
+        Q(close_at__isnull=True) | Q(close_at__gt=now),
+    )
+    diploma_response_forms = IntakeForm.objects.filter(
+        is_active=True,
+        is_required=True,
+        cohort_id=OuterRef(OuterRef("cohort_id")),
+    ).filter(
+        Q(open_at__isnull=True) | Q(open_at__lte=now),
+        Q(close_at__isnull=True) | Q(close_at__gt=now),
+    )
+
+    annotated = queryset.annotate(
+        _has_paid_record=Exists(
+            PaymentRecord.objects.filter(
+                application_id=OuterRef("pk"),
+                status=PAYMENT_STATUS_PAID,
+                deleted_at__isnull=True,
+            )
+        ),
+        _has_active_waiver=Exists(
+            PaymentWaiver.objects.filter(
+                application_id=OuterRef("pk"),
+                status=WAIVER_STATUS_ACTIVE,
+            )
+        ),
+        _has_submitted_documents=Exists(
+            ApplicationDocumentUpload.objects.filter(
+                request__program_application_id=OuterRef("pk"),
+            )
+        ),
+        _has_course_required_intake_form=Exists(course_forms),
+        _has_diploma_required_intake_form=Exists(diploma_forms),
+        _has_course_required_intake_response=Exists(
+            IntakeFormResponse.objects.filter(
+                program_application_id=OuterRef("pk"),
+                form_id=Subquery(course_response_forms.order_by("pk").values("pk")[:1]),
+            )
+        ),
+        _has_diploma_required_intake_response=Exists(
+            IntakeFormResponse.objects.filter(
+                program_application_id=OuterRef("pk"),
+                form_id=Subquery(diploma_response_forms.order_by("pk").values("pk")[:1]),
+            )
+        ),
+        _has_active_course_version=Exists(
+            CourseVersion.objects.filter(
+                course_id=OuterRef("course_id"),
+                is_active=True,
+            )
+        ),
+        _has_entrance_attempt=Exists(
+            EntranceAttempt.objects.filter(application_id=OuterRef("pk"))
+        ),
+    ).annotate(
+        _has_required_intake_form=Case(
+            When(
+                program_type=PROGRAM_TYPE_COURSE,
+                _has_course_required_intake_form=True,
+                then=Value(True),
+            ),
+            When(
+                program_type=PROGRAM_TYPE_DIPLOMA,
+                _has_diploma_required_intake_form=True,
+                then=Value(True),
+            ),
+            default=Value(False),
+            output_field=BooleanField(),
+        ),
+        _has_required_intake_response=Case(
+            When(
+                program_type=PROGRAM_TYPE_COURSE,
+                _has_course_required_intake_form=False,
+                then=Value(True),
+            ),
+            When(
+                program_type=PROGRAM_TYPE_COURSE,
+                _has_course_required_intake_response=True,
+                then=Value(True),
+            ),
+            When(
+                program_type=PROGRAM_TYPE_DIPLOMA,
+                _has_diploma_required_intake_form=False,
+                then=Value(True),
+            ),
+            When(
+                program_type=PROGRAM_TYPE_DIPLOMA,
+                _has_diploma_required_intake_response=True,
+                then=Value(True),
+            ),
+            default=Value(False),
+            output_field=BooleanField(),
+        ),
+    )
+
+    predicates = _application_action_predicates()
+    status_priority = Case(
+        *[
+            When(status=status, then=Value(priority))
+            for status, priority in APPLICATION_QUEUE_STATUS_PRIORITY.items()
+        ],
+        default=Value(999),
+        output_field=IntegerField(),
+    )
+    return annotated.annotate(
+        _queue_priority=Case(
+            *[
+                When(predicates[action], then=Value(APPLICATION_ACTION_PRIORITY[action]))
+                for action in sorted(
+                    APPLICATION_QUEUE_ACTIONS,
+                    key=lambda key: (APPLICATION_ACTION_PRIORITY[key], key),
+                )
+            ],
+            default=status_priority,
+            output_field=IntegerField(),
+        )
+    )
+
+
+def allowed_application_actions(application) -> frozenset[str]:
+    """Return only actions whose mutation-service gates currently pass."""
     status = application.status
     program_type = application.program_type
     allowed: set[str] = set()
     waiver_statuses = _waiver_legal_application_statuses()
-    payment_action_status = status in LEGAL_PAYMENT_STATUSES or status in waiver_statuses
+    has_paid = has_application_paid_record(application)
+    has_waiver = has_active_application_waiver(application)
+    has_documents = has_application_documents_submitted(application)
+    has_required_form = _has_required_intake_form(application)
+    has_required_response = _has_required_intake_check(application)
     documents_gate_satisfied = (
-        program_type != PROGRAM_TYPE_DIPLOMA
-        or not payment_action_status
-        or has_application_documents_submitted(application)
+        program_type != PROGRAM_TYPE_DIPLOMA or has_documents
     )
-    intake_gate_satisfied = (
-        not payment_action_status
-        or has_required_intake_response(application)
-    )
+    intake_gate_satisfied = has_required_response
 
     if status in _ACCEPT_ALLOWED_STATUSES.get(program_type, frozenset()):
         allowed.add(ACTION_ACCEPT)
     if status in _REJECT_ALLOWED_STATUSES.get(program_type, frozenset()):
         allowed.add(ACTION_REJECT)
-    if status in LEGAL_PAYMENT_STATUSES and documents_gate_satisfied and intake_gate_satisfied:
+    if (
+        status in LEGAL_PAYMENT_STATUSES
+        and not has_paid
+        and not has_waiver
+        and documents_gate_satisfied
+        and intake_gate_satisfied
+    ):
         allowed.add(ACTION_MARK_PAID)
-    if status in INTAKE_REQUESTABLE_STATUSES:
+    if status in INTAKE_REQUESTABLE_STATUSES and has_required_form and not has_required_response:
         allowed.add(ACTION_REQUEST_INTAKE)
-    if program_type == PROGRAM_TYPE_DIPLOMA and status in _REQUEST_DOCUMENTS_ALLOWED_STATUSES:
+    if (
+        program_type == PROGRAM_TYPE_DIPLOMA
+        and status in _REQUEST_DOCUMENTS_ALLOWED_STATUSES
+        and application.cohort_id
+        and application.student.user.email_activated_at
+    ):
         allowed.add(ACTION_REQUEST_DOCUMENTS)
     if program_type == PROGRAM_TYPE_DIPLOMA and status == PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED:
         allowed.add(ACTION_REQUEST_INTERVIEW)
     if program_type == PROGRAM_TYPE_DIPLOMA and status in _INVITE_TO_ENTRANCE_ALLOWED_STATUSES:
         allowed.add(ACTION_INVITE_TO_ENTRANCE)
-    if status in waiver_statuses and documents_gate_satisfied and intake_gate_satisfied:
+    if (
+        status in waiver_statuses
+        and not has_paid
+        and not has_waiver
+        and documents_gate_satisfied
+        and intake_gate_satisfied
+    ):
         allowed.add(ACTION_GRANT_WAIVER)
     if can_activate_application(application).ready:
         allowed.add(ACTION_ACTIVATE)
     if (
         status in {PROGRAM_APP_STATUS_ACCEPTED, PROGRAM_APP_STATUS_REJECTED}
-        and not application.entrance_attempts.exists()
+        and not _has_entrance_attempt(application)
     ):
         allowed.add(ACTION_REVERT)
 
@@ -1443,36 +1760,202 @@ def get_application_action_projection(application) -> dict:
 
 
 def filter_applications_for_action(queryset, action_filter: str):
-    """Apply the queue's shared action-category status projection.
-
-    The list and dashboard count use this helper so they cannot drift into
-    separate status sets. Row-level gate checks remain in
-    ``get_application_action_projection`` and in mutation services.
-    """
-    if action_filter in {"", "all", "action"}:
-        return queryset.exclude(
-            status__in=(PROGRAM_APP_STATUS_REJECTED, PROGRAM_APP_STATUS_ACTIVATED)
-        )
-    if action_filter == "review":
-        statuses = set().union(
-            *_ACCEPT_ALLOWED_STATUSES.values(),
-            *_REJECT_ALLOWED_STATUSES.values(),
-            _INVITE_TO_ENTRANCE_ALLOWED_STATUSES,
-            {PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED},
-        )
+    """Filter with the same set-based action predicates as the projection."""
+    if "_queue_priority" not in queryset.query.annotations:
+        queryset = annotate_application_action_readiness(queryset)
+    if action_filter in {"", "all"}:
+        return queryset
+    predicates = _application_action_predicates()
+    if action_filter == "action":
+        actions = APPLICATION_QUEUE_ACTIONS
+    elif action_filter == "review":
+        actions = {
+            ACTION_ACCEPT,
+            ACTION_REJECT,
+            ACTION_REQUEST_INTERVIEW,
+            ACTION_INVITE_TO_ENTRANCE,
+        }
     elif action_filter == "payment":
-        statuses = set(LEGAL_PAYMENT_STATUSES) | set(_waiver_legal_application_statuses())
+        actions = {ACTION_MARK_PAID, ACTION_GRANT_WAIVER}
     elif action_filter == "documents":
-        statuses = set(_REQUEST_DOCUMENTS_ALLOWED_STATUSES)
+        actions = {ACTION_REQUEST_DOCUMENTS}
     elif action_filter == "survey":
-        statuses = set(INTAKE_REQUESTABLE_STATUSES)
+        actions = {ACTION_REQUEST_INTAKE}
     elif action_filter == "entrance":
-        statuses = set(_INVITE_TO_ENTRANCE_ALLOWED_STATUSES)
+        actions = {ACTION_INVITE_TO_ENTRANCE}
     elif action_filter == "activation":
-        statuses = {PROGRAM_APP_STATUS_READY_FOR_ACTIVATION}
+        actions = {ACTION_ACTIVATE}
     else:
         return queryset.none()
-    return queryset.filter(status__in=statuses)
+    combined = Q()
+    for action in actions:
+        combined |= predicates[action]
+    return queryset.filter(combined)
+
+
+def get_application_portal_projection(application, *, now=None) -> dict:
+    """Project one application for the student dashboard and portal.
+
+    This application-owned projection contains the only student application
+    action list. It exposes real document, survey, and entrance destinations;
+    payment and activation remain state/next-step text because the student
+    has no same-page mutation or read-only destination to invoke there.
+    """
+    now = now or timezone.now()
+    is_paid = has_application_paid_record(application)
+    is_waived = has_active_application_waiver(application)
+    if is_paid:
+        payment_state, payment_state_label = "paid", _("Payment confirmed")
+    elif is_waived:
+        payment_state, payment_state_label = "waived", _("Payment waived")
+    else:
+        payment_state, payment_state_label = "pending", _("Payment pending")
+
+    document_requests = list(application.document_requests.all())
+    intake_requests = list(application.intake_requests.all())
+    entrance_attempts = list(application.entrance_attempts.all())
+
+    submitted_documents = False
+    for request in document_requests:
+        if request.status != DOCUMENT_REQUEST_STATUS_SUBMITTED:
+            continue
+        try:
+            if request.upload is not None:
+                submitted_documents = True
+                break
+        except ApplicationDocumentUpload.DoesNotExist:
+            continue
+    open_document_request = next(
+        (
+            request for request in document_requests
+            if request.status == DOCUMENT_REQUEST_STATUS_REQUESTED
+            and request.expires_at > now
+        ),
+        None,
+    )
+    if submitted_documents:
+        documents_state, documents_state_label = "submitted", _("Documents submitted")
+    elif open_document_request:
+        documents_state, documents_state_label = "requested", _("Documents requested")
+    elif any(request.status == DOCUMENT_REQUEST_STATUS_EXPIRED for request in document_requests):
+        documents_state, documents_state_label = "expired", _("Documents request expired")
+    elif any(request.status == DOCUMENT_REQUEST_STATUS_CANCELLED for request in document_requests):
+        documents_state, documents_state_label = "cancelled", _("Documents request cancelled")
+    else:
+        documents_state, documents_state_label = "not_requested", _("Documents not requested")
+
+    open_intake_request = next(
+        (
+            request for request in intake_requests
+            if request.status == INTAKE_REQUEST_STATUS_REQUESTED and request.expires_at > now
+        ),
+        None,
+    )
+    has_intake_response = any(
+        request.status == INTAKE_REQUEST_STATUS_SUBMITTED for request in intake_requests
+    ) or application.status == PROGRAM_APP_STATUS_SURVEY_SUBMITTED
+    if has_intake_response:
+        intake_state, intake_state_label = "submitted", _("Survey submitted")
+    elif open_intake_request:
+        intake_state, intake_state_label = "requested", _("Survey requested")
+    elif application.status == PROGRAM_APP_STATUS_SURVEY_REQUESTED:
+        intake_state, intake_state_label = "requested", _("Survey requested")
+    else:
+        intake_state, intake_state_label = "not_requested", _("Survey not requested")
+
+    actions = []
+    next_step = None
+    if application.status == PROGRAM_APP_STATUS_INVITED:
+        attempt = entrance_attempts[0] if entrance_attempts else None
+        exam = attempt.exam if attempt else None
+        if attempt and attempt.submitted_at:
+            next_step = _(
+                "Your entrance exam has been submitted. Awaiting the admissions office decision."
+            )
+        elif exam and exam.is_active and exam.access_token:
+            if (not exam.open_at or exam.open_at <= now) and (
+                not exam.close_at or exam.close_at > now
+            ):
+                actions.append({
+                    "kind": "entrance",
+                    "title": exam.title,
+                    "description": _("Your entrance exam is ready."),
+                    "label": _("Open exam"),
+                    "url": reverse("entrance_exams:exam_access_token", args=[exam.access_token]),
+                    "method": "GET",
+                    "priority": "urgent",
+                    "due_at": exam.close_at if exam.close_at and exam.close_at > now else None,
+                })
+            else:
+                next_step = _(
+                    "Your entrance assessment is scheduled. Use the link you received by email when it opens."
+                )
+        else:
+            next_step = _("Your entrance assessment has not been assigned yet.")
+    elif application.status == PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED:
+        next_step = _(
+            "Your entrance exam has been submitted. Awaiting the admissions office decision."
+        )
+
+    if open_document_request:
+        actions.append({
+            "kind": "document",
+            "title": _("Upload requested documents"),
+            "description": _("Waiting for your documents — open the upload from your applications."),
+            "label": _("Upload documents"),
+            "url": reverse("applications:my_document_upload", args=[application.id]),
+            "method": "GET",
+            "priority": "urgent" if (open_document_request.expires_at - now).days < 7 else "normal",
+            "due_at": open_document_request.expires_at,
+        })
+    if open_intake_request:
+        actions.append({
+            "kind": "intake",
+            "title": _("Complete the survey"),
+            "description": _("A required survey is waiting for your response."),
+            "label": _("Open survey"),
+            "url": reverse("intake_forms:student_intake_form", args=[open_intake_request.pk]),
+            "method": "GET",
+            "priority": "urgent" if (open_intake_request.expires_at - now).days < 7 else "normal",
+            "due_at": open_intake_request.expires_at,
+        })
+
+    if application.status == PROGRAM_APP_STATUS_PAYMENT_PENDING:
+        if is_waived:
+            next_step = _("Payment waived by the admissions office.")
+        elif is_paid:
+            next_step = _("Payment confirmed; awaiting activation.")
+        else:
+            next_step = _("Awaiting payment confirmation by the admissions office.")
+    elif application.status in {
+        PROGRAM_APP_STATUS_READY_FOR_ACTIVATION,
+        PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED,
+        PROGRAM_APP_STATUS_SURVEY_SUBMITTED,
+    } and (is_paid or is_waived):
+        next_step = _("Your application is ready for activation by the admissions office.")
+
+    if len(actions) > 1:
+        next_step = _("Complete the available application actions.")
+
+    return {
+        "payment_state": payment_state,
+        "payment_state_label": payment_state_label,
+        "documents_state": documents_state,
+        "documents_state_label": documents_state_label,
+        "documents_count": sum(
+            request.status == DOCUMENT_REQUEST_STATUS_SUBMITTED for request in document_requests
+        ),
+        "intake_state": intake_state,
+        "intake_state_label": intake_state_label,
+        "activation_state": "activated" if application.status == PROGRAM_APP_STATUS_ACTIVATED else "pending",
+        "activation_state_label": (
+            _("Application activated")
+            if application.status == PROGRAM_APP_STATUS_ACTIVATED
+            else _("Awaiting activation")
+        ),
+        "available_actions": actions,
+        "next_step": next_step,
+    }
 
 
 def _has_application_action(application, action: str) -> bool:
@@ -1544,6 +2027,8 @@ def mark_application_paid(
         raise ValueError(_("Application documents must be submitted before recording payment."))
     if not has_required_intake_response(locked):
         raise ValueError(_("Required intake form must be submitted before recording payment."))
+    if has_active_application_waiver(locked):
+        raise ValueError(_("An active payment waiver already exists for this application."))
     # Guard: duplicate payment (exclude soft-deleted records)
     if PaymentRecord.objects.filter(
         student=locked.student, application=locked, status=PAYMENT_STATUS_PAID, deleted_at__isnull=True
