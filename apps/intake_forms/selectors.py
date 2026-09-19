@@ -9,6 +9,9 @@ from apps.applications.models import ProgramApplication
 from .constants import INTAKE_REQUESTABLE_STATUSES
 from .models import IntakeForm, IntakeFormRequest, IntakeFormResponse
 
+ACTIVE_COURSE_VERSION_ORDERING = ("-created_at", "-id")
+REQUIRED_INTAKE_FORM_ORDERING = ("pk",)
+
 
 def get_application_intake_target(application: ProgramApplication) -> CourseVersion | Cohort | None:
     """Resolve the intake target (CourseVersion or Cohort) for an application.
@@ -20,7 +23,7 @@ def get_application_intake_target(application: ProgramApplication) -> CourseVers
     if application.program_type == PROGRAM_TYPE_COURSE:
         if not application.course:
             return None
-        return application.course.versions.filter(is_active=True).order_by("-created_at").first()
+        return application.course.versions.filter(is_active=True).order_by(*ACTIVE_COURSE_VERSION_ORDERING).first()
     if application.program_type == PROGRAM_TYPE_DIPLOMA:
         return application.cohort
     return None
@@ -38,7 +41,7 @@ def get_required_intake_form_for_application(application: ProgramApplication) ->
         qs = qs.filter(cohort=target)
     else:
         return None
-    for form in qs:
+    for form in qs.order_by(*REQUIRED_INTAKE_FORM_ORDERING):
         if form.is_open():
             return form
     return None

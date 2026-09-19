@@ -45,6 +45,8 @@ from apps.intake_forms.constants import (  # noqa: E402
 )
 from apps.intake_forms.models import IntakeForm, IntakeFormResponse
 from apps.intake_forms.selectors import (  # noqa: E402
+    ACTIVE_COURSE_VERSION_ORDERING,
+    REQUIRED_INTAKE_FORM_ORDERING,
     get_required_intake_form_for_application,
     has_required_intake_response,
 )
@@ -1505,9 +1507,9 @@ def annotate_application_action_readiness(queryset):
     """
     now = timezone.now()
     latest_course_version = CourseVersion.objects.filter(
-        course_id=OuterRef("course_id"),
+        course_id=OuterRef(OuterRef("course_id")),
         is_active=True,
-    ).order_by("-created_at", "-id")
+    ).order_by(*ACTIVE_COURSE_VERSION_ORDERING)
     course_forms = IntakeForm.objects.filter(
         is_active=True,
         is_required=True,
@@ -1515,7 +1517,7 @@ def annotate_application_action_readiness(queryset):
     ).filter(
         Q(open_at__isnull=True) | Q(open_at__lte=now),
         Q(close_at__isnull=True) | Q(close_at__gt=now),
-    )
+    ).order_by(*REQUIRED_INTAKE_FORM_ORDERING)
     diploma_forms = IntakeForm.objects.filter(
         is_active=True,
         is_required=True,
@@ -1523,21 +1525,21 @@ def annotate_application_action_readiness(queryset):
     ).filter(
         Q(open_at__isnull=True) | Q(open_at__lte=now),
         Q(close_at__isnull=True) | Q(close_at__gt=now),
-    )
+    ).order_by(*REQUIRED_INTAKE_FORM_ORDERING)
 
     course_response_forms = IntakeForm.objects.filter(
         is_active=True,
         is_required=True,
         course_version_id=Subquery(
             CourseVersion.objects.filter(
-                course_id=OuterRef(OuterRef("course_id")),
+                course_id=OuterRef(OuterRef(OuterRef("course_id"))),
                 is_active=True,
-            ).order_by("-created_at", "-id").values("pk")[:1]
+            ).order_by(*ACTIVE_COURSE_VERSION_ORDERING).values("pk")[:1]
         ),
     ).filter(
         Q(open_at__isnull=True) | Q(open_at__lte=now),
         Q(close_at__isnull=True) | Q(close_at__gt=now),
-    )
+    ).order_by(*REQUIRED_INTAKE_FORM_ORDERING)
     diploma_response_forms = IntakeForm.objects.filter(
         is_active=True,
         is_required=True,
@@ -1545,7 +1547,7 @@ def annotate_application_action_readiness(queryset):
     ).filter(
         Q(open_at__isnull=True) | Q(open_at__lte=now),
         Q(close_at__isnull=True) | Q(close_at__gt=now),
-    )
+    ).order_by(*REQUIRED_INTAKE_FORM_ORDERING)
 
     annotated = queryset.annotate(
         _has_paid_record=Exists(
@@ -1571,13 +1573,13 @@ def annotate_application_action_readiness(queryset):
         _has_course_required_intake_response=Exists(
             IntakeFormResponse.objects.filter(
                 program_application_id=OuterRef("pk"),
-                form_id=Subquery(course_response_forms.order_by("pk").values("pk")[:1]),
+                form_id=Subquery(course_response_forms.values("pk")[:1]),
             )
         ),
         _has_diploma_required_intake_response=Exists(
             IntakeFormResponse.objects.filter(
                 program_application_id=OuterRef("pk"),
-                form_id=Subquery(diploma_response_forms.order_by("pk").values("pk")[:1]),
+                form_id=Subquery(diploma_response_forms.values("pk")[:1]),
             )
         ),
         _has_active_course_version=Exists(
@@ -1587,7 +1589,7 @@ def annotate_application_action_readiness(queryset):
             )
         ),
         _has_entrance_attempt=Exists(
-            EntranceAttempt.objects.filter(application_id=OuterRef("pk"))
+            EntranceAttempt.objects.filter(program_application_id=OuterRef("pk"))
         ),
     ).annotate(
         _has_required_intake_form=Case(
