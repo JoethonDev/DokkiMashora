@@ -46,6 +46,7 @@ from apps.applications.constants import (
     PROGRAM_APP_STATUS_REJECTED,
 )
 from apps.applications.models import ProgramApplication
+from apps.applications.services import has_active_application_waiver, has_application_paid_record
 from apps.assessments import constants as assessment_constants
 from apps.assessments.models import (
     AssessmentAttempt,
@@ -69,16 +70,23 @@ from apps.entrance_exams.constants import (
 )
 from apps.entrance_exams.models import EntranceAttempt
 from apps.entrance_exams.services import attempt_decision
+from apps.intake_forms.constants import INTAKE_REQUEST_STATUS_REQUESTED
 from apps.intake_forms.models import IntakeFormRequest
+from apps.payments.constants import WAIVER_STATUS_ACTIVE
+from apps.payments.models import PaymentWaiver
 from apps.payments.selectors import get_enrollment_payment_status, get_student_payment_summary
 from apps.progression.constants import (
     CERTIFICATE_STATUS_AVAILABLE,
+    FINAL_PROGRESSION_STATUS_INTERVIEW_PENDING,
     REJOIN_STATUS_ACTIVE,
 )
 from apps.progression.models import (
     FinalExamEligibility,
+    FinalProgressionOutcome,
     PromotionDecision,
+    SemesterEvaluation,
     SemesterEvaluationConfig,
+    SemesterInterview,
     SemesterRejoinPlan,
     StudentDiplomaCompletion,
     StudentGradeItem,
@@ -158,16 +166,12 @@ def get_dashboard_data(
 
 def _home_context(data: dict) -> dict:
     """Build the student's actionable home from already-loaded sections."""
-    from types import SimpleNamespace
-
     now = timezone.now()
     actions = []
     applications = data.get("applications", [])
     open_applications = [a for a in applications if a.status != PROGRAM_APP_STATUS_REJECTED]
 
     # Batch: one active waiver lookup for every open application (P5-02).
-    from apps.payments.constants import WAIVER_STATUS_ACTIVE
-    from apps.payments.models import PaymentWaiver
     waived_app_ids = set(
         PaymentWaiver.objects.filter(
             application_id__in=[a.id for a in open_applications],
@@ -188,12 +192,13 @@ def _home_context(data: dict) -> dict:
                     "due_at": request.expires_at, "blocked_reason": None,
                 })
         for request in application.intake_requests.all():
-            if request.status == "requested" and request.expires_at > now:
+            if request.status == INTAKE_REQUEST_STATUS_REQUESTED and request.expires_at > now:
                 actions.append({
                     "kind": "intake", "priority": "urgent" if (request.expires_at - now).days < 7 else "normal",
-                    "title": _("Complete the intake form"),
-                    "description": _("Waiting for your intake form — use the secure link you received by email."),
-                    "url": reverse("students:applications"), "cta_label": _("Open applications"),
+                    "title": _("Complete the survey"),
+                    "description": _("A required survey is waiting for your response."),
+                    "url": reverse("intake_forms:student_intake_form", args=[request.pk]),
+                    "cta_label": _("Open survey"),
                     "due_at": request.expires_at, "blocked_reason": None,
                 })
         if application.status == PROGRAM_APP_STATUS_PAYMENT_PENDING and not is_waived:
@@ -622,14 +627,10 @@ def _get_exam_assignments(profile) -> list[dict]:
 def get_application_row(application: ProgramApplication) -> dict:
     """Project one application into a status-focused portal row (A1/A2).
 
-    Only server-derivable safe actions are exposed: an open entrance exam or
-    its result link. Document, intake, and payment steps show a clear pending
-    state instead of a dead CTA, because their secure tokens are stored hashed
-    and cannot be reconstructed from the portal. Payment readiness is shown
-    distinctly: paid, waived (Admin waiver), or awaiting payment.
+    Only server-derivable safe actions are exposed: an open entrance exam,
+    an authenticated survey request, or its result link. Payment readiness is
+    shown distinctly: paid, waived (Admin waiver), or awaiting payment.
     """
-    from apps.applications.services import has_active_application_waiver, has_application_paid_record
-
     now = timezone.now()
     is_paid = has_application_paid_record(application)
     is_waived = has_active_application_waiver(application)
@@ -689,10 +690,12 @@ def get_application_row(application: ProgramApplication) -> dict:
         row["next_step"] = _("Upload requested documents")
 
     intake_request = application.intake_requests.filter(
-        status="requested", expires_at__gt=now,
+        status=INTAKE_REQUEST_STATUS_REQUESTED, expires_at__gt=now,
     ).first()
     if intake_request:
-        row["next_step"] = _("Waiting for your intake form — use the secure link you received by email.")
+        row["action_url"] = reverse("intake_forms:student_intake_form", args=[intake_request.pk])
+        row["action_label"] = _("Open survey")
+        row["next_step"] = _("Complete the required survey before continuing.")
 
     return row
 
@@ -948,14 +951,6 @@ def _get_record_history(student_profile: StudentProfile) -> dict:
     decision, with Interview Pending kept neutral and exceptional decisions
     clearly marked. Never merges/copies grades or attendance across enrollments.
     """
-    from apps.progression.constants import FINAL_PROGRESSION_STATUS_INTERVIEW_PENDING
-    from apps.progression.models import (
-        FinalProgressionOutcome,
-        SemesterEvaluation,
-        SemesterInterview,
-        SemesterRejoinPlan,
-    )
-
     enrollments = list(
         DiplomaEnrollment.objects.filter(student=student_profile)
         .select_related("cohort__diploma", "entry_semester")

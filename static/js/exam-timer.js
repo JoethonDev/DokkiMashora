@@ -1,19 +1,48 @@
 (function () {
   "use strict";
 
+  if (window.DokkiExamTimer) return;
+
+  var active = null;
+
+  function findElement(root, selector) {
+    root = root || document;
+    if (root.nodeType === 1 && root.matches(selector)) return root;
+    return root.querySelector(selector);
+  }
+
+  function destroyActive() {
+    if (!active) return;
+    window.clearTimeout(active.saveTimer);
+    window.clearInterval(active.renderTimer);
+    window.clearInterval(active.periodicTimer);
+    active.form.removeEventListener("change", active.onAnswerChange);
+    active.form.removeEventListener("input", active.onAnswerChange);
+    document.removeEventListener("visibilitychange", active.visibilityHandler);
+    active.form.removeAttribute("data-exam-timer-initialized");
+    active = null;
+  }
+
   // Entrance exam countdown + answer recovery.
   // The server provides the authoritative deadline on page load; the browser
   // counts down locally and never polls. Recovery priority: localStorage,
   // backend snapshot (server-rendered), empty state. At zero the client stops
   // editing and calls the idempotent finalization endpoint once.
 
-  function initExamTimer() {
-    var form = document.getElementById("exam-take-form");
-    if (!form || form.dataset.examTimerInitialized === "true") return;
+  function initExamTimer(root) {
+    var form = findElement(root, "#exam-take-form");
     var timer = document.getElementById("exam-timer");
-    var value = document.getElementById("exam-timer-value");
-    var message = document.getElementById("exam-timer-message");
-    if (!timer || !value) return;
+    if (!form || !timer) {
+      if (active && !active.form.isConnected) destroyActive();
+      return;
+    }
+    if (active && active.form === form) return;
+
+    destroyActive();
+
+    var value = timer.querySelector("#exam-timer-value");
+    var message = timer.querySelector("#exam-timer-message");
+    if (!value || !window.CountdownCore) return;
     form.dataset.examTimerInitialized = "true";
 
     var Core = window.CountdownCore;
@@ -101,6 +130,7 @@
     function scheduleSnapshot() {
       window.clearTimeout(saveTimer);
       saveTimer = window.setTimeout(saveSnapshot, 2000);
+      if (active && active.form === form) active.saveTimer = saveTimer;
     }
 
     function onAnswerChange() {
@@ -151,6 +181,12 @@
       expired = true;
       window.clearTimeout(saveTimer);
       window.clearInterval(periodicTimer);
+      if (active && active.form === form) {
+        active.saveTimer = null;
+        active.periodicTimer = null;
+        window.clearInterval(active.renderTimer);
+        active.renderTimer = null;
+      }
       disableEditing();
       showExpired();
       finalizeExpired();
@@ -170,6 +206,8 @@
       expire();
     }
 
+    var visibilityHandler = render;
+
     // Recovery priority 1: localStorage. Priority 2 is the server-rendered
     // snapshot already present in the DOM, so only override when local data
     // is available and valid.
@@ -179,11 +217,32 @@
     form.addEventListener("change", onAnswerChange);
     form.addEventListener("input", onAnswerChange);
 
+    active = {
+      form: form,
+      onAnswerChange: onAnswerChange,
+      visibilityHandler: visibilityHandler,
+      saveTimer: saveTimer,
+      renderTimer: window.setInterval(render, 1000),
+      periodicTimer: window.setInterval(saveSnapshot, 60000),
+    };
     render();
-    window.setInterval(render, 1000);
-    periodicTimer = window.setInterval(saveSnapshot, 60000);
-    document.addEventListener("visibilitychange", render);
+    document.addEventListener("visibilitychange", visibilityHandler);
   }
 
-  document.addEventListener("DOMContentLoaded", initExamTimer);
+  window.DokkiExamTimer = {
+    init: initExamTimer,
+    destroy: destroyActive,
+  };
+
+  document.addEventListener("htmx:afterSwap", function (event) {
+    initExamTimer(event.detail && event.detail.target);
+  });
+  document.addEventListener("htmx:load", function (event) {
+    initExamTimer(event.target);
+  });
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", function () { initExamTimer(document); });
+  } else {
+    initExamTimer(document);
+  }
 }());

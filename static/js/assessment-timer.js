@@ -1,15 +1,39 @@
 (function () {
   "use strict";
 
-  function initAssessmentTimer() {
-    var timer = document.getElementById("assessment-timer");
-    if (!timer || timer.dataset.initialized === "true") return;
-    var value = document.getElementById("assessment-timer-value");
-    var message = document.getElementById("assessment-timer-message");
-    if (!value) return;
-    timer.dataset.initialized = "true";
+  if (window.DokkiAssessmentTimer) return;
 
+  var active = null;
+
+  function findElement(root, selector) {
+    root = root || document;
+    if (root.nodeType === 1 && root.matches(selector)) return root;
+    return root.querySelector(selector);
+  }
+
+  function destroyActive() {
+    if (!active) return;
+    window.clearInterval(active.interval);
+    document.removeEventListener("visibilitychange", active.visibilityHandler);
+    active.timer.removeAttribute("data-initialized");
+    active = null;
+  }
+
+  function initAssessmentTimer(root) {
+    var timer = findElement(root, "#assessment-timer");
+    if (!timer) {
+      if (active && !active.timer.isConnected) destroyActive();
+      return;
+    }
+    if (active && active.timer === timer) return;
+
+    destroyActive();
+
+    var value = timer.querySelector("#assessment-timer-value");
+    var message = timer.querySelector("#assessment-timer-message");
     var Core = window.CountdownCore;
+    if (!value || !Core) return;
+    timer.dataset.initialized = "true";
 
     var initialSeconds = Number(timer.dataset.remainingSeconds || 0);
     var serverNow = Date.parse(timer.dataset.serverNow || "");
@@ -30,6 +54,10 @@
       value.textContent = Core.formatAdaptive(seconds);
       if (seconds > 0 || expired) return;
       expired = true;
+      if (active && active.timer === timer) {
+        window.clearInterval(active.interval);
+        active.interval = null;
+      }
       value.classList.add("text-red");
       timer.classList.add("border-red", "bg-red-soft");
       if (message) message.textContent = timer.dataset.expiredLabel || "Time expired.";
@@ -37,10 +65,32 @@
       if (submit) submit.disabled = true;
     }
 
+    var visibilityHandler = render;
+
+    active = {
+      timer: timer,
+      interval: null,
+      visibilityHandler: visibilityHandler,
+    };
+    active.interval = window.setInterval(render, 1000);
+    document.addEventListener("visibilitychange", visibilityHandler);
     render();
-    window.setInterval(render, 1000);
-    document.addEventListener("visibilitychange", render);
   }
 
-  document.addEventListener("DOMContentLoaded", initAssessmentTimer);
+  window.DokkiAssessmentTimer = {
+    init: initAssessmentTimer,
+    destroy: destroyActive,
+  };
+
+  document.addEventListener("htmx:afterSwap", function (event) {
+    initAssessmentTimer(event.detail && event.detail.target);
+  });
+  document.addEventListener("htmx:load", function (event) {
+    initAssessmentTimer(event.target);
+  });
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", function () { initAssessmentTimer(document); });
+  } else {
+    initAssessmentTimer(document);
+  }
 }());

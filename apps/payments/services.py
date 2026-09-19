@@ -7,6 +7,7 @@ import logging
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Q
 from django.db.models.functions import Lower
@@ -14,15 +15,17 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.academics.models import CourseEnrollment, DiplomaEnrollment
-from apps.applications.services import activate_application_if_ready
+from apps.applications import services as application_services
+from apps.applications.constants import PROGRAM_TYPE_DIPLOMA
+from apps.applications.models import ProgramApplication
 from apps.audit.constants import (
     ACTION_PAYMENT_RECORD_UPDATED,
     ACTION_PAYMENT_WAIVER_GRANTED,
     ACTION_PAYMENT_WAIVER_REVOKED,
 )
 from apps.audit.services import record_audit_event
-from apps.core.permissions import validate_score
 from apps.core.dates import parse_date
+from apps.core.permissions import validate_score
 from apps.core.phone import normalize_phone
 from apps.students.identity import normalize_identity_number
 from apps.students.models import StudentProfile
@@ -240,7 +243,6 @@ def _lookup_application(data: dict, student: StudentProfile) -> tuple:
     if not app_id:
         return None, ""
     try:
-        from apps.applications.models import ProgramApplication
         app = ProgramApplication.objects.filter(id=int(app_id), student=student).first()
         if app:
             return app, ""
@@ -254,9 +256,14 @@ def _lookup_diploma_enrollment(data: dict, student: StudentProfile) -> DiplomaEn
     if not enroll_id:
         return None
     try:
-        return DiplomaEnrollment.objects.select_related("cohort__diploma").filter(id=int(enroll_id), student=student).first()
+        enrollment = DiplomaEnrollment.objects.select_related("cohort__diploma").filter(
+            id=int(enroll_id), student=student,
+        ).first()
     except (ValueError, TypeError):
-        return None
+        raise ValueError(_("Invalid diploma enrollment ID.")) from None
+    if enrollment is None:
+        raise ValueError(_("Diploma enrollment ID does not match this student."))
+    return enrollment
 
 
 def _lookup_course_enrollment(data: dict, student: StudentProfile) -> CourseEnrollment | None:
@@ -264,9 +271,14 @@ def _lookup_course_enrollment(data: dict, student: StudentProfile) -> CourseEnro
     if not enroll_id:
         return None
     try:
-        return CourseEnrollment.objects.select_related("course_version__course").filter(id=int(enroll_id), student=student).first()
+        enrollment = CourseEnrollment.objects.select_related("course_version__course").filter(
+            id=int(enroll_id), student=student,
+        ).first()
     except (ValueError, TypeError):
-        return None
+        raise ValueError(_("Invalid course enrollment ID.")) from None
+    if enrollment is None:
+        raise ValueError(_("Course enrollment ID does not match this student."))
+    return enrollment
 
 
 def _build_target_snapshot(
@@ -309,12 +321,24 @@ def preview_upload(upload_id: int) -> PaymentUpload:
                 row.status = ROW_STATUS_FAILED
                 row.error_message = app_error
                 errors.append(f"Row {row.row_number}: {app_error}")
+                all_parsed = False
+                row.save(update_fields=["status", "error_message"])
+                failed += 1
+                continue
+            try:
+                diploma_enrollment = _lookup_diploma_enrollment(data, student)
+                course_enrollment = _lookup_course_enrollment(data, student)
+            except ValueError as exc:
+                row.status = ROW_STATUS_FAILED
+                row.error_message = str(exc)
+                errors.append(f"Row {row.row_number}: {exc}")
+                all_parsed = False
                 row.save(update_fields=["status", "error_message"])
                 failed += 1
                 continue
             row.matched_application = app
-            row.matched_diploma_enrollment = _lookup_diploma_enrollment(data, student)
-            row.matched_course_enrollment = _lookup_course_enrollment(data, student)
+            row.matched_diploma_enrollment = diploma_enrollment
+            row.matched_course_enrollment = course_enrollment
             matched += 1
         else:
             row.status = ROW_STATUS_FAILED if method != MATCH_METHOD_AMBIGUOUS else ROW_STATUS_AMBIGUOUS
@@ -450,14 +474,11 @@ def confirm_upload(upload_id: int, confirmed_by) -> PaymentUpload:
     actor_id = getattr(confirmed_by, "pk", None)
 
     def activate_linked_applications():
-        from django.contrib.auth import get_user_model
-        from apps.applications.models import ProgramApplication
-
         actor = get_user_model().objects.filter(pk=actor_id).first() if actor_id else None
         applications = ProgramApplication.objects.filter(pk__in=application_ids)
         for application in applications:
             try:
-                activate_application_if_ready(application, actor=actor)
+                application_services.activate_application_if_ready(application, actor=actor)
             except Exception as exc:
                 logger.warning("Activation failed for application %s: %s", application.pk, exc)
 
@@ -758,14 +779,19 @@ def grant_payment_waiver(application, actor, *, reason: str) -> PaymentWaiver:
     exist per application (also enforced by a DB partial unique constraint).
     Activation is attempted only if the waiver is the missing readiness gate.
     """
-    from apps.applications.models import ProgramApplication
-
     if not reason or not reason.strip():
         raise ValueError(_("Waiver reason is required."))
 
     locked = ProgramApplication.objects.select_for_update().get(pk=application.pk)
     if locked.status not in WAIVER_LEGAL_APPLICATION_STATUSES:
         raise ValueError(_("Cannot grant a payment waiver for the current application status."))
+    if (
+        locked.program_type == PROGRAM_TYPE_DIPLOMA
+        and not application_services.has_application_documents_submitted(locked)
+    ):
+        raise ValueError(_("Application documents must be submitted before granting a payment waiver."))
+    if not application_services.has_required_intake_response(locked):
+        raise ValueError(_("Required intake form must be submitted before granting a payment waiver."))
 
     before = _waiver_requirement_state(locked)
     if PaymentWaiver.objects.filter(
@@ -803,7 +829,7 @@ def grant_payment_waiver(application, actor, *, reason: str) -> PaymentWaiver:
     # Attempt activation only if payment readiness is now satisfied and the
     # waiver was the blocking gate; other gates (intake, documents) remain.
     try:
-        activate_application_if_ready(locked, actor=actor)
+        application_services.activate_application_if_ready(locked, actor=actor)
     except Exception:
         logger.exception("Activation attempt after waiver grant failed for application %s", locked.pk)
 
@@ -817,13 +843,12 @@ def revoke_payment_waiver(waiver, actor, *, reason: str = "") -> PaymentWaiver:
     The owning application row is locked alongside the waiver so a concurrent
     activation (which locks the application) cannot race the readiness flip.
     """
-    from apps.applications.models import ProgramApplication
-
     locked = PaymentWaiver.objects.select_for_update().get(pk=waiver.pk)
     if locked.application_id:
         ProgramApplication.objects.select_for_update().get(pk=locked.application_id)
     if locked.status != WAIVER_STATUS_ACTIVE:
         raise ValueError(_("This payment waiver is not active."))
+    application_id = locked.application_id
     locked.status = WAIVER_STATUS_REVOKED
     locked.revoked_by = actor
     locked.revoked_at = timezone.now()
@@ -833,6 +858,14 @@ def revoke_payment_waiver(waiver, actor, *, reason: str = "") -> PaymentWaiver:
             "status", "revoked_by", "revoked_at", "revoke_reason", "updated_at",
         ]
     )
+    rollback = {"rolled_back": False, "application_status": ""}
+    if application_id:
+        rollback = application_services.rollback_waiver_activation(
+            application_id,
+            locked.pk,
+            actor=actor,
+            reason=reason.strip(),
+        )
     record_audit_event(
         actor=actor,
         action=ACTION_PAYMENT_WAIVER_REVOKED,
@@ -842,6 +875,10 @@ def revoke_payment_waiver(waiver, actor, *, reason: str = "") -> PaymentWaiver:
             "application_id": str(locked.application_id) if locked.application_id else "",
             "student_id": locked.student_id,
             "reason": locked.revoke_reason,
+            "application_status_before": rollback.get("application_status_before", ""),
+            "application_status_after": rollback.get("application_status_after", ""),
+            "activation_rolled_back": rollback.get("rolled_back", False),
+            "enrollment_reset": rollback.get("enrollment_reset", False),
         },
     )
     return locked

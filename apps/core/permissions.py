@@ -89,7 +89,16 @@ def _user_in_any_group(user, group_names: tuple[str, ...]) -> bool:
         return False
     if user.is_superuser:
         return True
-    return user.groups.filter(name__in=group_names).exists()
+    # Cache all group names per-request to avoid N queries (Take path did 5 group_exists before)
+    if hasattr(user, "_group_names_cache"):
+        cached = user._group_names_cache
+    else:
+        try:
+            cached = set(user.groups.values_list("name", flat=True))
+        except Exception:
+            cached = set()
+        user._group_names_cache = cached
+    return any(name in cached for name in group_names)
 
 
 ROLE_EXAM_STAFF = (GROUP_SUPER_ADMIN, GROUP_ADMIN)
@@ -231,9 +240,6 @@ def assessment_staff_scope_filter(user, prefix: str = "") -> Q:
     mod_wide_cohorts = list(ModeratorAssignment.objects.filter(
         moderator=user, active=True, cluster__isnull=True,
     ).values_list("cohort_id", flat=True))
-    mod_wide_cvs = list(ModeratorAssignment.objects.filter(
-        moderator=user, active=True, cluster__isnull=True, course_version_id__isnull=False,
-    ).values_list("course_version_id", flat=True))
     mod_cluster_students = list(ModeratorAssignment.objects.filter(
         moderator=user, active=True, cluster__isnull=False,
     ).values_list("cluster__memberships__student_id", flat=True))
@@ -250,8 +256,6 @@ def assessment_staff_scope_filter(user, prefix: str = "") -> Q:
     mod_filter = Q()
     if mod_wide_cohorts:
         mod_filter |= Q(**{f"{filter_prefix}assessment__cohort_id__in": mod_wide_cohorts})
-    if mod_wide_cvs:
-        mod_filter |= Q(**{f"{filter_prefix}assessment__course_version_id__in": mod_wide_cvs})
     if active_cluster_students:
         mod_filter |= (
             Q(**{f"{filter_prefix}student__student_profile_id__in": active_cluster_students})
@@ -267,7 +271,11 @@ def _student_profile(student):
 
 
 def assessment_scope_filter(user) -> Q:
-    """Return a Q filter for Assessment querysets scoped to a non-admin staff user."""
+    """Return a Q filter for Assessment querysets scoped to a non-admin staff user.
+
+    Moderator scope is Diploma-only (D-001): a Moderator sees assessments for
+    their assigned cohorts; course-version scope is intentionally excluded.
+    """
     if not user or not user.is_authenticated:
         return Q(pk__isnull=True)
     if is_admin(user):
@@ -275,17 +283,15 @@ def assessment_scope_filter(user) -> Q:
     mod_cohorts = ModeratorAssignment.objects.filter(
         moderator=user, active=True,
     ).values("cohort_id")
-    mod_cvs = ModeratorAssignment.objects.filter(
-        moderator=user, active=True,
-    ).values("course_version_id")
-    return (
-        Q(cohort_id__in=mod_cohorts)
-        | Q(course_version_id__in=mod_cvs)
-    )
+    return Q(cohort_id__in=mod_cohorts)
 
 
 def enrollment_scope_filter(user, enrollment_model: str = "course") -> Q:
-    """Return a Q filter for CourseEnrollment or DiplomaEnrollment querysets."""  # noqa: E501
+    """Return a Q filter for CourseEnrollment or DiplomaEnrollment querysets.
+
+    Moderator scope is Diploma-only (D-001): moderators never see course
+    enrollments; they are scoped to Diploma cohorts only.
+    """  # noqa: E501
     if not user or not user.is_authenticated:
         return Q(pk__isnull=True)
     if is_admin(user):
@@ -293,11 +299,8 @@ def enrollment_scope_filter(user, enrollment_model: str = "course") -> Q:
     mod_cohorts = ModeratorAssignment.objects.filter(
         moderator=user, active=True,
     ).values("cohort_id")
-    mod_cvs = ModeratorAssignment.objects.filter(
-        moderator=user, active=True,
-    ).values("course_version_id")
     if enrollment_model == "course":
-        return Q(course_version_id__in=mod_cvs)
+        return Q(pk__isnull=True)
     return Q(cohort_id__in=mod_cohorts)
 
 

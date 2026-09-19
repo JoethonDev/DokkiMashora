@@ -31,10 +31,10 @@
 
   function formatViolationMessage(body, labels) {
     if (body.violation) {
-      var prefix = (labels && labels.violationPrefix) ? labels.violationPrefix : "Violation";
+      var prefix = (labels && labels.violationPrefix) ? labels.violationPrefix : "";
       return prefix + ": " + body.violation;
     }
-    return body.error || ((labels && labels.accessDenied) ? labels.accessDenied : "Access denied");
+    return body.error || ((labels && labels.accessDenied) ? labels.accessDenied : "");
   }
 
   function isViolationResponse(res) {
@@ -52,7 +52,7 @@
       progressText.textContent = Math.round(body.progress) + "%";
     }
     if (body.status === "completed" && statusEl) {
-      statusEl.textContent = (labels && labels.completed) ? labels.completed : "Completed";
+      statusEl.textContent = (labels && labels.completed) ? labels.completed : "";
       statusEl.classList.add("text-success-text");
     }
   }
@@ -66,14 +66,14 @@
         violationEl.textContent = msg;
         var refreshButton = document.createElement("button");
         refreshButton.type = "button";
-        refreshButton.className = "ml-2 underline font-medium";
-        refreshButton.textContent = (labels && labels.refresh) ? labels.refresh : "Refresh";
+        refreshButton.className = "ms-2 underline font-medium";
+        refreshButton.textContent = (labels && labels.refresh) ? labels.refresh : "";
         refreshButton.addEventListener("click", function () { location.reload(); });
         violationEl.appendChild(refreshButton);
         violationEl.classList.remove("hidden");
       }
       if (statusEl) {
-        statusEl.textContent = (labels && labels.paused) ? labels.paused : "Paused";
+        statusEl.textContent = (labels && labels.paused) ? labels.paused : "";
       }
     };
   }

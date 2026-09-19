@@ -35,6 +35,27 @@
         </form>
       </div>
     </section>
+    {% if exam.is_active and exam_access_url %}
+      <section class="card-surface flex flex-col gap-4">
+        <div class="section-head"><div>
+            <p class="eyebrow">{% trans "Exam access" %}</p>
+            <h3>{% trans "Exam access link" %}</h3>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_12rem] gap-5 items-center">
+          <div class="form-stack min-w-0">
+            <label class="field" for="exam-access-link">
+              <span class="field-label">{% trans "Access link" %}</span>
+              <input id="exam-access-link" class="form-input bidi" type="text" value="{{ exam_access_url }}" readonly dir="ltr" aria-describedby="exam-access-link-help">
+            </label>
+            <p id="exam-access-link-help" class="text-sm text-muted m-0">{% trans "Scan this QR code to open the entrance exam." %}</p>
+          </div>
+          <div class="flex justify-center rounded-sm border border-line bg-white p-3">
+            <img class="w-40 h-40 max-w-full" src="{% url 'entrance_exams:admin_exam_qr_code' exam.id %}" alt="{% trans 'QR code' %}">
+          </div>
+        </div>
+      </section>
+    {% endif %}
     <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Content" %}</p>
           <h3>{% trans "Questions" %}</h3>
@@ -101,7 +122,7 @@
               <tr>
                 <td class="table-td"><strong>{{ attempt.student.full_name|default:attempt.student }}</strong></td>
                 <td class="table-td">{% include "ui/components/_status.html" with code=attempt.status label=attempt.get_status_display %}</td>
-                <td class="table-td">{{ attempt.submitted_at|date:"d/m/Y H:i"|default:'-' }}</td>
+                <td class="table-td"><span dir="ltr" class="bidi">{{ attempt.submitted_at|ui_datetime|default:'-' }}</span></td>
                 <td class="table-td">
                   <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-secondary"
                        href="{% url 'entrance_exams:admin_grade_attempt' attempt.id %}">{% if attempt.status == 'graded' %}{% trans "Review" %}{% else %}{% trans "Grade" %}{% endif %}</a>
@@ -123,7 +144,7 @@
             <div class="flex-1 min-w-0">
               <strong class="block truncate">{{ attempt.student.full_name|default:attempt.student }}</strong>
               {% include "ui/components/_status.html" with code=attempt.status label=attempt.get_status_display %}
-              <small class="block text-muted">{% trans "Submitted" %}: {{ attempt.submitted_at|date:"d/m/Y H:i"|default:'-' }}</small>
+              <small class="block text-muted">{% trans "Submitted" %}: <span dir="ltr" class="bidi">{{ attempt.submitted_at|ui_datetime|default:'-' }}</span></small>
             </div>
             <a class="btn-soft-primary shrink-0"
                href="{% url 'entrance_exams:admin_grade_attempt' attempt.id %}">{% if attempt.status == 'graded' %}{% trans "Review" %}{% else %}{% trans "Grade" %}{% endif %}</a>

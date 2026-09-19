@@ -17,6 +17,7 @@ from apps.storage.services import (
     _validate_file,
     build_storage_key,
 )
+import shutil
 
 
 class TestBuildStorageKey(TestCase):
@@ -80,7 +81,6 @@ class TestLocalStorageBackend(TestCase):
         self.backend.base_path = Path(self.temp_dir)
 
     def tearDown(self):
-        import shutil
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_upload_creates_file(self):
@@ -122,7 +122,6 @@ class TestStorageServiceUpload(TestCase):
         self.service._backend.base_path = Path(self.temp_dir)
 
     def tearDown(self):
-        import shutil
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_upload_file_returns_upload_result(self):

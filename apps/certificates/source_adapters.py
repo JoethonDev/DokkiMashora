@@ -32,7 +32,10 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+import fitz
 from django.utils.translation import gettext_lazy as _
+from PIL import Image, ImageDraw, ImageFont
+from psd_tools import PSDImage
 
 from .models import (
     ALLOWED_MAPPING_KEYS,
@@ -153,8 +156,6 @@ def source_checksum(data: bytes) -> str:
 
 
 def _fitz_preview(data: bytes) -> SourcePreview:
-    import fitz  # PyMuPDF
-
     doc = fitz.open(stream=data, filetype="pdf")
     try:
         if doc.page_count < 1:
@@ -176,8 +177,6 @@ def _fitz_preview(data: bytes) -> SourcePreview:
 
 def _raster_to_preview(image, label: str) -> SourcePreview:
     """Resize a PIL raster to the design reference width and PNG-encode it."""
-    from PIL import Image
-
     if image.mode not in ("RGB", "RGBA"):
         image = image.convert("RGB")
     target_width = _IMAGE_PREVIEW_WIDTH
@@ -198,15 +197,11 @@ def _raster_to_preview(image, label: str) -> SourcePreview:
 
 
 def _psd_preview(data: bytes) -> SourcePreview:
-    from psd_tools import PSDImage
-
     psd = PSDImage.open(io.BytesIO(data))
     return _raster_to_preview(psd.composite(), _("PSD"))
 
 
 def _image_preview(data: bytes) -> SourcePreview:
-    from PIL import Image
-
     image = Image.open(io.BytesIO(data)).convert("RGB")
     return _raster_to_preview(image, _("Image"))
 
@@ -345,8 +340,6 @@ def _pdf_font(font_family: str):
     Falls back to base-14 ``helv`` when the bundled font is unavailable so
     Latin-only rendering never breaks.
     """
-    import fitz
-
     family = font_family or DEFAULT_FONT_FAMILY
     if family not in FONT_REGISTRY:
         family = DEFAULT_FONT_FAMILY
@@ -368,8 +361,6 @@ def _pdf_font(font_family: str):
 
 def _overlay_on_pdf(data: bytes, mapping_fields: dict, field_values: dict[str, str]) -> bytes:
     """Embed selected fonts and place fields directly on PDF source pages."""
-    import fitz  # PyMuPDF
-
     doc = fitz.open(stream=data, filetype="pdf")
     try:
         registered: dict[int, set] = {}
@@ -444,8 +435,6 @@ def _overlay_on_image(image, mapping_fields: dict, field_values: dict[str, str])
     Font sizes are scaled from the design reference width (1400) to the export
     resolution so preview and final export are proportionally identical.
     """
-    from PIL import ImageDraw, ImageFont
-
     draw = ImageDraw.Draw(image)
     scale = image.width / _IMAGE_PREVIEW_WIDTH
     for key, value in field_values.items():
@@ -514,15 +503,10 @@ def overlay_text_on_source(
         return _overlay_on_pdf(data, mapping_fields, field_values)
 
     if source_format == TEMPLATE_SOURCE_FORMAT_PSD:
-        from PIL import Image
-        from psd_tools import PSDImage
-
         psd = PSDImage.open(io.BytesIO(data))
         return _overlay_on_image(psd.composite().convert("RGB"), mapping_fields, field_values)
 
     if source_format == TEMPLATE_SOURCE_FORMAT_JPG:
-        from PIL import Image
-
         image = Image.open(io.BytesIO(data)).convert("RGB")
         return _overlay_on_image(image, mapping_fields, field_values)
 

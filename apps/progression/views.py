@@ -351,7 +351,7 @@ def admin_semester_auto_promote(request, cohort_id, semester_id):
         try:
             promote_semester(
                 enrollment, semester,
-                actor=request.user, reason="Bulk auto-promote", automatic=True,
+                actor=request.user, reason=_("Bulk auto-promote"), automatic=True,
             )
             promoted += 1
         except (ValueError, ValidationError) as exc:
@@ -1236,6 +1236,7 @@ def admin_component_list(request, cohort_id, semester_id):
 
 @login_required
 @role_required(*ROLE_SENIOR_STAFF)
+@require_POST
 def admin_grade_sync(request, enrollment_id, semester_id):
     enrollment = get_object_or_404(DiplomaEnrollment, id=enrollment_id)
     semester = get_object_or_404(Semester, id=semester_id)

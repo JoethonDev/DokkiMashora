@@ -20,4 +20,6 @@ urlpatterns = [
     path("admin/applications/<int:application_id>/request-intake/", views.admin_intake_request_send, name="admin_intake_request_send"),
     # Student: fill form via token
     path("forms/fill/<str:token>/", views.fill_intake_form, name="fill_intake_form"),
+    # Student: fill an owned request from the authenticated dashboard
+    path("forms/request/<int:request_id>/", views.student_intake_form, name="student_intake_form"),
 ]

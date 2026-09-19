@@ -11,11 +11,7 @@
               {{ summary.attendance_percent }}
             %</strong>
           </p>
-          <p>
-            {{ summary.total_attended }}
-            /
-            {{ summary.total_sessions }}
-          </p>
+          <p>{{ summary.total_attended }} / {{ summary.total_sessions }} {% trans "attendance days" %}</p>
         </article>
       {% empty %}
         {% include "ui/components/_empty_state.html" with title=_("No attendance records") fill=True %}

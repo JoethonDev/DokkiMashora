@@ -50,6 +50,7 @@ from .constants import (
     USER_STATUS_ACTIVE,
 )
 from .models import User, UserUpload, UserUploadRow
+from .tokens import generate_activation_token
 
 REQUIRED_PROFILE_FIELDS = ["date_of_birth", "gender", "address", "education"]
 
@@ -537,8 +538,6 @@ def confirm_upload(upload_id: int, confirmed_by) -> UserUpload:
 
 
 def send_activation_email(user, *, idempotency_key: str | None = None, sent_by=None) -> None:
-    from .tokens import generate_activation_token
-
     uidb64, token = generate_activation_token(user)
     activation_url = settings.SITE_URL + reverse("accounts:activate", kwargs={"uidb64": uidb64, "token": token})
     full_name = getattr(user, "full_name", "") or ""

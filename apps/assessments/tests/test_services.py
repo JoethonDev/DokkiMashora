@@ -9,13 +9,22 @@ from django.test import TestCase
 from django.utils import timezone
 
 from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE
-from apps.academics.models import Cohort, Course, CourseEnrollment, CourseVersion, Diploma, Semester
+from apps.academics.models import (
+    Cohort,
+    Course,
+    CourseEnrollment,
+    CourseVersion,
+    Diploma,
+    DiplomaEnrollment,
+    Semester,
+)
 from apps.academics.services import assign_moderator_to_students, assign_teacher_to_cohort
 from apps.accounts.constants import GROUP_ADMIN, GROUP_MODERATOR, GROUP_TEACHER
 from apps.accounts.models import User
 from apps.assessments.constants import (
     ASSESSMENT_TYPE_HOMEWORK,
     ASSESSMENT_TYPE_QUIZ,
+    ASSESSMENT_TYPE_SEMESTER_EXAM,
     ATTEMPT_STATUS_ASSIGNED,
     ATTEMPT_STATUS_CANCELLED,
     ATTEMPT_STATUS_GRADED,
@@ -24,17 +33,22 @@ from apps.assessments.constants import (
     ATTEMPT_STATUS_SUBMITTED,
     ATTEMPT_STATUS_UNDER_REVIEW,
     HOMEWORK_STATUS_GRADED,
+    HOMEWORK_STATUS_SUBMITTED,
     HOMEWORK_STATUS_UNDER_REVIEW,
+    HOMEWORK_STATUS_UPLOADED,
     QUESTION_TYPE_MCQ,
     QUESTION_TYPE_WRITTEN,
     SNAPSHOT_QUESTION_SOURCE_BANK,
     SNAPSHOT_QUESTION_SOURCE_MANUAL,
+    SUBMISSION_STATUS_PENDING,
+    SUBMISSION_STATUS_PROCESSED,
 )
 from apps.assessments.models import (
     Assessment,
     AssessmentAnswer,
     AssessmentAttempt,
     AssessmentAttemptSnapshotAnswer,
+    AssessmentSubmission,
     AssessmentChoice,
     AssessmentLectureSection,
     AssessmentQuestion,
@@ -48,6 +62,7 @@ from apps.assessments.models import (
 from apps.assessments.services import (
     AssessmentAnswerData,
     autosave_attempt,
+    accept_diploma_submission,
     check_assessment_access,
     diploma_autosave_attempt,
     generate_diploma_assessment_snapshot,
@@ -60,15 +75,69 @@ from apps.assessments.services import (
     grade_homework,
     grade_written_answer,
     has_active_enrollment,
-    hide_grades,
-    release_grades,
+    hide_attempt_grades,
+    release_attempt_grades,
     start_assessment,
     submit_assessment,
     submit_diploma_assessment,
-    submit_homework,
+    add_homework_attachment,
+    submit_homework_submission,
+    process_durable_diploma_submission,
 )
 from apps.storage.services import FileValidationError, UploadResult
 from apps.students.models import StudentProfile
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
+
+
+def create_scoped_course_assessment(admin, student, **kwargs):
+    course = Course.objects.create(title="Test Course", created_by=admin)
+    course_version = CourseVersion.objects.create(course=course, label="v1", created_by=admin)
+    profile = StudentProfile.objects.create(
+        user=student,
+        full_name="Test Student",
+        date_of_birth=date(2000, 1, 1),
+        gender="m",
+        address="Address",
+        phone=f"010{student.pk:08d}",
+        national_id=f"100000000{student.pk:05d}",
+        education="university",
+    )
+    CourseEnrollment.objects.create(
+        student=profile,
+        course_version=course_version,
+        status=ENROLLMENT_STATUS_ACTIVE,
+    )
+    return Assessment.objects.create(course_version=course_version, **kwargs)
+
+
+def create_scoped_diploma_assessment(admin, student, **kwargs):
+    diploma = Diploma.objects.create(title="Test Diploma", total_semesters=1, created_by=admin)
+    cohort = Cohort.objects.create(
+        diploma=diploma,
+        name="Test Cohort",
+        start_date=date(2026, 1, 1),
+        created_by=admin,
+    )
+    semester = Semester.objects.create(diploma=diploma, title="Semester 1", order=1)
+    profile, _ = StudentProfile.objects.get_or_create(
+        user=student,
+        defaults={
+            "full_name": "Test Student",
+            "date_of_birth": date(2000, 1, 1),
+            "gender": "m",
+            "address": "Address",
+            "phone": f"011{student.pk:08d}",
+            "national_id": f"200000000{student.pk:05d}",
+            "education": "university",
+        },
+    )
+    DiplomaEnrollment.objects.create(
+        student=profile,
+        cohort=cohort,
+        status=ENROLLMENT_STATUS_ACTIVE,
+    )
+    return Assessment.objects.create(cohort=cohort, semester=semester, **kwargs)
 
 
 class HasActiveEnrollmentTests(TestCase):
@@ -167,7 +236,7 @@ class StartAssessmentTests(TestCase):
         self.admin = User.objects.create_superuser(email="admin@test.com", password="x")
         self.student = User.objects.create_user(email="student@test.com", password="x")
         self.now = timezone.now()
-        self.assessment = Assessment.objects.create(
+        self.assessment = create_scoped_course_assessment(self.admin, self.student,
             title="Quiz",
             assessment_type=ASSESSMENT_TYPE_QUIZ,
             open_at=self.now - timezone.timedelta(days=1),
@@ -209,7 +278,7 @@ class SubmitAssessmentTests(TestCase):
         self.admin = User.objects.create_superuser(email="admin@test.com", password="x")
         self.student = User.objects.create_user(email="student@test.com", password="x")
         self.now = timezone.now()
-        self.assessment = Assessment.objects.create(
+        self.assessment = create_scoped_course_assessment(self.admin, self.student,
             title="Quiz",
             assessment_type=ASSESSMENT_TYPE_QUIZ,
             open_at=self.now - timezone.timedelta(days=1),
@@ -345,7 +414,7 @@ class GradeWrittenAnswerTests(TestCase):
         self.grader = User.objects.create_user(email="grader@test.com", password="x")
         self.student = User.objects.create_user(email="student@test.com", password="x")
         self.now = timezone.now()
-        self.assessment = Assessment.objects.create(
+        self.assessment = create_scoped_course_assessment(self.admin, self.student,
             title="Quiz",
             assessment_type=ASSESSMENT_TYPE_QUIZ,
             open_at=self.now - timezone.timedelta(days=1),
@@ -397,7 +466,7 @@ class GradeHomeworkTests(TestCase):
         self.grader = User.objects.create_user(email="grader@test.com", password="x")
         self.student = User.objects.create_user(email="student@test.com", password="x")
         now = timezone.now()
-        self.assessment = Assessment.objects.create(
+        self.assessment = create_scoped_diploma_assessment(self.admin, self.student,
             title="Homework",
             assessment_type=ASSESSMENT_TYPE_HOMEWORK,
             open_at=now - timezone.timedelta(days=1),
@@ -437,7 +506,7 @@ class ReleaseAndHideGradesTests(TestCase):
         self.admin = User.objects.create_superuser(email="admin@test.com", password="x")
         self.student = User.objects.create_user(email="student@test.com", password="x")
         self.now = timezone.now()
-        self.assessment = Assessment.objects.create(
+        self.assessment = create_scoped_course_assessment(self.admin, self.student,
             title="Quiz",
             assessment_type=ASSESSMENT_TYPE_QUIZ,
             open_at=self.now - timezone.timedelta(days=1),
@@ -453,7 +522,7 @@ class ReleaseAndHideGradesTests(TestCase):
         )
 
     def test_release_grades(self):
-        result = release_grades(self.attempt)
+        result = release_attempt_grades(self.attempt.id, actor=self.admin)
         self.assertEqual(result.status, ATTEMPT_STATUS_RELEASED)
         self.assertTrue(result.visible_to_student)
 
@@ -461,13 +530,13 @@ class ReleaseAndHideGradesTests(TestCase):
         self.attempt.status = ATTEMPT_STATUS_SUBMITTED
         self.attempt.save(update_fields=["status"])
         with self.assertRaises(ValueError, msg="graded attempts"):
-            release_grades(self.attempt)
+            release_attempt_grades(self.attempt.id, actor=self.admin)
 
     def test_hide_grades(self):
         self.attempt.visible_to_student = True
         self.attempt.status = ATTEMPT_STATUS_RELEASED
         self.attempt.save(update_fields=["visible_to_student", "status"])
-        result = hide_grades(self.attempt)
+        result = hide_attempt_grades(self.attempt.id, actor=self.admin)
         self.assertFalse(result.visible_to_student)
         self.assertEqual(result.status, ATTEMPT_STATUS_GRADED)
 
@@ -724,7 +793,7 @@ class SubmitHomeworkTests(TestCase):
         self.admin = User.objects.create_superuser(email="admin@test.com", password="x")
         self.student = User.objects.create_user(email="student@test.com", password="x")
         self.now = timezone.now()
-        self.assessment = Assessment.objects.create(
+        self.assessment = create_scoped_diploma_assessment(self.admin, self.student,
             title="Homework",
             assessment_type=ASSESSMENT_TYPE_HOMEWORK,
             open_at=self.now - timezone.timedelta(days=1),
@@ -739,7 +808,7 @@ class SubmitHomeworkTests(TestCase):
         self.content_type = "application/pdf"
 
     @patch("apps.assessments.services.storage_service")
-    def test_submit_homework_creates_attempt_and_submission(self, mock_storage):
+    def test_upload_homework_creates_draft_attachment(self, mock_storage):
         mock_storage.upload_file.return_value = UploadResult(
             key="homework/1/abc.pdf",
             content_type="application/pdf",
@@ -747,30 +816,29 @@ class SubmitHomeworkTests(TestCase):
             checksum="abc123",
             backend="local",
         )
-        submission = submit_homework(
+        attachment = add_homework_attachment(
             student=self.student,
             assessment=self.assessment,
             file_data=self.file_data,
             original_filename=self.filename,
             content_type=self.content_type,
         )
-        self.assertEqual(submission.original_filename, "essay.pdf")
-        self.assertEqual(submission.storage_key, "homework/1/abc.pdf")
-        self.assertEqual(submission.content_type, "application/pdf")
-        self.assertEqual(submission.file_size, len(self.file_data))
-        self.assertEqual(submission.checksum, "abc123")
-        self.assertEqual(submission.status, HOMEWORK_STATUS_UNDER_REVIEW)
-        self.assertIsNotNone(submission.submitted_at)
-        self.assertIsNotNone(submission.attempt)
-        self.assertEqual(submission.attempt.status, ATTEMPT_STATUS_SUBMITTED)
-        self.assertEqual(submission.attempt.student, self.student)
+        submission = HomeworkSubmission.objects.get(assessment=self.assessment, student=self.student)
+        self.assertEqual(attachment.original_filename, "essay.pdf")
+        self.assertEqual(attachment.storage_key, "homework/1/abc.pdf")
+        self.assertEqual(attachment.content_type, "application/pdf")
+        self.assertEqual(attachment.file_size, len(self.file_data))
+        self.assertEqual(attachment.checksum, "abc123")
+        self.assertEqual(attachment.status, HOMEWORK_STATUS_UPLOADED)
+        self.assertEqual(submission.status, HOMEWORK_STATUS_UPLOADED)
+        self.assertIsNone(submission.attempt)
 
     @patch("apps.assessments.services.storage_service")
     def test_submit_homework_raises_when_inactive(self, mock_storage):
         self.assessment.is_active = False
         self.assessment.save(update_fields=["is_active"])
         with self.assertRaises(ValueError, msg="not active"):
-            submit_homework(
+            add_homework_attachment(
                 student=self.student, assessment=self.assessment,
                 file_data=self.file_data, original_filename=self.filename,
                 content_type=self.content_type,
@@ -786,10 +854,10 @@ class SubmitHomeworkTests(TestCase):
             storage_key="homework/1/existing.pdf",
             content_type="application/pdf",
             file_size=100,
-            status=HOMEWORK_STATUS_UNDER_REVIEW,
+            status=HOMEWORK_STATUS_SUBMITTED,
         )
         with self.assertRaises(ValueError, msg="Maximum number of files"):
-            submit_homework(
+            add_homework_attachment(
                 student=self.student,
                 assessment=self.assessment,
                 file_data=self.file_data,
@@ -808,27 +876,18 @@ class SubmitHomeworkTests(TestCase):
         )
         self.assessment.max_upload_files = 2
         self.assessment.save()
-        submit_homework(self.student, self.assessment, self.file_data, "a.pdf", "application/pdf")
-        submit_homework(self.student, self.assessment, self.file_data, "b.pdf", "application/pdf")
+        add_homework_attachment(self.student, self.assessment, self.file_data, "a.pdf", "application/pdf")
+        add_homework_attachment(self.student, self.assessment, self.file_data, "b.pdf", "application/pdf")
         with self.assertRaises(ValueError, msg="Maximum number of files"):
-            submit_homework(self.student, self.assessment, self.file_data, "c.pdf", "application/pdf")
+            add_homework_attachment(self.student, self.assessment, self.file_data, "c.pdf", "application/pdf")
 
-    def test_submit_homework_max_attempts(self):
-        for i in range(3):
-            AssessmentAttempt.objects.create(
-                assessment=self.assessment, student=self.student,
-                attempt_number=i + 1, status=ATTEMPT_STATUS_SUBMITTED,
-            )
+    def test_submit_homework_requires_uploaded_file(self):
         with self.assertRaises(ValueError, msg="maximum number of attempts"):
-            submit_homework(
-                student=self.student, assessment=self.assessment,
-                file_data=self.file_data, original_filename=self.filename,
-                content_type=self.content_type,
-            )
+            submit_homework_submission(self.student, self.assessment)
 
     def test_submit_homework_rejects_mismatched_mime(self):
         with self.assertRaises(FileValidationError, msg="mime"):
-            submit_homework(
+            add_homework_attachment(
                 student=self.student,
                 assessment=self.assessment,
                 file_data=self.file_data,
@@ -838,7 +897,7 @@ class SubmitHomeworkTests(TestCase):
 
     def test_submit_homework_rejects_blocked_extension(self):
         with self.assertRaises(FileValidationError, msg="not allowed"):
-            submit_homework(
+            add_homework_attachment(
                 student=self.student,
                 assessment=self.assessment,
                 file_data=self.file_data,
@@ -865,9 +924,7 @@ class GetHomeworkPendingGradingTests(TestCase):
     def test_returns_uploaded_submissions(self):
         HomeworkSubmission.objects.create(
             assessment=self.assessment, student=self.student,
-            original_filename="hw.pdf", storage_key="k",
-            content_type="application/pdf", file_size=100,
-            status=HOMEWORK_STATUS_UNDER_REVIEW,
+            status=HOMEWORK_STATUS_SUBMITTED,
         )
         results = get_homework_pending_grading()
         self.assertEqual(len(results), 1)
@@ -895,7 +952,7 @@ class FullFlowIntegrationTests(TestCase):
         self.grader = User.objects.create_user(email="grader@test.com", password="x")
         self.student = User.objects.create_user(email="student@test.com", password="x")
         self.now = timezone.now()
-        self.assessment = Assessment.objects.create(
+        self.assessment = create_scoped_course_assessment(self.admin, self.student,
             title="Integration Quiz",
             assessment_type=ASSESSMENT_TYPE_QUIZ,
             open_at=self.now - timezone.timedelta(days=1),
@@ -951,7 +1008,7 @@ class FullFlowIntegrationTests(TestCase):
         self.assertEqual(attempt.score_points, Decimal("25.00"))
 
         # 5. Admin releases grade
-        release_grades(attempt)
+        release_attempt_grades(attempt.id, actor=self.admin)
         attempt.refresh_from_db()
         self.assertEqual(attempt.status, ATTEMPT_STATUS_RELEASED)
         self.assertTrue(attempt.visible_to_student)
@@ -987,7 +1044,7 @@ class FullFlowIntegrationTests(TestCase):
         self.assertEqual(result.score_override_reason, "Re-evaluated rubric")
 
     def test_full_homework_flow(self):
-        hw_assessment = Assessment.objects.create(
+        hw_assessment = create_scoped_diploma_assessment(self.admin, self.student,
             title="Integration Homework",
             assessment_type=ASSESSMENT_TYPE_HOMEWORK,
             open_at=self.now - timezone.timedelta(days=1),
@@ -1003,12 +1060,13 @@ class FullFlowIntegrationTests(TestCase):
                 key="hw/test.pdf", content_type="application/pdf",
                 byte_size=100, checksum="abc", backend="local",
             )
-            submission = submit_homework(
+            add_homework_attachment(
                 student=self.student, assessment=hw_assessment,
                 file_data=b"pdf content", original_filename="hw.pdf",
                 content_type="application/pdf",
             )
-        self.assertEqual(submission.status, HOMEWORK_STATUS_UNDER_REVIEW)
+            submission = submit_homework_submission(self.student, hw_assessment)
+        self.assertEqual(submission.status, HOMEWORK_STATUS_SUBMITTED)
 
         grade_homework(submission.id, Decimal("18.00"), "Great", self.grader)
         submission.refresh_from_db()
@@ -1060,24 +1118,18 @@ class GradingQueueQueryCountTests(TestCase):
             )
 
     def test_get_pending_grading_query_count_bounded(self) -> None:
-        from django.db import connection
-        from django.test.utils import CaptureQueriesContext
         with CaptureQueriesContext(connection) as captured:
             list(get_pending_grading())
         self.assertLess(len(captured.captured_queries), 5,
                         f"get_pending_grading used {len(captured.captured_queries)} queries; expected < 5")
 
     def test_get_homework_pending_grading_query_count_bounded(self) -> None:
-        from django.db import connection
-        from django.test.utils import CaptureQueriesContext
         with CaptureQueriesContext(connection) as captured:
             list(get_homework_pending_grading())
         self.assertLess(len(captured.captured_queries), 5,
                         f"get_homework_pending_grading used {len(captured.captured_queries)} queries; expected < 5")
 
     def test_get_grading_queue_query_count_bounded(self) -> None:
-        from django.db import connection
-        from django.test.utils import CaptureQueriesContext
         with CaptureQueriesContext(connection) as captured:
             list(get_grading_queue(self.admin))
         self.assertLess(len(captured.captured_queries), 10,
@@ -1260,13 +1312,23 @@ class DiplomaSubmitAssessmentTests(TestCase):
     def setUp(self):
         self.admin = User.objects.create_superuser(email="admin@test.com", password="x")
         self.student = User.objects.create_user(email="student@test.com", password="x")
+        self.student_profile = StudentProfile.objects.create(
+            user=self.student,
+            full_name="Diploma Student",
+            date_of_birth=date(2000, 1, 1),
+            gender="m",
+            address="Address",
+            phone="01000000801",
+            national_id="10000000000801",
+            education="university",
+        )
         self.now = timezone.now()
         self.diploma = Diploma.objects.create(title="D", total_semesters=2, created_by=self.admin)
         self.cohort = Cohort.objects.create(diploma=self.diploma, name="C1", start_date=date(2026, 1, 1), created_by=self.admin)
         self.semester = Semester.objects.create(diploma=self.diploma, title="Sem1", order=1)
         self.lecture = DiplomaLecture.objects.create(cohort=self.cohort, semester=self.semester, order=1, title="L1")
         self.assessment = Assessment.objects.create(
-            title="Diploma Quiz", assessment_type=ASSESSMENT_TYPE_QUIZ,
+            title="Diploma Exam", assessment_type=ASSESSMENT_TYPE_SEMESTER_EXAM,
             semester=self.semester, cohort=self.cohort,
             open_at=self.now - timezone.timedelta(days=1),
             close_at=self.now + timezone.timedelta(days=7),
@@ -1287,6 +1349,11 @@ class DiplomaSubmitAssessmentTests(TestCase):
         self.attempt = AssessmentAttempt.objects.create(
             assessment=self.assessment, student=self.student,
             attempt_number=1, status=ATTEMPT_STATUS_IN_PROGRESS, started_at=self.now,
+        )
+        DiplomaEnrollment.objects.create(
+            student=self.student_profile,
+            cohort=self.cohort,
+            status=ENROLLMENT_STATUS_ACTIVE,
         )
         generate_diploma_assessment_snapshot(self.attempt)
         self.snapshot_questions = list(self.attempt.snapshot_questions.order_by("order"))
@@ -1327,6 +1394,55 @@ class DiplomaSubmitAssessmentTests(TestCase):
         with self.assertRaises(ValueError):
             submit_diploma_assessment(self.attempt, {})
 
+    @patch("apps.assessments.services._dispatch_diploma_submission")
+    def test_accept_persists_payload_and_closes_attempt(self, dispatch):
+        submission = accept_diploma_submission(
+            self.attempt,
+            "a" * 32,
+            {f"q_{self.mcq_sq.order}": str(self.correct_snapshot_choice.pk)},
+        )
+        self.assertEqual(submission.processing_status, SUBMISSION_STATUS_PENDING)
+        self.assertEqual(
+            submission.final_payload["answers"][f"q_{self.mcq_sq.order}"],
+            str(self.correct_snapshot_choice.pk),
+        )
+        self.attempt.refresh_from_db()
+        self.assertEqual(self.attempt.status, ATTEMPT_STATUS_SUBMITTED)
+        dispatch.assert_called_once_with("a" * 32)
+
+    @patch("apps.assessments.services._dispatch_diploma_submission")
+    def test_accept_is_idempotent_for_same_submission_id(self, dispatch):
+        first = accept_diploma_submission(
+            self.attempt, "b" * 32, {f"q_{self.mcq_sq.order}": "1"},
+        )
+        second = accept_diploma_submission(
+            self.attempt, "b" * 32, {f"q_{self.mcq_sq.order}": "2"},
+        )
+        self.assertEqual(first.pk, second.pk)
+        self.assertEqual(first.final_payload, second.final_payload)
+        dispatch.assert_called_once_with("b" * 32)
+
+    @patch("apps.assessments.services._dispatch_diploma_submission")
+    def test_accept_rejects_a_second_submission_id(self, dispatch):
+        accept_diploma_submission(self.attempt, "c" * 32, {})
+        with self.assertRaisesMessage(ValueError, "different submission"):
+            accept_diploma_submission(self.attempt, "d" * 32, {})
+
+    @patch("apps.assessments.services._dispatch_diploma_submission")
+    def test_durable_worker_processes_submission_once(self, dispatch):
+        submission = accept_diploma_submission(
+            self.attempt,
+            "e" * 32,
+            {f"q_{self.mcq_sq.order}": str(self.correct_snapshot_choice.pk)},
+        )
+        process_durable_diploma_submission(submission.submission_id)
+        process_durable_diploma_submission(submission.submission_id)
+        submission.refresh_from_db()
+        self.attempt.refresh_from_db()
+        self.assertEqual(submission.processing_status, SUBMISSION_STATUS_PROCESSED)
+        self.assertEqual(self.attempt.status, ATTEMPT_STATUS_GRADED)
+        self.assertEqual(self.attempt.score_points, Decimal("10.00"))
+
     def test_course_assessment_submit_unaffected(self):
         """Verify course assessment submit still works with existing code path."""
         course = Course.objects.create(title="C1", created_by=self.admin)
@@ -1363,7 +1479,7 @@ class DiplomaAutosaveTests(TestCase):
         self.semester = Semester.objects.create(diploma=self.diploma, title="Sem1", order=1)
         self.lecture = DiplomaLecture.objects.create(cohort=self.cohort, semester=self.semester, order=1, title="L1")
         self.assessment = Assessment.objects.create(
-            title="Diploma Quiz", assessment_type=ASSESSMENT_TYPE_QUIZ,
+            title="Diploma Exam", assessment_type=ASSESSMENT_TYPE_SEMESTER_EXAM,
             semester=self.semester, cohort=self.cohort,
             open_at=self.now - timezone.timedelta(days=1),
             close_at=self.now + timezone.timedelta(days=7),
@@ -1422,7 +1538,7 @@ class DiplomaGradingTests(TestCase):
         self.semester = Semester.objects.create(diploma=self.diploma, title="Sem1", order=1)
         self.lecture = DiplomaLecture.objects.create(cohort=self.cohort, semester=self.semester, order=1, title="L1")
         self.assessment = Assessment.objects.create(
-            title="Diploma Quiz", assessment_type=ASSESSMENT_TYPE_QUIZ,
+            title="Diploma Exam", assessment_type=ASSESSMENT_TYPE_SEMESTER_EXAM,
             semester=self.semester, cohort=self.cohort,
             open_at=self.now - timezone.timedelta(days=1),
             close_at=self.now + timezone.timedelta(days=7),

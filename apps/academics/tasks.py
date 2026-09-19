@@ -22,6 +22,16 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
+from apps.academics import services as academic_services
+from apps.academics.audio import transcode_to_hls
+from apps.academics.constants import (
+    AUDIO_PROCESSING_COMPLETED,
+    AUDIO_PROCESSING_FAILED,
+    AUDIO_PROCESSING_PROCESSING,
+)
+from apps.academics.models import DiplomaLecture, Lecture
+from apps.storage.services import record_deferred_storage_deletion, storage_service
+
 logger = logging.getLogger("apps.academics.tasks")
 
 _YT_API_BASE = "https://www.googleapis.com/youtube/v3/videos"
@@ -67,8 +77,6 @@ def refresh_youtube_metadata_task(lecture_id: int, *, diploma: bool = False) -> 
     (missing key, API error, unembeddable video) the lecture is left with a
     persisted 'metadata unavailable' state and an ERROR log entry.
     """
-    from apps.academics.models import DiplomaLecture, Lecture
-
     model = DiplomaLecture if diploma else Lecture
     try:
         lecture = model.objects.get(id=lecture_id)
@@ -134,15 +142,6 @@ def transcode_lecture_audio_task(
     same source key. Every storage write goes through the storage service;
     the lecture is marked FAILED with a visible error on any exception.
     """
-    from apps.academics.audio import transcode_to_hls
-    from apps.academics.constants import (
-        AUDIO_PROCESSING_COMPLETED,
-        AUDIO_PROCESSING_FAILED,
-        AUDIO_PROCESSING_PROCESSING,
-    )
-    from apps.academics.models import DiplomaLecture, Lecture
-    from apps.storage.services import record_deferred_storage_deletion, storage_service
-
     def cleanup_generation(prefix, source_key=""):
         """Remove only one immutable generation and durably record failures."""
         try:
@@ -258,9 +257,7 @@ def expire_stale_enrollments_task() -> dict:
     task — every read path independently enforces active/non-expired at read
     time, so a delayed run can never grant access.
     """
-    from apps.academics.services import expire_stale_enrollments
-
-    counts = expire_stale_enrollments()
+    counts = academic_services.expire_stale_enrollments()
     if any(counts.values()):
         logger.info("Expired enrollment normalization: %s", counts)
     else:

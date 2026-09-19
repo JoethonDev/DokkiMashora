@@ -35,7 +35,7 @@
           <div>
             <dt class="dt">{% trans "Submitted" %}</dt>
             <dd class="dd">
-              {{ application.created_at|date:"d/m/Y H:i" }}
+              <span dir="ltr" class="bidi">{{ application.created_at|ui_datetime }}</span>
             </dd>
           </div>
           <div>
@@ -62,7 +62,7 @@
             <div>
               <dt class="dt">{% trans "Reviewed at" %}</dt>
               <dd class="dd">
-                {{ application.reviewed_at|date:"d/m/Y H:i" }}
+                <span dir="ltr" class="bidi">{{ application.reviewed_at|ui_datetime }}</span>
               </dd>
             </div>
           {% endif %}
@@ -81,6 +81,8 @@
               <p class="text-sm text-muted">{% trans "Documents received. Record payment to continue the application." %}</p>
             {% elif can_grant_waiver %}
               <p class="text-sm text-muted">{% trans "Documents received. Grant a payment waiver to continue the application." %}</p>
+            {% elif intake_state.required_form and not intake_state.has_response and intake_state.latest_request and intake_state.latest_request.status == "requested" %}
+              <p class="text-sm text-muted">{% trans "Documents received. Complete the required survey before recording payment." %}</p>
             {% elif intake_state.can_request %}
               <p class="text-sm text-muted">{% trans "Documents received. Request the required intake form to continue." %}</p>
             {% elif can_activate %}
@@ -90,7 +92,7 @@
               <div class="flex flex-wrap items-center gap-2.5 py-2 {% if not forloop.first %}border-t border-line{% endif %}">
                 <div class="min-w-0 flex-1">
                   <strong class="block text-sm">{% blocktrans with n=forloop.counter %}Submission {{ n }}{% endblocktrans %}</strong>
-                  <small class="text-xs text-muted"><span dir="ltr" class="inline-block">{{ upload.submitted_at|date:"d/m/Y H:i" }}</span></small>
+                  <small class="text-xs text-muted"><span dir="ltr" class="bidi">{{ upload.submitted_at|ui_datetime }}</span></small>
                 </div>
                 <div class="flex gap-2.5 items-center flex-wrap shrink-0">
                   <a class="btn-secondary" href="{% url 'applications:download_persona' upload.id %}">{% trans "Download photo" %}</a>
@@ -100,10 +102,10 @@
             {% endfor %}
           {% elif doc_request %}
             <p>{% trans "Request status" %}: {{ doc_request.get_status_display }}</p>
-            <p class="text-sm text-muted">{% trans "Expires" %}: <span dir="ltr" class="inline-block">{{ doc_request.expires_at|date:"d/m/Y H:i" }}</span></p>
+            <p class="text-sm text-muted">{% trans "Expires" %}: <span dir="ltr" class="bidi">{{ doc_request.expires_at|ui_datetime }}</span></p>
           {% endif %}
           {% if request_doc_form %}
-            <form method="post" class="mt-4">{% csrf_token %}<input type="hidden" name="action" value="request_documents">
+            <form method="post" class="form-stack mt-4">{% csrf_token %}<input type="hidden" name="action" value="request_documents">
               {% for field in request_doc_form %}{% include "ui/components/_field.html" %}{% endfor %}
               <button class="btn-warning" type="submit">{% trans "Request documents" %}</button>
             </form>
@@ -116,30 +118,21 @@
             <h3>{% trans "Decision" %}</h3>
           </div>
         </div>
-        {% if can_accept %}
-        <form method="post">{% csrf_token %}
-          <input type="hidden" name="action" value="accept">
-          <div class="field"><label for="admin-notes-accept">{% trans "Reviewer notes" %}</label>
-            <textarea id="admin-notes-accept" name="admin_notes" class="form-input min-h-32 resize-y" rows="5">{% if admin_notes %}{{ admin_notes }}{% endif %}</textarea>
+        <form method="post" class="form-stack">{% csrf_token %}
+          <div class="field"><label for="admin-notes">{% trans "Reviewer notes" %}</label>
+            <textarea id="admin-notes" name="admin_notes" class="form-textarea min-h-32" rows="5">{% if admin_notes %}{{ admin_notes }}{% endif %}</textarea>
           </div>
-          <label class="flex items-center gap-2 mb-4"><input class="form-checkbox" type="checkbox" name="send_email" checked><span>{% trans "Send email notification" %}</span></label>
-          <button class="btn-success" type="submit">{% trans "Accept application" %}</button>
+          {% if can_reject %}
+            <div class="field"><label for="rejection-reason">{% trans "Rejection reason" %} <span aria-hidden="true">*</span></label>
+              <textarea id="rejection-reason" name="rejection_reason" class="form-textarea min-h-32" rows="3" aria-required="true">{% if rejection_reason %}{{ rejection_reason }}{% endif %}</textarea>
+            </div>
+          {% endif %}
+          <label class="flex items-center gap-2 text-sm"><input class="form-checkbox" type="checkbox" name="send_email" checked><span>{% trans "Send email notification" %}</span></label>
+          <div class="actions-row">
+            {% if can_accept %}<button class="btn-success" type="submit" name="action" value="accept">{% trans "Accept application" %}</button>{% endif %}
+            {% if can_reject %}<button class="btn-danger" type="submit" name="action" value="reject">{% trans "Reject application" %}</button>{% endif %}
+          </div>
         </form>
-        {% endif %}
-        {% if can_reject %}
-        {% if can_accept %}{% include "ui/components/_form_section_divider.html" with title=_("Reject application") %}{% endif %}
-        <form method="post">{% csrf_token %}
-          <input type="hidden" name="action" value="reject">
-          <div class="field"><label for="admin-notes-reject">{% trans "Reviewer notes" %}</label>
-            <textarea id="admin-notes-reject" name="admin_notes" class="form-input min-h-32 resize-y" rows="5">{% if admin_notes %}{{ admin_notes }}{% endif %}</textarea>
-          </div>
-          <div class="field"><label for="rejection-reason">{% trans "Rejection reason" %} <span aria-hidden="true">*</span></label>
-            <textarea id="rejection-reason" name="rejection_reason" class="form-input min-h-32 resize-y" rows="3" aria-required="true">{% if rejection_reason %}{{ rejection_reason }}{% endif %}</textarea>
-          </div>
-          <label class="flex items-center gap-2 mb-4"><input class="form-checkbox" type="checkbox" name="send_email" checked><span>{% trans "Send email notification" %}</span></label>
-          <button class="btn-danger" type="submit">{% trans "Reject application" %}</button>
-        </form>
-        {% endif %}
       </article>
       {% endif %}
       {% if intake_state.required_form %}
@@ -172,7 +165,7 @@
       {% if can_record_payment %}
         <article class="card-surface flex flex-col gap-4">
           <div class="section-head"><div><p class="eyebrow">{% trans "Payments" %}</p><h3>{% trans "Complete payment step" %}</h3></div></div>
-          <form method="post">{% csrf_token %}<input type="hidden" name="action" value="mark_paid">
+          <form method="post" class="form-stack">{% csrf_token %}<input type="hidden" name="action" value="mark_paid">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <label class="field"><span class="field-label">{% trans "Amount" %}</span><input class="form-input" name="amount" type="number" min="0" step="0.01" required></label>
               <label class="field"><span class="field-label">{% trans "External reference" %}</span><input class="form-input" name="external_reference"></label>
@@ -189,15 +182,15 @@
             <p class="text-sm text-muted mb-2">{% trans "Payment has been waived for this application." %}</p>
             <dl class="dl mb-3"><div><dt class="dt">{% trans "Reason" %}</dt><dd class="dd">{{ active_waiver.reason }}</dd></div>
               <div><dt class="dt">{% trans "Granted by" %}</dt><dd class="dd">{{ active_waiver.granted_by.full_name|default:active_waiver.granted_by.email }}</dd></div>
-              <div><dt class="dt">{% trans "Granted at" %}</dt><dd class="dd">{{ active_waiver.granted_at|date:"d/m/Y H:i" }}</dd></div></dl>
+              <div><dt class="dt">{% trans "Granted at" %}</dt><dd class="dd"><span dir="ltr" class="bidi">{{ active_waiver.granted_at|ui_datetime }}</span></dd></div></dl>
             {% if can_revoke_waiver %}
-              <form method="post">{% csrf_token %}<input type="hidden" name="action" value="revoke_waiver">
+              <form method="post" class="form-stack">{% csrf_token %}<input type="hidden" name="action" value="revoke_waiver">
                 <label class="field"><span class="field-label">{% trans "Revoke reason" %}</span><textarea class="form-input" name="waiver_revoke_reason" rows="2"></textarea></label>
                 <button class="btn-danger" type="submit" data-confirm="{% trans 'Revoke this payment waiver?' %}">{% trans "Revoke waiver" %}</button>
               </form>
             {% endif %}
           {% elif can_grant_waiver %}
-            <form method="post">{% csrf_token %}<input type="hidden" name="action" value="grant_waiver">
+            <form method="post" class="form-stack">{% csrf_token %}<input type="hidden" name="action" value="grant_waiver">
               <label class="field"><span class="field-label">{% trans "Reason" %} <span aria-hidden="true">*</span></span><textarea class="form-input" name="waiver_reason" rows="2" required></textarea></label>
               <p class="text-sm text-muted mb-3">{% trans "A waiver satisfies payment readiness without creating a payment record." %}</p>
               <button class="btn-warning" type="submit" data-confirm="{% trans 'Grant a payment waiver for this application?' %}">{% trans "Grant payment waiver" %}</button>
@@ -208,7 +201,7 @@
       {% if can_invite_to_entrance or application.status == "invited_to_entrance" %}
         <article class="card-surface flex flex-col gap-4">
           <div class="section-head"><div><p class="eyebrow">{% trans "Entrance assessment" %}</p><h3>{% trans "Invite applicant" %}</h3></div></div>
-          <form method="post">{% csrf_token %}<input type="hidden" name="action" value="invite_to_entrance">
+          <form method="post" class="form-stack">{% csrf_token %}<input type="hidden" name="action" value="invite_to_entrance">
             <label class="flex items-center gap-2 mb-4"><input class="form-checkbox" type="checkbox" name="send_email" checked><span>{% trans "Send invitation email" %}</span></label>
             <button class="btn-primary" type="submit">{% trans "Assign entrance assessment" %}</button>
           </form>
@@ -217,7 +210,7 @@
       {% if can_request_interview %}
         <article class="card-surface flex flex-col gap-4">
           <div class="section-head"><div><p class="eyebrow">{% trans "Interview" %}</p><h3>{% trans "Request interview" %}</h3></div></div>
-          <form method="post">{% csrf_token %}<input type="hidden" name="action" value="request_interview">
+          <form method="post" class="form-stack">{% csrf_token %}<input type="hidden" name="action" value="request_interview">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <label class="field"><span class="field-label">{% trans "Interview date/time" %}</span><input class="form-input" name="interview_at" type="datetime-local"></label>
               <label class="field"><span class="field-label">{% trans "Expiry date/time" %}</span><input class="form-input" name="expires_at" type="datetime-local" required></label>
@@ -232,13 +225,13 @@
       {% if can_activate %}
         <article class="card-surface flex flex-col gap-4">
           <div class="section-head"><div><p class="eyebrow">{% trans "Activation" %}</p><h3>{% trans "Complete application" %}</h3></div></div>
-          <form method="post">{% csrf_token %}<input type="hidden" name="action" value="activate"><button class="btn-success" type="submit">{% trans "Activate application" %}</button></form>
+          <form method="post" class="form-stack">{% csrf_token %}<input type="hidden" name="action" value="activate"><button class="btn-success" type="submit">{% trans "Activate application" %}</button></form>
         </article>
       {% endif %}
       {% if can_show_revert %}
         <article class="card-surface flex flex-col gap-4">
           <div class="section-head"><div><p class="eyebrow">{% trans "Decision" %}</p><h3>{% trans "Revert decision" %}</h3></div></div>
-          <form method="post">{% csrf_token %}<input type="hidden" name="action" value="revert">
+          <form method="post" class="form-stack">{% csrf_token %}<input type="hidden" name="action" value="revert">
             <label class="field"><span class="field-label">{% trans "Reason" %}</span><textarea class="form-input" name="revert_reason" rows="2" required></textarea></label>
             <button class="btn-warning" type="submit">{% trans "Revert decision" %}</button>
           </form>
@@ -266,8 +259,7 @@
                 </div>
                 <p class="text-xs text-muted mt-1 m-0 flex flex-wrap gap-x-2 items-center">
                   <span>{% trans "by" %} {{ decision.actor|default:_("System") }}</span>
-                  <span class="bidi" dir="ltr">{{ decision.created_at|date:"d/m/Y" }}</span>
-                  <span class="bidi" dir="ltr">{{ decision.created_at|date:"H:i" }}</span>
+                  <span class="bidi" dir="ltr">{{ decision.created_at|ui_datetime }}</span>
                 </p>
                 {% if decision.reason %}
                   <p class="text-sm mt-1 m-0 text-text">{{ decision.reason }}</p>

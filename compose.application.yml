@@ -13,8 +13,11 @@ services:
       CACHE_URL: redis://redis:6379/1
       CELERY_BROKER_URL: redis://redis:6379/0
       DJANGO_SETTINGS_MODULE: config.settings.prod
-      GUNICORN_WORKERS: 2
-      GUNICORN_THREADS: 2
+      ASSESSMENT_AUTOSAVE_WRITE_BEHIND: "true"
+      ASSESSMENT_SUBMISSION_GRADING_DELAY: ${ASSESSMENT_SUBMISSION_GRADING_DELAY:-0}
+      ASSESSMENT_PERF_TRACE: ${ASSESSMENT_PERF_TRACE:-false}
+      GUNICORN_WORKERS: 3
+      GUNICORN_THREADS: 4
     volumes:
       - ${APP_SOURCE:-.}:/app:ro
       - static_data:/app/staticfiles
@@ -25,13 +28,14 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=5)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=30)"]
       interval: 30s
-      timeout: 10s
+      timeout: 35s
       retries: 3
       start_period: 45s
-    cpus: 0.75
-    mem_limit: 1024m
+    cpuset: "0-3"
+    cpu_shares: 2048
+    mem_limit: 2048m
     networks: [app]
     logging:
       driver: json-file

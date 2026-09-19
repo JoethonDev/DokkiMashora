@@ -7,12 +7,14 @@ from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import IntegerField, Q, Sum, Value
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 logger = logging.getLogger(__name__)
 
+from apps.academics import tasks as academic_tasks
 from apps.academics.constants import (
     ENROLLMENT_STATUS_ACTIVE,
     ENROLLMENT_STATUS_EXPIRED,
@@ -30,6 +32,7 @@ from apps.academics.constants import (
     WATCH_STATUS_IN_PROGRESS,
     WATCH_STATUS_VIOLATED,
 )
+from apps.assessments.models import Assessment
 from apps.academics.models import (
     Cohort,
     Course,
@@ -66,6 +69,7 @@ from apps.progression.models import (
     SemesterGradeComponent,
     StudentSemesterProgress,
 )
+from apps.storage.services import record_deferred_storage_deletion, storage_service
 
 
 def activate_diploma_enrollment(enrollment: DiplomaEnrollment) -> DiplomaEnrollment:
@@ -744,11 +748,6 @@ def _schedule_audio_cleanup(lecture_keys, prefixes) -> None:
     cleanup runs post-commit. Failures are recorded as deferred deletions so a
     reconciliation command can retry them; cleanup is never fatal.
     """
-    from apps.storage.services import (
-        record_deferred_storage_deletion,
-        storage_service,
-    )
-
     def _cleanup():
         for key in lecture_keys:
             if not key:
@@ -798,8 +797,6 @@ def delete_diploma_record(*, diploma, actor):
     and audit rows are preserved (SET_NULL) and never deleted.
     """
     with transaction.atomic():
-        from apps.assessments.models import Assessment
-
         if diploma.entrance_exams.exists():
             raise ValueError(
                 _("This diploma cannot be deleted because it still has entrance exams. "
@@ -839,8 +836,6 @@ def delete_semester_record(*, semester, actor):
     stays separate from storage cleanup.
     """
     with transaction.atomic():
-        from apps.assessments.models import Assessment
-
         _assert_no_assessment_history(Assessment.objects.filter(semester=semester))
         lecture_rows = list(semester.diploma_lectures.values_list("id", "audio_storage_key"))
         lecture_keys = [row[1] for row in lecture_rows]
@@ -859,8 +854,6 @@ def delete_course_record(*, course, actor):
     course-version teacher/moderator scope rows that would raise ProtectedError.
     """
     with transaction.atomic():
-        from apps.assessments.models import Assessment
-
         _assert_no_assessment_history(Assessment.objects.filter(course_version__course=course))
         _remove_scope_assignment_rows(
             TeacherAssignment.objects.filter(course_version__course=course),
@@ -892,8 +885,6 @@ def delete_course_version_record(*, version, actor):
     separate from storage cleanup.
     """
     with transaction.atomic():
-        from apps.assessments.models import Assessment
-
         _assert_no_assessment_history(Assessment.objects.filter(course_version=version))
         _remove_scope_assignment_rows(
             TeacherAssignment.objects.filter(course_version=version),
@@ -955,8 +946,6 @@ def delete_cohort_record(*, cohort, actor):
     Diploma-lecture audio objects are removed post-commit (S2-33).
     """
     with transaction.atomic():
-        from apps.assessments.models import Assessment
-
         _assert_no_assessment_history(Assessment.objects.filter(cohort=cohort))
         _remove_scope_assignment_rows(
             ModeratorAssignment.objects.filter(cluster__cohort=cohort),
@@ -1008,15 +997,13 @@ def enqueue_youtube_metadata_refresh(lecture, *, diploma: bool = False) -> None:
     recorded as an explicit 'metadata unavailable' attempt state instead of
     failing silently.
     """
-    from apps.academics.tasks import refresh_youtube_metadata_task
-
     canonicalize_youtube_id(lecture)
     if lecture.youtube_duration_seconds:
         return
     if not lecture.youtube_video_id:
         return
     try:
-        refresh_youtube_metadata_task.delay(lecture.id, diploma=diploma)
+        academic_tasks.refresh_youtube_metadata_task.delay(lecture.id, diploma=diploma)
     except Exception as exc:  # noqa: BLE001 - broker down; persist the unavailable state
         logger.error("Could not enqueue YouTube metadata fetch for lecture %s: %s", lecture.id, exc)
         lecture.youtube_metadata_fetched_at = timezone.now()
@@ -1056,8 +1043,6 @@ def _empty_progress_result():
 def _duration_weighted_progress(
     lecture_qs, completed_lecture_ids, *, duration_field="youtube_duration_seconds",
 ) -> dict:
-    from django.db.models import Sum
-
     totals = lecture_qs.aggregate(total_seconds=Sum(duration_field))
     total_seconds = Decimal(str(totals["total_seconds"] or 0))
     completed_qs = lecture_qs.filter(id__in=completed_lecture_ids)
@@ -1080,9 +1065,6 @@ def course_progress_for_enrollment(student_profile, course_version) -> dict:
     Callers must check ``can_access_course`` before rendering; this selector
     itself returns a zero result when no enrollment exists.
     """
-    from django.db.models import IntegerField, Value
-    from django.db.models.functions import Coalesce
-
     lecture_qs = (
         course_version.lectures.filter(
             Q(release_at__isnull=True) | Q(release_at__lte=timezone.now()),

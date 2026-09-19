@@ -247,11 +247,11 @@ class ProgramApplicationDecision(TimeStampedModel):
         return f"{self.get_action_display()} on {self.program_application} by {self.actor}"
 
     def delete(self, *args, **kwargs) -> tuple[int, dict[str, int]]:
-        raise PermissionError("Program application decisions are append-only.")
+        raise PermissionError(_("Program application decisions are append-only."))
 
     def save(self, *args, **kwargs) -> None:
         if self.pk is not None:
-            raise PermissionError("Program application decisions are append-only.")
+            raise PermissionError(_("Program application decisions are append-only."))
         super().save(*args, **kwargs)
 
 
@@ -281,11 +281,11 @@ class ProgramApplicationNote(TimeStampedModel):
         return f"Note on {self.program_application} by {self.actor}"
 
     def delete(self, *args, **kwargs) -> tuple[int, dict[str, int]]:
-        raise PermissionError("Program application notes are append-only.")
+        raise PermissionError(_("Program application notes are append-only."))
 
     def save(self, *args, **kwargs) -> None:
         if self.pk is not None:
-            raise PermissionError("Program application notes are append-only.")
+            raise PermissionError(_("Program application notes are append-only."))
         super().save(*args, **kwargs)
 
 

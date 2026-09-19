@@ -1,0 +1,132 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+  <div class="page-stack animate-enter-view">
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=_('Assign one reviewer to a cohort, semester, or specific semester exam.') back_button=True back_url=back_url|default:'' %}
+    <section class="card-surface max-w-form mx-auto w-full">
+      <form class="page-stack" method="post" x-data="{
+          scope: '{{ reviewer_scope|escapejs }}',
+          cohortId: '{{ reviewer_cohort|escapejs }}',
+          scopeDescription: {
+            cohort: '{{ _('All semester exams in the cohort.')|escapejs }}',
+            semester: '{{ _('All semester exams in the selected semester.')|escapejs }}',
+            semester_exam: '{{ _('Only the selected semester exam.')|escapejs }}'
+          },
+          filterOptions() {
+            const cohort = this.cohortId;
+            const semester = this.$refs.semester;
+            const assessment = this.$refs.assessment;
+            const cluster = this.$refs.cluster;
+            if (semester) Array.from(semester.options).forEach(option => {
+              const visible = !option.value || !cohort || option.dataset.diplomaId === this.selectedDiplomaId;
+              option.hidden = !visible;
+              option.disabled = !visible;
+              if (!visible && option.selected) option.selected = false;
+            });
+            if (assessment) Array.from(assessment.options).forEach(option => {
+              const visible = !option.value || !cohort || option.dataset.cohortId === cohort;
+              option.hidden = !visible;
+              option.disabled = !visible;
+              if (!visible && option.selected) option.selected = false;
+            });
+            if (cluster) Array.from(cluster.options).forEach(option => {
+              const visible = !option.value || !cohort || option.dataset.cohortId === cohort;
+              option.hidden = !visible;
+              option.disabled = !visible;
+              if (!visible && option.selected) option.selected = false;
+            });
+          },
+          get selectedDiplomaId() {
+            const option = this.$refs.cohort?.options[this.$refs.cohort.selectedIndex];
+            return option?.dataset.diplomaId || '';
+          },
+          resetScopeFields() {
+            if (this.scope === 'cohort') {
+              this.$refs.semester.value = '';
+              this.$refs.assessment.value = '';
+            } else if (this.scope === 'semester') {
+              this.$refs.assessment.value = '';
+            }
+          }
+        }" x-init="filterOptions()">
+        {% csrf_token %}
+        <div class="rounded-md border border-blue/20 bg-blue-soft/30 p-4 text-sm leading-6">
+          <strong class="block mb-1">{% trans "One assignment, one scope" %}</strong>
+          <span>{% trans "Exam sections are handled as grading claims. They do not create separate reviewer assignments." %}</span>
+        </div>
+
+        <label class="field">
+          <span class="field-label">{% trans "Reviewers" %}</span>
+          <select class="form-select min-h-40" name="reviewers" multiple required>
+            {% for reviewer in reviewers %}
+              <option value="{{ reviewer.id }}"{% if reviewer.id|stringformat:'s' in reviewer_ids %} selected{% endif %}>{{ reviewer.full_name|default:reviewer.email }}</option>
+            {% endfor %}
+          </select>
+          <span class="field-help">{% trans "Select one or more reviewers. Use Ctrl/Cmd for multiple selections." %}</span>
+        </label>
+
+        <label class="field">
+          <span class="field-label">{% trans "Assignment scope" %}</span>
+          <select class="form-select" name="scope" x-model="scope" @change="resetScopeFields()" required>
+            <option value="">{% trans "Select" %}</option>
+            {% for value, label in reviewer_scope_choices %}<option value="{{ value }}"{% if value == reviewer_scope %} selected{% endif %}>{{ label }}</option>{% endfor %}
+          </select>
+          <span class="field-help" x-text="scopeDescription[scope] || '{{ _('Choose the level this reviewer can grade.')|escapejs }}'"></span>
+        </label>
+
+        <label class="field">
+          <span class="field-label">{% trans "Cohort" %}</span>
+          <select class="form-select" name="cohort" x-ref="cohort" x-model="cohortId" @change="filterOptions()" required>
+            <option value="">{% trans "Select" %}</option>
+            {% for cohort in cohorts %}<option value="{{ cohort.id }}" data-diploma-id="{{ cohort.diploma_id }}"{% if cohort.id|stringformat:'s' == reviewer_cohort %} selected{% endif %}>{{ cohort }}</option>{% endfor %}
+          </select>
+        </label>
+
+        <div x-show="scope === 'semester'" x-cloak>
+          <label class="field">
+            <span class="field-label">{% trans "Semester" %}</span>
+            <select class="form-select" name="semester" x-ref="semester" :disabled="scope !== 'semester'" :required="scope === 'semester'">
+              <option value="">{% trans "Select" %}</option>
+              {% for semester in semesters %}<option value="{{ semester.id }}" data-diploma-id="{{ semester.diploma_id }}"{% if semester.id|stringformat:'s' == reviewer_semester %} selected{% endif %}>{{ semester }}</option>{% endfor %}
+            </select>
+          </label>
+        </div>
+
+        <div x-show="scope === 'semester_exam'" x-cloak>
+          <label class="field">
+            <span class="field-label">{% trans "Semester exam" %}</span>
+            <select class="form-select" name="assessment" x-ref="assessment" :disabled="scope !== 'semester_exam'" :required="scope === 'semester_exam'">
+              <option value="">{% trans "Select" %}</option>
+              {% for exam in semester_exams %}<option value="{{ exam.id }}" data-cohort-id="{{ exam.cohort_id }}"{% if exam.id|stringformat:'s' == reviewer_assessment %} selected{% endif %}>{{ exam }}</option>{% endfor %}
+            </select>
+            <span class="field-help">{% trans "The selected exam supplies its semester automatically." %}</span>
+          </label>
+        </div>
+
+        <label class="field">
+          <span class="field-label">{% trans "Student cluster" %}</span>
+          <select class="form-select" name="cluster" x-ref="cluster">
+            <option value="">{% trans "All assigned students" %}</option>
+            {% for cluster in clusters %}<option value="{{ cluster.id }}" data-cohort-id="{{ cluster.cohort_id }}"{% if cluster.id|stringformat:'s' == reviewer_cluster %} selected{% endif %}>{{ cluster }}</option>{% endfor %}
+          </select>
+          <span class="field-help">{% trans "Optional. Leave empty to cover the whole selected scope." %}</span>
+        </label>
+
+        <fieldset class="field-group">
+          <legend class="field-label">{% trans "Grading access" %}</legend>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {% for value, label in reviewer_access_choices %}
+              <label class="choice-card"><input class="form-radio" type="radio" name="access_mode" value="{{ value }}"{% if value == reviewer_access_mode %} checked{% endif %}><span>{{ label }}</span></label>
+            {% endfor %}
+          </div>
+        </fieldset>
+
+        <div class="actions-row border-t border-line pt-5 mt-2">
+          <button class="btn-primary" type="submit">{% trans "Save assignment" %}</button>
+          <a class="btn-ghost" href="{% url 'assessments:admin_reviewer_assignment_list' %}">{% trans "Cancel" %}</a>
+        </div>
+      </form>
+    </section>
+  </div>
+{% endblock %}

@@ -12,6 +12,9 @@ from __future__ import annotations
 import logging
 
 from django.core.management.base import BaseCommand
+
+from apps.storage.models import DeferredStorageDeletion
+from apps.storage.services import storage_service
 from django.db import transaction
 
 logger = logging.getLogger("apps.storage")
@@ -27,9 +30,6 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options) -> None:
-        from apps.storage.models import DeferredStorageDeletion
-        from apps.storage.services import storage_service
-
         limit = max(1, int(options.get("limit") or 100))
         pending = list(DeferredStorageDeletion.objects.order_by("created_at")[:limit])
         if not pending:
@@ -38,19 +38,23 @@ class Command(BaseCommand):
 
         processed = cleared = failed = 0
         for item in pending:
+            # Remote object-store I/O must never hold a DB transaction open
+            # (RV-015 / AGENTS.md). Perform the deletes first, then update the
+            # durable claim in a short locked transaction.
+            ok = True
+            if item.key:
+                ok = storage_service.delete_file(item.key) and ok
+            if item.prefix:
+                ok = storage_service.delete_prefix(item.prefix) and ok
             with transaction.atomic():
-                ok = True
-                if item.key:
-                    ok = storage_service.delete_file(item.key) and ok
-                if item.prefix:
-                    ok = storage_service.delete_prefix(item.prefix) and ok
+                locked = DeferredStorageDeletion.objects.select_for_update().get(pk=item.pk)
                 if ok:
-                    item.delete()
+                    locked.delete()
                     cleared += 1
                 else:
-                    item.attempts += 1
-                    item.last_error = "reconciliation retry failed"
-                    item.save(update_fields=["attempts", "last_error", "updated_at"])
+                    locked.attempts += 1
+                    locked.last_error = "reconciliation retry failed"
+                    locked.save(update_fields=["attempts", "last_error", "updated_at"])
                     failed += 1
                 processed += 1
 

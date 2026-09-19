@@ -45,6 +45,7 @@ from apps.assessments.models import (
     HomeworkSubmission,
 )
 from apps.students.models import StudentProfile
+from apps.assessments.services import validate_sections_ready
 
 
 def _create_profile(user: User, *, national_id: str, phone: str) -> StudentProfile:
@@ -748,7 +749,6 @@ class DiplomaSectionManagementTests(TestCase):
         section = AssessmentLectureSection.objects.create(
             assessment=self.diploma_assessment, lecture=self.lecture, order=1, mcq_count=99, max_grade=Decimal("100.00"),
         )
-        from apps.assessments.services import validate_sections_ready
         with self.assertRaisesMessage(ValueError, "requires 99 MCQs"):
             validate_sections_ready(self.diploma_assessment)
 
@@ -756,7 +756,6 @@ class DiplomaSectionManagementTests(TestCase):
         AssessmentLectureSection.objects.create(
             assessment=self.diploma_assessment, lecture=self.lecture, order=1, mcq_count=0, max_grade=Decimal("50.00"),
         )
-        from apps.assessments.services import validate_sections_ready
         with self.assertRaisesMessage(ValueError, "does not match"):
             validate_sections_ready(self.diploma_assessment)
 
@@ -770,7 +769,6 @@ class DiplomaSectionManagementTests(TestCase):
         AssessmentLectureSection.objects.create(
             assessment=self.diploma_assessment, lecture=self.lecture, order=1, mcq_count=2, max_grade=Decimal("100.00"),
         )
-        from apps.assessments.services import validate_sections_ready
         validate_sections_ready(self.diploma_assessment)
 
     # --- Course assessment detail still shows questions ---

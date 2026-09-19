@@ -39,8 +39,8 @@ from .constants import (
     QUESTION_TYPE_WRITTEN,
     RELEASE_MODE_CHOICES,
     RELEASE_MODE_MANUAL,
+    REVIEWER_ACCESS_BOTH,
     REVIEWER_ACCESS_CHOICES,
-    REVIEWER_ACCESS_ONLINE,
     REVIEWER_CLAIM_IN_PROGRESS,
     REVIEWER_CLAIM_STATUS_CHOICES,
     REVIEWER_SCOPE_CHOICES,
@@ -48,6 +48,8 @@ from .constants import (
     REVIEWER_SCOPE_EXAM,
     REVIEWER_SCOPE_SEMESTER,
     SNAPSHOT_QUESTION_SOURCE_CHOICES,
+    SUBMISSION_STATUS_CHOICES,
+    SUBMISSION_STATUS_FAILED,
 )
 
 
@@ -402,6 +404,7 @@ class AssessmentAttempt(TimeStampedModel):
         indexes = [
             models.Index(fields=["student"]),
             models.Index(fields=["assessment"]),
+            models.Index(fields=["student", "assessment", "status"]),
             models.Index(fields=["status"]),
             models.Index(fields=["submitted_at"]),
             models.Index(fields=["graded_at"]),
@@ -823,6 +826,57 @@ class AssessmentAttemptSnapshotAnswer(TimeStampedModel):
         return f"Answer to snapshot Q{self.attempt_question.order}"
 
 
+class AssessmentSubmission(TimeStampedModel):
+    """Durable final payload and processing state for an online submission.
+
+    The row is created in the same transaction that closes the attempt.  It is
+    therefore sufficient to recover grading even if Redis, Celery, or the web
+    process fails immediately after the student receives the response.
+    """
+
+    submission_id = models.CharField(
+        _("submission id"), max_length=64, unique=True,
+    )
+    attempt = models.OneToOneField(
+        AssessmentAttempt,
+        on_delete=models.PROTECT,
+        related_name="durable_submission",
+        verbose_name=_("attempt"),
+    )
+    final_payload = models.JSONField(_("final payload"))
+    accepted_at = models.DateTimeField(_("accepted at"))
+    processing_status = models.CharField(
+        _("processing status"),
+        max_length=20,
+        choices=SUBMISSION_STATUS_CHOICES,
+        default="pending",
+        db_index=True,
+    )
+    processing_started_at = models.DateTimeField(null=True, blank=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+    failed_at = models.DateTimeField(null=True, blank=True)
+    retry_count = models.PositiveIntegerField(default=0)
+    last_error_code = models.CharField(max_length=80, blank=True)
+    last_error_detail = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = _("assessment submission")
+        verbose_name_plural = _("assessment submissions")
+        indexes = [
+            models.Index(fields=["processing_status", "accepted_at"]),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(processing_status=SUBMISSION_STATUS_FAILED)
+                | models.Q(failed_at__isnull=False),
+                name="submission_failed_has_failed_at",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.submission_id} - attempt {self.attempt_id}"
+
+
 class SemesterExamAccessOverride(TimeStampedModel):
     assessment = models.ForeignKey(
         Assessment, on_delete=models.CASCADE,
@@ -1013,7 +1067,7 @@ class ReviewerAssignment(TimeStampedModel):
     )
     access_mode = models.CharField(
         _("access mode"), max_length=10, choices=REVIEWER_ACCESS_CHOICES,
-        default=REVIEWER_ACCESS_ONLINE,
+        default=REVIEWER_ACCESS_BOTH,
     )
     active = models.BooleanField(_("active"), default=True)
     assigned_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="created_reviewer_assignments", verbose_name=_("assigned by"))
@@ -1022,7 +1076,12 @@ class ReviewerAssignment(TimeStampedModel):
         verbose_name = _("reviewer assignment")
         verbose_name_plural = _("reviewer assignments")
         constraints = [
-            models.UniqueConstraint(fields=["reviewer", "cohort", "semester", "section", "cluster"], name="uq_reviewer_assignment"),
+            models.UniqueConstraint(
+                fields=["reviewer", "cohort", "scope", "semester", "assessment", "cluster"],
+                condition=models.Q(active=True, section__isnull=True),
+                nulls_distinct=False,
+                name="uq_active_reviewer_assignment_scope",
+            ),
         ]
 
     def clean(self):
@@ -1050,6 +1109,14 @@ class ReviewerAssignment(TimeStampedModel):
                 raise ValidationError(_("Semester Exam must belong to the assignment cohort and semester."))
         else:
             raise ValidationError(_("Select a valid Reviewer assignment scope."))
+        if self.access_mode not in {
+            choice[0] for choice in REVIEWER_ACCESS_CHOICES
+        }:
+            raise ValidationError(_("Select a valid Reviewer access mode."))
+        if self.active and self.section_id:
+            raise ValidationError(
+                _("Active reviewer assignments cannot be restricted to one exam section.")
+            )
         if self.section_id:
             if self.section.assessment.assessment_type != ASSESSMENT_TYPE_SEMESTER_EXAM:
                 raise ValidationError(_("Reviewer assignments must target a Semester Exam section."))

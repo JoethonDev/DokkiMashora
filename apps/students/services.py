@@ -35,6 +35,7 @@ from apps.progression.constants import (
     DIPLOMA_COMPLETION_COMPLETED,
     DIPLOMA_COMPLETION_GRADUATED,
 )
+from apps.progression.models import StudentDiplomaCompletion
 
 if TYPE_CHECKING:
     from apps.students.models import StudentProfile
@@ -88,7 +89,6 @@ def check_apply_eligibility(
             }
 
         # Completed/graduated diploma
-        from apps.progression.models import StudentDiplomaCompletion
         if StudentDiplomaCompletion.objects.filter(
             student=profile,
             diploma_enrollment__cohort__diploma=diploma,
@@ -101,7 +101,6 @@ def check_apply_eligibility(
             }
 
         # Active/pending enrollment in any cohort of same diploma
-        from apps.academics.models import DiplomaEnrollment
         if DiplomaEnrollment.objects.filter(
             student=profile,
             cohort__diploma=diploma,
@@ -140,7 +139,6 @@ def check_apply_eligibility(
             }
 
         # Completed enrollment for any version of same course
-        from apps.academics.models import CourseEnrollment
         if CourseEnrollment.objects.filter(
             student=profile,
             course_version__course=course,
@@ -235,8 +233,6 @@ def get_open_apply_targets(
 
 def _blocked_diploma_ids(profile: StudentProfile) -> set[int]:
     """Diploma ids the profile can no longer apply to (set-based equivalent of check_apply_eligibility)."""
-    from apps.progression.models import StudentDiplomaCompletion
-
     blocked = set(
         StudentDiplomaCompletion.objects.filter(
             student=profile,

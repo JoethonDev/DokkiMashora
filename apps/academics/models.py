@@ -610,7 +610,12 @@ class StudentClusterMembership(TimeStampedModel):
 
 
 class ModeratorAssignment(TimeStampedModel):
-    """Moderator scoped to a course version + student scope (cluster or manual)."""
+    """Moderator scoped to a Diploma cohort/cluster (D-001).
+
+    Moderator is Diploma-only (DOKKIMASHORA §5). ``course_version`` is
+    retained only as optional historical metadata for rows created before the
+    Diploma-only topology was locked; it is never used for authorization.
+    """
 
     moderator = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -623,6 +628,8 @@ class ModeratorAssignment(TimeStampedModel):
         on_delete=models.PROTECT,
         related_name="moderator_assignments",
         verbose_name=_("course version"),
+        null=True,
+        blank=True,
     )
     cohort = models.ForeignKey(
         Cohort, on_delete=models.SET_NULL, null=True, blank=True,

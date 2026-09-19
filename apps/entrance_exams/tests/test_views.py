@@ -16,6 +16,8 @@ from apps.entrance_exams.constants import QUESTION_TYPE_MCQ, QUESTION_TYPE_WRITT
 from apps.entrance_exams.models import EntranceAttempt, EntranceChoice, EntranceExam, EntranceQuestion
 from apps.students.constants import EDUCATION_BACHELOR, GENDER_MALE
 from apps.students.models import StudentProfile
+from apps.entrance_exams.models import EntranceAnswer
+from apps.communications.models import EmailTemplate
 
 
 @pytest.fixture
@@ -431,7 +433,6 @@ class TestAdminGradeAttempt:
             exam=exam, question_type=QUESTION_TYPE_WRITTEN,
             text="Essay", order=1,
         )
-        from apps.entrance_exams.models import EntranceAnswer
         EntranceAnswer.objects.create(attempt=attempt, question=q, written_text="My answer")
         response = admin_client.post(
             reverse("entrance_exams:admin_grade_attempt", args=[attempt.id]),
@@ -450,7 +451,6 @@ def _create_prog_app(exam, student_profile, status="submitted"):
 
 @pytest.fixture
 def email_template_invitation():
-    from apps.communications.models import EmailTemplate
     return EmailTemplate.objects.create(
         slug="entrance_exam_invitation", name="Invitation",
         subject="Exam Invitation",
@@ -461,7 +461,6 @@ def email_template_invitation():
 
 @pytest.fixture
 def email_template_rejection():
-    from apps.communications.models import EmailTemplate
     return EmailTemplate.objects.create(
         slug="rejection", name="Rejection",
         subject="Application Update",

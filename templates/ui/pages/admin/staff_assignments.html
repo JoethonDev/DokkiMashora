@@ -57,17 +57,6 @@
       <form class="actions-row items-end"
             method="post"
             action="{% url 'accounts:admin_moderator_assignment_create' staff_user.id %}">{% csrf_token %}
-        <label class="min-w-40"><span class="field-label">{% trans "Course version" %}</span>
-          <select name="course_version" class="form-select" required>
-            <option value="">{% trans "Select" %}</option>
-            {% for item in course_versions %}
-              <option value="{{ item.id }}">{{ item.course }}
-                ·
-                {{ item.student.full_name|default:item }}
-              </option>
-            {% endfor %}
-          </select>
-        </label>
         <label class="min-w-40"><span class="field-label">{% trans "Scope" %}</span>
           <select name="scope" class="form-select"><option value="cohort">{% trans "Cohort" %}</option>
             <option value="cluster">{% trans "Cluster" %}</option>
@@ -104,7 +93,7 @@
           <tbody>
             {% for item in moderator_assignments %}
               <tr>
-                <td class="table-td">{{ item.course_version }}</td>
+                <td class="table-td">{{ item.course_version|default:'—' }}</td>
                 <td class="table-td">{{ item.cohort|default:'—' }}</td>
                 <td class="table-td">{{ item.cluster|default:'—' }}</td>
                 <td class="table-td">
@@ -128,7 +117,7 @@
         {% for item in moderator_assignments %}
           <div class="mobile-card">
             <div class="flex-1 min-w-0">
-              <strong class="block break-words">{{ item.course_version }}</strong>
+              <strong class="block break-words">{{ item.course_version|default:'—' }}</strong>
               <small class="block text-muted">{{ item.cohort|default:'—' }} &middot; {{ item.cluster|default:'—' }}</small>
             </div>
             {% if item.active %}

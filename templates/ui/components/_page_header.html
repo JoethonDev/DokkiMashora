@@ -13,10 +13,10 @@
   </div>
   <div class="actions-row justify-end">
     {% if back_button or back_url or PAGE_BACK_URL %}
-      {% if PAGE_RETURN_URL %}
-        <a class="btn-ghost" href="{{ PAGE_RETURN_URL }}">{{ back_label|default:_('Back') }}</a>
-      {% elif back_url %}
+      {% if back_url %}
         <a class="btn-ghost" href="{{ back_url }}">{{ back_label|default:_('Back') }}</a>
+      {% elif PAGE_RETURN_URL %}
+        <a class="btn-ghost" href="{{ PAGE_RETURN_URL }}">{{ back_label|default:_('Back') }}</a>
       {% elif PAGE_BACK_URL %}
         <a class="btn-ghost" href="{{ PAGE_BACK_URL }}">{{ back_label|default:_('Back') }}</a>
       {% endif %}

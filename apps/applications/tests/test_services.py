@@ -11,9 +11,9 @@ from apps.accounts.models import User
 from apps.applications.services import (
     RegistrationData,
     find_duplicate,
-    normalize_phone,
     submit_registration,
 )
+from apps.core.phone import normalize_phone
 from apps.students.constants import EDUCATION_BACHELOR, GENDER_MALE
 from apps.students.models import StudentProfile
 
@@ -42,19 +42,19 @@ def make_data(**overrides) -> RegistrationData:
 
 class NormalizePhoneTests(TestCase):
     def test_strips_egypt_country_code(self) -> None:
-        self.assertEqual(normalize_phone("+201234567890"), "1234567890")
+        self.assertEqual(normalize_phone("+201234567890"), "+201234567890")
 
     def test_strips_double_zero_international_prefix(self) -> None:
-        self.assertEqual(normalize_phone("00201234567890"), "1234567890")
+        self.assertEqual(normalize_phone("00201234567890"), "+201234567890")
 
     def test_strips_leading_zero(self) -> None:
-        self.assertEqual(normalize_phone("01001234567"), "1001234567")
+        self.assertEqual(normalize_phone("01001234567"), "+201001234567")
 
     def test_removes_spaces_and_dashes(self) -> None:
-        self.assertEqual(normalize_phone("+20 100-123-4567"), "1001234567")
+        self.assertEqual(normalize_phone("+20 100-123-4567"), "+201001234567")
 
     def test_strips_saudi_country_code(self) -> None:
-        self.assertEqual(normalize_phone("+966501234567"), "501234567")
+        self.assertEqual(normalize_phone("+966501234567"), "+966501234567")
 
     def test_returns_empty_for_no_digits(self) -> None:
         self.assertEqual(normalize_phone(""), "")
@@ -64,7 +64,7 @@ class NormalizePhoneTests(TestCase):
 class FindDuplicateTests(TestCase):
     def setUp(self) -> None:
         user = User.objects.create_user(
-            email="existing@example.com", password="x", phone="01000000001",
+            email="existing@example.com", password="x", phone="+201000000001",
             national_id="1234567890",
         )
         StudentProfile.objects.create(
@@ -73,7 +73,7 @@ class FindDuplicateTests(TestCase):
             date_of_birth=date(1990, 1, 1),
             gender=GENDER_MALE,
             address="X",
-            phone="01000000001",
+            phone="+201000000001",
             national_id="1234567890",
             education=EDUCATION_BACHELOR,
         )

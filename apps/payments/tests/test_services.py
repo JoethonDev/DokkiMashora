@@ -38,6 +38,31 @@ from ..services import (
     preview_upload,
     validate_csv_content,
 )
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
+from ..selectors import get_upload_queryset
+from ..selectors import get_student_payment_summary
+from apps.accounts.constants import GROUP_ADMIN
+from apps.accounts.models import User as UserModel
+from ..selectors import get_payment_record_queryset
+from apps.academics.models import (
+    Cohort,
+    Course,
+    CourseEnrollment,
+    CourseVersion,
+    Diploma,
+    DiplomaEnrollment,
+)
+from apps.applications.models import ProgramApplication
+from apps.core.permissions import safe_date_str
+from ..services import normalize_national_id
+from ..services import normalize_phone
+from ..services import parse_date
+from ..selectors import get_enrollment_payment_status
+from ..services import mark_enrollment_paid
+from ..services import mark_enrollment_unpaid
+from apps.audit.constants import ACTION_ENROLLMENT_DELETED
+from apps.audit.models import AuditEvent
 
 
 class MatchStudentTests(TestCase):
@@ -344,7 +369,6 @@ class PaymentSelectorQueryCountTests(TestCase):
     """Verify payment selectors produce bounded queries."""
 
     def setUp(self) -> None:
-        from apps.accounts.constants import GROUP_STUDENT
         group, _ = Group.objects.get_or_create(name=GROUP_STUDENT)
         self.user = User.objects.create_user(email="s@test.com", password="x")
         self.user.groups.add(group)
@@ -362,20 +386,12 @@ class PaymentSelectorQueryCountTests(TestCase):
             )
 
     def test_get_upload_queryset_query_count_bounded(self) -> None:
-        from django.db import connection
-        from django.test.utils import CaptureQueriesContext
-
-        from ..selectors import get_upload_queryset
         with CaptureQueriesContext(connection) as captured:
             list(get_upload_queryset())
         self.assertLess(len(captured.captured_queries), 5,
                         f"get_upload_queryset used {len(captured.captured_queries)} queries; expected < 5")
 
     def test_get_student_payment_summary_query_count_bounded(self) -> None:
-        from django.db import connection
-        from django.test.utils import CaptureQueriesContext
-
-        from ..selectors import get_student_payment_summary
         with CaptureQueriesContext(connection) as captured:
             get_student_payment_summary(self.student)
         self.assertLess(len(captured.captured_queries), 5,
@@ -386,8 +402,6 @@ class PaymentFilterSelectorTests(TestCase):
     """Tests for payment list filter selectors."""
 
     def setUp(self) -> None:
-        from apps.accounts.constants import GROUP_ADMIN, GROUP_STUDENT
-        from apps.accounts.models import User as UserModel
         self.student_group, _ = Group.objects.get_or_create(name=GROUP_STUDENT)
         self.admin_group, _ = Group.objects.get_or_create(name=GROUP_ADMIN)
         self.admin = UserModel.objects.create_user(
@@ -412,50 +426,42 @@ class PaymentFilterSelectorTests(TestCase):
         )
 
     def test_get_upload_queryset_filters_by_status(self) -> None:
-        from ..selectors import get_upload_queryset
         qs = get_upload_queryset(status=UPLOAD_STATUS_PREVIEWED)
         self.assertEqual(qs.count(), 1)
         qs = get_upload_queryset(status=UPLOAD_STATUS_CONFIRMED)
         self.assertEqual(qs.count(), 0)
 
     def test_get_upload_queryset_filters_by_date_range(self) -> None:
-        from ..selectors import get_upload_queryset
         qs = get_upload_queryset(date_from="2026-01-01", date_to="2026-12-31")
         self.assertEqual(qs.count(), 1)
         qs = get_upload_queryset(date_from="2025-01-01", date_to="2025-12-31")
         self.assertEqual(qs.count(), 0)
 
     def test_get_payment_record_queryset_filters_by_status(self) -> None:
-        from ..selectors import get_payment_record_queryset
         qs = get_payment_record_queryset(status=PAYMENT_STATUS_PAID)
         self.assertEqual(qs.count(), 1)
         qs = get_payment_record_queryset(status=PAYMENT_STATUS_UNPAID)
         self.assertEqual(qs.count(), 0)
 
     def test_get_payment_record_queryset_searches_by_name(self) -> None:
-        from ..selectors import get_payment_record_queryset
         qs = get_payment_record_queryset(student_q="Test")
         self.assertEqual(qs.count(), 1)
         qs = get_payment_record_queryset(student_q="Nonexistent")
         self.assertEqual(qs.count(), 0)
 
     def test_get_payment_record_queryset_searches_by_national_id(self) -> None:
-        from ..selectors import get_payment_record_queryset
         qs = get_payment_record_queryset(student_q="11111111111111")
         self.assertEqual(qs.count(), 1)
 
     def test_get_payment_record_queryset_searches_by_phone(self) -> None:
-        from ..selectors import get_payment_record_queryset
         qs = get_payment_record_queryset(student_q="01000000000")
         self.assertEqual(qs.count(), 1)
 
     def test_get_payment_record_queryset_searches_by_email(self) -> None:
-        from ..selectors import get_payment_record_queryset
         qs = get_payment_record_queryset(student_q="stu@test.com")
         self.assertEqual(qs.count(), 1)
 
     def test_get_payment_record_queryset_filters_by_date_range(self) -> None:
-        from ..selectors import get_payment_record_queryset
         qs = get_payment_record_queryset(date_from="2026-01-01", date_to="2026-01-31")
         self.assertEqual(qs.count(), 1)
         qs = get_payment_record_queryset(date_from="2025-01-01", date_to="2025-12-31")
@@ -466,17 +472,6 @@ class EnrollmentLinkingTests(TestCase):
     """Tests that preview_upload and confirm_upload populate enrollment FKs."""
 
     def setUp(self) -> None:
-        from apps.academics.models import (
-            Cohort,
-            Course,
-            CourseEnrollment,
-            CourseVersion,
-            Diploma,
-            DiplomaEnrollment,
-        )
-        from apps.accounts.constants import GROUP_ADMIN, GROUP_STUDENT
-        from apps.accounts.models import User as UserModel
-        from apps.applications.models import ProgramApplication
 
         self.student_group, _ = Group.objects.get_or_create(name=GROUP_STUDENT)
         admin_group, _ = Group.objects.get_or_create(name=GROUP_ADMIN)
@@ -615,7 +610,6 @@ class CreateUploadAtomicTests(TestCase):
     """create_upload must not leave orphan rows when CSV is invalid."""
 
     def setUp(self) -> None:
-        from apps.accounts.constants import GROUP_ADMIN
         admin_group, _ = Group.objects.get_or_create(name=GROUP_ADMIN)
         self.admin = User.objects.create_user(
             email="upload-admin@test.com", password="pass", is_staff=True
@@ -646,11 +640,9 @@ class SafeDateStrTests(TestCase):
     """Tests for safe_date_str helper."""
 
     def test_valid_date_passes_through(self) -> None:
-        from apps.core.permissions import safe_date_str
         self.assertEqual(safe_date_str("2026-06-20"), "2026-06-20")
 
     def test_invalid_date_returns_none(self) -> None:
-        from apps.core.permissions import safe_date_str
         self.assertIsNone(safe_date_str("not-a-date"))
         self.assertIsNone(safe_date_str("2026-13-01"))
         self.assertIsNone(safe_date_str(""))
@@ -659,29 +651,23 @@ class SafeDateStrTests(TestCase):
 
 class NormalizeFunctionTests(TestCase):
     def test_normalize_national_id_strips_whitespace(self):
-        from ..services import normalize_national_id
         self.assertEqual(normalize_national_id("  123  456  "), "123456")
 
     def test_normalize_phone_adds_country_code(self):
-        from ..services import normalize_phone
         self.assertEqual(normalize_phone("01234567890"), "+201234567890")
 
     def test_normalize_phone_handles_plus_prefix(self):
-        from ..services import normalize_phone
         self.assertEqual(normalize_phone("+201234567890"), "+201234567890")
 
     def test_normalize_phone_handles_double_zero(self):
-        from ..services import normalize_phone
         self.assertEqual(normalize_phone("00201234567890"), "+201234567890")
 
     def test_normalize_phone_strips_non_digits(self):
-        from ..services import normalize_phone
         self.assertEqual(normalize_phone("+20 123 456 7890"), "+201234567890")
 
 
 class ParseDateTests(TestCase):
     def test_parse_date_iso(self):
-        from ..services import parse_date
         result = parse_date("2026-01-15")
         self.assertIsNotNone(result)
         self.assertEqual(result.year, 2026)
@@ -689,23 +675,19 @@ class ParseDateTests(TestCase):
         self.assertEqual(result.day, 15)
 
     def test_parse_date_slash_format(self):
-        from ..services import parse_date
         result = parse_date("15/01/2026")
         self.assertIsNotNone(result)
         self.assertEqual(result.day, 15)
 
     def test_parse_date_reverse_slash(self):
-        from ..services import parse_date
         result = parse_date("2026/01/15")
         self.assertIsNotNone(result)
 
     def test_parse_date_dash_reversed(self):
-        from ..services import parse_date
         result = parse_date("15-01-2026")
         self.assertIsNotNone(result)
 
     def test_parse_date_invalid_returns_none(self):
-        from ..services import parse_date
         self.assertIsNone(parse_date("not-a-date"))
         self.assertIsNone(parse_date(""))
         self.assertIsNone(parse_date("2026-13-01"))
@@ -713,25 +695,20 @@ class ParseDateTests(TestCase):
 
 class PaymentModelStringTests(TestCase):
     def setUp(self):
-        from apps.accounts.constants import GROUP_STUDENT
         self.student_group, _ = Group.objects.get_or_create(name=GROUP_STUDENT)
         self.user = User.objects.create_user(email="str@test.com", password="x")
         self.user.groups.add(self.student_group)
 
     def test_payment_upload_str(self):
-        from ..models import PaymentUpload
         upload = PaymentUpload(original_filename="test.csv", status="pending")
         self.assertIn("test.csv", str(upload))
 
     def test_payment_upload_row_str(self):
-        from ..models import PaymentUploadRow
         row = PaymentUploadRow(row_number=3, status="parsed")
         self.assertIn("Row 3", str(row))
 
     def test_payment_record_str(self):
-        from apps.students.models import StudentProfile
 
-        from ..models import PaymentRecord
         student = StudentProfile.objects.create(
             user=self.user, full_name="Test Student",
             national_id="10000000000099", phone="01000000099",
@@ -748,16 +725,6 @@ class EnrollmentPaymentStatusSelectorTests(TestCase):
     """Tests for get_enrollment_payment_status — per-enrollment has_paid annotation."""
 
     def setUp(self) -> None:
-        from apps.academics.models import (
-            Cohort,
-            Course,
-            CourseEnrollment,
-            CourseVersion,
-            Diploma,
-            DiplomaEnrollment,
-        )
-        from apps.accounts.constants import GROUP_STUDENT
-        from apps.accounts.models import User as UserModel
 
         self.student_group, _ = Group.objects.get_or_create(name=GROUP_STUDENT)
         self.user = UserModel.objects.create_user(email="ep-status@test.com", password="x")
@@ -796,14 +763,12 @@ class EnrollmentPaymentStatusSelectorTests(TestCase):
             student=self.student, diploma_enrollment=self.diploma_enrollment,
             amount=Decimal("1000"), status=PAYMENT_STATUS_PAID,
         )
-        from ..selectors import get_enrollment_payment_status
         result = get_enrollment_payment_status(self.student)
         diplomas = result["diploma_enrollments"]
         self.assertEqual(len(diplomas), 1)
         self.assertTrue(diplomas[0].has_paid)
 
     def test_diploma_annotated_unpaid(self) -> None:
-        from ..selectors import get_enrollment_payment_status
         result = get_enrollment_payment_status(self.student)
         self.assertFalse(result["diploma_enrollments"][0].has_paid)
 
@@ -812,7 +777,6 @@ class EnrollmentPaymentStatusSelectorTests(TestCase):
             student=self.student, course_enrollment=self.course_enrollment,
             amount=Decimal("500"), status=PAYMENT_STATUS_PAID,
         )
-        from ..selectors import get_enrollment_payment_status
         result = get_enrollment_payment_status(self.student)
         courses = {e.course_version.course.title: e.has_paid for e in result["course_enrollments"]}
         self.assertTrue(courses["EP Course"])
@@ -824,7 +788,6 @@ class EnrollmentPaymentStatusSelectorTests(TestCase):
             student=self.student, course_enrollment=self.course_enrollment,
             amount=Decimal("200"), status=PAYMENT_STATUS_PAID,
         )
-        from ..selectors import get_enrollment_payment_status
         result = get_enrollment_payment_status(self.student)
         courses = {e.course_version.course.title: e.has_paid for e in result["course_enrollments"]}
         self.assertTrue(courses["EP Course"])
@@ -835,16 +798,6 @@ class EnrollmentPaymentServiceTests(TestCase):
     """Tests for mark_enrollment_paid / mark_enrollment_unpaid."""
 
     def setUp(self) -> None:
-        from apps.academics.models import (
-            Cohort,
-            Course,
-            CourseEnrollment,
-            CourseVersion,
-            Diploma,
-            DiplomaEnrollment,
-        )
-        from apps.accounts.constants import GROUP_STUDENT
-        from apps.accounts.models import User as UserModel
 
         self.student_group, _ = Group.objects.get_or_create(name=GROUP_STUDENT)
         self.user = UserModel.objects.create_user(email="ep-svc@test.com", password="x")
@@ -874,7 +827,6 @@ class EnrollmentPaymentServiceTests(TestCase):
         )
 
     def test_mark_diploma_paid_creates_record(self) -> None:
-        from ..services import mark_enrollment_paid
         record = mark_enrollment_paid(self.student, "diploma", self.diploma_enrollment.id, self.admin, amount=3000)
         self.assertEqual(record.student, self.student)
         self.assertEqual(record.diploma_enrollment, self.diploma_enrollment)
@@ -883,13 +835,11 @@ class EnrollmentPaymentServiceTests(TestCase):
         self.assertIsNotNone(record.paid_at)
 
     def test_mark_course_paid_creates_record(self) -> None:
-        from ..services import mark_enrollment_paid
         record = mark_enrollment_paid(self.student, "course", self.course_enrollment.id, self.admin, amount=1500)
         self.assertEqual(record.course_enrollment, self.course_enrollment)
         self.assertIsNone(record.diploma_enrollment)
 
     def test_mark_enrollment_unpaid_updates_records(self) -> None:
-        from ..services import mark_enrollment_paid, mark_enrollment_unpaid
         mark_enrollment_paid(self.student, "course", self.course_enrollment.id, self.admin, amount=1000)
         count = mark_enrollment_unpaid(self.student, "course", self.course_enrollment.id)
         self.assertEqual(count, 1)
@@ -898,18 +848,15 @@ class EnrollmentPaymentServiceTests(TestCase):
         )
 
     def test_mark_unpaid_no_records_returns_zero(self) -> None:
-        from ..services import mark_enrollment_unpaid
         count = mark_enrollment_unpaid(self.student, "diploma", 99999)
         self.assertEqual(count, 0)
 
     def test_invalid_enrollment_type_raises(self) -> None:
-        from ..services import mark_enrollment_paid
         with self.assertRaises(ValueError):
             mark_enrollment_paid(self.student, "invalid", 1, self.admin)
 
     def test_wrong_student_raises_does_not_create(self) -> None:
         """Marking payment for another student's enrollment must raise."""
-        from apps.academics.models import DiplomaEnrollment
         other_user = User.objects.create_user(email="other@test.com", password="x")
         other_user.groups.add(self.student_group)
         other_student = StudentProfile.objects.create(
@@ -917,7 +864,6 @@ class EnrollmentPaymentServiceTests(TestCase):
             national_id="55555555555555", phone="+201555555555",
             date_of_birth=date(2000, 5, 5),
         )
-        from ..services import mark_enrollment_paid
         with self.assertRaises(DiplomaEnrollment.DoesNotExist):
             mark_enrollment_paid(other_student, "diploma", self.diploma_enrollment.id, self.admin)
 
@@ -953,7 +899,6 @@ class PaymentSoftDeleteTests(TestCase):
         self.record.deleted_at = timezone.now()
         self.record.deleted_by = self.admin
         self.record.save(update_fields=["deleted_at", "deleted_by"])
-        from ..selectors import get_payment_record_queryset
         self.assertEqual(get_payment_record_queryset().count(), 0)
         self.assertEqual(PaymentRecord.objects.filter(deleted_at__isnull=True).count(), 0)
 
@@ -968,7 +913,6 @@ class PaymentTargetRefTests(TestCase):
     """mark_enrollment_paid populates target_ref for stable identity."""
 
     def setUp(self) -> None:
-        from apps.academics.models import Cohort, Diploma, DiplomaEnrollment
 
         self.student_group, _ = Group.objects.get_or_create(name=GROUP_STUDENT)
         self.user = User.objects.create_user(email="tr@test.com", password="x")
@@ -991,7 +935,6 @@ class PaymentTargetRefTests(TestCase):
         )
 
     def test_mark_enrollment_paid_sets_target_ref(self) -> None:
-        from ..services import mark_enrollment_paid
         record = mark_enrollment_paid(self.student, "diploma", self.diploma_enrollment.id, self.admin, amount=1000)
         record.refresh_from_db()
         self.assertEqual(record.target_ref, str(self.diploma_enrollment.id))
@@ -1030,7 +973,6 @@ class PaymentTargetDeletionTests(TestCase):
     """Deleting a target enrollment preserves PaymentRecord and logs audit event."""
 
     def setUp(self) -> None:
-        from apps.academics.models import Cohort, Course, CourseEnrollment, CourseVersion, Diploma
 
         self.student_group, _ = Group.objects.get_or_create(name=GROUP_STUDENT)
         self.user = User.objects.create_user(email="ptd@test.com", password="x")
@@ -1074,8 +1016,6 @@ class PaymentTargetDeletionTests(TestCase):
         self.assertIsNotNone(self.record.student)
 
     def test_enrollment_deletion_logs_audit_event(self) -> None:
-        from apps.audit.constants import ACTION_ENROLLMENT_DELETED
-        from apps.audit.models import AuditEvent
 
         enrollment_id = self.enrollment.id
         self.enrollment.delete()

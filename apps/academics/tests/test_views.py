@@ -27,6 +27,8 @@ from apps.accounts.constants import GROUP_STUDENT
 from apps.accounts.models import User
 from apps.students.constants import EDUCATION_BACHELOR, GENDER_MALE
 from apps.students.models import StudentProfile
+import re
+from unittest.mock import patch
 
 
 def _create_student_profile(user):
@@ -68,7 +70,6 @@ class CourseDetailModalIdTests(TestCase):
         html = response.content.decode()
 
         # ponytail: count unique id="del-version-..." patterns
-        import re
         version_ids = re.findall(r'id="del-version-(\d+)"', html)
         unique_ids = set(version_ids)
         self.assertEqual(len(version_ids), len(unique_ids),
@@ -78,7 +79,6 @@ class CourseDetailModalIdTests(TestCase):
         response = self.client.get(reverse("academics:admin_course_detail", args=[self.course.id]))
         html = response.content.decode()
 
-        import re
         lecture_ids = re.findall(r'id="del-lecture-(\d+)"', html)
         unique_ids = set(lecture_ids)
         self.assertEqual(len(lecture_ids), len(unique_ids),
@@ -563,7 +563,6 @@ class DiplomaStudentViewTests(TestCase):
         self.assertEqual(r.status_code, 404)
 
     def test_student_diploma_lecture_audio_access(self):
-        from unittest.mock import patch
         de = self._enroll_active()
         with patch("apps.academics.views.storage_service.download_file", return_value=b"audio"):
             r = self.client.get(

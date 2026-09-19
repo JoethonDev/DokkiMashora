@@ -62,14 +62,27 @@
             <form method="post"
                   action="{% url 'assessments:homework_add_attachment' assessment.id %}"
                   enctype="multipart/form-data"
-                  class="mt-6">{% csrf_token %}
+                  class="mt-6 field-group">{% csrf_token %}
               <label class="field-label" for="homework-files">{% trans "Homework files" %}</label>
-              <input id="homework-files" name="homework_files" type="file" accept=".pdf,.docx" multiple>
-              <p class="text-sm text-muted mt-2">{% trans "Upload PDF or DOCX files. Each file is checked for type and size before storage. Files stay in your draft until you submit." %}</p>
+              <div class="flex flex-wrap items-center gap-2.5" data-file-picker>
+                <input id="homework-files"
+                       name="homework_files"
+                       type="file"
+                       accept=".pdf,.docx"
+                       multiple
+                       class="sr-only"
+                       data-file-input>
+                <label for="homework-files" class="btn-soft cursor-pointer">{% trans "Choose files" %}</label>
+                <span class="text-sm text-muted min-w-0"
+                      data-file-name
+                      data-empty-label="{% trans 'No files selected' %}"
+                      aria-live="polite">{% trans "No files selected" %}</span>
+              </div>
+              <p class="field-help">{% trans "Upload PDF or DOCX files. Each file is checked for type and size before storage. Files stay in your draft until you submit." %}</p>
               {% if remaining_uploads is not None %}
-                <p class="text-sm text-muted mt-1">{% blocktrans with count=remaining_uploads %}{{ count }} upload(s) remaining.{% endblocktrans %}</p>
+                <p class="field-help">{% blocktrans with count=remaining_uploads %}{{ count }} upload(s) remaining.{% endblocktrans %}</p>
               {% endif %}
-              <button class="btn-soft mt-4" type="submit">{% trans "Add files" %}</button>
+              <button class="btn-soft mt-1" type="submit">{% trans "Add files" %}</button>
             </form>
           {% else %}
             {% include "ui/components/_empty_state.html" with title=_("No more uploads available") message=_("You have reached the maximum number of homework files for this assessment.") %}

@@ -8,22 +8,27 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from django.db import transaction
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.applications.constants import (
-    EMAIL_ACTION_NOTE,
+    EMAIL_ACTION_ENTRANCE_EXAM_INVITATION,
+    EMAIL_ACTION_EXAM_RESULT,
     PROGRAM_APP_STATUS_ACCEPTED,
     PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
     PROGRAM_APP_STATUS_REJECTED,
     PROGRAM_TYPE_DIPLOMA,
 )
+from apps.applications.models import ProgramApplicationEmailLog
 from apps.applications.services import mark_entrance_submitted, record_program_application_note
 from apps.audit.services import record_audit_event
 from apps.communications.constants import (
     TEMPLATE_ENTRANCE_EXAM_FAIL,
+    TEMPLATE_ENTRANCE_EXAM_INVITATION,
     TEMPLATE_ENTRANCE_EXAM_PASS,
 )
+from apps.communications.services import queue_program_application_email
 from apps.core.permissions import validate_score
 from apps.core.scoring import compute_percent, is_passing
 
@@ -45,8 +50,6 @@ if TYPE_CHECKING:
 
     from apps.applications.models import ProgramApplication
     from apps.students.models import StudentProfile
-
-    from .models import EntranceAnswer, EntranceAttempt, EntranceExam
 
 
 @dataclass
@@ -283,8 +286,6 @@ def _send_result_email(
     actor and idempotency are handled centrally and Celery updates the log.
     """
     try:
-        from apps.communications.services import queue_program_application_email
-
         prog_app = attempt.program_application
         slug = TEMPLATE_ENTRANCE_EXAM_PASS if result == RESULT_PASS else TEMPLATE_ENTRANCE_EXAM_FAIL
         email_to = attempt.student.user.email
@@ -295,7 +296,7 @@ def _send_result_email(
         }
         queue_program_application_email(
             program_application=prog_app,
-            action=EMAIL_ACTION_NOTE,
+            action=EMAIL_ACTION_EXAM_RESULT,
             template_slug=slug,
             to_email=email_to,
             context=context,
@@ -333,6 +334,70 @@ def assign_exam_for_application(program_application: ProgramApplication) -> Entr
         student=program_application.student,
     )
     return attempt
+
+
+def queue_entrance_invitation_email(
+    *,
+    exam: EntranceExam,
+    program_application: ProgramApplication,
+    actor: User | None = None,
+    is_resend: bool = False,
+) -> tuple[object | None, object | None]:
+    """Queue an entrance-exam invitation without changing application status.
+
+    Invitation delivery is intentionally separate from the application
+    lifecycle transition.  The post-activation application email helper also
+    manages required intake forms; using it here can move an already-invited
+    application back to ``survey_requested`` instead of sending this email.
+    """
+    if program_application.program_type != PROGRAM_TYPE_DIPLOMA:
+        raise ValueError(_("Only diploma applications can receive an entrance exam invitation."))
+    if not exam.cohort_id or program_application.cohort_id != exam.cohort_id:
+        raise ValueError(_("The entrance exam does not belong to this application cohort."))
+
+    email_to = (program_application.student.user.email or "").strip()
+    if not email_to:
+        return None, None
+
+    EntranceAttempt.objects.get_or_create(
+        exam=exam,
+        program_application=program_application,
+        student=program_application.student,
+    )
+    context = {
+        "full_name": program_application.student.full_name or "",
+        "email": email_to,
+        "phone_number": program_application.student.phone or "",
+        "exam_title": exam.title,
+        "cohort_name": exam.cohort.name or "",
+        "exam_url": reverse("entrance_exams:exam_access_token", args=[exam.access_token]) if exam.access_token else "",
+        "exam_open_at": "",
+        "exam_close_at": "",
+    }
+    if is_resend:
+        resend_seq = ProgramApplicationEmailLog.objects.filter(
+            program_application=program_application,
+            action=EMAIL_ACTION_ENTRANCE_EXAM_INVITATION,
+            is_resend=True,
+        ).count()
+        idempotency_key = (
+            f"entrance_exam:resend:{EMAIL_ACTION_ENTRANCE_EXAM_INVITATION}:"
+            f"app:{program_application.pk}:{resend_seq}"
+        )
+    else:
+        idempotency_key = f"entrance_exam:{EMAIL_ACTION_ENTRANCE_EXAM_INVITATION}:app:{program_application.pk}"
+
+    return queue_program_application_email(
+        program_application=program_application,
+        action=EMAIL_ACTION_ENTRANCE_EXAM_INVITATION,
+        template_slug=TEMPLATE_ENTRANCE_EXAM_INVITATION,
+        to_email=email_to,
+        context=context,
+        sent_by=actor,
+        idempotency_key=idempotency_key,
+        reference=f"app:{program_application.pk}",
+        is_resend=is_resend,
+    )
 
 
 def get_student_attempts(student: StudentProfile) -> list[EntranceAttempt]:

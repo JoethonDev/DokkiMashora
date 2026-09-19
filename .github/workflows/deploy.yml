@@ -59,5 +59,7 @@ jobs:
             python manage.py migrate --noinput
             python manage.py collectstatic --noinput
             sudo systemctl restart lms
+            # Authoritative post-deploy health gate (RV-011): a failed health
+            # check must fail the deployment job, not be informational.
             sleep 5
-            curl --fail --silent --show-error http://localhost:8000/healthz || true
+            curl --fail --silent --show-error --retry 3 --retry-connrefused --retry-delay 3 http://localhost:8000/healthz

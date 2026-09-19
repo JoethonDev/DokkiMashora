@@ -5,12 +5,12 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: PACKAGE VERSION\n"
+"Project-Id-Version: DokkiMashora\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2026-07-24 19:17+0300\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language-Team: LANGUAGE <LL@li.org>\n"
+"PO-Revision-Date: 2026-08-28 00:00+0300\n"
+"Last-Translator: DokkiMashora Engineering\n"
+"Language-Team: English\n"
 "Language: en\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -962,10 +962,9 @@ msgstr ""
 #: .\templates\ui\pages\student\content.html:12
 #: .\templates\ui\pages\student\content.html:20
 #: .\templates\ui\pages\student\learning.html:4
-#, fuzzy
 #| msgid "Learning library"
 msgid "Learning"
-msgstr "Learning library"
+msgstr ""
 
 #: .\apps\academics\views.py:828 .\apps\academics\views.py:850
 #: .\apps\academics\views.py:877 .\apps\academics\views.py:1398
@@ -2447,10 +2446,9 @@ msgid "Entrance exam assigned."
 msgstr ""
 
 #: .\apps\applications\views.py:413
-#, fuzzy
 #| msgid "Application approved."
 msgid "Application activated."
-msgstr "Application pulse"
+msgstr ""
 
 #: .\apps\applications\views.py:415
 #, python-format
@@ -4637,10 +4635,9 @@ msgstr ""
 
 #: .\apps\core\views.py:129
 #: .\templates\ui\fragments\shared\_global_search_results.html:5
-#, fuzzy
 #| msgid "application"
 msgid "Navigation"
-msgstr "Application pulse"
+msgstr ""
 
 #: .\apps\core\views.py:173 .\templates\ui\pages\admin\diploma_list.html:4
 #: .\templates\ui\pages\admin\diploma_list.html:7
@@ -6550,22 +6547,19 @@ msgstr ""
 
 #: .\apps\students\selectors.py:150 .\apps\students\selectors.py:157
 #: .\apps\students\selectors.py:164
-#, fuzzy
 #| msgid "application"
 msgid "Open application"
-msgstr "Application pulse"
+msgstr ""
 
 #: .\apps\students\selectors.py:156
-#, fuzzy
 #| msgid "Complete review or entrance exam"
 msgid "Complete the intake form"
-msgstr "Complete review or entrance exam"
+msgstr ""
 
 #: .\apps\students\selectors.py:162
-#, fuzzy
 #| msgid "Clear application path"
 msgid "Complete application payment"
-msgstr "Clear application path"
+msgstr ""
 
 #: .\apps\students\selectors.py:171
 msgid "Your entrance exam is ready."
@@ -7287,13 +7281,12 @@ msgstr ""
 
 #: .\templates\ui\fragments\admin\_program_table.html:6
 msgid "applications"
-msgstr "Application pulse"
+msgstr "applications"
 
 #: .\templates\ui\fragments\admin\_program_table.html:15
-#, fuzzy
 #| msgid "application"
 msgid "Applicant"
-msgstr "Application pulse"
+msgstr ""
 
 #: .\templates\ui\fragments\admin\_program_table.html:45
 #: .\templates\ui\fragments\admin\_program_table.html:56
@@ -7305,10 +7298,9 @@ msgid "Review"
 msgstr ""
 
 #: .\templates\ui\fragments\admin\_program_table.html:66
-#, fuzzy
 #| msgid "applications"
 msgid "No applications found"
-msgstr "Application pulse"
+msgstr ""
 
 #: .\templates\ui\fragments\admin\_staff_table.html:3
 #: .\templates\ui\fragments\admin\_student_table.html:4
@@ -7378,10 +7370,9 @@ msgid "Manage students"
 msgstr ""
 
 #: .\templates\ui\fragments\admin\dashboard\_admin.html:14
-#, fuzzy
 #| msgid "Review program applications"
 msgid "Review applications"
-msgstr "Submit one application"
+msgstr ""
 
 #: .\templates\ui\fragments\admin\dashboard\_admin.html:20
 msgid "Awaiting review"
@@ -7427,10 +7418,9 @@ msgid "Admissions"
 msgstr ""
 
 #: .\templates\ui\fragments\admin\dashboard\_admin.html:51
-#, fuzzy
 #| msgid "Application approved."
 msgid "Application pipeline"
-msgstr "Application pulse"
+msgstr ""
 
 #: .\templates\ui\fragments\admin\dashboard\_admin.html:53
 msgid "Open all"
@@ -7472,20 +7462,18 @@ msgid "progression exceptions"
 msgstr ""
 
 #: .\templates\ui\fragments\admin\dashboard\_admin.html:117
-#, fuzzy
 #| msgid "Clear application path"
 msgid "failed application emails"
-msgstr "Clear application path"
+msgstr ""
 
 #: .\templates\ui\fragments\admin\dashboard\_admin.html:118
 msgid "Email delivery"
 msgstr ""
 
 #: .\templates\ui\fragments\admin\dashboard\_admin.html:126
-#, fuzzy
 #| msgid "Published lectures"
 msgid "unpublished lectures"
-msgstr "No published lectures yet"
+msgstr ""
 
 #: .\templates\ui\fragments\admin\dashboard\_admin.html:127
 #: .\templates\ui\pages\student\content.html:27
@@ -7515,20 +7503,18 @@ msgid "View queue"
 msgstr ""
 
 #: .\templates\ui\fragments\admin\dashboard\_admin.html:164
-#, fuzzy
 #| msgid "applications"
 msgid "No recent applications"
-msgstr "Application pulse"
+msgstr ""
 
 #: .\templates\ui\fragments\admin\dashboard\_admin.html:164
 msgid "New submissions will appear here."
 msgstr ""
 
 #: .\templates\ui\fragments\admin\dashboard\_admin.html:169
-#, fuzzy
 #| msgid "application"
 msgid "Quick action"
-msgstr "Application pulse"
+msgstr ""
 
 #: .\templates\ui\fragments\admin\dashboard\_admin.html:170
 msgid "Open a workspace"
@@ -7617,36 +7603,32 @@ msgid "Load more"
 msgstr ""
 
 #: .\templates\ui\fragments\student\_applications.html:4
-#, fuzzy
 #| msgid "applications"
 msgid "My applications"
-msgstr "Application pulse"
+msgstr ""
 
 #: .\templates\ui\fragments\student\_applications.html:5
 msgid "Follow submitted applications, requested documents, and decisions."
 msgstr ""
 
 #: .\templates\ui\fragments\student\_applications.html:7
-#, fuzzy
 #| msgid "application"
 msgid "Start an application"
-msgstr "Application pulse"
+msgstr ""
 
 #: .\templates\ui\fragments\student\_applications.html:9
 msgid "Apply to a program"
 msgstr ""
 
 #: .\templates\ui\fragments\student\_applications.html:31
-#, fuzzy
 #| msgid "Review program applications"
 msgid "Program application"
-msgstr "Submit one application"
+msgstr ""
 
 #: .\templates\ui\fragments\student\_applications.html:48
-#, fuzzy
 #| msgid "applications"
 msgid "No applications yet"
-msgstr "Application pulse"
+msgstr ""
 
 #: .\templates\ui\fragments\student\_applications.html:49
 msgid "Your submitted applications will appear here."
@@ -7668,10 +7650,9 @@ msgid "No eligible programs are currently available."
 msgstr ""
 
 #: .\templates\ui\fragments\student\_apply.html:18
-#, fuzzy
 #| msgid "Active academic program"
 msgid "Select a program"
-msgstr "Live academic structure"
+msgstr ""
 
 #: .\templates\ui\fragments\student\_apply.html:35
 msgid "Submit application"
@@ -7688,10 +7669,9 @@ msgid "Review released scores, feedback, and assessment status."
 msgstr ""
 
 #: .\templates\ui\fragments\student\_assessment_history.html:8
-#, fuzzy
 #| msgid "Available now"
 msgid "Available assessments"
-msgstr "Available now"
+msgstr ""
 
 #: .\templates\ui\fragments\student\_assessment_history.html:36
 msgid "No assessment history"
@@ -7702,20 +7682,18 @@ msgid "Completed assessments and released results will appear here."
 msgstr ""
 
 #: .\templates\ui\fragments\student\_dashboard.html:3
-#, fuzzy
 #| msgid "Learning library"
 msgid "Learning overview"
-msgstr "Learning library"
+msgstr ""
 
 #: .\templates\ui\fragments\student\_dashboard.html:9
 msgid "Your next steps, progress, and important records are collected here."
 msgstr ""
 
 #: .\templates\ui\fragments\student\_dashboard.html:11
-#, fuzzy
 #| msgid "Standalone learning"
 msgid "Continue learning"
-msgstr "Standalone learning"
+msgstr ""
 
 #: .\templates\ui\fragments\student\_dashboard.html:12
 msgid "View my record"
@@ -7727,10 +7705,9 @@ msgstr ""
 
 #: .\templates\ui\fragments\student\_dashboard.html:21
 #: .\templates\ui\fragments\student\_learning.html:29
-#, fuzzy
 #| msgid "Start learning"
 msgid "Active learning"
-msgstr "Start learning"
+msgstr ""
 
 #: .\templates\ui\fragments\student\_dashboard.html:23
 msgid "Programs and courses"
@@ -7745,10 +7722,9 @@ msgid "Open assignments"
 msgstr ""
 
 #: .\templates\ui\fragments\student\_dashboard.html:44
-#, fuzzy
 #| msgid "Available now"
 msgid "Available to download"
-msgstr "Available now"
+msgstr ""
 
 #: .\templates\ui\fragments\student\_dashboard.html:50
 msgid "Next actions"
@@ -7782,22 +7758,19 @@ msgid "Account"
 msgstr ""
 
 #: .\templates\ui\fragments\student\_dashboard.html:76
-#, fuzzy
 #| msgid "application"
 msgid "Current application"
-msgstr "Application pulse"
+msgstr ""
 
 #: .\templates\ui\fragments\student\_dashboard.html:85
-#, fuzzy
 #| msgid "applications"
 msgid "Open applications"
-msgstr "Application pulse"
+msgstr ""
 
 #: .\templates\ui\fragments\student\_dashboard.html:89
-#, fuzzy
 #| msgid "application"
 msgid "No active application"
-msgstr "Application pulse"
+msgstr ""
 
 #: .\templates\ui\fragments\student\_dashboard.html:90
 msgid ""
@@ -7813,10 +7786,9 @@ msgid "Your programs and courses"
 msgstr ""
 
 #: .\templates\ui\fragments\student\_dashboard.html:100
-#, fuzzy
 #| msgid "Start learning"
 msgid "Open learning"
-msgstr "Start learning"
+msgstr ""
 
 #: .\templates\ui\fragments\student\_dashboard.html:110
 #: .\templates\ui\fragments\student\_learning.html:17
@@ -7843,12 +7815,10 @@ msgid "No learning enrolments yet"
 msgstr ""
 
 #: .\templates\ui\fragments\student\_dashboard.html:149
-#, fuzzy
 #| msgid ""
 #| "When active standalone courses exist, they will appear here automatically."
 msgid "Your active programs and courses will appear here."
 msgstr ""
-"When active standalone courses exist, they will appear here automatically."
 
 #: .\templates\ui\fragments\student\_exam_results.html:5
 msgid "See assigned exams, open attempts, and released results."
@@ -8021,10 +7991,9 @@ msgid "Total paid"
 msgstr ""
 
 #: .\templates\ui\fragments\student\_record.html:47
-#, fuzzy
 #| msgid "Available now"
 msgid "Available records"
-msgstr "Available now"
+msgstr ""
 
 #: .\templates\ui\fragments\student\_record.html:53
 msgid "Attendance history"
@@ -8051,10 +8020,9 @@ msgid "No released assessments"
 msgstr ""
 
 #: .\templates\ui\fragments\student\_record.html:89
-#, fuzzy
 #| msgid "Published lectures will appear here automatically."
 msgid "Released results will appear here."
-msgstr "Published lectures will appear here automatically."
+msgstr ""
 
 #: .\templates\ui\fragments\student\_record.html:97
 msgid "Academic history"
@@ -8161,10 +8129,9 @@ msgstr ""
 
 #: .\templates\ui\layouts\student.html:21
 #: .\templates\ui\pages\public\landing.html:26
-#, fuzzy
 #| msgid "Start learning"
 msgid "My learning"
-msgstr "Start learning"
+msgstr ""
 
 #: .\templates\ui\layouts\student.html:37
 msgid "My record"
@@ -8267,10 +8234,9 @@ msgid "Closes"
 msgstr ""
 
 #: .\templates\ui\pages\admin\assessment_detail.html:105
-#, fuzzy
 #| msgid "applications"
 msgid "Sections"
-msgstr "Application pulse"
+msgstr ""
 
 #: .\templates\ui\pages\admin\assessment_detail.html:111
 #: .\templates\ui\pages\admin\assessment_tools.html:189
@@ -9004,10 +8970,9 @@ msgstr ""
 
 #: .\templates\ui\pages\admin\course_detail.html:78
 #: .\templates\ui\pages\admin\diploma_lecture_list.html:53
-#, fuzzy
 #| msgid "Published lectures"
 msgid "No lectures"
-msgstr "No published lectures yet"
+msgstr ""
 
 #: .\templates\ui\pages\admin\course_detail.html:78
 msgid "No lectures found for this course."
@@ -9235,10 +9200,9 @@ msgid "Back to exam"
 msgstr ""
 
 #: .\templates\ui\pages\admin\entrance_exams.html:50
-#, fuzzy
 #| msgid "applications"
 msgid "Invitations"
-msgstr "Application pulse"
+msgstr ""
 
 #: .\templates\ui\pages\admin\entrance_exams.html:52
 msgid "History"
@@ -9548,26 +9512,23 @@ msgstr ""
 
 #: .\templates\ui\pages\admin\program_detail.html:7
 #: .\templates\ui\pages\admin\program_list.html:11
-#, fuzzy
 #| msgid "Application approved."
 msgid "Application review"
-msgstr "Application pulse"
+msgstr ""
 
 #: .\templates\ui\pages\admin\program_detail.html:9
 msgid "Submitted request"
 msgstr ""
 
 #: .\templates\ui\pages\admin\program_detail.html:10
-#, fuzzy
 #| msgid "applications"
 msgid "Application details"
-msgstr "Application pulse"
+msgstr ""
 
 #: .\templates\ui\pages\admin\program_detail.html:44
-#, fuzzy
 #| msgid "application"
 msgid "Applicant email"
-msgstr "Application pulse"
+msgstr ""
 
 #: .\templates\ui\pages\admin\program_detail.html:51
 msgid "Reviewed by"
@@ -9596,16 +9557,14 @@ msgid "Rejection reason"
 msgstr ""
 
 #: .\templates\ui\pages\admin\program_detail.html:99
-#, fuzzy
 #| msgid "application"
 msgid "Accept application"
-msgstr "Application pulse"
+msgstr ""
 
 #: .\templates\ui\pages\admin\program_detail.html:103
-#, fuzzy
 #| msgid "application"
 msgid "Reject application"
-msgstr "Application pulse"
+msgstr ""
 
 #: .\templates\ui\pages\admin\program_detail.html:110
 msgid "Decision history"
@@ -9784,10 +9743,9 @@ msgstr ""
 
 #: .\templates\ui\pages\admin\progression.html:282
 #: .\templates\ui\pages\admin\progression_semester_evaluation.html:12
-#, fuzzy
 #| msgid "application"
 msgid "Evaluation"
-msgstr "Application pulse"
+msgstr ""
 
 #: .\templates\ui\pages\admin\progression.html:291
 #: .\templates\ui\pages\admin\progression_semester_evaluation.html:21
@@ -9982,10 +9940,9 @@ msgid "Account summary"
 msgstr ""
 
 #: .\templates\ui\pages\admin\student_detail.html:93
-#, fuzzy
 #| msgid "applications"
 msgid "No applications"
-msgstr "Application pulse"
+msgstr ""
 
 #: .\templates\ui\pages\admin\student_detail.html:93
 msgid "This student has not submitted any applications."
@@ -10066,20 +10023,18 @@ msgid "Submit documents"
 msgstr ""
 
 #: .\templates\ui\pages\public\landing.html:9
-#, fuzzy
 #| msgid "Admin-editable announcement"
 msgid "Announcement"
-msgstr "Admin-editable announcement"
+msgstr ""
 
 #: .\templates\ui\pages\public\landing.html:24
 msgid "Explore our programs"
 msgstr ""
 
 #: .\templates\ui\pages\public\landing.html:32
-#, fuzzy
 #| msgid "Start learning"
 msgid "Structured learning"
-msgstr "Start learning"
+msgstr ""
 
 #: .\templates\ui\pages\public\landing.html:33
 msgid "Real student support"
@@ -10094,10 +10049,9 @@ msgid "Open diplomas"
 msgstr ""
 
 #: .\templates\ui\pages\public\landing.html:63
-#, fuzzy
 #| msgid "Standalone Courses"
 msgid "Open standalone courses"
-msgstr "Standalone course"
+msgstr ""
 
 #: .\templates\ui\pages\public\landing.html:78
 msgid "No programs available"
@@ -10305,17 +10259,15 @@ msgid "No certificates available."
 msgstr ""
 
 #: .\templates\ui\pages\student\content.html:7
-#, fuzzy
 #| msgid "Start learning"
 msgid "Course learning"
-msgstr "Start learning"
+msgstr ""
 
 #: .\templates\ui\pages\student\content.html:13
 #: .\templates\ui\pages\student\content.html:24
-#, fuzzy
 #| msgid "Start learning"
 msgid "Back to learning"
-msgstr "Start learning"
+msgstr ""
 
 #: .\templates\ui\pages\student\content.html:17
 #: .\templates\ui\pages\student\content.html:97
@@ -10327,10 +10279,9 @@ msgid "lessons"
 msgstr ""
 
 #: .\templates\ui\pages\student\content.html:51
-#, fuzzy
 #| msgid "No published lectures yet"
 msgid "No published lessons yet."
-msgstr "No published lectures yet"
+msgstr ""
 
 #: .\templates\ui\pages\student\content.html:55
 msgid "Course team"
@@ -10353,20 +10304,18 @@ msgid "Lessons"
 msgstr ""
 
 #: .\templates\ui\pages\student\content.html:75
-#, fuzzy
 #| msgid "Published lectures"
 msgid "Published content"
-msgstr "No published lectures yet"
+msgstr ""
 
 #: .\templates\ui\pages\student\content.html:102
 msgid "No lessons available"
 msgstr ""
 
 #: .\templates\ui\pages\student\content.html:103
-#, fuzzy
 #| msgid "Published lectures will appear here automatically."
 msgid "Published course content will appear here."
-msgstr "Published lectures will appear here automatically."
+msgstr ""
 
 #: .\templates\ui\pages\student\exam.html:14
 msgid "Back to exam results"
@@ -10527,7 +10476,46 @@ msgstr ""
 #~ "The top announcement can be changed, scheduled, linked, or disabled from "
 #~ "admin control."
 
-#, fuzzy, python-format
+#, python-format
 #~| msgid "No applications have been recorded yet."
 #~ msgid "%(count)s applications have been recorded in the LMS so far."
-#~ msgstr "No applications have been recorded yet."
+#~ msgstr ""
+
+msgid "Could not determine audio duration."
+msgstr "Could not determine audio duration."
+
+msgid "FFmpeg failed: %(error)s"
+msgstr "FFmpeg failed: %(error)s"
+
+msgid "Audit events are append-only and cannot be deleted."
+msgstr "Audit events are append-only and cannot be deleted."
+
+msgid "Audit events are append-only and cannot be modified."
+msgstr "Audit events are append-only and cannot be modified."
+
+msgid "Program application decisions are append-only."
+msgstr "Program application decisions are append-only."
+
+msgid "Program application notes are append-only."
+msgstr "Program application notes are append-only."
+
+msgid "Bulk auto-promote"
+msgstr "Bulk auto-promote"
+
+msgid "Final pass."
+msgstr "Final pass."
+
+msgid "Final fail."
+msgstr "Final fail."
+
+msgid "Interview completed."
+msgstr "Interview completed."
+
+msgid "Manual promotion."
+msgstr "Manual promotion."
+
+msgid "Manual completion."
+msgstr "Manual completion."
+
+msgid "Manual graduation."
+msgstr "Manual graduation."

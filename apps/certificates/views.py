@@ -1,5 +1,6 @@
 """Views for certificate management (admin and student)."""
 
+import json
 import logging
 
 from django.contrib import messages
@@ -264,8 +265,6 @@ def admin_template_editor(request, template_id):
 @require_POST
 def admin_template_save_mapping(request, template_id):
     """Validate and persist the placement mapping (P7-03)."""
-    import json
-
     template = get_object_or_404(CertificateTemplate, id=template_id)
     if template.source_status != "ready":
         return JsonResponse({"error": _("No source preview available.")}, status=400)
@@ -303,8 +302,6 @@ def admin_template_preview_generate(request, template_id):
     reflects what the admin sees, not silently stale persisted state. When no
     mapping is sent, falls back to the persisted mapping.
     """
-    import json
-
     template = get_object_or_404(CertificateTemplate, id=template_id)
     if template.source_status != "ready" or not template.source_storage_key:
         return JsonResponse({"error": _("No source available.")}, status=400)

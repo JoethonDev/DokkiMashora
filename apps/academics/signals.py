@@ -7,6 +7,7 @@ from django.dispatch import receiver
 
 from apps.audit.constants import ACTION_ENROLLMENT_DELETED
 from apps.audit.services import record_audit_event
+from apps.payments.models import PaymentRecord
 from apps.progression.models import DiplomaProgressionRule
 
 from .models import CourseEnrollment, Diploma, DiplomaEnrollment
@@ -33,8 +34,6 @@ def _auto_create_diploma_progression_rule(sender, instance, created, **kwargs):
 
 
 def _log_deleted_enrollment(instance, enrollment_type: str, fk_field: str) -> None:
-    from apps.payments.models import PaymentRecord
-
     qs = PaymentRecord.objects.filter(**{fk_field: instance})
     count = qs.count()
     if count == 0:

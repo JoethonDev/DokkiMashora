@@ -199,6 +199,39 @@
     }
   });
 
+  // --- Accessible file pickers ----------------------------------------------
+  // Native file controls expose browser/OS English such as "Choose Files" even
+  // on an Arabic page. Keep the real input for keyboard and form semantics,
+  // but render the visible trigger and selected-file status in the locale.
+  function initFilePickers(container) {
+    if (!container) container = document;
+    var roots = [];
+    if (container.nodeType === 1 && container.matches("[data-file-picker]")) {
+      roots.push(container);
+    }
+    roots = roots.concat(Array.prototype.slice.call(container.querySelectorAll("[data-file-picker]")));
+    roots.forEach(function (root) {
+      if (root.dataset.filePickerInitialized === "true") return;
+      var input = root.querySelector("[data-file-input]");
+      var name = root.querySelector("[data-file-name]");
+      if (!input || !name) return;
+
+      function updateName() {
+        var files = Array.prototype.map.call(input.files || [], function (file) {
+          return file.name;
+        });
+        name.textContent = files.length ? files.join("، ") : (name.dataset.emptyLabel || "");
+      }
+
+      input.addEventListener("change", updateName);
+      updateName();
+      root.dataset.filePickerInitialized = "true";
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", function () { initFilePickers(); });
+  document.addEventListener("htmx:afterSwap", function (e) { initFilePickers(e.detail.target); });
+
   // --- Native form submit guard ---
   document.addEventListener("submit", function (e) {
     var form = e.target;
@@ -382,6 +415,8 @@
     form.dataset.autosaveInitialized = "true";
     var pendingTimer = null;
     var isSubmitting = false;
+    var dirty = new Map();
+    var hasBaseline = false;
 
     function collectAnswers() {
       var answers = {};
@@ -402,6 +437,16 @@
 
     function save() {
       if (isSubmitting) return;
+      var keys = hasBaseline ? Array.from(dirty.entries()) : null;
+      if (hasBaseline && !keys.length) return;
+      var answers = collectAnswers();
+      if (keys) {
+        answers = keys.reduce(function (delta, entry) {
+          var key = entry[0];
+          if (Object.prototype.hasOwnProperty.call(answers, key)) delta[key] = answers[key];
+          return delta;
+        }, {});
+      }
       setStatus(form.dataset.autosaveSaving || "Saving answers…");
       return fetch(autosaveUrl, {
         method: "POST",
@@ -409,10 +454,19 @@
           "Content-Type": "application/json",
           "X-CSRFToken": csrf.value,
         },
-        body: JSON.stringify({ answers: collectAnswers() }),
+        body: JSON.stringify({ answers: answers }),
         credentials: "same-origin",
       }).then(function (response) {
         if (!response.ok) throw new Error("autosave_failed");
+        if (keys) {
+          keys.forEach(function (entry) {
+            var key = entry[0];
+            var version = entry[1];
+            if (dirty.get(key) === version) dirty.delete(key);
+          });
+        } else {
+          hasBaseline = true;
+        }
         setStatus(form.dataset.autosaveSaved || "Answers saved.");
       }).catch(function () {
         setStatus(form.dataset.autosaveFailed || "Autosave failed.");
@@ -424,8 +478,14 @@
       pendingTimer = window.setTimeout(save, 1200);
     }
 
-    form.addEventListener("change", scheduleSave);
-    form.addEventListener("input", scheduleSave);
+    function markDirty(event) {
+      if (event.target && event.target.name) {
+        dirty.set(event.target.name, (dirty.get(event.target.name) || 0) + 1);
+      }
+      scheduleSave();
+    }
+    form.addEventListener("change", markDirty);
+    form.addEventListener("input", markDirty);
     form.addEventListener("submit", function () {
       isSubmitting = true;
     });
@@ -635,11 +695,11 @@
       if (unanswered.length) {
         e.preventDefault();
         pendingForm = form;
-        var prefix = form.getAttribute("data-unanswered-prefix") || "Unanswered questions";
-        var suffix = form.getAttribute("data-unanswered-suffix") || "Submit them as empty values?";
+        var prefix = form.getAttribute("data-unanswered-prefix") || "";
+        var suffix = form.getAttribute("data-unanswered-suffix") || "";
         showConfirmModal(
           prefix + ": " + unanswered.join(", ") + ". " + suffix,
-          form.getAttribute("data-confirm-label") || "Submit",
+          form.getAttribute("data-confirm-label") || "",
           false
         );
         return;
@@ -851,6 +911,53 @@
 
   document.addEventListener("DOMContentLoaded", function () { initRegistrationWizard(); });
   document.addEventListener("htmx:afterSwap", function (e) { initRegistrationWizard(e.detail.target); });
+
+  // --- Entrance decision tabs ---
+  // The default panel is rendered without JavaScript. This initializer only
+  // adds tab switching and therefore cannot make the decision actions vanish
+  // when Alpine is delayed or unavailable.
+  function initDecisionTabs(container) {
+    if (!container) container = document;
+    var roots = [];
+    if (container.nodeType === 1 && container.matches("[data-decision-tabs]")) {
+      roots.push(container);
+    }
+    roots = roots.concat(Array.prototype.slice.call(container.querySelectorAll("[data-decision-tabs]")));
+    roots.forEach(function (root) {
+      if (root.dataset.decisionTabsInitialized === "true") return;
+      var buttons = Array.prototype.slice.call(root.querySelectorAll("[data-decision-tab]"));
+      var panels = Array.prototype.slice.call(root.querySelectorAll("[data-decision-panel]"));
+      if (!buttons.length || !panels.length) return;
+
+      function select(key) {
+        buttons.forEach(function (button) {
+          var selected = button.getAttribute("data-decision-tab") === key;
+          button.classList.toggle("tab-active", selected);
+          button.setAttribute("aria-selected", selected ? "true" : "false");
+        });
+        panels.forEach(function (panel) {
+          panel.hidden = panel.getAttribute("data-decision-panel") !== key;
+        });
+      }
+
+      var defaultKey = root.getAttribute("data-decision-default") || "";
+      var initialButton = buttons.find(function (button) {
+        return button.getAttribute("aria-selected") === "true";
+      }) || buttons.find(function (button) {
+        return button.getAttribute("data-decision-tab") === defaultKey;
+      }) || buttons[0];
+      select(initialButton.getAttribute("data-decision-tab"));
+      buttons.forEach(function (button) {
+        button.addEventListener("click", function () {
+          select(button.getAttribute("data-decision-tab"));
+        });
+      });
+      root.dataset.decisionTabsInitialized = "true";
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", function () { initDecisionTabs(); });
+  document.addEventListener("htmx:afterSwap", function (e) { initDecisionTabs(e.detail.target); });
 
   // --- Lucide Icons (loaded via CDN) ---
   function initLucide() {

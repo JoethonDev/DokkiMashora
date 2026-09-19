@@ -9,20 +9,18 @@ from decimal import Decimal, InvalidOperation
 from urllib.parse import urlencode
 
 import qrcode
-
-logger = logging.getLogger(__name__)
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Q
+from django.forms.models import inlineformset_factory
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods, require_POST
-from django.forms.models import inlineformset_factory
 
 from apps.academics.models import Cohort
 from apps.applications.constants import (
@@ -79,10 +77,13 @@ from .services import (
     finalize_expired_attempt,
     get_pending_grading,
     grade_answer,
+    queue_entrance_invitation_email,
     save_snapshot,
     start_attempt,
     submit_attempt,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _get_profile(user):
@@ -143,6 +144,12 @@ def exam_access_token(request, token):
 def exam_qr_code(request, token):
     """Return a QR code PNG for the exam access URL."""
     exam_url = request.build_absolute_uri(reverse("entrance_exams:exam_access_token", args=[token]))
+
+    return _qr_response(exam_url)
+
+
+def _qr_response(exam_url):
+    """Build the shared QR response for student and admin callers."""
 
     img = qrcode.make(exam_url)
     buf = io.BytesIO()
@@ -370,11 +377,32 @@ def admin_detail(request, exam_id):
         ),
         id=exam_id,
     )
+    exam_access_url = ""
+    if exam.is_active and exam.access_token:
+        exam_access_url = request.build_absolute_uri(
+            reverse("entrance_exams:exam_access_token", args=[exam.access_token])
+        )
     return render(request, "ui/pages/admin/entrance_exam_detail.html", {
         "exam": exam,
+        "exam_access_url": exam_access_url,
         "title": _("Entrance exam"),
         "next": safe_next_url(request),
     })
+
+
+@login_required
+@role_required(*ROLE_EXAM_STAFF)
+def admin_exam_qr_code(request, exam_id):
+    """Return the current active exam access QR for authorized exam staff."""
+    if not is_admin(request.user):
+        raise PermissionDenied
+    exam = get_object_or_404(EntranceExam, id=exam_id, is_active=True)
+    if not exam.access_token:
+        raise Http404
+    exam_url = request.build_absolute_uri(
+        reverse("entrance_exams:exam_access_token", args=[exam.access_token])
+    )
+    return _qr_response(exam_url)
 
 
 @login_required
@@ -585,6 +613,7 @@ def _parse_local_datetime(value: str):
 
 @login_required
 @role_required(*ROLE_EXAM_STAFF)
+@require_POST
 def admin_attempt_decision(request, attempt_id):
     """Admin decision for a graded entrance attempt: pass / fail / interview / revert.
 
@@ -828,40 +857,35 @@ def _send_invitations(request, exam, cohort, student_ids):
             failed_count += 1
             continue
         is_rejected = prog_app.status == PROGRAM_APP_STATUS_REJECTED
-        slug = TEMPLATE_REJECTION if is_rejected else TEMPLATE_ENTRANCE_EXAM_INVITATION
         action = EMAIL_ACTION_REJECTION if is_rejected else EMAIL_ACTION_INVITATION
-        context = {
-            "full_name": prog_app.student.full_name or "",
-            "email": email_to,
-        }
         if is_rejected:
+            slug = TEMPLATE_REJECTION
+            context = {
+                "full_name": prog_app.student.full_name or "",
+                "email": email_to,
+            }
             context.update(
                 rejection_reason=prog_app.rejection_reason or "",
                 cohort_name=cohort.name or "",
             )
-        else:
-            EntranceAttempt.objects.get_or_create(
-                exam=exam, program_application=prog_app, student=prog_app.student,
-            )
-            context.update(
-                phone_number=prog_app.student.phone or "",
-                exam_title=exam.title,
-                cohort_name=cohort.name or "",
-                exam_url=reverse("entrance_exams:exam_access_token", args=[exam.access_token]) if exam.access_token else "",
-                exam_open_at="",
-                exam_close_at="",
-            )
         try:
-            record, _log = queue_program_application_email(
-                program_application=prog_app,
-                action=action,
-                template_slug=slug,
-                to_email=email_to,
-                context=context,
-                sent_by=request.user,
-                idempotency_key=f"entrance_exam:{action}:app:{prog_app.pk}",
-                reference=f"app:{prog_app.pk}",
-            )
+            if is_rejected:
+                record, _log = queue_program_application_email(
+                    program_application=prog_app,
+                    action=action,
+                    template_slug=slug,
+                    to_email=email_to,
+                    context=context,
+                    sent_by=request.user,
+                    idempotency_key=f"entrance_exam:{action}:app:{prog_app.pk}",
+                    reference=f"app:{prog_app.pk}",
+                )
+            else:
+                record, _log = queue_entrance_invitation_email(
+                    exam=exam,
+                    program_application=prog_app,
+                    actor=request.user,
+                )
         except Exception:
             logger.exception("Exam assign email queue failed for application %s", prog_app.id)
             failed_count += 1
@@ -1146,39 +1170,36 @@ def admin_app_email_resend(request, exam_id, app_id):
         if action == EMAIL_ACTION_INVITATION
         else TEMPLATE_REJECTION
     )
-    context = {
-        "full_name": prog_app.student.full_name or "",
-        "email": email_to,
-        "phone_number": prog_app.student.phone or "",
-    }
-    if slug == TEMPLATE_ENTRANCE_EXAM_INVITATION:
-        context.update(
-            exam_title=exam.title,
-            cohort_name=cohort.name or "",
-            exam_url=reverse("entrance_exams:exam_access_token", args=[exam.access_token]) if exam.access_token else "",
-            exam_open_at="",
-            exam_close_at="",
-        )
-    else:
-        context.update(
-            rejection_reason=prog_app.rejection_reason or "",
-            cohort_name=cohort.name or "",
-        )
-    resend_seq = PAEL.objects.filter(
-        program_application=prog_app, action=action, is_resend=True,
-    ).count()
     try:
-        record, _log = queue_program_application_email(
-            program_application=prog_app,
-            action=action,
-            template_slug=slug,
-            to_email=email_to,
-            context=context,
-            sent_by=request.user,
-            idempotency_key=f"entrance_exam:resend:{action}:app:{prog_app.pk}:{resend_seq}",
-            reference=f"app:{prog_app.pk}",
-            is_resend=True,
-        )
+        if action == EMAIL_ACTION_INVITATION:
+            record, _log = queue_entrance_invitation_email(
+                exam=exam,
+                program_application=prog_app,
+                actor=request.user,
+                is_resend=True,
+            )
+        else:
+            context = {
+                "full_name": prog_app.student.full_name or "",
+                "email": email_to,
+                "phone_number": prog_app.student.phone or "",
+                "rejection_reason": prog_app.rejection_reason or "",
+                "cohort_name": cohort.name or "",
+            }
+            resend_seq = PAEL.objects.filter(
+                program_application=prog_app, action=action, is_resend=True,
+            ).count()
+            record, _log = queue_program_application_email(
+                program_application=prog_app,
+                action=action,
+                template_slug=TEMPLATE_REJECTION,
+                to_email=email_to,
+                context=context,
+                sent_by=request.user,
+                idempotency_key=f"entrance_exam:resend:{action}:app:{prog_app.pk}:{resend_seq}",
+                reference=f"app:{prog_app.pk}",
+                is_resend=True,
+            )
     except Exception:
         logger.exception("Resend single email queue failed for application %s", prog_app.id)
         record_program_application_email_log(

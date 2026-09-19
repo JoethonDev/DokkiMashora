@@ -6,7 +6,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Case, IntegerField, Q, Value, When
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -17,7 +17,7 @@ from apps.academics.models import Cohort
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import ROLE_SENIOR_STAFF, is_admin, role_required, safe_int
-from apps.entrance_exams.services import assign_exam_for_application
+from apps.entrance_exams.services import assign_exam_for_application, queue_entrance_invitation_email
 from apps.intake_forms.selectors import get_application_intake_state  # noqa: E402
 from apps.intake_forms.services import request_intake_form_for_application  # noqa: E402
 from apps.payments.services import grant_payment_waiver, revoke_payment_waiver
@@ -32,6 +32,7 @@ from .constants import (
     DECISION_ACTION_INVITED_TO_ENTRANCE,
     DECISION_ACTION_NOTE,
     DECISION_ACTION_PAYMENT_PENDING,
+    DECISION_ACTION_PAYMENT_WAIVER_REVOKED,
     DECISION_ACTION_REJECT,
     DECISION_ACTION_REQUEST_DOCUMENTS,
     DECISION_ACTION_REQUEST_INTERVIEW,
@@ -87,7 +88,6 @@ from .services import (
     reject_program_application,
     request_interview_program_application,
     revert_program_application_decision,
-    send_post_activation_application_email,
     submit_registration,
 )
 
@@ -240,6 +240,11 @@ REVIEW_QUEUE_STATUSES = (
     PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
 )
 
+APPLICATION_LIST_TERMINAL_STATUSES = (
+    PROGRAM_APP_STATUS_ACTIVATED,
+    PROGRAM_APP_STATUS_REJECTED,
+)
+
 
 def review_queue_applications():
     """Applications awaiting a staff decision (shared queue predicate, A8).
@@ -286,7 +291,15 @@ def program_application_list(request: HttpRequest) -> HttpResponse:
     q = request.GET.get("q", "")
     applications = ProgramApplication.objects.select_related(
         "student__user", "reviewed_by", "cohort__diploma", "course"
-    ).order_by("-created_at")
+    ).order_by(
+        Case(
+            When(status__in=APPLICATION_LIST_TERMINAL_STATUSES, then=Value(1)),
+            default=Value(0),
+            output_field=IntegerField(),
+        ),
+        "-created_at",
+        "-id",
+    )
     if q:
         applications = applications.filter(
             Q(student__full_name__icontains=q) | Q(student__user__email__icontains=q)
@@ -503,9 +516,18 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
             try:
                 if application.status in (PROGRAM_APP_STATUS_SUBMITTED, PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED):
                     invite_to_entrance_exam(application, request.user)
-                assign_exam_for_application(application)
+                attempt = assign_exam_for_application(application)
                 if send_email:
-                    send_post_activation_application_email(application, request.user, force_resend=True)
+                    if attempt is None:
+                        raise ValueError(_("No active entrance exam is configured for this application cohort."))
+                    record, _log = queue_entrance_invitation_email(
+                        exam=attempt.exam,
+                        program_application=application,
+                        actor=request.user,
+                        is_resend=True,
+                    )
+                    if record is None:
+                        raise ValueError(_("No active email template is available for the entrance exam invitation."))
             except ValueError as exc:
                 messages.error(request, str(exc))
             else:
@@ -568,6 +590,7 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
         DECISION_ACTION_ACCEPT: "success",
         DECISION_ACTION_REJECT: "danger",
         DECISION_ACTION_REVERT: "warning",
+        DECISION_ACTION_PAYMENT_WAIVER_REVOKED: "warning",
         DECISION_ACTION_NOTE: "neutral",
         DECISION_ACTION_REQUEST_DOCUMENTS: "warning",
         DECISION_ACTION_SUBMIT_DOCUMENTS: "success",

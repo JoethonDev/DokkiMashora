@@ -15,19 +15,15 @@ from apps.applications.constants import (
     PROGRAM_APP_STATUS_SURVEY_SUBMITTED,
 )
 from apps.applications.models import ProgramApplication
-from apps.applications.services import (
-    _log_email_send,
-    _record_decision,
-    activate_application_if_ready,
-)
-from apps.communications.services import queue_templated_email
+from apps.applications import services as application_services
+from apps.communications.services import queue_program_application_email
 
 from .constants import (
-    INTAKE_REQUESTABLE_STATUSES,
     INTAKE_REQUEST_STATUS_CANCELLED,
     INTAKE_REQUEST_STATUS_EXPIRED,
     INTAKE_REQUEST_STATUS_REQUESTED,
     INTAKE_REQUEST_STATUS_SUBMITTED,
+    INTAKE_REQUESTABLE_STATUSES,
 )
 from .models import IntakeForm, IntakeFormAnswer, IntakeFormRequest, IntakeFormResponse
 from .selectors import get_required_intake_form_for_application
@@ -91,15 +87,13 @@ def request_intake_form_for_application(
     old_status = application.status
     if application.status not in (PROGRAM_APP_STATUS_SURVEY_REQUESTED, PROGRAM_APP_STATUS_SURVEY_SUBMITTED):
         _set_status(application, PROGRAM_APP_STATUS_SURVEY_REQUESTED)
-        _record_decision(
+        application_services._record_decision(
             application, "request_survey",
             old_status, PROGRAM_APP_STATUS_SURVEY_REQUESTED, actor,
         )
 
     if send_email:
         transaction.on_commit(lambda: _send_intake_request_email(application, form, raw_token, intake_request))
-        email_action = EMAIL_ACTION_APPLICATION_SURVEY_REQUEST
-        _log_email_send(application, email_action, "application_survey_request", application.student.user.email, actor)
 
     return intake_request
 
@@ -123,8 +117,12 @@ def _send_intake_request_email(application, form, raw_token, intake_request) -> 
         "expires_at": intake_request.expires_at.isoformat(),
         "staff_phone": "",
     }
-    queue_templated_email(
-        "application_survey_request", email, context,
+    queue_program_application_email(
+        program_application=application,
+        action=EMAIL_ACTION_APPLICATION_SURVEY_REQUEST,
+        template_slug="application_survey_request",
+        to_email=email,
+        context=context,
         sent_by=intake_request.requested_by,
         idempotency_key=f"application:survey_request:app:{application.pk}:request:{intake_request.pk}",
         reference=f"app:{application.pk}",
@@ -266,15 +264,14 @@ def submit_intake_form_response(
     old_status = application.status
     application.status = PROGRAM_APP_STATUS_SURVEY_SUBMITTED
     application.save(update_fields=["status", "updated_at"])
-    _record_decision(
+    application_services._record_decision(
         application, "submit_survey",
         old_status, PROGRAM_APP_STATUS_SURVEY_SUBMITTED, actor,
     )
 
-    result = activate_application_if_ready(application, actor=actor)
-    from apps.applications.services import send_post_activation_application_email
+    result = application_services.activate_application_if_ready(application, actor=actor)
     if not result.activated:
-        send_post_activation_application_email(application, actor=actor)
+        application_services.send_post_activation_application_email(application, actor=actor)
 
     return response
 

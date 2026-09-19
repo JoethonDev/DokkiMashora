@@ -18,6 +18,13 @@ from celery import shared_task
 from django.db import transaction
 from django.utils import timezone
 
+from apps.accounts.models import UserUploadRow
+from apps.communications.constants import EMAIL_STATUS_FAILED, EMAIL_STATUS_SENT
+from apps.communications.email_message import EmailMessage
+from apps.entrance_exams.constants import ATTEMPT_STATUS_COMPLETED, ATTEMPT_STATUS_GRADED
+from apps.entrance_exams.models import EntranceSnapshot
+from apps.payments.models import PaymentUploadRow
+
 logger = logging.getLogger("apps.core.tasks")
 
 #: Retention window for ephemeral data (DECISION #33).
@@ -49,9 +56,6 @@ def _blank_email_bodies(cutoff) -> int:
     produce an empty send. The delivery record (status, to_email, sent_at,
     template_slug, subject) is kept so audit/traceability stays intact.
     """
-    from apps.communications.constants import EMAIL_STATUS_FAILED, EMAIL_STATUS_SENT
-    from apps.communications.models import EmailMessage
-
     queryset = (
         EmailMessage.objects.filter(
             created_at__lt=cutoff,
@@ -75,12 +79,6 @@ def _delete_terminal_snapshots(cutoff) -> int:
     retention window, the snapshot rows are safe to delete; the final answers,
     score, and result stay durable.
     """
-    from apps.entrance_exams.constants import (
-        ATTEMPT_STATUS_COMPLETED,
-        ATTEMPT_STATUS_GRADED,
-    )
-    from apps.entrance_exams.models import EntranceSnapshot
-
     queryset = EntranceSnapshot.objects.filter(
         attempt__status__in=[ATTEMPT_STATUS_COMPLETED, ATTEMPT_STATUS_GRADED],
         attempt__submitted_at__lt=cutoff,
@@ -99,9 +97,6 @@ def _blank_import_raw_payloads(cutoff) -> dict[str, int]:
     the link to created/updated records stay observable) but their ``raw_data``
     copy of the uploaded file content is ephemeral and is removed after 30 days.
     """
-    from apps.accounts.models import UserUploadRow
-    from apps.payments.models import PaymentUploadRow
-
     totals = {"user_upload_rows_blanked": 0, "payment_upload_rows_blanked": 0}
     for model, key in (
         (UserUploadRow, "user_upload_rows_blanked"),

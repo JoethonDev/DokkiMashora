@@ -3,11 +3,14 @@ SESSION_STATUS_OPEN = "open"
 SESSION_STATUS_CLOSED = "closed"
 SESSION_STATUS_CANCELLED = "cancelled"
 
+from django.utils.translation import gettext_lazy as _
+
+
 SESSION_STATUS_CHOICES = [
-    (SESSION_STATUS_SCHEDULED, "Scheduled"),
-    (SESSION_STATUS_OPEN, "Open"),
-    (SESSION_STATUS_CLOSED, "Closed"),
-    (SESSION_STATUS_CANCELLED, "Cancelled"),
+    (SESSION_STATUS_SCHEDULED, _("Scheduled")),
+    (SESSION_STATUS_OPEN, _("Open")),
+    (SESSION_STATUS_CLOSED, _("Closed")),
+    (SESSION_STATUS_CANCELLED, _("Cancelled")),
 ]
 
 ATTENDANCE_STATUS_PRESENT = "present"
@@ -16,8 +19,8 @@ ATTENDANCE_STATUS_EXCUSED = "excused"
 ATTENDANCE_STATUS_INVALID = "invalid"
 
 ATTENDANCE_STATUS_CHOICES = [
-    (ATTENDANCE_STATUS_PRESENT, "Present"),
-    (ATTENDANCE_STATUS_LATE, "Late"),
-    (ATTENDANCE_STATUS_EXCUSED, "Excused"),
-    (ATTENDANCE_STATUS_INVALID, "Invalid"),
+    (ATTENDANCE_STATUS_PRESENT, _("Present")),
+    (ATTENDANCE_STATUS_LATE, _("Late")),
+    (ATTENDANCE_STATUS_EXCUSED, _("Excused")),
+    (ATTENDANCE_STATUS_INVALID, _("Invalid")),
 ]

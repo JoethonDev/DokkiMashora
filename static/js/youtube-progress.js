@@ -29,12 +29,12 @@
     var seq = 0;
 
     var labels = {
-      refresh: "Refresh",
-      paused: "Paused",
-      violationPrefix: "Violation",
-      accessDenied: "Access denied",
-      completed: "Completed",
-      startFailed: "Could not start tracking.",
+      refresh: container.dataset.msgRefresh || "",
+      paused: container.dataset.msgPaused || "",
+      violationPrefix: container.dataset.msgViolationPrefix || "",
+      accessDenied: container.dataset.msgAccessDenied || "",
+      completed: container.dataset.msgCompleted || "",
+      startFailed: container.dataset.msgStartFailed || "",
     };
 
     var elements = {

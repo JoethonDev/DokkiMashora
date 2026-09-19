@@ -33,6 +33,7 @@ from apps.academics.services import (
 from apps.accounts.models import User
 from apps.students.constants import EDUCATION_BACHELOR, GENDER_MALE
 from apps.students.models import StudentProfile
+from django.core.exceptions import ValidationError
 
 
 class DiplomaTests(TestCase):
@@ -63,7 +64,6 @@ class SemesterTests(TestCase):
         self.assertIn("Semester 1", str(self.semester))
 
     def test_unique_order_per_diploma(self):
-        from django.db import IntegrityError
         with self.assertRaises(IntegrityError):
             Semester.objects.create(diploma=self.diploma, order=1, title="Duplicate")
 
@@ -93,7 +93,6 @@ class CohortTests(TestCase):
         self.assertIn("2026 A", str(self.cohort))
 
     def test_unique_name_per_diploma(self):
-        from django.db import IntegrityError
         with self.assertRaises(IntegrityError):
             Cohort.objects.create(
                 diploma=self.diploma,
@@ -166,7 +165,6 @@ class LectureTests(TestCase):
         self.assertEqual(lectures[1].order, 2)
 
     def test_unique_order_per_version(self):
-        from django.db import IntegrityError
         with self.assertRaises(IntegrityError):
             Lecture.objects.create(
                 course_version=self.version, order=1, title="Duplicate", is_published=True,
@@ -324,7 +322,6 @@ class DiplomaLectureTests(TestCase):
         dl = DiplomaLecture(
             cohort=self.cohort, semester=s2, order=1, title="L1",
         )
-        from django.core.exceptions import ValidationError
         with self.assertRaises(ValidationError):
             dl.clean()
 

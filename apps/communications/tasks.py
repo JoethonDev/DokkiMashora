@@ -14,6 +14,8 @@ import logging
 
 from celery import shared_task
 
+from apps.communications import services as communication_services
+
 logger = logging.getLogger("apps.communications.tasks")
 
 #: Bounded retry policy for transient SMTP failures. Each retry re-claims the
@@ -33,22 +35,20 @@ def send_queued_email_task(self, delivery_id: int) -> None:
     Idempotent: terminal rows are never re-sent and the exclusive QUEUED claim
     in ``deliver_queued_email`` prevents concurrent duplicate sends.
     """
-    from apps.communications.services import deliver_queued_email, record_email_delivery_failure
-
     try:
-        delivered = deliver_queued_email(delivery_id)
+        delivered = communication_services.deliver_queued_email(delivery_id)
     except Exception as exc:  # noqa: BLE001 - SMTP failure is retried then surfaced as FAILED
         logger.exception(
             "Email delivery %s attempt %s failed: %s",
             delivery_id, self.request.retries + 1, exc,
         )
         if self.request.retries < self.max_retries:
-            record_email_delivery_failure(delivery_id, str(exc), final=False)
+            communication_services.record_email_delivery_failure(delivery_id, str(exc), final=False)
             raise self.retry(
                 exc=exc,
                 countdown=EMAIL_TASK_RETRY_BACKOFF_SECONDS * (2 ** self.request.retries),
             ) from exc
-        record_email_delivery_failure(delivery_id, str(exc), final=True)
+        communication_services.record_email_delivery_failure(delivery_id, str(exc), final=True)
         logger.error(
             "Email delivery %s failed permanently after %s attempts",
             delivery_id, self.max_retries + 1,
@@ -68,9 +68,7 @@ def send_bulk_email_chunk_task(bulk_send_id: int, recipient_emails: list[str], t
     failures are recorded on the EmailMessage row by the service and never
     raise, so a chunk cannot abort mid-batch.
     """
-    from apps.communications.services import process_bulk_email_chunk
-
     try:
-        process_bulk_email_chunk(bulk_send_id, recipient_emails, total)
+        communication_services.process_bulk_email_chunk(bulk_send_id, recipient_emails, total)
     except Exception as exc:  # noqa: BLE001 - unexpected chunk failure is logged; idempotency keeps a re-run safe
         logger.exception("Bulk email chunk failed for bulk_send=%s: %s", bulk_send_id, exc)

@@ -14,7 +14,7 @@
   {% else %}
     {% include "ui/components/_page_header.html" with eyebrow=_("Intake form") title=form_instance.title description=form_instance.description back_url=applications_url back_label=_("Back to applications") %}
     <form class="card-surface max-w-form mx-auto w-full page-stack"
-          method="post">{% csrf_token %}
+          method="post" action="{{ form_action_url }}">{% csrf_token %}
       {% for field in form %}
         {% include "ui/components/_field.html" %}
       {% endfor %}

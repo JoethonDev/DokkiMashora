@@ -1,0 +1,70 @@
+{% extends "ui/layouts/student.html" %}
+{% load i18n static %}
+{% block title %}{{ assessment.title }}{% endblock %}
+{% block content %}
+<div class="page-stack animate-enter-view">
+  {% url 'assessments:student_list' as student_assessment_list_url %}
+  {% include "ui/components/_page_header.html" with eyebrow=_("Assessment") title=assessment.title back_url=student_assessment_list_url back_label=_("Leave assessment") %}
+  {% if timer_enabled %}
+    <div id="assessment-timer" class="card-surface flex items-center justify-between gap-4 py-4" role="status" aria-live="polite"
+         data-remaining-seconds="{{ remaining_seconds }}" data-server-now="{{ timer_server_now|date:'c' }}" data-deadline="{{ timer_deadline|date:'c' }}"
+         data-active-label="{% trans 'Time remaining' %}" data-expired-label="{% trans 'Time expired. Submission is no longer available.' %}">
+      <div><p class="eyebrow">{% trans "Assessment timer" %}</p><p id="assessment-timer-message" class="text-sm text-muted m-0">{% trans "The timer continues while you work and is enforced by the server." %}</p></div>
+      <strong id="assessment-timer-value" class="shrink-0 text-2xl font-black tabular-nums" dir="ltr">--:--</strong>
+    </div>
+  {% endif %}
+  <section class="card-surface"><div class="max-w-2xl mx-auto">
+    <form method="post" action="{% url 'assessments:submit' assessment.id %}" id="assessment-take-form"
+          data-autosave-url="{% url 'assessments:api_diploma_autosave' assessment.id %}"
+          data-assessment-kind="diploma" data-confirm-unanswered="true"
+          data-unanswered-prefix="{% trans 'Unanswered questions' %}" data-unanswered-suffix="{% trans 'Submit them as empty values?' %}"
+          data-confirm-label="{% trans 'Submit assessment' %}"
+          data-autosave-saving="{% trans 'Saving answers…' %}" data-autosave-saved="{% trans 'Answers saved.' %}" data-autosave-failed="{% trans 'Autosave could not reach the server. You can continue and try again.' %}">
+      {% csrf_token %}
+      <p id="assessment-autosave-status" class="text-sm text-muted mb-5" role="status" aria-live="polite">{% trans "Answers are saved automatically while you work." %}</p>
+      <div id="take-chunks" class="flex flex-col gap-4">
+        <div id="take-chunk-1">{{ first_chunk_html|safe }}</div>
+        {% for cn in chunk_numbers %}
+          <div id="take-chunk-{{ cn }}" hx-get="{% url 'assessments:take_chunk' assessment.id cn %}" hx-trigger="revealed" hx-swap="innerHTML"></div>
+        {% endfor %}
+      </div>
+      <button class="btn-primary mt-6" type="submit">{% trans "Submit assessment" %}</button>
+    </form>
+  </div></section>
+</div>
+<script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js" defer></script>
+<script id="take-answer-state" type="application/json">{{ answer_state_json|safe }}</script>
+<script>
+(function(){
+  function applyAnswers(state){
+    if(!state||!state.answers) return;
+    Object.entries(state.answers).forEach(([k,v])=>{
+      const order = k.replace('q_','');
+      if(!v) return;
+      const els = document.querySelectorAll('[name="q_'+order+'"]');
+      els.forEach(el=>{
+        if(el.type==='radio' && String(el.value)===String(v)) el.checked=true;
+        if(el.tagName==='TEXTAREA' && typeof v==='string') el.value=v;
+      });
+    });
+  }
+  let answerState = null;
+  try{ answerState = JSON.parse(document.getElementById('take-answer-state').textContent||'{}'); }catch(e){}
+  function markInteractive(){
+    document.dispatchEvent(new CustomEvent('take:first-interactive',{detail:{at:performance.now()}}));
+  }
+  document.body.addEventListener('htmx:afterSwap', function(e){
+    applyAnswers(answerState);
+  });
+  function init(){
+    applyAnswers(answerState);
+    markInteractive();
+    // trigger remaining chunks after first paint
+    setTimeout(()=>{ document.querySelectorAll('[id^="take-chunk-"]').forEach(el=>{ if(window.htmx) htmx.trigger(el,'revealed'); }); }, 100);
+  }
+  if(document.readyState!=='loading') init();
+  else document.addEventListener('DOMContentLoaded',init);
+})();
+</script>
+{% if timer_enabled %}<script src="{% static 'js/countdown-core.js' %}" defer></script><script src="{% static 'js/assessment-timer.js' %}" defer></script>{% endif %}
+{% endblock %}

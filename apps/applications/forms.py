@@ -202,12 +202,13 @@ class RegistrationForm(StyledFormMixin, forms.Form):
             )
             duplicate_on = find_duplicate(data)
             if duplicate_on:
-                messages = {
-                    "email": _("An account with this email already exists."),
-                    "phone": _("An account with this mobile number already exists."),
-                    "national_id": _("An account with this national ID already exists."),
-                }
-                self.add_error(duplicate_on, messages[duplicate_on])
+                self.add_error(
+                    duplicate_on,
+                    _(
+                        "An account with these details already exists. "
+                        "If you believe this is a mistake, please contact the support team."
+                    ),
+                )
 
             apply_program = cleaned.get("apply_program")
             program_type = cleaned.get("program_type")

@@ -1,12 +1,12 @@
 {% extends "ui/layouts/admin.html" %}
 {% load i18n %}
 {% block title %}
-  {% trans "Attendance sessions" %}
+  {% trans "Attendance periods" %}
 {% endblock %}
 {% block content %}
   <div class="page-stack animate-enter-view">{% trans "Learning" as eyebrow %}
-    {% trans "Attendance sessions" as title %}
-    {% trans "Create, open, and monitor attendance sessions." as description %}
+    {% trans "Attendance periods" as title %}
+    {% trans "Create one cohort-semester period and monitor its numbered attendance days." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
      <section class="card-surface flex flex-col gap-4"><form class="actions-row items-end"
              method="get"
@@ -41,7 +41,7 @@
         </div>
     </section>
     <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-primary"
-         href="{% url 'attendance:attendance_session_create' %}">{% trans "Create session" %}</a>
+             href="{% url 'attendance:attendance_session_create' %}">{% trans "Create attendance" %}</a>
     </div>
   </div>
 {% endblock %}

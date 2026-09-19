@@ -14,6 +14,9 @@ from apps.accounts.models import User
 from ..constants import BULK_STATUS_PARTIAL, BULK_STATUS_SENT, EMAIL_STATUS_FAILED, EMAIL_STATUS_SENT
 from ..models import BulkEmailSend
 from ..services import has_unresolved_variables, resolve_recipients, send_bulk_email, send_templated_email
+from ..email_message import EmailMessage
+from ..models import EmailTemplate
+from django.template.loader import render_to_string
 
 
 class HasUnresolvedVariablesTests(TestCase):
@@ -72,7 +75,6 @@ class SendBulkEmailTests(TestCase):
 
     @patch("apps.communications.services.send_email")
     def test_send_bulk_reports_partial_on_failure(self, mock_send) -> None:
-        from ..email_message import EmailMessage
 
         ok_record = EmailMessage(status=EMAIL_STATUS_SENT)
         fail_record = EmailMessage(status=EMAIL_STATUS_FAILED)
@@ -85,7 +87,6 @@ class SendBulkEmailTests(TestCase):
 
     @patch("apps.communications.services.send_email")
     def test_send_bulk_reports_success_when_all_succeed(self, mock_send) -> None:
-        from ..email_message import EmailMessage
 
         ok_record = EmailMessage(status=EMAIL_STATUS_SENT)
         mock_send.return_value = ok_record
@@ -103,7 +104,6 @@ class SendTemplatedEmailDesignTests(TestCase):
     """send_templated_email wraps admin body in action-specific design."""
 
     def setUp(self) -> None:
-        from ..models import EmailTemplate
 
         self.admin_user = User.objects.create_user(
             email="design-admin@test.com", password="pass", is_staff=True,
@@ -167,7 +167,6 @@ class SendTemplatedEmailDesignTests(TestCase):
 
     def test_disabled_template_returns_none(self):
         """Inactive or disabled templates make send_templated_email return None."""
-        from ..models import EmailTemplate
         EmailTemplate.objects.create(
             slug="disabled_test",
             subject="Disabled {{ full_name }}",
@@ -201,14 +200,12 @@ class EmailDesignRenderTests(TestCase):
     ACTION_DESIGNS = ["acceptance", "rejection", "payment_notification"]
 
     def test_all_layout_designs_render(self) -> None:
-        from django.template.loader import render_to_string
 
         for slug in self.LAYOUT_DESIGNS:
             html = render_to_string(f"communications/email_designs/{slug}.html", {"content": "<p>Test</p>"})
             self.assertIn("Test", html)
 
     def test_all_action_designs_render(self) -> None:
-        from django.template.loader import render_to_string
 
         for slug in self.ACTION_DESIGNS:
             html = render_to_string(f"communications/email_designs/{slug}.html", {"content": "<p>Test</p>"})

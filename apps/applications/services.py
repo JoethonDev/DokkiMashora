@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import secrets
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
 from django.contrib.auth import get_user_model
@@ -18,8 +18,9 @@ from apps.academics.constants import ENROLLMENT_STATUS_PENDING
 from apps.academics.models import Cohort, Course, CourseEnrollment, DiplomaEnrollment
 from apps.academics.services import activate_course_enrollment, activate_diploma_enrollment
 from apps.accounts.constants import GROUP_STUDENT, USER_STATUS_INACTIVE
+from apps.applications import documents as application_documents
 from apps.attendance.services import get_or_create_attendance_code_for_enrollment
-from apps.audit.constants import ACTION_APPLICATION_DECISION_REVERTED
+from apps.audit.constants import ACTION_APPLICATION_DECISION_REVERTED, ACTION_APPLICATION_STATUS_CHANGE
 from apps.audit.services import record_audit_event
 from apps.communications.constants import (
     TEMPLATE_ACCEPTANCE,
@@ -30,12 +31,13 @@ from apps.communications.constants import (
 )
 from apps.communications.services import (
     queue_program_application_email,
-    record_program_application_email_log,
 )
 from apps.core.permissions import validate_score
 from apps.core.phone import normalize_phone
+from apps.intake_forms import services as intake_services
 from apps.intake_forms.constants import INTAKE_REQUESTABLE_STATUSES  # noqa: E402
 from apps.intake_forms.selectors import has_required_intake_response  # noqa: E402
+from apps.payments import services as payment_services
 from apps.payments.constants import CURRENCY_EGP, PAYMENT_STATUS_PAID, WAIVER_STATUS_ACTIVE
 from apps.payments.models import PaymentRecord, PaymentWaiver
 from apps.students.identity import (
@@ -51,6 +53,7 @@ from .constants import (
     DECISION_ACTION_ENTRANCE_SUBMITTED,
     DECISION_ACTION_INVITED_TO_ENTRANCE,
     DECISION_ACTION_PAYMENT_PENDING,
+    DECISION_ACTION_PAYMENT_WAIVER_REVOKED,
     DECISION_ACTION_REJECT,
     DECISION_ACTION_REQUEST_INTERVIEW,
     DECISION_ACTION_REVERT,
@@ -392,12 +395,9 @@ def send_post_activation_application_email(application, actor=None, force_resend
     if application.status not in allowed:
         raise ValueError(_("Application must be in account_activated status to send post-activation email."))
 
-    from apps.intake_forms.selectors import get_required_intake_form_for_application
-    from apps.intake_forms.services import ensure_required_intake_request
-
-    form = get_required_intake_form_for_application(application)
+    form = intake_services.get_required_intake_form_for_application(application)
     if form and not has_required_intake_response(application):
-        ensure_required_intake_request(application, actor=actor)
+        intake_services.ensure_required_intake_request(application, actor=actor)
         return
 
     if application.program_type == PROGRAM_TYPE_COURSE:
@@ -479,20 +479,6 @@ def _send_diploma_entrance_schedule_email(prog_app, actor=None) -> None:
     )
 
 
-def _log_email_send(application, action, template_slug, recipient, actor=None) -> None:
-    # Canonical single write path — keep for any legacy direct callers, but
-    # new queue paths should call queue_program_application_email instead.
-    record_program_application_email_log(
-        program_application=application,
-        action=action,
-        template_slug=template_slug,
-        recipient=recipient,
-        sent_by=actor,
-        status="queued",
-        is_resend=None,
-    )
-
-
 @transaction.atomic
 def mark_entrance_submitted(application, actor=None, attempt=None) -> None:
     """Transition invited_to_entrance -> entrance_submitted.
@@ -541,10 +527,8 @@ def _attempt_intake_request_safe(application, actor=None) -> str | None:
     Unexpected failures are also logged and recorded as system notes so
     admins can see why activation remains blocked.
     """
-    from apps.intake_forms.services import ensure_required_intake_request
-
     try:
-        ensure_required_intake_request(application, actor=actor)
+        intake_services.ensure_required_intake_request(application, actor=actor)
     except ValueError as exc:
         logger.warning("Intake request not created for app %s: %s", application.pk, exc)
     except Exception as exc:
@@ -567,11 +551,15 @@ def _attempt_intake_request_safe(application, actor=None) -> str | None:
 
 @transaction.atomic
 def accept_program_application(application, actor, notes: str = "", send_email: bool = False) -> None:
-    """Accept from entrance_submitted or interview_requested (diploma) or payment_pending (course)."""
+    """Accept a course or diploma without requiring an entrance score decision."""
     if application.program_type == PROGRAM_TYPE_COURSE:
         allowed = {PROGRAM_APP_STATUS_SUBMITTED, PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED, PROGRAM_APP_STATUS_PAYMENT_PENDING}
     else:
-        allowed = {PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED, PROGRAM_APP_STATUS_INTERVIEW_REQUESTED}
+        allowed = {
+            PROGRAM_APP_STATUS_INVITED,
+            PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
+            PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
+        }
     if application.status not in allowed:
         raise ValueError(_("Application cannot be accepted from current status."))
     old_status = application.status
@@ -597,10 +585,14 @@ def accept_program_application(application, actor, notes: str = "", send_email: 
 
 @transaction.atomic
 def reject_program_application(application, actor, reason: str, notes: str = "", send_email: bool = False) -> None:
-    """Reject from entrance_submitted or interview_requested (diploma) or submitted/account_activated/payment_pending (course)."""
+    """Reject a course or diploma from any active pre-decision admissions state."""
     if not reason.strip():
         raise ValueError(_("Rejection reason is required."))
-    allowed = {PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED, PROGRAM_APP_STATUS_INTERVIEW_REQUESTED}
+    allowed = {
+        PROGRAM_APP_STATUS_INVITED,
+        PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
+        PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
+    }
     if application.program_type == PROGRAM_TYPE_COURSE:
         allowed |= {PROGRAM_APP_STATUS_SUBMITTED, PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED, PROGRAM_APP_STATUS_PAYMENT_PENDING}
     if application.status not in allowed:
@@ -861,8 +853,7 @@ class ActivationResult:
 
 def has_application_documents_submitted(application) -> bool:
     """Check if a complete document upload exists for this application."""
-    from .documents import has_application_documents_submitted as _check
-    return _check(application)
+    return application_documents.has_application_documents_submitted(application)
 
 
 def has_application_paid_record(application) -> bool:
@@ -1018,6 +1009,7 @@ def activate_application_if_ready(application, actor=None) -> ActivationResult:
         metadata={
             "payment_record_id": _find_paid_record_id(locked),
             "payment_waiver_id": _active_application_waiver_id(locked),
+            "enrollment_created": created,
             "enrollment_id": enrollment_id,
             "enrollment_type": enrollment_type,
             "activated_by": actor.email if actor else "",
@@ -1042,6 +1034,113 @@ def activate_application_if_ready(application, actor=None) -> ActivationResult:
         enrollment=enrollment,
         reasons=[],
     )
+
+
+@transaction.atomic
+def rollback_waiver_activation(application_id, waiver_id, actor=None, reason: str = "") -> dict:
+    """Undo activation caused solely by a payment waiver that was revoked.
+
+    A real payment always wins: if one exists, revoking an otherwise redundant
+    waiver must not remove access. The activation decision metadata identifies
+    whether this exact waiver caused activation, so unrelated later/manual
+    activation is never rolled back.
+    """
+    locked = ProgramApplication.objects.select_for_update().get(pk=application_id)
+    if locked.status != PROGRAM_APP_STATUS_ACTIVATED:
+        return {
+            "rolled_back": False,
+            "application_status_before": locked.status,
+            "application_status_after": locked.status,
+            "enrollment_reset": False,
+        }
+    if has_application_paid_record(locked):
+        return {
+            "rolled_back": False,
+            "application_status_before": locked.status,
+            "application_status_after": locked.status,
+            "enrollment_reset": False,
+        }
+
+    activation = locked.decisions.filter(
+        action=DECISION_ACTION_ACTIVATE,
+    ).order_by("-created_at", "-id").first()
+    metadata = activation.metadata if activation else {}
+    if not activation or str(metadata.get("payment_waiver_id") or "") != str(waiver_id):
+        return {
+            "rolled_back": False,
+            "application_status_before": locked.status,
+            "application_status_after": locked.status,
+            "enrollment_reset": False,
+        }
+
+    old_status = locked.status
+    restored_status = activation.old_status
+    enrollment_id = metadata.get("enrollment_id")
+    enrollment_type = metadata.get("enrollment_type")
+    enrollment_created = metadata.get("enrollment_created")
+    if enrollment_created is None and enrollment_id:
+        # Older activation decisions did not persist this flag. The timestamp
+        # fallback only treats an enrollment created immediately before that
+        # activation as belonging to the activation being rolled back.
+        if enrollment_type == "diploma":
+            legacy_enrollment = DiplomaEnrollment.objects.filter(pk=enrollment_id).first()
+        elif enrollment_type == "course":
+            legacy_enrollment = CourseEnrollment.objects.filter(pk=enrollment_id).first()
+        else:
+            legacy_enrollment = None
+        enrollment_created = bool(
+            legacy_enrollment
+            and legacy_enrollment.created_at >= activation.created_at - timedelta(seconds=10)
+        )
+
+    enrollment = None
+    if enrollment_created and enrollment_id:
+        if enrollment_type == "diploma":
+            enrollment = DiplomaEnrollment.objects.select_for_update().filter(pk=enrollment_id).first()
+        elif enrollment_type == "course":
+            enrollment = CourseEnrollment.objects.select_for_update().filter(pk=enrollment_id).first()
+        if enrollment:
+            enrollment.status = ENROLLMENT_STATUS_PENDING
+            enrollment.activated_at = None
+            enrollment.expires_at = None
+            enrollment.save(update_fields=["status", "activated_at", "expires_at", "updated_at"])
+
+    locked.status = restored_status
+    locked.save(update_fields=["status", "updated_at"])
+    _record_decision(
+        locked,
+        DECISION_ACTION_PAYMENT_WAIVER_REVOKED,
+        old_status,
+        restored_status,
+        actor,
+        reason=reason,
+        metadata={
+            "payment_waiver_id": str(waiver_id),
+            "enrollment_id": enrollment_id,
+            "enrollment_type": enrollment_type,
+            "enrollment_reset": enrollment is not None,
+        },
+    )
+    record_audit_event(
+        actor=actor,
+        action=ACTION_APPLICATION_STATUS_CHANGE,
+        target_type="program_application",
+        target_id=str(locked.pk),
+        metadata={
+            "old_status": old_status,
+            "new_status": restored_status,
+            "reason": reason,
+            "payment_waiver_id": str(waiver_id),
+            "enrollment_id": enrollment_id,
+            "enrollment_reset": enrollment is not None,
+        },
+    )
+    return {
+        "rolled_back": True,
+        "application_status_before": old_status,
+        "application_status_after": restored_status,
+        "enrollment_reset": enrollment is not None,
+    }
 
 
 def _find_existing_enrollment(application):
@@ -1119,6 +1218,7 @@ _ACCEPT_ALLOWED_STATUSES = {
         PROGRAM_APP_STATUS_PAYMENT_PENDING,
     }),
     PROGRAM_TYPE_DIPLOMA: frozenset({
+        PROGRAM_APP_STATUS_INVITED,
         PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
         PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
     }),
@@ -1133,6 +1233,7 @@ _REJECT_ALLOWED_STATUSES = {
         PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
     }),
     PROGRAM_TYPE_DIPLOMA: frozenset({
+        PROGRAM_APP_STATUS_INVITED,
         PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
         PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
     }),
@@ -1155,9 +1256,7 @@ def _waiver_legal_application_statuses() -> frozenset:
     Imported lazily to avoid a module-load import cycle (payments.services
     imports from apps.applications.services).
     """
-    from apps.payments.services import WAIVER_LEGAL_APPLICATION_STATUSES
-
-    return frozenset(WAIVER_LEGAL_APPLICATION_STATUSES)
+    return frozenset(payment_services.WAIVER_LEGAL_APPLICATION_STATUSES)
 
 
 def allowed_application_actions(application) -> frozenset[str]:
@@ -1170,12 +1269,23 @@ def allowed_application_actions(application) -> frozenset[str]:
     status = application.status
     program_type = application.program_type
     allowed: set[str] = set()
+    waiver_statuses = _waiver_legal_application_statuses()
+    payment_action_status = status in LEGAL_PAYMENT_STATUSES or status in waiver_statuses
+    documents_gate_satisfied = (
+        program_type != PROGRAM_TYPE_DIPLOMA
+        or not payment_action_status
+        or has_application_documents_submitted(application)
+    )
+    intake_gate_satisfied = (
+        not payment_action_status
+        or has_required_intake_response(application)
+    )
 
     if status in _ACCEPT_ALLOWED_STATUSES.get(program_type, frozenset()):
         allowed.add(ACTION_ACCEPT)
     if status in _REJECT_ALLOWED_STATUSES.get(program_type, frozenset()):
         allowed.add(ACTION_REJECT)
-    if status in LEGAL_PAYMENT_STATUSES:
+    if status in LEGAL_PAYMENT_STATUSES and documents_gate_satisfied and intake_gate_satisfied:
         allowed.add(ACTION_MARK_PAID)
     if status in INTAKE_REQUESTABLE_STATUSES:
         allowed.add(ACTION_REQUEST_INTAKE)
@@ -1185,7 +1295,7 @@ def allowed_application_actions(application) -> frozenset[str]:
         allowed.add(ACTION_REQUEST_INTERVIEW)
     if program_type == PROGRAM_TYPE_DIPLOMA and status in _INVITE_TO_ENTRANCE_ALLOWED_STATUSES:
         allowed.add(ACTION_INVITE_TO_ENTRANCE)
-    if status in _waiver_legal_application_statuses():
+    if status in waiver_statuses and documents_gate_satisfied and intake_gate_satisfied:
         allowed.add(ACTION_GRANT_WAIVER)
     if can_activate_application(application).ready:
         allowed.add(ACTION_ACTIVATE)
@@ -1258,6 +1368,10 @@ def mark_application_paid(
         raise ValueError(_("Application is already activated."))
     if locked.status not in LEGAL_PAYMENT_STATUSES:
         raise ValueError(_("Cannot record payment in current application status."))
+    if locked.program_type == PROGRAM_TYPE_DIPLOMA and not has_application_documents_submitted(locked):
+        raise ValueError(_("Application documents must be submitted before recording payment."))
+    if not has_required_intake_response(locked):
+        raise ValueError(_("Required intake form must be submitted before recording payment."))
     # Guard: duplicate payment (exclude soft-deleted records)
     if PaymentRecord.objects.filter(
         student=locked.student, application=locked, status=PAYMENT_STATUS_PAID, deleted_at__isnull=True

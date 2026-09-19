@@ -634,7 +634,7 @@ msgid "Interview completed."
 msgstr "تم إكمال المقابلة."
 
 msgid "Interview requested"
-msgstr "تم طلب المقابلة"
+msgstr "طُلبت مقابلة"
 
 msgid "Review"
 msgstr "مراجعة"
@@ -1330,7 +1330,7 @@ msgstr "يجب ألا يحتوي نطاق إصدار المقرر على مقر�
 
 #: .\apps\academics\models.py:469
 msgid "Teacher already has an active assignment for this course version."
-msgstr "لدى المعلم بالفعل تكليف نشط بهذا الإصدار من الدورة."
+msgstr "لدى المعلم بالفعل تكليف نشط لهذا الإصدار من المقرر."
 
 #: .\apps\academics\models.py:471
 msgid "Unknown scope type."
@@ -1444,31 +1444,26 @@ msgstr "تقدم مشاهدة المحاضرة"
 
 #: .\apps\academics\models.py:919 .\apps\academics\models.py:974
 #: .\apps\assessments\models.py:687
-#, fuzzy
 msgid "diploma lecture"
-msgstr "الدبلومات والمقررات"
+msgstr "محاضرة الدبلوم"
 
 #: .\apps\academics\models.py:920
-#, fuzzy
 msgid "diploma lectures"
-msgstr "الدبلومات والمقررات"
+msgstr "محاضرات الدبلوم"
 
 #: .\apps\academics\models.py:937 .\apps\assessments\forms.py:236
 msgid "Semester and cohort must belong to the same diploma."
 msgstr "يجب أن ينتمي الفصل الدراسي والدفعة إلى الدبلومة نفسها."
 
 #: .\apps\academics\models.py:1022 .\apps\academics\models.py:1023
-#, fuzzy
 msgid "diploma lecture watch progress"
-msgstr "تقدم مشاهدة المحاضرة"
+msgstr "تقدم مشاهدة محاضرة الدبلوم"
 
 #: .\apps\academics\services.py:585 .\apps\progression\services.py:584
-#, fuzzy
 msgid "Semester Exam"
 msgstr "امتحان الفصل الدراسي"
 
 #: .\apps\academics\services.py:599 .\apps\progression\constants.py:127
-#, fuzzy
 msgid "Homework/Assessment"
 msgstr "الواجب/التقييم"
 
@@ -1497,9 +1492,8 @@ msgid "No audio is available for this lecture."
 msgstr "تتبع الفيديو غير مفعّل لهذه الدورة."
 
 #: .\apps\academics\services.py:1491
-#, fuzzy
 msgid "Video tracking is disabled for this diploma."
-msgstr "تتبع الفيديو غير مفعّل لهذه الدبلومة."
+msgstr "تتبع الفيديو غير مفعّل لهذا الدبلوم."
 
 #: .\apps\academics\views.py:144 .\apps\academics\views.py:461
 #: .\apps\accounts\admin.py:25 .\apps\accounts\forms.py:156
@@ -1773,22 +1767,20 @@ msgstr "تم رفع الملف الصوتي. بدأت معالجة HLS."
 #: .\apps\academics\views.py:864
 #, python-format
 msgid "Audio upload failed: %(error)s"
-msgstr "فشلت معالجة الصوت: %(error)s"
+msgstr "تعذر رفع الملف الصوتي: %(error)s"
 
 #: .\apps\academics\views.py:967
 msgid "You do not have access to this course."
 msgstr "ليس لديك صلاحية الوصول إلى هذا المقرر."
 
 #: .\apps\academics\views.py:1011 .\apps\assessments\services.py:1318
-#, fuzzy
 msgid "No active enrollment"
-msgstr "لا يوجد تسجيل نشط."
+msgstr "لا يوجد تسجيل نشط"
 
 #: .\apps\academics\views.py:1013 .\apps\academics\views.py:1604
 #: .\templates\ui\pages\student\content.html:9
 #: .\templates\ui\pages\student\content.html:59
 #: .\templates\ui\pages\student\content.html:67
-#, fuzzy
 msgid "Back to learning"
 msgstr "العودة إلى التعلم"
 
@@ -1800,34 +1792,28 @@ msgstr "هذه المحاضرة غير متاحة بعد."
 
 #: .\apps\academics\views.py:1054
 #: .\templates\ui\pages\admin\course_lecture_preview.html:15
-#, fuzzy
 msgid "Back to course"
-msgstr "العودة إلى الدورة"
+msgstr "العودة إلى المقرر"
 
 #: .\apps\academics\views.py:1180
-#, fuzzy
 msgid "Diploma lecture created."
-msgstr "تم إنشاء الدبلومة."
+msgstr "تم إنشاء محاضرة الدبلوم."
 
 #: .\apps\academics\views.py:1188
-#, fuzzy
 msgid "Create diploma lecture"
-msgstr "إنشاء دبلومة"
+msgstr "إنشاء محاضرة دبلوم"
 
 #: .\apps\academics\views.py:1210
-#, fuzzy
 msgid "Diploma lecture updated."
-msgstr "تم تحديث الدبلومة."
+msgstr "تم تحديث محاضرة الدبلوم."
 
 #: .\apps\academics\views.py:1217
-#, fuzzy
 msgid "Edit diploma lecture"
-msgstr "تعديل الدبلومة"
+msgstr "تعديل محاضرة الدبلوم"
 
 #: .\apps\academics\views.py:1235
-#, fuzzy
 msgid "Diploma lecture deleted."
-msgstr "تم حذف الدبلومة."
+msgstr "تم حذف محاضرة الدبلوم."
 
 #: .\apps\academics\views.py:1302 .\apps\academics\views.py:1386
 msgid "Enrollment Status"
@@ -1842,9 +1828,8 @@ msgid "Version"
 msgstr "الإصدار"
 
 #: .\apps\academics\views.py:1342
-#, fuzzy
 msgid "The student already has an enrollment for that version."
-msgstr "لدى المعلم بالفعل تكليف نشط بهذا الإصدار من الدورة."
+msgstr "لدى الطالب تسجيل بالفعل لهذا الإصدار."
 
 #: .\apps\academics\views.py:1346
 msgid "Student migrated to the selected course version."
@@ -1870,9 +1855,8 @@ msgid "Cohort"
 msgstr "دفعة"
 
 #: .\apps\academics\views.py:1426
-#, fuzzy
 msgid "Enrollment updated."
-msgstr "التسجيلات"
+msgstr "تم تحديث التسجيل."
 
 #: .\apps\academics\views.py:1557 .\apps\academics\views.py:1621
 #: .\apps\academics\views.py:1673 .\apps\academics\views.py:1717
@@ -1883,24 +1867,20 @@ msgstr "التسجيل غير نشط."
 #: .\apps\academics\views.py:1559 .\apps\academics\views.py:1623
 #: .\apps\academics\views.py:1675 .\apps\academics\views.py:1719
 #: .\apps\academics\views.py:1762
-#, fuzzy
 msgid "Enrollment has expired."
-msgstr "تم تحديد الطالب كمكتمل."
+msgstr "انتهى التسجيل."
 
 #: .\apps\academics\views.py:1605
-#, fuzzy
 msgid "Active until %(date)s"
-msgstr "الدبلومات النشطة"
+msgstr "نشط حتى %(date)s"
 
 #: .\apps\academics\views.py:1605
-#, fuzzy
 msgid "unlimited"
-msgstr "تمت الدعوة"
+msgstr "غير محدود"
 
 #: .\apps\academics\views.py:1627 .\apps\assessments\services.py:184
-#, fuzzy
 msgid "This semester is not available yet."
-msgstr "هذه المحاضرة غير متاحة بعد."
+msgstr "هذا الفصل الدراسي غير متاح بعد."
 
 #: .\apps\academics\views.py:1654
 #: .\templates\ui\pages\admin\diploma_lecture_list.html:72
@@ -2057,9 +2037,8 @@ msgstr "حقلَا كلمة المرور غير متطابقين."
 
 #: .\apps\accounts\forms.py:150 .\apps\applications\forms.py:48
 #: .\apps\students\policies.py:55
-#, fuzzy
 msgid "Country"
-msgstr "المبلغ"
+msgstr "الدولة"
 
 #: .\apps\accounts\forms.py:157
 msgid "Account active"
@@ -2126,29 +2105,25 @@ msgid "Role"
 msgstr "الدور"
 
 #: .\apps\accounts\forms.py:184
-#, fuzzy
 msgid "Select country"
-msgstr "اختيار الدولة"
+msgstr "اختر الدولة"
 
 #: .\apps\accounts\forms.py:249 .\apps\applications\forms.py:149
 #: .\apps\students\identity.py:76
-#, fuzzy
 msgid "%(label)s is required."
-msgstr "البريد الإلكتروني مطلوب"
+msgstr "%(label)s مطلوب."
 
 #: .\apps\accounts\forms.py:259 .\apps\accounts\forms.py:262
-#, fuzzy
 msgid "This identity number is already in use."
-msgstr "رقم الهاتف هذا مستخدم بالفعل."
+msgstr "رقم الهوية هذا مستخدم بالفعل."
 
 #: .\apps\accounts\forms.py:270
 msgid "This email is already in use."
 msgstr "البريد الإلكتروني هذا مستخدم بالفعل."
 
 #: .\apps\accounts\forms.py:283
-#, fuzzy
 msgid "Country is required for student users."
-msgstr "السبب مطلوب للخفض."
+msgstr "الدولة مطلوبة للمستخدمين من فئة الطلاب."
 
 #: .\apps\accounts\forms.py:355 .\apps\payments\forms.py:14
 msgid "CSV file"
@@ -2207,9 +2182,8 @@ msgid "phone number"
 msgstr "رقم الهاتف"
 
 #: .\apps\accounts\models.py:48 .\apps\students\models.py:30
-#, fuzzy
 msgid "country code"
-msgstr "الحساب نشط"
+msgstr "رمز الدولة"
 
 #: .\apps\accounts\models.py:52 .\apps\students\models.py:33
 msgid "ISO two-letter country code."
@@ -2379,39 +2353,34 @@ msgstr "المدير العام"
 
 #: .\apps\accounts\views.py:398
 msgid "Select a role valid for this list."
-msgstr ""
+msgstr "اختر دورًا صالحًا لهذه القائمة."
 
 #: .\apps\accounts\views.py:408
-#, fuzzy
 msgid "User created."
-msgstr "تم إنشاء المجموعة."
+msgstr "تم إنشاء المستخدم."
 
 #: .\apps\accounts\views.py:411 .\templates\ui\pages\admin\staff_form.html:5
 #: .\templates\ui\pages\admin\staff_list.html:50
-#, fuzzy
 msgid "Create staff member"
-msgstr "إنشاء فصل دراسي"
+msgstr "إنشاء عضو هيئة التدريس"
 
 #: .\apps\accounts\views.py:411 .\templates\ui\pages\admin\student_form.html:5
 #: .\templates\ui\pages\admin\student_form.html:12
 #: .\templates\ui\pages\admin\student_list.html:13
-#, fuzzy
 msgid "Create student"
-msgstr "الطالب المتطابق"
+msgstr "إنشاء طالب"
 
 #: .\apps\accounts\views.py:477
-#, fuzzy
 msgid "You cannot delete your own account."
-msgstr "يمكنك رفع المستندات لطلبك الخاص فقط."
+msgstr "لا يمكنك حذف حسابك الخاص."
 
 #: .\apps\accounts\views.py:490
-#, fuzzy
 msgid "User deleted."
-msgstr "تم حذف الفصل الدراسي."
+msgstr "تم حذف المستخدم."
 
 #: .\apps\accounts\views.py:492
 msgid "This user cannot be deleted while referenced by existing records."
-msgstr ""
+msgstr "لا يمكن حذف هذا المستخدم ما دامت سجلات موجودة تشير إليه."
 
 #: .\apps\accounts\views.py:572
 msgid "User updated."
@@ -2421,14 +2390,12 @@ msgstr "تم تحديث المستخدم."
 #: .\templates\ui\pages\admin\student_detail.html:14
 #: .\templates\ui\pages\admin\student_form.html:7
 #: .\templates\ui\pages\admin\student_form.html:14
-#, fuzzy
 msgid "Edit student"
-msgstr "الطالب"
+msgstr "تعديل الطالب"
 
 #: .\apps\accounts\views.py:577 .\templates\ui\pages\admin\staff_form.html:7
-#, fuzzy
 msgid "Edit staff member"
-msgstr "تعديل الفصل الدراسي"
+msgstr "تعديل عضو هيئة التدريس"
 
 #: .\apps\accounts\views.py:596 .\apps\payments\views.py:98
 msgid "Tuition fee"
@@ -2631,28 +2598,24 @@ msgid "Submitted"
 msgstr "تم التقديم"
 
 #: .\apps\applications\constants.py:25 .\apps\applications\constants.py:87
-#, fuzzy
 msgid "Account Activated"
 msgstr "تم تفعيل الحساب"
 
 #: .\apps\applications\constants.py:26 .\apps\applications\constants.py:88
-#, fuzzy
 msgid "Payment Pending"
-msgstr "بانتظار الدفع"
+msgstr "الدفع قيد الانتظار"
 
 #: .\apps\applications\constants.py:27
 msgid "Invited to Entrance Assessment"
 msgstr "تمت دعوته لتقييم القبول"
 
 #: .\apps\applications\constants.py:28 .\apps\applications\constants.py:90
-#, fuzzy
 msgid "Entrance Submitted"
-msgstr "تم تقديم اختبار القبول."
+msgstr "تم إرسال امتحان القبول"
 
 #: .\apps\applications\constants.py:29
-#, fuzzy
 msgid "Interview Requested"
-msgstr "تم طلب مقابلة"
+msgstr "طُلبت مقابلة"
 
 #: .\apps\applications\constants.py:30 .\apps\applications\constants.py:92
 #: .\apps\assessments\constants.py:114 .\apps\entrance_exams\constants.py:25
@@ -2668,27 +2631,22 @@ msgid "Rejected"
 msgstr "مرفوض"
 
 #: .\apps\applications\constants.py:32 .\apps\applications\constants.py:96
-#, fuzzy
 msgid "Documents Requested"
-msgstr "تم طلب المستندات"
+msgstr "طُلبت المستندات"
 
 #: .\apps\applications\constants.py:33 .\apps\applications\constants.py:97
-#, fuzzy
 msgid "Documents Submitted"
-msgstr "تم تقديم المستندات"
+msgstr "تم إرسال المستندات"
 
 #: .\apps\applications\constants.py:34 .\apps\applications\constants.py:98
-#, fuzzy
 msgid "Survey Requested"
-msgstr "تم طلب الاستبيان"
+msgstr "طُلب الاستبيان"
 
 #: .\apps\applications\constants.py:35 .\apps\applications\constants.py:99
-#, fuzzy
 msgid "Survey Submitted"
 msgstr "تم إرسال الاستبيان"
 
 #: .\apps\applications\constants.py:36
-#, fuzzy
 msgid "Ready for Activation"
 msgstr "جاهز للتفعيل"
 
@@ -2699,7 +2657,6 @@ msgid "Activated"
 msgstr "تم التفعيل"
 
 #: .\apps\applications\constants.py:38
-#, fuzzy
 msgid "Under review (legacy)"
 msgstr "قيد المراجعة (قديم)"
 
@@ -2724,29 +2681,25 @@ msgid "Course"
 msgstr "الدورة"
 
 #: .\apps\applications\constants.py:89
-#, fuzzy
 msgid "Invited to Entrance"
-msgstr "دعوة لامتحان القبول"
+msgstr "تمت الدعوة إلى امتحان القبول"
 
 #: .\apps\applications\constants.py:91 .\apps\progression\views.py:1194
 #: .\templates\ui\fragments\admin\_semester_table_row.html:44
-#, fuzzy
 msgid "Request Interview"
-msgstr "طلب تغيير"
+msgstr "طلب مقابلة"
 
 #: .\apps\applications\constants.py:94
 msgid "Reverted"
 msgstr "تم التراجع عنه"
 
 #: .\apps\applications\constants.py:95 .\apps\applications\constants.py:141
-#, fuzzy
 msgid "Note"
-msgstr "ملاحظات"
+msgstr "ملاحظة"
 
 #: .\apps\applications\constants.py:112 .\apps\intake_forms\constants.py:44
 #: .\apps\progression\constants.py:164
 #: .\templates\ui\fragments\admin\_semester_table_row.html:24
-#, fuzzy
 msgid "Requested"
 msgstr "مطلوب"
 
@@ -2769,49 +2722,41 @@ msgid "Acceptance"
 msgstr "مقبول"
 
 #: .\apps\applications\constants.py:135
-#, fuzzy
 msgid "Course payment instructions"
-msgstr "العودة للتعليمات"
+msgstr "تعليمات دفع المقرر"
 
 #: .\apps\applications\constants.py:136
-#, fuzzy
 msgid "Diploma entrance exam schedule"
-msgstr "لا توجد امتحانات قبول"
+msgstr "موعد امتحان قبول الدبلوم"
 
 #: .\apps\applications\constants.py:137
 msgid "Diploma interview request"
 msgstr "طلب مقابلة الدبلومة"
 
 #: .\apps\applications\constants.py:138
-#, fuzzy
 msgid "Diploma document upload request"
-msgstr "صفوف تحميل الدفعة"
+msgstr "طلب رفع مستندات الدبلوم"
 
 #: .\apps\applications\constants.py:139
-#, fuzzy
 msgid "Application payment pending"
-msgstr "تم قبول الطلب."
+msgstr "دفع الطلب قيد الانتظار"
 
 #: .\apps\applications\constants.py:140
-#, fuzzy
 msgid "Application survey request"
-msgstr "تم التراجع عن الطلب."
+msgstr "طلب استبيان الطلب"
 
 #: .\apps\applications\constants.py:142
-#, fuzzy
 msgid "Entrance exam result"
-msgstr "امتحانات القبول"
+msgstr "نتيجة امتحان القبول"
 
 #: .\apps\applications\documents.py:81
-#, fuzzy
 msgid "Persona image is empty."
-msgstr "الملف المرفوع فارغ."
+msgstr "صورة الشخصية فارغة."
 
 #: .\apps\applications\documents.py:99 .\apps\applications\documents.py:143
 #: .\apps\applications\forms.py:312
-#, fuzzy
 msgid "At least one attachment file is required."
-msgstr "بيانات التواصل مع الأب الكاهن مطلوبة."
+msgstr "يجب إرفاق ملف واحد على الأقل."
 
 #: .\apps\applications\documents.py:103 .\apps\applications\forms.py:331
 #, python-format
@@ -2819,12 +2764,10 @@ msgid "Maximum %(max)d attachment files allowed."
 msgstr "الحد الأقصى %(max)d من الملفات المرفقة."
 
 #: .\apps\applications\documents.py:114
-#, fuzzy
 msgid "One of the attachment files is empty."
-msgstr "الملف المرفوع فارغ."
+msgstr "أحد ملفات المرفقات فارغ."
 
 #: .\apps\applications\documents.py:117 .\apps\applications\forms.py:320
-#, fuzzy
 msgid "File type '%(ext)s' is not allowed for attachments."
 msgstr "نوع الملف '{file_type}' غير مسموح به. المسموح: {allowed}"
 
@@ -2843,8 +2786,7 @@ msgstr "الملف '%(name)s' له نوع محتوى غير صحيح."
 msgid "File '%(name)s' is not a valid PDF."
 msgstr "الملف '%(name)s' ليس PDF صالحًا."
 
-#: .\apps\applications\documents.py:130
-#: .\apps\applications\forms.py
+#: .\apps\applications\documents.py:130 .\apps\applications\forms.py
 msgid "Only one PDF file can be uploaded."
 msgstr "يمكن رفع ملف PDF واحد فقط."
 
@@ -2862,7 +2804,6 @@ msgid "Total attachment size exceeds %(max)s MB."
 msgstr "إجمالي حجم المرفقات يتجاوز %(max)s ميغابايت."
 
 #: .\apps\applications\documents.py:156
-#, fuzzy
 msgid "File type '%(ext)s' is not allowed. Allowed: %(allowed)s"
 msgstr "نوع الملف '{file_type}' غير مسموح به. المسموح: {allowed}"
 
@@ -2871,9 +2812,8 @@ msgid "Uploaded file is empty."
 msgstr "الملف المرفوع فارغ."
 
 #: .\apps\applications\documents.py:164
-#, fuzzy
 msgid "File size exceeds the maximum allowed size of %(max_size_mb)s MB."
-msgstr "حجم الملف يتجاوز الحد الأقصى المسموح به وهو {max_size_mb} م.ب."
+msgstr "يتجاوز حجم الملف الحد الأقصى المسموح به وهو %(max_size_mb)s ميجابايت."
 
 #: .\apps\applications\documents.py:175
 msgid "Uploaded image is corrupted or unsupported."
@@ -2882,7 +2822,8 @@ msgstr "الصورة المرفوعة تالفة أو غير مدعومة."
 #: .\apps\applications\documents.py:180
 msgid ""
 "Image dimensions (%(w)dx%(h)d) exceed the maximum allowed %(max)s pixels."
-msgstr "أبعاد الصورة (%(w)dx%(h)d) تتجاوز الحد الأقصى المسموح به وهو %(max)s بكسل."
+msgstr ""
+"أبعاد الصورة (%(w)dx%(h)d) تتجاوز الحد الأقصى المسموح به وهو %(max)s بكسل."
 
 #: .\apps\applications\documents.py:202
 msgid "No valid images to combine."
@@ -2897,9 +2838,8 @@ msgid "Documents can only be requested for accepted applications."
 msgstr "يمكن طلب المستندات فقط للطلبات المقبولة."
 
 #: .\apps\applications\documents.py:223
-#, fuzzy
 msgid "Application has no cohort target."
-msgstr "تغيير حالة الطلب"
+msgstr "لا يوجد للطلب مجموعة مستهدفة."
 
 #: .\apps\applications\documents.py:225
 msgid "Student account must be activated before requesting documents."
@@ -2911,28 +2851,24 @@ msgstr "يجب أن يكون وقت الانتهاء مرتبطًا بالمنط
 
 #: .\apps\applications\documents.py:229 .\apps\applications\forms.py:277
 #: .\apps\applications\services.py:626
-#, fuzzy
 msgid "Expiry time must be in the future."
-msgstr "يجب أن يكون وقت الإغلاق في المستقبل."
+msgstr "يجب أن يكون وقت الانتهاء في المستقبل."
 
 #: .\apps\applications\documents.py:310
 msgid "This document request is no longer open."
 msgstr "لم يعد طلب المستندات هذا متاحًا."
 
 #: .\apps\applications\documents.py:312
-#, fuzzy
 msgid "This document request has expired."
-msgstr "انتهت مدة الامتحان."
+msgstr "انتهت صلاحية طلب المستندات."
 
 #: .\apps\applications\documents.py:314
-#, fuzzy
 msgid "Not a diploma application."
-msgstr "لا توجد طلبات برامج بعد."
+msgstr "ليس طلب دبلوم."
 
 #: .\apps\applications\documents.py:316
-#, fuzzy
 msgid "Application is not in documents-requested state."
-msgstr "الرفع ليس في حالة المعاينة"
+msgstr "الطلب ليس في حالة طلب المستندات."
 
 #: .\apps\applications\documents.py:318
 msgid "You can only upload documents for your own application."
@@ -3140,29 +3076,24 @@ msgid "program application decisions"
 msgstr "قرارات طلبات الالتحاق"
 
 #: .\apps\applications\models.py:243
-#, fuzzy
 msgid "note"
-msgstr "ملاحظات"
+msgstr "ملاحظة"
 
 #: .\apps\applications\models.py:247
-#, fuzzy
 msgid "program application note"
-msgstr "طلب برنامج"
+msgstr "ملاحظة طلب البرنامج"
 
 #: .\apps\applications\models.py:248
-#, fuzzy
 msgid "program application notes"
-msgstr "طلبات البرامج"
+msgstr "ملاحظات طلب البرنامج"
 
 #: .\apps\applications\models.py:279 .\apps\attendance\models.py:42
-#, fuzzy
 msgid "token hash"
-msgstr "تجزئة الملف"
+msgstr "تجزئة الرمز"
 
 #: .\apps\applications\models.py:286 .\apps\progression\models.py:926
-#, fuzzy
 msgid "requested at"
-msgstr "تم الخفض في"
+msgstr "وقت الطلب"
 
 #: .\apps\applications\models.py:287 .\apps\applications\models.py:325
 #: .\apps\assessments\models.py:332 .\apps\assessments\models.py:511
@@ -3171,27 +3102,22 @@ msgid "submitted at"
 msgstr "تم التقديم في"
 
 #: .\apps\applications\models.py:288 .\apps\assessments\models.py:842
-#, fuzzy
 msgid "cancelled at"
-msgstr "ملغي"
+msgstr "وقت الإلغاء"
 
 #: .\apps\applications\models.py:296
-#, fuzzy
 msgid "application document request"
-msgstr "تم رفض الطلب"
+msgstr "طلب مستندات الطلب"
 
 #: .\apps\applications\models.py:297
-#, fuzzy
 msgid "application document requests"
-msgstr "تم رفض الطلب"
+msgstr "طلبات مستندات الطلب"
 
 #: .\apps\applications\models.py:327
-#, fuzzy
 msgid "persona image key"
-msgstr "مفتاح تخزين PDF"
+msgstr "مفتاح صورة الشخصية"
 
 #: .\apps\applications\models.py:330 .\apps\applications\models.py:338
-#, fuzzy
 msgid "file size"
 msgstr "حجم الملف"
 
@@ -3200,24 +3126,20 @@ msgid "attachments PDF key"
 msgstr "مفتاح مرفقات PDF"
 
 #: .\apps\applications\models.py:334
-#, fuzzy
 msgid "original filenames"
-msgstr "اسم الملف الأصلي"
+msgstr "أسماء الملفات الأصلية"
 
 #: .\apps\applications\models.py:340
-#, fuzzy
 msgid "original file count"
-msgstr "اسم الملف الأصلي"
+msgstr "عدد الملفات الأصلي"
 
 #: .\apps\applications\models.py:343
-#, fuzzy
 msgid "application document upload"
-msgstr "تحميل الدفعة"
+msgstr "رفع مستندات الطلب"
 
 #: .\apps\applications\models.py:344
-#, fuzzy
 msgid "application document uploads"
-msgstr "تحميلات الدفعات"
+msgstr "ملفات رفع مستندات الطلب"
 
 #: .\apps\applications\services.py:248 .\apps\applications\services.py:283
 #: .\apps\students\services.py:86 .\apps\students\views.py:247
@@ -3229,9 +3151,8 @@ msgid "This course is no longer accepting applications."
 msgstr "لم يعد هذا المقرر متاحاً."
 
 #: .\apps\applications\services.py:280
-#, fuzzy
 msgid "This course has no active version available for enrollment."
-msgstr "لا توجد نسخة نشطة من هذا المقرر متاحة للتسجيل."
+msgstr "لا يوجد إصدار نشط من هذا المقرر متاح للتسجيل."
 
 #: .\apps\applications\services.py:314
 msgid ""
@@ -3261,7 +3182,6 @@ msgid "Application must be awaiting admin review before invitation."
 msgstr "يجب أن يكون الطلب في انتظار مراجعة المشرف قبل الدعوة."
 
 #: .\apps\applications\services.py:518
-#, fuzzy
 msgid "Only diploma applications can be invited to entrance exam."
 msgstr "يمكن دعوة طلبات الدبلوم فقط إلى امتحان القبول."
 
@@ -3271,7 +3191,6 @@ msgid "Intake request creation failed: {error}"
 msgstr "فشل إنشاء طلب التقديم: {error}"
 
 #: .\apps\applications\services.py:566
-#, fuzzy
 msgid "Application cannot be accepted from current status."
 msgstr "لا يمكن قبول الطلب من حالته الحالية."
 
@@ -3280,7 +3199,6 @@ msgid "Rejection reason is required."
 msgstr "سبب الرفض مطلوب."
 
 #: .\apps\applications\services.py:597
-#, fuzzy
 msgid "Application cannot be rejected from current status."
 msgstr "لا يمكن رفض الطلب من حالته الحالية."
 
@@ -3311,12 +3229,10 @@ msgid "No decision to revert."
 msgstr "لا يوجد قرار للتراجع عنه."
 
 #: .\apps\applications\services.py:981
-#, fuzzy
 msgid "Cannot record payment for a rejected application."
-msgstr "لا يمكن تسجيل الدفع لطلب مرفوض."
+msgstr "لا يمكن تسجيل دفع لطلب مرفوض."
 
 #: .\apps\applications\services.py:983
-#, fuzzy
 msgid "Application is already activated."
 msgstr "تم تفعيل الطلب بالفعل."
 
@@ -3325,7 +3241,6 @@ msgid "Cannot record payment in current application status."
 msgstr "لا يمكن تسجيل الدفع في حالة الطلب الحالية."
 
 #: .\apps\applications\services.py:990
-#, fuzzy
 msgid "Payment already recorded for this application."
 msgstr "تم تسجيل الدفع لهذا الطلب بالفعل."
 
@@ -3372,23 +3287,20 @@ msgstr "النوع"
 
 #: .\apps\applications\views.py:333
 #: .\templates\ui\fragments\admin\_program_table.html:20
-#, fuzzy
 msgid "Action needed"
-msgstr "تم حذف السؤال."
+msgstr "إجراء مطلوب"
 
 #: .\apps\applications\views.py:336
-#, fuzzy
 msgid "Review decision"
-msgstr "رؤية المعهد"
+msgstr "قرار المراجعة"
 
 #: .\apps\applications\views.py:337
 #: .\templates\ui\fragments\admin\_program_table.html:49
 #: .\templates\ui\pages\admin\payments.html:205
 #: .\templates\ui\pages\admin\student_detail.html:184
 #: .\templates\ui\pages\admin\student_detail.html:206
-#, fuzzy
 msgid "Payment"
-msgstr "المدفوعات"
+msgstr "الدفع"
 
 #: .\apps\applications\views.py:338
 #: .\templates\ui\fragments\admin\_program_table.html:51
@@ -3397,9 +3309,8 @@ msgid "Documents"
 msgstr "المستندات"
 
 #: .\apps\applications\views.py:343
-#, fuzzy
 msgid "Cohort / program"
-msgstr "استكشف البرامج"
+msgstr "المجموعة / البرنامج"
 
 #: .\apps\applications\views.py:387
 msgid "Application accepted."
@@ -3469,26 +3380,22 @@ msgid "Unknown"
 msgstr "غير معروف"
 
 #: .\apps\applications\views.py:666
-#, fuzzy
 msgid "Invalid or expired document upload link."
-msgstr "تعذر إنشاء رابط التحميل."
+msgstr "رابط رفع المستندات غير صالح أو منتهي الصلاحية."
 
 #: .\apps\applications\views.py:673
 msgid "This document upload link is not for your account."
 msgstr "رابط رفع المستندات هذا ليس مخصصًا لحسابك."
 
 #: .\apps\applications\views.py:677
-#, fuzzy
 msgid "Documents have already been submitted for this request."
-msgstr "تم تقديم المستندات بالفعل لهذا الطلب."
+msgstr "تم إرسال المستندات لهذا الطلب بالفعل."
 
 #: .\apps\applications\views.py:681
-#, fuzzy
 msgid "This document upload link has expired."
 msgstr "انتهت صلاحية رابط رفع المستندات."
 
 #: .\apps\applications\views.py:694
-#, fuzzy
 msgid "Documents submitted successfully."
 msgstr "تم إرسال المستندات بنجاح."
 
@@ -3614,12 +3521,10 @@ msgstr "غير متصل"
 #: .\apps\assessments\constants.py:133
 #: .\templates\ui\pages\admin\lecture_bank.html:7
 #: .\templates\ui\pages\admin\lecture_bank.html:10
-#, fuzzy
 msgid "Question bank"
 msgstr "بنك الأسئلة"
 
 #: .\apps\assessments\constants.py:134
-#, fuzzy
 msgid "Manual written"
 msgstr "كتابي يدوي"
 
@@ -3628,14 +3533,12 @@ msgid "Used"
 msgstr "مستخدم"
 
 #: .\apps\assessments\forms.py:56 .\apps\assessments\models.py:729
-#, fuzzy
 msgid "MCQ count cannot be negative."
-msgstr "لا يمكن أن تكون الدرجة سالبة."
+msgstr "لا يمكن أن يكون عدد أسئلة الاختيار من متعدد سالبًا."
 
 #: .\apps\assessments\forms.py:63 .\apps\assessments\models.py:720
-#, fuzzy
 msgid "Lecture sections are only for diploma-scoped assessments."
-msgstr "يتطلب تقييم نطاق الدبلومة كلاً من الفصل الدراسي والدفعة."
+msgstr "أقسام المحاضرات مخصصة للتقييمات الخاصة بالدبلوم فقط."
 
 #: .\apps\assessments\forms.py:73
 #, python-format
@@ -3644,7 +3547,9 @@ msgstr "يتوفر %(available)d سؤال اختيار من متعدد نشط ف
 
 #: .\apps\assessments\forms.py:81
 msgid "Set at least one MCQ or add manual questions to determine max grade."
-msgstr "اضبط سؤال اختيار من متعدد واحدًا على الأقل أو أضف أسئلة يدوية لتحديد الدرجة القصوى."
+msgstr ""
+"اضبط سؤال اختيار من متعدد واحدًا على الأقل أو أضف أسئلة يدوية لتحديد الدرجة "
+"القصوى."
 
 #: .\apps\assessments\forms.py:109
 #: .\templates\ui\pages\admin\assessment_detail.html:63
@@ -3655,14 +3560,12 @@ msgid "Scope"
 msgstr "النطاق"
 
 #: .\apps\assessments\forms.py:207
-#, fuzzy
 msgid "Course is required for course-scoped assessments."
-msgstr "المجموعة مطلوبة للتكليف الخاص بمجموعة."
+msgstr "المقرر مطلوب للتقييمات الخاصة بالمقرر."
 
 #: .\apps\assessments\forms.py:214
-#, fuzzy
 msgid "Selected course has no active version."
-msgstr "لا توجد محاضرات في هذا الإصدار بعد."
+msgstr "المقرر المحدد ليس له إصدار نشط."
 
 #: .\apps\assessments\forms.py:220 .\apps\assessments\models.py:230
 msgid "Course-scoped assessments can only be a Quiz."
@@ -3917,9 +3820,8 @@ msgstr "مرئي للطالب"
 
 #: .\apps\assessments\models.py:358
 #: .\templates\ui\fragments\student\_record.html:109
-#, fuzzy
 msgid "exceptional"
-msgstr "اختياري"
+msgstr "استثنائي"
 
 #: .\apps\assessments\models.py:360
 msgid "exam review status"
@@ -4035,24 +3937,20 @@ msgid "homework submissions"
 msgstr "جميع تقديمات الواجبات المنزلية"
 
 #: .\apps\assessments\models.py:647
-#, fuzzy
 msgid "diploma lecture question"
-msgstr "سؤال محاضرة الدبلومة"
+msgstr "سؤال محاضرة الدبلوم"
 
 #: .\apps\assessments\models.py:648
-#, fuzzy
 msgid "diploma lecture questions"
-msgstr "أسئلة محاضرة الدبلومة"
+msgstr "أسئلة محاضرات الدبلوم"
 
 #: .\apps\assessments\models.py:662
-#, fuzzy
 msgid "diploma lecture choice"
-msgstr "خيار محاضرة الدبلومة"
+msgstr "خيار سؤال محاضرة الدبلوم"
 
 #: .\apps\assessments\models.py:663
-#, fuzzy
 msgid "diploma lecture choices"
-msgstr "خيارات محاضرة الدبلومة"
+msgstr "خيارات أسئلة محاضرات الدبلوم"
 
 #: .\apps\assessments\models.py:676
 msgid "Referenced question does not exist."
@@ -4067,119 +3965,97 @@ msgid "MCQ count"
 msgstr "عدد أسئلة الاختيار من متعدد"
 
 #: .\apps\assessments\models.py:690
-#, fuzzy
 msgid "max grade"
-msgstr "حفظ الدرجات"
+msgstr "الدرجة القصوى"
 
 #: .\apps\assessments\models.py:693
-#, fuzzy
 msgid "assessment lecture section"
-msgstr "سؤال التقييم"
+msgstr "قسم محاضرة التقييم"
 
 #: .\apps\assessments\models.py:694
-#, fuzzy
 msgid "assessment lecture sections"
-msgstr "أسئلة التقييم"
+msgstr "أقسام محاضرات التقييم"
 
 #: .\apps\assessments\models.py:722
 msgid "Assessment must have semester and cohort for lecture sections."
 msgstr "يجب أن يحتوي التقييم على فصل ودفعة لأقسام المحاضرات."
 
 #: .\apps\assessments\models.py:725
-#, fuzzy
 msgid "Lecture must belong to the assessment's cohort."
 msgstr "يجب أن تنتمي المحاضرة إلى دفعة التقييم."
 
 #: .\apps\assessments\models.py:727
-#, fuzzy
 msgid "Lecture must belong to the assessment's semester."
 msgstr "يجب أن تنتمي المحاضرة إلى فصل التقييم."
 
 #: .\apps\assessments\models.py:733 .\apps\assessments\models.py:752
 #: .\apps\assessments\models.py:920 .\apps\assessments\models.py:949
-#, fuzzy
 msgid "section"
-msgstr "القسم"
+msgstr "قسم"
 
 #: .\apps\assessments\models.py:742
-#, fuzzy
 msgid "assessment section manual question"
 msgstr "سؤال يدوي لقسم التقييم"
 
 #: .\apps\assessments\models.py:743
-#, fuzzy
 msgid "assessment section manual questions"
 msgstr "أسئلة يدوية لقسم التقييم"
 
 #: .\apps\assessments\models.py:753
-#, fuzzy
 msgid "source lecture"
-msgstr "إنشاء محاضرة"
+msgstr "المحاضرة المصدر"
 
 #: .\apps\assessments\models.py:754
-#, fuzzy
 msgid "source bank question"
-msgstr "سؤال القبول"
+msgstr "سؤال بنك الأسئلة المصدر"
 
 #: .\apps\assessments\models.py:755
-#, fuzzy
 msgid "source manual question"
-msgstr "إجمالي الأسئلة"
+msgstr "السؤال اليدوي المصدر"
 
 #: .\apps\assessments\models.py:756
-#, fuzzy
 msgid "source type"
-msgstr "نوع المحتوى"
+msgstr "نوع المصدر"
 
 #: .\apps\assessments\models.py:757
-#, fuzzy
 msgid "question text snapshot"
-msgstr "نص السؤال"
+msgstr "نسخة محفوظة من نص السؤال"
 
 #: .\apps\assessments\models.py:762
-#, fuzzy
 msgid "rubric snapshot"
-msgstr "لقطة للدرجة"
+msgstr "نسخة محفوظة من سلم التقييم"
 
 #: .\apps\assessments\models.py:765
-#, fuzzy
 msgid "attempt snapshot question"
-msgstr "سؤال التقييم"
+msgstr "نسخة محفوظة من سؤال المحاولة"
 
 #: .\apps\assessments\models.py:766
-#, fuzzy
 msgid "attempt snapshot questions"
-msgstr "أسئلة التقييم"
+msgstr "نسخ محفوظة من أسئلة المحاولة"
 
 #: .\apps\assessments\models.py:777 .\apps\assessments\models.py:792
-#, fuzzy
 msgid "attempt question"
-msgstr "حفظ السؤال"
+msgstr "سؤال المحاولة"
 
 #: .\apps\assessments\models.py:783
-#, fuzzy
 msgid "attempt snapshot choice"
-msgstr "لقطة للدرجة"
+msgstr "نسخة محفوظة من خيار المحاولة"
 
 #: .\apps\assessments\models.py:784
-#, fuzzy
 msgid "attempt snapshot choices"
-msgstr "لقطة للدرجة"
+msgstr "نسخ محفوظة من خيارات المحاولة"
 
 #: .\apps\assessments\models.py:802
-#, fuzzy
 msgid "attempt snapshot answer"
-msgstr "لقطة للدرجة"
+msgstr "نسخة محفوظة من إجابة المحاولة"
 
 #: .\apps\assessments\models.py:803
-#, fuzzy
 msgid "attempt snapshot answers"
-msgstr "لقطة للدرجة"
+msgstr "نسخ محفوظة من إجابات المحاولة"
 
 #: .\apps\assessments\models.py:823 .\apps\assessments\models.py:919
-#, fuzzy
 msgid "exam code"
-msgstr "نوع الامتحان"
+msgstr "رمز الامتحان"
 
 #: .\apps\assessments\models.py:833 .\apps\payments\models.py:299
 #: .\apps\progression\models.py:302 .\apps\progression\models.py:865
@@ -4187,128 +4063,108 @@ msgid "reason"
 msgstr "السبب"
 
 #: .\apps\assessments\models.py:840
-#, fuzzy
 msgid "cancelled by"
-msgstr "ملغي"
+msgstr "أُلغي بواسطة"
 
 #: .\apps\assessments\models.py:843
-#, fuzzy
 msgid "used count"
-msgstr "عدد الناجحين"
+msgstr "عدد مرات الاستخدام"
 
 #: .\apps\assessments\models.py:844
-#, fuzzy
 msgid "used at"
-msgstr "تم الاجتياز في"
+msgstr "وقت الاستخدام"
 
 #: .\apps\assessments\models.py:852
-#, fuzzy
 msgid "semester exam access override"
-msgstr "نسبة نجاح الفصل"
+msgstr "استثناء إتاحة امتحان الفصل الدراسي"
 
 #: .\apps\assessments\models.py:853
-#, fuzzy
 msgid "semester exam access overrides"
-msgstr "نسبة نجاح الفصل"
+msgstr "استثناءات إتاحة امتحان الفصل الدراسي"
 
 #: .\apps\assessments\models.py:870 .\apps\assessments\services.py:1831
 msgid "Overrides are only allowed for semester exams."
-msgstr ""
+msgstr "لا يُسمح بالاستثناءات إلا لامتحانات الفصل الدراسي."
 
 #: .\apps\assessments\models.py:872 .\apps\assessments\services.py:1833
 msgid "Overrides are only allowed for diploma-scoped semester exams."
-msgstr ""
+msgstr "لا يُسمح بالاستثناءات إلا لامتحانات الفصل الدراسي الخاصة بالدبلوم."
 
 #: .\apps\assessments\models.py:875
 msgid "Enrollment cohort must match the assessment cohort."
-msgstr ""
+msgstr "يجب أن تطابق مجموعة التسجيل مجموعة التقييم."
 
 #: .\apps\assessments\models.py:877 .\apps\assessments\services.py:1835
 #: .\apps\attendance\models.py:179 .\apps\attendance\services.py:88
 #: .\apps\intake_forms\models.py:61
-#, fuzzy
 msgid "open_at must be before close_at."
 msgstr "يجب أن يسبق وقت الفتح وقت الإغلاق."
 
 #: .\apps\assessments\models.py:879
-#, fuzzy
 msgid "max_attempts must be at least 1."
 msgstr "يجب ألا يقل الحد الأقصى للمحاولات عن 1."
 
 #: .\apps\assessments\models.py:881 .\apps\assessments\services.py:1837
 #: .\apps\assessments\views.py:2002
-#, fuzzy
 msgid "Reason is required."
-msgstr "السبب (مطلوب)"
+msgstr "السبب مطلوب."
 
 #: .\apps\assessments\models.py:884
-#, fuzzy
 msgid "Exam code must belong to the same assessment and enrollment."
-msgstr "يجب أن ينتمي الفصل لنفس دبلوم القاعدة."
+msgstr "يجب أن ينتمي رمز الامتحان إلى التقييم والتسجيل نفسيهما."
 
 #: .\apps\assessments\models.py:897
-#, fuzzy
 msgid "code number"
-msgstr "رقم الهاتف"
+msgstr "رقم الرمز"
 
 #: .\apps\assessments\models.py:898
-#, fuzzy
 msgid "delivery mode"
-msgstr "وضع المعاينة"
+msgstr "طريقة التسليم"
 
 #: .\apps\assessments\models.py:899
-#, fuzzy
 msgid "printed at"
-msgstr "تمت الترقية في"
+msgstr "وقت الطباعة"
 
 #: .\apps\assessments\models.py:904
-#, fuzzy
 msgid "semester exam code"
-msgstr "امتحان الفصل الدراسي"
+msgstr "رمز امتحان الفصل الدراسي"
 
 #: .\apps\assessments\models.py:905
-#, fuzzy
 msgid "semester exam codes"
 msgstr "رموز امتحان الفصل الدراسي"
 
 #: .\apps\assessments\models.py:927
-#, fuzzy
 msgid "offline section grade"
 msgstr "درجة القسم غير المتصل"
 
 #: .\apps\assessments\models.py:928
-#, fuzzy
 msgid "offline section grades"
 msgstr "درجات الأقسام غير المتصلة"
 
 #: .\apps\assessments\models.py:935
-#, fuzzy, python-format
+#, python-format
 msgid "Score cannot exceed section max grade of %(max)s."
 msgstr "الترتيب لا يمكن أن يتجاوز إجمالي الدبلومة البالغ %(max)s فصلًا دراسيًا."
 
 #: .\apps\assessments\models.py:946
-#, fuzzy
 msgid "reviewer"
-msgstr "تمت المعاينة"
+msgstr "المراجع"
 
 #: .\apps\assessments\models.py:954
-#, fuzzy
 msgid "reviewer assignment"
-msgstr "تعيين معلم لمجموعة"
+msgstr "تكليف المراجع"
 
 #: .\apps\assessments\models.py:955
-#, fuzzy
 msgid "reviewer assignments"
-msgstr "تعيينات المعلمين للمجموعات"
+msgstr "تكليفات المراجعين"
 
 #: .\apps\assessments\services.py:115
 msgid "This assessment is preserved legacy data and cannot be used."
 msgstr "هذا التقييم بيانات قديمة محفوظة ولا يمكن استخدامه."
 
 #: .\apps\assessments\services.py:158
-#, fuzzy
 msgid "This exam is offline-only and cannot be taken online."
-msgstr "لا يمكن التراجع عن هذا الإجراء."
+msgstr "هذا الامتحان مخصص للحضور غير المتصل فقط ولا يمكن أداؤه عبر الإنترنت."
 
 #: .\apps\assessments\services.py:165 .\apps\assessments\services.py:365
 #: .\apps\assessments\services.py:655
@@ -4341,14 +4197,13 @@ msgid "You have reached the maximum number of attempts."
 msgstr "لقد وصلت إلى الحد الأقصى لعدد المحاولات."
 
 #: .\apps\assessments\services.py:282
-#, fuzzy
 msgid "Assessment has no lecture sections configured."
-msgstr "لقد أغلق الامتحان بالفعل."
+msgstr "لم يتم إعداد أقسام محاضرات لهذا التقييم."
 
 #: .\apps\assessments\services.py:314
 #, python-format
 msgid "Section '%(lecture)s' needs %(req)d MCQs, %(avail)d available."
-msgstr ""
+msgstr "يحتاج القسم '%(lecture)s' إلى %(req)d من أسئلة الاختيار من متعدد، والمتاح %(avail)d."
 
 #: .\apps\assessments\services.py:360
 msgid "Assessment can only be submitted from in_progress status."
@@ -4372,17 +4227,16 @@ msgstr "إجابة المقال لا يجب أن تحتوي على اختيار 
 
 #: .\apps\assessments\services.py:451
 msgid "Attempt is not in progress."
-msgstr ""
+msgstr "المحاولة ليست قيد التنفيذ."
 
 #: .\apps\assessments\services.py:508
-#, fuzzy
 msgid "Invalid choice for question %(order)d."
-msgstr "اختيار غير صالح للسؤال %(id)s."
+msgstr "الخيار غير صالح للسؤال %(order)d."
 
 #: .\apps\assessments\services.py:525
 #, python-format
 msgid "Question %(order)d requires an answer."
-msgstr ""
+msgstr "السؤال %(order)d يتطلب إجابة."
 
 #: .\apps\assessments\services.py:651
 msgid "This assessment does not accept homework uploads."
@@ -4428,9 +4282,8 @@ msgid ""
 msgstr "سبب التجاوز مطلوب عند تغيير إجابة تم تصحيحها مسبقًا."
 
 #: .\apps\assessments\services.py:832
-#, fuzzy
 msgid "Score (%(score)s) cannot exceed question points (%(max_points)s)."
-msgstr "الدرجة ({score}) لا يمكن أن تتجاوز نقاط السؤال ({max_points})."
+msgstr "لا يمكن أن تتجاوز الدرجة (%(score)s) نقاط السؤال (%(max_points)s)."
 
 #: .\apps\assessments\services.py:891
 msgid "This homework submission is preserved legacy data and is read-only."
@@ -4442,12 +4295,11 @@ msgstr "لا يمكن تصحيح تسليم الواجب هذا في حالته 
 
 #: .\apps\assessments\services.py:896
 msgid "This homework submission has no linked assessment attempt."
-msgstr ""
+msgstr "لا يوجد لهذه التسليمية المرتبطة بالواجب محاولة تقييم."
 
 #: .\apps\assessments\services.py:907
-#, fuzzy
 msgid "Assessment total points must be positive."
-msgstr "التقييم غير نشط."
+msgstr "يجب أن تكون النقاط الإجمالية للتقييم موجبة."
 
 #: .\apps\assessments\services.py:976 .\apps\assessments\services.py:1011
 #: .\apps\assessments\services.py:1057 .\apps\assessments\services.py:1076
@@ -4493,7 +4345,7 @@ msgstr "لا يمكن اعتبار الامتحان عند حد النجاح أ�
 #: .\apps\students\selectors.py:547 .\apps\students\selectors.py:549
 #: .\apps\students\selectors.py:553
 msgid "Closed"
-msgstr "إغلاق"
+msgstr "مغلق"
 
 #: .\apps\assessments\services.py:1326 .\apps\assessments\services.py:1328
 #: .\templates\ui\fragments\student\_dashboard.html:132
@@ -4504,7 +4356,7 @@ msgstr "متابعة"
 
 #: .\apps\assessments\services.py:1337
 msgid "Awaiting release"
-msgstr "في انتظار المراجعة"
+msgstr "في انتظار النشر"
 
 #: .\apps\assessments\services.py:1344 .\apps\assessments\services.py:1346
 msgid "View result"
@@ -4512,7 +4364,7 @@ msgstr "عرض النتائج"
 
 #: .\apps\assessments\services.py:1353 .\apps\students\selectors.py:551
 msgid "Scheduled"
-msgstr "تم إنشاء الامتحان"
+msgstr "مجدول"
 
 #: .\apps\assessments\services.py:1363
 msgid "Maximum attempts reached"
@@ -4528,27 +4380,26 @@ msgstr "جاهز"
 msgid ""
 "Section '%(lecture)s' requires %(required)d MCQs but only %(available)d "
 "available."
-msgstr ""
+msgstr "يتطلب القسم '%(lecture)s' عدد %(required)d من أسئلة الاختيار من متعدد، بينما المتاح %(available)d فقط."
 
 #: .\apps\assessments\services.py:1516
 #, python-format
 msgid ""
 "Total section max grade (%(total)s) does not match assessment total points "
 "(%(expected)s)."
-msgstr ""
+msgstr "لا تتطابق الدرجة القصوى الإجمالية للأقسام (%(total)s) مع إجمالي نقاط التقييم (%(expected)s)."
 
 #: .\apps\assessments\services.py:1528
 msgid "Exam codes are only for semester exams."
-msgstr ""
+msgstr "رموز الامتحان مخصصة لامتحانات الفصل الدراسي فقط."
 
 #: .\apps\assessments\services.py:1530
-#, fuzzy
 msgid "Assessment must have a cohort."
-msgstr "تم بدء التقييم."
+msgstr "يجب أن يكون للتقييم مجموعة."
 
 #: .\apps\assessments\services.py:1554
 msgid "Could not generate a unique exam code after 1000 attempts."
-msgstr ""
+msgstr "تعذر إنشاء رمز امتحان فريد بعد 1000 محاولة."
 
 #: .\apps\assessments\services.py:1727
 msgid "Offline section grades require an offline exam code."
@@ -4575,14 +4426,12 @@ msgid "Answer is outside your assigned cohort/semester."
 msgstr "ليس لديك أي تقييمات نشطة في الوقت الحالي."
 
 #: .\apps\assessments\services.py:1888
-#, fuzzy
 msgid "Reason is required to cancel an override."
-msgstr "السبب مطلوب للتجاوز."
+msgstr "السبب مطلوب لإلغاء الاستثناء."
 
 #: .\apps\assessments\services.py:1890
-#, fuzzy
 msgid "Override is not active."
-msgstr "الامتحان غير نشط."
+msgstr "الاستثناء غير نشط."
 
 #: .\apps\assessments\views.py:223
 msgid "Homework assessments use the upload flow."
@@ -4623,28 +4472,24 @@ msgid "File removed."
 msgstr "لم يتم تقديم ملف"
 
 #: .\apps\assessments\views.py:429
-#, fuzzy
 msgid "Homework submitted successfully."
-msgstr "تم تقديم الواجب بنجاح."
+msgstr "تم إرسال الواجب بنجاح."
 
 #: .\apps\assessments\views.py:520 .\apps\entrance_exams\views.py:212
-#, fuzzy
 msgid "Invalid question."
-msgstr "اختيار دبلومة غير صالح."
+msgstr "السؤال غير صالح."
 
 #: .\apps\assessments\views.py:581
 msgid "Legacy / read-only"
 msgstr "قديم / للقراءة فقط"
 
 #: .\apps\assessments\views.py:633
-#, fuzzy
 msgid "Total recalculation is only available for diploma-scoped assessments."
-msgstr "يتطلب تقييم نطاق الدبلومة كلاً من الفصل الدراسي والدفعة."
+msgstr "إعادة حساب الإجمالي متاحة فقط للتقييمات الخاصة بالدبلوم."
 
 #: .\apps\assessments\views.py:646
-#, fuzzy
 msgid "Assessment totals recalculated."
-msgstr "لقد أغلق الامتحان بالفعل."
+msgstr "تمت إعادة حساب إجماليات التقييم."
 
 #: .\apps\assessments\views.py:716
 msgid "Assessment created."
@@ -4718,147 +4563,122 @@ msgid "Grades hidden from student."
 msgstr "تم إخفاء الدرجات عن الطالب."
 
 #: .\apps\assessments\views.py:1218
-#, fuzzy
 msgid "Hidden %(count)s released attempt(s)."
 msgstr "تم إنهاء %(count)d محاولة معلقة."
 
 #: .\apps\assessments\views.py:1221
-#, fuzzy
 msgid "Released %(count)s graded attempt(s)."
 msgstr "تم إنهاء %(count)d محاولة معلقة."
 
 #: .\apps\assessments\views.py:1223
 msgid "No graded or released attempts to toggle."
-msgstr ""
+msgstr "لا توجد محاولات مصححة أو منشورة لتبديل حالتها."
 
 #: .\apps\assessments\views.py:1318 .\apps\assessments\views.py:1906
 msgid "Answer graded."
 msgstr "تم تصحيح الإجابة."
 
 #: .\apps\assessments\views.py:1448
-#, fuzzy
 msgid "Bank question created."
-msgstr "تم إنشاء السؤال"
+msgstr "تم إنشاء سؤال بنك الأسئلة."
 
 #: .\apps\assessments\views.py:1457
-#, fuzzy
 msgid "Add lecture question"
 msgstr "تعديل السؤال"
 
 #: .\apps\assessments\views.py:1459 .\apps\assessments\views.py:1497
-#, fuzzy
 msgid "Back to questions"
-msgstr "العودة إلى الإصدار"
+msgstr "العودة إلى الأسئلة"
 
 #: .\apps\assessments\views.py:1486
-#, fuzzy
 msgid "Bank question updated."
-msgstr "تم تحديث السؤال"
+msgstr "تم تحديث سؤال بنك الأسئلة."
 
 #: .\apps\assessments\views.py:1495
-#, fuzzy
 msgid "Edit lecture question"
-msgstr "تعديل السؤال"
+msgstr "تعديل سؤال المحاضرة"
 
 #: .\apps\assessments\views.py:1512
-#, fuzzy
 msgid "Bank question deleted."
-msgstr "تم حذف السؤال."
+msgstr "تم حذف سؤال بنك الأسئلة."
 
 #: .\apps\assessments\views.py:1537 .\apps\assessments\views.py:1569
-#, fuzzy
 msgid "A section with this order already exists in this assessment."
 msgstr "يوجد حساب بهذا البريد الإلكتروني بالفعل."
 
 #: .\apps\assessments\views.py:1541
-#, fuzzy
 msgid "Section added."
-msgstr "تم حفظ السؤال."
+msgstr "تمت إضافة القسم."
 
 #: .\apps\assessments\views.py:1546
-#, fuzzy
 msgid "Add Section"
-msgstr "إضافة سؤال"
+msgstr "إضافة قسم"
 
 #: .\apps\assessments\views.py:1559
-#, fuzzy
 msgid "Cannot edit section after attempts exist."
-msgstr "لا يمكنك التراجع عن الطلب بعد وجود محاولة امتحان قبول."
+msgstr "لا يمكن تعديل القسم بعد وجود محاولات."
 
 #: .\apps\assessments\views.py:1573
-#, fuzzy
 msgid "Section updated."
-msgstr "تم تحديث السؤال"
+msgstr "تم تحديث القسم."
 
 #: .\apps\assessments\views.py:1578
-#, fuzzy
 msgid "Edit Section"
-msgstr "تعديل السؤال"
+msgstr "تعديل القسم"
 
 #: .\apps\assessments\views.py:1592
-#, fuzzy
 msgid "Cannot delete section after attempts exist."
-msgstr "لا يمكنك التراجع عن الطلب بعد وجود محاولة امتحان قبول."
+msgstr "لا يمكن حذف القسم بعد وجود محاولات."
 
 #: .\apps\assessments\views.py:1597
-#, fuzzy
 msgid "Section deleted."
-msgstr "تم حذف السؤال."
+msgstr "تم حذف القسم."
 
 #: .\apps\assessments\views.py:1619
-#, fuzzy
 msgid "Manual question added."
-msgstr "تم حفظ السؤال."
+msgstr "تمت إضافة السؤال اليدوي."
 
 #: .\apps\assessments\views.py:1624
-#, fuzzy
 msgid "Add Manual Question"
-msgstr "إضافة سؤال"
+msgstr "إضافة سؤال يدوي"
 
 #: .\apps\assessments\views.py:1645
-#, fuzzy
 msgid "Manual question updated."
-msgstr "تم تحديث السؤال"
+msgstr "تم تحديث السؤال اليدوي."
 
 #: .\apps\assessments\views.py:1650
-#, fuzzy
 msgid "Edit Manual Question"
-msgstr "تعديل السؤال"
+msgstr "تعديل السؤال اليدوي"
 
 #: .\apps\assessments\views.py:1669
-#, fuzzy
 msgid "Manual question deleted."
-msgstr "تم حذف السؤال."
+msgstr "تم حذف السؤال اليدوي."
 
 #: .\apps\assessments\views.py:1699
 msgid "%(count)d exam codes generated."
 msgstr "تم إنشاء %(count)d رمز امتحان."
 
 #: .\apps\assessments\views.py:1701
-#, fuzzy
 msgid "All codes already exist."
-msgstr "يوجد حساب بهذا البريد الإلكتروني بالفعل."
+msgstr "جميع الرموز موجودة بالفعل."
 
 #: .\apps\assessments\views.py:1717
 msgid "Delivery mode toggled."
 msgstr "تم تغيير وضع التقديم."
 
 #: .\apps\assessments\views.py:1749
-#, fuzzy
 msgid "No exam code found."
 msgstr "لم يتم العثور على رمز امتحان."
 
 #: .\apps\assessments\views.py:1774
-#, fuzzy
 msgid "Grade saved."
-msgstr "تم حفظ الدرجات."
+msgstr "تم حفظ الدرجة."
 
 #: .\apps\assessments\views.py:1804
 #: .\templates\ui\pages\admin\reviewer_dashboard.html:4
 #: .\templates\ui\pages\admin\reviewer_dashboard.html:8
-#, fuzzy
 msgid "Reviewer dashboard"
-msgstr "لوحة تحكم المراجع"
+msgstr "لوحة تحكم المراجعين"
 
 #: .\apps\assessments\views.py:1812 .\apps\assessments\views.py:1894
 msgid "This assignment has no section to grade."
@@ -4882,9 +4702,8 @@ msgid "Answer and score are required."
 msgstr "الموضوع والمحتوى مطلوبان."
 
 #: .\apps\assessments\views.py:1935
-#, fuzzy
 msgid "Reviewer, cohort, and semester are required."
-msgstr "تم إنشاء إصدار المقرر."
+msgstr "المراجع والمجموعة والفصل الدراسي حقول مطلوبة."
 
 #: .\apps\assessments\views.py:1937
 msgid "Selected reviewer is not in the Reviewer group."
@@ -4895,40 +4714,34 @@ msgid "Section does not belong to the selected cohort/semester."
 msgstr "الفصل الدراسي لا ينتمي إلى دبلومة الدفعة المحددة."
 
 #: .\apps\assessments\views.py:1950 .\apps\assessments\views.py:1960
-#, fuzzy
 msgid "Reviewer assignment created."
-msgstr "تم إنشاء تكليف المعلم."
+msgstr "تم إنشاء تكليف المراجع."
 
 #: .\apps\assessments\views.py:2005 .\apps\attendance\views.py:126
-#, fuzzy
 msgid "Open and close times are required."
-msgstr "تم إنشاء إصدار المقرر."
+msgstr "وقتا الفتح والإغلاق مطلوبان."
 
 #: .\apps\assessments\views.py:2012
-#, fuzzy
 msgid "Invalid datetime format."
-msgstr "اختيار دبلومة غير صالح."
+msgstr "تنسيق التاريخ والوقت غير صالح."
 
 #: .\apps\assessments\views.py:2028
 msgid "Exceptional access overrides created."
-msgstr ""
+msgstr "تم إنشاء استثناءات الإتاحة الاستثنائية."
 
 #: .\apps\assessments\views.py:2069
-#, fuzzy
 msgid "Override cancelled."
 msgstr "تجاوز الفشل"
 
 #: .\apps\attendance\models.py:48
 msgid "display code"
-msgstr ""
+msgstr "رمز العرض"
 
 #: .\apps\attendance\models.py:65 .\apps\attendance\models.py:231
-#, fuzzy
 msgid "attendance code"
 msgstr "رمز الحضور"
 
 #: .\apps\attendance\models.py:66
-#, fuzzy
 msgid "attendance codes"
 msgstr "رموز الحضور"
 
@@ -4937,27 +4750,22 @@ msgid "Exactly one of diploma enrollment or course enrollment must be set."
 msgstr "يجب تحديد التحاق واحد فقط: دبلومة أو دورة."
 
 #: .\apps\attendance\models.py:126
-#, fuzzy
 msgid "date"
 msgstr "التاريخ"
 
 #: .\apps\attendance\models.py:143
-#, fuzzy
 msgid "opened by"
 msgstr "تم فتحها بواسطة"
 
 #: .\apps\attendance\models.py:151
-#, fuzzy
 msgid "closed by"
 msgstr "تم إغلاقها بواسطة"
 
 #: .\apps\attendance\models.py:161
-#, fuzzy
 msgid "attendance session"
 msgstr "جلسة حضور"
 
 #: .\apps\attendance\models.py:162
-#, fuzzy
 msgid "attendance sessions"
 msgstr "جلسات الحضور"
 
@@ -4970,42 +4778,34 @@ msgid "Semester can only be set when targeting a cohort."
 msgstr "يمكن تحديد الفصل الدراسي فقط عند استهداف دفعة."
 
 #: .\apps\attendance\models.py:187
-#, fuzzy
 msgid "Semester must belong to the cohort's diploma."
 msgstr "يجب أن ينتمي الفصل الدراسي إلى دبلومة الدفعة."
 
 #: .\apps\attendance\models.py:203
-#, fuzzy
 msgid "session"
 msgstr "جلسة"
 
 #: .\apps\attendance\models.py:237
-#, fuzzy
 msgid "scanned by"
 msgstr "تم المسح بواسطة"
 
 #: .\apps\attendance\models.py:239
-#, fuzzy
 msgid "scanned at"
 msgstr "وقت المسح"
 
 #: .\apps\attendance\models.py:249
-#, fuzzy
 msgid "attendance record"
 msgstr "سجل الحضور"
 
 #: .\apps\attendance\models.py:250
-#, fuzzy
 msgid "attendance records"
 msgstr "سجلات الحضور"
 
 #: .\apps\attendance\services.py:117 .\apps\attendance\views.py:230
-#, fuzzy
 msgid "Only a scheduled session can be opened."
 msgstr "لا يمكن فتح إلا الجلسة المجدولة."
 
 #: .\apps\attendance\services.py:128
-#, fuzzy
 msgid "Only an open session can be closed."
 msgstr "لا يمكن إغلاق إلا الجلسة المفتوحة."
 
@@ -5022,14 +4822,16 @@ msgid "Invalid or tampered attendance token."
 msgstr "رمز الحضور غير صالح أو تم التلاعب به."
 
 #: .\apps\attendance\services.py:164
-#, fuzzy
 msgid "Invalid attendance token."
 msgstr "رمز الحضور غير صالح."
 
 #: .\apps\attendance\services.py:168
-#, fuzzy
 msgid "Attendance code is not linked to an enrollment."
 msgstr "رمز الحضور غير مرتبط بأي التحاق."
+
+#: .\apps\attendance\models.py .\apps\attendance\services.py
+msgid "Attendance code does not match its enrollment."
+msgstr "رمز الحضور لا يطابق الالتحاق المرتبط به."
 
 #: .\apps\attendance\services.py:174
 msgid "The student's enrollment is not active."
@@ -5037,10 +4839,9 @@ msgstr "التسجيل غير نشط."
 
 #: .\apps\attendance\services.py:176
 msgid "The student's enrollment has expired."
-msgstr "تم تحديد الطالب كمكتمل."
+msgstr "انتهت صلاحية تسجيل الطالب."
 
 #: .\apps\attendance\services.py:180
-#, fuzzy
 msgid "Session is not for a diploma cohort."
 msgstr "الجلسة ليست مخصصة لدفعة دبلومة."
 
@@ -5049,7 +4850,6 @@ msgid "Attendance code does not match this session."
 msgstr "رمز الحضور لا يطابق هذه الجلسة."
 
 #: .\apps\attendance\services.py:186
-#, fuzzy
 msgid "Session is not for a course."
 msgstr "الجلسة ليست مخصصة لدورة."
 
@@ -5058,7 +4858,6 @@ msgid "Invalid date/time format."
 msgstr "تنسيق التاريخ/الوقت غير صالح."
 
 #: .\apps\attendance\views.py:141
-#, fuzzy
 msgid "Select a target type."
 msgstr "يرجى اختيار نوع الهدف."
 
@@ -5067,42 +4866,35 @@ msgid "Select a cohort and no course version for a diploma session."
 msgstr "يرجى اختيار دفعة وعدم اختيار نسخة دورة لجلسة الدبلومة."
 
 #: .\apps\attendance\views.py:147
-#, fuzzy
 msgid "Select a course version and no cohort or semester for a course session."
 msgstr "يرجى اختيار نسخة دورة وعدم اختيار دفعة أو فصل دراسي لجلسة الدورة."
 
 #: .\apps\attendance\views.py:159
-#, fuzzy
 msgid "Semester does not belong to the selected cohort's diploma."
 msgstr "الفصل الدراسي لا ينتمي إلى دبلومة الدفعة المحددة."
 
 #: .\apps\attendance\views.py:171
-#, fuzzy
 msgid "Attendance session created."
 msgstr "تم إنشاء جلسة الحضور."
 
 #: .\apps\attendance\views.py:186
-#, fuzzy
 msgid "Create Session"
 msgstr "إنشاء جلسة"
 
 #: .\apps\attendance\views.py:235
-#, fuzzy
 msgid "Session opened."
 msgstr "تم فتح الجلسة."
 
 #: .\apps\attendance\views.py:255
-#, fuzzy
 msgid "Session closed."
 msgstr "تم إغلاق الجلسة."
 
 #: .\apps\attendance\views.py:278
-#, fuzzy, python-format
+#, python-format
 msgid "Records: %(session)s"
 msgstr "السجلات: %(session)s"
 
 #: .\apps\attendance\views.py:303 .\apps\attendance\views.py:367
-#, fuzzy
 msgid "Select a session."
 msgstr "يرجى اختيار جلسة."
 
@@ -5289,9 +5081,8 @@ msgid "User import confirmed"
 msgstr "تم تأكيد استيراد المستخدمين"
 
 #: .\apps\audit\constants.py:97
-#, fuzzy
 msgid "Exam access override created"
-msgstr "تم إنشاء تجاوز صلاحية الامتحان"
+msgstr "تم إنشاء استثناء إتاحة الامتحان"
 
 #: .\apps\audit\constants.py:98
 msgid "Exam access override cancelled"
@@ -5327,9 +5118,8 @@ msgid "audit events"
 msgstr "أحداث التدقيق"
 
 #: .\apps\audit\views.py:64
-#, fuzzy
 msgid "Audit detail"
-msgstr "حدث التدقيق"
+msgstr "تفاصيل التدقيق"
 
 #: .\apps\certificates\apps.py:8 .\apps\certificates\views.py:314
 #: .\apps\certificates\views.py:317 .\apps\certificates\views.py:429
@@ -5370,9 +5160,8 @@ msgstr "الإنجليزية"
 #: .\templates\ui\fragments\student\_dashboard.html:122
 #: .\templates\ui\fragments\student\_learning.html:24
 #: .\templates\ui\fragments\student\_progression.html:76
-#, fuzzy
 msgid "Completion"
-msgstr "إكمال"
+msgstr "الإكمال"
 
 #: .\apps\certificates\models.py:24
 msgid "None (HTML template)"
@@ -5581,7 +5370,6 @@ msgid "New template"
 msgstr "قالب جديد"
 
 #: .\apps\certificates\views.py:82 .\apps\certificates\views.py:107
-#, fuzzy
 msgid "Certificate template"
 msgstr "قالب الشهادة"
 
@@ -5903,9 +5691,8 @@ msgstr "الموضوع والمحتوى مطلوبان."
 #: .\apps\communications\views.py:77 .\apps\communications\views.py:101
 #: .\templates\ui\pages\admin\communication_bulk_form.html:4
 #: .\templates\ui\pages\admin\communication_bulk_form.html:8
-#, fuzzy
 msgid "Create bulk email"
-msgstr "معاينة البريد الإلكتروني الجماعي"
+msgstr "إنشاء بريد إلكتروني جماعي"
 
 #: .\apps\communications\views.py:109
 msgid "No draft found. Start a new bulk email."
@@ -5965,13 +5752,12 @@ msgid "Global footer updated."
 msgstr "تم تحديث القالب."
 
 #: .\apps\core\admin_middleware.py:35
-#, fuzzy
 msgid "This action was not valid. Please try again."
-msgstr "فشل رفع الملف. يرجى المحاولة مرة أخرى."
+msgstr "هذا الإجراء غير صالح. يُرجى المحاولة مرة أخرى."
 
 #: .\apps\core\admin_middleware.py:40
 msgid "This page requires a form submission."
-msgstr ""
+msgstr "تتطلب هذه الصفحة إرسال نموذج."
 
 #: .\apps\core\apps.py:10
 msgid "Core"
@@ -6157,19 +5943,16 @@ msgid "Payments"
 msgstr "المدفوعات"
 
 #: .\apps\core\permissions.py:77
-#, fuzzy
 msgid "Invalid score value."
-msgstr "المقرر المحدد غير صالح."
+msgstr "قيمة الدرجة غير صالحة."
 
 #: .\apps\core\permissions.py:79
-#, fuzzy
 msgid "Score must be a finite number."
-msgstr "يجب أن يكون وقت الإغلاق في المستقبل."
+msgstr "يجب أن تكون الدرجة رقمًا محدودًا."
 
 #: .\apps\core\permissions.py:83
-#, fuzzy
 msgid "Score cannot exceed %(max)s."
-msgstr "لا يمكن أن تكون الدرجة سالبة."
+msgstr "لا يمكن أن تتجاوز الدرجة %(max)s."
 
 #: .\apps\core\views.py:90
 msgid "Landing page restored to the default preset."
@@ -6181,9 +5964,8 @@ msgstr "تم تحديث القالب."
 
 #: .\apps\core\views.py:137
 #: .\templates\ui\fragments\shared\_global_search_results.html:5
-#, fuzzy
 msgid "Navigation"
-msgstr "دعوة"
+msgstr "التنقل"
 
 #: .\apps\core\views.py:181
 #: .\templates\ui\fragments\admin\_diploma_table.html:4
@@ -6195,7 +5977,6 @@ msgid "Diplomas"
 msgstr "دبلومات"
 
 #: .\apps\core\views.py:595
-#, fuzzy
 msgid "Design showcase"
 msgstr "معرض التصاميم"
 
@@ -6357,7 +6138,7 @@ msgstr "إرسال بريد إلكتروني بالنجاح/الرسوب تلق�
 
 #: .\apps\entrance_exams\models.py:115
 msgid "entrance exam"
-msgstr "امتحان قبول"
+msgstr "امتحان القبول"
 
 #: .\apps\entrance_exams\models.py:116
 msgid "entrance exams"
@@ -6368,14 +6149,12 @@ msgid "exam"
 msgstr "الامتحان"
 
 #: .\apps\entrance_exams\models.py:159 .\apps\progression\models.py:566
-#, fuzzy
 msgid "max score"
-msgstr "الدرجة"
+msgstr "الدرجة القصوى"
 
 #: .\apps\entrance_exams\models.py:163
-#, fuzzy
 msgid "Maximum possible score for this question."
-msgstr "تم الوصول إلى الحد الأقصى لعدد الملفات لهذا التقييم."
+msgstr "أقصى درجة ممكنة لهذا السؤال."
 
 #: .\apps\entrance_exams\models.py:166
 msgid "scoring rubric / model answer"
@@ -6482,14 +6261,12 @@ msgid "Please answer all exam questions before submitting."
 msgstr "يرجى الإجابة عن جميع الأسئلة المطلوبة قبل الإرسال."
 
 #: .\apps\entrance_exams\services.py:237
-#, fuzzy
 msgid "Exam passed"
-msgstr "تم تحديث الامتحان"
+msgstr "تم اجتياز الامتحان"
 
 #: .\apps\entrance_exams\services.py:237
-#, fuzzy
 msgid "Exam failed"
-msgstr "الرسائل الفاشلة"
+msgstr "لم يتم اجتياز الامتحان"
 
 #: .\apps\entrance_exams\views.py:103
 msgid "You do not have an application for this cohort."
@@ -6515,9 +6292,8 @@ msgstr "في انتظار المراجعة"
 #: .\templates\ui\pages\admin\entrance_exam_preview.html:3
 #: .\templates\ui\pages\student\exam.html:4
 #: .\templates\ui\pages\student\exam.html:9
-#, fuzzy
 msgid "Entrance exam"
-msgstr "امتحانات القبول"
+msgstr "امتحان القبول"
 
 #: .\apps\entrance_exams\views.py:362
 msgid "Entrance exam created."
@@ -6546,18 +6322,16 @@ msgid "Finalized %(count)d pending attempt(s)."
 msgstr "تم إنهاء %(count)d محاولة معلقة."
 
 #: .\apps\entrance_exams\views.py:469
-#, fuzzy
 msgid "Invalid score value for question %(q)s."
 msgstr "اختيار غير صالح للسؤال %(id)s."
 
 #: .\apps\entrance_exams\views.py:473
-#, fuzzy
 msgid "Score for question %(q)s cannot exceed %(max)s."
 msgstr "لا يمكن أن تكون الدرجة سالبة."
 
 #: .\apps\entrance_exams\views.py:483
 msgid "An unexpected error occurred while saving grades."
-msgstr ""
+msgstr "حدث خطأ غير متوقع أثناء حفظ الدرجات."
 
 #: .\apps\entrance_exams\views.py:521
 msgid "Edit question"
@@ -6626,7 +6400,6 @@ msgid "Text"
 msgstr "نص"
 
 #: .\apps\intake_forms\constants.py:30
-#, fuzzy
 msgid "Textarea"
 msgstr "نص"
 
@@ -6641,7 +6414,6 @@ msgstr "الرقم"
 #: .\templates\ui\pages\admin\academic_form.html:47
 #: .\templates\ui\pages\admin\academic_form.html:70
 #: .\templates\ui\pages\admin\academic_form.html:97
-#, fuzzy
 msgid "Choice"
 msgstr "خيارات"
 
@@ -6657,7 +6429,6 @@ msgid "Title"
 msgstr "العنوان"
 
 #: .\apps\intake_forms\forms.py:23
-#, fuzzy
 msgid "Description"
 msgstr "الوصف"
 
@@ -6675,38 +6446,31 @@ msgstr "مطلوب"
 
 #: .\apps\intake_forms\forms.py:43
 #: .\templates\ui\pages\admin\exceptional_access.html:12
-#, fuzzy
 msgid "Open at"
 msgstr "يفتح في"
 
 #: .\apps\intake_forms\forms.py:47
 #: .\templates\ui\pages\admin\exceptional_access.html:15
-#, fuzzy
 msgid "Close at"
 msgstr "يغلق في"
 
 #: .\apps\intake_forms\forms.py:57
-#, fuzzy
 msgid "Select a course version."
 msgstr "إنشاء إصدار دورة"
 
 #: .\apps\intake_forms\forms.py:59
-#, fuzzy
 msgid "Select a diploma cohort."
-msgstr "الدبلومات النشطة"
+msgstr "اختر مجموعة الدبلوم."
 
 #: .\apps\intake_forms\forms.py:68
-#, fuzzy
 msgid "Label"
 msgstr "تسمية"
 
 #: .\apps\intake_forms\forms.py:69
-#, fuzzy
 msgid "Help text"
 msgstr "نص المقال"
 
 #: .\apps\intake_forms\forms.py:70
-#, fuzzy
 msgid "Field type"
 msgstr "نوع الامتحان"
 
@@ -6743,12 +6507,10 @@ msgid "A form cannot target both a course version and a cohort."
 msgstr "لا يمكن للنموذج استهداف إصدار مقرر ودفعة معًا."
 
 #: .\apps\intake_forms\models.py:59
-#, fuzzy
 msgid "A form must target a course version or a cohort."
 msgstr "إنشاء إصدار لدفعة"
 
 #: .\apps\intake_forms\models.py:101
-#, fuzzy
 msgid "Choice fields must have at least one option."
 msgstr "يجب أن تحتوي أسئلة الاختيار من متعدد على خيارين على الأقل."
 
@@ -6757,12 +6519,10 @@ msgid "Non-choice fields must not have options."
 msgstr "يجب ألا تحتوي الحقول غير الاختيارية على خيارات."
 
 #: .\apps\intake_forms\services.py:76
-#, fuzzy
 msgid "No required intake form exists for this application."
 msgstr "لم يتم العثور على قرار قابل للتراجع عن هذا الطلب."
 
 #: .\apps\intake_forms\services.py:79
-#, fuzzy
 msgid "Intake form already submitted for this application."
 msgstr "لم يتم العثور على قرار قابل للتراجع عن هذا الطلب."
 
@@ -6775,17 +6535,14 @@ msgid "This intake form request has expired."
 msgstr "انتهت صلاحية طلب نموذج التقديم هذا."
 
 #: .\apps\intake_forms\services.py:197
-#, fuzzy
 msgid "Invalid request or form."
 msgstr "تسلسل غير صالح"
 
 #: .\apps\intake_forms\services.py:201
-#, fuzzy
 msgid "You do not own this application."
 msgstr "لم يتم العثور على قرار قابل للتراجع عن هذا الطلب."
 
 #: .\apps\intake_forms\services.py:208
-#, fuzzy
 msgid "A response for this form already exists."
 msgstr "يوجد قالب لهذا الإجراء بالفعل."
 
@@ -6795,12 +6552,10 @@ msgid "Unknown field IDs: {}"
 msgstr "معرّفات حقول غير معروفة: {}"
 
 #: .\apps\intake_forms\views.py:94
-#, fuzzy
 msgid "Intake form created."
 msgstr "تم إنشاء امتحان القبول."
 
 #: .\apps\intake_forms\views.py:101
-#, fuzzy
 msgid "Create intake form"
 msgstr "إنشاء امتحان قبول"
 
@@ -6817,7 +6572,6 @@ msgid "Field added."
 msgstr "تمت إضافة الحقل."
 
 #: .\apps\intake_forms\views.py:171
-#, fuzzy
 msgid "Form active state toggled."
 msgstr "لم يتم العثور على محاولة نشطة."
 
@@ -6826,7 +6580,6 @@ msgid "Form required state toggled."
 msgstr "تم تغيير حالة إلزامية النموذج."
 
 #: .\apps\intake_forms\views.py:219
-#, fuzzy
 msgid "Field deleted."
 msgstr "تم حذف الدبلومة."
 
@@ -6843,7 +6596,6 @@ msgid "This intake form link is not for your account."
 msgstr "رابط نموذج البيانات هذا ليس مخصصًا لحسابك."
 
 #: .\apps\intake_forms\views.py:343
-#, fuzzy
 msgid "Intake form submitted successfully."
 msgstr "تم تسليم الامتحان بنجاح."
 
@@ -6934,7 +6686,7 @@ msgstr "مستحق في"
 
 #: .\apps\payments\models.py:208
 msgid "diploma or course"
-msgstr "الدبلومات والمقررات"
+msgstr "دبلوم أو مقرر"
 
 #: .\apps\payments\models.py:211
 msgid "target reference"
@@ -7033,7 +6785,6 @@ msgid "Invalid enrollment type: {t}"
 msgstr "نوع تسجيل غير صالح: {t}"
 
 #: .\apps\payments\services.py:521
-#, fuzzy
 msgid "Payment already recorded for this enrollment."
 msgstr "شهادة نشطة موجودة بالفعل لهذا التسجيل."
 
@@ -7060,10 +6811,9 @@ msgstr "تعذرت مطابقة بعض الصفوف. راجع الأخطاء أ�
 
 #: .\apps\payments\views.py:147
 msgid "The file could not be processed. Check the format and try again."
-msgstr ""
+msgstr "تعذر معالجة الملف. تحقق من التنسيق وحاول مرة أخرى."
 
 #: .\apps\payments\views.py:148 .\apps\payments\views.py:157
-#, fuzzy
 msgid "Payment upload"
 msgstr "تحميلات الدفعات"
 
@@ -7081,18 +6831,16 @@ msgstr "اكتمل الاستيراد: %(created)d منشأ، %(updated)d محد
 
 #: .\apps\payments\views.py:251 .\apps\payments\views.py:289
 #: .\templates\ui\pages\admin\payments.html:206
-#, fuzzy
 msgid "Payment record"
 msgstr "سجلات الدفع"
 
 #: .\apps\payments\views.py:287
-#, fuzzy
 msgid "Payment record updated."
 msgstr "تم تحديث سجل الدفع"
 
 #: .\apps\payments\views.py:314
 msgid "Enrollment marked as paid."
-msgstr "تم تحديد الطالب كمكتمل."
+msgstr "تم تحديد التسجيل كمدفوع."
 
 #: .\apps\payments\views.py:316
 msgid "Marked unpaid from the enrollment payment toggle"
@@ -7113,7 +6861,6 @@ msgid "Not started"
 msgstr "لم يبدأ"
 
 #: .\apps\progression\constants.py:20
-#, fuzzy
 msgid "Passed pending confirmation"
 msgstr "إعادة إرسال تأكيد البريد الإلكتروني"
 
@@ -7137,7 +6884,6 @@ msgid "Retake required"
 msgstr "مطلوب إعادة"
 
 #: .\apps\progression\constants.py:28
-#, fuzzy
 msgid "Passed confirmed"
 msgstr "تم تأكيد تحميل الدفعة"
 
@@ -7185,12 +6931,10 @@ msgid "Rejoin planned"
 msgstr "إعادة الالتحاق مخططة"
 
 #: .\apps\progression\constants.py:64
-#, fuzzy
 msgid "Rejoin activated"
 msgstr "إعادة الالتحاق مفعلة"
 
 #: .\apps\progression\constants.py:65
-#, fuzzy
 msgid "Rejoin cancelled"
 msgstr "إعادة الالتحاق ملغاة"
 
@@ -7205,17 +6949,14 @@ msgid "Request interview"
 msgstr "طلب مقابلة"
 
 #: .\apps\progression\constants.py:67
-#, fuzzy
 msgid "Interview pass"
 msgstr "نجاح المقابلة"
 
 #: .\apps\progression\constants.py:68
-#, fuzzy
 msgid "Interview fail"
 msgstr "فشل المقابلة"
 
 #: .\apps\progression\constants.py:69
-#, fuzzy
 msgid "Confirm pass"
 msgstr "تأكيد النجاح"
 
@@ -7332,21 +7073,18 @@ msgid ""
 msgstr "لا يمكن تفعيل اشتراط الامتحان النهائي دون اشتراط اجتياز جميع الفصول."
 
 #: .\apps\progression\models.py:112
-#, fuzzy
 msgid "year number"
 msgstr "رقم الصف"
 
 #: .\apps\progression\models.py:115
-#, fuzzy
 msgid "semesters per year"
 msgstr "نسبة نجاح الفصل"
 
 #: .\apps\progression\models.py:125
 msgid "Academic year end date must be after its start date."
-msgstr ""
+msgstr "يجب أن يكون تاريخ نهاية السنة الأكاديمية بعد تاريخ بدايتها."
 
 #: .\apps\progression\models.py:127
-#, fuzzy
 msgid "Semesters per year must be positive."
 msgstr "يجب أن تكون المدة موجبة."
 
@@ -7520,88 +7258,74 @@ msgid "Final score must be between 0 and 100."
 msgstr "يجب أن تكون الدرجة النهائية بين 0 و 100."
 
 #: .\apps\progression\models.py:472
-#, fuzzy
 msgid "component type"
 msgstr "نوع المحتوى"
 
 #: .\apps\progression\models.py:477
-#, fuzzy
 msgid "weight percent"
 msgstr "نسبة الخصم"
 
 #: .\apps\progression\models.py:483
-#, fuzzy
 msgid "required min percent"
 msgstr "نسبة إكمال الفيديو"
 
 #: .\apps\progression\models.py:489
-#, fuzzy
 msgid "required to pass"
 msgstr "مطلوب"
 
 #: .\apps\progression\models.py:494
-#, fuzzy
 msgid "semester grade component"
 msgstr "نسبة نجاح الفصل"
 
 #: .\apps\progression\models.py:495
-#, fuzzy
 msgid "semester grade components"
 msgstr "نسبة نجاح الفصل"
 
 #: .\apps\progression\models.py:513 .\apps\progression\models.py:709
-#, fuzzy
 msgid "Semester must belong to the same diploma as the cohort."
 msgstr "يجب أن ينتمي الفصل لنفس دبلوم القاعدة."
 
 #: .\apps\progression\models.py:526
 msgid "component"
-msgstr ""
+msgstr "مكوّن"
 
 #: .\apps\progression\models.py:544
-#, fuzzy
 msgid "source assessment attempt"
 msgstr "محاولة تقييم"
 
 #: .\apps\progression\models.py:551
 msgid "source exam code"
-msgstr ""
+msgstr "رمز الامتحان المصدر"
 
 #: .\apps\progression\models.py:554
 msgid "source attendance summary"
-msgstr ""
+msgstr "ملخص الحضور المصدر"
 
 #: .\apps\progression\models.py:559
-#, fuzzy
 msgid "manual score"
 msgstr "الدرجة النهائية"
 
 #: .\apps\progression\models.py:571
-#, fuzzy
 msgid "score percent"
 msgstr "نسبة النجاح"
 
 #: .\apps\progression\models.py:589
-#, fuzzy
 msgid "student grade item"
 msgstr "ملف الطالب"
 
 #: .\apps\progression\models.py:590
-#, fuzzy
 msgid "student grade items"
 msgstr "ملفات الطلاب"
 
 #: .\apps\progression\models.py:604
-#, fuzzy
 msgid "Component cohort must match diploma enrollment cohort."
 msgstr "تسجيل الدبلومة المتطابق"
 
 #: .\apps\progression\models.py:607
 msgid "Manual score cannot exceed max score."
-msgstr ""
+msgstr "لا يمكن أن تتجاوز الدرجة اليدوية الدرجة القصوى."
 
 #: .\apps\progression\models.py:609
-#, fuzzy
 msgid "Score percent must be between 0 and 100."
 msgstr "يجب أن تكون نسبة نجاح الفصل بين 0 و 100."
 
@@ -7674,37 +7398,30 @@ msgid "semester interviews"
 msgstr "طلب مقابلة"
 
 #: .\apps\progression\models.py:956
-#, fuzzy
 msgid "from enrollment"
 msgstr "تسجيل دبلوم"
 
 #: .\apps\progression\models.py:964
-#, fuzzy
 msgid "to enrollment"
 msgstr "تسجيل مقرر"
 
 #: .\apps\progression\models.py:970
-#, fuzzy
 msgid "failed semester"
 msgstr "فصل دراسي جديد"
 
 #: .\apps\progression\models.py:976
-#, fuzzy
 msgid "target cohort"
 msgstr "إنشاء مجموعة"
 
 #: .\apps\progression\models.py:989
-#, fuzzy
 msgid "planned by"
 msgstr "تم الرفع بواسطة"
 
 #: .\apps\progression\models.py:995
-#, fuzzy
 msgid "semester rejoin plan"
 msgstr "قاعدة ترقية الفصل"
 
 #: .\apps\progression\models.py:996
-#, fuzzy
 msgid "semester rejoin plans"
 msgstr "قواعد ترقية الفصل"
 
@@ -7725,13 +7442,12 @@ msgid "Semester does not belong to the cohort's diploma."
 msgstr "الفصل الدراسي لا ينتمي إلى دبلومة الدفعة المحددة."
 
 #: .\apps\progression\services.py:364
-#, fuzzy
 msgid "No grade component setup for this cohort/semester."
 msgstr "لا يوجد سياق تجريبي محدد لهذا القالب."
 
 #: .\apps\progression\services.py:368
 msgid "Active component weights must sum to 100."
-msgstr ""
+msgstr "يجب أن يصل مجموع أوزان المكونات النشطة إلى 100."
 
 #: .\apps\progression\services.py:466 .\apps\progression\services.py:554
 #: .\apps\progression\services.py:629 .\apps\progression\services.py:1281
@@ -7764,7 +7480,7 @@ msgstr "في انتظار الإرسال"
 
 #: .\apps\progression\services.py:641
 msgid "Semester evaluation cannot be finalized: %(reasons)s."
-msgstr "فشلت معالجة الصوت: %(error)s"
+msgstr "تعذر إنهاء تقييم الفصل: %(reasons)s."
 
 #: .\apps\progression\services.py:763
 msgid "Final decision is blocked until the interview is completed."
@@ -7832,12 +7548,10 @@ msgid "Student is locked. Unlock before promoting."
 msgstr "الطالب مقفل. قم بإلغاء القفل قبل الترقية."
 
 #: .\apps\progression\services.py:1141
-#, fuzzy
 msgid "Reason is required for academic-year promotion."
 msgstr "السبب مطلوب للخفض."
 
 #: .\apps\progression\services.py:1143
-#, fuzzy
 msgid "Semesters must belong to the enrollment diploma."
 msgstr "يجب أن ينتمي الفصل الدراسي والدفعة إلى الدبلومة نفسها."
 
@@ -7904,25 +7618,22 @@ msgid "Student is not eligible for final exam."
 msgstr "الطالب غير مؤهل للامتحان النهائي."
 
 #: .\apps\progression\services.py:1859
-#, fuzzy
 msgid "An interview can only be requested for a pending calculated pass."
 msgstr "يمكن طلب المستندات فقط للطلبات المقبولة."
 
 #: .\apps\progression\services.py:1895
 msgid "Pass confirmation requires a pending calculated pass."
-msgstr ""
+msgstr "يتطلب تأكيد النجاح وجود نجاح محسوب قيد الانتظار."
 
 #: .\apps\progression\services.py:1903
 msgid "Student has not passed the interview. Use skip_interview to bypass."
-msgstr ""
+msgstr "لم يجتز الطالب المقابلة. استخدم skip_interview للتجاوز."
 
 #: .\apps\progression\services.py:1943
-#, fuzzy
 msgid "An interview request is required before recording an interview result."
 msgstr "السبب مطلوب لتعيين الإعادة."
 
 #: .\apps\progression\services.py:2145
-#, fuzzy
 msgid "Enrollment does not belong to this student."
 msgstr "الفصل الدراسي لا ينتمي إلى الدبلومة."
 
@@ -7952,22 +7663,20 @@ msgstr "شهادة نشطة موجودة بالفعل لهذا التسجيل."
 
 #: .\apps\progression\services.py:2163 .\apps\progression\services.py:2210
 msgid "The student already has an active enrollment in the target cohort."
-msgstr "لدى المعلم بالفعل تكليف نشط بهذا الإصدار من الدورة."
+msgstr "لدى الطالب بالفعل تسجيل نشط في المجموعة المستهدفة."
 
 #: .\apps\progression\services.py:2179 .\apps\progression\views.py:1425
-#, fuzzy
 msgid "Rejoin plan created."
 msgstr "تم إنشاء الدبلومة."
 
 #: .\apps\progression\services.py:2195
-#, fuzzy
 msgid "Only planned rejoin plans can be activated."
 msgstr "يمكن نشر المحاولات المصححة فقط."
 
 #: .\apps\progression\services.py:2197
 msgid ""
 "Source and target cohort are the same. Rejoin requires a different cohort."
-msgstr ""
+msgstr "المجموعة المصدر والمجموعة المستهدفة متماثلتان. تتطلب إعادة الانضمام مجموعة مختلفة."
 
 #: .\apps\progression\services.py:2202
 msgid "This rejoin plan is no longer planned."
@@ -7984,10 +7693,9 @@ msgstr "الدفعة المستهدفة أنهت هذا الفصل؛ انتهت 
 
 #: .\apps\progression\services.py:2251 .\apps\progression\views.py:1464
 msgid "Rejoin plan cancelled."
-msgstr ""
+msgstr "تم إلغاء خطة إعادة الانضمام."
 
 #: .\apps\progression\services.py:2260
-#, fuzzy
 msgid "Only active rejoin plans can be completed."
 msgstr "يمكن نشر المحاولات المصححة فقط."
 
@@ -8017,7 +7725,6 @@ msgstr "تم ترقية {promoted} طالب. فشل {fail}."
 
 #: .\apps\progression\views.py:629
 #: .\templates\ui\fragments\admin\dashboard\_admin.html:104
-#, fuzzy
 msgid "Student progression"
 msgstr "تقدم الطالب مقفل."
 
@@ -8031,7 +7738,6 @@ msgid "Final progression resolved as Pass."
 msgstr "لا توجد سجلات تقدم."
 
 #: .\apps\progression\views.py:709
-#, fuzzy
 msgid "Student promoted to the next academic year."
 msgstr "تمت الترقية إلى الفصل الدراسي التالي."
 
@@ -8060,7 +7766,6 @@ msgid "Retake cleared."
 msgstr "تم مسح الإعادة."
 
 #: .\apps\progression\views.py:898
-#, fuzzy
 msgid "No progress record found for this semester."
 msgstr "لا توجد سجلات تقدم بعد."
 
@@ -8089,26 +7794,22 @@ msgid "Progression rule updated."
 msgstr "لا توجد سجلات تقدم."
 
 #: .\apps\progression\views.py:1068
-#, fuzzy
 msgid "Grade Components"
 msgstr "تصحيح التسليمات"
 
 #: .\apps\progression\views.py:1071
-#, fuzzy
 msgid "Progression components"
 msgstr "التقدم"
 
 #: .\apps\progression\views.py:1082
 msgid "Synced {count} grade item(s)."
-msgstr ""
+msgstr "تمت مزامنة عناصر الدرجات ({count})."
 
 #: .\apps\progression\views.py:1108
-#, fuzzy
 msgid "Semester Evaluation"
 msgstr "تم تقييم الفصل."
 
 #: .\apps\progression\views.py:1111
-#, fuzzy
 msgid "Semester evaluation"
 msgstr "تم تقييم الفصل."
 
@@ -8120,24 +7821,20 @@ msgid "Progress"
 msgstr "التقدم"
 
 #: .\apps\progression\views.py:1197
-#, fuzzy
 msgid "Interview request"
 msgstr "قائمة المراجعة"
 
 #: .\apps\progression\views.py:1244
-#, fuzzy
 msgid "Invalid decision."
 msgstr "اختيار دبلومة غير صالح."
 
 #: .\apps\progression\views.py:1267
-#, fuzzy
 msgid "Interview Decision"
 msgstr "رؤية المعهد"
 
 #: .\apps\progression\views.py:1270
 #: .\templates\ui\pages\admin\progression.html:327
 #: .\templates\ui\pages\admin\progression_semester_evaluation.html:59
-#, fuzzy
 msgid "Interview decision"
 msgstr "رؤية المعهد"
 
@@ -8151,10 +7848,9 @@ msgstr "فشل المقابلة"
 
 #: .\apps\progression\views.py:1381 .\apps\progression\views.py:1436
 msgid "Rejoin Plans"
-msgstr ""
+msgstr "خطط إعادة الانضمام"
 
 #: .\apps\progression\views.py:1384
-#, fuzzy
 msgid "Rejoin plans"
 msgstr "تم إنشاء الدبلومة."
 
@@ -8169,17 +7865,14 @@ msgid "Semester is required."
 msgstr "النوع مطلوب."
 
 #: .\apps\progression\views.py:1437
-#, fuzzy
 msgid "Create Rejoin Plan"
 msgstr "إنشاء دبلومة"
 
 #: .\apps\progression\views.py:1440
-#, fuzzy
 msgid "Rejoin plan"
 msgstr "تم إنشاء الدبلومة."
 
 #: .\apps\progression\views.py:1450
-#, fuzzy
 msgid "Rejoin plan activated."
 msgstr "الطلبات"
 
@@ -8314,84 +8007,83 @@ msgstr "أخرى"
 
 #: .\apps\students\identity.py:19
 msgid "Egypt"
-msgstr ""
+msgstr "مصر"
 
 #: .\apps\students\identity.py:20
 msgid "Saudi Arabia"
-msgstr ""
+msgstr "المملكة العربية السعودية"
 
 #: .\apps\students\identity.py:21
 msgid "United Arab Emirates"
-msgstr ""
+msgstr "الإمارات العربية المتحدة"
 
 #: .\apps\students\identity.py:22
 msgid "United States"
-msgstr ""
+msgstr "الولايات المتحدة"
 
 #: .\apps\students\identity.py:23
 msgid "United Kingdom"
-msgstr ""
+msgstr "المملكة المتحدة"
 
 #: .\apps\students\identity.py:24
 msgid "Canada"
-msgstr ""
+msgstr "كندا"
 
 #: .\apps\students\identity.py:25
 msgid "Australia"
-msgstr ""
+msgstr "أستراليا"
 
 #: .\apps\students\identity.py:26
 msgid "Jordan"
-msgstr ""
+msgstr "الأردن"
 
 #: .\apps\students\identity.py:27
 msgid "Lebanon"
-msgstr ""
+msgstr "لبنان"
 
 #: .\apps\students\identity.py:28
 msgid "Iraq"
-msgstr ""
+msgstr "العراق"
 
 #: .\apps\students\identity.py:29
 msgid "Syria"
-msgstr ""
+msgstr "سوريا"
 
 #: .\apps\students\identity.py:30
 msgid "Palestine"
-msgstr ""
+msgstr "فلسطين"
 
 #: .\apps\students\identity.py:31
 msgid "Libya"
-msgstr ""
+msgstr "ليبيا"
 
 #: .\apps\students\identity.py:32
 msgid "Sudan"
-msgstr ""
+msgstr "السودان"
 
 #: .\apps\students\identity.py:33
 msgid "Tunisia"
-msgstr ""
+msgstr "تونس"
 
 #: .\apps\students\identity.py:34
 msgid "Morocco"
-msgstr ""
+msgstr "المغرب"
 
 #: .\apps\students\identity.py:35
 msgid "Algeria"
-msgstr ""
+msgstr "الجزائر"
 
 #: .\apps\students\identity.py:56
-#, fuzzy
 msgid "Passport ID"
 msgstr "كلمة المرور"
 
 #: .\apps\students\identity.py:81
 msgid "Egyptian National ID must be exactly 14 digits."
-msgstr ""
+msgstr "يجب أن يتكون الرقم القومي المصري من 14 رقمًا بالضبط."
 
 #: .\apps\students\identity.py:86
 msgid "Passport ID contains invalid characters."
-msgstr ""
+msgstr "يحتوي رقم جواز السفر على أحرف غير صالحة."
 
 #: .\apps\students\models.py:24
 msgid "full name (4 parts)"
@@ -8464,12 +8156,10 @@ msgstr ""
 #: .\apps\students\selectors.py:171 .\apps\students\selectors.py:180
 #: .\apps\students\selectors.py:187 .\apps\students\selectors.py:194
 #: .\templates\ui\fragments\student\_dashboard.html:82
-#, fuzzy
 msgid "Open applications"
 msgstr "الطلبات الأخيرة"
 
 #: .\apps\students\selectors.py:178
-#, fuzzy
 msgid "Complete the intake form"
 msgstr "إنشاء مجموعة"
 
@@ -8481,7 +8171,6 @@ msgstr ""
 "البريد الإلكتروني."
 
 #: .\apps\students\selectors.py:185
-#, fuzzy
 msgid "Complete application payment"
 msgstr "مسار تقديم واضح"
 
@@ -8499,48 +8188,39 @@ msgid "Your payment was waived by the admissions office."
 msgstr "تم إعفاؤك من الدفع من مكتب القبول."
 
 #: .\apps\students\selectors.py:204
-#, fuzzy
 msgid "Your entrance exam is ready."
 msgstr "لا توجد امتحانات قبول بعد."
 
 #: .\apps\students\selectors.py:223
-#, fuzzy
 msgid "Assessment ready to start or continue."
 msgstr "لقد أغلق الامتحان بالفعل."
 
 #: .\apps\students\selectors.py:225
-#, fuzzy
 msgid "Continue assessment"
 msgstr "متابعة التقييم"
 
 #: .\apps\students\selectors.py:230
-#, fuzzy
 msgid "Certificate available"
 msgstr "الشهادة متاحة"
 
 #: .\apps\students\selectors.py:231
-#, fuzzy
 msgid "Your completed program"
 msgstr "برنامجك المكتمل"
 
 #: .\apps\students\selectors.py:233
 #: .\templates\ui\fragments\student\_record.html:251
-#, fuzzy
 msgid "Download certificate"
 msgstr "تنزيل الشهادة"
 
 #: .\apps\students\selectors.py:239
-#, fuzzy
 msgid "Continue your learning."
 msgstr "واصل تعلمك."
 
 #: .\apps\students\selectors.py:240
-#, fuzzy
 msgid "Open Learning"
 msgstr "فتح التعلم"
 
 #: .\apps\students\selectors.py:545
-#, fuzzy
 msgid "Continue exam"
 msgstr "متابعة"
 
@@ -8549,7 +8229,6 @@ msgid "Open exam"
 msgstr "يفتح في"
 
 #: .\apps\students\selectors.py:597
-#, fuzzy
 msgid "Program application"
 msgstr "طلبات البرامج"
 
@@ -8592,7 +8271,6 @@ msgid "You already have a pending application for this diploma."
 msgstr "لديك بالفعل طلب معلق أو نشط لهذه المجموعة من الدبلومة."
 
 #: .\apps\students\services.py:138 .\apps\students\views.py:277
-#, fuzzy
 msgid "This course is not currently accepting applications."
 msgstr "لم يعد هذا المقرر متاحاً."
 
@@ -8689,7 +8367,6 @@ msgid "Skip to main content"
 msgstr "تخطَّ إلى المحتوى الرئيسي"
 
 #: .\templates\ui\base.html:31
-#, fuzzy
 msgid "Request failed. Please try again."
 msgstr "فشل رفع الملف. يرجى المحاولة مرة أخرى."
 
@@ -8749,13 +8426,11 @@ msgid "Search screens and records"
 msgstr "ابحث في الشاشات والسجلات"
 
 #: .\templates\ui\components\_global_search.html:21
-#, fuzzy
 msgid "Search query"
 msgstr "عبارة البحث"
 
 #: .\templates\ui\components\_global_search.html:28
 #: .\templates\ui\pages\admin\entrance_exams.html:98
-#, fuzzy
 msgid "Search results"
 msgstr "نتائج البحث"
 
@@ -8764,12 +8439,10 @@ msgid "Navigate"
 msgstr "تنقل"
 
 #: .\templates\ui\components\_language_switcher.html:18
-#, fuzzy
 msgid "Toggle direction"
 msgstr "تبديل الاتجاه"
 
 #: .\templates\ui\components\_loading_indicator.html:5
-#, fuzzy
 msgid "Loading"
 msgstr "جارٍ التحميل"
 
@@ -8788,7 +8461,6 @@ msgid "Pagination"
 msgstr "ترقيم الصفحات"
 
 #: .\templates\ui\components\_pagination.html:4
-#, fuzzy
 msgid ""
 "\n"
 "  %(first)s\n"
@@ -8799,13 +8471,12 @@ msgid ""
 msgstr ""
 "\n"
 "    %(start)s–%(end)s من %(total)s\n"
-"    "
+"    \n"
 
 #: .\templates\ui\components\_pagination.html:14
 #: .\templates\ui\components\_pagination.html:16
 #: .\templates\ui\pages\admin\progression_rejoin_eligibility.html:64
 #: .\templates\ui\pages\student\content.html:51
-#, fuzzy
 msgid "Previous"
 msgstr "السابق"
 
@@ -8835,7 +8506,6 @@ msgid "Log out"
 msgstr "تسجيل الخروج"
 
 #: .\templates\ui\components\_toast_region.html:16
-#, fuzzy
 msgid "Dismiss notification"
 msgstr "إغلاق الإشعار"
 
@@ -8844,18 +8514,15 @@ msgid "Bad request"
 msgstr "طلب غير صالح"
 
 #: .\templates\ui\errors\400.html:6
-#, fuzzy
 msgid "The request could not be understood."
 msgstr "تعذر فهم الطلب."
 
 #: .\templates\ui\errors\403.html:3 .\templates\ui\errors\403.html:5
 #: .\templates\ui\pages\student\content.html:30
-#, fuzzy
 msgid "Access denied"
 msgstr "تم رفض الوصول."
 
 #: .\templates\ui\errors\403.html:6
-#, fuzzy
 msgid "You do not have permission to view this page."
 msgstr "ليس لديك صلاحية الوصول لهذه الصفحة."
 
@@ -8864,7 +8531,6 @@ msgid "Page not found"
 msgstr "الصفحة غير موجودة"
 
 #: .\templates\ui\errors\404.html:6
-#, fuzzy
 msgid "The page you requested does not exist."
 msgstr "الصفحة التي تبحث عنها غير موجودة."
 
@@ -8874,7 +8540,6 @@ msgstr "خطأ في الخادم"
 
 #: .\templates\ui\errors\500.html:6
 #: .\templates\ui\fragments\shared\_global_search_results.html:17
-#, fuzzy
 msgid "Something went wrong. Please try again."
 msgstr "حدث خطأ من جانبنا. يرجى المحاولة مرة أخرى."
 
@@ -8987,7 +8652,7 @@ msgstr "المحاولات"
 
 #: .\templates\ui\fragments\admin\_assessment_table.html:20
 msgid "Period"
-msgstr ""
+msgstr "الفترة"
 
 #: .\templates\ui\fragments\admin\_assessment_table.html:21
 #: .\templates\ui\fragments\admin\_attendance_records.html:19
@@ -9056,12 +8721,10 @@ msgstr "الإجراءات"
 #: .\templates\ui\pages\admin\entrance_exams.html:357
 #: .\templates\ui\pages\admin\intake.html:248
 #: .\templates\ui\pages\admin\intake.html:273
-#, fuzzy
 msgid "Active,Inactive"
 msgstr "غير نشط"
 
 #: .\templates\ui\fragments\admin\_assessment_table.html:63
-#, fuzzy
 msgid "No assessments found"
 msgstr "لا توجد تقييمات بعد"
 
@@ -9072,15 +8735,13 @@ msgstr "لا توجد تقييمات بعد"
 #: .\templates\ui\fragments\admin\_program_table.html:80
 #: .\templates\ui\fragments\admin\_staff_table.html:80
 msgid "Try changing the search or filters."
-msgstr ""
+msgstr "جرّب تغيير البحث أو عوامل التصفية."
 
 #: .\templates\ui\fragments\admin\_attendance_records.html:3
-#, fuzzy
 msgid "Sessions"
 msgstr "الإصدارات"
 
 #: .\templates\ui\fragments\admin\_attendance_records.html:6
-#, fuzzy
 msgid "sessions"
 msgstr "الإصدار"
 
@@ -9100,9 +8761,8 @@ msgstr "بواسطة"
 
 #: .\templates\ui\fragments\admin\_attendance_records.html:61
 #: .\templates\ui\fragments\student\_record.html:18
-#, fuzzy
 msgid "records"
-msgstr "سجلات الدفع"
+msgstr "سجلات"
 
 #: .\templates\ui\fragments\admin\_attendance_semester_options.html:2
 #: .\templates\ui\fragments\admin\_progression_action_form.html:12
@@ -9127,13 +8787,12 @@ msgid "Semester"
 msgstr "فصل دراسي"
 
 #: .\templates\ui\fragments\admin\_cluster_members.html:5
-#, fuzzy
 msgid "No members found."
 msgstr "لم يتم العثور على مستخدمين."
 
 #: .\templates\ui\fragments\admin\_course_table.html:3
 msgid "Offerings"
-msgstr ""
+msgstr "الطرح"
 
 #: .\templates\ui\fragments\admin\_course_table.html:18
 #: .\templates\ui\fragments\admin\_diploma_table.html:18
@@ -9153,7 +8812,6 @@ msgstr "التسجيلات"
 
 #: .\templates\ui\fragments\admin\_course_table.html:33
 #: .\templates\ui\fragments\admin\_course_table.html:59
-#, fuzzy
 msgid "versions"
 msgstr "الإصدارات"
 
@@ -9161,12 +8819,10 @@ msgstr "الإصدارات"
 #: .\templates\ui\fragments\admin\_diploma_table.html:63
 #: .\templates\ui\pages\admin\progression_cohort_list.html:48
 #: .\templates\ui\pages\admin\progression_semester_list.html:43
-#, fuzzy
 msgid "enrollments"
 msgstr "التسجيلات"
 
 #: .\templates\ui\fragments\admin\_course_table.html:67
-#, fuzzy
 msgid "No courses found"
 msgstr "لم يتم العثور على مستخدمين."
 
@@ -9180,7 +8836,6 @@ msgid "Rule"
 msgstr "القاعدة"
 
 #: .\templates\ui\fragments\admin\_diploma_table.html:71
-#, fuzzy
 msgid "No diplomas found"
 msgstr "لا توجد تحميلات بعد"
 
@@ -9248,24 +8903,20 @@ msgid "Enrolled"
 msgstr "مسجل"
 
 #: .\templates\ui\fragments\admin\_enrollment_table.html:77
-#, fuzzy
 msgid "No enrollments found"
 msgstr "لم يتم العثور على تسجيلات."
 
 #: .\templates\ui\fragments\admin\_options.html:5
-#, fuzzy
 msgid "No options"
 msgstr "لا توجد خيارات أخرى"
 
 #: .\templates\ui\fragments\admin\_payment_record_table.html:6
 #: .\templates\ui\pages\admin\payments.html:125
-#, fuzzy
 msgid "Program / enrollment"
 msgstr "تسجيل دبلوم"
 
 #: .\templates\ui\fragments\admin\_payment_record_table.html:8
 #: .\templates\ui\pages\admin\payments.html:127
-#, fuzzy
 msgid "Status / date"
 msgstr "تاريخ البداية"
 
@@ -9274,7 +8925,7 @@ msgstr "تاريخ البداية"
 #: .\templates\ui\pages\admin\payments.html:164
 #: .\templates\ui\pages\admin\payments.html:188
 msgid "No payments match these filters."
-msgstr ""
+msgstr "لا توجد مدفوعات تطابق عوامل التصفية هذه."
 
 #: .\templates\ui\fragments\admin\_payment_record_table.html:47
 #: .\templates\ui\fragments\admin\_payment_record_table.html:84
@@ -9290,7 +8941,7 @@ msgstr "لا توجد سجلات دفع بعد."
 msgid ""
 "Records appear after an enrollment is marked paid or a CSV import is "
 "confirmed."
-msgstr ""
+msgstr "تظهر السجلات بعد تحديد التسجيل كمدفوع أو تأكيد استيراد ملف CSV."
 
 #: .\templates\ui\fragments\admin\_payment_upload_table.html:4
 #: .\templates\ui\pages\admin\payments.html:252
@@ -9309,19 +8960,16 @@ msgstr "الإجمالي"
 
 #: .\templates\ui\fragments\admin\_payment_upload_table.html:6
 #: .\templates\ui\pages\admin\payments.html:254
-#, fuzzy
 msgid "matched"
 msgstr "غير متطابق"
 
 #: .\templates\ui\fragments\admin\_payment_upload_table.html:6
 #: .\templates\ui\pages\admin\payments.html:254
-#, fuzzy
 msgid "unmatched"
 msgstr "غير متطابق"
 
 #: .\templates\ui\fragments\admin\_payment_upload_table.html:6
 #: .\templates\ui\pages\admin\payments.html:254
-#, fuzzy
 msgid "failed"
 msgstr "راسب"
 
@@ -9330,13 +8978,12 @@ msgstr "راسب"
 #: .\templates\ui\pages\admin\payments.html:276
 #: .\templates\ui\pages\admin\payments.html:300
 msgid "No imports match these filters."
-msgstr ""
+msgstr "لا توجد عمليات استيراد تطابق عوامل التصفية هذه."
 
 #: .\templates\ui\fragments\admin\_payment_upload_table.html:30
 #: .\templates\ui\fragments\admin\_payment_upload_table.html:55
 #: .\templates\ui\pages\admin\payments.html:278
 #: .\templates\ui\pages\admin\payments.html:302
-#, fuzzy
 msgid "No imports yet."
 msgstr "لا توجد محاولات بعد."
 
@@ -9344,7 +8991,6 @@ msgstr "لا توجد محاولات بعد."
 #: .\templates\ui\fragments\admin\_payment_upload_table.html:55
 #: .\templates\ui\pages\admin\payments.html:278
 #: .\templates\ui\pages\admin\payments.html:302
-#, fuzzy
 msgid "Upload a CSV file to begin."
 msgstr "رفع ملف CSV لاستيراد سجلات الدفع."
 
@@ -9365,12 +9011,10 @@ msgid "Queue"
 msgstr "طابور"
 
 #: .\templates\ui\fragments\admin\_program_table.html:16
-#, fuzzy
 msgid "Applicant"
 msgstr "الطلبات"
 
 #: .\templates\ui\fragments\admin\_program_table.html:80
-#, fuzzy
 msgid "No applications found"
 msgstr "الطلبات"
 
@@ -9459,7 +9103,6 @@ msgstr "إنشاء شهادة"
 #: .\templates\ui\pages\admin\progression.html:128
 #: .\templates\ui\pages\admin\progression.html:439
 #: .\templates\ui\pages\admin\progression_rejoin_create.html:25
-#, fuzzy
 msgid "Create rejoin plan"
 msgstr "إنشاء دبلومة"
 
@@ -9470,30 +9113,26 @@ msgid "Sync"
 msgstr "مزامنة"
 
 #: .\templates\ui\fragments\admin\_semester_table_row.html:73
-#, fuzzy
 msgid "Confirm Pass"
 msgstr "تم التأكيد"
 
 #: .\templates\ui\fragments\admin\_staff_table.html:3
 #: .\templates\ui\fragments\admin\_student_table.html:4
-#, fuzzy
 msgid "Directory"
 msgstr "السجل"
 
 #: .\templates\ui\fragments\admin\_staff_table.html:16
 #: .\templates\ui\pages\admin\staff_form.html:12
-#, fuzzy
 msgid "Staff member"
 msgstr "رقم الهاتف"
 
 #: .\templates\ui\fragments\admin\_staff_table.html:17
 #: .\templates\ui\fragments\admin\_student_table.html:18
 msgid "Contact"
-msgstr ""
+msgstr "بيانات التواصل"
 
 #: .\templates\ui\fragments\admin\_staff_table.html:20
 #: .\templates\ui\fragments\admin\_student_table.html:21
-#, fuzzy
 msgid "Last sign-in"
 msgstr "آخر تسجيل دخول"
 
@@ -9503,7 +9142,6 @@ msgid "Assignments"
 msgstr "الإسنادات"
 
 #: .\templates\ui\fragments\admin\_staff_table.html:80
-#, fuzzy
 msgid "No staff found"
 msgstr "لم يتم العثور على طاقم عمل."
 
@@ -9512,13 +9150,12 @@ msgid "Joined"
 msgstr "تاريخ الانضمام"
 
 #: .\templates\ui\fragments\admin\_student_table.html:65
-#, fuzzy
 msgid "No students found"
 msgstr "لم يتم العثور على طلاب."
 
 #: .\templates\ui\fragments\admin\_student_table.html:65
 msgid "Try changing the search or status filter."
-msgstr ""
+msgstr "جرّب تغيير البحث أو عامل تصفية الحالة."
 
 #: .\templates\ui\fragments\admin\dashboard\_admin.html:86
 #: .\templates\ui\fragments\admin\dashboard\_teacher.html:23
@@ -9526,23 +9163,19 @@ msgid "Grading queue"
 msgstr "قائمة التصحيح"
 
 #: .\templates\ui\fragments\admin\dashboard\_admin.html:94
-#, fuzzy
 msgid "uploads with unmatched rows"
 msgstr "الصفوف غير المتطابقة"
 
 #: .\templates\ui\fragments\admin\dashboard\_admin.html:156
-#, fuzzy
 msgid "No recent applications"
 msgstr "لا توجد طلبات أخيرة."
 
 #: .\templates\ui\fragments\admin\dashboard\_admin.html:156
-#, fuzzy
 msgid "New submissions will appear here."
 msgstr "لا توجد تقديمات في انتظار المراجعة."
 
 #: .\templates\ui\fragments\admin\dashboard\_moderator.html:17
 #: .\templates\ui\pages\admin\diploma_detail.html:79
-#, fuzzy
 msgid "Student clusters"
 msgstr "مجموعات الطلاب"
 
@@ -9555,57 +9188,48 @@ msgid "Open Homework grading queue"
 msgstr "قائمة التصحيح"
 
 #: .\templates\ui\fragments\admin\dashboard\_secretary.html:11
-#, fuzzy
 msgid "Today's attendance sessions and exceptions."
 msgstr "تم إنشاء تكليف المعلم."
 
 #: .\templates\ui\fragments\admin\dashboard\_secretary.html:15
-#, fuzzy
 msgid "Sessions today"
 msgstr "الإصدارات"
 
 #: .\templates\ui\fragments\admin\dashboard\_secretary.html:29
-#, fuzzy
 msgid "Upcoming"
 msgstr "القادمة"
 
 #: .\templates\ui\fragments\admin\dashboard\_secretary.html:30
-#, fuzzy
 msgid "Upcoming sessions"
 msgstr "الجلسات القادمة"
 
 #: .\templates\ui\fragments\admin\dashboard\_secretary.html:47
-#, fuzzy
 msgid "No upcoming sessions"
 msgstr "لا توجد جلسات قادمة"
 
 #: .\templates\ui\fragments\admin\dashboard\_secretary.html:47
-#, fuzzy
 msgid "No attendance sessions scheduled."
 msgstr "لا توجد جلسات حضور مجدولة."
 
 #: .\templates\ui\fragments\admin\dashboard\_secretary.html:50
-#, fuzzy
 msgid "Open attendance"
 msgstr "فتح الحضور"
 
 #: .\templates\ui\fragments\admin\dashboard\_teacher.html:11
 msgid "Your teaching assignments and grading queue."
-msgstr ""
+msgstr "تكليفاتك التدريسية وقائمة التصحيح."
 
 #: .\templates\ui\fragments\admin\dashboard\_teacher.html:17
-#, fuzzy
 msgid "Teaching assignments"
 msgstr "تعيينات المعلمين للمجموعات"
 
 #: .\templates\ui\fragments\admin\dashboard\_teacher.html:27
-#, fuzzy
 msgid "Open grading queue"
 msgstr "قائمة التصحيح"
 
 #: .\templates\ui\fragments\shared\_global_search_results.html:20
 msgid "Retry"
-msgstr ""
+msgstr "إعادة المحاولة"
 
 #: .\templates\ui\fragments\shared\_global_search_results.html:24
 msgid "No results for \"%(q)s\""
@@ -9613,28 +9237,25 @@ msgstr "لم يتم العثور على طلاب."
 
 #: .\templates\ui\fragments\shared\_global_search_results.html:25
 msgid "Try a name, email, program, or screen name."
-msgstr ""
+msgstr "جرّب اسمًا أو بريدًا إلكترونيًا أو برنامجًا أو اسم شاشة."
 
 #: .\templates\ui\fragments\shared\_program_options.html:12
 msgid "Load more"
 msgstr "تحميل المزيد"
 
 #: .\templates\ui\fragments\student\_applications.html:2
-#, fuzzy
 msgid "My applications"
 msgstr "الطلبات"
 
 #: .\templates\ui\fragments\student\_applications.html:2
 msgid "Follow submitted applications, requested documents, and decisions."
-msgstr ""
+msgstr "تابع الطلبات المقدمة والمستندات المطلوبة والقرارات."
 
 #: .\templates\ui\fragments\student\_applications.html:2
-#, fuzzy
 msgid "Start an application"
 msgstr "بدء التقديم"
 
 #: .\templates\ui\fragments\student\_applications.html:3
-#, fuzzy
 msgid "Apply to a program"
 msgstr "تقديم لدفعة أو برنامج جديد."
 
@@ -9649,13 +9270,11 @@ msgstr "تم تأكيد الدفع"
 
 #: .\templates\ui\fragments\student\_applications.html:44
 #: .\templates\ui\fragments\student\_applications.html:68
-#, fuzzy
 msgid "No applications yet"
 msgstr "الطلبات"
 
 #: .\templates\ui\fragments\student\_applications.html:44
 #: .\templates\ui\fragments\student\_applications.html:68
-#, fuzzy
 msgid "Your submitted applications will appear here."
 msgstr "لم تقدم أي طلبات بعد."
 
@@ -9676,12 +9295,10 @@ msgid "Start a new application for a diploma or a standalone course."
 msgstr "تقديم طلب جديد للانضمام إلى مجموعة."
 
 #: .\templates\ui\fragments\student\_apply.html:4
-#, fuzzy
 msgid "No eligible programs are currently available."
 msgstr "لا توجد برامج مؤهلة متاحة حاليًا."
 
 #: .\templates\ui\fragments\student\_apply.html:24
-#, fuzzy
 msgid "Select a program"
 msgstr "يرجى اختيار برنامج."
 
@@ -9692,102 +9309,86 @@ msgstr "تقديم الطلب"
 #: .\templates\ui\fragments\student\_assessment_history.html:2
 #: .\templates\ui\pages\student\assessment_history.html:4
 #: .\templates\ui\pages\student\assessment_history.html:7
-#, fuzzy
 msgid "Assessment history"
 msgstr "التقييمات"
 
 #: .\templates\ui\fragments\student\_assessment_history.html:2
 msgid "Review released scores, feedback, and assessment status."
-msgstr ""
+msgstr "راجع الدرجات المنشورة والملاحظات وحالة التقييم."
 
 #: .\templates\ui\fragments\student\_assessment_history.html:2
-#, fuzzy
 msgid "Available assessments"
 msgstr "التقييمات والواجبات المتاحة"
 
 #: .\templates\ui\fragments\student\_assessment_history.html:28
 #: .\templates\ui\fragments\student\_assessment_history.html:47
-#, fuzzy
 msgid "No assessment history"
 msgstr "لا توجد تقييمات بعد"
 
 #: .\templates\ui\fragments\student\_assessment_history.html:28
 #: .\templates\ui\fragments\student\_assessment_history.html:47
 msgid "Completed assessments and released results will appear here."
-msgstr ""
+msgstr "ستظهر هنا التقييمات المكتملة والنتائج المنشورة."
 
 #: .\templates\ui\fragments\student\_dashboard.html:3
-#, fuzzy
 msgid "Learning overview"
-msgstr "في انتظار المراجعة"
+msgstr "نظرة عامة على التعلّم"
 
 #: .\templates\ui\fragments\student\_dashboard.html:9
 msgid "Your next steps, progress, and important records are collected here."
-msgstr ""
+msgstr "تُجمع خطواتك التالية وتقدمك وسجلاتك المهمة هنا."
 
 #: .\templates\ui\fragments\student\_dashboard.html:11
-#, fuzzy
 msgid "Continue learning"
 msgstr "متابعة التعلم"
 
 #: .\templates\ui\fragments\student\_dashboard.html:12
-#, fuzzy
 msgid "View my record"
 msgstr "عرض المقررات"
 
 #: .\templates\ui\fragments\student\_dashboard.html:19
-#, fuzzy
 msgid "Summary"
 msgstr "ملخص الأخطاء"
 
 #: .\templates\ui\fragments\student\_dashboard.html:21
 #: .\templates\ui\fragments\student\_learning.html:23
-#, fuzzy
 msgid "Active learning"
 msgstr "ابدأ التعلم"
 
 #: .\templates\ui\fragments\student\_dashboard.html:23
-#, fuzzy
 msgid "Programs and courses"
 msgstr "نوع البرنامج"
 
 #: .\templates\ui\fragments\student\_dashboard.html:30
-#, fuzzy
 msgid "Ready for action"
 msgstr "إعادة إرسال تأكيد البريد الإلكتروني"
 
 #: .\templates\ui\fragments\student\_dashboard.html:37
-#, fuzzy
 msgid "Open assignments"
 msgstr "إسنادات الامتحان"
 
 #: .\templates\ui\fragments\student\_dashboard.html:44
-#, fuzzy
 msgid "Available to download"
 msgstr "متاح الآن"
 
 #: .\templates\ui\fragments\student\_dashboard.html:50
-#, fuzzy
 msgid "Next actions"
 msgstr "جميع الإجراءات"
 
 #: .\templates\ui\fragments\student\_dashboard.html:52
 #: .\templates\ui\fragments\student\_learning.html:2
-#, fuzzy
 msgid "View record"
 msgstr "عرض المقررات"
 
 #: .\templates\ui\fragments\student\_dashboard.html:61
-#, fuzzy
 msgid "Due"
 msgstr "تاريخ الاستحقاق"
 
 #: .\templates\ui\fragments\student\_dashboard.html:67
 msgid "You are all caught up"
-msgstr ""
+msgstr "لا توجد تحديثات جديدة"
 
 #: .\templates\ui\fragments\student\_dashboard.html:67
-#, fuzzy
 msgid "There are no outstanding actions right now."
 msgstr "لا توجد برامج مؤهلة متاحة حاليًا."
 
@@ -9799,36 +9400,31 @@ msgstr "لا توجد برامج مؤهلة متاحة حاليًا."
 #: .\templates\ui\pages\public\resend_activation.html:13
 #: .\templates\ui\pages\student\account_profile.html:6
 #: .\templates\ui\pages\student\profile.html:7
-#, fuzzy
 msgid "Account"
 msgstr "الحسابات"
 
 #: .\templates\ui\fragments\student\_dashboard.html:73
-#, fuzzy
 msgid "Current application"
 msgstr "الطلب الأساسي"
 
 #: .\templates\ui\fragments\student\_dashboard.html:85
-#, fuzzy
 msgid "No active application"
 msgstr "لا توجد طلبات أخيرة."
 
 #: .\templates\ui\fragments\student\_dashboard.html:85
 msgid ""
 "Explore available programs and submit an application when you are ready."
-msgstr ""
+msgstr "استكشف البرامج المتاحة وأرسل طلبًا عندما تكون مستعدًا."
 
 #: .\templates\ui\fragments\student\_dashboard.html:85
-#, fuzzy
 msgid "Browse programs"
 msgstr "استكشف البرامج"
 
 #: .\templates\ui\fragments\student\_dashboard.html:91
 msgid "Your programs and courses"
-msgstr ""
+msgstr "برامجك ومقرراتك"
 
 #: .\templates\ui\fragments\student\_dashboard.html:93
-#, fuzzy
 msgid "Open learning"
 msgstr "ابدأ التعلم"
 
@@ -9839,18 +9435,16 @@ msgid "Expires"
 msgstr "ينتهي"
 
 #: .\templates\ui\fragments\student\_dashboard.html:119
-#, fuzzy
 msgid "Active course"
 msgstr "المقررات النشطة"
 
 #: .\templates\ui\fragments\student\_dashboard.html:140
-#, fuzzy
 msgid "No learning enrolments yet"
 msgstr "لا توجد تسجيلات بعد."
 
 #: .\templates\ui\fragments\student\_dashboard.html:140
 msgid "Your active programs and courses will appear here."
-msgstr ""
+msgstr "ستظهر برامجك ومقرراتك النشطة هنا."
 
 #: .\templates\ui\fragments\student\_exam_results.html:2
 #, python-format
@@ -9885,61 +9479,53 @@ msgstr "ستظهر المحاضرات المنشورة هنا تلقائيا."
 
 #: .\templates\ui\fragments\student\_learning.html:2
 msgid "My programs and courses"
-msgstr ""
+msgstr "برامجي ومقرراتي"
 
 #: .\templates\ui\fragments\student\_learning.html:2
 msgid ""
 "Track completion and continue from your next available lesson or assessment."
-msgstr ""
+msgstr "تابع الإكمال واستمر من الدرس أو التقييم التالي المتاح."
 
 #: .\templates\ui\fragments\student\_learning.html:42
-#, fuzzy
 msgid "No learning content yet"
 msgstr "لم يتم إرسال أي بريد إلكتروني جماعي بعد"
 
 #: .\templates\ui\fragments\student\_learning.html:42
-#, fuzzy
 msgid "Enrolments will appear here when they become available."
 msgstr "ستظهر المحاضرات هنا عند إصدارها."
 
 #: .\templates\ui\fragments\student\_profile.html:6
 #: .\templates\ui\pages\student\profile.html:17
-#, fuzzy
 msgid "Save changes"
 msgstr "تم تغيير الدرجة"
 
 #: .\templates\ui\fragments\student\_profile_details.html:2
-#, fuzzy
 msgid "Edit profile"
 msgstr "تعديل الملف الشخصي"
 
 #: .\templates\ui\fragments\student\_profile_details.html:4
 #: .\templates\ui\pages\admin\student_detail.html:10
 msgid "Identity"
-msgstr ""
+msgstr "الهوية"
 
 #: .\templates\ui\fragments\student\_profile_details.html:5
 #: .\templates\ui\pages\admin\student_detail.html:44
-#, fuzzy
 msgid "Personal details"
 msgstr "تفاصيل المستخدم"
 
 #: .\templates\ui\fragments\student\_profile_details.html:19
 msgid "Protected"
-msgstr ""
+msgstr "محمي"
 
 #: .\templates\ui\fragments\student\_profile_details.html:20
-#, fuzzy
 msgid "Restricted details"
 msgstr "مقيد"
 
 #: .\templates\ui\fragments\student\_profile_details.html:33
-#, fuzzy
 msgid "No restricted fields are available."
 msgstr "لا توجد شهادات متاحة."
 
 #: .\templates\ui\fragments\student\_progression.html:2
-#, fuzzy
 msgid "Academic journey"
 msgstr "التقدم الأكاديمي"
 
@@ -9947,75 +9533,62 @@ msgstr "التقدم الأكاديمي"
 msgid ""
 "Track semester decisions, completion, eligibility, released grades, and "
 "certificates."
-msgstr ""
+msgstr "تابع قرارات الفصول الدراسية والإكمال والأهلية والدرجات المنشورة والشهادات."
 
 #: .\templates\ui\fragments\student\_progression.html:2
-#, fuzzy
 msgid "Open full record"
 msgstr "سجل الدفع"
 
 #: .\templates\ui\fragments\student\_progression.html:5
 #: .\templates\ui\pages\admin\progression.html:135
 #: .\templates\ui\pages\admin\progression_student_detail.html:60
-#, fuzzy
 msgid "Semester progress"
 msgstr "تقدم الفصل"
 
 #: .\templates\ui\fragments\student\_progression.html:13
 #: .\templates\ui\fragments\student\_progression.html:41
-#, fuzzy
 msgid "Average score"
 msgstr "الدرجة"
 
 #: .\templates\ui\fragments\student\_progression.html:29
 #: .\templates\ui\fragments\student\_progression.html:45
-#, fuzzy
 msgid "No semester progress available."
 msgstr "لا توجد محاضرات متاحة."
 
 #: .\templates\ui\fragments\student\_progression.html:50
-#, fuzzy
 msgid "Decisions"
 msgstr "القرار"
 
 #: .\templates\ui\fragments\student\_progression.html:51
-#, fuzzy
 msgid "Promotion decisions"
 msgstr "قرارات الترقية"
 
 #: .\templates\ui\fragments\student\_progression.html:71
-#, fuzzy
 msgid "No promotion decisions recorded."
 msgstr "لم يتم تسجيل قرارات."
 
 #: .\templates\ui\fragments\student\_progression.html:77
-#, fuzzy
 msgid "Eligibility and certificates"
 msgstr "الشهادات المنشأة"
 
 #: .\templates\ui\fragments\student\_progression.html:92
-#, fuzzy
 msgid "No final-exam eligibility records."
 msgstr "أهليات الامتحان النهائي"
 
 #: .\templates\ui\fragments\student\_progression.html:97
-#, fuzzy
 msgid "Released results"
 msgstr "إرسال النتائج تلقائيًا"
 
 #: .\templates\ui\fragments\student\_progression.html:98
-#, fuzzy
 msgid "Grade items"
 msgstr "تصحيح الامتحانات"
 
 #: .\templates\ui\fragments\student\_progression.html:104
-#, fuzzy
 msgid "Component"
 msgstr "إكمال"
 
 #: .\templates\ui\fragments\student\_progression.html:118
 #: .\templates\ui\fragments\student\_progression.html:134
-#, fuzzy
 msgid "No released grades available."
 msgstr "لا توجد محاضرات متاحة."
 
@@ -10023,19 +9596,16 @@ msgstr "لا توجد محاضرات متاحة."
 #: .\templates\ui\pages\admin\student_detail.html:44
 #: .\templates\ui\pages\student\record.html:4
 #: .\templates\ui\pages\student\record.html:7
-#, fuzzy
 msgid "Student record"
 msgstr "تم خفض الطالب."
 
 #: .\templates\ui\fragments\student\_record.html:2
-#, fuzzy
 msgid "Released information"
 msgstr "إعادة إرسال تأكيد البريد الإلكتروني"
 
 #: .\templates\ui\fragments\student\_record.html:2
 #: .\templates\ui\pages\student\profile_details.html:4
 #: .\templates\ui\pages\student\profile_details.html:8
-#, fuzzy
 msgid "Profile details"
 msgstr "تفاصيل الملف الشخصي"
 
@@ -10049,17 +9619,14 @@ msgid "Grades"
 msgstr "الدرجات"
 
 #: .\templates\ui\fragments\student\_record.html:12
-#, fuzzy
 msgid "Attendance rate"
-msgstr "محاولة القبول"
+msgstr "معدل الحضور"
 
 #: .\templates\ui\fragments\student\_record.html:24
-#, fuzzy
 msgid "Released grades"
 msgstr "متاح"
 
 #: .\templates\ui\fragments\student\_record.html:26
-#, fuzzy
 msgid "Visible grade items"
 msgstr "ملفات الطلاب"
 
@@ -10068,7 +9635,6 @@ msgid "Total paid"
 msgstr "المدفوع الإجمالي"
 
 #: .\templates\ui\fragments\student\_record.html:44
-#, fuzzy
 msgid "Available records"
 msgstr "متاح الآن"
 
@@ -10109,54 +9675,44 @@ msgid "Rejoin entry into this cohort"
 msgstr "الفصل الدراسي ضمن الدفعة"
 
 #: .\templates\ui\fragments\student\_record.html:146
-#, fuzzy
 msgid "Attendance history"
-msgstr "محاولة القبول"
+msgstr "سجل الحضور"
 
 #: .\templates\ui\fragments\student\_record.html:157
-#, fuzzy
 msgid "No released attendance"
 msgstr "لا توجد امتحانات قبول"
 
 #: .\templates\ui\fragments\student\_record.html:157
-#, fuzzy
 msgid "Attendance records will appear once released."
 msgstr "تم إنشاء تكليف المعلم."
 
 #: .\templates\ui\fragments\student\_record.html:163
-#, fuzzy
 msgid "Released assessment history"
 msgstr "التقييم النهائي"
 
 #: .\templates\ui\fragments\student\_record.html:165
-#, fuzzy
 msgid "View all"
 msgstr "عرض"
 
 #: .\templates\ui\fragments\student\_record.html:177
-#, fuzzy
 msgid "No released assessments"
 msgstr "إنشاء تقييم"
 
 #: .\templates\ui\fragments\student\_record.html:177
-#, fuzzy
 msgid "Released results will appear here."
 msgstr "ستظهر المحاضرات المنشورة هنا تلقائيا."
 
 #: .\templates\ui\fragments\student\_record.html:184
-#, fuzzy
 msgid "Academic history"
 msgstr "الأكاديميات"
 
 #: .\templates\ui\fragments\student\_record.html:186
 #: .\templates\ui\pages\admin\progression_semester_list.html:25
 #: .\templates\ui\pages\admin\progression_semester_list.html:45
-#, fuzzy
 msgid "View progression"
 msgstr "التقدم"
 
 #: .\templates\ui\fragments\student\_record.html:201
-#, fuzzy
 msgid "No progression records."
 msgstr "لا توجد سجلات تقدم."
 
@@ -10166,29 +9722,25 @@ msgstr "لا توجد سجلات دفع"
 
 #: .\templates\ui\fragments\student\_record.html:236
 msgid "Released payment information will appear here."
-msgstr ""
+msgstr "ستظهر هنا معلومات الدفع المنشورة."
 
 #: .\templates\ui\fragments\student\_record.html:242
 msgid "Credentials"
-msgstr ""
+msgstr "الشهادات والاعتمادات"
 
 #: .\templates\ui\fragments\student\_record.html:254
-#, fuzzy
 msgid "No certificates available"
 msgstr "لا توجد شهادات متاحة."
 
 #: .\templates\ui\fragments\student\_record.html:254
-#, fuzzy
 msgid "Completed credentials will appear here when released."
 msgstr "ستظهر المحاضرات هنا عند إصدارها."
 
 #: .\templates\ui\fragments\student\_record.html:260
-#, fuzzy
 msgid "Exam assignments"
 msgstr "إسنادات الامتحان"
 
 #: .\templates\ui\fragments\student\_record.html:273
-#, fuzzy
 msgid "No entrance exam records."
 msgstr "لا توجد امتحانات قبول"
 
@@ -10197,12 +9749,10 @@ msgid "Notifications"
 msgstr "الإشعارات"
 
 #: .\templates\ui\fragments\student\_record.html:291
-#, fuzzy
 msgid "No communications released."
 msgstr "الاتصالات"
 
 #: .\templates\ui\layouts\admin.html:16 .\templates\ui\layouts\student.html:16
-#, fuzzy
 msgid "Main navigation"
 msgstr "التنقل الرئيسي"
 
@@ -10211,7 +9761,6 @@ msgid "Close navigation"
 msgstr "إغلاق التنقل"
 
 #: .\templates\ui\layouts\admin.html:24
-#, fuzzy
 msgid "Admin navigation"
 msgstr "تنقل الإدارة"
 
@@ -10220,7 +9769,6 @@ msgid "All rights reserved."
 msgstr "جميع الحقوق محفوظة."
 
 #: .\templates\ui\layouts\public.html:10
-#, fuzzy
 msgid "Public navigation"
 msgstr "التنقل العام"
 
@@ -10241,36 +9789,30 @@ msgstr "التسجيل"
 
 #: .\templates\ui\layouts\student.html:17
 #: .\templates\ui\layouts\student.html:54
-#, fuzzy
 msgid "Student portal"
 msgstr "بوابة الطالب"
 
 #: .\templates\ui\layouts\student.html:24
-#, fuzzy
 msgid "Student navigation"
 msgstr "تنقل الطالب"
 
 #: .\templates\ui\layouts\student.html:24
-#, fuzzy
 msgid "My workspace"
 msgstr "مساحتي"
 
 #: .\templates\ui\layouts\student.html:43
 #: .\templates\ui\pages\admin\entrance_exams.html:486
 #: .\templates\ui\pages\admin\student_detail.html:176
-#, fuzzy
 msgid "Record"
 msgstr "سجل"
 
 #: .\templates\ui\pages\admin\academic_detail.html:4
 #: .\templates\ui\pages\admin\academic_detail.html:9
-#, fuzzy
 msgid "Academic detail"
 msgstr "الأكاديميات"
 
 #: .\templates\ui\pages\admin\academic_detail.html:9
 #: .\templates\ui\pages\admin\academic_form.html:8
-#, fuzzy
 msgid "Academic"
 msgstr "الأكاديميات"
 
@@ -10293,7 +9835,7 @@ msgstr "أيام"
 #: .\templates\ui\pages\admin\course_detail.html:30
 #: .\templates\ui\pages\admin\course_detail.html:47
 msgid "Unlimited"
-msgstr "تمت الدعوة"
+msgstr "غير محدود"
 
 #: .\templates\ui\pages\admin\academic_detail.html:27
 #: .\templates\ui\pages\admin\diploma_lecture_list.html:15
@@ -10335,15 +9877,13 @@ msgid "Preview"
 msgstr "معاينة"
 
 #: .\templates\ui\pages\admin\academic_detail.html:96
-#, fuzzy
 msgid "responses"
 msgstr "بيانات الاستجابة"
 
 #: .\templates\ui\pages\admin\academic_form.html:11
 #: .\templates\ui\pages\admin\reviewer_assignment_list.html:13
-#, fuzzy
 msgid "Reviewer"
-msgstr "قائمة المراجعة"
+msgstr "المراجع"
 
 #: .\templates\ui\pages\admin\academic_form.html:11
 #: .\templates\ui\pages\admin\academic_form.html:12
@@ -10360,18 +9900,15 @@ msgstr "قائمة المراجعة"
 #: .\templates\ui\pages\admin\staff_assignments.html:92
 #: .\templates\ui\pages\admin\staff_assignments.html:107
 #: .\templates\ui\pages\admin\staff_assignments.html:114
-#, fuzzy
 msgid "Select"
 msgstr "اختر"
 
 #: .\templates\ui\pages\admin\academic_form.html:14
 #: .\templates\ui\pages\admin\reviewer_assignment_list.html:16
-#, fuzzy
 msgid "Section"
-msgstr "الإجراء"
+msgstr "قسم"
 
 #: .\templates\ui\pages\admin\academic_form.html:14
-#, fuzzy
 msgid "All sections"
 msgstr "جميع الإجراءات"
 
@@ -10406,18 +9943,15 @@ msgid "Save"
 msgstr "حفظ"
 
 #: .\templates\ui\pages\admin\admin_offline_grade_entry.html:10
-#, fuzzy
 msgid "Offline grade entry"
 msgstr "حفظ الدرجات"
 
 #: .\templates\ui\pages\admin\admin_offline_grade_entry.html:12
 #: .\templates\ui\pages\admin\reviewer_section_grading.html:12
-#, fuzzy
 msgid "Exam code"
-msgstr "نوع الامتحان"
+msgstr "رمز الامتحان"
 
 #: .\templates\ui\pages\admin\admin_offline_grade_entry.html:15
-#, fuzzy
 msgid "Load code"
 msgstr "تحميل المزيد"
 
@@ -10426,7 +9960,6 @@ msgid "Legacy assessment - read only"
 msgstr "تقييم قديم — للقراءة فقط"
 
 #: .\templates\ui\pages\admin\assessment_detail.html:18
-#, fuzzy
 msgid "Grade queue"
 msgstr "قائمة التصحيح"
 
@@ -10455,7 +9988,6 @@ msgid "Activate"
 msgstr "نشط"
 
 #: .\templates\ui\pages\admin\assessment_detail.html:34
-#, fuzzy
 msgid "Recalculate totals"
 msgstr "تم الحساب في"
 
@@ -10466,7 +9998,6 @@ msgid "Details"
 msgstr "التفاصيل"
 
 #: .\templates\ui\pages\admin\assessment_detail.html:40
-#, fuzzy
 msgid "Assessment info"
 msgstr "التقييمات"
 
@@ -10488,13 +10019,12 @@ msgid "Closes"
 msgstr "يغلق"
 
 #: .\templates\ui\pages\admin\assessment_detail.html:120
-#, fuzzy
 msgid "Sections"
 msgstr "الإجراء"
 
 #: .\templates\ui\pages\admin\assessment_detail.html:122
 msgid "Add section"
-msgstr "إضافة سؤال"
+msgstr "إضافة قسم"
 
 #: .\templates\ui\pages\admin\assessment_detail.html:133
 msgid "MCQ"
@@ -10567,7 +10097,7 @@ msgstr "لا توجد أسئلة بعد. أضف السؤال الأول."
 
 #: .\templates\ui\pages\admin\assessment_detail.html:204
 msgid "Add manual question"
-msgstr "إضافة سؤال"
+msgstr "إضافة سؤال يدوي"
 
 #: .\templates\ui\pages\admin\assessment_detail.html:205
 msgid "Manage question bank"
@@ -10583,21 +10113,18 @@ msgid "Results"
 msgstr "النتائج"
 
 #: .\templates\ui\pages\admin\assessment_detail.html:264
-#, fuzzy
 msgid "No attempts"
 msgstr "لا توجد محاولات بعد."
 
 #: .\templates\ui\pages\admin\assessment_detail.html:264
-#, fuzzy
 msgid "No student attempts for this assessment."
 msgstr "أضف أسئلة لهذا التقييم."
 
 #: .\templates\ui\pages\admin\assessment_list.html:10
 msgid "Create, manage, and review exams, quizzes, and homework."
-msgstr ""
+msgstr "أنشئ الامتحانات والاختبارات القصيرة والواجبات وأدرها وراجعها."
 
 #: .\templates\ui\pages\admin\assessment_list.html:27
-#, fuzzy
 msgid "Search assessments…"
 msgstr "العودة إلى التقييمات"
 
@@ -10661,70 +10188,57 @@ msgid "Reset"
 msgstr "إعادة تعيين"
 
 #: .\templates\ui\pages\admin\attendance_detail.html:7
-#, fuzzy
 msgid "Attendance session"
 msgstr "جلسة حضور"
 
 #: .\templates\ui\pages\admin\attendance_detail.html:10
-#, fuzzy
 msgid "Session info"
 msgstr "معلومات الجلسة"
 
 #: .\templates\ui\pages\admin\attendance_detail.html:17
-#, fuzzy
 msgid "Open session"
 msgstr "فتح الجلسة"
 
 #: .\templates\ui\pages\admin\attendance_detail.html:24
-#, fuzzy
 msgid "Close session"
 msgstr "إغلاق الجلسة"
 
 #: .\templates\ui\pages\admin\attendance_detail.html:37
-#, fuzzy
 msgid "Created by"
 msgstr "تم الإنشاء بواسطة"
 
 #: .\templates\ui\pages\admin\attendance_detail.html:86
-#, fuzzy
 msgid "Opened by"
 msgstr "تم فتحها بواسطة"
 
 #: .\templates\ui\pages\admin\attendance_detail.html:94
-#, fuzzy
 msgid "Closed by"
 msgstr "تم إغلاقها بواسطة"
 
 #: .\templates\ui\pages\admin\attendance_detail.html:104
-#, fuzzy
 msgid "Attendance records"
 msgstr "سجلات الحضور"
 
 #: .\templates\ui\pages\admin\attendance_detail.html:113
 #: .\templates\ui\pages\admin\attendance_detail.html:137
-#, fuzzy
 msgid "Scanned at"
 msgstr "وقت المسح"
 
 #: .\templates\ui\pages\admin\attendance_detail.html:114
-#, fuzzy
 msgid "Scanned by"
 msgstr "تم المسح بواسطة"
 
 #: .\templates\ui\pages\admin\attendance_detail.html:144
 #: .\templates\ui\pages\admin\student_detail.html:223
-#, fuzzy
 msgid "No records"
 msgstr "لا توجد سجلات"
 
 #: .\templates\ui\pages\admin\attendance_detail.html:144
-#, fuzzy
 msgid "No attendance records for this session."
 msgstr "لا توجد سجلات حضور لهذه الجلسة."
 
 #: .\templates\ui\pages\admin\attendance_form.html:4
 #: .\templates\ui\pages\admin\attendance_form.html:7
-#, fuzzy
 msgid "Create attendance session"
 msgstr "إنشاء جلسة حضور"
 
@@ -10745,7 +10259,6 @@ msgstr "إلى"
 
 #: .\templates\ui\pages\admin\attendance_scan.html:4
 #: .\templates\ui\pages\admin\attendance_scan.html:7
-#, fuzzy
 msgid "Scan attendance"
 msgstr "مسح الحضور"
 
@@ -10766,13 +10279,12 @@ msgid "Enter QR payload"
 msgstr "أدخل بيانات رمز QR."
 
 #: .\templates\ui\pages\admin\attendance_scan.html:50
-#, fuzzy
 msgid "QR payload"
 msgstr "بيانات QR"
 
 #: .\templates\ui\pages\admin\audit.html:9
 msgid "Trace business actions and system changes."
-msgstr ""
+msgstr "تتبع إجراءات العمل وتغييرات النظام."
 
 #: .\templates\ui\pages\admin\audit.html:33
 #: .\templates\ui\pages\admin\audit.html:121
@@ -10801,12 +10313,10 @@ msgid "All actions"
 msgstr "جميع الإجراءات"
 
 #: .\templates\ui\pages\admin\audit.html:79
-#, fuzzy
 msgid "Actor name"
 msgstr "الممثل"
 
 #: .\templates\ui\pages\admin\audit.html:81
-#, fuzzy
 msgid "All types"
 msgstr "جميع الحالات"
 
@@ -10819,7 +10329,6 @@ msgid "Date to"
 msgstr "إلى تاريخ"
 
 #: .\templates\ui\pages\admin\audit.html:100
-#, fuzzy
 msgid "Event"
 msgstr "حدث التدقيق"
 
@@ -10830,7 +10339,6 @@ msgstr "تفاصيل المستخدم"
 
 #: .\templates\ui\pages\admin\audit.html:141
 #: .\templates\ui\pages\admin\audit.html:160
-#, fuzzy
 msgid "No audit events found."
 msgstr "لم يتم العثور على أحداث تدقيق"
 
@@ -10946,7 +10454,6 @@ msgstr "أنشئ شهادات الطلاب وحمّلها وأدرها."
 #: .\templates\ui\pages\admin\certificates.html:15
 #: .\templates\ui\pages\admin\communication_template_form.html:4
 #: .\templates\ui\pages\admin\communication_template_form.html:8
-#, fuzzy
 msgid "Edit template"
 msgstr "تعديل القالب"
 
@@ -11003,7 +10510,6 @@ msgid "No certificate templates yet."
 msgstr "قوالب الشهادات"
 
 #: .\templates\ui\pages\admin\certificates.html:82
-#, fuzzy
 msgid "Certificate number"
 msgstr "رقم الشهادة"
 
@@ -11027,7 +10533,6 @@ msgid "Revoke this certificate?"
 msgstr "الشهادة المنشأة"
 
 #: .\templates\ui\pages\admin\certificates.html:114
-#, fuzzy
 msgid "Revoked by administrator"
 msgstr "هذا الفصل مقفول. اتصل بالمشرف للحصول على التفاصيل."
 
@@ -11046,7 +10551,6 @@ msgstr "إلغاء"
 #: .\templates\ui\pages\admin\communication_template_list.html:64
 #: .\templates\ui\pages\admin\communications.html:217
 #: .\templates\ui\pages\admin\communications.html:350
-#, fuzzy
 msgid "Create template"
 msgstr "إنشاء قالب"
 
@@ -11055,13 +10559,12 @@ msgstr "إنشاء قالب"
 #: .\templates\ui\pages\admin\communication_preview.html:7
 #: .\templates\ui\pages\admin\communications.html:7
 #: .\templates\ui\pages\admin\communications.html:14
-#, fuzzy
 msgid "Messaging"
 msgstr "عنوان البريد الإلكتروني"
 
 #: .\templates\ui\pages\admin\communication_bulk_form.html:9
 msgid "Compose and send a bulk email to selected recipients."
-msgstr ""
+msgstr "أنشئ رسالة بريد إلكتروني جماعية وأرسلها إلى المستلمين المحددين."
 
 #: .\templates\ui\pages\admin\communication_bulk_form.html:14
 #: .\templates\ui\pages\admin\communication_history.html:14
@@ -11085,7 +10588,6 @@ msgstr "المحتوى"
 
 #: .\templates\ui\pages\admin\communication_bulk_form.html:23
 #: .\templates\ui\pages\admin\communications.html:28
-#, fuzzy
 msgid "No template"
 msgstr "لا توجد قوالب."
 
@@ -11101,49 +10603,42 @@ msgstr "حالة التسجيل"
 
 #: .\templates\ui\pages\admin\communication_bulk_form.html:56
 #: .\templates\ui\pages\admin\communications.html:61
-#, fuzzy
 msgid "Any status"
 msgstr "الحالة الجديدة"
 
 #: .\templates\ui\pages\admin\communication_bulk_form.html:64
 #: .\templates\ui\pages\admin\communications.html:69
-#, fuzzy
 msgid "Recipient search"
 msgstr "المستلمون"
 
 #: .\templates\ui\pages\admin\communication_bulk_form.html:67
 #: .\templates\ui\pages\admin\communications.html:72
-#, fuzzy
 msgid "Name or email"
 msgstr "بريد المستلمين الإلكتروني"
 
 #: .\templates\ui\pages\admin\communication_bulk_form.html:69
 #: .\templates\ui\pages\admin\communications.html:75
-#, fuzzy
 msgid "Manual recipients"
 msgstr "ترقية يدوية"
 
 #: .\templates\ui\pages\admin\communication_bulk_form.html:70
 #: .\templates\ui\pages\admin\communications.html:76
-#, fuzzy
 msgid "One email per line or comma separated"
 msgstr "بريد إلكتروني واحد لكل سطر، يُستخدم عندما تكون التصفية فارغة"
 
 #: .\templates\ui\pages\admin\communication_bulk_form.html:73
 #: .\templates\ui\pages\admin\communications.html:79
-#, fuzzy
 msgid "Preview recipients"
 msgstr "المستلمون"
 
 #: .\templates\ui\pages\admin\communication_detail.html:4
 #: .\templates\ui\pages\admin\communication_detail.html:8
-#, fuzzy
 msgid "Message detail"
 msgstr "تفاصيل المستخدم"
 
 #: .\templates\ui\pages\admin\communication_detail.html:9
 msgid "Delivery details for a sent bulk email."
-msgstr ""
+msgstr "تفاصيل تسليم بريد إلكتروني جماعي مُرسل."
 
 #: .\templates\ui\pages\admin\communication_detail.html:23
 #: .\templates\ui\pages\admin\communication_preview.html:17
@@ -11170,7 +10665,6 @@ msgstr "المستلمون"
 #: .\templates\ui\pages\admin\communication_detail.html:77
 #: .\templates\ui\pages\admin\communications.html:171
 #: .\templates\ui\pages\admin\communications.html:187
-#, fuzzy
 msgid "No delivery messages."
 msgstr "وضع المعاينة"
 
@@ -11178,7 +10672,6 @@ msgstr "وضع المعاينة"
 #: .\templates\ui\pages\admin\communication_footer.html:8
 #: .\templates\ui\pages\admin\communication_footer.html:12
 #: .\templates\ui\pages\admin\communications.html:222
-#, fuzzy
 msgid "Global footer"
 msgstr "التذييل العام"
 
@@ -11190,33 +10683,29 @@ msgstr "الإعدادات"
 
 #: .\templates\ui\pages\admin\communication_footer.html:9
 msgid "Edit the global email footer applied to all communications."
-msgstr ""
+msgstr "عدّل تذييل البريد الإلكتروني العام المطبق على جميع المراسلات."
 
 #: .\templates\ui\pages\admin\communication_footer.html:16
 #: .\templates\ui\pages\admin\communications.html:226
-#, fuzzy
 msgid "Save footer"
 msgstr "قالب البريد الإلكتروني"
 
 #: .\templates\ui\pages\admin\communication_history.html:4
 #: .\templates\ui\pages\admin\communication_history.html:8
-#, fuzzy
 msgid "Sent messages"
 msgstr "رسائل البريد الإلكتروني"
 
 #: .\templates\ui\pages\admin\communication_history.html:9
 msgid "View sent bulk email messages and their delivery status."
-msgstr ""
+msgstr "اعرض رسائل البريد الإلكتروني الجماعية المرسلة وحالة تسليمها."
 
 #: .\templates\ui\pages\admin\communication_history.html:15
 #: .\templates\ui\pages\admin\communications.html:359
-#, fuzzy
 msgid "Audience"
 msgstr "حدث التدقيق"
 
 #: .\templates\ui\pages\admin\communication_history.html:16
 #: .\templates\ui\pages\admin\communications.html:360
-#, fuzzy
 msgid "Success / failed"
 msgstr "نجاح"
 
@@ -11224,7 +10713,6 @@ msgstr "نجاح"
 #: .\templates\ui\pages\admin\communication_history.html:68
 #: .\templates\ui\pages\admin\communications.html:390
 #: .\templates\ui\pages\admin\communications.html:412
-#, fuzzy
 msgid "No messages have been sent."
 msgstr "لم يتم اجتياز جميع الفصول الدراسية."
 
@@ -11239,12 +10727,10 @@ msgstr "راسب"
 
 #: .\templates\ui\pages\admin\communication_history.html:75
 #: .\templates\ui\pages\admin\communications.html:419
-#, fuzzy
 msgid "Create message"
 msgstr "إنشاء فصل دراسي"
 
 #: .\templates\ui\pages\admin\communication_preview.html:9
-#, fuzzy
 msgid "Review your draft before sending."
 msgstr "مراجعة قبل الإرسال"
 
@@ -11256,7 +10742,6 @@ msgstr "مراجعة قبل الإرسال"
 #: .\templates\ui\pages\admin\communications.html:208
 #: .\templates\ui\pages\admin\communications.html:263
 #: .\templates\ui\pages\admin\communications.html:302
-#, fuzzy
 msgid "Design"
 msgstr "التصاميم"
 
@@ -11279,13 +10764,12 @@ msgstr "تجاهل"
 #: .\templates\ui\pages\admin\communication_template_form.html:7
 #: .\templates\ui\pages\admin\communication_template_list.html:4
 #: .\templates\ui\pages\admin\communication_template_list.html:8
-#, fuzzy
 msgid "Templates"
 msgstr "القالب"
 
 #: .\templates\ui\pages\admin\communication_resend.html:9
 msgid "Create a new email template for a system action."
-msgstr ""
+msgstr "أنشئ قالب بريد إلكتروني جديدًا لإجراء من إجراءات النظام."
 
 #: .\templates\ui\pages\admin\communication_resend.html:19
 #: .\templates\ui\pages\admin\communications.html:199
@@ -11300,48 +10784,41 @@ msgstr "الاسم"
 #: .\templates\ui\pages\admin\communication_template_form.html:70
 #: .\templates\ui\pages\admin\communications.html:215
 #: .\templates\ui\pages\admin\communications.html:288
-#, fuzzy
 msgid "Enabled for actions"
 msgstr "مفعّل للإجراء"
 
 #: .\templates\ui\pages\admin\communication_template_form.html:9
-#, fuzzy
 msgid "Edit an email template."
 msgstr "قالب البريد الإلكتروني"
 
 #: .\templates\ui\pages\admin\communication_template_form.html:19
 #: .\templates\ui\pages\admin\communications.html:237
-#, fuzzy
 msgid "Rendered subject"
 msgstr "الموضوع"
 
 #: .\templates\ui\pages\admin\communication_template_form.html:29
 #: .\templates\ui\pages\admin\communications.html:247
-#, fuzzy
 msgid "Missing sample variables"
 msgstr "المتغيرات المفقودة"
 
 #: .\templates\ui\pages\admin\communication_template_form.html:53
 #: .\templates\ui\pages\admin\communications.html:271
-#, fuzzy
 msgid "Required variables"
 msgstr "المتغيرات المطلوبة"
 
 #: .\templates\ui\pages\admin\communication_template_form.html:72
 #: .\templates\ui\pages\admin\communications.html:290
-#, fuzzy
 msgid "Save template"
 msgstr "قالب جديد"
 
 #: .\templates\ui\pages\admin\communication_template_form.html:75
 #: .\templates\ui\pages\admin\communications.html:294
-#, fuzzy
 msgid "Preview template"
 msgstr "قالب جديد"
 
 #: .\templates\ui\pages\admin\communication_template_list.html:9
 msgid "Manage email templates for system actions."
-msgstr ""
+msgstr "أدر قوالب البريد الإلكتروني لإجراءات النظام."
 
 #: .\templates\ui\pages\admin\communication_template_list.html:15
 #: .\templates\ui\pages\admin\communications.html:301
@@ -11357,94 +10834,79 @@ msgstr "لا توجد قوالب."
 
 #: .\templates\ui\pages\admin\communication_template_list.html:66
 #: .\templates\ui\pages\admin\communications.html:352
-#, fuzzy
 msgid "Edit footer"
 msgstr "تعديل المجموعة"
 
 #: .\templates\ui\pages\admin\communications.html:9
 msgid ""
 "Design, preview, send, and inspect delivery of institutional communications."
-msgstr ""
+msgstr "صمّم المراسلات المؤسسية وعاينها وأرسلها وافحص تسليمها."
 
 #: .\templates\ui\pages\admin\communications.html:15
 msgid "Compose message"
 msgstr "إنشاء فصل دراسي"
 
 #: .\templates\ui\pages\admin\course_detail.html:10
-#, fuzzy
 msgid "Course versions"
 msgstr "نسخ الدورة"
 
 #: .\templates\ui\pages\admin\course_detail.html:13
-#, fuzzy
 msgid "Create version"
 msgstr "إنشاء نسخة"
 
 #: .\templates\ui\pages\admin\course_detail.html:55
-#, fuzzy
 msgid "No versions"
 msgstr "لا توجد إصدارات بعد"
 
 #: .\templates\ui\pages\admin\course_detail.html:55
-#, fuzzy
 msgid "No versions found for this course."
 msgstr "لا توجد نسخ لهذا المقرر."
 
 #: .\templates\ui\pages\admin\course_detail.html:59
 #: .\templates\ui\pages\admin\entrance_exam_detail.html:37
 #: .\templates\ui\pages\admin\entrance_exams.html:285
-#, fuzzy
 msgid "Content"
 msgstr "متابعة"
 
 #: .\templates\ui\pages\admin\course_detail.html:101
 #: .\templates\ui\pages\admin\diploma_lecture_list.html:67
-#, fuzzy
 msgid "No lectures"
 msgstr "لا توجد محاضرات منشورة بعد"
 
 #: .\templates\ui\pages\admin\course_detail.html:101
-#, fuzzy
 msgid "No lectures found for this course."
 msgstr "لا توجد محاضرات في هذا الإصدار بعد."
 
 #: .\templates\ui\pages\admin\course_detail.html:143
 #: .\templates\ui\pages\admin\diploma_detail.html:198
 #: .\templates\ui\pages\admin\student_detail.html:162
-#, fuzzy
 msgid "No enrollments"
 msgstr "تسجيل مقرر"
 
 #: .\templates\ui\pages\admin\course_detail.html:143
-#, fuzzy
 msgid "No student enrollments for this course."
 msgstr "ليس لديك تسجيل نشط في هذه الدورة."
 
 #: .\templates\ui\pages\admin\course_lecture_preview.html:6
 #: .\templates\ui\pages\admin\lecture_preview.html:6
-#, fuzzy
 msgid "Lecture preview"
 msgstr "تم إنشاء المحاضرة."
 
 #: .\templates\ui\pages\admin\course_lecture_preview.html:11
 #: .\templates\ui\pages\admin\lecture_preview.html:20
-#, fuzzy
 msgid "Open YouTube video"
 msgstr "معرّف فيديو YouTube"
 
 #: .\templates\ui\pages\admin\course_lecture_preview.html:12
 #: .\templates\ui\pages\admin\lecture_preview.html:22
-#, fuzzy
 msgid "No YouTube video has been added to this lecture."
 msgstr "ليس لديك صلاحية الوصول إلى هذا المقرر."
 
 #: .\templates\ui\pages\admin\course_list.html:10
-#, fuzzy
 msgid "Manage course offerings, versions, and lectures."
 msgstr "إدارة عروض المقرر والإصدارات والمحاضرات."
 
 #: .\templates\ui\pages\admin\course_list.html:24
-#, fuzzy
 msgid "Search courses…"
 msgstr "البحث في المقررات…"
 
@@ -11453,7 +10915,6 @@ msgid "Search courses"
 msgstr "البحث في المسارات"
 
 #: .\templates\ui\pages\admin\dashboard.html:22
-#, fuzzy
 msgid "Welcome to the dashboard."
 msgstr "اذهب إلى لوحة التحكم"
 
@@ -11466,7 +10927,6 @@ msgid "Add cohort"
 msgstr "إضافة دفعة"
 
 #: .\templates\ui\pages\admin\diploma_detail.html:17
-#, fuzzy
 msgid "Add semester"
 msgstr "تعديل الفصل الدراسي"
 
@@ -11507,7 +10967,6 @@ msgid "No clusters yet."
 msgstr "لا توجد مجموعات بعد."
 
 #: .\templates\ui\pages\admin\diploma_detail.html:131
-#, fuzzy
 msgid "No cohorts"
 msgstr "لا توجد دفعات بعد"
 
@@ -11552,12 +11011,10 @@ msgid "No progression rule set."
 msgstr "لا توجد قاعدة تقدم نشطة."
 
 #: .\templates\ui\pages\admin\diploma_detail.html:198
-#, fuzzy
 msgid "No student enrollments for this diploma."
 msgstr "لا يوجد تسجيل نشط."
 
 #: .\templates\ui\pages\admin\diploma_lecture_list.html:20
-#, fuzzy
 msgid "Lecture list"
 msgstr "محاضرات"
 
@@ -11569,31 +11026,26 @@ msgid "Questions"
 msgstr "الأسئلة"
 
 #: .\templates\ui\pages\admin\diploma_lecture_list.html:67
-#, fuzzy
 msgid "No lectures found for this cohort and semester."
 msgstr "لا يوجد سياق تجريبي محدد لهذا القالب."
 
 #: .\templates\ui\pages\admin\diploma_list.html:24
-#, fuzzy
 msgid "Search diplomas…"
-msgstr "الدبلومات النشطة"
+msgstr "ابحث عن الدبلومات…"
 
 #: .\templates\ui\pages\admin\diploma_list.html:25
 msgid "Search diplomas"
 msgstr "البحث في الدبلومات"
 
 #: .\templates\ui\pages\admin\enrollment_list.html:13
-#, fuzzy
 msgid "Manage course enrollment records."
 msgstr "تسجيلات المقرر"
 
 #: .\templates\ui\pages\admin\enrollment_list.html:19
-#, fuzzy
 msgid "Manage diploma enrollment records."
 msgstr "تسجيلات الدبلوم"
 
 #: .\templates\ui\pages\admin\enrollment_list.html:34
-#, fuzzy
 msgid "Search by name or email…"
 msgstr "البحث بالاسم أو البريد الإلكتروني..."
 
@@ -11609,7 +11061,6 @@ msgstr "البحث في التسجيلات"
 #: .\templates\ui\pages\admin\entrance_exam_list.html:7
 #: .\templates\ui\pages\admin\entrance_exams.html:7
 #: .\templates\ui\pages\admin\grading_list.html:7
-#, fuzzy
 msgid "Assessment operations"
 msgstr "أسئلة التقييم"
 
@@ -11623,17 +11074,15 @@ msgstr "أسئلة التقييم"
 msgid ""
 "Create exams, manage invitations, grade attempts, and inspect delivery "
 "history."
-msgstr ""
+msgstr "أنشئ الامتحانات وأدر الدعوات وصحح المحاولات وافحص سجل التسليم."
 
 #: .\templates\ui\pages\admin\entrance_exam_detail.html:25
 #: .\templates\ui\pages\admin\entrance_exams.html:273
-#, fuzzy
 msgid "Cohort emails"
 msgstr "التعلم الجماعي"
 
 #: .\templates\ui\pages\admin\entrance_exam_detail.html:32
 #: .\templates\ui\pages\admin\entrance_exams.html:280
-#, fuzzy
 msgid "Finalize pending"
 msgstr "إنهاء المحاولات المعلقة"
 
@@ -11666,7 +11115,6 @@ msgid "Search email log"
 msgstr "البحث في سجل البريد"
 
 #: .\templates\ui\pages\admin\entrance_exam_email_log.html:17
-#, fuzzy
 msgid "Search…"
 msgstr "بحث"
 
@@ -11681,21 +11129,18 @@ msgstr "جميع الحالات"
 #: .\templates\ui\pages\admin\entrance_exam_email_log.html:69
 #: .\templates\ui\pages\admin\entrance_exams.html:462
 #: .\templates\ui\pages\admin\entrance_exams.html:478
-#, fuzzy
 msgid "No email logs."
 msgstr "لا توجد سجلات بريد إلكتروني بعد."
 
 #: .\templates\ui\pages\admin\entrance_exam_form.html:27
 #: .\templates\ui\pages\admin\entrance_exams.html:251
-#, fuzzy
 msgid "Save exam"
 msgstr "الامتحانات المباشرة"
 
 #: .\templates\ui\pages\admin\entrance_exam_grade_attempt.html:4
 #: .\templates\ui\pages\admin\entrance_exam_grade_attempt.html:8
-#, fuzzy
 msgid "Grade attempt"
-msgstr "محاولة القبول"
+msgstr "تصحيح المحاولة"
 
 #: .\templates\ui\pages\admin\entrance_exam_grade_attempt.html:37
 #: .\templates\ui\pages\admin\entrance_exams.html:41
@@ -11706,7 +11151,6 @@ msgstr "حفظ الدرجات"
 
 #: .\templates\ui\pages\admin\entrance_exam_grade_list.html:13
 #: .\templates\ui\pages\admin\entrance_exams.html:372
-#, fuzzy
 msgid "Attempts to grade"
 msgstr "محاولات التصحيح"
 
@@ -11714,7 +11158,6 @@ msgstr "محاولات التصحيح"
 #: .\templates\ui\pages\admin\entrance_exam_grade_list.html:56
 #: .\templates\ui\pages\admin\entrance_exams.html:398
 #: .\templates\ui\pages\admin\entrance_exams.html:415
-#, fuzzy
 msgid "No attempts to grade."
 msgstr "لا توجد محاولات للتصحيح."
 
@@ -11736,7 +11179,6 @@ msgstr "إنشاء امتحان"
 
 #: .\templates\ui\pages\admin\entrance_exam_list.html:23
 #: .\templates\ui\pages\admin\entrance_exams.html:314
-#, fuzzy
 msgid "Cohort / scope"
 msgstr "الدفعة / النطاق"
 
@@ -11749,7 +11191,6 @@ msgstr "النافذة / المدة"
 #: .\templates\ui\pages\admin\entrance_exam_list.html:77
 #: .\templates\ui\pages\admin\entrance_exams.html:343
 #: .\templates\ui\pages\admin\entrance_exams.html:363
-#, fuzzy
 msgid "No entrance exams created."
 msgstr "لا توجد امتحانات قبول بعد."
 
@@ -11758,17 +11199,14 @@ msgid "questions"
 msgstr "الأسئلة"
 
 #: .\templates\ui\pages\admin\entrance_exam_preview.html:6
-#, fuzzy
 msgid "Entrance exam preview"
 msgstr "معاينة اختبار القبول"
 
 #: .\templates\ui\pages\admin\entrance_exam_preview.html:34
-#, fuzzy
 msgid "No questions have been added to this exam yet."
 msgstr "لم تُضف أي أسئلة إلى هذا الاختبار بعد."
 
 #: .\templates\ui\pages\admin\entrance_exams.html:51
-#, fuzzy
 msgid "Invitations"
 msgstr "الدعوات"
 
@@ -11777,7 +11215,6 @@ msgid "History"
 msgstr "السجل"
 
 #: .\templates\ui\pages\admin\entrance_exams.html:58
-#, fuzzy
 msgid "Search invitations"
 msgstr "البحث في الدعوات"
 
@@ -11787,7 +11224,6 @@ msgid "Search"
 msgstr "بحث"
 
 #: .\templates\ui\pages\admin\entrance_exams.html:92
-#, fuzzy
 msgid "Send invitations"
 msgstr "إرسال الدعوات"
 
@@ -11801,37 +11237,30 @@ msgid "Result"
 msgstr "النتيجة"
 
 #: .\templates\ui\pages\admin\entrance_exams.html:98
-#, fuzzy
 msgid "All results"
 msgstr "كل النتائج"
 
 #: .\templates\ui\pages\admin\entrance_exams.html:136
-#, fuzzy
 msgid "Send results"
 msgstr "إرسال النتائج"
 
 #: .\templates\ui\pages\admin\entrance_exams.html:138
-#, fuzzy
 msgid "No results."
 msgstr "لا توجد نتائج."
 
 #: .\templates\ui\pages\admin\entrance_exams.html:142
-#, fuzzy
 msgid "Search history"
 msgstr "بحث في السجل"
 
 #: .\templates\ui\pages\admin\entrance_exams.html:181
-#, fuzzy
 msgid "Resend emails"
 msgstr "إعادة إرسال البريد الإلكتروني"
 
 #: .\templates\ui\pages\admin\entrance_exams.html:183
-#, fuzzy
 msgid "No email history."
 msgstr "لا يوجد سجل بريد إلكتروني بعد."
 
 #: .\templates\ui\pages\admin\entrance_exams.html:304
-#, fuzzy
 msgid "No questions."
 msgstr "لا توجد أسئلة بعد."
 
@@ -11842,19 +11271,16 @@ msgid "min"
 msgstr "دقيقة"
 
 #: .\templates\ui\pages\admin\entrance_exams.html:426
-#, fuzzy
 msgid "Search—"
 msgstr "بحث"
 
 #: .\templates\ui\pages\admin\entrance_exams.html:495
 #: .\templates\ui\pages\admin\entrance_exams.html:514
-#, fuzzy
 msgid "Exam record"
 msgstr "سجل الامتحان"
 
 #: .\templates\ui\pages\admin\entrance_exams.html:504
 #: .\templates\ui\pages\admin\entrance_exams.html:520
-#, fuzzy
 msgid "No records found."
 msgstr "لم يتم العثور على سجلات."
 
@@ -11867,30 +11293,26 @@ msgid "Exam codes"
 msgstr "نوع الامتحان"
 
 #: .\templates\ui\pages\admin\exam_code_roster.html:13
-#, fuzzy
 msgid "Generate missing codes"
 msgstr "توليد الرموز المفقودة"
 
 #: .\templates\ui\pages\admin\exam_code_roster.html:15
-#, fuzzy
 msgid "Export offline codes"
 msgstr "تصدير الرموز غير المتصلة"
 
 #: .\templates\ui\pages\admin\exam_code_roster.html:21
 #: .\templates\ui\pages\admin\reviewer_online_grading.html:16
-#, fuzzy
 msgid "Code"
 msgstr "الرمز"
 
 #: .\templates\ui\pages\admin\exam_code_roster.html:23
-#, fuzzy
 msgid "Mode"
 msgstr "اسم النموذج"
 
 #: .\templates\ui\pages\admin\exam_code_roster.html:35
 #: .\templates\ui\pages\admin\exam_code_roster.html:57
 msgid "Toggle"
-msgstr ""
+msgstr "تبديل"
 
 #: .\templates\ui\pages\admin\exam_code_roster.html:42
 #: .\templates\ui\pages\admin\exam_code_roster.html:62
@@ -11940,7 +11362,6 @@ msgstr "في انتظار المراجعة"
 
 #: .\templates\ui\pages\admin\exceptional_access.html:7
 #: .\templates\ui\pages\admin\exceptional_access.html:10
-#, fuzzy
 msgid "Exceptional access"
 msgstr "دخول الامتحان"
 
@@ -11949,7 +11370,6 @@ msgid "No active enrolled students in this cohort."
 msgstr "ليس لديك تسجيل نشط في هذه الدورة."
 
 #: .\templates\ui\pages\admin\exceptional_access.html:30
-#, fuzzy
 msgid "Create overrides"
 msgstr "تجاوز الدرجة"
 
@@ -11963,7 +11383,7 @@ msgstr "تجاوز"
 
 #: .\templates\ui\pages\admin\exceptional_access.html:39
 msgid "Window"
-msgstr ""
+msgstr "النافذة"
 
 #: .\templates\ui\pages\admin\exceptional_access.html:58
 #: .\templates\ui\pages\admin\exceptional_access.html:84
@@ -11973,13 +11393,11 @@ msgstr "سبب الإلغاء"
 
 #: .\templates\ui\pages\admin\exceptional_access.html:67
 #: .\templates\ui\pages\admin\exceptional_access.html:92
-#, fuzzy
 msgid "No overrides yet."
 msgstr "لا توجد إصدارات بعد"
 
 #: .\templates\ui\pages\admin\grading_detail.html:4
 #: .\templates\ui\pages\admin\grading_detail.html:7
-#, fuzzy
 msgid "Grade submission"
 msgstr "تصحيح التسليم"
 
@@ -11991,7 +11409,7 @@ msgstr "التحميل ليس في حالة معاينة."
 #: .\templates\ui\pages\student\assessment_results.html:28
 #: .\templates\ui\pages\student\assessment_take.html:16
 msgid "Submitted files"
-msgstr "الملف المقدم"
+msgstr "الملفات المقدمة"
 
 #: .\templates\ui\pages\admin\grading_detail.html:58
 #: .\templates\ui\pages\admin\grading_detail.html:72
@@ -11999,12 +11417,10 @@ msgstr "الملف المقدم"
 #: .\templates\ui\pages\admin\progression_custom_activity.html:33
 #: .\templates\ui\pages\admin\reviewer_online_grading.html:26
 #: .\templates\ui\pages\admin\reviewer_section_grading.html:18
-#, fuzzy
 msgid "Save grade"
 msgstr "حفظ الدرجات"
 
 #: .\templates\ui\pages\admin\grading_list.html:9
-#, fuzzy
 msgid "Review and score assessment attempts and homework submissions."
 msgstr "راجع وصحح محاولات التقييم وتسليمات الواجبات المنزلية."
 
@@ -12014,19 +11430,16 @@ msgstr "محاولات التقييم"
 
 #: .\templates\ui\pages\admin\grading_list.html:59
 #: .\templates\ui\pages\admin\grading_list.html:154
-#, fuzzy
 msgid "No submissions are waiting for grading."
 msgstr "لا توجد تسليمات بانتظار التصحيح."
 
 #: .\templates\ui\pages\admin\grading_list.html:64
-#, fuzzy
 msgid "Homework submissions"
 msgstr "تسليمات الواجبات المنزلية"
 
 #: .\templates\ui\pages\admin\import.html:4
 #: .\templates\ui\pages\admin\import.html:7
 #: .\templates\ui\pages\admin\student_list.html:15
-#, fuzzy
 msgid "Import students"
 msgstr "استيراد الطلاب"
 
@@ -12037,7 +11450,6 @@ msgstr "الصفوف"
 #: .\templates\ui\pages\admin\import.html:22
 #: .\templates\ui\pages\admin\import.html:36
 #: .\templates\ui\pages\admin\payments.html:337
-#, fuzzy
 msgid "Row"
 msgstr "الصفوف"
 
@@ -12045,7 +11457,6 @@ msgstr "الصفوف"
 #: .\templates\ui\pages\admin\import.html:42
 #: .\templates\ui\pages\admin\payments.html:355
 #: .\templates\ui\pages\admin\payments.html:372
-#, fuzzy
 msgid "No rows found."
 msgstr "لم يتم العثور على مستخدمين."
 
@@ -12060,7 +11471,6 @@ msgid "Upload"
 msgstr "رفع"
 
 #: .\templates\ui\pages\admin\intake.html:4
-#, fuzzy
 msgid "Intake"
 msgstr "التقديم"
 
@@ -12074,12 +11484,10 @@ msgid "Form"
 msgstr "النموذج"
 
 #: .\templates\ui\pages\admin\intake.html:54
-#, fuzzy
 msgid "Make optional"
 msgstr "جعل الحقل اختياريًا"
 
 #: .\templates\ui\pages\admin\intake.html:56
-#, fuzzy
 msgid "Make required"
 msgstr "جعل الحقل مطلوبًا"
 
@@ -12088,7 +11496,6 @@ msgid "Fields"
 msgstr "الحقول"
 
 #: .\templates\ui\pages\admin\intake.html:64
-#, fuzzy
 msgid "Form fields"
 msgstr "حقول النموذج"
 
@@ -12097,7 +11504,6 @@ msgid "Delete this field?"
 msgstr "حذف هذه المحاضرة؟"
 
 #: .\templates\ui\pages\admin\intake.html:93
-#, fuzzy
 msgid "No fields yet."
 msgstr "لا توجد حقول بعد."
 
@@ -12107,15 +11513,13 @@ msgstr "أضف الحقول أدناه لبناء نموذج التقديم هذ
 
 #: .\templates\ui\pages\admin\intake.html:98
 msgid "Builder"
-msgstr ""
+msgstr "المنشئ"
 
 #: .\templates\ui\pages\admin\intake.html:99
-#, fuzzy
 msgid "Add a field"
 msgstr "إضافة المحددين"
 
 #: .\templates\ui\pages\admin\intake.html:132
-#, fuzzy
 msgid "Add field"
 msgstr "إضافة المحددين"
 
@@ -12124,13 +11528,11 @@ msgid "Responses"
 msgstr "الإجابات"
 
 #: .\templates\ui\pages\admin\intake.html:145
-#, fuzzy
 msgid "Form responses"
 msgstr "بيانات الاستجابة"
 
 #: .\templates\ui\pages\admin\intake.html:158
 #: .\templates\ui\pages\admin\intake.html:179
-#, fuzzy
 msgid "Not submitted"
 msgstr "لم يبدأ"
 
@@ -12139,43 +11541,35 @@ msgid "No responses yet."
 msgstr "لا توجد أسئلة بعد."
 
 #: .\templates\ui\pages\admin\intake.html:171
-#, fuzzy
 msgid "Intake target"
 msgstr "نموذج التقديم"
 
 #: .\templates\ui\pages\admin\intake.html:174
-#, fuzzy
 msgid "Responses for this target"
 msgstr "لا توجد إجابات لهذا الهدف"
 
 #: .\templates\ui\pages\admin\intake.html:182
-#, fuzzy
 msgid "No responses."
 msgstr "لا توجد أسئلة بعد."
 
 #: .\templates\ui\pages\admin\intake.html:187
-#, fuzzy
 msgid "Response"
 msgstr "الإجابات"
 
 #: .\templates\ui\pages\admin\intake.html:188
-#, fuzzy
 msgid "Intake response"
 msgstr "إجابات نماذج التقديم"
 
 #: .\templates\ui\pages\admin\intake.html:208
-#, fuzzy
 msgid "Target name"
 msgstr "نوع الهدف"
 
 #: .\templates\ui\pages\admin\intake.html:209
-#, fuzzy
 msgid "Required / optional"
 msgstr "مطلوب إعادة الفصل الدراسي."
 
 #: .\templates\ui\pages\admin\intake.html:245
 #: .\templates\ui\pages\admin\intake.html:272
-#, fuzzy
 msgid "Required,Optional"
 msgstr "مطلوب إعادة الفصل الدراسي."
 
@@ -12186,19 +11580,16 @@ msgstr "إدارة"
 
 #: .\templates\ui\pages\admin\intake.html:258
 #: .\templates\ui\pages\admin\intake.html:279
-#, fuzzy
 msgid "No intake forms found."
 msgstr "لا توجد امتحانات قبول بعد."
 
 #: .\templates\ui\pages\admin\intake.html:258
 #: .\templates\ui\pages\admin\intake.html:279
 #: .\templates\ui\pages\admin\intake.html:286
-#, fuzzy
 msgid "Create form"
 msgstr "إنشاء نموذج"
 
 #: .\templates\ui\pages\admin\landing_settings.html:7
-#, fuzzy
 msgid "Site content"
 msgstr "محتوى الصفحة"
 
@@ -12253,7 +11644,6 @@ msgid "No diploma cohorts found."
 msgstr "لا توجد تحميلات بعد"
 
 #: .\templates\ui\pages\admin\landing_settings.html:176
-#, fuzzy
 msgid "Save settings"
 msgstr "حفظ الإعدادات"
 
@@ -12266,7 +11656,6 @@ msgid "Are you sure you want to reset all content to defaults?"
 msgstr "هل أنت متأكد أنك تريد إعادة تعيين كل المحتوى إلى القيم الافتراضية؟"
 
 #: .\templates\ui\pages\admin\landing_settings.html:184
-#, fuzzy
 msgid "Reset to defaults"
 msgstr "إعادة التعيين إلى القيم الافتراضية"
 
@@ -12281,7 +11670,6 @@ msgstr "الإعفاءات"
 
 #: .\templates\ui\pages\admin\payments.html:21
 #: .\templates\ui\pages\admin\payments.html:101
-#, fuzzy
 msgid "Search student…"
 msgstr "الطالب المتطابق"
 
@@ -12306,12 +11694,10 @@ msgstr "حذف هذا الفصل الدراسي؟"
 #: .\templates\ui\pages\admin\payments.html:278
 #: .\templates\ui\pages\admin\payments.html:302
 #: .\templates\ui\pages\admin\payments.html:310
-#, fuzzy
 msgid "New import"
 msgstr "مجموعة جديدة"
 
 #: .\templates\ui\pages\admin\payments.html:311
-#, fuzzy
 msgid "CSV template"
 msgstr "قالب جديد"
 
@@ -12320,47 +11706,39 @@ msgid "Total rows"
 msgstr "إجمالي الصفوف"
 
 #: .\templates\ui\pages\admin\payments.html:329
-#, fuzzy
 msgid "Confirm upload"
 msgstr "تم التأكيد"
 
 #: .\templates\ui\pages\admin\payments.html:376
-#, fuzzy
 msgid "Back to imports"
 msgstr "العودة إلى الدورة"
 
 #: .\templates\ui\pages\admin\profile.html:6
 msgid "Update your staff account details."
-msgstr ""
+msgstr "حدّث تفاصيل حسابك الوظيفي."
 
 #: .\templates\ui\pages\admin\program_detail.html:7
 #: .\templates\ui\pages\admin\program_list.html:9
-#, fuzzy
 msgid "Application review"
-msgstr "تم التراجع عن الطلب."
+msgstr "مراجعة الطلب"
 
 #: .\templates\ui\pages\admin\program_detail.html:9
-#, fuzzy
 msgid "Submitted request"
-msgstr "تم التقديم في"
+msgstr "الطلب المقدم"
 
 #: .\templates\ui\pages\admin\program_detail.html:10
-#, fuzzy
 msgid "Application details"
-msgstr "مؤشر الطلبات"
+msgstr "تفاصيل الطلب"
 
 #: .\templates\ui\pages\admin\program_detail.html:44
-#, fuzzy
 msgid "Applicant email"
-msgstr "بيانات المتقدم"
+msgstr "البريد الإلكتروني للمتقدم"
 
 #: .\templates\ui\pages\admin\program_detail.html:51
-#, fuzzy
 msgid "Reviewed by"
-msgstr "راجعه"
+msgstr "راجع الطلب"
 
 #: .\templates\ui\pages\admin\program_detail.html:59
-#, fuzzy
 msgid "Reviewed at"
 msgstr "تمت المراجعة في"
 
@@ -12383,15 +11761,13 @@ msgid "Reviewer notes"
 msgstr "ملاحظات المراجع"
 
 #: .\templates\ui\pages\admin\program_detail.html:80
-#, fuzzy
 msgid "Accept application"
-msgstr "الطلبات الأخيرة"
+msgstr "قبول الطلب"
 
 #: .\templates\ui\pages\admin\program_detail.html:84
 #: .\templates\ui\pages\admin\program_detail.html:94
-#, fuzzy
 msgid "Reject application"
-msgstr "الطلبات الأخيرة"
+msgstr "رفض الطلب"
 
 #: .\templates\ui\pages\admin\program_detail.html:90
 msgid "Rejection reason"
@@ -12439,7 +11815,6 @@ msgid "Documents received. The application is ready for activation."
 msgstr "تم استلام المستندات. الطلب جاهز للتفعيل."
 
 #: .\templates\ui\pages\admin\program_detail.html:140
-#, fuzzy
 msgid "External reference"
 msgstr "مرجع خارجي"
 
@@ -12526,7 +11901,6 @@ msgstr "تاريخ/وقت المقابلة"
 #: .\templates\ui\pages\admin\program_detail.html:219
 #: .\templates\ui\pages\public\activation_confirm.html:20
 #: .\templates\ui\pages\public\resend_activation.html:20
-#, fuzzy
 msgid "Activation"
 msgstr "التفعيل"
 
@@ -12539,12 +11913,10 @@ msgid "Activate application"
 msgstr "تفعيل الطلب"
 
 #: .\templates\ui\pages\admin\program_detail.html:235
-#, fuzzy
 msgid "Decision history"
 msgstr "سجل القرارات"
 
 #: .\templates\ui\pages\admin\program_detail.html:266
-#, fuzzy
 msgid "No decisions recorded"
 msgstr "لم يتم تسجيل قرارات."
 
@@ -12555,10 +11927,9 @@ msgstr "ستظهر أنشطة مسار العمل هنا."
 #: .\templates\ui\pages\admin\program_list.html:10
 msgid ""
 "Search the queue, inspect applicant context, and make permissioned decisions."
-msgstr ""
+msgstr "ابحث في قائمة الانتظار وافحص سياق المتقدم واتخذ قرارات مصرحًا بها."
 
 #: .\templates\ui\pages\admin\program_list.html:24
-#, fuzzy
 msgid "Applicant, email, or program"
 msgstr "سجل رسائل الطلبات"
 
@@ -12568,7 +11939,6 @@ msgstr "البحث في الطلبات"
 
 #: .\templates\ui\pages\admin\progression.html:36
 #: .\templates\ui\pages\admin\progression_dashboard.html:48
-#, fuzzy
 msgid "Diploma / cohort"
 msgstr "دفعة الدبلومة"
 
@@ -12579,13 +11949,11 @@ msgstr "الفصل الدراسي الحالي"
 
 #: .\templates\ui\pages\admin\progression.html:38
 #: .\templates\ui\pages\admin\progression_dashboard.html:50
-#, fuzzy
 msgid "Progress state"
 msgstr "سجل التقدم"
 
 #: .\templates\ui\pages\admin\progression.html:39
 #: .\templates\ui\pages\admin\progression_dashboard.html:51
-#, fuzzy
 msgid "Last decision / update"
 msgstr "تم تحديث السؤال"
 
@@ -12593,115 +11961,97 @@ msgstr "تم تحديث السؤال"
 #: .\templates\ui\pages\admin\progression.html:82
 #: .\templates\ui\pages\admin\progression_dashboard.html:74
 #: .\templates\ui\pages\admin\progression_dashboard.html:94
-#, fuzzy
 msgid "No progression records found."
 msgstr "لا توجد سجلات تقدم."
 
 #: .\templates\ui\pages\admin\progression.html:95
 #: .\templates\ui\pages\admin\progression_student_detail.html:17
-#, fuzzy
 msgid "Current progress"
 msgstr "الدرجة الحالية"
 
 #: .\templates\ui\pages\admin\progression.html:112
 #: .\templates\ui\pages\admin\progression.html:117
-#, fuzzy
 msgid "Semester id"
 msgstr "فصل دراسي"
 
 #: .\templates\ui\pages\admin\progression.html:145
 #: .\templates\ui\pages\admin\progression_student_detail.html:70
-#, fuzzy
 msgid "No semester progress."
 msgstr "تقدم الفصل"
 
 #: .\templates\ui\pages\admin\progression.html:150
 #: .\templates\ui\pages\admin\progression_student_detail.html:75
-#, fuzzy
 msgid "Components"
 msgstr "إكمال"
 
 #: .\templates\ui\pages\admin\progression.html:151
 #: .\templates\ui\pages\admin\progression_student_detail.html:76
-#, fuzzy
 msgid "Progress components"
 msgstr "تصحيح التسليمات"
 
 #: .\templates\ui\pages\admin\progression.html:167
 #: .\templates\ui\pages\admin\progression_student_detail.html:92
-#, fuzzy
 msgid "Interviews"
 msgstr "تجاوز النجاح"
 
 #: .\templates\ui\pages\admin\progression.html:168
 #: .\templates\ui\pages\admin\progression_student_detail.html:93
-#, fuzzy
 msgid "Interview requests"
 msgstr "قائمة المراجعة"
 
 #: .\templates\ui\pages\admin\progression.html:184
 #: .\templates\ui\pages\admin\progression_component_list.html:16
 msgid "Weight"
-msgstr ""
+msgstr "الوزن"
 
 #: .\templates\ui\pages\admin\progression.html:210
 #: .\templates\ui\pages\admin\progression.html:231
 #: .\templates\ui\pages\admin\progression_component_list.html:42
 #: .\templates\ui\pages\admin\progression_component_list.html:63
-#, fuzzy
 msgid "No components."
 msgstr "إكمال"
 
 #: .\templates\ui\pages\admin\progression.html:235
 #: .\templates\ui\pages\admin\progression_component_list.html:67
-#, fuzzy
 msgid "Create component"
 msgstr "إنشاء مجموعة"
 
 #: .\templates\ui\pages\admin\progression.html:251
 #: .\templates\ui\pages\admin\progression_component_form.html:23
-#, fuzzy
 msgid "Weight percent"
 msgstr "نسبة الخصم"
 
 #: .\templates\ui\pages\admin\progression.html:256
 #: .\templates\ui\pages\admin\progression_component_form.html:28
-#, fuzzy
 msgid "Required minimum percent"
 msgstr "نسبة إكمال الفيديو"
 
 #: .\templates\ui\pages\admin\progression.html:267
 #: .\templates\ui\pages\admin\progression_component_form.html:39
-#, fuzzy
 msgid "Required to pass"
 msgstr "مطلوب إعادة الفصل الدراسي."
 
 #: .\templates\ui\pages\admin\progression.html:277
 #: .\templates\ui\pages\admin\progression_component_form.html:49
-#, fuzzy
 msgid "Save component"
 msgstr "إنشاء مجموعة"
 
 #: .\templates\ui\pages\admin\progression.html:293
 #: .\templates\ui\pages\admin\progression_custom_activity.html:24
-#, fuzzy
 msgid "Maximum score"
 msgstr "الدرجة"
 
 #: .\templates\ui\pages\admin\progression.html:316
-#, fuzzy
 msgid "Evaluation result"
 msgstr "تقييم"
 
 #: .\templates\ui\pages\admin\progression.html:321
 #: .\templates\ui\pages\admin\progression_semester_evaluation.html:53
-#, fuzzy
 msgid "Synchronize grade items"
 msgstr "ملفات الطلاب"
 
 #: .\templates\ui\pages\admin\progression.html:351
 #: .\templates\ui\pages\admin\progression_interview_decision.html:21
-#, fuzzy
 msgid "Save decision"
 msgstr "حفظ السؤال"
 
@@ -12709,19 +12059,16 @@ msgstr "حفظ السؤال"
 #: .\templates\ui\pages\admin\progression.html:420
 #: .\templates\ui\pages\admin\progression_rejoin_list.html:53
 #: .\templates\ui\pages\admin\progression_rejoin_list.html:78
-#, fuzzy
 msgid "No rejoin plans."
 msgstr "لا توجد قوالب."
 
 #: .\templates\ui\pages\admin\progression.html:426
 #: .\templates\ui\pages\admin\progression_rejoin_create.html:12
-#, fuzzy
 msgid "Failed semester"
 msgstr "فصل دراسي جديد"
 
 #: .\templates\ui\pages\admin\progression.html:431
 #: .\templates\ui\pages\admin\progression_rejoin_create.html:17
-#, fuzzy
 msgid "Target cohort"
 msgstr "إنشاء مجموعة"
 
@@ -12768,7 +12115,6 @@ msgid "Previous Cohort"
 msgstr "السابق"
 
 #: .\templates\ui\pages\admin\progression_rejoin_eligibility.html:15
-#, fuzzy
 msgid "Failed Semester"
 msgstr "الفصول الدراسية المكتملة"
 
@@ -12854,7 +12200,7 @@ msgstr "في انتظار الإرسال"
 
 #: .\templates\ui\pages\admin\progression_semester_table.html:58
 msgid "Exceptional"
-msgstr "اختياري"
+msgstr "استثنائي"
 
 #: .\templates\ui\pages\admin\progression_semester_table.html:105
 #: .\templates\ui\pages\admin\progression_semester_table.html:136
@@ -12881,7 +12227,7 @@ msgstr "تم طلب مقابلة وهي تمنع القرارات النهائي
 #: .\templates\ui\pages\admin\reviewer_assignment_list.html:4
 #: .\templates\ui\pages\admin\reviewer_assignment_list.html:8
 msgid "Reviewer assignments"
-msgstr "تعيينات المراجعين"
+msgstr "تكليفات المراجعين"
 
 #: .\templates\ui\pages\admin\reviewer_assignment_list.html:30
 #: .\templates\ui\pages\admin\reviewer_assignment_list.html:47
@@ -12924,25 +12270,21 @@ msgstr "في انتظار التصحيح"
 #: .\templates\ui\pages\admin\settings.html:9
 msgid ""
 "Site configuration, email health, AI review settings, and announcements."
-msgstr ""
+msgstr "إعدادات الموقع وحالة البريد وإعدادات المراجعة بالذكاء الاصطناعي والإعلانات."
 
 #: .\templates\ui\pages\admin\settings.html:12
-#, fuzzy
 msgid "General"
 msgstr "تم الإنشاء"
 
 #: .\templates\ui\pages\admin\settings.html:13
-#, fuzzy
 msgid "Site configuration"
 msgstr "إعدادات الموقع"
 
 #: .\templates\ui\pages\admin\settings.html:17
-#, fuzzy
 msgid "Site name (EN)"
 msgstr "اسم الموقع"
 
 #: .\templates\ui\pages\admin\settings.html:23
-#, fuzzy
 msgid "Site name (AR)"
 msgstr "اسم الموقع (بالعربية)"
 
@@ -12951,40 +12293,34 @@ msgid "Timezone"
 msgstr "المنطقة الزمنية"
 
 #: .\templates\ui\pages\admin\settings.html:41
-#, fuzzy
 msgid "Storage backend"
 msgstr "خلفية التخزين"
 
 #: .\templates\ui\pages\admin\settings.html:43
 msgid "Local"
-msgstr ""
+msgstr "محلي"
 
 #: .\templates\ui\pages\admin\settings.html:50
-#, fuzzy
 msgid "Email health"
 msgstr "الرسائل المرسلة"
 
 #: .\templates\ui\pages\admin\settings.html:54
-#, fuzzy
 msgid "Total sent"
 msgstr "الدرجة النهائية"
 
 #: .\templates\ui\pages\admin\settings.html:72
-#, fuzzy
 msgid "Last status"
 msgstr "صلاحية الموظف"
 
 #: .\templates\ui\pages\admin\settings.html:78
-#, fuzzy
 msgid "Last attempt"
 msgstr "الحد الأقصى للمحاولات"
 
 #: .\templates\ui\pages\admin\settings.html:86
 msgid "AI"
-msgstr ""
+msgstr "الذكاء الاصطناعي"
 
 #: .\templates\ui\pages\admin\settings.html:87
-#, fuzzy
 msgid "AI review"
 msgstr "معاينة"
 
@@ -12997,7 +12333,6 @@ msgid "Yes,No"
 msgstr "نعم،لا"
 
 #: .\templates\ui\pages\admin\settings.html:97
-#, fuzzy
 msgid "Provider / model"
 msgstr "وضع المعاينة"
 
@@ -13010,38 +12345,32 @@ msgid "Prompt version"
 msgstr "إصدار الموجه"
 
 #: .\templates\ui\pages\admin\settings.html:117
-#, fuzzy
 msgid "Reviews triggered"
 msgstr "قائمة المراجعة"
 
 #: .\templates\ui\pages\admin\settings.html:126
 msgid "Notice"
-msgstr ""
+msgstr "تنبيه"
 
 #: .\templates\ui\pages\admin\staff_assignments.html:4
 #: .\templates\ui\pages\admin\staff_assignments.html:8
-#, fuzzy
 msgid "Staff assignments"
 msgstr "إسنادات الامتحان"
 
 #: .\templates\ui\pages\admin\staff_assignments.html:12
-#, fuzzy
 msgid "Teaching"
 msgstr "قيد المشاهدة"
 
 #: .\templates\ui\pages\admin\staff_assignments.html:13
-#, fuzzy
 msgid "Teacher assignments"
 msgstr "تعيينات المعلمين للمجموعات"
 
 #: .\templates\ui\pages\admin\staff_assignments.html:30
-#, fuzzy
 msgid "Assign teacher"
 msgstr "تعيين إعادة"
 
 #: .\templates\ui\pages\admin\staff_assignments.html:45
 #: .\templates\ui\pages\admin\staff_assignments.html:69
-#, fuzzy
 msgid "Active,Revoked"
 msgstr "ملغي"
 
@@ -13056,12 +12385,10 @@ msgid "No teacher assignments."
 msgstr "لا توجد تكليفات للمعلمين."
 
 #: .\templates\ui\pages\admin\staff_assignments.html:83
-#, fuzzy
 msgid "Moderation"
 msgstr "مشرف"
 
 #: .\templates\ui\pages\admin\staff_assignments.html:84
-#, fuzzy
 msgid "Moderator assignments"
 msgstr "تعيينات المشرفين للطلاب"
 
@@ -13072,7 +12399,6 @@ msgid "Cluster"
 msgstr "المجموعة"
 
 #: .\templates\ui\pages\admin\staff_assignments.html:123
-#, fuzzy
 msgid "Assign moderator"
 msgstr "مشرف"
 
@@ -13088,7 +12414,7 @@ msgstr "لا توجد تكليفات للمشرفين."
 
 #: .\templates\ui\pages\admin\staff_list.html:10
 msgid "Search, filter, and manage staff accounts."
-msgstr ""
+msgstr "ابحث عن حسابات الموظفين وصفّها وأدرها."
 
 #: .\templates\ui\pages\admin\staff_list.html:24
 #: .\templates\ui\pages\admin\student_list.html:30
@@ -13100,7 +12426,6 @@ msgid "Search staff"
 msgstr "البحث في الموظفين"
 
 #: .\templates\ui\pages\admin\staff_list.html:28
-#, fuzzy
 msgid "All roles"
 msgstr "قالب جديد"
 
@@ -13109,79 +12434,69 @@ msgid "Student profile"
 msgstr "ملف الطالب"
 
 #: .\templates\ui\pages\admin\student_detail.html:11
-#, fuzzy
 msgid "Account summary"
 msgstr "الحسابات"
 
 #: .\templates\ui\pages\admin\student_detail.html:105
-#, fuzzy
 msgid "No applications"
 msgstr "الطلبات"
 
 #: .\templates\ui\pages\admin\student_detail.html:105
-#, fuzzy
 msgid "This student has not submitted any applications."
 msgstr "لم تقدم أي طلبات بعد."
 
 #: .\templates\ui\pages\admin\student_detail.html:162
-#, fuzzy
 msgid "This student is not enrolled in any programs."
 msgstr "الطالب غير مسجل في دفعة المجموعة."
 
 #: .\templates\ui\pages\admin\student_detail.html:168
-#, fuzzy
 msgid "Finance and results"
 msgstr "امتحانات القبول"
 
 #: .\templates\ui\pages\admin\student_detail.html:169
-#, fuzzy
 msgid "Recent records"
 msgstr "سجلات الدفع"
 
 #: .\templates\ui\pages\admin\student_detail.html:177
-#, fuzzy
 msgid "Detail"
 msgstr "التفاصيل"
 
 #: .\templates\ui\pages\admin\student_detail.html:223
-#, fuzzy
 msgid "No payments or assessment records available."
 msgstr "لا توجد محاضرات متاحة."
 
 #: .\templates\ui\pages\admin\student_form.html:17
 msgid "Capture identity and access details in one guided record."
-msgstr ""
+msgstr "سجّل بيانات الهوية والوصول في سجل إرشادي واحد."
 
 #: .\templates\ui\pages\admin\student_form.html:26
-#, fuzzy
 msgid "Student information"
 msgstr "معلومات أخرى"
 
 #: .\templates\ui\pages\admin\student_form.html:27
 msgid "Use the student's official identity details."
-msgstr ""
+msgstr "استخدم بيانات الهوية الرسمية للطالب."
 
 #: .\templates\ui\pages\admin\student_form.html:41
 msgid "Dismiss"
-msgstr ""
+msgstr "إغلاق"
 
 #: .\templates\ui\pages\admin\student_form.html:42
 msgid "Before saving"
-msgstr ""
+msgstr "قبل الحفظ"
 
 #: .\templates\ui\pages\admin\student_form.html:43
 msgid ""
 "Check the email and phone number. They are used for account communication."
-msgstr ""
+msgstr "تحقق من البريد الإلكتروني ورقم الهاتف. يُستخدمان لمراسلات الحساب."
 
 #: .\templates\ui\pages\admin\student_form.html:46
-#, fuzzy
 msgid "Save student"
 msgstr "الطالب المتطابق"
 
 #: .\templates\ui\pages\admin\student_list.html:10
 msgid "Search, filter, and manage student records."
-msgstr ""
+msgstr "ابحث عن سجلات الطلاب وصفّها وأدرها."
 
 #: .\templates\ui\pages\admin\student_list.html:14
 msgid "Download import template"
@@ -13202,7 +12517,6 @@ msgstr "تحقق من %(email)s للحصول على رابط التفعيل."
 
 #: .\templates\ui\pages\public\activation_confirm.html:35
 #: .\templates\ui\pages\public\resend_activation.html:31
-#, fuzzy
 msgid "Back to login"
 msgstr "العودة إلى القائمة"
 
@@ -13216,7 +12530,6 @@ msgid "These documents have already been submitted."
 msgstr "تم تقديم هذه المستندات من قبل."
 
 #: .\templates\ui\pages\public\document_upload.html:12
-#, fuzzy
 msgid "This upload link has expired."
 msgstr "انتهت مدة الامتحان."
 
@@ -13225,17 +12538,14 @@ msgid "Submit documents"
 msgstr "تسليم المستندات"
 
 #: .\templates\ui\pages\public\landing.html:10
-#, fuzzy
 msgid "Announcement"
 msgstr "إعلان قابل للتعديل من الإدارة"
 
 #: .\templates\ui\pages\public\landing.html:37
-#, fuzzy
 msgid "Explore our programs"
 msgstr "استكشف البرامج"
 
 #: .\templates\ui\pages\public\landing.html:39
-#, fuzzy
 msgid "My learning"
 msgstr "مساري التعليمي"
 
@@ -13244,13 +12554,12 @@ msgid "Coptic Orthodox Family Formation"
 msgstr "شعارات معهد الأسرة القبطي"
 
 #: .\templates\ui\pages\public\landing.html:221
-#, fuzzy
 msgid "No programs available"
-msgstr "لا توجد محاضرات متاحة."
+msgstr "لا توجد برامج متاحة."
 
 #: .\templates\ui\pages\public\landing.html:221
 msgid "Check back soon for current programs."
-msgstr ""
+msgstr "تحقق مرة أخرى قريبًا للاطلاع على البرامج الحالية."
 
 #: .\templates\ui\pages\public\landing.html:251
 msgid "Apply for a program"
@@ -13270,30 +12579,27 @@ msgstr "رابط يوتيوب"
 
 #: .\templates\ui\pages\public\register.html:13
 msgid "Begin here"
-msgstr ""
+msgstr "ابدأ من هنا"
 
 #: .\templates\ui\pages\public\register.html:14
 msgid "Make space for meaningful learning."
-msgstr ""
+msgstr "اترك مساحة لتعلّم هادف."
 
 #: .\templates\ui\pages\public\register.html:15
 msgid ""
 "Create your account, explore available programs, and submit your application "
 "when ready."
-msgstr ""
+msgstr "أنشئ حسابك واستكشف البرامج المتاحة وأرسل طلبك عندما تكون مستعدًا."
 
 #: .\templates\ui\pages\public\register.html:20
-#, fuzzy
 msgid "Registration"
 msgstr "التسجيل"
 
 #: .\templates\ui\pages\public\register.html:21
-#, fuzzy
 msgid "Create your account"
-msgstr "إنشاء إصدار مقرر"
+msgstr "إنشاء حسابك"
 
 #: .\templates\ui\pages\public\register.html:22
-#, fuzzy
 msgid "Complete the form to begin your application."
 msgstr "لم يتم العثور على قرار قابل للتراجع عن هذا الطلب."
 
@@ -13303,33 +12609,32 @@ msgstr "التسجيل"
 
 #: .\templates\ui\pages\public\register.html:66
 #: .\templates\ui\pages\public\register.html:89
-#, fuzzy
 msgid "Create account"
 msgstr "إنشاء حساب"
 
 #: .\templates\ui\pages\public\register.html:92
-#, fuzzy
 msgid "Already registered?"
 msgstr "مسجل بالفعل؟"
 
 #: .\templates\ui\pages\public\registration_success.html:4
 #: .\templates\ui\pages\public\registration_success.html:12
-#, fuzzy
 msgid "Registration complete"
 msgstr "اكتمل التسجيل"
 
 #: .\templates\ui\pages\public\registration_success.html:15
-#, fuzzy, python-format
+#, python-format
 msgid ""
 "\n"
 "      Check\n"
 "      %(email)s\n"
 "      for the activation link.\n"
 "    "
-msgstr "تم إنشاء الحساب! تحقق من بريدك الإلكتروني للحصول على رابط التفعيل."
+msgstr ""
+"\n"
+"      تحقق من البريد %(email)s للحصول على رابط التفعيل.\n"
+"    "
 
 #: .\templates\ui\pages\public\registration_success.html:23
-#, fuzzy
 msgid "Go to login"
 msgstr "الذهاب إلى تسجيل الدخول"
 
@@ -13339,33 +12644,28 @@ msgstr "العودة للرئيسية"
 
 #: .\templates\ui\pages\public\resend_activation.html:5
 #: .\templates\ui\pages\public\resend_activation.html:21
-#, fuzzy
 msgid "Resend activation"
 msgstr "إعادة إرسال التفعيل"
 
 #: .\templates\ui\pages\public\resend_activation.html:14
-#, fuzzy
 msgid "Resend activation email."
 msgstr "إعادة إرسال رسالة التفعيل."
 
 #: .\templates\ui\pages\public\resend_activation.html:15
-#, fuzzy
 msgid "Enter your email to request a new activation link."
 msgstr "أدخل بريدك الإلكتروني لطلب رابط تفعيل جديد."
 
 #: .\templates\ui\pages\public\resend_activation.html:22
-#, fuzzy
 msgid "Request a new activation email."
 msgstr "إعادة إرسال رسالة التفعيل"
 
 #: .\templates\ui\pages\public\resend_activation.html:29
-#, fuzzy
 msgid "Send activation email"
 msgstr "إعادة إرسال رسالة التفعيل"
 
 #: .\templates\ui\pages\student\account_profile.html:6
 msgid "Update your account details."
-msgstr ""
+msgstr "حدّث تفاصيل حسابك."
 
 #: .\templates\ui\pages\student\assessment_history.html:7
 #: .\templates\ui\pages\student\assessment_instructions.html:7
@@ -13375,7 +12675,6 @@ msgstr "العودة إلى التقييمات"
 
 #: .\templates\ui\pages\student\assessment_history.html:27
 #: .\templates\ui\pages\student\assessment_history.html:43
-#, fuzzy
 msgid "No assessment history available."
 msgstr "لا توجد محاضرات متاحة."
 
@@ -13390,13 +12689,12 @@ msgid "minutes"
 msgstr "دقيقة"
 
 #: .\templates\ui\pages\student\assessment_instructions.html:26
-#, fuzzy
 msgid "Start assessment"
 msgstr "بدء التقييم"
 
 #: .\templates\ui\pages\student\assessment_list.html:7
 msgid "Open available assessments and review your current attempt status."
-msgstr ""
+msgstr "افتح التقييمات المتاحة وراجع حالة محاولتك الحالية."
 
 #: .\templates\ui\pages\student\assessment_list.html:10
 msgid "Diploma homework"
@@ -13411,13 +12709,11 @@ msgid "Quizzes"
 msgstr "اختبارات قصيرة"
 
 #: .\templates\ui\pages\student\assessment_list.html:66
-#, fuzzy
 msgid "No assessments available"
-msgstr "لا توجد محاضرات متاحة."
+msgstr "لا توجد تقييمات متاحة."
 
 #: .\templates\ui\pages\student\assessment_results.html:4
 #: .\templates\ui\pages\student\assessment_results.html:7
-#, fuzzy
 msgid "Assessment results"
 msgstr "التقييمات"
 
@@ -13430,7 +12726,6 @@ msgid "Your answer"
 msgstr "إجابتك"
 
 #: .\templates\ui\pages\student\assessment_results.html:101
-#, fuzzy
 msgid "No results available"
 msgstr "لا توجد محاضرات متاحة."
 
@@ -13440,9 +12735,8 @@ msgid "Time remaining: %(remaining_seconds)s seconds"
 msgstr "الوقت المتبقي: %(remaining_seconds)s ثانية"
 
 #: .\templates\ui\pages\student\assessment_take.html:9
-#, fuzzy
 msgid "Leave assessment"
-msgstr "إنشاء تقييم"
+msgstr "مغادرة التقييم"
 
 #: .\templates\ui\pages\student\assessment_take.html:13
 msgid ""
@@ -13451,11 +12745,17 @@ msgstr "تم تسليم واجبك. لم يعد بإمكانك إضافة أو �
 
 #: .\templates\ui\pages\student\assessment_take.html:29
 msgid "Draft files"
-msgstr "مسودة"
+msgstr "الملفات المسودة"
 
 #: .\templates\ui\pages\student\assessment_take.html:49
 msgid "Homework files"
-msgstr "مراجعة الواجبات"
+msgstr "ملفات الواجب"
+
+msgid "Choose files"
+msgstr "اختيار الملفات"
+
+msgid "No files selected"
+msgstr "لم يتم اختيار ملفات"
 
 #: .\templates\ui\pages\student\assessment_take.html:51
 msgid ""
@@ -13467,16 +12767,16 @@ msgstr ""
 
 #: .\templates\ui\pages\student\assessment_take.html:53
 msgid "%(count)s upload(s) remaining."
-msgstr "مستلم واحد"
+msgstr "متبقٍ %(count)s من الملفات المسموح برفعها."
 
 #: .\templates\ui\pages\student\assessment_take.html:55
 msgid "Add files"
-msgstr "إضافة المحددين"
+msgstr "إضافة الملفات"
 
 #: .\templates\ui\pages\student\assessment_take.html:58
 msgid ""
 "You have reached the maximum number of homework files for this assessment."
-msgstr "لقد وصلت إلى الحد الأقصى لعدد المحاولات."
+msgstr "لقد وصلت إلى الحد الأقصى لعدد ملفات الواجب لهذا التقييم."
 
 #: .\templates\ui\pages\student\assessment_take.html:64
 msgid "Submit homework"
@@ -13484,9 +12784,8 @@ msgstr "تقديم الواجب المنزلي"
 
 #: .\templates\ui\pages\student\assessment_take.html:82
 #: .\templates\ui\pages\student\assessment_take.html:96
-#, fuzzy
 msgid "No questions available."
-msgstr "لا توجد محاضرات متاحة."
+msgstr "لا توجد أسئلة متاحة."
 
 #: .\templates\ui\pages\student\assessment_take.html:100
 #: .\templates\ui\pages\student\assessment_take.html:102
@@ -13495,18 +12794,15 @@ msgstr "تقديم التقييم"
 
 #: .\templates\ui\pages\student\attendance.html:4
 #: .\templates\ui\pages\student\attendance.html:7
-#, fuzzy
 msgid "My attendance"
 msgstr "حضوري"
 
 #: .\templates\ui\pages\student\attendance.html:21
-#, fuzzy
 msgid "No attendance records"
 msgstr "لا توجد سجلات حضور"
 
 #: .\templates\ui\pages\student\certificates.html:7
 #: .\templates\ui\pages\student\exam_results.html:7
-#, fuzzy
 msgid "Back to record"
 msgstr "العودة إلى السجل"
 
@@ -13515,7 +12811,6 @@ msgid "No certificates available."
 msgstr "لا توجد شهادات متاحة."
 
 #: .\templates\ui\pages\student\content.html:20
-#, fuzzy
 msgid "Open video"
 msgstr "مراجعة Gemini"
 
@@ -13561,52 +12856,42 @@ msgstr "فتح الجلسة"
 #: .\templates\ui\pages\student\content.html:62
 #: .\templates\ui\pages\student\content.html:65
 #: .\templates\ui\pages\student\content.html:99
-#, fuzzy
 msgid "No published lessons yet."
 msgstr "لا توجد محاضرات منشورة بعد"
 
 #: .\templates\ui\pages\student\content.html:72
-#, fuzzy
 msgid "lessons"
 msgstr "درس"
 
 #: .\templates\ui\pages\student\content.html:103
-#, fuzzy
 msgid "Course team"
 msgstr "الدورة"
 
 #: .\templates\ui\pages\student\content.html:104
-#, fuzzy
 msgid "Teachers and moderators"
 msgstr "تكليفات المعلمين"
 
 #: .\templates\ui\pages\student\content.html:112
-#, fuzzy
 msgid "Course teacher"
 msgstr "تم إنشاء المقرر."
 
 #: .\templates\ui\pages\student\content.html:117
-#, fuzzy
 msgid "No course team listed."
 msgstr "لا توجد مقررات في هذا الفصل الدراسي."
 
 #: .\templates\ui\pages\student\content.html:122
-#, fuzzy
 msgid "Lessons"
 msgstr "درس"
 
 #: .\templates\ui\pages\student\content.html:123
-#, fuzzy
 msgid "Published content"
 msgstr "المحاضرات المنشورة"
 
 #: .\templates\ui\pages\student\content.html:155
-#, fuzzy
 msgid "No lessons available"
 msgstr "لا توجد محاضرات متاحة."
 
 #: .\templates\ui\pages\student\content.html:155
-#, fuzzy
 msgid "Published course content will appear here."
 msgstr "ستظهر المحاضرات المنشورة هنا تلقائيا."
 
@@ -13615,7 +12900,6 @@ msgid "%(exam.description)s"
 msgstr "الوصف"
 
 #: .\templates\ui\pages\student\exam.html:9
-#, fuzzy
 msgid "Back to exam results"
 msgstr "العودة للامتحانات"
 
@@ -13635,9 +12919,12 @@ msgstr "تسليم الامتحان"
 msgid "Your answers are saved automatically every %(interval)s seconds."
 msgstr "تُحفظ إجاباتك تلقائياً كل %(interval)s ثانية."
 
+msgid "Your answers are saved automatically. You may leave the page and return to continue from where you stopped."
+msgstr "تُحفظ إجاباتك تلقائياً. يمكنك مغادرة الصفحة والعودة للمتابعة من حيث توقفت."
+
 #: .\templates\ui\pages\student\exam.html:43
 msgid "Exam submitted"
-msgstr "لم يبدأ"
+msgstr "تم تقديم الامتحان"
 
 #: .\templates\ui\pages\student\exam.html:44
 msgid ""
@@ -13645,9 +12932,51 @@ msgid ""
 "make a decision."
 msgstr "تم استلام إجاباتك. سيراجعها مكتب القبول ويتخذ قراراً."
 
+msgid "Exam access"
+msgstr "دخول الامتحان"
+
+msgid "Application documents must be submitted before recording payment."
+msgstr "يجب تقديم مستندات الطلب قبل تسجيل الدفع."
+
+msgid "Application documents must be submitted before granting a payment waiver."
+msgstr "يجب تقديم مستندات الطلب قبل منح الإعفاء من الدفع."
+
+msgid "Required intake form must be submitted before recording payment."
+msgstr "يجب تقديم نموذج القبول المطلوب قبل تسجيل الدفع."
+
+msgid "Required intake form must be submitted before granting a payment waiver."
+msgstr "يجب تقديم نموذج القبول المطلوب قبل منح الإعفاء من الدفع."
+
+msgid "Complete the survey"
+msgstr "إكمال الاستبيان"
+
+msgid "A required survey is waiting for your response."
+msgstr "يوجد استبيان مطلوب بانتظار إجابتك."
+
+msgid "Open survey"
+msgstr "فتح الاستبيان"
+
+msgid "Documents received. Complete the required survey before recording payment."
+msgstr "تم استلام المستندات. أكمل الاستبيان المطلوب قبل تسجيل الدفع."
+
+msgid "Complete the required survey before continuing."
+msgstr "أكمل الاستبيان المطلوب قبل المتابعة."
+
+msgid "Exam access link"
+msgstr "رابط دخول الامتحان"
+
+msgid "Access link"
+msgstr "رابط الدخول"
+
+msgid "Scan this QR code to open the entrance exam."
+msgstr "امسح رمز الاستجابة السريعة لفتح امتحان القبول."
+
+msgid "QR code"
+msgstr "رمز الاستجابة السريعة"
+
 #: .\templates\ui\pages\student\exam.html:56
 msgid "Exam rules"
-msgstr "النتيجة"
+msgstr "تعليمات الامتحان"
 
 #: .\templates\ui\pages\student\exam.html:68
 #: .\templates\ui\pages\student\exam.html:87
@@ -13680,7 +13009,7 @@ msgstr "لقد أغلق الامتحان بالفعل."
 
 #: .\templates\ui\pages\student\exam.html:91
 msgid "Follow the instructions to continue."
-msgstr ""
+msgstr "اتبع التعليمات للمتابعة."
 
 #: .\templates\ui\pages\student\exam.html:94
 msgid "Start exam"
@@ -13688,19 +13017,16 @@ msgstr "بدء الامتحان"
 
 #: .\templates\ui\pages\student\exam_results.html:4
 #: .\templates\ui\pages\student\exam_results.html:7
-#, fuzzy
 msgid "Entrance exam results"
 msgstr "امتحانات القبول"
 
 #: .\templates\ui\pages\student\exam_results.html:31
 #: .\templates\ui\pages\student\exam_results.html:49
-#, fuzzy
 msgid "No entrance exam results available."
 msgstr "لا توجد امتحانات قبول بعد."
 
 #: .\templates\ui\pages\student\intake_form.html:4
 #: .\templates\ui\pages\student\intake_form.html:9
-#, fuzzy
 msgid "Intake form submitted"
 msgstr "تم تقديم امتحان القبول."
 
@@ -13736,7 +13062,6 @@ msgstr ""
 "القبول للحصول على رابط جديد."
 
 #: .\templates\ui\pages\student\profile.html:7
-#, fuzzy
 msgid "View details"
 msgstr "تفاصيل المستخدم"
 
@@ -13745,7 +13070,9 @@ msgid "Back to dashboard"
 msgstr "العودة إلى لوحة التحكم"
 
 #: .\templates\ui\pages\admin\entrance_exam_grade_attempt.html:9
-msgid "Review each question and the student's answer, then record the final score and feedback."
+msgid ""
+"Review each question and the student's answer, then record the final score "
+"and feedback."
 msgstr "راجع كل سؤال وإجابة الطالب، ثم سجّل الدرجة النهائية والملاحظات."
 
 #: .\templates\ui\pages\admin\entrance_exam_grade_attempt.html:10
@@ -13793,7 +13120,9 @@ msgid "Decision actions"
 msgstr "إجراءات القرار"
 
 #: .\templates\ui\pages\admin\entrance_exam_grade_attempt.html
-msgid "Accept the student based on this decision. The calculated score stays unchanged."
+msgid ""
+"Accept the student based on this decision. The calculated score stays "
+"unchanged."
 msgstr "اقبل الطالب بناءً على هذا القرار. تبقى الدرجة المحسوبة كما هي."
 
 #: .\templates\ui\pages\admin\entrance_exam_grade_attempt.html
@@ -13801,7 +13130,9 @@ msgid "Pass student"
 msgstr "اجتياز الطالب"
 
 #: .\templates\ui\pages\admin\entrance_exam_grade_attempt.html
-msgid "Reject the student based on this decision. The calculated score stays unchanged."
+msgid ""
+"Reject the student based on this decision. The calculated score stays "
+"unchanged."
 msgstr "ارفض الطالب بناءً على هذا القرار. تبقى الدرجة المحسوبة كما هي."
 
 #: .\templates\ui\pages\admin\entrance_exam_grade_attempt.html
@@ -13829,7 +13160,8 @@ msgid "Undo decision"
 msgstr "تراجع عن القرار"
 
 #: .\templates\ui\pages\admin\entrance_exam_grade_attempt.html
-msgid "Return the application to the undecided state so it can be re-evaluated."
+msgid ""
+"Return the application to the undecided state so it can be re-evaluated."
 msgstr "أعد الطلب إلى الحالة غير المحسومة لإمكانية إعادة تقييمه."
 
 #: .\apps\applications\services.py
@@ -13850,7 +13182,7 @@ msgstr "تم التراجع عن القرار."
 
 #: .\templates\ui\pages\public\document_upload.html
 msgid "Documents submitted"
-msgstr "تم تقديم المستندات"
+msgstr "تم إرسال المستندات"
 
 #: .\templates\ui\pages\public\document_upload.html
 msgid "Go to my applications"
@@ -13861,8 +13193,10 @@ msgid "Upload link expired"
 msgstr "انتهت صلاحية رابط التحميل"
 
 #: .\templates\ui\pages\public\document_upload.html
-msgid "This upload link has expired. Contact the admissions office for a new link."
-msgstr "انتهت صلاحية رابط التحميل هذا. تواصل مع مكتب القبول للحصول على رابط جديد."
+msgid ""
+"This upload link has expired. Contact the admissions office for a new link."
+msgstr ""
+"انتهت صلاحية رابط التحميل هذا. تواصل مع مكتب القبول للحصول على رابط جديد."
 
 #: .\templates\ui\pages\public\document_upload.html
 msgid "Upload request cancelled"
@@ -13904,12 +13238,10 @@ msgstr "لم يتم رفع أي مستندات لهذا الطالب."
 msgid "Application"
 msgstr "الطلب"
 
-
 #: .\apps\assessments\services.py
 msgid "Legacy semester exam data is read-only."
 msgstr "بيانات امتحان الفصل الدراسي القديمة للقراءة فقط."
 
-#, fuzzy
 #~ msgid "Course version must belong to the same diploma as the assignment."
 #~ msgstr ""
 #~ "يجب أن ينتمي إصدار الدورة إلى الدفعة نفسها التي ينتمي إليها التكليف."
@@ -13947,19 +13279,15 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgstr ""
 #~ "تم إرسال %(sent)d بريد إلكتروني (فشل %(failed)d) لنتيجة '%(result)s'."
 
-#, fuzzy
 #~ msgid "Component is not a custom activity."
 #~ msgstr "التسجيل غير نشط."
 
-#, fuzzy
 #~ msgid "max_score must be a positive number."
 #~ msgstr "يجب أن تكون المدة موجبة."
 
-#, fuzzy
 #~ msgid "Score must be between 0 and max_score."
 #~ msgstr "يجب أن تكون الدرجة النهائية بين 0 و 100."
 
-#, fuzzy
 #~ msgid "Target cohort must belong to the same diploma as the enrollment."
 #~ msgstr "يجب أن ينتمي الفصل لنفس دبلوم القاعدة."
 
@@ -13972,119 +13300,93 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "Student demoted."
 #~ msgstr "تم خفض الطالب."
 
-#, fuzzy
 #~ msgid "Name, type, weight, and order are required."
 #~ msgstr "الموضوع والمحتوى مطلوبان."
 
-#, fuzzy
 #~ msgid "Component created."
 #~ msgstr "تم إنشاء المجموعة."
 
-#, fuzzy
 #~ msgid "Create Component"
 #~ msgstr "إنشاء مجموعة"
 
-#, fuzzy
 #~ msgid "Progression component"
 #~ msgstr "التقدم"
 
-#, fuzzy
 #~ msgid "Component updated."
 #~ msgstr "تم تحديث المجموعة."
 
-#, fuzzy
 #~ msgid "Edit Component"
 #~ msgstr "تعديل المجموعة"
 
-#, fuzzy
 #~ msgid "Component deactivated."
 #~ msgstr "معطل"
 
-#, fuzzy
 #~ msgid "Pass confirmed."
 #~ msgstr "تم التأكيد"
 
-#, fuzzy
 #~ msgid "Interview marked as passed."
 #~ msgstr "تم تحديد الطالب كمكتمل."
 
-#, fuzzy
 #~ msgid "Interview marked as failed."
 #~ msgstr "تم تحديد الطالب كمكتمل."
 
-#, fuzzy
 #~ msgid "Semester and target cohort are required."
 #~ msgstr "تم إنشاء إصدار المقرر."
 
 #~ msgid "Drawer"
 #~ msgstr "القائمة الجانبية"
 
-#, fuzzy
 #~ msgid "Close drawer"
 #~ msgstr "إغلاق القائمة الجانبية"
 
 #~ msgid "Dialog"
 #~ msgstr "مربع حوار"
 
-#, fuzzy
 #~ msgid "Close dialog"
 #~ msgstr "إغلاق مربع الحوار"
 
 #~ msgid "applications"
 #~ msgstr "الطلبات"
 
-#, fuzzy
 #~ msgid "students"
 #~ msgstr "الطالب"
 
-#, fuzzy
 #~ msgid "In review"
 #~ msgstr "قيد المراجعة"
 
-#, fuzzy
 #~ msgid "assignments"
 #~ msgstr "إسناد"
 
-#, fuzzy
 #~ msgid "My record"
 #~ msgstr "سجلي"
 
-#, fuzzy
 #~ msgid "No questions found."
 #~ msgstr "لم يتم العثور على مستخدمين."
 
-#, fuzzy
 #~ msgid "Student or assessment"
 #~ msgstr "تقديم التقييم"
 
-#, fuzzy
 #~ msgid "Assessment record"
 #~ msgstr "تم بدء التقييم."
 
-#, fuzzy
 #~ msgid "No cohorts found for this diploma."
 #~ msgstr "لم يتم العثور على دفعة نشطة مع امتحان قبول لهذه الدبلومة."
 
-#, fuzzy
 #~ msgid "No semesters"
 #~ msgstr "إلى الفصل"
 
 #~ msgid "Back to exam"
 #~ msgstr "العودة إلى الامتحان"
 
-#, fuzzy
 #~ msgid "Back to students"
 #~ msgstr "العودة إلى القائمة"
 
-#, fuzzy
 #~ msgid "Open diplomas"
 #~ msgstr "دبلومات"
 
-#, fuzzy
 #~ msgid "seconds"
 #~ msgstr "الثانوية"
 
-#, fuzzy
 #~ msgid "Course learning"
 #~ msgstr "تعلم المقرر"
 
@@ -14124,11 +13426,9 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "Delete this diploma and all its semesters, cohorts, and lectures?"
 #~ msgstr "حذف هذه الدبلومة وجميع فصولها ودفعاتها ومحاضراتها؟"
 
-#, fuzzy
 #~ msgid "Semesters & Lectures"
 #~ msgstr "مقررات الفصل الدراسي"
 
-#, fuzzy
 #~ msgid "Add Lecture"
 #~ msgstr "إضافة محاضرة"
 
@@ -14163,7 +13463,6 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "Back to Diploma"
 #~ msgstr "العودة إلى الدبلومة"
 
-#, fuzzy
 #~ msgid "Preview lecture"
 #~ msgstr "عرض المحاضرات"
 
@@ -14173,7 +13472,6 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "Optional"
 #~ msgstr "اختياري"
 
-#, fuzzy
 #~ msgid "View Responses"
 #~ msgstr "عرض النتائج"
 
@@ -14192,18 +13490,15 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "Migrate"
 #~ msgstr "نقل"
 
-#, fuzzy
 #~ msgid "Select semester"
 #~ msgstr "إلى الفصل"
 
 #~ msgid "Back to My Courses"
 #~ msgstr "العودة إلى دوراتي"
 
-#, fuzzy
 #~ msgid "Attendance QR Code"
 #~ msgstr "رمز QR للامتحان"
 
-#, fuzzy
 #~ msgid "Code:"
 #~ msgstr "رمز QR"
 
@@ -14324,7 +13619,6 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "Back to program applications"
 #~ msgstr "العودة إلى طلبات البرامج"
 
-#, fuzzy
 #~ msgid "Not paid"
 #~ msgstr "المدفوع الإجمالي"
 
@@ -14337,27 +13631,21 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "Reject"
 #~ msgstr "رفض"
 
-#, fuzzy
 #~ msgid "Continue the entrance assessment workflow from here."
 #~ msgstr "تمت دعوة المتقدم لتقييم القبول."
 
-#, fuzzy
 #~ msgid "Send entrance invitation email"
 #~ msgstr "حدد الطلاب لإرسال رسائل دعوة امتحان القبول."
 
-#, fuzzy
 #~ msgid "Send Intake Request"
 #~ msgstr "سؤال القبول"
 
-#, fuzzy
 #~ msgid "Mark Paid"
 #~ msgstr "تحديد كمُتخرج"
 
-#, fuzzy
 #~ msgid "Document Status"
 #~ msgstr "حالة التسجيل"
 
-#, fuzzy
 #~ msgid "Persona Image"
 #~ msgstr "المعلومات الشخصية"
 
@@ -14379,11 +13667,9 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "Program Applications"
 #~ msgstr "طلبات الالتحاق"
 
-#, fuzzy
 #~ msgid "Link expires"
 #~ msgstr "ينتهي في"
 
-#, fuzzy
 #~ msgid "Personal Photo"
 #~ msgstr "المعلومات الشخصية"
 
@@ -14440,11 +13726,9 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "Priest contact is required."
 #~ msgstr "بيانات التواصل مع الأب الكاهن مطلوبة."
 
-#, fuzzy
 #~ msgid "is required."
 #~ msgstr "البريد الإلكتروني مطلوب"
 
-#, fuzzy
 #~ msgid "Enter a valid "
 #~ msgstr "أدخل رقمًا قوميًّا صالحًا."
 
@@ -14475,7 +13759,6 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgstr ""
 #~ "تحقق من بريدك الإلكتروني للحصول على رابط التفعيل وبيانات الدخول الأولية."
 
-#, fuzzy
 #~ msgid "Max grade must be positive."
 #~ msgstr "يجب أن تكون المدة موجبة."
 
@@ -14491,30 +13774,24 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "Assessment Detail"
 #~ msgstr "تفاصيل التقييم"
 
-#, fuzzy
 #~ msgid "Roster"
 #~ msgstr "التسجيل"
 
-#, fuzzy
 #~ msgid "Hide All Released"
 #~ msgstr "تم نشر الدرجة"
 
 #~ msgid "Untimed"
 #~ msgstr "بدون وقت"
 
-#, fuzzy
 #~ msgid "Max grade:"
 #~ msgstr "حفظ الدرجات"
 
-#, fuzzy
 #~ msgid "Manual Questions"
 #~ msgstr "الأسئلة"
 
-#, fuzzy
 #~ msgid "Add Manual"
 #~ msgstr "ترقية يدوية"
 
-#, fuzzy
 #~ msgid "Add lecture sections to compose this assessment."
 #~ msgstr "أضف أسئلة لهذا التقييم."
 
@@ -14530,19 +13807,15 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "Attempt"
 #~ msgstr "محاولة"
 
-#, fuzzy
 #~ msgid "Current Overrides"
 #~ msgstr "الدرجة الحالية"
 
-#, fuzzy
 #~ msgid "Created By"
 #~ msgstr "تم الإنشاء"
 
-#, fuzzy
 #~ msgid "Cancel this override?"
 #~ msgstr "السماح بتجاوز المشرف"
 
-#, fuzzy
 #~ msgid "Cancelled by admin"
 #~ msgstr "ملغي"
 
@@ -14591,15 +13864,12 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "All homework submissions"
 #~ msgstr "جميع تقديمات الواجبات المنزلية"
 
-#, fuzzy
 #~ msgid "Question Bank"
 #~ msgstr "سؤال"
 
-#, fuzzy
 #~ msgid "question(s)"
 #~ msgstr "الأسئلة"
 
-#, fuzzy
 #~ msgid "Add a question to get started."
 #~ msgstr "أضف أسئلة لهذا التقييم."
 
@@ -14609,7 +13879,6 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "Answer Choices"
 #~ msgstr "خيارات الإجابة"
 
-#, fuzzy
 #~ msgid "No choices yet. Add at least two and mark exactly one correct."
 #~ msgstr "لا توجد خيارات بعد. أضف خيارًا واحدًا على الأقل."
 
@@ -14619,27 +13888,21 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "Assessment Management"
 #~ msgstr "إدارة التقييم"
 
-#, fuzzy
 #~ msgid "Exam Code"
 #~ msgstr "رمز QR للامتحان"
 
-#, fuzzy
 #~ msgid "Student:"
 #~ msgstr "الطلاب"
 
-#, fuzzy
 #~ msgid "No code found"
 #~ msgstr "لم يتم العثور على مستخدمين."
 
-#, fuzzy
 #~ msgid "Create Reviewer Assignment"
 #~ msgstr "تكليفات المعلمين"
 
-#, fuzzy
 #~ msgid "Reviewer Assignments"
 #~ msgstr "تكليفات المعلمين"
 
-#, fuzzy
 #~ msgid "Select reviewer…"
 #~ msgstr "إلى الفصل"
 
@@ -14649,27 +13912,21 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "Select semester…"
 #~ msgstr "إلى الفصل"
 
-#, fuzzy
 #~ msgid "Section (optional)"
 #~ msgstr "ملاحظات (اختياري)"
 
-#, fuzzy
 #~ msgid "Create Assignment"
 #~ msgstr "إنشاء تقييم"
 
-#, fuzzy
 #~ msgid "Assigned By"
 #~ msgstr "مُسند"
 
-#, fuzzy
 #~ msgid "No reviewer assignments have been created yet."
 #~ msgstr "لم يتم تسجيل أي طلبات بعد."
 
-#, fuzzy
 #~ msgid "Exam Codes"
 #~ msgstr "رمز QR للامتحان"
 
-#, fuzzy
 #~ msgid "Printed"
 #~ msgstr "طباعة"
 
@@ -14699,43 +13956,33 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "The rubric is shown to graders, not to students."
 #~ msgstr "يظهر سلم التقييم للمصححين، لا للطلاب."
 
-#, fuzzy
 #~ msgid "Ungraded:"
 #~ msgstr "غير مصحح"
 
-#, fuzzy
 #~ msgid "No section assigned"
 #~ msgstr "تم تعيين إعادة"
 
-#, fuzzy
 #~ msgid "You have no active reviewer assignments."
 #~ msgstr "ليس لديك أي تقييمات نشطة في الوقت الحالي."
 
-#, fuzzy
 #~ msgid "Grade Section"
 #~ msgstr "تم إخفاء الدرجة"
 
-#, fuzzy
 #~ msgid "Enter exam code"
 #~ msgstr "تم إنشاء امتحان القبول."
 
-#, fuzzy
 #~ msgid "Exam Code:"
 #~ msgstr "رمز QR للامتحان"
 
-#, fuzzy
 #~ msgid "Section:"
 #~ msgstr "الإجراء"
 
-#, fuzzy
 #~ msgid "Max Grade:"
 #~ msgstr "حفظ الدرجة"
 
-#, fuzzy
 #~ msgid "Current Score:"
 #~ msgstr "الدرجة الحالية"
 
-#, fuzzy
 #~ msgid "No exam code found"
 #~ msgstr "لا توجد قوالب."
 
@@ -14788,67 +14035,51 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "MB"
 #~ msgstr "م.ب"
 
-#, fuzzy
 #~ msgid "Total Sessions"
 #~ msgstr "إجمالي الأسئلة"
 
-#, fuzzy
 #~ msgid "Present"
 #~ msgstr "الحالة السابقة"
 
-#, fuzzy
 #~ msgid "Excused"
 #~ msgstr "مركز"
 
-#, fuzzy
 #~ msgid "— Optional —"
 #~ msgstr "اختياري"
 
-#, fuzzy
 #~ msgid "— Select open session —"
 #~ msgstr "— اختر —"
 
-#, fuzzy
 #~ msgid "Session Details"
 #~ msgstr "تفاصيل التقييم"
 
-#, fuzzy
 #~ msgid "Attendance Session"
 #~ msgstr "سؤال القبول"
 
-#, fuzzy
 #~ msgid "Open At"
 #~ msgstr "يفتح في"
 
-#, fuzzy
 #~ msgid "Close At"
 #~ msgstr "يغلق"
 
-#, fuzzy
 #~ msgid "Closed By"
 #~ msgstr "يغلق"
 
-#, fuzzy
 #~ msgid "Attendance Records"
 #~ msgstr "سجلات الدفع"
 
-#, fuzzy
 #~ msgid "— Select cohort —"
 #~ msgstr "— اختر —"
 
-#, fuzzy
 #~ msgid "— Select course version —"
 #~ msgstr "إنشاء إصدار مقرر"
 
-#, fuzzy
 #~ msgid "Session Records"
 #~ msgstr "سجلات الدفع"
 
-#, fuzzy
 #~ msgid "Back to Session"
 #~ msgstr "العودة إلى الإصدار"
 
-#, fuzzy
 #~ msgid "%(total)s record"
 #~ msgid_plural "%(total)s records"
 #~ msgstr[0] "الدرجة النهائية"
@@ -14940,11 +14171,9 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "Email Template Management"
 #~ msgstr "إدارة قوالب البريد الإلكتروني"
 
-#, fuzzy
 #~ msgid "No templates found. Run"
 #~ msgstr "لا توجد قوالب."
 
-#, fuzzy
 #~ msgid "to seed the default templates."
 #~ msgstr "إعادة تعيين الإعداد الافتراضي"
 
@@ -15128,7 +14357,6 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ "أعد بناء الإجابات من أحدث اللقطات المحفوظة وصحح جميع المحاولات قيد "
 #~ "التنفيذ. لا يمكن التراجع عن هذا الإجراء."
 
-#, fuzzy
 #~ msgid "Student or recipient"
 #~ msgstr "مستلم واحد"
 
@@ -15407,26 +14635,21 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "Finalized %(count)d pending assignment(s)."
 #~ msgstr "تم إنهاء %(count)d مهمة معلقة."
 
-#, fuzzy
 #~ msgid "Required (blocks activation)"
 #~ msgstr "إعادة إرسال تأكيد البريد الإلكتروني"
 
-#, fuzzy
 #~ msgid "inactive"
 #~ msgstr "غير نشط"
 
-#, fuzzy
 #~ msgid "App"
 #~ msgstr "تقديم الآن"
 
 #~ msgid "New"
 #~ msgstr "جديد"
 
-#, fuzzy
 #~ msgid "You have already submitted this intake form."
 #~ msgstr "لقد أكملت هذه الدبلومة بالفعل."
 
-#, fuzzy
 #~ msgid "Link Expired"
 #~ msgstr "منتهي"
 
@@ -15436,11 +14659,9 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "Imported by"
 #~ msgstr "تم الاستيراد بواسطة"
 
-#, fuzzy
 #~ msgid "Diploma enrollment"
 #~ msgstr "تسجيل دبلوم"
 
-#, fuzzy
 #~ msgid "Edit Payment Record"
 #~ msgstr "سجل الدفع"
 
@@ -15462,47 +14683,36 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "No uploads yet"
 #~ msgstr "لا توجد تحميلات بعد"
 
-#, fuzzy
 #~ msgid "Component Type"
 #~ msgstr "نوع المحتوى"
 
-#, fuzzy
 #~ msgid "Update"
 #~ msgstr "تم التحديث"
 
-#, fuzzy
 #~ msgid "Add Component"
 #~ msgstr "إضافة دفعة"
 
-#, fuzzy
 #~ msgid "Max Score"
 #~ msgstr "الدرجة"
 
-#, fuzzy
 #~ msgid "Submit Decision"
 #~ msgstr "إرسال التسجيل"
 
-#, fuzzy
 #~ msgid "Total Score"
 #~ msgstr "الدرجة النهائية"
 
-#, fuzzy
 #~ msgid "Total Passed"
 #~ msgstr "المدفوع الإجمالي"
 
-#, fuzzy
 #~ msgid "Optional. Leave blank to set later."
 #~ msgstr "سجل الأحداث التشغيلية"
 
-#, fuzzy
 #~ msgid "Select semester..."
 #~ msgstr "إلى الفصل"
 
-#, fuzzy
 #~ msgid "Select cohort..."
 #~ msgstr "— اختر —"
 
-#, fuzzy
 #~ msgid "From Cohort"
 #~ msgstr "البرنامج / المجموعة"
 
@@ -15515,14 +14725,12 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "assessment(s)"
 #~ msgstr "تقييم(ات)"
 
-#, fuzzy
 #~ msgid "Sync Grades"
 #~ msgstr "حفظ الدرجات"
 
 #~ msgid "Semester Actions"
 #~ msgstr "إجراءات الفصل الدراسي"
 
-#, fuzzy
 #~ msgid "Promote academic year"
 #~ msgstr "بيانات أكاديمية حية"
 
@@ -16034,8 +15242,8 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "Upcoming cohorts"
 #~ msgstr "المجموعات المفتوحة"
 
-#~ msgid "Starts"
-#~ msgstr "تبدأ في"
+msgid "Starts"
+msgstr "يبدأ"
 
 #~ msgid "Review program applications"
 #~ msgstr "طلبات البرامج"
@@ -16887,26 +16095,22 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgstr ""
 #~ "يحتوي القالب '%(slug)s' على متغيرات غير محلولة بعد العرض: %(missing)s"
 
-#, fuzzy
 #~| msgid "Course version must belong to the same cohort as the assignment."
 #~ msgid "Component does not belong to the same cohort as the enrollment."
 #~ msgstr ""
 #~ "يجب أن ينتمي إصدار الدورة إلى الدفعة نفسها التي ينتمي إليها التكليف."
 
-#, fuzzy
 #~| msgid "Semester must belong to the same diploma as the rule."
 #~ msgid ""
 #~ "Failed semester must belong to the same diploma as the target cohort."
 #~ msgstr "يجب أن ينتمي الفصل لنفس دبلوم القاعدة."
 
-#, fuzzy
 #~| msgid "An active certificate already exists for this enrollment."
 #~ msgid ""
 #~ "An active or planned rejoin plan already exists for this enrollment and "
 #~ "semester."
 #~ msgstr "شهادة نشطة موجودة بالفعل لهذا التسجيل."
 
-#, fuzzy
 #~| msgid "Subject and body are required."
 #~ msgid "Score and max score are required."
 #~ msgstr "الموضوع والمحتوى مطلوبان."
@@ -16914,32 +16118,26 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "Loading…"
 #~ msgstr "جارٍ التحميل…"
 
-#, fuzzy
 #~| msgid "assessment choice"
 #~ msgid "Remove choice"
 #~ msgstr "خيار التقييم"
 
-#, fuzzy
 #~| msgid "No members."
 #~ msgid "staff members"
 #~ msgstr "لا يوجد أعضاء."
 
-#, fuzzy
 #~| msgid "No students found."
 #~ msgid "No results for"
 #~ msgstr "لم يتم العثور على طلاب."
 
-#, fuzzy
 #~| msgid "Semester does not belong to the diploma."
 #~ msgid "No semesters found for this diploma."
 #~ msgstr "الفصل الدراسي لا ينتمي إلى الدبلومة."
 
-#, fuzzy
 #~| msgid "e.g. active"
 #~ msgid "Toggle active"
 #~ msgstr "مثال: نشط"
 
-#, fuzzy
 #~| msgid "allow late submission"
 #~ msgid "Download submission"
 #~ msgstr "تنزيل التسليم"
@@ -16962,17 +16160,14 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "Create Cluster"
 #~ msgstr "إنشاء مجموعة"
 
-#, fuzzy
 #~| msgid "Edit entrance exam"
 #~ msgid "Assign / send entrance exam"
 #~ msgstr "تعديل امتحان القبول"
 
-#, fuzzy
 #~| msgid "Recent payments"
 #~ msgid "Record Payment"
 #~ msgstr "المدفوعات الأخيرة"
 
-#, fuzzy
 #~| msgid "Required columns:"
 #~ msgid "Request Documents"
 #~ msgstr "الأعمدة المطلوبة:"
@@ -16992,12 +16187,10 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "Grade visibility"
 #~ msgstr "رؤية الدرجة"
 
-#, fuzzy
 #~| msgid "No questions yet"
 #~ msgid "No sections yet"
 #~ msgstr "لا توجد أسئلة بعد"
 
-#, fuzzy
 #~| msgid "Total paid"
 #~ msgid "Total max grade:"
 #~ msgstr "المدفوع الإجمالي"
@@ -17017,7 +16210,6 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "No homework submissions yet."
 #~ msgstr "لا توجد تسليمات واجبات بعد."
 
-#, fuzzy
 #~| msgid "No assignments yet."
 #~ msgid "No assignments"
 #~ msgstr "لا توجد إسنادات بعد."
@@ -17025,7 +16217,6 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "Submitted file"
 #~ msgstr "الملف المقدم"
 
-#, fuzzy
 #~| msgid "You have no active assessments right now."
 #~ msgid "You have no active assignments in this cohort/semester."
 #~ msgstr "ليس لديك أي تقييمات نشطة في الوقت الحالي."
@@ -17059,12 +16250,10 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "Source"
 #~ msgstr "المصدر"
 
-#, fuzzy
 #~| msgid "Exam created"
 #~ msgid "Exam schedule"
 #~ msgstr "تم إنشاء الامتحان"
 
-#, fuzzy
 #~| msgid "result"
 #~ msgid "Exam result"
 #~ msgstr "النتيجة"
@@ -17093,17 +16282,14 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "Form Already Submitted"
 #~ msgstr "تم إرسال النموذج من قبل"
 
-#, fuzzy
 #~| msgid "Assessment duration has expired."
 #~ msgid "This intake form link has expired."
 #~ msgstr "انتهت مدة الامتحان."
 
-#, fuzzy
 #~| msgid "Edit assessment"
 #~ msgid "Edit payment"
 #~ msgstr "تعديل التقييم"
 
-#, fuzzy
 #~| msgid "No payment records"
 #~ msgid "Back to payment record"
 #~ msgstr "لا توجد سجلات دفع"
@@ -17111,12 +16297,10 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "Upload CSV"
 #~ msgstr "رفع CSV"
 
-#, fuzzy
 #~| msgid "graded at"
 #~ msgid "Graded at"
 #~ msgstr "تاريخ التصحيح"
 
-#, fuzzy
 #~| msgid "Create cohort"
 #~ msgid "Target Cohort"
 #~ msgstr "إنشاء مجموعة"
@@ -17151,7 +16335,6 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 #~ msgid "This course is no longer accessible."
 #~ msgstr "لم يعد هذا المقرر متاحاً."
 
-#, fuzzy
 #~| msgid "Download"
 #~ msgid "Download documents"
 #~ msgstr "تنزيل"
@@ -17203,3 +16386,279 @@ msgstr "بيانات امتحان الفصل الدراسي القديمة لل�
 
 #~ msgid "Homework and grading"
 #~ msgstr "الواجبات والتصحيح"
+
+msgid "Could not determine audio duration."
+msgstr "تعذر تحديد مدة الصوت."
+
+msgid "FFmpeg failed: %(error)s"
+msgstr "فشل FFmpeg: %(error)s"
+
+msgid "Audit events are append-only and cannot be deleted."
+msgstr "أحداث التدقيق للقراءة فقط ولا يمكن حذفها."
+
+msgid "Audit events are append-only and cannot be modified."
+msgstr "أحداث التدقيق للقراءة فقط ولا يمكن تعديلها."
+
+msgid "Program application decisions are append-only."
+msgstr "قرارات طلبات البرامج للقراءة فقط ولا يمكن تعديلها."
+
+msgid "Program application notes are append-only."
+msgstr "ملاحظات طلبات البرامج للقراءة فقط ولا يمكن تعديلها."
+
+msgid "Bulk auto-promote"
+msgstr "الترقية الجماعية التلقائية"
+
+msgid "Final pass."
+msgstr "النجاح النهائي."
+
+msgid "Final fail."
+msgstr "الرسوب النهائي."
+
+msgid "Manual promotion."
+msgstr "ترقية يدوية."
+
+msgid "Manual completion."
+msgstr "إكمال يدوي."
+
+msgid "Manual graduation."
+msgstr "تخرج يدوي."
+
+msgid "Add a numbered session"
+msgstr "إضافة جلسة مرقمة"
+
+msgid "Add session"
+msgstr "إضافة جلسة"
+
+msgid "Add the first dated session when the cohort meets."
+msgstr "أضف أول جلسة مؤرخة عند انعقاد المجموعة."
+
+msgid "All assigned students"
+msgstr "جميع الطلاب المعيّنين"
+
+msgid "All Semester Exams"
+msgstr "جميع امتحانات الفصل الدراسي"
+
+msgid "All semester exams in the cohort."
+msgstr "جميع امتحانات الفصل الدراسي في المجموعة."
+
+msgid "All semester exams in the selected semester."
+msgstr "جميع امتحانات الفصل الدراسي في الفصل المحدد."
+
+msgid "Assign one reviewer to a cohort, semester, or specific semester exam."
+msgstr "عيّن مراجعًا واحدًا لمجموعة أو فصل دراسي أو امتحان فصل دراسي محدد."
+
+msgid "Assignment scope"
+msgstr "نطاق التعيين"
+
+msgid "Attendance day"
+msgstr "يوم الحضور"
+
+msgid "Attendance days"
+msgstr "أيام الحضور"
+
+msgid "Attendance period"
+msgstr "فترة الحضور"
+
+msgid "Attendance periods"
+msgstr "فترات الحضور"
+
+msgid "Attendance type"
+msgstr "نوع الحضور"
+
+msgid "Back to attendance period"
+msgstr "العودة إلى فترة الحضور"
+
+msgid "Choose the level this reviewer can grade."
+msgstr "اختر المستوى الذي يمكن لهذا المراجع تصحيحه."
+
+msgid "Claimed submissions"
+msgstr "الإجابات المحجوزة"
+
+msgid "Close period"
+msgstr "إغلاق الفترة"
+
+msgid "Continue online submission"
+msgstr "متابعة الإجابة الإلكترونية"
+
+msgid "Course attendance"
+msgstr "حضور الدورة"
+
+msgid "Course session"
+msgstr "جلسة دورة"
+
+msgid "Create attendance"
+msgstr "إنشاء الحضور"
+
+msgid "Create one cohort-semester period and monitor its numbered attendance days."
+msgstr "أنشئ فترة واحدة للمجموعة والفصل الدراسي وتابع أيام الحضور المرقمة فيها."
+
+msgid "Create one period for a cohort and semester, then add numbered daily sessions inside it. Course attendance can still use standalone sessions."
+msgstr "أنشئ فترة واحدة للمجموعة والفصل الدراسي، ثم أضف جلسات يومية مرقمة داخلها. ويمكن لحضور الدورات الاستمرار باستخدام جلسات مستقلة."
+
+msgid "Create one period for each cohort and semester."
+msgstr "أنشئ فترة واحدة لكل مجموعة وفصل دراسي."
+
+msgid "Daily sessions"
+msgstr "الجلسات اليومية"
+
+msgid "Diploma attendance"
+msgstr "حضور الدبلوم"
+
+msgid "Diploma attendance is organized by period and day."
+msgstr "يُنظَّم حضور الدبلوم حسب الفترة واليوم."
+
+msgid "Diploma semester period"
+msgstr "فترة فصل الدبلوم"
+
+msgid "Ends"
+msgstr "ينتهي"
+
+msgid "Exam sections are handled as grading claims. They do not create separate reviewer assignments."
+msgstr "تُدار أقسام الامتحان باعتبارها مهام تصحيح محجوزة، ولا تُنشئ تكليفات مراجعين منفصلة."
+
+msgid "Grading access"
+msgstr "صلاحية التصحيح"
+
+msgid "Grading activity"
+msgstr "نشاط التصحيح"
+
+msgid "Legacy section restriction"
+msgstr "تقييد قسم قديم"
+
+msgid "No attendance days yet."
+msgstr "لا توجد أيام حضور بعد."
+
+msgid "No diploma attendance periods found"
+msgstr "لم يتم العثور على فترات حضور للدبلوم"
+
+msgid "No grading claims yet."
+msgstr "لا توجد مهام تصحيح محجوزة بعد."
+
+msgid "Offline grades"
+msgstr "درجات الحضور غير الإلكتروني"
+
+msgid "One assignment, one scope"
+msgstr "تكليف واحد، نطاق واحد"
+
+msgid "Online and offline grading"
+msgstr "تصحيح إلكتروني وغير إلكتروني"
+
+msgid "Only the selected semester exam."
+msgstr "الامتحان الفصلي المحدد فقط."
+
+msgid "Optional title"
+msgstr "عنوان اختياري"
+
+msgid "Optional. Leave empty to cover the whole selected scope."
+msgstr "اختياري. اتركه فارغًا ليشمل النطاق المحدد بالكامل."
+
+msgid "Period details"
+msgstr "تفاصيل الفترة"
+
+msgid "Period sessions"
+msgstr "جلسات الفترة"
+
+msgid "periods"
+msgstr "فترات"
+
+msgid "Range"
+msgstr "المدة"
+
+msgid "Request online submission"
+msgstr "طلب إجابة إلكترونية"
+
+msgid "Reviewers"
+msgstr "المراجعون"
+
+msgid "Save assignment"
+msgstr "حفظ التكليف"
+
+msgid "Select one or more reviewers. Use Ctrl/Cmd for multiple selections."
+msgstr "اختر مراجعًا واحدًا أو أكثر. استخدم Ctrl/Cmd لتحديد خيارات متعددة."
+
+msgid "Session number"
+msgstr "رقم الجلسة"
+
+msgid "Standalone sessions"
+msgstr "جلسات مستقلة"
+
+msgid "The selected exam supplies its semester automatically."
+msgstr "يحدد الامتحان المختار فصله الدراسي تلقائيًا."
+
+msgid "This filters the available cohorts and semesters."
+msgstr "يُصفّي هذا الاختيار المجموعات والفصول الدراسية المتاحة."
+
+msgid "The attendance period must start before it ends."
+msgstr "يجب أن تبدأ فترة الحضور قبل انتهائها."
+
+msgid "An attendance period already exists for this cohort and semester."
+msgstr "توجد فترة حضور بالفعل لهذه المجموعة والفصل الدراسي."
+
+msgid "The attendance period is no longer active."
+msgstr "لم تعد فترة الحضور نشطة."
+
+msgid "Session date must be inside the attendance period."
+msgstr "يجب أن يقع تاريخ الجلسة داخل فترة الحضور."
+
+msgid "Session times must be inside the attendance period."
+msgstr "يجب أن تقع أوقات الجلسة داخل فترة الحضور."
+
+msgid "An attendance session already exists for this date in the period."
+msgstr "توجد جلسة حضور بالفعل لهذا التاريخ في الفترة."
+
+msgid "Diploma attendance must be created as a cohort semester period."
+msgstr "يجب إنشاء حضور الدبلوم كفترة للمجموعة والفصل الدراسي."
+
+msgid "This attendance session has already ended."
+msgstr "انتهت جلسة الحضور هذه بالفعل."
+
+msgid "The attendance period is not active yet."
+msgstr "فترة الحضور غير نشطة بعد."
+
+msgid "The attendance period is not open."
+msgstr "فترة الحضور غير مفتوحة."
+
+msgid "Only an active attendance period can be closed."
+msgstr "لا يمكن إغلاق إلا فترة حضور نشطة."
+
+msgid "Close all open attendance sessions before closing the period."
+msgstr "أغلق جميع جلسات الحضور المفتوحة قبل إغلاق الفترة."
+
+msgid "A period session must target a cohort and semester, not a course."
+msgstr "يجب أن تستهدف جلسة الفترة مجموعة وفصلًا دراسيًا، وليس دورة."
+
+msgid "Session must belong to its attendance period's cohort and semester."
+msgstr "يجب أن تنتمي الجلسة إلى مجموعة وفصل فترة الحضور."
+
+msgid "A period session must have a positive number."
+msgstr "يجب أن يكون لجلسة الفترة رقم موجب."
+
+msgid "Active reviewer assignments cannot be restricted to one exam section."
+msgstr "لا يمكن تقييد تكليف المراجع النشط بقسم امتحان واحد."
+
+msgid "Select a valid Reviewer access mode."
+msgstr "اختر صلاحية وصول صحيحة للمراجع."
+
+msgid "Request online submissions"
+msgstr "طلب الإجابات الإلكترونية"
+
+msgid "Enter offline grades"
+msgstr "إدخال الدرجات غير الإلكترونية"
+
+msgid "This assignment does not allow offline grading."
+msgstr "لا يسمح هذا التكليف بالتصحيح غير الإلكتروني."
+
+msgid "This assignment does not allow online grading."
+msgstr "لا يسمح هذا التكليف بالتصحيح الإلكتروني."
+
+msgid "Create reviewer assignment"
+msgstr "إنشاء تكليف مراجع"
+
+msgid "Every selected reviewer must be review staff."
+msgstr "يجب أن يكون كل مراجع مختار ضمن طاقم المراجعة."
+
+msgid "Student cluster"
+msgstr "مجموعة الطلاب"
+
+msgid "Cohort semester attendance"
+msgstr "حضور المجموعة والفصل الدراسي"

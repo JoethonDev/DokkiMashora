@@ -7,6 +7,7 @@ import logging
 import re
 import uuid
 from decimal import Decimal
+from types import SimpleNamespace
 
 import qrcode
 from django.conf import settings
@@ -81,6 +82,7 @@ from apps.academics.services import (
     start_lecture_audio,
     start_lecture_watch,
 )
+from apps.academics.tasks import transcode_lecture_audio_task
 from apps.applications.constants import PROGRAM_APP_STATUS_REJECTED, PROGRAM_TYPE_DIPLOMA
 from apps.applications.models import ProgramApplication
 from apps.assessments.constants import (
@@ -108,6 +110,7 @@ from apps.core.permissions import (
 from apps.core.views import safe_next_url
 from apps.intake_forms.models import IntakeForm
 from apps.progression.models import DiplomaProgressionRule, SemesterProgressionRule
+from apps.progression.services import save_progression_rule
 from apps.storage.services import record_deferred_storage_deletion, storage_service
 from apps.students.models import StudentProfile
 
@@ -361,8 +364,6 @@ def admin_semester_edit(request, diploma_id, semester_id):
                 with transaction.atomic():
                     form.save()
                     if diploma_rule and pass_percent is not None:
-                        from apps.progression.services import save_progression_rule
-
                         semester_rule, _created = SemesterProgressionRule.objects.update_or_create(
                             semester=semester,
                             diploma_rule=diploma_rule,
@@ -852,8 +853,6 @@ def _process_lecture_audio(request, lecture, files, key_prefix=None):
             "audio_processing_error", "updated_at",
         ])
         source_persisted = True
-        from apps.academics.tasks import transcode_lecture_audio_task
-
         transcode_lecture_audio_task.delay(
             lecture_id=lecture.id,
             storage_key=result.key,
@@ -935,7 +934,6 @@ def _cleanup_audio_after_commit(old_keys, old_prefixes):
 
 
 def _assessment_due_work(user, *, course_version_id=None, cohort_id=None):
-    from types import SimpleNamespace
     filters = Q(student=user, status__in=[ATTEMPT_STATUS_ASSIGNED, ATTEMPT_STATUS_IN_PROGRESS])
     scope = Q()
     if course_version_id:

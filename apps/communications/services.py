@@ -18,6 +18,8 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from apps.applications.models import ProgramApplicationEmailLog
+from apps.communications import tasks as communication_tasks
 from apps.students.models import StudentProfile
 
 from .constants import (
@@ -36,6 +38,21 @@ from .models import BulkEmailSend, EmailFooter, EmailTemplate
 logger = logging.getLogger("apps.communications")
 
 VARIABLE_PATTERN = re.compile(r"{{\s*[a-zA-Z_][a-zA-Z0-9_]*\s*}}")
+
+
+def _mask_email(value: str) -> str:
+    """Partially mask an address for logs (RV-025): keep the first 2 chars and
+    the domain so operators can still triage, never the full local part.
+    """
+    if not value:
+        return ""
+    at = value.rfind("@")
+    if at <= 0:
+        return value[:2] + "***"
+    local = value[:at]
+    domain = value[at:]
+    keep = local[:2] if len(local) > 2 else local
+    return f"{keep}***{domain}"
 
 
 def _wrap_in_design(body: str, design: str, footer: str) -> str:
@@ -191,7 +208,10 @@ def send_email(
         record.sent_at = timezone.now()
         record.save(update_fields=["status", "sent_at", "updated_at"])
     except Exception as exc:  # noqa: BLE001
-        logger.exception("Failed to send email %s to %s", template_slug, to_email)
+        logger.exception(
+            "Failed to send email %s (message id %s) to %s",
+            template_slug, record.pk, _mask_email(to_email),
+        )
         record.status = EMAIL_STATUS_FAILED
         record.error = str(exc)[:1000]
         record.save(update_fields=["status", "error", "updated_at"])
@@ -225,8 +245,6 @@ def queue_templated_email(
     HTML body are stored so the worker delivers exactly what was rendered at
     queue time.
     """
-    from apps.communications.tasks import send_queued_email_task
-
     rendered = _render_templated_email(slug, context)
     if rendered is None:
         return None
@@ -263,7 +281,7 @@ def queue_templated_email(
     else:
         record = EmailMessage.objects.create(**defaults)
 
-    transaction.on_commit(lambda: send_queued_email_task.delay(record.id))
+        transaction.on_commit(lambda: communication_tasks.send_queued_email_task.delay(record.id))
     return record
 
 
@@ -352,10 +370,6 @@ def _sync_application_log_from_delivery(delivery_id: int, *, status: str, error:
     queue time. ``failure -> queued`` re-shows the log as queued so a retry
     remains visible as pending.
     """
-    try:
-        from apps.applications.models import ProgramApplicationEmailLog
-    except Exception:  # noqa: BLE001
-        return
     now = timezone.now()
     update_fields: dict[str, object] = {"status": status, "error": error, "updated_at": now}
     if status == EMAIL_STATUS_SENT:
@@ -388,8 +402,6 @@ def record_program_application_email_log(
     When ``idempotency_key`` is given, a matching log is returned instead of
     creating a duplicate (bulk-invitation idempotency).
     """
-    from apps.applications.models import ProgramApplicationEmailLog
-
     recipient = (recipient or "").strip()
     if is_resend is None:
         is_resend = ProgramApplicationEmailLog.objects.filter(
@@ -452,8 +464,6 @@ def queue_program_application_email(
     This is the canonical entry point for all application-bound emails
     (including BUG-005 Option A resends).
     """
-    from apps.applications.models import ProgramApplicationEmailLog
-
     to_email = (to_email or "").strip()
     if not to_email:
         return None, None
@@ -569,7 +579,7 @@ def resolve_recipients(
             validate_email(e)
             entries.append({"email": e, "source": "manual"})
         except Exception:  # noqa: BLE001
-            logger.warning("Skipping invalid email address: %s", e)
+            logger.warning("Skipping invalid email address: %s", _mask_email(e))
 
     seen: set[str] = set()
     result: list[RecipientEntry] = []
@@ -619,8 +629,6 @@ def enqueue_bulk_email_send(bulk_send: BulkEmailSend) -> int:
     SMTP delivery (T5); each chunk task sends at most ``_BULK_EMAIL_CHUNK_SIZE``
     recipients and skips recipients that already have a terminal send record.
     """
-    from apps.communications.tasks import send_bulk_email_chunk_task
-
     recipients = bulk_send.resolved_recipients if bulk_send.resolved_recipients else resolve_recipients(
         filter_criteria=bulk_send.recipient_filter if bulk_send.recipient_filter else None,
         manual_emails=bulk_send.recipient_emails,
@@ -634,7 +642,7 @@ def enqueue_bulk_email_send(bulk_send: BulkEmailSend) -> int:
     chunk_count = 0
     for offset in range(0, total, _BULK_EMAIL_CHUNK_SIZE):
         chunk_emails = [entry["email"] for entry in recipients[offset:offset + _BULK_EMAIL_CHUNK_SIZE]]
-        send_bulk_email_chunk_task.delay(bulk_send.id, chunk_emails, total)
+        communication_tasks.send_bulk_email_chunk_task.delay(bulk_send.id, chunk_emails, total)
         chunk_count += 1
     return chunk_count
 

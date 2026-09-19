@@ -4,10 +4,11 @@
   {{ session }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=session|stringformat:"s" eyebrow=_("Attendance session") back_button=True %}
+  <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=_("Attendance session") eyebrow=_("Attendance session") back_button=True back_url=back_url %}
     <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Session" %}</p>
           <h3>{% trans "Session info" %}</h3>
+          {% if period %}<a class="text-sm text-link inline-block mt-2" href="{% url 'attendance:attendance_period_detail' period.id %}">{% trans "Back to attendance period" %}</a>{% endif %}
         </div>
         {% if is_admin %}
           <div class="flex gap-2.5 items-center flex-wrap">{% if session.status == 'scheduled' %}
@@ -74,22 +75,28 @@
             </dd>
           </div>
         {% endif %}
+        {% if session.period %}
+          <div>
+            <dt class="dt">{% trans "Session number" %}</dt>
+            <dd class="dd">{{ session.session_number }}</dd>
+          </div>
+        {% endif %}
         <div>
           <dt class="dt">{% trans "Date" %}</dt>
           <dd class="dd">
-            {{ session.date|date:"DATE_FORMAT"|default:'—' }}
+            <span dir="ltr">{{ session.date|date:"d/m/Y"|default:'—' }}</span>
           </dd>
         </div>
         <div>
           <dt class="dt">{% trans "Opens" %}</dt>
           <dd class="dd">
-            {{ session.open_at|date:"d/m/Y H:i" }}
+            <span dir="ltr">{{ session.open_at|date:"d/m/Y H:i" }}</span>
           </dd>
         </div>
         <div>
           <dt class="dt">{% trans "Closes" %}</dt>
           <dd class="dd">
-            {{ session.close_at|date:"d/m/Y H:i" }}
+            <span dir="ltr">{{ session.close_at|date:"d/m/Y H:i" }}</span>
           </dd>
         </div>
         {% if session.opened_by %}
@@ -131,9 +138,9 @@
                 <tr>
                   <td class="table-td">{{ record.student.full_name }}</td>
                   <td class="table-td">{% include "ui/components/_status.html" with code=record.status label=record.get_status_display %}</td>
-                  <td class="table-td">{{ record.scanned_at|date:"d/m/Y H:i"|default:'—' }}</td>
+                  <td class="table-td"><span dir="ltr">{{ record.scanned_at|date:"d/m/Y H:i"|default:'—' }}</span></td>
                   <td class="table-td">{{ record.scanned_by.full_name|default:'—' }}</td>
-                  <td class="table-td">{{ record.notes|default:'—' }}</td>
+                   <td class="table-td">{{ record.metadata.note|default:'—' }}</td>
                 </tr>
               {% endfor %}
             </tbody>
@@ -145,8 +152,8 @@
               <div class="flex-1 min-w-0">
                 <strong class="block truncate">{{ record.student.full_name }}</strong>
                 {% include "ui/components/_status.html" with code=record.status label=record.get_status_display %}
-                <small class="block text-muted">{% trans "Scanned at" %}: {{ record.scanned_at|date:"d/m/Y H:i"|default:'—' }} &middot; {% trans "by" %} {{ record.scanned_by.full_name|default:'—' }}</small>
-                <small class="block text-muted">{{ record.notes|default:'—' }}</small>
+                <small class="block text-muted">{% trans "Scanned at" %}: <span dir="ltr">{{ record.scanned_at|date:"d/m/Y H:i"|default:'—' }}</span> &middot; {% trans "by" %} {{ record.scanned_by.full_name|default:'—' }}</small>
+                 <small class="block text-muted">{{ record.metadata.note|default:'—' }}</small>
               </div>
             </div>
           {% endfor %}

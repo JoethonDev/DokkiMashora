@@ -96,7 +96,15 @@
   .form-group-error .form-textarea:focus,
   .form-group-error .form-file:focus { @apply ring-red/15; }
   .field-label {
-    @apply block text-xs font-bold text-text uppercase tracking-wider;
+    @apply block text-xs font-bold text-text uppercase tracking-wider leading-6;
+  }
+  :where([dir="rtl"]) .field-label,
+  :where([dir="rtl"]) .dt,
+  :where([dir="rtl"]) .eyebrow,
+  :where([dir="rtl"]) .table-th {
+    text-transform: none;
+    letter-spacing: 0;
+    line-height: 1.7;
   }
   .field-help {
     @apply text-xs text-muted mt-1 leading-normal;
@@ -138,6 +146,41 @@
   .form-radio {
     @apply w-5 h-5 sm:w-4 sm:h-4 m-0 shrink-0 rounded-full;
     accent-color: #8A2E1A;
+  }
+  .form-choice-group {
+    @apply flex flex-col gap-2;
+  }
+  .field-group {
+    @apply flex flex-col gap-3;
+  }
+  .choice-card {
+    @apply flex items-start gap-3 rounded-sm border border-line bg-surface-soft px-3 py-3 text-sm font-bold cursor-pointer transition-colors;
+  }
+  .choice-card:hover,
+  .choice-card:has(input:checked) {
+    @apply border-brand bg-brand-soft;
+  }
+  .choice-card input {
+    @apply mt-0.5;
+  }
+  .alert-error {
+    @apply rounded-sm border border-red/30 bg-red-soft px-4 py-3 text-sm text-red;
+  }
+  .text-link {
+    @apply font-bold text-brand underline decoration-brand/40 hover:text-brand-800;
+  }
+  .choice-list {
+    @apply flex flex-col gap-2 m-0 p-0 list-none;
+  }
+  .choice-list li {
+    @apply m-0;
+  }
+  .choice-list label {
+    @apply inline-flex items-center gap-2 cursor-pointer text-sm font-medium;
+  }
+  .choice-list input[type="radio"],
+  .choice-list input[type="checkbox"] {
+    @apply m-0 shrink-0;
   }
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-sm px-4 py-2.5 text-sm font-bold
@@ -210,6 +253,7 @@
   /* §3.2 new primitives */
   .page-container { @apply w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8; }
   .page-stack     { @apply flex flex-col gap-4 sm:gap-5; }
+  .form-stack     { @apply flex flex-col gap-4; }
   .aspect-video   { aspect-ratio: 16 / 9; }
   .section-head   { @apply flex items-center justify-between gap-4 mb-4 flex-wrap; }
   .card-surface > .section-head { border-bottom: 1px solid #E9DDC9; padding-bottom: 0.75rem; margin-bottom: 0.75rem; }
@@ -242,7 +286,7 @@
   }
   .dl { @apply grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 m-0; }
   .dt { @apply text-xs font-bold text-muted uppercase tracking-wider; }
-  .dd { @apply m-0 text-sm font-medium text-text; flex: 1 1 0%; min-width: 0; overflow-wrap: anywhere; }
+  .dd { @apply m-0 text-sm font-medium text-text; flex: 1 1 0%; min-width: 0; overflow-wrap: anywhere; line-height: 1.75; }
   .auth-hero { @apply relative overflow-hidden flex flex-col justify-between p-10 lg:p-12 text-white bg-gradient-to-br from-surface-inverse to-brand-strong; }
   .auth-hero::before, .auth-hero::after { content: ""; position: absolute; border-radius: 9999px; background: rgba(255,255,255,.06); }
   .auth-hero::before { width: 380px; height: 380px; inset-inline-end: -150px; top: -120px; }

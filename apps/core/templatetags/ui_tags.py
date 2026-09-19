@@ -1,7 +1,9 @@
 """Template tags for UI helpers."""
 
 from django import template
-from django.utils.translation import gettext
+from django.utils import timezone
+from django.utils.formats import date_format
+from django.utils.translation import get_language, gettext
 
 register = template.Library()
 
@@ -10,6 +12,17 @@ register = template.Library()
 def dict_key(d, key):
     """Look up a dictionary key (supports integer keys)."""
     return d.get(key)
+
+
+@register.filter
+def ui_datetime(value):
+    """Render a human-facing datetime with the active locale's month names."""
+    if not value:
+        return ""
+    if timezone.is_aware(value):
+        value = timezone.localtime(value)
+    separator = "،" if (get_language() or "").split("-")[0] == "ar" else ","
+    return date_format(value, format=f"j F Y{separator} H:i", use_l10n=True)
 
 
 _SUCCESS = frozenset({"active", "accepted", "activated", "paid", "passed", "completed", "released", "sent", "matched", "published", "graded", "present", "pass"})

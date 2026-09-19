@@ -1,10 +1,12 @@
 """Views for attendance management."""
 
+from datetime import date as date_type
 from datetime import datetime
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Q
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -34,15 +36,19 @@ from .constants import (
     ATTENDANCE_STATUS_EXCUSED,
     ATTENDANCE_STATUS_LATE,
     ATTENDANCE_STATUS_PRESENT,
+    SESSION_STATUS_CANCELLED,
     SESSION_STATUS_CLOSED,
     SESSION_STATUS_OPEN,
     SESSION_STATUS_SCHEDULED,
 )
-from .models import AttendanceRecord, AttendanceSession
+from .models import AttendancePeriod, AttendanceRecord, AttendanceSession
 from .services import (
     AttendanceScanError,
     _build_attendance_summary,
+    close_attendance_period,
     close_attendance_session,
+    create_attendance_day,
+    create_attendance_period,
     get_attendance_evaluation_percent,
     get_attendance_summaries,
     open_attendance_session,
@@ -61,8 +67,14 @@ ADMIN_ONLY = (GROUP_SUPER_ADMIN, GROUP_ADMIN)
 @login_required
 @role_required(*ROLE_ATTENDANCE_STAFF)
 def attendance_session_list(request):
-    sessions = AttendanceSession.objects.all().select_related(
-        "cohort", "course_version", "created_by"
+    periods = AttendancePeriod.objects.select_related(
+        "cohort", "semester", "created_by"
+    ).annotate(
+        day_count=Count("sessions", distinct=True),
+        record_count=Count("sessions__records", distinct=True),
+    )
+    sessions = AttendanceSession.objects.filter(period__isnull=True).select_related(
+        "cohort", "course_version", "semester", "created_by"
     ).annotate(record_count=Count("records"))
 
     cohort_id = safe_int(request.GET.get("cohort_id"))
@@ -71,19 +83,25 @@ def attendance_session_list(request):
     exception = request.GET.get("exception", "")
 
     if cohort_id:
+        periods = periods.filter(cohort_id=cohort_id)
         sessions = sessions.filter(cohort_id=cohort_id)
     if date_from:
+        periods = periods.filter(sessions__date__gte=date_from).distinct()
         sessions = sessions.filter(date__gte=date_from)
     if date_to:
+        periods = periods.filter(sessions__date__lte=date_to).distinct()
         sessions = sessions.filter(date__lte=date_to)
     if exception == "overdue":
+        periods = periods.filter(status="scheduled", ends_at__lt=timezone.now())
         sessions = sessions.filter(status="scheduled", date__lt=timezone.localdate())
 
+    periods = periods.order_by("-starts_at", "-created_at")
+    page_obj, pagination_qs = paginate(request, periods, per_page=25)
     sessions = sessions.order_by("-date", "-created_at")
-    page_obj, pagination_qs = paginate(request, sessions, per_page=25)
 
     ctx = {
-        "sessions": page_obj,
+        "periods": page_obj,
+        "sessions": sessions,
         "page_obj": page_obj,
         "pagination_qs": pagination_qs,
         "cohorts": Cohort.objects.filter(is_active=True),
@@ -91,7 +109,7 @@ def attendance_session_list(request):
         "date_from": date_from,
         "date_to": date_to,
         "exception": exception,
-        "breadcrumb_items": [{"label": _("Attendance Sessions")}],
+        "breadcrumb_items": [{"label": _("Attendance periods")}],
         "is_admin": is_admin(request.user),
     }
     if is_htmx(request):
@@ -107,11 +125,7 @@ def attendance_session_list(request):
 @login_required
 @role_required(*ADMIN_ONLY)
 def attendance_session_create(request):
-    """Create an attendance session with dependent target fields.
-
-    Validation errors re-render the form with the submitted selections
-    preserved instead of redirecting and wiping them.
-    """
+    """Create a diploma attendance period or a standalone course session."""
     form_errors = []
     form_data = {}
     if request.method == "POST":
@@ -151,8 +165,10 @@ def attendance_session_create(request):
         if target_type not in {"diploma", "course"}:
             form_errors.append(_("Select a target type."))
         elif target_type == "diploma":
-            if not cohort_id or course_version_id:
-                form_errors.append(_("Select a cohort and no course version for a diploma session."))
+            if not cohort_id or course_version_id or not semester_id:
+                form_errors.append(
+                    _("Select a cohort and semester, and no course version for a diploma period.")
+                )
         else:
             if not course_version_id or cohort_id or semester_id:
                 form_errors.append(
@@ -160,22 +176,31 @@ def attendance_session_create(request):
                 )
 
         if not form_errors:
-            if target_type == "diploma":
-                target = get_object_or_404(Cohort, id=cohort_id)
-            else:
-                target = get_object_or_404(CourseVersion, id=course_version_id)
-
             semester = None
             if semester_id:
                 semester = get_object_or_404(Semester, id=semester_id)
-                if cohort_id and semester.diploma_id != target.diploma_id:
+            if target_type == "diploma":
+                target = get_object_or_404(Cohort, id=cohort_id)
+                if semester and semester.diploma_id != target.diploma_id:
                     form_errors.append(_("Semester does not belong to the selected cohort's diploma."))
+            else:
+                target = get_object_or_404(CourseVersion, id=course_version_id)
 
             if not form_errors:
                 try:
+                    if target_type == "diploma":
+                        period = create_attendance_period(
+                            target,
+                            semester,
+                            starts_at=open_at,
+                            ends_at=close_at,
+                            actor=request.user,
+                            title=title,
+                        )
+                        messages.success(request, _("Attendance period created."))
+                        return redirect("attendance:attendance_period_detail", period.id)
                     session = open_attendance_session(
                         target,
-                        semester=semester,
                         open_at=open_at,
                         close_at=close_at,
                         actor=request.user,
@@ -201,29 +226,6 @@ def attendance_session_create(request):
         .select_related("diploma")
         .order_by("diploma_id", "order")
     )
-    # For exposing required attendance count (how many times we ask for) per DOKKIMASHORA evaluation config
-    import json
-
-    from apps.progression.models import SemesterEvaluationConfig
-
-    evaluation_configs = SemesterEvaluationConfig.objects.filter(
-        cohort__in=cohorts, semester__in=semesters
-    ).select_related("cohort", "semester")
-    required_map = {}
-    for cfg in evaluation_configs:
-        key = f"{cfg.cohort_id}:{cfg.semester_id}"
-        required_map[key] = cfg.attendance_required_sessions
-    # Also handle whole-cohort (semester null) case: 0 means no semester filter
-    session_counts_qs = AttendanceSession.objects.values("cohort_id", "semester_id").annotate(
-        cnt=Count("id")
-    )
-    session_counts = {}
-    for row in session_counts_qs:
-        sem_id = row["semester_id"] or 0
-        key = f"{row['cohort_id']}:{sem_id}"
-        session_counts[key] = row["cnt"]
-    required_map_json = json.dumps(required_map)
-    session_counts_json = json.dumps(session_counts)
     ctx = {
         "cohorts": cohorts,
         "course_versions": course_versions,
@@ -231,19 +233,86 @@ def attendance_session_create(request):
         "diplomas": Diploma.objects.filter(is_active=True).order_by("title"),
         "form_data": form_data,
         "form_errors": form_errors,
-        "required_map_json": required_map_json,
-        "session_counts_json": session_counts_json,
+        "back_url": reverse("attendance:attendance_session_list"),
         "breadcrumb_items": [
-            {"label": _("Attendance Sessions"), "href": reverse("attendance:attendance_session_list")},
-            {"label": _("Create Session")},
+            {"label": _("Attendance periods"), "href": reverse("attendance:attendance_session_list")},
+            {"label": _("Create attendance")},
         ],
     }
     return render(request, "ui/pages/admin/attendance_form.html", ctx)
 
 
 # ---------------------------------------------------------------------------
-# Admin session detail
+# Admin attendance period and dated-session detail
 # ---------------------------------------------------------------------------
+
+
+@login_required
+@role_required(*ROLE_ATTENDANCE_STAFF)
+def attendance_period_detail(request, period_id):
+    period = get_object_or_404(
+        AttendancePeriod.objects.select_related(
+            "cohort", "semester", "created_by", "opened_by", "closed_by"
+        ),
+        id=period_id,
+    )
+    days = period.sessions.select_related("created_by", "opened_by", "closed_by").annotate(
+        record_count=Count("records")
+    ).order_by("session_number", "date")
+    return render(request, "ui/pages/admin/attendance_period_detail.html", {
+        "period": period,
+        "days": days,
+        "is_admin": is_admin(request.user),
+        "back_url": reverse("attendance:attendance_session_list"),
+        "breadcrumb_items": [
+            {"label": _("Attendance periods"), "href": reverse("attendance:attendance_session_list")},
+            {"label": str(period)},
+        ],
+    })
+
+
+@login_required
+@role_required(*ADMIN_ONLY)
+@require_POST
+def attendance_period_day_create(request, period_id):
+    period = get_object_or_404(AttendancePeriod, id=period_id)
+    session_date_raw = request.POST.get("session_date", "").strip()
+    open_at_raw = request.POST.get("open_at", "").strip()
+    close_at_raw = request.POST.get("close_at", "").strip()
+    title = request.POST.get("title", "").strip()
+    try:
+        session_date = date_type.fromisoformat(session_date_raw)
+        open_at = datetime.fromisoformat(open_at_raw)
+        close_at = datetime.fromisoformat(close_at_raw)
+        if timezone.is_naive(open_at):
+            open_at = timezone.make_aware(open_at)
+        if timezone.is_naive(close_at):
+            close_at = timezone.make_aware(close_at)
+        create_attendance_day(
+            period,
+            session_date=session_date,
+            open_at=open_at,
+            close_at=close_at,
+            actor=request.user,
+            title=title,
+        )
+        messages.success(request, _("Attendance session added to the period."))
+    except (TypeError, ValueError) as exc:
+        messages.error(request, str(exc) or _("Enter a valid session date and time."))
+    return redirect("attendance:attendance_period_detail", period.id)
+
+
+@login_required
+@role_required(*ADMIN_ONLY)
+@require_POST
+def attendance_period_close(request, period_id):
+    period = get_object_or_404(AttendancePeriod, id=period_id)
+    try:
+        close_attendance_period(period, request.user)
+        messages.success(request, _("Attendance period closed."))
+    except ValueError as exc:
+        messages.error(request, str(exc))
+    return redirect("attendance:attendance_period_detail", period.id)
 
 
 @login_required
@@ -256,7 +325,7 @@ def attendance_session_delete(request, session_id):
     deleted; the deletion of an empty session is audited.
     """
     session = get_object_or_404(
-        AttendanceSession.objects.select_related("cohort", "course_version", "semester"),
+        AttendanceSession.objects.select_related("cohort", "course_version", "semester", "period"),
         id=session_id,
     )
     if AttendanceRecord.objects.filter(session=session).exists():
@@ -264,7 +333,9 @@ def attendance_session_delete(request, session_id):
             request,
             _("This session has recorded attendance and cannot be deleted."),
         )
-        return redirect("attendance:attendance_session_detail", session.id)
+        return redirect(
+            "attendance:attendance_period_detail", session.period_id
+        ) if session.period_id else redirect("attendance:attendance_session_detail", session.id)
     info = str(session)
     record_audit_event(
         actor=request.user,
@@ -282,14 +353,16 @@ def attendance_session_delete(request, session_id):
     )
     session.delete()
     messages.success(request, _("Attendance session deleted: %(session)s.") % {"session": info})
-    return redirect("attendance:attendance_session_list")
+    return redirect(
+        "attendance:attendance_period_detail", session.period_id
+    ) if session.period_id else redirect("attendance:attendance_session_list")
 
 
 @login_required
 @role_required(*ROLE_ATTENDANCE_STAFF)
 def attendance_session_detail(request, session_id):
     session = get_object_or_404(
-        AttendanceSession.objects.select_related("cohort", "course_version", "semester", "created_by", "opened_by", "closed_by"),
+        AttendanceSession.objects.select_related("cohort", "course_version", "semester", "period", "created_by", "opened_by", "closed_by"),
         id=session_id,
     )
     records = session.records.select_related("student", "scanned_by").order_by("scanned_at")
@@ -297,9 +370,13 @@ def attendance_session_detail(request, session_id):
     ctx = {
         "session": session,
         "records": records,
+        "period": session.period,
         "is_admin": is_admin(request.user),
+        "back_url": reverse(
+            "attendance:attendance_period_detail", args=[session.period_id]
+        ) if session.period_id else reverse("attendance:attendance_session_list"),
         "breadcrumb_items": [
-            {"label": _("Attendance Sessions"), "href": reverse("attendance:attendance_session_list")},
+            {"label": _("Attendance periods"), "href": reverse("attendance:attendance_session_list")},
             {"label": str(session)},
         ],
     }
@@ -364,6 +441,10 @@ def attendance_session_records(request, session_id):
     ctx = {
         "session": session,
         "records": records,
+        "period": session.period,
+        "back_url": reverse(
+            "attendance:attendance_period_detail", args=[session.period_id]
+        ) if session.period_id else reverse("attendance:attendance_session_list"),
         "breadcrumb_items": [
             {"label": _("Attendance Sessions"), "href": reverse("attendance:attendance_session_list")},
             {"label": _("Records: %(session)s") % {"session": session}},
@@ -382,7 +463,7 @@ def attendance_session_records(request, session_id):
 def attendance_scan(request):
     open_sessions = AttendanceSession.objects.filter(
         status=SESSION_STATUS_OPEN,
-    ).select_related("cohort", "course_version").order_by("-date")
+    ).select_related("cohort", "course_version", "semester", "period").order_by("-date", "-session_number")
 
     result = None
 
@@ -449,8 +530,6 @@ def attendance_scan_api(request):
     parsing prose. Never trusts client state — session/student/cohort/window/
     replay are all validated server-side.
     """
-    from django.http import JsonResponse
-
     session_id = safe_int(request.POST.get("session_id"))
     payload = request.POST.get("qr_payload", "").strip()
 
@@ -502,7 +581,9 @@ def my_attendance(request):
         return redirect("core:home")
 
     now = timezone.now()
-    ended_or_closed = Q(status=SESSION_STATUS_CLOSED) | Q(close_at__lte=now)
+    ended_or_closed = (Q(status=SESSION_STATUS_CLOSED) | Q(close_at__lte=now)) & ~Q(
+        status=SESSION_STATUS_CANCELLED
+    )
 
     summaries = []
 
@@ -557,6 +638,7 @@ def my_attendance(request):
     for ce in course_enrollments:
         session_qs = AttendanceSession.objects.filter(
             course_version=ce.course_version,
+            period__isnull=True,
         ).filter(ended_or_closed)
         total = session_qs.count()
         if total == 0:

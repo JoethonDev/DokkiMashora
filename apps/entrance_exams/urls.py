@@ -18,6 +18,7 @@ urlpatterns = [
     path("manage/cohorts-for-diploma/", views.admin_cohorts_for_diploma, name="admin_cohorts_for_diploma"),
     path("manage/create/", views.admin_create_exam, name="admin_create_exam"),
     path("manage/<int:exam_id>/", views.admin_detail, name="admin_detail"),
+    path("manage/<int:exam_id>/qr/", views.admin_exam_qr_code, name="admin_exam_qr_code"),
     path("manage/<int:exam_id>/edit/", views.admin_edit_exam, name="admin_edit_exam"),
     path("manage/<int:exam_id>/preview/", views.admin_preview, name="admin_preview"),
     path("manage/<int:exam_id>/toggle-active/", views.admin_toggle_active, name="admin_toggle_active"),

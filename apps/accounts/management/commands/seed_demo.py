@@ -43,6 +43,7 @@ from apps.assessments.models import (
     AssessmentAttempt,
     AssessmentChoice,
     AssessmentQuestion,
+    HomeworkAttachment,
     HomeworkSubmission,
 )
 from apps.audit.models import AuditEvent
@@ -80,7 +81,6 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR("No superuser found. Run seed_roles first."))
             return
 
-        teacher = User.objects.filter(email="teacher@dokkimashora.test").first()
         student_user = User.objects.filter(email="student@dokkimashora.test").first()
         if not student_user:
             self.stdout.write(self.style.ERROR("No demo student found. Run seed_roles first."))
@@ -187,7 +187,7 @@ class Command(BaseCommand):
                     "course_version": version_ot,
                     "semester": sem1,
                     "cohort": cohort,
-                    "created_by": teacher or admin,
+                    "created_by": admin,
                     "open_at": timezone.now() - timedelta(days=14),
                     "close_at": timezone.now() + timedelta(days=7),
                     "duration_minutes": 30,
@@ -238,7 +238,7 @@ class Command(BaseCommand):
                     "assessment_type": ASSESSMENT_TYPE_SEMESTER_EXAM,
                     "semester": sem1,
                     "cohort": cohort,
-                    "created_by": teacher or admin,
+                    "created_by": admin,
                     "open_at": timezone.now() - timedelta(days=30),
                     "close_at": timezone.now() - timedelta(days=1),
                     "duration_minutes": 120,
@@ -274,7 +274,7 @@ class Command(BaseCommand):
                 "course_version": CourseVersion.objects.filter(course__is_active=True, is_active=True).first(),
                 "semester": sem2,
                 "cohort": cohort,
-                "created_by": teacher or admin,
+                "created_by": admin,
                 "open_at": timezone.now() - timedelta(days=7),
                 "close_at": timezone.now() + timedelta(days=14),
                 "duration_minutes": 0,
@@ -296,11 +296,23 @@ class Command(BaseCommand):
                 "reviewed_at": timezone.now() - timedelta(days=2),
                 "score": 42,
                 "feedback": "Good work, well referenced.",
-                "original_filename": "church_history_essay.pdf",
+            },
+        )
+        HomeworkAttachment.objects.get_or_create(
+            submission=hw_submission,
+            original_filename="church_history_essay.pdf",
+            defaults={
+                "assessment": hw,
+                "student": student_user,
                 "storage_key": "demo/hw/church_history_essay.pdf",
                 "content_type": "application/pdf",
                 "file_size": 102400,
                 "checksum": "demo_checksum_123",
+                "status": HOMEWORK_STATUS_GRADED,
+                "submitted_at": timezone.now() - timedelta(days=3),
+                "reviewed_at": timezone.now() - timedelta(days=2),
+                "score": 42,
+                "feedback": "Good work, well referenced.",
             },
         )
 
@@ -311,7 +323,7 @@ class Command(BaseCommand):
                 "semester_pass_percent": 60,
                 "final_exam_pass_percent": 60,
                 "require_all_semesters_passed": True,
-                "require_final_exam": True,
+                "require_final_exam": False,
                 "auto_promote_enabled": True,
                 "allow_admin_override": True,
                 "allow_retake": True,

@@ -1,0 +1,75 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n %}
+{% block title %}{{ period }}{% endblock %}
+{% block content %}
+  <div class="page-stack animate-enter-view">
+    {% include "ui/components/_page_header.html" with title=_('Attendance period') eyebrow=_('Attendance period') back_button=True back_url=back_url %}
+
+    <section class="card-surface">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">{% trans "Cohort semester attendance" %}</p>
+          <h2>{% trans "Period details" %}</h2>
+        </div>
+        {% if is_admin and period.status == 'open' %}
+          <form method="post" action="{% url 'attendance:attendance_period_close' period.id %}">
+            {% csrf_token %}
+            <button class="btn-warning" type="submit">{% trans "Close period" %}</button>
+          </form>
+        {% endif %}
+      </div>
+      <dl class="dl">
+        <div><dt class="dt">{% trans "Cohort" %}</dt><dd class="dd">{{ period.cohort }}</dd></div>
+        <div><dt class="dt">{% trans "Semester" %}</dt><dd class="dd">{{ period.semester }}</dd></div>
+        <div><dt class="dt">{% trans "Status" %}</dt><dd class="dd">{{ period.get_status_display }}</dd></div>
+        <div><dt class="dt">{% trans "Starts" %}</dt><dd class="dd"><span dir="ltr">{{ period.starts_at|date:"d/m/Y H:i" }}</span></dd></div>
+        <div><dt class="dt">{% trans "Ends" %}</dt><dd class="dd"><span dir="ltr">{{ period.ends_at|date:"d/m/Y H:i" }}</span></dd></div>
+        <div><dt class="dt">{% trans "Daily sessions" %}</dt><dd class="dd">{{ days|length }}</dd></div>
+      </dl>
+    </section>
+
+    {% if is_admin and period.status == 'open' %}
+      <section class="card-surface">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">{% trans "Attendance day" %}</p>
+            <h2>{% trans "Add a numbered session" %}</h2>
+          </div>
+        </div>
+        <form class="page-stack" method="post" action="{% url 'attendance:attendance_period_day_create' period.id %}">
+          {% csrf_token %}
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <label class="field"><span class="field-label">{% trans "Date" %}</span><input class="form-input" type="date" name="session_date" min="{{ period.starts_at|date:'Y-m-d' }}" max="{{ period.ends_at|date:'Y-m-d' }}" required></label>
+            <label class="field"><span class="field-label">{% trans "Opens" %}</span><input class="form-input" type="datetime-local" name="open_at" required></label>
+            <label class="field"><span class="field-label">{% trans "Closes" %}</span><input class="form-input" type="datetime-local" name="close_at" required></label>
+          </div>
+          <label class="field"><span class="field-label">{% trans "Title" %}</span><input class="form-input" name="title" placeholder="{% trans 'Optional title' %}"></label>
+          <div class="actions-row border-t border-line pt-5 mt-1"><button class="btn-primary" type="submit">{% trans "Add session" %}</button></div>
+        </form>
+      </section>
+    {% endif %}
+
+    <section class="card-surface">
+      <div class="section-head"><div><p class="eyebrow">{% trans "Period sessions" %}</p><h2>{% trans "Attendance days" %}</h2></div></div>
+      {% if days %}
+        <div class="table-wrap hidden lg:block"><table class="table">
+          <thead><tr><th class="table-th">{% trans "Session" %}</th><th class="table-th">{% trans "Date" %}</th><th class="table-th">{% trans "Status" %}</th><th class="table-th">{% trans "Records" %}</th><th class="table-th">{% trans "Actions" %}</th></tr></thead>
+          <tbody>{% for day in days %}
+            <tr>
+              <td class="table-td"><strong>{{ day.session_number }}</strong>{% if day.title %}<small class="block text-muted">{{ day.title }}</small>{% endif %}</td>
+              <td class="table-td"><span dir="ltr">{{ day.date|date:"d/m/Y" }}</span></td>
+              <td class="table-td">{{ day.get_status_display }}</td>
+              <td class="table-td">{{ day.record_count }}</td>
+              <td class="table-td"><a class="btn-secondary" href="{% url 'attendance:attendance_session_detail' day.id %}">{% trans "Open" %}</a></td>
+            </tr>
+          {% endfor %}</tbody>
+        </table></div>
+        <div class="card-stack lg:hidden">{% for day in days %}
+          <div class="mobile-card"><div class="flex-1 min-w-0"><strong class="block">{% trans "Session" %} {{ day.session_number }}</strong><small class="block text-muted"><span dir="ltr">{{ day.date|date:"d/m/Y" }}</span> · {{ day.get_status_display }} · {{ day.record_count }} {% trans "records" %}</small></div><a class="btn-soft-primary shrink-0" href="{% url 'attendance:attendance_session_detail' day.id %}">{% trans "Open" %}</a></div>
+        {% endfor %}</div>
+      {% else %}
+        {% include "ui/components/_empty_state.html" with title=_('No attendance days yet.') message=_('Add the first dated session when the cohort meets.') %}
+      {% endif %}
+    </section>
+  </div>
+{% endblock %}

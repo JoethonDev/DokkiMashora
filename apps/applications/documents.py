@@ -43,7 +43,7 @@ from .models import (
     ProgramApplicationEmailLog,
     ProgramApplicationNote,
 )
-from .services import _attempt_intake_request_safe, activate_application_if_ready
+from . import services as application_services
 
 logger = logging.getLogger(__name__)
 
@@ -411,10 +411,10 @@ def submit_application_documents(
         raise
 
     # Try to activate (outside the transaction since it succeeds independently)
-    result = activate_application_if_ready(locked_app, actor=actor)
+    result = application_services.activate_application_if_ready(locked_app, actor=actor)
     # Trigger intake request if activation blocked by missing intake
     if not result.activated and "intake_form_required" in result.reasons:
-        _attempt_intake_request_safe(locked_app, actor=actor)
+        application_services._attempt_intake_request_safe(locked_app, actor=actor)
 
     return upload
 

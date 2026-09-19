@@ -26,7 +26,6 @@ from apps.academics.constants import (
     ENROLLMENT_STATUS_EXPIRED,
     ENROLLMENT_STATUS_PENDING,
     ENROLLMENT_STATUS_RESTRICTED,
-    SCOPE_DIPLOMA_COHORT,
 )
 from apps.academics.models import (
     Cohort,
@@ -38,7 +37,6 @@ from apps.academics.models import (
     Lecture,
     ModeratorStudentAssignment,
     Semester,
-    TeacherAssignment,
 )
 from apps.applications.constants import (
     PROGRAM_APP_STATUS_ACCEPTED,
@@ -48,9 +46,9 @@ from apps.applications.constants import (
 )
 from apps.applications.models import ProgramApplication
 from apps.assessments.constants import (
-    ASSESSMENT_TYPE_FINAL_EXAM,
     ASSESSMENT_TYPE_HOMEWORK,
     ASSESSMENT_TYPE_QUIZ,
+    ASSESSMENT_TYPE_SEMESTER_EXAM,
     ATTEMPT_STATUS_GRADED,
     ATTEMPT_STATUS_UNDER_REVIEW,
     GRADE_VISIBILITY_RELEASED,
@@ -109,7 +107,6 @@ PASSWORD = "TestPass123!"
 ROLE_SUPER_ADMIN = "Super Admin"
 ROLE_ADMIN = "Admin"
 ROLE_MODERATOR = "Moderator"
-ROLE_TEACHER = "Teacher"
 ROLE_STUDENT = "Student"
 
 # Student definitions.
@@ -232,8 +229,7 @@ class Command(BaseCommand):
 
         with transaction.atomic():
             super_admin = self._ensure_super_admin()
-            self._ensure_admin()
-            teacher = self._ensure_user("teacher@dokkimashora.test", ROLE_TEACHER, is_staff=True)
+            admin = self._ensure_admin()
             moderator = self._ensure_user("moderator@dokkimashora.test", ROLE_MODERATOR, is_staff=True)
 
             student_users: dict[str, tuple[User, dict]] = {}
@@ -252,10 +248,10 @@ class Command(BaseCommand):
 
             apps_map = self._ensure_applications(profiles, super_admin, cohort_a, cohort_b, course)
             self._ensure_enrollments(profiles, cohort_a, course_version)
-            assessments = self._ensure_assessments(teacher, course_version, cohort_a, sem1)
+            assessments = self._ensure_assessments(admin, course_version, cohort_a, sem1)
             attempt_for_audit = self._ensure_attempts(assessments, student_users, profiles)
             self._ensure_entrance_exam(diploma, cohort_a, profiles, super_admin)
-            self._ensure_teacher_moderator(super_admin, teacher, moderator, cohort_a, profiles)
+            self._ensure_moderator_assignment(super_admin, moderator, cohort_a, profiles)
             payment_for_audit = self._ensure_payments(profiles, apps_map)
             self._ensure_communications()
             cert_for_audit = self._ensure_certificates(super_admin, profiles, cohort_a, diploma)
@@ -287,11 +283,7 @@ class Command(BaseCommand):
         return self.groups[name]
 
     def _ensure_super_admin(self) -> User:
-        """Ensure the Super Admin user exists, with a known password.
-
-        The Super Admin is also added to the Admin, Moderator, Teacher,
-        and Student groups so it can reach every page in the E2E suite.
-        """
+        """Ensure the Super Admin user exists, with a known password."""
         user, created = User.objects.get_or_create(
             email="superadmin@dokkimashora.test",
             defaults={"is_staff": True, "is_superuser": True, "is_active": True},
@@ -302,7 +294,7 @@ class Command(BaseCommand):
         user.set_password(PASSWORD)
         user.save(update_fields=["is_staff", "is_superuser", "is_active", "password"])
         user.groups.clear()
-        for role in (ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_MODERATOR, ROLE_TEACHER, ROLE_STUDENT):
+        for role in (ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_MODERATOR, ROLE_STUDENT):
             user.groups.add(self._group(role))
         self._report("User: superadmin@dokkimashora.test (Super Admin)", created)
         return user
@@ -618,7 +610,7 @@ class Command(BaseCommand):
 
         # noaccess: no enrollment.
 
-    def _ensure_assessments(self, teacher, ver_a, cohort_a, sem1):
+    def _ensure_assessments(self, creator, ver_a, cohort_a, sem1):
         now = timezone.now()
         assessments: dict[str, Assessment] = {}
 
@@ -628,17 +620,17 @@ class Command(BaseCommand):
             defaults={
                 "assessment_type": ASSESSMENT_TYPE_QUIZ,
                 "course_version": ver_a,
-                "semester": sem1,
-                "cohort": cohort_a,
-                "created_by": teacher,
+                "semester": None,
+                "cohort": None,
+                "created_by": creator,
                 "open_at": now - timedelta(days=1),
                 "close_at": now + timedelta(days=1),
                 "duration_minutes": 30,
                 "total_points": 10,
                 "passing_score": 50,
                 "is_active": True,
-                "max_attempts": 2,
-                "show_correct_answers": True,
+                "max_attempts": 1,
+                "show_correct_answers": False,
                 "grade_visibility": GRADE_VISIBILITY_RELEASED,
             },
         )
@@ -673,15 +665,15 @@ class Command(BaseCommand):
             question=q2, text="7", defaults={"is_correct": True, "order": 3},
         )
 
-        # Mixed assessment (MCQ + written).
+        # Mixed standalone-course quiz (MCQ + written).
         mixed, created = Assessment.objects.update_or_create(
             title="E2E Mixed Assessment",
             defaults={
                 "assessment_type": ASSESSMENT_TYPE_QUIZ,
                 "course_version": ver_a,
-                "semester": sem1,
-                "cohort": cohort_a,
-                "created_by": teacher,
+                "semester": None,
+                "cohort": None,
+                "created_by": creator,
                 "open_at": now - timedelta(days=1),
                 "close_at": now + timedelta(days=1),
                 "duration_minutes": 45,
@@ -732,10 +724,10 @@ class Command(BaseCommand):
             title="E2E Homework Upload",
             defaults={
                 "assessment_type": ASSESSMENT_TYPE_HOMEWORK,
-                "course_version": ver_a,
+                "course_version": None,
                 "semester": sem1,
                 "cohort": cohort_a,
-                "created_by": teacher,
+                "created_by": creator,
                 "open_at": now - timedelta(days=1),
                 "close_at": now + timedelta(days=7),
                 "duration_minutes": None,
@@ -748,15 +740,15 @@ class Command(BaseCommand):
         self._report("Assessment: E2E Homework Upload", created)
         assessments["homework"] = hw
 
-        # Final Exam (timed).
-        final, created = Assessment.objects.update_or_create(
-            title="E2E Final Exam",
+        # Semester Exam (timed).
+        semester_exam, created = Assessment.objects.update_or_create(
+            title="E2E Semester Exam",
             defaults={
-                "assessment_type": ASSESSMENT_TYPE_FINAL_EXAM,
-                "course_version": ver_a,
+                "assessment_type": ASSESSMENT_TYPE_SEMESTER_EXAM,
+                "course_version": None,
                 "semester": sem1,
                 "cohort": cohort_a,
-                "created_by": teacher,
+                "created_by": creator,
                 "open_at": now - timedelta(days=1),
                 "close_at": now + timedelta(days=7),
                 "duration_minutes": 120,
@@ -767,8 +759,8 @@ class Command(BaseCommand):
                 "grade_visibility": GRADE_VISIBILITY_RELEASED,
             },
         )
-        self._report("Assessment: E2E Final Exam", created)
-        assessments["final"] = final
+        self._report("Assessment: E2E Semester Exam", created)
+        assessments["semester_exam"] = semester_exam
 
         return assessments
 
@@ -824,10 +816,6 @@ class Command(BaseCommand):
             defaults={
                 "status": HOMEWORK_STATUS_UNDER_REVIEW,
                 "attempt": hw_attempt,
-                "original_filename": "e2e_homework.pdf",
-                "storage_key": "demo/e2e_homework.pdf",
-                "content_type": "application/pdf",
-                "file_size": 102400,
                 "submitted_at": now - timedelta(days=1),
             },
         )
@@ -857,13 +845,13 @@ class Command(BaseCommand):
             defaults={"text": "MCQ: What is theology?", "question_type": "mcq"},
         )
         _obj, created = EntranceChoice.objects.update_or_create(
-            question=eq1, text="Study of God", defaults={"score": 2, "order": 1},
+            question=eq1, order=1, defaults={"text": "Study of God", "score": 2},
         )
         _obj, created = EntranceChoice.objects.update_or_create(
-            question=eq1, text="Study of animals", defaults={"score": 0, "order": 2},
+            question=eq1, order=2, defaults={"text": "Study of animals", "score": 0},
         )
         _obj, created = EntranceChoice.objects.update_or_create(
-            question=eq1, text="Study of rocks", defaults={"score": 0, "order": 3},
+            question=eq1, order=3, defaults={"text": "Study of rocks", "score": 0},
         )
 
         eq2, created = EntranceQuestion.objects.update_or_create(
@@ -871,13 +859,13 @@ class Command(BaseCommand):
             defaults={"text": "MCQ: Who wrote the Gospel of John?", "question_type": "mcq"},
         )
         _obj, created = EntranceChoice.objects.update_or_create(
-            question=eq2, text="Matthew", defaults={"score": 0, "order": 1},
+            question=eq2, order=1, defaults={"text": "Matthew", "score": 0},
         )
         _obj, created = EntranceChoice.objects.update_or_create(
-            question=eq2, text="John", defaults={"score": 2, "order": 2},
+            question=eq2, order=2, defaults={"text": "John", "score": 2},
         )
         _obj, created = EntranceChoice.objects.update_or_create(
-            question=eq2, text="Paul", defaults={"score": 0, "order": 3},
+            question=eq2, order=3, defaults={"text": "Paul", "score": 0},
         )
 
         _obj, created = EntranceQuestion.objects.update_or_create(
@@ -900,13 +888,7 @@ class Command(BaseCommand):
             )
             self._report("EntranceAttempt: pending student (assigned)", created)
 
-    def _ensure_teacher_moderator(self, admin, teacher, moderator, cohort_a, profiles):
-        _obj, created = TeacherAssignment.objects.update_or_create(
-            teacher=teacher, scope_type=SCOPE_DIPLOMA_COHORT, cohort=cohort_a,
-            defaults={"active": True, "assigned_by": admin},
-        )
-        self._report("TeacherAssignment: teacher -> Cohort A", created)
-
+    def _ensure_moderator_assignment(self, admin, moderator, cohort_a, profiles):
         p = profiles["student.active@dokkimashora.test"]
         _obj, created = ModeratorStudentAssignment.objects.update_or_create(
             moderator=moderator, student=p, cohort=cohort_a,
@@ -951,7 +933,17 @@ class Command(BaseCommand):
             (TEMPLATE_RECEIVED, "Registration Received", "Your registration has been received."),
             (TEMPLATE_ACCEPTANCE, "Acceptance", "Congratulations! You have been accepted."),
             (TEMPLATE_REJECTION, "Rejection", "We regret to inform you..."),
-            (TEMPLATE_ACTIVATION, "Activation", "Your account has been activated."),
+            (
+                TEMPLATE_ACTIVATION,
+                "Activate your account",
+                "Hello {{ full_name }},\n\n"
+                "Your account has been created. Your login email is {{ email }} "
+                "and your initial password is {{ password }}.\n\n"
+                "Please activate your account using the link below:\n\n"
+                "{{ activation_url }}\n\n"
+                "You can change your password after logging in.\n\n"
+                "Welcome aboard!\nDokkiMashora admissions",
+            ),
             (TEMPLATE_ENTRANCE_EXAM_INVITATION, "Entrance Exam Invitation", "You have been invited to the entrance exam."),
         ]
         for slug, name, body in templates:
@@ -1091,7 +1083,6 @@ class Command(BaseCommand):
             ("Super Admin", "superadmin@dokkimashora.test"),
             ("Admin", "admin@dokkimashora.test"),
             ("Moderator", "moderator@dokkimashora.test"),
-            ("Teacher", "teacher@dokkimashora.test"),
             ("Student (active)", "student.active@dokkimashora.test"),
             ("Student (expired)", "student.expired@dokkimashora.test"),
             ("Student (restricted)", "student.restricted@dokkimashora.test"),

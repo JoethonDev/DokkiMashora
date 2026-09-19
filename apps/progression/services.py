@@ -13,7 +13,6 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE, ENROLLMENT_STATUS_RESTRICTED
 from apps.academics.models import Cohort, Diploma, DiplomaEnrollment, Semester
-from apps.attendance.models import AttendanceSession
 from apps.assessments.constants import (
     ASSESSMENT_TYPE_HOMEWORK,
     ASSESSMENT_TYPE_SEMESTER_EXAM,
@@ -21,14 +20,25 @@ from apps.assessments.constants import (
     ATTEMPT_STATUS_GRADED,
     ATTEMPT_STATUS_RELEASED,
     ATTEMPT_STATUS_UNDER_REVIEW,
+    EXAM_REVIEW_STATUS_FAILED,
+    EXAM_REVIEW_STATUS_PASSED,
     LEGACY_STATUS_ACTIVE,
 )
 from apps.assessments.models import Assessment, AssessmentAttempt
+from apps.attendance.models import AttendanceSession
 from apps.attendance.services import (
     get_attendance_evaluation_percent,
     get_attendance_summaries,
     get_attendance_summary,
 )
+from apps.core.scoring import compute_percent
+from apps.audit.constants import (
+    ACTION_PROMOTION,
+    ACTION_RULE_REEVALUATION,
+    ACTION_SEMESTER_FINALIZED,
+    ACTION_SEMESTER_REEVALUATED,
+)
+from apps.audit.services import record_audit_event
 from apps.students.models import StudentProfile
 
 from .constants import (
@@ -205,15 +215,6 @@ def aggregate_semester_scores(student_profile: StudentProfile, semester: Semeste
 # ---------------------------------------------------------------------------
 # Semester evaluation
 # ---------------------------------------------------------------------------
-
-
-from apps.audit.constants import (
-    ACTION_PROMOTION,
-    ACTION_RULE_REEVALUATION,
-    ACTION_SEMESTER_FINALIZED,
-    ACTION_SEMESTER_REEVALUATED,
-)
-from apps.audit.services import record_audit_event
 
 REEVALUATION_CHUNK_SIZE = 100
 
@@ -590,8 +591,6 @@ def _homework_best_scores(
 
 
 def _homework_evaluation_percent(enrollment: DiplomaEnrollment, semester: Semester) -> Decimal | None:
-    from apps.core.scoring import compute_percent
-
     aggregate = _homework_best_scores(enrollment, semester)
     if aggregate is None:
         return None
@@ -611,6 +610,7 @@ def _semester_exam_evaluation_percent(enrollment: DiplomaEnrollment, semester: S
             assessment__in=assessments,
             student=enrollment.student.user,
             status__in=[ATTEMPT_STATUS_GRADED, ATTEMPT_STATUS_RELEASED],
+            exam_review_status__in=[EXAM_REVIEW_STATUS_FAILED, EXAM_REVIEW_STATUS_PASSED],
             score_percent__isnull=False,
         )
         .order_by("-score_percent")
@@ -671,6 +671,7 @@ def evaluate_semester_evaluation(
         attendance_source_exists = AttendanceSession.objects.filter(
             cohort=enrollment.cohort,
             semester=semester,
+            period__isnull=False,
         ).exists()
     attendance_percent = get_attendance_evaluation_percent(
         enrollment, semester, config.attendance_required_sessions,
@@ -973,7 +974,11 @@ def get_semester_progression_rows(cohort: Cohort, semester: Semester, enrollment
         enrollment.id not in evaluations for enrollment in enrollments
     )
     attendance_source_exists = (
-        AttendanceSession.objects.filter(cohort=cohort, semester=semester).exists()
+        AttendanceSession.objects.filter(
+            cohort=cohort,
+            semester=semester,
+            period__isnull=False,
+        ).exists()
         if needs_previews else None
     )
     attendance_summaries = (
@@ -1081,7 +1086,7 @@ def resolve_final_progression(
         from_semester=evaluation.semester,
         decision_type=decision_type,
         automatic=False,
-        reason=reason.strip() or ("Final pass." if final_result == SEMESTER_EVALUATION_PASS else "Final fail."),
+        reason=reason.strip() or (_("Final pass.") if final_result == SEMESTER_EVALUATION_PASS else _("Final fail.")),
         score_snapshot=evaluation.overall_percent,
         decided_by=actor,
         decided_at=now,
@@ -1158,7 +1163,7 @@ def request_final_interview(
         from_semester=evaluation.semester,
         decision_type=PROMOTION_DECISION_REQUEST_INTERVIEW,
         automatic=False,
-        reason=notes or "Interview requested.",
+        reason=notes or _("Interview requested."),
         decided_by=actor,
         metadata={"evaluation_id": evaluation.id, "interview_id": interview.id},
     )
@@ -1206,7 +1211,7 @@ def complete_final_interview(
         from_semester=evaluation.semester,
         decision_type=decision_type,
         automatic=False,
-        reason=details or "Interview completed.",
+        reason=details or _("Interview completed."),
         decided_by=actor,
         metadata={"evaluation_id": evaluation.id, "interview_id": interview.id, "interview_outcome": decision},
     )
@@ -1310,7 +1315,7 @@ def promote_semester(
         reason=reason or (
             _("Auto-promoted based on the calculated semester evaluation.")
             if automatic
-            else "Manual promotion."
+            else _("Manual promotion.")
         ),
         score_snapshot=evaluation.overall_percent,
         decided_by=actor,
@@ -2065,7 +2070,7 @@ def mark_completed(
             previous_status=previous_status,
             new_status=DIPLOMA_COMPLETION_COMPLETED,
             automatic=False,
-            reason=notes or "Manual completion.",
+            reason=notes or _("Manual completion."),
             decided_by=actor,
         )
 
@@ -2097,7 +2102,7 @@ def mark_graduated(
             previous_status=previous_status,
             new_status=DIPLOMA_COMPLETION_GRADUATED,
             automatic=False,
-            reason=notes or "Manual graduation.",
+            reason=notes or _("Manual graduation."),
             decided_by=actor,
         )
 
@@ -2135,6 +2140,7 @@ def sync_semester_exam_grade_item(diploma_enrollment, semester, actor=None) -> S
             assessment__in=assessments,
             student=diploma_enrollment.student.user,
             status__in=[ATTEMPT_STATUS_GRADED, ATTEMPT_STATUS_RELEASED],
+            exam_review_status__in=[EXAM_REVIEW_STATUS_FAILED, EXAM_REVIEW_STATUS_PASSED],
             score_percent__isnull=False,
         )
         .order_by("-score_percent")
@@ -2194,8 +2200,6 @@ def sync_homework_assessment_grade_item(diploma_enrollment, semester, actor=None
     component = _get_grade_component(diploma_enrollment, semester, COMPONENT_TYPE_HOMEWORK_ASSESSMENT)
     if component is None:
         return None
-
-    from apps.core.scoring import compute_percent
 
     aggregate = _homework_best_scores(diploma_enrollment, semester)
     if aggregate is None:

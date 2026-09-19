@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+import re
 import secrets
 import string
 from dataclasses import dataclass
@@ -10,6 +11,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from django.conf import settings
+from django.core.cache import cache
 from django.db import transaction
 from django.db.models import Count, Exists, F, Max, OuterRef, Q, Subquery, Sum
 from django.urls import reverse
@@ -18,7 +20,7 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE
 from apps.academics.models import CourseEnrollment, DiplomaEnrollment, StudentClusterMembership
-from apps.academics.services import get_visible_semester_ids_by_enrollment
+from apps.academics.services import get_student_diploma_access, get_visible_semester_ids_by_enrollment
 from apps.applications.constants import DELIVERY_MODE_ONLINE as APPLICATION_DELIVERY_MODE_ONLINE
 from apps.applications.constants import PROGRAM_APP_STATUS_REJECTED, PROGRAM_TYPE_DIPLOMA
 from apps.applications.models import ProgramApplication
@@ -38,10 +40,12 @@ from apps.core.scoring import compute_percent, is_passing, mcq_score
 from apps.storage.services import record_deferred_storage_deletion, storage_service
 from apps.students.models import StudentProfile
 
+from . import write_behind as write_behind_protocol
 from .constants import (
     ASSESSMENT_TYPE_HOMEWORK,
     ASSESSMENT_TYPE_QUIZ,
     ASSESSMENT_TYPE_SEMESTER_EXAM,
+    ATTEMPT_STATUS_ASSIGNED,
     ATTEMPT_STATUS_CANCELLED,
     ATTEMPT_STATUS_EXPIRED,
     ATTEMPT_STATUS_GRADED,
@@ -66,6 +70,9 @@ from .constants import (
     QUESTION_TYPE_MCQ,
     QUESTION_TYPE_WRITTEN,
     RELEASE_MODE_AUTOMATIC,
+    REVIEWER_ACCESS_BOTH,
+    REVIEWER_ACCESS_OFFLINE,
+    REVIEWER_ACCESS_ONLINE,
     REVIEWER_CLAIM_FINALIZED,
     REVIEWER_CLAIM_IN_PROGRESS,
     REVIEWER_SCOPE_COHORT,
@@ -73,6 +80,11 @@ from .constants import (
     REVIEWER_SCOPE_SEMESTER,
     SNAPSHOT_QUESTION_SOURCE_BANK,
     SNAPSHOT_QUESTION_SOURCE_MANUAL,
+    SUBMISSION_STATUS_FAILED,
+    SUBMISSION_STATUS_PENDING,
+    SUBMISSION_STATUS_PROCESSED,
+    SUBMISSION_STATUS_PROCESSING,
+    SUBMISSION_STATUS_UNDER_REVIEW,
 )
 from .models import (
     Assessment,
@@ -84,6 +96,7 @@ from .models import (
     AssessmentChoice,
     AssessmentLectureSection,
     AssessmentQuestion,
+    AssessmentSubmission,
     DiplomaLectureChoice,
     DiplomaLectureQuestion,
     HomeworkAttachment,
@@ -206,17 +219,21 @@ def has_active_enrollment(student, assessment: Assessment) -> bool:
 
 
 def check_delivery_mode(student, assessment: Assessment) -> None:
-    """Raise ValueError if this is an offline semester exam for the student."""
+    """Raise ValueError if the authoritative application is offline."""
     if assessment.assessment_type != ASSESSMENT_TYPE_SEMESTER_EXAM:
         return
     if assessment.cohort_id is None:
         return
-    code = SemesterExamCode.objects.filter(
-        assessment=assessment,
-        diploma_enrollment__student__user=student,
-        active=True,
-    ).first()
-    if code and code.delivery_mode == DELIVERY_MODE_OFFLINE:
+    application = ProgramApplication.objects.filter(
+        student__user=student,
+        program_type=PROGRAM_TYPE_DIPLOMA,
+        cohort_id=assessment.cohort_id,
+    ).exclude(
+        status=PROGRAM_APP_STATUS_REJECTED,
+    ).order_by("-created_at", "-id").first()
+    if application and application.delivery_mode == APPLICATION_DELIVERY_MODE_ONLINE:
+        return
+    if application and application.delivery_mode == DELIVERY_MODE_OFFLINE:
         raise ValueError(_("This exam is offline-only and cannot be taken online."))
 
 
@@ -233,13 +250,9 @@ def check_assessment_access(
         raise ValueError(_("Assessment is not active."))
     if getattr(assessment, "legacy_status", LEGACY_STATUS_ACTIVE) != LEGACY_STATUS_ACTIVE:
         raise ValueError(_("This assessment is preserved legacy data and cannot be accessed."))
-    if not has_active_enrollment(student, assessment):
-        raise ValueError(_("You do not have an active enrollment for this course."))
-
+    enrollment = None
     if assessment.cohort_id and assessment.semester_id:
-        from apps.academics.services import get_student_diploma_access
-
-        enrollment = DiplomaEnrollment.objects.filter(
+        enrollment = DiplomaEnrollment.objects.select_related("cohort__diploma").filter(
             student__user=student,
             cohort_id=assessment.cohort_id,
             status=ENROLLMENT_STATUS_ACTIVE,
@@ -250,16 +263,20 @@ def check_assessment_access(
             semester.id for semester in get_student_diploma_access(enrollment)["visible_semesters"]
         }:
             raise ValueError(_("This semester is not available yet."))
+    elif not has_active_enrollment(student, assessment):
+        raise ValueError(_("You do not have an active enrollment for this course."))
 
     check_delivery_mode(student, assessment)
 
-    override = get_active_assessment_access_override(student, assessment, now)
+    override = get_active_assessment_access_override(
+        student,
+        assessment,
+        now,
+        enrollment=enrollment,
+    )
     if override and override.open_at <= now <= override.close_at:
         if existing_attempt or override.used_count < override.max_attempts:
             return
-    if existing_attempt and override and override.attempt_id:
-        return
-
     if assessment.open_at and now < assessment.open_at:
         raise ValueError(_("Assessment has not opened yet."))
     if assessment.close_at and now > assessment.close_at and not allow_late_submission:
@@ -312,59 +329,134 @@ def start_assessment(student, assessment: Assessment) -> AssessmentAttempt:
         and override.used_count < override.max_attempts
     )
 
-    if exceptional_access_start:
-        # Exceptional access is a fresh assessment run, but the original
-        # attempt is immutable history. Preserve it and let the new row receive
-        # the next attempt number (normally attempt 2).
-        if AssessmentAttempt.objects.filter(
-            assessment=assessment,
-            student=student,
-            status=ATTEMPT_STATUS_IN_PROGRESS,
-        ).exists():
-            raise ValueError(_("Finish the current attempt before starting exceptional access."))
-        existing = None
-    else:
-        existing = AssessmentAttempt.objects.filter(
-            assessment=assessment,
-            student=student,
-            status=ATTEMPT_STATUS_IN_PROGRESS,
-        ).first()
-    if existing:
-        check_attempt_submission_access(
-            existing,
-            allow_late_submission=assessment.allow_late_submission,
+    with transaction.atomic():
+        # Serialize concurrent starts for the same student on one row so the
+        # attempt-number derivation (count()+1) is deterministic under races
+        # (RV-006). The caller passes the User; lock the owning profile.
+        StudentProfile.objects.select_for_update().get(user_id=student.pk)
+
+        if exceptional_access_start:
+            # Exceptional access is a fresh assessment run, but the original
+            # attempt is immutable history. Preserve it and let the new row receive
+            # the next attempt number (normally attempt 2).
+            if AssessmentAttempt.objects.filter(
+                assessment=assessment,
+                student=student,
+                status=ATTEMPT_STATUS_IN_PROGRESS,
+            ).exists():
+                raise ValueError(_("Finish the current attempt before starting exceptional access."))
+            existing = None
+        else:
+            snapshot_exists = AssessmentAttemptQuestion.objects.filter(
+                attempt_id=OuterRef("pk"),
+            )
+            existing = AssessmentAttempt.objects.filter(
+                assessment=assessment,
+                student=student,
+                status=ATTEMPT_STATUS_IN_PROGRESS,
+            ).annotate(has_snapshot=Exists(snapshot_exists)).first()
+        if existing:
+            check_attempt_submission_access(
+                existing,
+                allow_late_submission=assessment.allow_late_submission,
+            )
+            if _is_diploma_random(assessment) and not existing.has_snapshot:
+                generate_diploma_assessment_snapshot(existing)
+            return existing
+        snapshot_exists = AssessmentAttemptQuestion.objects.filter(
+            attempt_id=OuterRef("pk"),
         )
+        assigned = AssessmentAttempt.objects.select_for_update().filter(
+            assessment=assessment,
+            student=student,
+            status=ATTEMPT_STATUS_ASSIGNED,
+        ).annotate(has_snapshot=Exists(snapshot_exists)).order_by("attempt_number").first()
+        check_assessment_access(student, assessment, existing_attempt=bool(assigned))
+        if assigned:
+            assigned.status = ATTEMPT_STATUS_IN_PROGRESS
+            assigned.started_at = now
+            assigned.save(update_fields=["status", "started_at", "updated_at"])
+            if _is_diploma_random(assessment) and not assigned.has_snapshot:
+                generate_diploma_assessment_snapshot(assigned)
+            return assigned
+        override = get_active_assessment_access_override(student, assessment)
+        if override:
+            attempt_number = AssessmentAttempt.objects.filter(
+                assessment=assessment, student=student,
+            ).count() + 1
+            if override.used_count >= override.max_attempts:
+                raise ValueError(_("You have reached the maximum number of attempts."))
+        else:
+            attempt_number = AssessmentAttempt.objects.filter(
+                assessment=assessment, student=student,
+            ).count() + 1
+            if attempt_number > assessment.max_attempts:
+                raise ValueError(_("You have reached the maximum number of attempts."))
+        attempt = AssessmentAttempt.objects.create(
+            assessment=assessment,
+            student=student,
+            attempt_number=attempt_number,
+            status=ATTEMPT_STATUS_IN_PROGRESS,
+            started_at=timezone.now(),
+        )
+        if override:
+            attempt.is_exceptional = True
+            attempt.save(update_fields=["is_exceptional"])
+            consume_assessment_access_override(override, attempt)
         if _is_diploma_random(assessment):
-            generate_diploma_assessment_snapshot(existing)
-        return existing
-    check_assessment_access(student, assessment)
-    override = get_active_assessment_access_override(student, assessment)
-    if override:
-        attempt_number = AssessmentAttempt.objects.filter(
-            assessment=assessment, student=student,
-        ).count() + 1
-        if override.used_count >= override.max_attempts:
-            raise ValueError(_("You have reached the maximum number of attempts."))
-    else:
-        attempt_number = AssessmentAttempt.objects.filter(
-            assessment=assessment, student=student,
-        ).count() + 1
-        if attempt_number > assessment.max_attempts:
-            raise ValueError(_("You have reached the maximum number of attempts."))
-    attempt = AssessmentAttempt.objects.create(
-        assessment=assessment,
-        student=student,
-        attempt_number=attempt_number,
-        status=ATTEMPT_STATUS_IN_PROGRESS,
-        started_at=timezone.now(),
-    )
-    if override:
-        attempt.is_exceptional = True
-        attempt.save(update_fields=["is_exceptional"])
-        consume_assessment_access_override(override, attempt)
-    if _is_diploma_random(assessment):
-        generate_diploma_assessment_snapshot(attempt)
-    return attempt
+            generate_diploma_assessment_snapshot(attempt)
+        return attempt
+
+
+def prepare_diploma_assessment_attempts(assessment: Assessment, limit: int = 50) -> tuple[int, int]:
+    """Prepare online enrolled students, including exceptional online access."""
+    now = timezone.now()
+    latest_delivery_mode = ProgramApplication.objects.filter(
+        student_id=OuterRef("pk"),
+        program_type=PROGRAM_TYPE_DIPLOMA,
+        cohort_id=assessment.cohort_id,
+    ).exclude(
+        status=PROGRAM_APP_STATUS_REJECTED,
+    ).order_by("-created_at", "-id").values("delivery_mode")[:1]
+    students = StudentProfile.objects.filter(
+        diploma_enrollments__cohort_id=assessment.cohort_id,
+        diploma_enrollments__status=ENROLLMENT_STATUS_ACTIVE,
+    ).filter(
+        Q(diploma_enrollments__expires_at__isnull=True) | Q(diploma_enrollments__expires_at__gt=now),
+    ).exclude(
+        user__assessment_attempts__assessment=assessment,
+        user__assessment_attempts__status__in=[ATTEMPT_STATUS_ASSIGNED, ATTEMPT_STATUS_IN_PROGRESS],
+    ).annotate(
+        application_delivery_mode=Subquery(latest_delivery_mode),
+    ).filter(
+        Q(application_delivery_mode=APPLICATION_DELIVERY_MODE_ONLINE)
+        | Q(application_delivery_mode__isnull=True),
+    ).select_related("user").order_by("pk")[:limit]
+    created = 0
+    skipped = 0
+    for profile in students:
+        with transaction.atomic():
+            attempts = AssessmentAttempt.objects.select_for_update().filter(
+                assessment=assessment, student=profile.user,
+            )
+            if attempts.filter(status__in=[ATTEMPT_STATUS_ASSIGNED, ATTEMPT_STATUS_IN_PROGRESS]).exists():
+                skipped += 1
+                continue
+            attempt_number = attempts.exclude(
+                status__in=[ATTEMPT_STATUS_CANCELLED, ATTEMPT_STATUS_EXPIRED],
+            ).count() + 1
+            if attempt_number > assessment.max_attempts:
+                skipped += 1
+                continue
+            attempt = AssessmentAttempt.objects.create(
+                assessment=assessment,
+                student=profile.user,
+                attempt_number=attempt_number,
+                status=ATTEMPT_STATUS_ASSIGNED,
+            )
+            generate_diploma_assessment_snapshot(attempt)
+            created += 1
+    return created, skipped
 
 
 def _is_diploma_random(assessment: Assessment) -> bool:
@@ -448,6 +540,19 @@ def generate_diploma_assessment_snapshot(attempt: AssessmentAttempt) -> None:
 
         _ensure_snapshot_answers(attempt_ref)
 
+    def _post_snapshot_cache():
+        _cache_snapshot_questions(attempt_ref)
+        # Build prepared gzip chunks (render once, gzip once)
+        try:
+            from apps.assessments.prepared_take import build_prepared_take
+
+            build_prepared_take(attempt_ref)
+        except Exception:
+            # Prepared cache is rebuildable; correctness remains via DB fallback
+            pass
+
+    transaction.on_commit(_post_snapshot_cache)
+
 
 def _ensure_snapshot_answers(attempt: AssessmentAttempt) -> None:
     """Create empty snapshot answer for each question that lacks one."""
@@ -462,6 +567,72 @@ def _ensure_snapshot_answers(attempt: AssessmentAttempt) -> None:
             to_create.append(AssessmentAttemptSnapshotAnswer(attempt_question=sq))
     if to_create:
         AssessmentAttemptSnapshotAnswer.objects.bulk_create(to_create)
+
+
+def _snapshot_questions_cache_key(attempt_id: int) -> str:
+    return f"assessment-attempt:{attempt_id}:snapshot-questions:v1"
+
+
+def _cache_snapshot_questions(attempt: AssessmentAttempt) -> None:
+    """Cache the immutable question/choice metadata used by autosave."""
+    try:
+        questions = attempt.snapshot_questions.prefetch_related("choices").order_by("order")
+        mapping = {
+            question.order: {
+                "id": question.pk,
+                "type": question.question_type,
+                "choice_ids": [choice.pk for choice in question.choices.all()],
+            }
+            for question in questions
+        }
+        timeout = max(300, ((attempt.assessment.duration_minutes or 60) * 60) + 300)
+        cache.set(_snapshot_questions_cache_key(attempt.pk), mapping, timeout=timeout)
+    except Exception:
+        # Redis is an optimization only; the database remains authoritative.
+        return
+
+
+def _get_snapshot_questions(attempt: AssessmentAttempt) -> list[AssessmentAttemptQuestion]:
+    """Load snapshot questions using cached ids, falling back to the database."""
+    try:
+        cached = cache.get(_snapshot_questions_cache_key(attempt.pk))
+    except Exception:
+        cached = None
+    if not cached:
+        return list(attempt.snapshot_questions.order_by("order"))
+
+    question_ids = [item["id"] for item in cached.values()]
+    questions = AssessmentAttemptQuestion.objects.filter(
+        attempt=attempt, pk__in=question_ids,
+    ).order_by("order")
+    return list(questions) or list(attempt.snapshot_questions.order_by("order"))
+
+
+def _get_snapshot_question_metadata(attempt: AssessmentAttempt) -> list[dict]:
+    """Load autosave validation metadata without re-reading immutable rows."""
+    try:
+        cached = cache.get(_snapshot_questions_cache_key(attempt.pk))
+    except Exception:
+        cached = None
+    if cached:
+        return [
+            {
+                "order": int(order),
+                "question_type": item["type"],
+                "choice_ids": set(item.get("choice_ids", [])),
+            }
+            for order, item in cached.items()
+        ]
+
+    questions = attempt.snapshot_questions.prefetch_related("choices").order_by("order")
+    return [
+        {
+            "order": question.order,
+            "question_type": question.question_type,
+            "choice_ids": {choice.pk for choice in question.choices.all()},
+        }
+        for question in questions
+    ]
 
 
 def submit_assessment(attempt: AssessmentAttempt, answers: list[AssessmentAnswerData]) -> AssessmentAttempt:
@@ -486,6 +657,11 @@ def submit_assessment(attempt: AssessmentAttempt, answers: list[AssessmentAnswer
     answers_by_question = {answer_data.question_id: answer_data for answer_data in answers}
 
     with transaction.atomic():
+        # Lock the attempt so concurrent submits serialize; re-check status
+        # after acquiring the lock (RV-006, mirrors submit_diploma_assessment).
+        attempt = AssessmentAttempt.objects.select_for_update().get(pk=attempt.pk)
+        if attempt.status != ATTEMPT_STATUS_IN_PROGRESS:
+            raise ValueError(_("Assessment can only be submitted from in_progress status."))
         for question in questions:
             answer_data = answers_by_question.get(
                 question.id,
@@ -547,16 +723,30 @@ def submit_diploma_assessment(attempt: AssessmentAttempt, answer_data: dict) -> 
 
     answer_data maps ``q_{order}`` -> selected_choice_id (MCQ) or written_text (written).
     """
-    if attempt.status != ATTEMPT_STATUS_IN_PROGRESS:
+    if attempt.status not in (ATTEMPT_STATUS_IN_PROGRESS, ATTEMPT_STATUS_SUBMITTED):
         raise ValueError(_("Attempt is not in progress."))
 
     assessment = attempt.assessment
     ensure_active_assessment(assessment)
-    check_attempt_submission_access(attempt)
+    if attempt.status == ATTEMPT_STATUS_IN_PROGRESS:
+        check_attempt_submission_access(
+            attempt,
+            allow_late_submission=assessment.allow_late_submission,
+        )
     now = timezone.now()
 
     with transaction.atomic():
         attempt_ref = AssessmentAttempt.objects.select_for_update().get(pk=attempt.pk)
+        if attempt_ref.status not in (ATTEMPT_STATUS_IN_PROGRESS, ATTEMPT_STATUS_SUBMITTED):
+            return attempt_ref
+
+        if write_behind_protocol.enabled() and attempt_ref.status == ATTEMPT_STATUS_IN_PROGRESS:
+            write_behind_protocol.drain(
+                attempt_ref.pk,
+                lambda values: diploma_autosave_attempt(
+                    attempt_ref, values, write_behind=False,
+                ),
+            )
 
         # Load the snapshot question set with prefetched choices and the
         # existing answers once (P3-01): no per-question queries.
@@ -578,6 +768,10 @@ def submit_diploma_assessment(attempt: AssessmentAttempt, answer_data: dict) -> 
             for sq in snapshot_questions
             for choice in sq.choices.all()
         }
+        from apps.assessments.prepared_take import get_valid_choices
+
+        cached_valid_choices = get_valid_choices(attempt_ref.pk) or {}
+        cached_valid_by_order = cached_valid_choices.get("by_order", {})
 
         has_written = False
         total_earned = Decimal("0")
@@ -598,6 +792,9 @@ def submit_diploma_assessment(attempt: AssessmentAttempt, answer_data: dict) -> 
                 raw = answer_data.get(order_key, "")
                 if raw:
                     try:
+                        allowed_ids = cached_valid_by_order.get(str(sq.order), [])
+                        if allowed_ids and int(raw) not in allowed_ids:
+                            raise ValueError
                         choice = choices_by_key[(sq.pk, int(raw))]
                     except (KeyError, ValueError):
                         raise ValueError(_("Invalid choice for question %(order)d.") % {"order": sq.order}) from None
@@ -631,46 +828,308 @@ def submit_diploma_assessment(attempt: AssessmentAttempt, answer_data: dict) -> 
         else:
             attempt_ref.status = ATTEMPT_STATUS_GRADED
             attempt_ref.graded_at = now
-        attempt_ref.submitted_at = now
+        if attempt_ref.submitted_at is None:
+            attempt_ref.submitted_at = now
         attempt_ref.save()
 
     return attempt_ref
 
 
-def diploma_autosave_attempt(attempt: AssessmentAttempt, answer_data: dict) -> None:
-    """Save in-progress snapshot answers without scoring or status change."""
-    check_attempt_submission_access(attempt)
-    snapshot_questions = list(attempt.snapshot_questions.order_by("order"))
-    existing = {
-        a.attempt_question_id: a
-        for a in AssessmentAttemptSnapshotAnswer.objects.filter(
-            attempt_question__attempt=attempt,
+_SUBMISSION_ID_RE = re.compile(r"\A[0-9a-fA-F-]{16,64}\Z")
+
+
+def valid_diploma_submission_id(value: str | None) -> bool:
+    return bool(value and _SUBMISSION_ID_RE.fullmatch(value))
+
+
+def accept_diploma_submission(
+    attempt: AssessmentAttempt,
+    submission_id: str,
+    answer_data: dict[str, str],
+) -> AssessmentSubmission:
+    """Atomically close an online attempt and persist its final payload.
+
+    Celery is deliberately not part of this transaction.  The database row
+    remains recoverable if the post-commit wake-up cannot be delivered.
+    """
+    if not valid_diploma_submission_id(submission_id):
+        raise ValueError(_("Invalid submission ID."))
+
+    with transaction.atomic():
+        attempt_ref = AssessmentAttempt.objects.select_for_update().select_related(
+            "assessment", "student",
+        ).get(pk=attempt.pk)
+        existing_submission = AssessmentSubmission.objects.select_for_update().filter(
+            Q(attempt=attempt_ref) | Q(submission_id=submission_id),
+        ).first()
+        if existing_submission and existing_submission.attempt_id != attempt_ref.pk:
+            raise ValueError(_("This submission ID belongs to another attempt."))
+        if existing_submission:
+            if existing_submission.submission_id != submission_id:
+                raise ValueError(_("This attempt already has a different submission."))
+            return existing_submission
+
+        if attempt_ref.status != ATTEMPT_STATUS_IN_PROGRESS:
+            raise ValueError(_("Attempt is not in progress."))
+        ensure_active_assessment(attempt_ref.assessment)
+        check_attempt_submission_access(
+            attempt_ref,
+            allow_late_submission=attempt_ref.assessment.allow_late_submission,
         )
-    }
-    new_answers = []
-    to_save = []
-    for sq in snapshot_questions:
-        order_key = f"q_{sq.order}"
-        if order_key not in answer_data:
-            continue
-        answer = existing.get(sq.pk)
-        if answer is None:
-            answer = AssessmentAttemptSnapshotAnswer(attempt_question=sq)
-            new_answers.append(answer)
+
+        now = timezone.now()
+        submission = AssessmentSubmission.objects.create(
+            submission_id=submission_id,
+            attempt=attempt_ref,
+            final_payload={"answers": answer_data},
+            accepted_at=now,
+            processing_status=SUBMISSION_STATUS_PENDING,
+        )
+        attempt_ref.status = ATTEMPT_STATUS_SUBMITTED
+        attempt_ref.submitted_at = now
+        attempt_ref.save(update_fields=["status", "submitted_at", "updated_at"])
+        transaction.on_commit(
+            lambda sid=submission.submission_id: _dispatch_diploma_submission(sid),
+        )
+        transaction.on_commit(
+            lambda aid=attempt_ref.pk: write_behind_protocol.close(aid),
+        )
+        transaction.on_commit(
+            lambda aid=attempt_ref.pk: _delete_prepared_diploma_take(aid),
+        )
+    return submission
+
+
+def _dispatch_diploma_submission(submission_id: str) -> None:
+    from .tasks import process_diploma_submission
+
+    try:
+        delay = max(0.0, float(getattr(settings, "ASSESSMENT_SUBMISSION_GRADING_DELAY", 0.0)))
+        if delay:
+            process_diploma_submission.apply_async(args=[submission_id], countdown=delay)
         else:
-            to_save.append(answer)
-        raw = answer_data[order_key]
-        if sq.question_type == QUESTION_TYPE_MCQ:
-            try:
-                answer.selected_choice_id = int(raw) if raw else None
-            except (ValueError, TypeError):
-                answer.selected_choice_id = None
-        elif sq.question_type == QUESTION_TYPE_WRITTEN:
-            answer.written_text = raw
-    if new_answers:
-        AssessmentAttemptSnapshotAnswer.objects.bulk_create(new_answers)
-    for answer in to_save:
-        answer.save(update_fields=["selected_choice", "written_text"])
+            process_diploma_submission.delay(submission_id)
+    except Exception:
+        # The durable pending row is recovered by the periodic sweep.
+        pass
+
+
+def _delete_prepared_diploma_take(attempt_id: int) -> None:
+    from apps.assessments.prepared_take import delete_prepared_take
+
+    try:
+        delete_prepared_take(attempt_id)
+    except Exception:
+        # Prepared Take data is rebuildable and deletion is not part of Submit.
+        pass
+
+
+def process_durable_diploma_submission(submission_id: str) -> AssessmentSubmission:
+    """Claim and score one durable submission idempotently."""
+    with transaction.atomic():
+        submission = AssessmentSubmission.objects.select_for_update().select_related(
+            "attempt__assessment",
+        ).get(submission_id=submission_id)
+        if submission.processing_status in (
+            SUBMISSION_STATUS_PROCESSED,
+            SUBMISSION_STATUS_UNDER_REVIEW,
+        ):
+            return submission
+        submission.processing_status = SUBMISSION_STATUS_PROCESSING
+        submission.processing_started_at = timezone.now()
+        submission.retry_count = F("retry_count") + 1
+        submission.save(
+            update_fields=[
+                "processing_status", "processing_started_at", "retry_count", "updated_at",
+            ],
+        )
+
+    try:
+        attempt = AssessmentAttempt.objects.select_related("assessment").get(
+            pk=submission.attempt_id,
+        )
+        if attempt.status not in (ATTEMPT_STATUS_GRADED, ATTEMPT_STATUS_UNDER_REVIEW):
+            attempt = submit_diploma_assessment(
+                attempt,
+                submission.final_payload["answers"],
+            )
+        final_status = (
+            SUBMISSION_STATUS_UNDER_REVIEW
+            if attempt.status == ATTEMPT_STATUS_UNDER_REVIEW
+            else SUBMISSION_STATUS_PROCESSED
+        )
+    except Exception as exc:
+        AssessmentSubmission.objects.filter(pk=submission.pk).update(
+            processing_status=SUBMISSION_STATUS_FAILED,
+            failed_at=timezone.now(),
+            last_error_code=exc.__class__.__name__[:80],
+            last_error_detail=str(exc)[:2000],
+        )
+        raise
+
+    AssessmentSubmission.objects.filter(pk=submission.pk).update(
+        processing_status=final_status,
+        processed_at=timezone.now(),
+        failed_at=None,
+        last_error_code="",
+        last_error_detail="",
+    )
+    submission.processing_status = final_status
+    return submission
+
+
+def diploma_autosave_attempt(
+    attempt: AssessmentAttempt,
+    answer_data: dict,
+    *,
+    write_behind: bool | None = None,
+) -> None:
+    """Save in-progress snapshot answers without scoring or status change."""
+    use_write_behind = (
+        write_behind is None and write_behind_protocol.enabled()
+    ) if write_behind is None else write_behind
+    attempt_query = AssessmentAttempt.objects.select_related("assessment", "student")
+    if not use_write_behind:
+        attempt_query = attempt_query.select_for_update()
+    with transaction.atomic():
+        attempt_ref = attempt_query.get(pk=attempt.pk)
+        check_attempt_submission_access(
+            attempt_ref,
+            allow_late_submission=attempt_ref.assessment.allow_late_submission,
+        )
+        if use_write_behind:
+            question_metadata = _get_snapshot_question_metadata(attempt_ref)
+            normalized = {}
+            for question in question_metadata:
+                order_key = f"q_{question['order']}"
+                if order_key not in answer_data:
+                    continue
+                raw = answer_data[order_key]
+                if question["question_type"] == QUESTION_TYPE_MCQ:
+                    try:
+                        selected_choice_id = int(raw) if raw else None
+                    except (ValueError, TypeError):
+                        selected_choice_id = None
+                    if selected_choice_id not in question["choice_ids"]:
+                        selected_choice_id = None
+                    normalized[order_key] = selected_choice_id
+                elif question["question_type"] == QUESTION_TYPE_WRITTEN:
+                    normalized[order_key] = raw
+            if normalized:
+                generation = write_behind_protocol.enqueue(attempt_ref.pk, normalized)
+                if not generation:
+                    raise ValueError(_("Assessment editing is closed."))
+                from .tasks import flush_snapshot_batch
+
+                if write_behind_protocol.claim_schedule(attempt_ref.pk):
+                    try:
+                        flush_snapshot_batch.apply_async(
+                            args=[attempt_ref.pk, generation], countdown=1,
+                        )
+                    except Exception:
+                        write_behind_protocol.release_schedule(attempt_ref.pk)
+                        raise
+                return
+        snapshot_questions = _get_snapshot_questions(attempt_ref)
+        question_ids = [question.pk for question in snapshot_questions]
+        valid_choice_ids_by_question = {}
+        for question_id, choice_id in AssessmentAttemptChoice.objects.filter(
+            attempt_question_id__in=question_ids,
+        ).values_list("attempt_question_id", "pk"):
+            valid_choice_ids_by_question.setdefault(question_id, set()).add(choice_id)
+        existing = {
+            answer.attempt_question_id: answer
+            for answer in AssessmentAttemptSnapshotAnswer.objects.filter(
+                attempt_question_id__in=question_ids,
+            )
+        }
+        new_answers = []
+        to_save = []
+        now = timezone.now()
+        for question in snapshot_questions:
+            order_key = f"q_{question.order}"
+            if order_key not in answer_data:
+                continue
+            answer = existing.get(question.pk)
+            if answer is None:
+                answer = AssessmentAttemptSnapshotAnswer(attempt_question=question)
+                new_answers.append(answer)
+            else:
+                to_save.append(answer)
+            raw = answer_data[order_key]
+            if question.question_type == QUESTION_TYPE_MCQ:
+                try:
+                    selected_choice_id = int(raw) if raw else None
+                except (ValueError, TypeError):
+                    selected_choice_id = None
+                answer.selected_choice_id = (
+                    selected_choice_id
+                    if selected_choice_id in valid_choice_ids_by_question.get(question.pk, set())
+                    else None
+                )
+            elif question.question_type == QUESTION_TYPE_WRITTEN:
+                answer.written_text = raw
+            if answer.pk:
+                answer.updated_at = now
+        if new_answers:
+            AssessmentAttemptSnapshotAnswer.objects.bulk_create(new_answers)
+        if to_save:
+            AssessmentAttemptSnapshotAnswer.objects.bulk_update(
+                to_save,
+                ["selected_choice", "written_text", "updated_at"],
+            )
+
+
+def diploma_autosave_attempt_batch(values_by_attempt: dict[int, dict[str, object]]) -> None:
+    """Persist Redis deltas for several attempts with one bulk update."""
+    if not values_by_attempt:
+        return
+    with transaction.atomic():
+        attempts = list(
+            AssessmentAttempt.objects.select_for_update().select_related("assessment", "student").filter(
+                pk__in=values_by_attempt, status=ATTEMPT_STATUS_IN_PROGRESS,
+            ).order_by("pk")
+        )
+        questions = list(AssessmentAttemptQuestion.objects.filter(attempt_id__in=[a.pk for a in attempts]))
+        question_by_key = {(q.attempt_id, f"q_{q.order}"): q for q in questions}
+        question_ids = [q.pk for q in questions]
+        valid_choices = {}
+        for question_id, choice_id in AssessmentAttemptChoice.objects.filter(
+            attempt_question_id__in=question_ids,
+        ).values_list("attempt_question_id", "pk"):
+            valid_choices.setdefault(question_id, set()).add(choice_id)
+        answers = {
+            answer.attempt_question_id: answer
+            for answer in AssessmentAttemptSnapshotAnswer.objects.filter(attempt_question_id__in=question_ids)
+        }
+        new_answers = []
+        changed_answers = []
+        now = timezone.now()
+        for attempt in attempts:
+            check_attempt_submission_access(
+                attempt, allow_late_submission=attempt.assessment.allow_late_submission,
+            )
+            for key, raw in values_by_attempt[attempt.pk].items():
+                question = question_by_key.get((attempt.pk, key))
+                if question is None:
+                    continue
+                answer = answers.get(question.pk)
+                if answer is None:
+                    answer = AssessmentAttemptSnapshotAnswer(attempt_question=question)
+                    new_answers.append(answer)
+                if question.question_type == QUESTION_TYPE_MCQ:
+                    answer.selected_choice_id = raw if raw in valid_choices.get(question.pk, set()) else None
+                else:
+                    answer.written_text = raw
+                answer.updated_at = now
+                if answer.pk:
+                    changed_answers.append(answer)
+        if new_answers:
+            AssessmentAttemptSnapshotAnswer.objects.bulk_create(new_answers)
+        if changed_answers:
+            AssessmentAttemptSnapshotAnswer.objects.bulk_update(
+                changed_answers, ["selected_choice", "written_text", "updated_at"],
+            )
 
 
 # ponytail: V154 — save in-progress answers without scoring or status change.
@@ -784,8 +1243,9 @@ def add_homework_attachment(
     try:
         with transaction.atomic():
             # Lock the durable parent that all first-upload contenders share.
-            # StudentProfile.pk is not interchangeable with the custom User.pk.
-            StudentProfile.objects.select_for_update().get(pk=student.pk)
+            # The caller passes the User; lock the owning StudentProfile row so
+            # concurrent uploads from the same student serialize on one row.
+            StudentProfile.objects.select_for_update().get(user_id=student.pk)
             submission, _created = HomeworkSubmission.objects.select_for_update().get_or_create(
                 assessment=assessment,
                 student=student,
@@ -886,6 +1346,7 @@ def grade_written_answer(
     grader,
     *,
     override_reason: str = "",
+    recalculate: bool = True,
 ) -> AssessmentAnswer:
     answer = AssessmentAnswer.objects.select_related("attempt__assessment").get(id=answer_id)
     if score < 0:
@@ -906,7 +1367,8 @@ def grade_written_answer(
             raise ValueError(_("An override reason is required when changing a previously-graded answer."))
         answer.score_override_reason = override_reason
     answer.save(update_fields=["score", "feedback", "graded_at", "graded_by", "score_override_reason"])
-    _update_attempt_grade(answer.attempt)
+    if recalculate:
+        _update_attempt_grade(answer.attempt)
     return answer
 
 
@@ -917,6 +1379,7 @@ def grade_diploma_snapshot_answer(
     grader,
     *,
     override_reason: str = "",
+    recalculate: bool = True,
 ) -> AssessmentAttemptSnapshotAnswer:
     answer = AssessmentAttemptSnapshotAnswer.objects.select_related(
         "attempt_question__attempt__assessment",
@@ -941,39 +1404,47 @@ def grade_diploma_snapshot_answer(
     if is_override:
         answer.score_override_reason = override_reason
     answer.save(update_fields=["score", "feedback", "graded_at", "graded_by", "score_override_reason"])
-    _update_diploma_attempt_grade(answer.attempt_question.attempt)
+    if recalculate:
+        _update_diploma_attempt_grade(answer.attempt_question.attempt)
     return answer
 
 
 def _update_diploma_attempt_grade(attempt: AssessmentAttempt) -> None:
-    snapshot_questions = list(attempt.snapshot_questions.all())
-    if not snapshot_questions:
-        return
-    answers = {
-        a.attempt_question_id: a
-        for a in AssessmentAttemptSnapshotAnswer.objects.filter(
-            attempt_question__attempt=attempt,
-        )
-    }
-    total = Decimal("0")
-    all_graded = True
-    for sq in snapshot_questions:
-        answer = answers.get(sq.pk)
-        if answer and answer.score is not None:
-            total += answer.score
+    """Recompute a diploma snapshot attempt aggregate under an attempt lock.
+
+    The attempt row is locked so concurrent graders serialize and the final
+    aggregate is never computed from a partial answer set (RV-014).
+    """
+    with transaction.atomic():
+        locked = AssessmentAttempt.objects.select_for_update().get(pk=attempt.pk)
+        snapshot_questions = list(locked.snapshot_questions.all())
+        if not snapshot_questions:
+            return
+        answers = {
+            a.attempt_question_id: a
+            for a in AssessmentAttemptSnapshotAnswer.objects.filter(
+                attempt_question__attempt=locked,
+            )
+        }
+        total = Decimal("0")
+        all_graded = True
+        for sq in snapshot_questions:
+            answer = answers.get(sq.pk)
+            if answer and answer.score is not None:
+                total += answer.score
+            else:
+                all_graded = False
+        locked.score_points = total
+        total_possible = sum(sq.points for sq in snapshot_questions)
+        assessment = locked.assessment
+        locked.score_percent = compute_percent(total, total_possible)
+        if all_graded:
+            locked.status = ATTEMPT_STATUS_GRADED
+            locked.graded_at = timezone.now()
+            locked.is_pass = is_passing(locked.score_percent, assessment.passing_score)
+            locked.save(update_fields=["score_points", "score_percent", "status", "graded_at", "is_pass"])
         else:
-            all_graded = False
-    attempt.score_points = total
-    total_possible = sum(sq.points for sq in snapshot_questions)
-    assessment = attempt.assessment
-    attempt.score_percent = compute_percent(total, total_possible)
-    if all_graded:
-        attempt.status = ATTEMPT_STATUS_GRADED
-        attempt.graded_at = timezone.now()
-        attempt.is_pass = is_passing(attempt.score_percent, assessment.passing_score)
-        attempt.save(update_fields=["score_points", "score_percent", "status", "graded_at", "is_pass"])
-    else:
-        attempt.save(update_fields=["score_points", "score_percent"])
+            locked.save(update_fields=["score_points", "score_percent"])
 
 
 def grade_homework(submission_id: int, score: Decimal, feedback: str, grader) -> HomeworkSubmission:
@@ -1016,30 +1487,37 @@ def grade_homework(submission_id: int, score: Decimal, feedback: str, grader) ->
     return submission
 
 
-def _update_attempt_grade(attempt: AssessmentAttempt):
-    total = Decimal("0.00")
-    all_graded = True
-    for answer in attempt.answers.select_related("question").all():
-        if answer.score is not None:
-            total += answer.score
+def _update_attempt_grade(attempt: AssessmentAttempt) -> None:
+    """Recompute the attempt aggregate from its answers under an attempt lock.
+
+    The attempt row is locked so concurrent graders serialize and the final
+    aggregate is never computed from a partial answer set (RV-014).
+    """
+    with transaction.atomic():
+        locked = AssessmentAttempt.objects.select_for_update().get(pk=attempt.pk)
+        total = Decimal("0.00")
+        all_graded = True
+        for answer in locked.answers.select_related("question").all():
+            if answer.score is not None:
+                total += answer.score
+            else:
+                all_graded = False
+        locked.score_points = total
+        assessment = locked.assessment
+        total_possible = sum(q.points for q in assessment.questions.all())
+        locked.score_percent = compute_percent(total, total_possible)
+        if all_graded:
+            locked.status = ATTEMPT_STATUS_GRADED
+            locked.graded_at = timezone.now()
+            locked.is_pass = is_passing(locked.score_percent, assessment.passing_score)
+            locked.save(
+                update_fields=[
+                    "score_points", "score_percent", "status",
+                    "graded_at", "is_pass",
+                ],
+            )
         else:
-            all_graded = False
-    attempt.score_points = total
-    assessment = attempt.assessment
-    total_possible = sum(q.points for q in assessment.questions.all())
-    attempt.score_percent = compute_percent(total, total_possible)
-    if all_graded:
-        attempt.status = ATTEMPT_STATUS_GRADED
-        attempt.graded_at = timezone.now()
-        attempt.is_pass = is_passing(attempt.score_percent, assessment.passing_score)
-        attempt.save(
-            update_fields=[
-                "score_points", "score_percent", "status",
-                "graded_at", "is_pass",
-            ],
-        )
-    else:
-        attempt.save(update_fields=["score_points", "score_percent"])
+            locked.save(update_fields=["score_points", "score_percent"])
 
 
 # ---------------------------------------------------------------------------
@@ -1583,7 +2061,9 @@ def get_student_assessments(student):
     if override_ids:
         extra = list(
             Assessment.objects.filter(
-                id__in=override_ids, legacy_status=LEGACY_STATUS_ACTIVE,
+                id__in=override_ids,
+                is_active=True,
+                legacy_status=LEGACY_STATUS_ACTIVE,
             )
             .select_related("course_version__course")
             .prefetch_related("attempts")
@@ -1797,6 +2277,9 @@ def change_diploma_enrollment_delivery_mode(
         item.delivery_mode = mode
         item.updated_at = now
     SemesterExamCode.objects.bulk_update(mutable_codes, ["delivery_mode", "updated_at"])
+    if source_code is not None:
+        source_code.delivery_mode = mode
+        source_code.updated_at = now
 
     record_audit_event(
         actor=actor,
@@ -1918,6 +2401,8 @@ def finalize_offline_attempt(exam_code_id: int) -> AssessmentAttempt:
 
 def _reviewer_assignment_scope(assignment):
     """Return active online Semester Exam attempts within an assignment scope."""
+    if assignment.access_mode not in (REVIEWER_ACCESS_ONLINE, REVIEWER_ACCESS_BOTH):
+        return AssessmentAttempt.objects.none()
     qs = AssessmentAttempt.objects.filter(
         assessment__cohort_id=assignment.cohort_id,
         assessment__assessment_type=ASSESSMENT_TYPE_SEMESTER_EXAM,
@@ -2021,12 +2506,11 @@ def claim_next_reviewer_submission(assignment) -> ReviewerExamClaim:
 
 
 def reviewer_claim_items(claim):
-    """Return anonymous primitives for every written answer of the claim.
+    """Return anonymous primitives for every written answer in the claim's section.
 
     The claim reserves one anonymous attempt; the Reviewer grades ALL of its
-    written questions (every section within assignment scope) before
-    finalizing. Never includes student identity, enrollment, or attempt
-    objects.
+    written questions in the claimed section before finalizing. Never includes
+    student identity, enrollment, or attempt objects.
     """
     code_number = SemesterExamCode.objects.filter(
         assessment_id=claim.attempt.assessment_id,
@@ -2038,6 +2522,7 @@ def reviewer_claim_items(claim):
         AssessmentAttemptSnapshotAnswer.objects.filter(
             attempt_question__attempt_id=claim.attempt_id,
             attempt_question__question_type=QUESTION_TYPE_WRITTEN,
+            attempt_question__section_id=claim.section_id,
         )
         .annotate(
             answer_id=F("pk"),
@@ -2100,6 +2585,8 @@ def _reviewer_assignment_assessments(assignment):
 
 def get_reviewer_ungraded_count(assignment) -> int:
     """Return ungraded offline code/section pairs within an assignment scope."""
+    if assignment.access_mode not in (REVIEWER_ACCESS_OFFLINE, REVIEWER_ACCESS_BOTH):
+        return 0
     assessments = _reviewer_assignment_assessments(assignment)
     sections = AssessmentLectureSection.objects.filter(assessment__in=assessments)
     if assignment.section_id:
@@ -2254,6 +2741,8 @@ def annotate_reviewer_ungraded_counts(assignments) -> dict[int, int]:
         graded_by_code.setdefault(code_id, set()).add(section_id)
 
     for assignment in assignments:
+        if assignment.access_mode not in (REVIEWER_ACCESS_OFFLINE, REVIEWER_ACCESS_BOTH):
+            continue
         ids = candidate_ids[assignment.id]
         if not ids:
             continue
@@ -2293,6 +2782,13 @@ def annotate_reviewer_online_ungraded_counts(assignments) -> dict[int, int]:
     if not assignments:
         return {}
     counts = {assignment.id: 0 for assignment in assignments}
+    online_assignment_ids = {
+        assignment.id
+        for assignment in assignments
+        if assignment.access_mode in (REVIEWER_ACCESS_ONLINE, REVIEWER_ACCESS_BOTH)
+    }
+    if not online_assignment_ids:
+        return counts
     candidate_ids, _, _ = _reviewer_scope_maps(assignments)
     all_assessment_ids = set().union(*(candidate_ids.values()))
     if not all_assessment_ids:
@@ -2358,6 +2854,8 @@ def annotate_reviewer_online_ungraded_counts(assignments) -> dict[int, int]:
     )
 
     for assignment in assignments:
+        if assignment.id not in online_assignment_ids:
+            continue
         count = 0
         for assessment_id in candidate_ids[assignment.id]:
             for attempt_id in attempts_by_assessment.get(assessment_id, ()):
@@ -2384,6 +2882,8 @@ def reviewer_grade_section(exam_code_id: int, section_id: int, score: Decimal, g
         ).get(pk=exam_code_id)
         if not assignment.active or assignment.reviewer_id != grader.id:
             raise ValueError(_("This Reviewer assignment is not active for grading."))
+        if assignment.access_mode not in (REVIEWER_ACCESS_OFFLINE, REVIEWER_ACCESS_BOTH):
+            raise ValueError(_("This assignment does not allow offline grading."))
         if code.assessment.legacy_status != LEGACY_STATUS_ACTIVE:
             raise ValueError(_("Legacy semester exam data is read-only."))
         if code.delivery_mode != DELIVERY_MODE_OFFLINE:
@@ -2438,6 +2938,8 @@ def reviewer_grade_written_answer(answer_id: int, score: Decimal, grader, assign
             raise ValueError(_("Only written answers can be graded by a Reviewer."))
         if not assignment.active or assignment.reviewer_id != grader.id:
             raise ValueError(_("This Reviewer assignment is not active for online grading."))
+        if assignment.access_mode not in (REVIEWER_ACCESS_ONLINE, REVIEWER_ACCESS_BOTH):
+            raise ValueError(_("This assignment does not allow online grading."))
         if assignment.section_id and sq.section_id != assignment.section_id:
             raise ValueError(_("Answer is outside your assigned section."))
         claim = ReviewerExamClaim.objects.filter(
@@ -2478,6 +2980,8 @@ def reviewer_grade_written_answer(answer_id: int, score: Decimal, grader, assign
 
 def can_reviewer_grade_code(assignment, exam_code) -> bool:
     """Check that the exam code belongs to the reviewer's assigned scope."""
+    if assignment.access_mode not in (REVIEWER_ACCESS_OFFLINE, REVIEWER_ACCESS_BOTH):
+        return False
     if exam_code.assessment.legacy_status != LEGACY_STATUS_ACTIVE:
         return False
     if assignment.cohort_id != exam_code.diploma_enrollment.cohort_id:
@@ -2573,9 +3077,13 @@ def create_assessment_access_overrides(
             assessment=assessment, diploma_enrollment=enrollment,
         ).first()
 
-        if force_online and exam_code and exam_code.delivery_mode != DELIVERY_MODE_ONLINE:
-            exam_code.delivery_mode = DELIVERY_MODE_ONLINE
-            exam_code.save(update_fields=["delivery_mode"])
+        if force_online and exam_code:
+            exam_code = change_diploma_enrollment_delivery_mode(
+                enrollment.id,
+                DELIVERY_MODE_ONLINE,
+                actor,
+                source_code_id=exam_code.id,
+            )
 
         override = SemesterExamAccessOverride.objects.create(
             assessment=assessment,
@@ -2673,16 +3181,23 @@ def cancel_semester_exam_access_override(override, *, actor, reason="") -> Semes
     return cancel_assessment_access_override(override, actor=actor, reason=reason)
 
 
-def get_active_assessment_access_override(student, assessment, now=None) -> SemesterExamAccessOverride | None:
+def get_active_assessment_access_override(
+    student,
+    assessment,
+    now=None,
+    *,
+    enrollment=None,
+) -> SemesterExamAccessOverride | None:
     now = now or timezone.now()
     if assessment.assessment_type == ASSESSMENT_TYPE_QUIZ and assessment.course_version_id:
-        enrollment = CourseEnrollment.objects.filter(
-            student__user=student,
-            course_version_id=assessment.course_version_id,
-            status=ENROLLMENT_STATUS_ACTIVE,
-        ).filter(
-            Q(expires_at__isnull=True) | Q(expires_at__gt=now),
-        ).first()
+        if enrollment is None:
+            enrollment = CourseEnrollment.objects.filter(
+                student__user=student,
+                course_version_id=assessment.course_version_id,
+                status=ENROLLMENT_STATUS_ACTIVE,
+            ).filter(
+                Q(expires_at__isnull=True) | Q(expires_at__gt=now),
+            ).first()
         if enrollment:
             return SemesterExamAccessOverride.objects.filter(
                 course_enrollment=enrollment,
@@ -2697,13 +3212,14 @@ def get_active_assessment_access_override(student, assessment, now=None) -> Seme
         and assessment.semester_id
         and assessment.course_version_id is None
     ):
-        enrollment = DiplomaEnrollment.objects.filter(
-            student__user=student,
-            cohort_id=assessment.cohort_id,
-            status=ENROLLMENT_STATUS_ACTIVE,
-        ).filter(
-            Q(expires_at__isnull=True) | Q(expires_at__gt=now),
-        ).first()
+        if enrollment is None:
+            enrollment = DiplomaEnrollment.objects.filter(
+                student__user=student,
+                cohort_id=assessment.cohort_id,
+                status=ENROLLMENT_STATUS_ACTIVE,
+            ).filter(
+                Q(expires_at__isnull=True) | Q(expires_at__gt=now),
+            ).first()
         if enrollment:
             return SemesterExamAccessOverride.objects.filter(
                 diploma_enrollment=enrollment,

@@ -86,7 +86,7 @@ def transcode_to_hls(
 
         duration = _probe_duration(input_path)
         if duration is None:
-            raise RuntimeError("Could not determine audio duration.")
+            raise RuntimeError(_("Could not determine audio duration."))
 
         playlist_path = output_dir / "index.m3u8"
         result = subprocess.run(
@@ -107,7 +107,7 @@ def transcode_to_hls(
                 timeout=300,
         )
         if result.returncode != 0:
-            raise RuntimeError(f"FFmpeg failed: {result.stderr}")
+            raise RuntimeError(_("FFmpeg failed: %(error)s") % {"error": result.stderr})
 
         for f in output_dir.iterdir():
             if not f.is_file():

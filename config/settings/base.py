@@ -88,7 +88,6 @@ LOCAL_APPS = [
     "apps.certificates",
     "apps.payments",
     "apps.audit",
-    "apps.ai",  # retained only for schema-removal migration history (DECISION 35)
     "apps.deployment",
     "apps.intake_forms",
     "apps.attendance",
@@ -99,6 +98,7 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 # --- Middleware --------------------------------------------------------------
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "apps.core.performance_middleware.PerformanceTimingMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.locale.LocaleMiddleware",
@@ -133,6 +133,7 @@ DATABASES = {"default": env.db()}
 
 # --- Cache and background jobs ----------------------------------------------
 CACHE_URL = env("CACHE_URL")
+ASSESSMENT_PERF_TRACE = env.bool("ASSESSMENT_PERF_TRACE", default=False)
 if CACHE_URL:
     CACHES = {
         "default": {
@@ -148,12 +149,25 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TIMEZONE = "Africa/Cairo"
 CELERY_ENABLE_UTC = True
+CELERY_TASK_ROUTES = {
+    "apps.assessments.tasks.process_diploma_submission": {"queue": "exam_submission"},
+    "apps.assessments.tasks.recover_queued_diploma_submissions": {"queue": "exam_submission"},
+    "apps.assessments.tasks.flush_snapshot": {"queue": "exam_autosave"},
+    "apps.assessments.tasks.flush_snapshot_batch": {"queue": "exam_autosave"},
+    "apps.assessments.tasks.prepare_upcoming_exam_attempts": {"queue": "exam_autosave"},
+}
+CELERY_TASK_DEFAULT_QUEUE = "celery"
+CELERY_TASK_CREATE_MISSING_QUEUES = True
 
 # P5-04: bounded daily lifecycle normalization for expired enrollments.
 # Read-path active/non-expired checks remain the authorization authority; this
 # beat only keeps the persisted status consistent. Beat uses the existing
 # Celery broker (no second scheduler, no worker-concurrency increase).
 CELERY_BEAT_SCHEDULE = {
+    "prepare-upcoming-exam-attempts": {
+        "task": "apps.assessments.tasks.prepare_upcoming_exam_attempts",
+        "schedule": 300.0,
+    },
     "expire-stale-enrollments-daily": {
         "task": "apps.academics.tasks.expire_stale_enrollments_task",
         "schedule": 86400.0,  # every 24h

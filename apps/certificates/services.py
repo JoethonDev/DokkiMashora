@@ -11,6 +11,8 @@ from django.template import Context, Template
 from django.template.loader import render_to_string
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from PIL import Image
+from reportlab.pdfgen import canvas as pdf_canvas
 
 from apps.academics.models import Diploma, DiplomaEnrollment
 from apps.audit.constants import ACTION_CERTIFICATE_TEMPLATE_DELETED
@@ -47,6 +49,7 @@ from .models import (
     GeneratedCertificate,
 )
 from .source_adapters import (
+    overlay_text_on_source,
     render_source_preview,
     source_checksum,
     validate_field_mapping,
@@ -250,7 +253,6 @@ def generate_certificate_pdf(
 
         if template.source_status == TEMPLATE_SOURCE_STATUS_READY and template.source_storage_key and template.field_mapping:
             source_bytes = storage_service.download_file(template.source_storage_key)
-            from .source_adapters import overlay_text_on_source
             output_bytes = overlay_text_on_source(
                 source_bytes,
                 template.source_format,
@@ -301,9 +303,6 @@ def generate_certificate_pdf(
 
 def _image_bytes_to_pdf(png_bytes: bytes) -> bytes:
     """Wrap a PNG (raster overlay output) into a single-page PDF via PIL."""
-    from PIL import Image
-    from reportlab.pdfgen import canvas as pdf_canvas
-
     img = Image.open(BytesIO(png_bytes))
     buf = BytesIO()
     c = pdf_canvas.Canvas(buf, pagesize=(img.width, img.height))

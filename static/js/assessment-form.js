@@ -24,7 +24,7 @@
     var versionSelect = form.querySelector('[name="course_version"]');
     var courseFields = ["course", "course_version"];
     var diplomaFields = ["diploma", "semester", "cohort"];
-    var selectLabel = form.dataset.selectLabel || "Select";
+    var selectLabel = form.dataset.selectLabel || "";
 
     function toggleScope(scope) {
       form.querySelectorAll(".scope-field").forEach(function (el) {

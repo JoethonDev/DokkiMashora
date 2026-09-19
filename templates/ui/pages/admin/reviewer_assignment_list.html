@@ -15,6 +15,7 @@
               <th class="table-th">{% trans "Semester" %}</th>
                <th class="table-th">{% trans "Scope" %}</th>
                <th class="table-th">{% trans "Semester Exam" %}</th>
+               <th class="table-th">{% trans "Access" %}</th>
                <th class="table-th">{% trans "Online" %}</th>
                <th class="table-th">{% trans "Offline" %}</th>
             </tr>
@@ -25,14 +26,15 @@
                 <td class="table-td">{{ item.reviewer }}</td>
                 <td class="table-td">{{ item.cohort }}</td>
                 <td class="table-td">{{ item.semester }}</td>
-                <td class="table-td">{{ item.get_scope_display }}{% if item.cluster %} · {{ item.cluster }}{% endif %}</td>
-                <td class="table-td">{{ item.assessment|default:'All Semester Exams' }}</td>
+                 <td class="table-td">{{ item.get_scope_display }}{% if item.cluster %} · {{ item.cluster }}{% endif %}{% if item.section %}<small class="block text-muted">{% trans "Legacy section restriction" %}: {{ item.section }}</small>{% endif %}</td>
+                 <td class="table-td">{{ item.assessment|default:_('All Semester Exams') }}</td>
+                 <td class="table-td">{{ item.get_access_mode_display }}</td>
                 <td class="table-td">{{ item.available_submissions|default:'—' }}</td>
                 <td class="table-td">{{ item.available_offline|default:'—' }}</td>
               </tr>
             {% empty %}
               <tr>
-                  <td class="table-td" colspan="7">
+                  <td class="table-td" colspan="8">
                   {% include "ui/components/_empty_state.html" with title=_("No reviewer assignments yet.") compact=True %}
                 </td>
               </tr>
@@ -45,7 +47,9 @@
           <div class="mobile-card">
             <div class="flex-1 min-w-0">
               <strong class="block truncate">{{ item.reviewer }}</strong>
-                  <small class="block text-muted">{{ item.cohort }} &middot; {{ item.get_scope_display }} &middot; {{ item.assessment|default:'All Semester Exams' }} &middot; {% trans "Online" %}: {{ item.available_submissions|default:'—' }} &middot; {% trans "Offline" %}: {{ item.available_offline|default:'—' }}</small>
+                  <small class="block text-muted">{{ item.cohort }} &middot; {{ item.get_scope_display }} &middot; {{ item.assessment|default:_('All Semester Exams') }} &middot; {{ item.get_access_mode_display }}</small>
+                  {% if item.section %}<small class="block text-muted">{% trans "Legacy section restriction" %}: {{ item.section }}</small>{% endif %}
+                  <small class="block text-muted">{% trans "Online" %}: {{ item.available_submissions|default:'—' }} &middot; {% trans "Offline" %}: {{ item.available_offline|default:'—' }}</small>
             </div>
           </div>
         {% empty %}

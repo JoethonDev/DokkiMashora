@@ -5,14 +5,21 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods
 
 from apps.academics.models import Cohort, CourseVersion
-from apps.audit.constants import ACTION_INTAKE_FORM_CREATED, ACTION_INTAKE_FORM_TOGGLED, ACTION_INTAKE_FORM_FIELD_CREATED, ACTION_INTAKE_FORM_FIELD_DELETED, ACTION_INTAKE_REQUEST_SENT
-from apps.audit.services import record_audit_event
 from apps.applications.models import ProgramApplication
+from apps.audit.constants import (
+    ACTION_INTAKE_FORM_CREATED,
+    ACTION_INTAKE_FORM_FIELD_CREATED,
+    ACTION_INTAKE_FORM_FIELD_DELETED,
+    ACTION_INTAKE_FORM_TOGGLED,
+    ACTION_INTAKE_REQUEST_SENT,
+)
+from apps.audit.services import record_audit_event
 from apps.core.pagination import paginate
 from apps.core.permissions import ROLE_SENIOR_STAFF, is_admin, role_required, student_required
 
@@ -20,9 +27,9 @@ from .constants import (
     FIELD_TYPE_BOOLEAN,
     FIELD_TYPE_CHOICE,
     FIELD_TYPE_MULTI_CHOICE,
-    INTAKE_REQUESTABLE_STATUSES,
     INTAKE_REQUEST_STATUS_CANCELLED,
     INTAKE_REQUEST_STATUS_SUBMITTED,
+    INTAKE_REQUESTABLE_STATUSES,
 )
 from .forms import IntakeFormBuildForm, IntakeFormFieldForm, IntakeFormSubmitForm
 from .models import IntakeForm, IntakeFormField, IntakeFormRequest, IntakeFormResponse
@@ -290,12 +297,48 @@ def admin_intake_request_send(request: HttpRequest, application_id: int) -> Http
 @require_http_methods(["GET", "POST"])
 @student_required
 def fill_intake_form(request: HttpRequest, token: str) -> HttpResponse:
-    """Student fills an intake form via expiring token link."""
-    profile = _get_profile_or_404(request.user)
+    """Student fills an intake form via an expiring token link."""
     intake_request = get_intake_request_by_token(token)
     if not intake_request:
         messages.error(request, _("Invalid or expired intake form link."))
         return redirect("students:applications")
+    profile = _get_profile_or_404(request.user)
+    return _render_intake_form(
+        request,
+        intake_request,
+        profile,
+        form_action_url=reverse("intake_forms:fill_intake_form", args=[token]),
+    )
+
+
+@require_http_methods(["GET", "POST"])
+@student_required
+def student_intake_form(request: HttpRequest, request_id: int) -> HttpResponse:
+    """Student fills an owned intake request from the authenticated dashboard."""
+    profile = _get_profile_or_404(request.user)
+    intake_request = get_object_or_404(
+        IntakeFormRequest.objects.select_related(
+            "form", "program_application__student__user",
+        ),
+        pk=request_id,
+        program_application__student=profile,
+    )
+    return _render_intake_form(
+        request,
+        intake_request,
+        profile,
+        form_action_url=reverse("intake_forms:student_intake_form", args=[request_id]),
+    )
+
+
+def _render_intake_form(
+    request: HttpRequest,
+    intake_request: IntakeFormRequest,
+    profile,
+    *,
+    form_action_url: str,
+) -> HttpResponse:
+    """Render or submit an intake request after its ownership is established."""
 
     application = intake_request.program_application
     if application.student != profile:
@@ -359,4 +402,5 @@ def fill_intake_form(request: HttpRequest, token: str) -> HttpResponse:
         "form_instance": form_instance,
         "active_fields": active_fields,
         "form": submit_form,
+        "form_action_url": form_action_url,
     })

@@ -38,6 +38,7 @@ from apps.entrance_exams.services import (
 )
 from apps.students.constants import EDUCATION_BACHELOR, GENDER_MALE
 from apps.students.models import StudentProfile
+from apps.entrance_exams.views import take_exam
 
 
 @pytest.fixture
@@ -415,7 +416,6 @@ class TestScoreVisibility:
     """Phase 9: Choice scores must never render on the take-exam page."""
 
     def test_choice_score_is_not_in_take_exam_context(self, rf, exam, student_profile, admin_user):
-        from apps.entrance_exams.views import take_exam
 
         q = EntranceQuestion.objects.create(
             exam=exam, question_type=QUESTION_TYPE_MCQ,

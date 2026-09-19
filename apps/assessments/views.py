@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
@@ -15,6 +16,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Count, Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -32,7 +34,7 @@ from apps.academics.models import (
     Semester,
     StudentCluster,
 )
-from apps.accounts.constants import GROUP_REVIEWER
+from apps.assessments import write_behind as write_behind_protocol
 from apps.assessments.constants import (
     ASSESSMENT_TYPE_HOMEWORK,
     ASSESSMENT_TYPE_QUIZ,
@@ -45,6 +47,10 @@ from apps.assessments.constants import (
     LEGACY_STATUS_ACTIVE,
     QUESTION_TYPE_MCQ,
     QUESTION_TYPE_WRITTEN,
+    REVIEWER_ACCESS_BOTH,
+    REVIEWER_ACCESS_CHOICES,
+    REVIEWER_ACCESS_OFFLINE,
+    REVIEWER_ACCESS_ONLINE,
     REVIEWER_CLAIM_IN_PROGRESS,
     REVIEWER_SCOPE_CHOICES,
     REVIEWER_SCOPE_COHORT,
@@ -80,6 +86,9 @@ from apps.assessments.models import (
 from apps.assessments.services import (
     AssessmentAnswerData,
     _semester_exam_attempt_details,
+    _update_attempt_grade,
+    _update_diploma_attempt_grade,
+    accept_diploma_submission,
     add_homework_attachment,
     admin_review_semester_exam,
     annotate_reviewer_online_ungraded_counts,
@@ -122,9 +131,9 @@ from apps.assessments.services import (
     reviewer_grade_written_answer,
     start_assessment,
     submit_assessment,
-    submit_diploma_assessment,
     submit_homework_submission,
     sync_course_quiz_total_points,
+    valid_diploma_submission_id,
 )
 from apps.audit.constants import (
     ACTION_EXAM_CREATED,
@@ -139,6 +148,7 @@ from apps.audit.constants import (
 from apps.audit.services import record_audit_event
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
+from apps.core.performance_middleware import stage as performance_stage
 from apps.core.permissions import (
     ROLE_EXAM_STAFF,
     ROLE_HOMEWORK_GRADING_STAFF,
@@ -278,7 +288,8 @@ def start_assessment_view(request, assessment_id):
         messages.error(request, _("Homework assessments use the upload flow."))
         return redirect("assessments:take", assessment_id=assessment_id)
     try:
-        start_assessment(request.user, assessment)
+        with performance_stage(request, "start_transition"):
+            start_assessment(request.user, assessment)
         messages.success(request, _("Assessment started."))
         return redirect("assessments:take", assessment_id=assessment.id)
     except ValueError as exc:
@@ -289,17 +300,18 @@ def start_assessment_view(request, assessment_id):
 @student_required
 def take_assessment(request, assessment_id):
     assessment = get_object_or_404(Assessment, id=assessment_id, is_active=True)
-    try:
-        ensure_active_assessment(assessment)
-    except ValueError as exc:
-        messages.error(request, str(exc))
-        return redirect("assessments:student_list")
-    try:
-        check_delivery_mode(request.user, assessment)
-    except ValueError as exc:
-        messages.error(request, str(exc))
-        return redirect("assessments:student_list")
     if assessment.assessment_type == ASSESSMENT_TYPE_HOMEWORK:
+        with performance_stage(request, "eligibility"):
+            try:
+                ensure_active_assessment(assessment)
+            except ValueError as exc:
+                messages.error(request, str(exc))
+                return redirect("assessments:student_list")
+            try:
+                check_delivery_mode(request.user, assessment)
+            except ValueError as exc:
+                messages.error(request, str(exc))
+                return redirect("assessments:student_list")
         now = timezone.now()
         if not has_active_enrollment(request.user, assessment):
             messages.error(request, _("You do not have an active enrollment for this course."))
@@ -336,32 +348,34 @@ def take_assessment(request, assessment_id):
                 "remaining_uploads": remaining_uploads,
             },
         )
-    attempt = AssessmentAttempt.objects.filter(
-        assessment=assessment,
-        student=request.user,
-        status=ATTEMPT_STATUS_IN_PROGRESS,
-    ).first()
-    if not attempt:
-        messages.error(request, _("No active attempt found."))
-        return redirect("assessments:instructions", assessment_id=assessment_id)
-
-    is_diploma = bool(assessment.course_version_id is None and assessment.semester_id and assessment.cohort_id)
-    now = timezone.now()
-    remaining = 0
-    timer_enabled = bool(attempt.started_at and assessment.duration_minutes)
-    timer_deadline = None
-    if timer_enabled:
-        timer_deadline = attempt.started_at + timezone.timedelta(minutes=assessment.duration_minutes)
-        elapsed = (now - attempt.started_at).total_seconds()
-        remaining = max(0, int(assessment.duration_minutes * 60 - elapsed))
-
-    if is_diploma:
-        snapshot_questions = attempt.snapshot_questions.order_by("order").prefetch_related("choices")
-        saved_snapshot_answers = {
-            answer.attempt_question_id: answer
-            for answer in AssessmentAttemptSnapshotAnswer.objects.filter(
-                attempt_question__attempt=attempt,
+    is_diploma = bool(
+        assessment.course_version_id is None
+        and assessment.semester_id
+        and assessment.cohort_id
+    )
+    if not is_diploma:
+        attempt = AssessmentAttempt.objects.filter(
+            assessment=assessment,
+            student=request.user,
+            status=ATTEMPT_STATUS_IN_PROGRESS,
+        ).first()
+        try:
+            check_assessment_access(
+                request.user,
+                assessment,
+                existing_attempt=bool(attempt),
+                allow_late_submission=assessment.allow_late_submission,
             )
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return redirect("assessments:student_list")
+        if not attempt:
+            messages.error(request, _("No active attempt found."))
+            return redirect("assessments:instructions", assessment_id=assessment_id)
+        questions = assessment.questions.prefetch_related("choices").all()
+        saved_answers = {
+            answer.question_id: answer
+            for answer in AssessmentAnswer.objects.filter(attempt=attempt)
         }
         return render(
             request,
@@ -369,67 +383,324 @@ def take_assessment(request, assessment_id):
             {
                 "assessment": assessment,
                 "attempt": attempt,
-                "snapshot_questions": snapshot_questions,
+                "questions": questions,
+                "saved_answers": saved_answers,
+            },
+        )
+    # Diploma / semester exam hot path: ≤3 domain queries
+    # Q1: attempt + assessment + enrollment exists.
+    from django.db.models import Exists, OuterRef
+
+    from apps.academics.models import DiplomaEnrollment
+
+    now = timezone.now()
+    with performance_stage(request, "eligibility_attempt"):
+        enrolled_exists = DiplomaEnrollment.objects.filter(
+            student__user=request.user,
+            cohort_id=OuterRef("assessment__cohort_id"),
+            status=ENROLLMENT_STATUS_ACTIVE,
+        ).filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
+        attempt_qs = AssessmentAttempt.objects.filter(
+            assessment_id=assessment_id,
+            student=request.user,
+            status=ATTEMPT_STATUS_IN_PROGRESS,
+        ).select_related("assessment").annotate(has_enrollment=Exists(enrolled_exists))
+        attempt = attempt_qs.first()
+        if not attempt:
+            messages.error(request, _("No active attempt found."))
+            return redirect("assessments:instructions", assessment_id=assessment_id)
+        assessment = attempt.assessment
+        # Validate remaining eligibility without extra queries
+        if not assessment.is_active or assessment.legacy_status != LEGACY_STATUS_ACTIVE:
+            messages.error(request, _("Assessment is not active."))
+            return redirect("assessments:student_list")
+        if not attempt.has_enrollment:
+            messages.error(request, _("You do not have an active enrollment for this course."))
+            return redirect("assessments:student_list")
+        if assessment.open_at and now < assessment.open_at:
+            messages.error(request, _("Assessment has not opened yet."))
+            return redirect("assessments:student_list")
+        if assessment.close_at and now > assessment.close_at and not assessment.allow_late_submission:
+            messages.error(request, _("Assessment has already closed."))
+            return redirect("assessments:student_list")
+        try:
+            check_assessment_access(
+                request.user,
+                assessment,
+                existing_attempt=True,
+                allow_late_submission=assessment.allow_late_submission,
+            )
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return redirect("assessments:student_list")
+    # Timer metadata (no query)
+    remaining = 0
+    timer_enabled = bool(attempt.started_at and assessment.duration_minutes)
+    timer_deadline = None
+    if timer_enabled:
+        from datetime import timedelta as _td
+
+        timer_deadline = attempt.started_at + _td(minutes=assessment.duration_minutes)
+        elapsed = (now - attempt.started_at).total_seconds()
+        remaining = max(0, int(assessment.duration_minutes * 60 - elapsed))
+    # Q2: current persisted answers in one query (values, no model graph) - collapsed from 2 to 1
+    with performance_stage(request, "answers"):
+        rows = list(
+            AssessmentAttemptSnapshotAnswer.objects.filter(
+                attempt_question__attempt=attempt
+            ).values_list("attempt_question__order", "selected_choice_id", "written_text")
+        )
+        persisted = {}
+        written_map = {}
+        for order, choice_id, written_text in rows:
+            if choice_id is not None:
+                persisted[order] = choice_id
+            if written_text:
+                written_map[order] = written_text
+    # Q3: Redis pending overlay (not SQL) + build answer_state JSON
+    with performance_stage(request, "redis_pending_overlay"):
+        pending = write_behind_protocol.latest_values(attempt.pk)
+        answers = {}
+        for order, choice_id in persisted.items():
+            answers[f"q_{order}"] = choice_id
+        for order, txt in written_map.items():
+            answers[f"q_{order}"] = txt
+        for k, v in pending.items():
+            answers[k] = v
+    # Determine chunk count from prepared meta or default 4
+    with performance_stage(request, "prepared_meta"):
+        from apps.assessments.prepared_take import CHUNK_SIZE, get_chunk, get_meta
+        meta = get_meta(attempt.pk)
+        if meta and meta.get("chunk_count"):
+            chunk_count = meta["chunk_count"]
+            question_count = meta["question_count"]
+        else:
+            question_count = 100
+            chunk_count = 4
+        # Inline first chunk HTML to avoid extra HTMX round-trip for interactive
+        first_chunk_html = ""
+        try:
+            cbytes = get_chunk(attempt.pk, 1)
+            if cbytes is not None:
+                import gzip as _gzip
+
+                try:
+                    first_chunk_html = _gzip.decompress(cbytes).decode("utf-8")
+                except Exception:
+                    first_chunk_html = cbytes.decode("utf-8", errors="ignore")
+        except Exception:
+            first_chunk_html = ""
+        if not first_chunk_html:
+            # Fallback render first chunk on-the-fly (still avoids full 100 rendering)
+            from django.template.loader import render_to_string as _rts
+
+            from apps.assessments.models import AssessmentAttemptQuestion
+
+            qs = list(
+                AssessmentAttemptQuestion.objects.filter(attempt=attempt)
+                .order_by("order")
+                .prefetch_related("choices")[:CHUNK_SIZE]
+            )
+            first_chunk_html = _rts("ui/fragments/take_chunk.html", {"questions": qs, "attempt": attempt})
+    chunk_numbers = list(range(2, chunk_count + 1)) if chunk_count > 1 else []
+    answer_state = {"answers": answers, "generation": 0, "question_count": question_count, "chunk_count": chunk_count}
+    import json as _json
+    answer_state_json = _json.dumps(answer_state)
+    with performance_stage(request, "template_render_shell"):
+        return render(
+            request,
+            "ui/pages/student/assessment_take_shell.html",
+            {
+                "assessment": assessment,
+                "attempt": attempt,
                 "remaining_seconds": remaining,
                 "timer_enabled": timer_enabled,
                 "timer_deadline": timer_deadline,
                 "timer_server_now": now,
+                "chunk_numbers": chunk_numbers,
+                "first_chunk_html": first_chunk_html,
+                "answer_state_json": answer_state_json,
                 "is_diploma_random": True,
-                "saved_snapshot_answers": saved_snapshot_answers,
             },
         )
 
-    questions = assessment.questions.prefetch_related("choices").all()
-    saved_answers = {
-        answer.question_id: answer
-        for answer in AssessmentAnswer.objects.filter(attempt=attempt)
-    }
-    return render(
-        request,
-        "ui/pages/student/assessment_take.html",
-        {
-            "assessment": assessment,
-            "attempt": attempt,
-            "questions": questions,
-            "remaining_seconds": remaining,
-            "timer_enabled": timer_enabled,
-            "timer_deadline": timer_deadline,
-            "timer_server_now": now,
-            "saved_answers": saved_answers,
-        },
+
+@student_required
+def take_chunk_view(request, assessment_id, chunk_no):
+    """Serve pre-rendered gzip chunk. No template rendering on hot path."""
+    # Collapse auth: attempt ownership + assessment in one query
+    from django.db.models import Exists, OuterRef
+
+    from apps.academics.models import DiplomaEnrollment
+    from apps.assessments.prepared_take import get_chunk
+
+    with performance_stage(request, "take_chunk_scope"):
+        now = timezone.now()
+        enrolled_exists = DiplomaEnrollment.objects.filter(
+            student__user=request.user,
+            cohort_id=OuterRef("assessment__cohort_id"),
+            status=ENROLLMENT_STATUS_ACTIVE,
+        ).filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
+        attempt = (
+            AssessmentAttempt.objects.filter(
+                assessment_id=assessment_id, student=request.user, status=ATTEMPT_STATUS_IN_PROGRESS
+            )
+            .select_related("assessment")
+            .annotate(has_enrollment=Exists(enrolled_exists))
+            .first()
+        )
+    if not attempt or not attempt.has_enrollment:
+        return JsonResponse({"error": "no_active_attempt"}, status=404)
+    try:
+        check_assessment_access(
+            request.user,
+            attempt.assessment,
+            existing_attempt=True,
+            allow_late_submission=attempt.assessment.allow_late_submission,
+        )
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=403)
+    # Try prepared cache
+    chunk_bytes = get_chunk(attempt.pk, int(chunk_no))
+    if chunk_bytes is not None:
+        # Check client accepts gzip
+        accept = request.headers.get("Accept-Encoding", "")
+        if "gzip" in accept:
+            resp = HttpResponse(chunk_bytes, content_type="text/html; charset=utf-8")
+            resp["Content-Encoding"] = "gzip"
+            resp["Content-Length"] = str(len(chunk_bytes))
+            resp["Vary"] = "Accept-Encoding"
+            resp["Cache-Control"] = "private, max-age=60"
+            # Avoid nginx double gzip
+            resp["X-Accel-Buffering"] = "no"
+            return resp
+        else:
+            import gzip as _gzip
+
+            try:
+                html = _gzip.decompress(chunk_bytes).decode("utf-8")
+            except Exception:
+                html = chunk_bytes.decode("utf-8", errors="ignore")
+            return HttpResponse(html, content_type="text/html; charset=utf-8")
+    # Fallback renders only this chunk from DB (still avoids full 100 rendering).
+    from apps.assessments.models import AssessmentAttemptQuestion
+
+    qs = list(
+        AssessmentAttemptQuestion.objects.filter(attempt=attempt)
+        .order_by("order")
+        .prefetch_related("choices")
     )
+    from apps.assessments.prepared_take import CHUNK_SIZE
+
+    start = (int(chunk_no) - 1) * CHUNK_SIZE
+    chunk_qs = qs[start : start + CHUNK_SIZE]
+    if not chunk_qs:
+        return HttpResponse("", content_type="text/html")
+    html = render_to_string("ui/fragments/take_chunk.html", {"questions": chunk_qs, "attempt": attempt})
+    return HttpResponse(html, content_type="text/html")
+
+
+@student_required
+def take_answers_view(request, assessment_id):
+    """Small JSON with current answer state (persisted + pending overlay)."""
+    from django.db.models import Exists, OuterRef
+
+    from apps.academics.models import DiplomaEnrollment
+
+    now = timezone.now()
+    enrolled_exists = DiplomaEnrollment.objects.filter(
+        student__user=request.user,
+        cohort_id=OuterRef("assessment__cohort_id"),
+        status=ENROLLMENT_STATUS_ACTIVE,
+    ).filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
+    attempt = (
+        AssessmentAttempt.objects.filter(
+            assessment_id=assessment_id, student=request.user, status=ATTEMPT_STATUS_IN_PROGRESS
+        )
+        .select_related("assessment")
+        .annotate(has_enrollment=Exists(enrolled_exists))
+        .first()
+    )
+    if not attempt or not attempt.has_enrollment:
+        return JsonResponse({"error": "no_active_attempt"}, status=404)
+    try:
+        check_assessment_access(
+            request.user,
+            attempt.assessment,
+            existing_attempt=True,
+            allow_late_submission=attempt.assessment.allow_late_submission,
+        )
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=403)
+    persisted = dict(
+        AssessmentAttemptSnapshotAnswer.objects.filter(attempt_question__attempt=attempt).values_list(
+            "attempt_question__order", "selected_choice_id"
+        )
+    )
+    written_map = dict(
+        AssessmentAttemptSnapshotAnswer.objects.filter(
+            attempt_question__attempt=attempt, attempt_question__question_type=QUESTION_TYPE_WRITTEN
+        ).values_list("attempt_question__order", "written_text")
+    )
+    pending = write_behind_protocol.latest_values(attempt.pk)
+    answers = {}
+    for order, cid in persisted.items():
+        if cid is not None:
+            answers[f"q_{order}"] = cid
+    for order, txt in written_map.items():
+        if txt:
+            answers[f"q_{order}"] = txt
+    for k, v in pending.items():
+        answers[k] = v
+    return JsonResponse({"answers": answers, "attempt_id": attempt.pk})
 
 
 @student_required
 def submit_assessment_view(request, assessment_id):
     if request.method != "POST":
         return redirect("assessments:take", assessment_id=assessment_id)
-    assessment = get_object_or_404(Assessment, id=assessment_id, is_active=True)
-    try:
-        ensure_active_assessment(assessment)
-    except ValueError as exc:
-        messages.error(request, str(exc))
+    with performance_stage(request, "submit_scope"):
+        attempt = (
+            AssessmentAttempt.objects.filter(
+                assessment_id=assessment_id, student=request.user, status=ATTEMPT_STATUS_IN_PROGRESS
+            )
+            .select_related("assessment")
+            .first()
+        )
+    if not attempt:
+        messages.error(request, _("No active attempt found."))
         return redirect("assessments:student_list")
-    try:
-        check_delivery_mode(request.user, assessment)
-    except ValueError as exc:
-        messages.error(request, str(exc))
+    assessment = attempt.assessment
+    # Lightweight active checks without extra queries
+    if not assessment.is_active or assessment.legacy_status != LEGACY_STATUS_ACTIVE:
+        messages.error(request, _("Assessment is not active."))
         return redirect("assessments:student_list")
     if assessment.assessment_type == ASSESSMENT_TYPE_HOMEWORK:
         messages.error(request, _("Homework assessments must be submitted through the upload form."))
         return redirect("assessments:take", assessment_id=assessment_id)
-    attempt = get_object_or_404(
-        AssessmentAttempt,
-        assessment=assessment,
-        student=request.user,
-        status=ATTEMPT_STATUS_IN_PROGRESS,
-    )
     is_diploma = bool(assessment.course_version_id is None and assessment.semester_id and assessment.cohort_id)
+    if not is_diploma and not has_active_enrollment(request.user, assessment):
+        messages.error(request, _("No active attempt found."))
+        return redirect("assessments:student_list")
     if is_diploma:
-        answer_data = {k: v for k, v in request.POST.items() if k.startswith("q_")}
+        with performance_stage(request, "submit_payload"):
+            answer_data = {k: v for k, v in request.POST.items() if k.startswith("q_")}
+            submission_id = request.POST.get("submission_id") or request.headers.get("X-Submission-ID")
+            if not valid_diploma_submission_id(submission_id):
+                fingerprint = json.dumps(
+                    {"attempt_id": attempt.pk, "answers": answer_data},
+                    separators=(",", ":"), sort_keys=True,
+                ).encode()
+                submission_id = hashlib.sha256(fingerprint).hexdigest()
         try:
-            submit_diploma_assessment(attempt, answer_data)
-            messages.success(request, _("Assessment submitted successfully."))
+            with performance_stage(request, "submit_durable_accept"):
+                accept_diploma_submission(attempt, submission_id, answer_data)
+            # Pending autosave generations must not overwrite final submission.
+            try:
+                write_behind_protocol.discard(attempt.pk)
+            except Exception:
+                pass
+            messages.info(request, _("Assessment received and will be finalized shortly."))
         except ValueError as exc:
             messages.error(request, str(exc))
     else:
@@ -516,18 +787,20 @@ def api_diploma_autosave(request, assessment_id):
     """POST autosave for any normal assessment in-progress attempt."""
 
     try:
-        student = request.user
-        assessment = Assessment.objects.get(id=assessment_id)
-        attempt = AssessmentAttempt.objects.filter(
-            assessment=assessment, student=student, status=ATTEMPT_STATUS_IN_PROGRESS,
-        ).first()
+        with performance_stage(request, "autosave_scope"):
+            student = request.user
+            assessment = Assessment.objects.get(id=assessment_id)
+            attempt = AssessmentAttempt.objects.filter(
+                assessment=assessment, student=student, status=ATTEMPT_STATUS_IN_PROGRESS,
+            ).first()
         if not attempt:
             return JsonResponse({"error": "no_active_attempt"}, status=404)
 
-        try:
-            data = json.loads(request.body)
-        except (ValueError, TypeError):
-            return JsonResponse({"error": "invalid_json"}, status=400)
+        with performance_stage(request, "autosave_payload"):
+            try:
+                data = json.loads(request.body)
+            except (ValueError, TypeError):
+                return JsonResponse({"error": "invalid_json"}, status=400)
 
         answer_data = data.get("answers", {})
         if not isinstance(answer_data, dict):
@@ -538,10 +811,11 @@ def api_diploma_autosave(request, assessment_id):
                 and assessment.semester_id
                 and assessment.cohort_id
             )
-            if is_diploma:
-                diploma_autosave_attempt(attempt, answer_data)
-            else:
-                autosave_attempt(attempt, _parse_json_autosave_answers(assessment, answer_data))
+            with performance_stage(request, "autosave_persist"):
+                if is_diploma:
+                    diploma_autosave_attempt(attempt, answer_data)
+                else:
+                    autosave_attempt(attempt, _parse_json_autosave_answers(assessment, answer_data))
         except ValueError as exc:
             return JsonResponse({"error": str(exc)}, status=400)
         return JsonResponse({"status": "ok", "saved_at": timezone.now().isoformat()})
@@ -1280,6 +1554,7 @@ def admin_grade_detail(request, attempt_id):
         }
         if request.method == "POST":
             with transaction.atomic():
+                graded_any = False
                 for sq in snapshot_questions:
                     answer = snapshot_answers.get(sq.pk)
                     if not answer:
@@ -1295,12 +1570,18 @@ def admin_grade_detail(request, attempt_id):
                         feedback = request.POST.get(feedback_key, "")
                         override_reason = request.POST.get(reason_key, "")
                         try:
+                            # RV-014: grade without per-answer recalc; one
+                            # recalculation runs after the loop.
                             grade_diploma_snapshot_answer(
                                 answer.pk, score, feedback, request.user,
                                 override_reason=override_reason,
+                                recalculate=False,
                             )
+                            graded_any = True
                         except ValueError as exc:
                             messages.error(request, str(exc))
+                if graded_any:
+                    _update_diploma_attempt_grade(attempt)
             record_audit_event(
                 actor=request.user,
                 action=ACTION_GRADE_CHANGED,
@@ -1326,6 +1607,7 @@ def admin_grade_detail(request, attempt_id):
     answers = {a.question_id: a for a in attempt.answers.select_related("question", "selected_choice").all()}
     if request.method == "POST":
         with transaction.atomic():
+            graded_any = False
             for q in questions:
                 answer = answers.get(q.id)
                 if not answer:
@@ -1341,12 +1623,18 @@ def admin_grade_detail(request, attempt_id):
                     feedback = request.POST.get(feedback_key, "")
                     override_reason = request.POST.get(reason_key, "")
                     try:
+                        # RV-014: grade without per-answer recalc; one
+                        # recalculation runs after the loop.
                         grade_written_answer(
                             answer.id, score, feedback, request.user,
                             override_reason=override_reason,
+                            recalculate=False,
                         )
+                        graded_any = True
                     except ValueError as exc:
                         messages.error(request, str(exc))
+            if graded_any:
+                _update_attempt_grade(attempt)
         record_audit_event(
             actor=request.user,
             action=ACTION_GRADE_CHANGED,
@@ -2035,8 +2323,10 @@ def _reviewer_assignment_context(assignment):
         "cluster": str(assignment.cluster) if assignment.cluster_id else "",
         "scope": assignment.scope,
         "scope_label": assignment.get_scope_display(),
-        "semester": str(assignment.semester) if assignment.semester_id else "All semesters",
-        "assessment": str(assignment.assessment) if assignment.assessment_id else "All Semester Exams",
+        "semester": str(assignment.semester) if assignment.semester_id else str(_("All semesters")),
+        "assessment": str(assignment.assessment) if assignment.assessment_id else str(_("All Semester Exams")),
+        "access_mode": assignment.access_mode,
+        "access_mode_label": assignment.get_access_mode_display(),
         "title": str(assignment.assessment) if assignment.assessment_id else assignment.get_scope_display(),
     }
 
@@ -2072,6 +2362,8 @@ def reviewer_dashboard(request):
             "claim": active_claims.get(a.id),
             "ungraded": ungraded_by_id.get(a.id, 0),
             "online_ungraded": online_ungraded_by_id.get(a.id, 0),
+            "can_online": a.access_mode in (REVIEWER_ACCESS_ONLINE, REVIEWER_ACCESS_BOTH),
+            "can_offline": a.access_mode in (REVIEWER_ACCESS_OFFLINE, REVIEWER_ACCESS_BOTH),
         })
     return render(request, "ui/pages/admin/reviewer_dashboard.html", {"groups": groups, "title": _("Reviewer dashboard")})
 
@@ -2080,6 +2372,9 @@ def reviewer_dashboard(request):
 @role_required(*ROLE_REVIEWER)
 def reviewer_section_grading(request, assignment_id):
     assignment = get_object_or_404(ReviewerAssignment, id=assignment_id, reviewer=request.user, active=True)
+    if assignment.access_mode not in (REVIEWER_ACCESS_OFFLINE, REVIEWER_ACCESS_BOTH):
+        messages.error(request, _("This assignment does not allow offline grading."))
+        return redirect("assessments:reviewer_dashboard")
     code_number = request.POST.get("code_number", request.GET.get("code_number", "")).strip()
     section_id = safe_int(request.POST.get("section_id")) if request.method == "POST" else None
     score_raw = request.POST.get("score", "").strip() if request.method == "POST" else ""
@@ -2153,6 +2448,9 @@ def reviewer_section_grading(request, assignment_id):
 @role_required(*ROLE_REVIEWER)
 def reviewer_online_grading(request, assignment_id):
     assignment = get_object_or_404(ReviewerAssignment, id=assignment_id, reviewer=request.user, active=True)
+    if assignment.access_mode not in (REVIEWER_ACCESS_ONLINE, REVIEWER_ACCESS_BOTH):
+        messages.error(request, _("This assignment does not allow online grading."))
+        return redirect("assessments:reviewer_dashboard")
     claim = get_active_reviewer_claim(assignment)
     if not claim:
         messages.info(request, _("Request one anonymous submission before grading."))
@@ -2196,6 +2494,9 @@ def reviewer_online_grading(request, assignment_id):
 @require_POST
 def reviewer_claim_submission(request, assignment_id):
     assignment = get_object_or_404(ReviewerAssignment, id=assignment_id, reviewer=request.user, active=True)
+    if assignment.access_mode not in (REVIEWER_ACCESS_ONLINE, REVIEWER_ACCESS_BOTH):
+        messages.error(request, _("This assignment does not allow online grading."))
+        return redirect("assessments:reviewer_dashboard")
     try:
         claim_next_reviewer_submission(assignment)
         return redirect("assessments:reviewer_online_grading", assignment_id=assignment.id)
@@ -2207,33 +2508,47 @@ def reviewer_claim_submission(request, assignment_id):
 @login_required
 @role_required(*ROLE_SENIOR_STAFF)
 def admin_reviewer_assignment_create(request):
+    """Create one reviewer assignment for one logical scope.
+
+    Exam sections are intentionally not part of this assignment. They remain
+    claim/grading units so the dashboard does not render one row per section.
+    """
+
     user_model = get_user_model()
-    reviewers = user_model.objects.filter(groups__name__in=ROLE_REVIEW_STAFF).distinct()
-    cohorts = Cohort.objects.select_related("diploma").all()
-    semesters = Semester.objects.all()
-    clusters = StudentCluster.objects.select_related("cohort").all()
+    reviewers = user_model.objects.filter(
+        groups__name__in=ROLE_REVIEW_STAFF
+    ).distinct().order_by("full_name", "email")
+    cohorts = Cohort.objects.select_related("diploma").order_by("diploma__title", "name")
+    semesters = Semester.objects.select_related("diploma").order_by("diploma_id", "order")
+    clusters = StudentCluster.objects.select_related("cohort").order_by("cohort_id", "name")
     semester_exams = Assessment.objects.filter(
         assessment_type=ASSESSMENT_TYPE_SEMESTER_EXAM,
         legacy_status=LEGACY_STATUS_ACTIVE,
-    ).select_related("cohort", "semester").all()
+    ).select_related("cohort", "semester").order_by("cohort_id", "semester_id", "title")
     reviewer_scope = request.POST.get("scope", "") if request.method == "POST" else ""
     reviewer_cohort = request.POST.get("cohort", "") if request.method == "POST" else ""
     reviewer_semester = request.POST.get("semester", "") if request.method == "POST" else ""
     reviewer_assessment = request.POST.get("assessment", "") if request.method == "POST" else ""
     reviewer_cluster = request.POST.get("cluster", "") if request.method == "POST" else ""
+    reviewer_access_mode = request.POST.get("access_mode", REVIEWER_ACCESS_BOTH) if request.method == "POST" else REVIEWER_ACCESS_BOTH
+    reviewer_ids = request.POST.getlist("reviewers") if request.method == "POST" else []
     if request.method == "POST":
-        reviewer_ids = request.POST.getlist("reviewers") or [request.POST.get("reviewer")]
+        reviewer_ids = [value for value in reviewer_ids if value]
         scope = request.POST.get("scope")
         cohort_id = request.POST.get("cohort")
         semester_id = request.POST.get("semester")
         assessment_id = request.POST.get("assessment") or None
         cluster_id = request.POST.get("cluster") or None
-        if not reviewer_ids or not all([reviewer_ids[0], scope, cohort_id]):
-            messages.error(request, _("Reviewers, scope, and cohort are required."))
+        if not reviewer_ids or not scope or not cohort_id:
+            messages.error(request, _("Select at least one reviewer, a scope, and a cohort."))
         elif scope not in dict(REVIEWER_SCOPE_CHOICES):
             messages.error(request, _("Select a valid Reviewer assignment scope."))
-        elif not user_model.objects.filter(pk__in=reviewer_ids, groups__name=GROUP_REVIEWER).count() == len(set(reviewer_ids)):
-            messages.error(request, _("Every selected reviewer must be in the Reviewer group."))
+        elif reviewer_access_mode not in dict(REVIEWER_ACCESS_CHOICES):
+            messages.error(request, _("Select a valid Reviewer access mode."))
+        elif user_model.objects.filter(
+            pk__in=reviewer_ids, groups__name__in=ROLE_REVIEW_STAFF
+        ).distinct().count() != len(set(reviewer_ids)):
+            messages.error(request, _("Every selected reviewer must be review staff."))
         else:
             cohort = Cohort.objects.filter(pk=cohort_id).first()
             semester = Semester.objects.filter(pk=semester_id).first() if semester_id else None
@@ -2256,49 +2571,71 @@ def admin_reviewer_assignment_create(request):
                 messages.error(request, _("A semester assignment cannot include a specific exam."))
             else:
                 conflict = None
+                cluster_overlap = (
+                    Q(cluster__isnull=True) | Q(cluster_id=cluster.id)
+                    if cluster
+                    else Q()
+                )
                 for reviewer_id in set(reviewer_ids):
-                    existing = ReviewerAssignment.objects.filter(
-                        reviewer_id=reviewer_id, active=True, cohort_id=cohort.id,
-                        scope=scope, semester_id=semester.id if semester else None,
-                        assessment_id=exam.id if exam else None, cluster_id=cluster.id if cluster else None,
-                    ).first()
-                    if existing:
-                        continue
                     candidates = ReviewerAssignment.objects.filter(
                         reviewer_id=reviewer_id, active=True, cohort_id=cohort.id,
                     )
+                    exact = candidates.filter(
+                        scope=scope,
+                        semester_id=semester.id if semester else None,
+                        assessment_id=exam.id if exam else None,
+                        cluster_id=cluster.id if cluster else None,
+                    ).exists()
+                    if exact:
+                        continue
                     if scope == REVIEWER_SCOPE_COHORT:
-                        conflict = candidates.first()
+                        conflict = candidates.filter(cluster_overlap).first()
                     elif scope == REVIEWER_SCOPE_SEMESTER:
                         conflict = candidates.filter(
-                            Q(scope=REVIEWER_SCOPE_COHORT)
-                            | Q(scope=REVIEWER_SCOPE_SEMESTER, semester_id=semester.id)
-                            | Q(scope=REVIEWER_SCOPE_EXAM, semester_id=semester.id),
+                            cluster_overlap
+                            & (
+                                Q(scope=REVIEWER_SCOPE_COHORT)
+                                | Q(scope=REVIEWER_SCOPE_SEMESTER, semester_id=semester.id)
+                                | Q(scope=REVIEWER_SCOPE_EXAM, semester_id=semester.id)
+                            ),
                         ).first()
                     else:
                         conflict = candidates.filter(
-                            Q(scope=REVIEWER_SCOPE_COHORT)
-                            | Q(scope=REVIEWER_SCOPE_SEMESTER, semester_id=semester.id)
-                            | Q(scope=REVIEWER_SCOPE_EXAM, assessment_id=exam.id),
+                            cluster_overlap
+                            & (
+                                Q(scope=REVIEWER_SCOPE_COHORT)
+                                | Q(scope=REVIEWER_SCOPE_SEMESTER, semester_id=semester.id)
+                                | Q(scope=REVIEWER_SCOPE_EXAM, assessment_id=exam.id)
+                            ),
                         ).first()
                     if conflict:
                         break
                 if conflict:
                     messages.error(request, _("This Reviewer already has a broader or overlapping assignment for the selected scope."))
                 else:
-                    for reviewer_id in set(reviewer_ids):
-                        ReviewerAssignment.objects.update_or_create(
-                            reviewer_id=reviewer_id,
-                            cohort_id=cohort.id,
-                            scope=scope,
-                            semester_id=semester.id if semester else None,
-                            assessment_id=exam.id if exam else None,
-                            cluster_id=cluster.id if cluster else None,
-                            defaults={"active": True, "assigned_by": request.user, "section": None},
-                        )
-                    messages.success(request, _("Reviewer assignments saved."))
-                    return redirect("assessments:admin_reviewer_assignment_list")
-    return render(request, "ui/pages/admin/academic_form.html", {
+                    try:
+                        with transaction.atomic():
+                            for reviewer_id in set(reviewer_ids):
+                                ReviewerAssignment.objects.update_or_create(
+                                    reviewer_id=reviewer_id,
+                                    cohort_id=cohort.id,
+                                    scope=scope,
+                                    semester_id=semester.id if semester else None,
+                                    assessment_id=exam.id if exam else None,
+                                    cluster_id=cluster.id if cluster else None,
+                                    section=None,
+                                    defaults={
+                                        "active": True,
+                                        "access_mode": reviewer_access_mode,
+                                        "assigned_by": request.user,
+                                    },
+                                )
+                    except IntegrityError:
+                        messages.error(request, _("The assignment changed while it was being saved. Refresh and try again."))
+                    else:
+                        messages.success(request, _("Reviewer assignments saved."))
+                        return redirect("assessments:admin_reviewer_assignment_list")
+    return render(request, "ui/pages/admin/reviewer_assignment_form.html", {
         "reviewers": reviewers,
         "cohorts": cohorts,
         "semesters": semesters,
@@ -2310,6 +2647,12 @@ def admin_reviewer_assignment_create(request):
         "reviewer_semester": reviewer_semester,
         "reviewer_assessment": reviewer_assessment,
         "reviewer_cluster": reviewer_cluster,
+        "reviewer_access_mode": reviewer_access_mode,
+        "reviewer_ids": reviewer_ids,
+        "reviewer_access_choices": REVIEWER_ACCESS_CHOICES,
+        "back_url": reverse("assessments:admin_reviewer_assignment_list"),
+        "title": _("Create reviewer assignment"),
+        "eyebrow": _("Semester exam"),
     })
 
 
@@ -2318,7 +2661,7 @@ def admin_reviewer_assignment_create(request):
 def admin_reviewer_assignment_list(request):
     assignments = ReviewerAssignment.objects.select_related(
         "reviewer", "cohort", "semester", "assessment", "section", "section__lecture", "assigned_by",
-    ).all()
+    ).filter(active=True)
     page_obj, pagination_qs = paginate(request, assignments, per_page=25)
     page_assignments = list(page_obj)
     available_by_assignment = annotate_reviewer_online_ungraded_counts(page_assignments)

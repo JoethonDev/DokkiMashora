@@ -27,7 +27,7 @@
       <label class="field"><span class="field-label">{% trans "Session" %}</span>
         <select data-scanner-session name="scanner_session_id" class="form-select">
           <option value="">{% trans "Select" %}</option>{% for session in open_sessions %}
-            <option value="{{ session.id }}">{{ session }}</option>
+          <option value="{{ session.id }}">{% if session.period %}{{ session.period.cohort }} · {{ session.period.semester }} · {% trans "Session" %} {{ session.session_number }} · {{ session.date|date:"d/m/Y" }}{% else %}{{ session }}{% endif %}</option>
           {% endfor %}
         </select>
       </label>
@@ -36,8 +36,8 @@
         <button class="btn-primary" type="button" data-scanner-start>{% trans "Start camera" %}</button>
         <button class="btn-ghost hidden" type="button" data-scanner-retry>{% trans "Retry camera" %}</button>
       </div>
-      <p data-scanner-status class="text-sm mt-2 text-muted" role="status">{% trans "Start the camera to begin scanning." %}</p>
-      <p data-scanner-result class="status-pill hidden"></p>
+      <p data-scanner-status class="text-sm mt-2 text-muted" role="status" aria-live="polite" aria-atomic="true">{% trans "Start the camera to begin scanning." %}</p>
+      <p data-scanner-result class="status-pill hidden" role="status" aria-live="polite" aria-atomic="true"></p>
 {% if result %}
         <p role="status" class="{% if result.status == 'duplicate' %}status-pill-warning{% else %}status-pill-success{% endif %}">
           <span class="status-icon" aria-hidden="true">{% if result.status == 'duplicate' %}!{% else %}✓{% endif %}</span>
@@ -56,7 +56,7 @@
         <div class="field"><label for="session_id">{% trans "Session" %}</label>
           <select id="session_id" name="session_id" class="form-select">
             <option value="">{% trans "Select" %}</option>{% for session in open_sessions %}
-              <option value="{{ session.id }}">{{ session }}</option>
+              <option value="{{ session.id }}">{% if session.period %}{{ session.period.cohort }} · {{ session.period.semester }} · {% trans "Session" %} {{ session.session_number }} · {{ session.date|date:"d/m/Y" }}{% else %}{{ session }}{% endif %}</option>
             {% endfor %}
           </select>
         </div>

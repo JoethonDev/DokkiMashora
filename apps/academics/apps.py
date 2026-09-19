@@ -1,5 +1,7 @@
 """AppConfig for the academics app."""
 
+import importlib
+
 from django.apps import AppConfig
 from django.utils.translation import gettext_lazy as _
 
@@ -10,4 +12,5 @@ class AcademicsConfig(AppConfig):
     verbose_name = _("Academics")
 
     def ready(self) -> None:
-        from . import signals  # noqa: F401
+        # Signal modules may import models, so load them after the registry is ready.
+        importlib.import_module(".signals", __package__)

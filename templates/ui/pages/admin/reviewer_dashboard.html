@@ -14,13 +14,13 @@
              <div class="flex items-center justify-between gap-2 border-t border-line py-3 first:border-t-0">
                <div class="min-w-0">
                   <strong class="block">{{ item.assignment.title }}</strong>
-                  <small class="block text-muted">{{ item.assignment.scope_label }} · {{ item.assignment.assessment|default:_('All Semester Exams') }} · {{ item.assignment.cluster|default:_('All assigned students') }}</small>
+                   <small class="block text-muted">{{ item.assignment.scope_label }} · {{ item.assignment.assessment|default:_('All Semester Exams') }} · {{ item.assignment.cluster|default:_('All assigned students') }} · {{ item.assignment.access_mode_label }}</small>
                 </div>
                 <div class="flex gap-2 flex-wrap justify-end">
-                  <a class="btn-soft" href="{% url 'assessments:reviewer_section_grading' item.assignment.id %}">{% trans "Offline grades" %} <span class="status">{{ item.ungraded }}</span></a>
-                  {% if item.claim %}
+                  {% if item.can_offline %}<a class="btn-soft" href="{% url 'assessments:reviewer_section_grading' item.assignment.id %}">{% trans "Offline grades" %} <span class="status">{{ item.ungraded }}</span></a>{% endif %}
+                  {% if item.can_online and item.claim %}
                     <a class="btn-primary" href="{% url 'assessments:reviewer_online_grading' item.assignment.id %}">{% trans "Continue online submission" %}</a>
-                  {% else %}
+                  {% elif item.can_online %}
                     <form method="post" action="{% url 'assessments:reviewer_claim_submission' item.assignment.id %}">{% csrf_token %}<button class="btn-soft" type="submit">{% trans "Request online submission" %} <span class="status">{{ item.online_ungraded }}</span></button></form>
                   {% endif %}
                 </div>

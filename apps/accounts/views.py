@@ -20,10 +20,9 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods
 
-from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE, SCOPE_COURSE_VERSION, SCOPE_DIPLOMA_COHORT
+from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE
 from apps.academics.models import (
     Cohort,
-    CourseVersion,
     Diploma,
     DiplomaEnrollment,
     Lecture,
@@ -45,6 +44,7 @@ from apps.applications.models import (
     ProgramApplicationDecision,
     ProgramApplicationEmailLog,
 )
+from apps.applications.services import handle_user_account_activated
 from apps.applications.views import review_queue_applications
 from apps.assessments.constants import ATTEMPT_STATUS_SUBMITTED, ATTEMPT_STATUS_UNDER_REVIEW
 from apps.assessments.models import AssessmentAttempt
@@ -728,7 +728,6 @@ def admin_staff_assignments(request, user_id):
     )
 
     cohorts = Cohort.objects.all()
-    course_versions = CourseVersion.objects.select_related("course").all()
     clusters = StudentCluster.objects.select_related("cohort").all()
 
     ctx = {
@@ -738,10 +737,7 @@ def admin_staff_assignments(request, user_id):
         "teacher_assignments": teacher_assignments,
         "moderator_assignments": moderator_assignments,
         "cohorts": cohorts,
-        "course_versions": course_versions,
         "clusters": clusters,
-        "SCOPE_COURSE_VERSION": SCOPE_COURSE_VERSION,
-        "SCOPE_DIPLOMA_COHORT": SCOPE_DIPLOMA_COHORT,
         "GROUP_ADMIN": GROUP_ADMIN,
         "GROUP_SUPER_ADMIN": GROUP_SUPER_ADMIN,
         "GROUP_MODERATOR": GROUP_MODERATOR,
@@ -758,25 +754,19 @@ def admin_moderator_assignment_create(request, user_id):
     if GROUP_MODERATOR not in staff_user.groups.values_list("name", flat=True):
         messages.error(request, _("Target user is not a Moderator."))
         return redirect("accounts:admin_staff_assignments", user_id=staff_user.id)
-    version_id = request.POST.get("course_version")
     scope = request.POST.get("scope", "cohort")
     cohort_id = request.POST.get("cohort")
     cluster_id = request.POST.get("cluster")
-    if not version_id:
-        messages.error(request, _("Course version is required."))
-        return redirect("accounts:admin_staff_assignments", user_id=staff_user.id)
     if scope == "cohort" and not cohort_id:
         messages.error(request, _("Cohort is required for cohort-wide assignment."))
         return redirect("accounts:admin_staff_assignments", user_id=staff_user.id)
     if scope == "cluster" and not cluster_id:
         messages.error(request, _("Cluster is required for cluster-specific assignment."))
         return redirect("accounts:admin_staff_assignments", user_id=staff_user.id)
-    version = get_object_or_404(CourseVersion, id=version_id)
     cluster = get_object_or_404(StudentCluster, id=cluster_id) if cluster_id else None
     cohort = cluster.cohort if cluster else get_object_or_404(Cohort, id=cohort_id)
     assignment = ModeratorAssignment.objects.create(
         moderator=staff_user,
-        course_version=version,
         cohort=cohort,
         cluster=cluster,
         active=True,
@@ -787,7 +777,7 @@ def admin_moderator_assignment_create(request, user_id):
         action=ACTION_STAFF_ASSIGNMENT_CREATED,
         target_type="moderator_assignment",
         target_id=str(assignment.id),
-        metadata={"moderator_id": str(staff_user.id), "course_version_id": str(version.id), "cohort_id": str(cohort.id)},
+        metadata={"moderator_id": str(staff_user.id), "cohort_id": str(cohort.id)},
     )
     messages.success(request, _("Moderator assignment created."))
     return redirect("accounts:admin_staff_assignments", user_id=staff_user.id)
@@ -960,6 +950,7 @@ def activate_account(request, uidb64, token):
         user.email_activated_at = timezone.now()
         user.set_password(form.cleaned_data["new_password1"])
         user.save(update_fields=["is_active", "email_activated_at", "password", "updated_at"])
+        handle_user_account_activated(user, actor=user)
     auth_login(request, user)
     messages.success(request, _("Account activated successfully. Welcome!"))
     return redirect(_dashboard_url_name(user))

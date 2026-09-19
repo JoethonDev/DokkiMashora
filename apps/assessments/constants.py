@@ -146,11 +146,29 @@ EXAM_OVERRIDE_STATUS_CHOICES = [
     (EXAM_OVERRIDE_EXPIRED, _("Expired")),
 ]
 
+# Durable final-submission processing state.  The submission row is the
+# authoritative recovery queue; Redis/Celery delivery is only a wake-up.
+SUBMISSION_STATUS_PENDING = "pending"
+SUBMISSION_STATUS_PROCESSING = "processing"
+SUBMISSION_STATUS_PROCESSED = "processed"
+SUBMISSION_STATUS_FAILED = "failed"
+SUBMISSION_STATUS_UNDER_REVIEW = "under_review"
+
+SUBMISSION_STATUS_CHOICES = [
+    (SUBMISSION_STATUS_PENDING, _("Pending")),
+    (SUBMISSION_STATUS_PROCESSING, _("Processing")),
+    (SUBMISSION_STATUS_PROCESSED, _("Processed")),
+    (SUBMISSION_STATUS_FAILED, _("Failed")),
+    (SUBMISSION_STATUS_UNDER_REVIEW, _("Under review")),
+]
+
 REVIEWER_ACCESS_ONLINE = "online"
 REVIEWER_ACCESS_OFFLINE = "offline"
+REVIEWER_ACCESS_BOTH = "both"
 REVIEWER_ACCESS_CHOICES = [
     (REVIEWER_ACCESS_ONLINE, _("Request online submissions")),
     (REVIEWER_ACCESS_OFFLINE, _("Enter offline grades")),
+    (REVIEWER_ACCESS_BOTH, _("Online and offline grading")),
 ]
 
 REVIEWER_CLAIM_IN_PROGRESS = "in_progress"

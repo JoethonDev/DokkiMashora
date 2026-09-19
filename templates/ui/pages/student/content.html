@@ -48,10 +48,16 @@
       {% if youtube_video_id|default:lecture.youtube_video_id %}<div{% if video_tracking_enabled %}
      data-youtube-progress="{{ youtube_video_id|default:lecture.youtube_video_id }}"
      data-watch-start-url="{% if version %}{% url 'academics:api_watch_start' version.id lecture.id %}{% elif diploma %}{% url 'academics:api_diploma_watch_start' enrollment.id semester.id lecture.id %}{% endif %}"
-     data-watch-checkpoint-url="{% if version %}{% url 'academics:api_watch_checkpoint' version.id lecture.id %}{% elif diploma %}{% url 'academics:api_diploma_watch_checkpoint' enrollment.id semester.id lecture.id %}{% endif %}{% endif %}><div class="aspect-video overflow-hidden rounded-md bg-surface-inverse"><iframe class="yt-iframe w-full h-full" src="https://www.youtube-nocookie.com/embed/{{ youtube_video_id|default:lecture.youtube_video_id }}?enablejsapi=1&rel=0&modestbranding=1&origin={{ request.scheme }}://{{ request.get_host }}&widget_referrer={{ request.scheme }}://{{ request.get_host }}" title="{{ lecture.title }}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div>
+     data-watch-checkpoint-url="{% if version %}{% url 'academics:api_watch_checkpoint' version.id lecture.id %}{% elif diploma %}{% url 'academics:api_diploma_watch_checkpoint' enrollment.id semester.id lecture.id %}{% endif %}"
+     data-msg-refresh="{% trans 'Refresh' %}"
+     data-msg-paused="{% trans 'Paused' %}"
+     data-msg-violation-prefix="{% trans 'Violation' %}"
+     data-msg-access-denied="{% trans 'Access denied' %}"
+     data-msg-completed="{% trans 'Completed' %}"
+     data-msg-start-failed="{% trans 'Could not start tracking.' %}"{% endif %}><div class="aspect-video overflow-hidden rounded-md bg-surface-inverse"><iframe class="yt-iframe w-full h-full" src="https://www.youtube-nocookie.com/embed/{{ youtube_video_id|default:lecture.youtube_video_id }}?enablejsapi=1&rel=0&modestbranding=1&origin={{ request.scheme }}://{{ request.get_host }}&widget_referrer={{ request.scheme }}://{{ request.get_host }}" title="{{ lecture.title }}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope, picture-in-picture, web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div>
   {% if video_tracking_enabled %}<div class="flex items-center gap-2.5 mt-3"><div class="progress-track flex-1"><div class="progress-bar yt-progress-bar" style="--progress:0%"></div></div><span class="yt-progress-text text-sm text-muted">0%</span></div>
-  <p class="yt-status text-sm mt-2"></p>
-  <p class="yt-violation hidden text-red text-sm mt-2"></p>{% endif %}
+  <p class="yt-status text-sm mt-2" role="status" aria-live="polite" aria-atomic="true"></p>
+  <p class="yt-violation hidden text-red text-sm mt-2" role="status" aria-live="polite" aria-atomic="true"></p>{% endif %}
 </div>
       {% elif lecture.youtube_url %}<a class="btn-primary" href="{{ lecture.youtube_url }}" target="_blank" rel="noopener noreferrer">{% trans "Open video" %}</a>{% endif %}
       {% if lecture.audio_hls_playlist_key and version %}
@@ -71,8 +77,8 @@
             <source src="{% url 'academics:student_lecture_audio_download' version.id lecture.id %}" type="{{ lecture.audio_content_type|default:'audio/mpeg' }}">
           </audio>
           <div class="flex items-center gap-2.5 mt-3"><div class="progress-track flex-1"><div class="progress-bar audio-progress-bar" style="--progress:0%"></div></div><span class="audio-progress-text text-sm text-muted">0%</span></div>
-          <p class="audio-status text-sm mt-2"></p>
-          <p class="audio-violation hidden text-red text-sm mt-2"></p>
+          <p class="audio-status text-sm mt-2" role="status" aria-live="polite" aria-atomic="true"></p>
+          <p class="audio-violation hidden text-red text-sm mt-2" role="status" aria-live="polite" aria-atomic="true"></p>
         </div>
       {% elif lecture.audio_hls_playlist_key and diploma %}
         <audio class="w-full mt-4" controls>

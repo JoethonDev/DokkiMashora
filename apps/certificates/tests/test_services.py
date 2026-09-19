@@ -23,6 +23,11 @@ from apps.progression.constants import (
 )
 from apps.progression.models import StudentDiplomaCompletion
 from apps.students.models import StudentProfile
+from apps.certificates.models import GeneratedCertificate
+from apps.certificates.services import regenerate_certificate
+from unittest.mock import patch
+from apps.progression.models import PromotionDecision
+from apps.certificates.models import CertificateCounter
 
 
 def _create_user(email="student@test.com", group_name="Student"):
@@ -81,7 +86,6 @@ class CertificateServiceTests(TestCase):
         self.assertIsNone(template)
 
     def test_revoke_without_reason_raises(self):
-        from apps.certificates.models import GeneratedCertificate
         cert = GeneratedCertificate.objects.create(
             student=self.student,
             diploma_enrollment=self.enrollment,
@@ -92,7 +96,6 @@ class CertificateServiceTests(TestCase):
             revoke_certificate(cert, actor=self.admin)
 
     def test_revoke_certificate(self):
-        from apps.certificates.models import GeneratedCertificate
         cert = GeneratedCertificate.objects.create(
             student=self.student,
             diploma_enrollment=self.enrollment,
@@ -104,7 +107,6 @@ class CertificateServiceTests(TestCase):
         self.assertIsNotNone(revoked.revoked_at)
 
     def test_certificate_number_unique(self):
-        from apps.certificates.models import GeneratedCertificate
         GeneratedCertificate.objects.create(
             student=self.student,
             diploma_enrollment=self.enrollment,
@@ -120,8 +122,6 @@ class CertificateServiceTests(TestCase):
             )
 
     def test_regenerate_certificate_requires_reason(self):
-        from apps.certificates.models import GeneratedCertificate
-        from apps.certificates.services import regenerate_certificate
         cert = GeneratedCertificate.objects.create(
             student=self.student,
             diploma_enrollment=self.enrollment,
@@ -132,11 +132,6 @@ class CertificateServiceTests(TestCase):
             regenerate_certificate(cert, actor=self.admin)
 
     def test_regenerate_certificate_changes_status(self):
-        from unittest.mock import patch
-
-        from apps.certificates.models import GeneratedCertificate
-        from apps.certificates.services import regenerate_certificate
-        from apps.progression.models import PromotionDecision
         StudentDiplomaCompletion.objects.create(
             student=self.student,
             diploma_enrollment=self.enrollment,
@@ -165,14 +160,12 @@ class CertificateModelStringTests(TestCase):
         self.diploma = Diploma.objects.create(title="Test Diploma", total_semesters=2, created_by=self.admin)
 
     def test_certificate_counter_str(self):
-        from apps.certificates.models import CertificateCounter
         counter = CertificateCounter.objects.create(diploma=self.diploma, year=2026, last_sequence=5)
         self.assertIn("Test Diploma", str(counter))
         self.assertIn("2026", str(counter))
         self.assertIn("5", str(counter))
 
     def test_certificate_template_str(self):
-        from apps.certificates.models import CertificateTemplate
         template = CertificateTemplate.objects.create(
             name="My Template",
             diploma=self.diploma,
@@ -183,16 +176,12 @@ class CertificateModelStringTests(TestCase):
         self.assertIn("ar", str(template))
 
     def test_generated_certificate_str(self):
-        from apps.certificates.models import GeneratedCertificate
         student_user = User.objects.create_user(email="s@test.com", password="x")
-        from apps.students.models import StudentProfile
         student = StudentProfile.objects.create(
             user=student_user, full_name="A Student",
             national_id="10000000000001", phone="01000000001",
             date_of_birth=timezone.now().date(),
         )
-        from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE
-        from apps.academics.models import Cohort, DiplomaEnrollment
         cohort = Cohort.objects.create(
             diploma=self.diploma, name="C1", start_date=timezone.now().date(),
             created_by=self.admin,

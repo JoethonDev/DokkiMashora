@@ -17,7 +17,7 @@ def field_type(field):
     if name == "radioselect":
         return "radio"
     if name == "checkboxselectmultiple":
-        return "checkbox"
+        return "checkboxes"
     return name
 
 
@@ -29,15 +29,17 @@ def widget_class(field):
     from apps/core/forms. Also wires aria-describedby/aria-invalid.
     """
     widget = field.field.widget
+    is_choice_group = type(widget).__name__ in {"RadioSelect", "CheckboxSelectMultiple"}
     canonical = WIDGET_CLASSES.get(type(widget).__name__, DEFAULT_WIDGET_CLASS)
     existing = set(widget.attrs.get("class", "").split()) - CANONICAL_WIDGET_CLASSES
-    attrs = {"class": " ".join(sorted(existing | {canonical}))}
+    attrs = {} if is_choice_group else {"class": " ".join(sorted(existing | {canonical}))}
+    field_id = field.id_for_label or field.auto_id
     described_by = []
     if field.help_text:
-        described_by.append(f"{field.id_for_label}-help")
+        described_by.append(f"{field_id}-help")
     if field.errors:
         attrs["aria-invalid"] = "true"
-        described_by.append(f"{field.id_for_label}-error")
+        described_by.append(f"{field_id}-error")
     if described_by:
         attrs["aria-describedby"] = " ".join(described_by)
     return field.as_widget(attrs=attrs)
