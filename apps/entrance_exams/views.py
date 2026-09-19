@@ -956,7 +956,7 @@ def _send_results(request, exam, student_ids):
     attempts = exam.attempts.filter(
         id__in=student_ids, status__in=[ATTEMPT_STATUS_COMPLETED, ATTEMPT_STATUS_GRADED],
         result__in=[RESULT_PASS, RESULT_FAIL],
-    ).select_related("student__user", "program_application")
+    ).select_related("student__user", "program_application", "exam__cohort")
     queued_count = failed_count = 0
     pass_count = fail_count = 0
     for attempt in attempts:
