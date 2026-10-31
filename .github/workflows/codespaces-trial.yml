@@ -1,0 +1,38 @@
+name: Codespaces trial configuration
+
+on:
+  pull_request:
+    paths:
+      - ".devcontainer/**"
+      - "compose.codespaces.yml"
+      - "compose.application.yml"
+      - "compose.infrastructure.yml"
+      - ".github/workflows/codespaces-trial.yml"
+
+jobs:
+  config:
+    name: Validate demo Compose and bootstrap
+    runs-on: ubuntu-latest
+    env:
+      CODESPACE_NAME: dokkimashora-demo-check
+      APP_ENV_FILE: .env.docker
+      APP_IMAGE_TAG: codespaces
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare example env for configuration-only validation
+        run: cp .env.docker.example .env.docker
+
+      - name: Validate the merged Docker Compose configuration
+        run: |
+          docker compose --project-name dokkimashora-trial \
+            --env-file .env.docker \
+            -f compose.application.yml \
+            -f compose.infrastructure.yml \
+            -f compose.codespaces.yml config --quiet
+
+      - name: Validate devcontainer JSON
+        run: python -m json.tool .devcontainer/devcontainer.json >/dev/null
+
+      - name: Validate startup shell syntax
+        run: bash -n .devcontainer/start-demo.sh
