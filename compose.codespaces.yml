@@ -1,0 +1,70 @@
+# Codespaces-only demo sizing. Always load this after both existing Compose files.
+# This is not the approved 2-vCPU/4-GB benchmark environment.
+x-demo-host: &demo-host ${CODESPACE_NAME:?Run this stack inside GitHub Codespaces}-80.app.github.dev
+x-demo-env: &demo-env
+  DJANGO_ALLOWED_HOSTS: *demo-host
+  DJANGO_CSRF_TRUSTED_ORIGINS: "https://${CODESPACE_NAME:?Run inside Codespaces}-80.app.github.dev"
+  SITE_URL: "https://${CODESPACE_NAME:?Run inside Codespaces}-80.app.github.dev"
+  # Codespaces terminates public HTTPS before requests reach our HTTP-only Nginx.
+  # Leave secure cookies enabled, but avoid an incorrect HTTP->HTTPS redirect loop.
+  DJANGO_SECURE_SSL_REDIRECT: "false"
+  DJANGO_SECURE_COOKIES: "true"
+
+services:
+  web:
+    cpuset: "0-1"
+    mem_limit: 1536m
+    environment: *demo-env
+
+  postgres:
+    cpuset: "0-1"
+    mem_limit: 1536m
+    command:
+      - postgres
+      - -c
+      - max_connections=60
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - effective_cache_size=2GB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - checkpoint_completion_target=0.9
+      - -c
+      - wal_buffers=16MB
+      - -c
+      - max_wal_size=1GB
+      - -c
+      - checkpoint_timeout=15min
+
+  redis:
+    cpuset: "0-1"
+    mem_limit: 384m
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
+
+  celery-submit:
+    cpuset: "0-1"
+    mem_limit: 512m
+    environment: *demo-env
+
+  celery-autosave:
+    cpuset: "0-1"
+    mem_limit: 512m
+    environment: *demo-env
+
+  celery:
+    cpuset: "0-1"
+    environment: *demo-env
+
+  beat:
+    cpuset: "0-1"
+    environment: *demo-env
+
+  nginx:
+    cpuset: "0-1"
+
+  backup:
+    cpuset: "0-1"
