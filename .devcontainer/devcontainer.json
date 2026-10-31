@@ -1,0 +1,15 @@
+{
+  "name": "DokkiMashora 10-day trial",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "forwardPorts": [80],
+  "portsAttributes": {
+    "80": {
+      "label": "DokkiMashora Django demo",
+      "onAutoForward": "notify"
+    }
+  },
+  "postStartCommand": "bash .devcontainer/start-demo.sh"
+}
