@@ -1,0 +1,34 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n %}
+{% block title %}{{ page_title }}{% endblock %}
+{% block content %}
+  <div class="page-stack animate-enter-view">
+    {% include "ui/components/_page_header.html" with title=page_title eyebrow=_('Attendance') back_button=True back_url=back_url %}
+    <section class="card-surface max-w-form mx-auto w-full">
+      <div class="mb-5 rounded-md border border-amber/30 bg-amber-soft/40 p-4 text-sm leading-6">
+        <strong class="block mb-1">{{ object_title }}</strong>
+        <span>{{ notice }}</span>
+      </div>
+      <form class="page-stack" method="post">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+          <div class="alert-error space-y-1" role="alert">
+            {% for error in form.non_field_errors %}<p class="m-0">{{ error }}</p>{% endfor %}
+          </div>
+        {% endif %}
+        {% for field in form %}
+          <label class="field" for="{{ field.id_for_label }}">
+            <span class="field-label">{{ field.label }}{% if field.field.required %} <span class="text-red">*</span>{% endif %}</span>
+            {{ field }}
+            {% if field.help_text %}<span class="field-help">{{ field.help_text }}</span>{% endif %}
+            {% for error in field.errors %}<span class="block text-sm text-red" role="alert">{{ error }}</span>{% endfor %}
+          </label>
+        {% endfor %}
+        <div class="actions-row border-t border-line pt-5 mt-2">
+          <button class="btn-primary" type="submit">{{ submit_label }}</button>
+          <a class="btn-ghost" href="{{ back_url }}">{% trans "Cancel" %}</a>
+        </div>
+      </form>
+    </section>
+  </div>
+{% endblock %}

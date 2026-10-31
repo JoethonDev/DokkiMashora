@@ -97,8 +97,13 @@
             </div>
           {% endif %}
         </dl>
+        {% if student_edit_url %}
+          <div class="actions-row">
+            <a class="btn-secondary" href="{{ student_edit_url }}?next={{ request.get_full_path|urlencode }}">{% trans "Edit applicant details" %}</a>
+          </div>
+        {% endif %}
       </article>
-      {% if request_doc_form or doc_request or doc_uploads %}
+      {% if request_doc_form or doc_request or doc_uploads or admin_doc_upload_form or admin_open_doc_request %}
         <article class="card-surface flex flex-col gap-4">
           <div class="section-head"><div><p class="eyebrow">{% trans "Documents" %}</p><h3>{% trans "Application documents" %}</h3></div></div>
           {% if doc_uploads %}
@@ -141,6 +146,20 @@
               {% for field in request_doc_form %}{% include "ui/components/_field.html" %}{% endfor %}
               <button class="btn-warning" type="submit">{% trans "Request documents" %}</button>
             </form>
+          {% endif %}
+          {% if admin_doc_upload_form %}
+            <div class="border-t border-line pt-4 flex flex-col gap-3">
+              <div class="section-head"><div>
+                <p class="eyebrow">{% trans "On behalf of the applicant" %}</p>
+                <h3>{% trans "Upload documents" %}</h3>
+              </div></div>
+              <p class="text-sm text-muted">{% trans "Upload the photo and attachments the applicant provided. This completes the document step for them." %}</p>
+              <form method="post" enctype="multipart/form-data" class="form-stack">{% csrf_token %}
+                <input type="hidden" name="action" value="admin_upload_documents">
+                {% for field in admin_doc_upload_form %}{% include "ui/components/_field.html" %}{% endfor %}
+                <button class="btn-primary" type="submit">{% trans "Upload documents" %}</button>
+              </form>
+            </div>
           {% endif %}
         </article>
       {% endif %}
@@ -204,6 +223,29 @@
           {% elif not intake_state.has_response %}
             <p class="text-sm text-muted">{% trans "Intake request is not available for the current application status." %}</p>
           {% endif %}
+          {% if admin_intake_form %}
+            <div class="border-t border-line pt-4 flex flex-col gap-3">
+              <div class="section-head"><div>
+                <p class="eyebrow">{% trans "On behalf of the applicant" %}</p>
+                <h3>{{ admin_open_intake_request.form.title }}</h3>
+              </div></div>
+              <p class="text-sm text-muted">{% trans "Complete the required survey with the applicant's answers." %}</p>
+              <form method="post" class="form-stack">{% csrf_token %}
+                <input type="hidden" name="action" value="admin_submit_intake">
+                {% for field in admin_intake_form %}{% include "ui/components/_field.html" %}{% endfor %}
+                <button class="btn-primary" type="submit">{% trans "Submit survey" %}</button>
+              </form>
+            </div>
+          {% endif %}
+        </article>
+      {% endif %}
+      {% if can_request_payment %}
+        <article class="card-surface flex flex-col gap-4">
+          <div class="section-head"><div><p class="eyebrow">{% trans "Payments" %}</p><h3>{% trans "Request payment" %}</h3></div></div>
+          <p class="text-sm text-muted">{% trans "Send the applicant the payment instructions for this application." %}</p>
+          <form method="post" class="form-stack">{% csrf_token %}<input type="hidden" name="action" value="request_payment">
+            <button class="btn-warning" type="submit">{% trans "Request payment" %}</button>
+          </form>
         </article>
       {% endif %}
       {% if can_record_payment %}

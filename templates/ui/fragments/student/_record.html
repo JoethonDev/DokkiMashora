@@ -14,9 +14,10 @@
           {{ attendance.attendance_percent|default:0 }}
         %</strong>
         <small>
-          {{ attendance.records|length }}
+          {{ attendance.total }}
           {% trans "records" %}
         </small>
+        <small class="text-muted">{{ attendance.countable_record_count }} / {{ attendance.excluded_record_count }} {% trans "countable / excluded" %}</small>
       </div>
     </article>
     <article class="stat-card">
@@ -143,20 +144,23 @@
     </div>
   </section>
   {% endif %}
-  <section class="grid grid-cols-1 md:grid-cols-2 gap-4"><article class="card-surface flex flex-col gap-4"><div class="section-head"><div>
+  <section id="record-attendance" class="grid grid-cols-1 md:grid-cols-2 gap-4"><article class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Attendance" %}</p>
           <h3>{% trans "Attendance history" %}</h3>
+          <p class="text-sm text-muted mt-2 mb-0">{{ attendance.countable_record_count }} / {{ attendance.excluded_record_count }} / {{ attendance.total }} {% trans "countable / excluded / total" %}</p>
         </div>
         <a class="btn-ghost" href="{% url 'attendance:my_attendance' %}">{% trans "View all" %}</a>
       </div>
       <div class="flex flex-col gap-4">{% for item in attendance.records|slice:":6" %}
           <div class="flex items-center gap-2.5 py-3 border-b border-line first:pt-0 last:border-b-0 last:pb-0">
-            <span class="min-w-0 flex-1 flex flex-col gap-1"><strong class="block"><span dir="ltr" class="inline-block">{{ item.session.date }}</span></strong>
-              <small class="block">{{ item.session|default:'' }}</small></span>
+            <span class="min-w-0 flex-1 flex flex-col gap-1"><strong class="block"><span dir="ltr" class="inline-block">{{ item.session.date|date:"DATE_FORMAT" }}</span></strong>
+              <small class="block">{{ item.session|default:'' }}</small>
+              <small class="block text-muted">{% trans "Scanned at" %}: <span dir="ltr">{{ item.scanned_at|date:"DATETIME_FORMAT" }}</span></small>
+              <small class="block text-muted">{% if item.is_countable %}{% trans "Countable" %}{% else %}{{ item.exclusion_reason }}{% endif %}</small></span>
             {% include "ui/components/_status.html" with code=item.status label=item.get_status_display|default:'—' %}
           </div>
         {% empty %}
-          {% include "ui/components/_empty_state.html" with title=_("No released attendance") message=_("Attendance records will appear once released.") %}
+          {% include "ui/components/_empty_state.html" with title=_("No attendance records") message=_("Attendance records will appear after your sessions.") %}
         {% endfor %}
       </div>
     </article>
@@ -207,6 +211,9 @@
                 {{ item.to_semester }}
               </strong>
               <small class="block">{{ item.get_decision_type_display }}</small>
+              {% if item.superseded_at %}
+                {% include "ui/components/_status.html" with code="superseded" label=_("Superseded") %}
+              {% endif %}
             </p>
           </div>
         {% endfor %}
@@ -241,8 +248,8 @@
     </div>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">{% for item in certificates %}
         <article class="card-surface flex flex-col gap-4">
-          <h3>{{ item.diploma_enrollment.cohort.diploma|default:item }}</h3>
-          <small class="text-muted"><span dir="ltr" class="inline-block">{{ item.issued_at|date:"d/m/Y"|default:'' }}</span></small>
+          <h3>{{ item.program_title|default:item }}</h3>
+          <small class="text-muted"><span dir="ltr" class="inline-block">{{ item.generated_at|date:"d/m/Y"|default:'' }}</span></small>
           <a class="btn-primary"
              href="{% url 'certificates:student_certificate_download' item.id %}">{% trans "Download certificate" %}
           </a></article>

@@ -12,10 +12,10 @@ from __future__ import annotations
 import logging
 
 from django.core.management.base import BaseCommand
+from django.db import transaction
 
 from apps.storage.models import DeferredStorageDeletion
 from apps.storage.services import storage_service
-from django.db import transaction
 
 logger = logging.getLogger("apps.storage")
 

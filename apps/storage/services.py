@@ -28,8 +28,7 @@ import shutil
 import time
 import uuid
 from dataclasses import dataclass
-from pathlib import Path
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from urllib.parse import urlencode
 
 from django.conf import settings

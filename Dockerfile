@@ -26,4 +26,4 @@ USER app
 
 EXPOSE 10000
 
-CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && exec gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-10000} --workers ${GUNICORN_WORKERS:-3} --threads ${GUNICORN_THREADS:-2} --timeout ${GUNICORN_TIMEOUT:-120} --access-logfile - --error-logfile -"]
+CMD ["sh", "-c", "python manage.py wait_for_db && python manage.py migrate --noinput && python manage.py seed_email_templates --missing-only && python manage.py collectstatic --noinput && exec gunicorn config.wsgi:application --config python:config.gunicorn_conf --bind 0.0.0.0:${PORT:-10000} --access-logfile - --error-logfile -"]

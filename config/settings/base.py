@@ -16,7 +16,10 @@ env = environ.Env(
     DJANGO_DEBUG=(bool, False),
     DJANGO_SECRET_KEY=(str, ""),
     DJANGO_ALLOWED_HOSTS=(list, ["localhost", "127.0.0.1"]),
-    DJANGO_CSRF_TRUSTED_ORIGINS=(list, ["http://localhost:8000", "http://127.0.0.1:8000"]),
+    DJANGO_CSRF_TRUSTED_ORIGINS=(
+        list,
+        ["http://localhost:8000", "http://127.0.0.1:8000"],
+    ),
     DATABASE_URL=(str, f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
     CACHE_URL=(str, ""),
     CELERY_BROKER_URL=(str, "redis://localhost:6379/0"),
@@ -26,8 +29,11 @@ env = environ.Env(
     EMAIL_HOST_USER=(str, ""),
     EMAIL_HOST_PASSWORD=(str, ""),
     EMAIL_USE_TLS=(bool, True),
+    EMAIL_TIMEOUT=(int, 20),
     SITE_NAME=(str, "DokkiMashora LMS"),
     SITE_NAME_AR=(str, "دكى مشورة"),
+    APP_VERSION=(str, "dev"),
+    SLOW_REQUEST_LOG_MS=(int, 2000),
     DEFAULT_FROM_EMAIL=(str, "no-reply@dokkimashora.local"),
     R2_ACCESS_KEY_ID=(str, ""),
     R2_SECRET_ACCESS_KEY=(str, ""),
@@ -36,6 +42,7 @@ env = environ.Env(
     R2_PUBLIC_BASE_URL=(str, ""),
     USE_R2_STORAGE=(bool, False),
     SITE_URL=(str, "http://localhost:8000"),
+    YOUTUBE_API_KEY=(str, ""),
 )
 
 # Read .env file if it exists.
@@ -62,7 +69,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # --- Applications ------------------------------------------------------------
 DJANGO_APPS = [
-    "django.contrib.admin",
+    "apps.accounts.admin_config.RoleAwareAdminConfig",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
@@ -106,8 +113,13 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "apps.core.logging_middleware.RequestLoggingMiddleware",
+    "apps.audit.middleware.AuditRequestMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Innermost: report skipped emails after the view has run but before
+    # MessageMiddleware persists the messages for the next page.
+    "apps.core.email_notice_middleware.EmailTemplateNoticeMiddleware",
 ]
 
 # --- Templates ---------------------------------------------------------------
@@ -233,9 +245,15 @@ EMAIL_PORT = env("EMAIL_PORT")
 EMAIL_HOST_USER = env("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD")
 EMAIL_USE_TLS = env("EMAIL_USE_TLS")
+EMAIL_TIMEOUT = env("EMAIL_TIMEOUT")
 SITE_NAME = env("SITE_NAME")
 SITE_NAME_AR = env("SITE_NAME_AR")
+APP_VERSION = env("APP_VERSION")
+SLOW_REQUEST_LOG_MS = env("SLOW_REQUEST_LOG_MS")
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL")
+
+# --- YouTube Data API ---------------------------------------------------------
+YOUTUBE_API_KEY = env("YOUTUBE_API_KEY")
 
 # --- Cloudflare R2 -----------------------------------------------------------
 USE_R2_STORAGE = env("USE_R2_STORAGE")
@@ -296,7 +314,12 @@ LOGGING = {
     "disable_existing_loggers": False,
     "formatters": {
         "verbose": {
-            "format": "{asctime} [{levelname}] {name} {message}",
+            "format": (
+                "{asctime} [{levelname}] {name} "
+                "req={request_id} user={user_label} method={request_method} "
+                "path={request_path} status={status_code} dur_ms={duration_ms} "
+                "ip={client_ip} task={task_name} task_id={task_id} {message}"
+            ),
             "style": "{",
         },
         "simple": {
@@ -304,10 +327,16 @@ LOGGING = {
             "style": "{",
         },
     },
+    "filters": {
+        "request_context": {
+            "()": "apps.core.logging.RequestContextFilter",
+        },
+    },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
             "formatter": "verbose",
+            "filters": ["request_context"],
         },
     },
     "root": {
@@ -320,7 +349,22 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
+        "django.request": {
+            "handlers": ["console"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+        "django.security": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
         "apps": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "celery": {
             "handlers": ["console"],
             "level": "INFO",
             "propagate": False,

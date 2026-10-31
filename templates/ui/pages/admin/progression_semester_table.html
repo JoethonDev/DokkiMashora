@@ -3,26 +3,75 @@
 {% block title %}{{ title }}{% endblock %}
 {% block content %}
 <div class="page-stack animate-enter-view">
-  {% include "ui/components/_page_header.html" with eyebrow=_("Progression") title=semester.title description=cohort.name back_button=True %}
+  {% include "ui/components/_page_header.html" with eyebrow=_("Progression") title=semester.title description=cohort.name back_button=True back_url=back_url %}
 
-  <section class="card-surface mb-4 flex flex-col gap-4">
-    <div class="flex gap-2.5 items-center flex-wrap">
-      <form method="post" action="{% url 'progression:admin_semester_sync_all' cohort.id semester.id %}" class="inline">{% csrf_token %}
-        <button class="btn-secondary" type="submit">{% trans "Sync All" %}</button>
-      </form>
-       <form method="post" action="{% url 'progression:admin_semester_evaluate_all' cohort.id semester.id %}" class="inline">{% csrf_token %}
-         <button class="btn-secondary" type="submit">{% trans "Evaluate All" %}</button>
-       </form>
-       <form method="post" action="{% url 'progression:admin_semester_reevaluate_all' cohort.id semester.id %}" class="inline">{% csrf_token %}
-         <button class="btn-secondary" type="submit">{% trans "Re-evaluate All" %}</button>
-       </form>
-      <a class="btn-ghost" href="{% url 'progression:admin_evaluation_config_edit' diploma.id cohort.id semester.id %}">{% trans "Evaluation settings" %}</a>
-      <a class="btn-ghost" href="{% url 'progression:admin_component_list' cohort.id semester.id %}">{% trans "Components" %}</a>
-      <form method="post" action="{% url 'progression:admin_semester_auto_promote' cohort.id semester.id %}" class="inline">{% csrf_token %}
-        <button class="btn-success" type="submit">{% trans "Auto-Promote" %}</button>
-      </form>
-      <a class="btn-ghost" href="{% url 'progression:admin_semester_export_csv' cohort.id semester.id %}">{% trans "Export CSV" %}</a>
-    </div>
+  <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-4 items-start">
+    <article class="card-surface flex flex-col gap-3 md:col-span-2">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">{% trans "Evaluation and setup" %}</p>
+          <h3 class="m-0">{% trans "Semester evaluation" %}</h3>
+        </div>
+      </div>
+      <div class="actions-row">
+        <a class="btn-ghost" href="{% url 'progression:admin_evaluation_config_edit' diploma.id cohort.id semester.id %}">{% trans "Evaluation settings" %}</a>
+        <a class="btn-ghost" href="{% url 'progression:admin_contextual_component_list' diploma.id cohort.id semester.id %}">{% trans "Components" %}</a>
+      </div>
+      <div class="actions-row border-t border-line pt-3">
+        <form method="post" action="{% url 'progression:admin_semester_sync_all' cohort.id semester.id %}" class="m-0">{% csrf_token %}<button class="btn-secondary" type="submit">{% trans "Sync All" %}</button></form>
+        <form method="post" action="{% url 'progression:admin_semester_evaluate_all' cohort.id semester.id %}" class="m-0">{% csrf_token %}<button class="btn-secondary" type="submit">{% trans "Evaluate All" %}</button></form>
+        <form method="post" action="{% url 'progression:admin_semester_reevaluate_all' cohort.id semester.id %}" class="m-0">{% csrf_token %}<button class="btn-secondary" type="submit">{% trans "Re-evaluate All" %}</button></form>
+      </div>
+    </article>
+    <article class="card-surface flex flex-col gap-3">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">{% trans "Assessment operations" %}</p>
+          <h3 class="m-0">{% trans "Assessments" %}</h3>
+        </div>
+      </div>
+      <div class="actions-row">
+        <a class="btn-ghost" href="{% url 'assessments:admin_grade_list' %}?cohort_id={{ cohort.id }}&amp;semester_id={{ semester.id }}">{% trans "Grading" %}</a>
+        <a class="btn-ghost" href="{% url 'assessments:admin_homework_list' %}?cohort_id={{ cohort.id }}&amp;semester_id={{ semester.id }}">{% trans "Homework submissions" %}</a>
+        <a class="btn-ghost" href="{% url 'assessments:admin_exam_review_list' %}?cohort_id={{ cohort.id }}&amp;semester_id={{ semester.id }}">{% trans "Semester Exam review" %}</a>
+        <a class="btn-ghost" href="{% url 'assessments:admin_reviewer_assignment_list' %}?cohort_id={{ cohort.id }}&amp;semester_id={{ semester.id }}">{% trans "Reviewer assignments" %}</a>
+      </div>
+    </article>
+    <article class="card-surface flex flex-col gap-3">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">{% trans "Attendance" %}</p>
+          <h3 class="m-0">{% trans "Attendance records" %}</h3>
+        </div>
+      </div>
+      <div class="actions-row">
+        <a class="btn-ghost" href="{% url 'attendance:attendance_session_list' %}?diploma_id={{ diploma.id }}&amp;cohort_id={{ cohort.id }}&amp;semester_id={{ semester.id }}">{% trans "Attendance periods" %}</a>
+      </div>
+    </article>
+    <article class="card-surface flex flex-col gap-3">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">{% trans "Progression decisions" %}</p>
+          <h3 class="m-0">{% trans "Student outcomes" %}</h3>
+        </div>
+      </div>
+      <div class="actions-row">
+        <form method="post" action="{% url 'progression:admin_semester_auto_promote' cohort.id semester.id %}" class="m-0">{% csrf_token %}<button class="btn-success" type="submit">{% trans "Auto-Promote" %}</button></form>
+        <a class="btn-ghost" href="{% url 'progression:admin_semester_export_csv' cohort.id semester.id %}">{% trans "Export CSV" %}</a>
+      </div>
+    </article>
+    <article class="card-surface flex flex-col gap-3">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">{% trans "Rejoin" %}</p>
+          <h3 class="m-0">{% trans "Return to the next cohort" %}</h3>
+        </div>
+      </div>
+      <div class="actions-row">
+        <a class="btn-ghost" href="{% url 'progression:admin_contextual_rejoin_eligibility' diploma.id cohort.id semester.id %}">{% trans "Rejoin eligibility" %}</a>
+        <a class="btn-ghost" href="{% url 'progression:admin_contextual_rejoin_plan_list' diploma.id cohort.id semester.id %}">{% trans "Rejoin plans" %}</a>
+      </div>
+    </article>
   </section>
 
   {% include "ui/components/_pagination.html" with page_obj=page_obj pagination_qs=pagination_qs %}
@@ -45,7 +94,7 @@
         <tbody>
           {% for row in table_rows %}
             <tr id="student-row-{{ row.enrollment.id }}">
-              <td class="table-td"><a class="link" href="{% url 'progression:admin_student_detail' row.student.id %}"><strong>{{ row.student.full_name|default:row.student }}</strong></a></td>
+              <td class="table-td"><a class="link" href="{% url 'progression:admin_contextual_student_detail' diploma.id cohort.id semester.id row.student.id row.enrollment.id %}"><strong>{{ row.student.full_name|default:row.student }}</strong></a></td>
               <td class="table-td">{% if row.components and row.components.semester_exam is not None %}<span dir="ltr">{{ row.components.semester_exam|floatformat:2 }}%</span>{% else %}—{% endif %}</td>
               <td class="table-td">{% if row.components and row.components.attendance is not None %}<span dir="ltr">{{ row.components.attendance|floatformat:2 }}%</span>{% else %}—{% endif %}</td>
               <td class="table-td">{% if row.components and row.components.homework is not None %}<span dir="ltr">{{ row.components.homework|floatformat:2 }}%</span>{% else %}—{% endif %}</td>
@@ -90,53 +139,7 @@
                 {% endif %}
               </td>
               <td class="table-td">
-                <div class="flex gap-1 items-center flex-wrap">
-                  <form method="post" action="{% url 'progression:admin_grade_sync' row.enrollment.id semester.id %}" class="inline">{% csrf_token %}
-                    <input type="hidden" name="next" value="{% url 'progression:admin_cohort_semester_progression' diploma.id cohort.id semester.id %}">
-                    <button class="btn-ghost" type="submit">{% trans "Sync" %}</button>
-                  </form>
-                  {% if not row.evaluation %}
-                    {% if row.preview and not row.preview.blocked %}
-                      <form method="post" action="{% url 'progression:admin_evaluate_semester' row.student.id %}" class="inline">{% csrf_token %}
-                        <input type="hidden" name="enrollment_id" value="{{ row.enrollment.id }}">
-                        <input type="hidden" name="semester_id" value="{{ semester.id }}">
-                        <input type="hidden" name="next" value="{% url 'progression:admin_cohort_semester_progression' diploma.id cohort.id semester.id %}">
-                        <button class="btn-ghost" type="submit">{% trans "Finalize" %}</button>
-                      </form>
-                    {% endif %}
-                  {% else %}
-                    <form method="post" action="{% url 'progression:admin_grade_reevaluate' row.enrollment.id semester.id %}" class="inline">{% csrf_token %}
-                      <input type="hidden" name="next" value="{% url 'progression:admin_cohort_semester_progression' diploma.id cohort.id semester.id %}">
-                      <button class="btn-ghost" type="submit">{% trans "Re-evaluate" %}</button>
-                    </form>
-                    {% if not row.outcome or row.outcome.status != "resolved" %}
-                      {% if not row.interview or row.interview.status != "requested" %}
-                        <a class="btn-ghost" href="{% url 'progression:admin_request_interview' row.enrollment.id semester.id %}?next={% url 'progression:admin_cohort_semester_progression' diploma.id cohort.id semester.id %}">{% trans "Interview" %}</a>
-                        {% if row.evaluation.result == "pass" %}
-                          <form method="post" action="{% url 'progression:admin_confirm_pass' row.enrollment.id semester.id %}" class="inline">{% csrf_token %}
-                            <input type="hidden" name="next" value="{% url 'progression:admin_cohort_semester_progression' diploma.id cohort.id semester.id %}">
-                            <button class="btn-ghost" type="submit">{% trans "Final Pass" %}</button>
-                          </form>
-                        {% endif %}
-                        {% if row.evaluation.result == "fail" %}
-                          <form method="post" action="{% url 'progression:admin_demote' row.student.id %}" class="inline">{% csrf_token %}
-                            <input type="hidden" name="enrollment_id" value="{{ row.enrollment.id }}">
-                            <input type="hidden" name="semester_id" value="{{ semester.id }}">
-                            <input type="hidden" name="next" value="{% url 'progression:admin_cohort_semester_progression' diploma.id cohort.id semester.id %}">
-                            <button class="btn-ghost" type="submit">{% trans "Final Fail" %}</button>
-                          </form>
-                        {% endif %}
-                        <form method="post" action="{% url 'progression:admin_exceptional_promote' row.student.id %}" class="inline flex gap-1 items-center">{% csrf_token %}
-                          <input type="hidden" name="enrollment_id" value="{{ row.enrollment.id }}">
-                          <input type="hidden" name="semester_id" value="{{ semester.id }}">
-                          <input type="hidden" name="next" value="{% url 'progression:admin_cohort_semester_progression' diploma.id cohort.id semester.id %}">
-                          <input class="form-input" name="reason" required placeholder="{% trans 'Reason for exceptional promotion' %}">
-                          <button class="btn-warning" type="submit">{% trans "Exceptional Promote" %}</button>
-                        </form>
-                      {% endif %}
-                    {% endif %}
-                  {% endif %}
-                </div>
+                {% include "ui/fragments/admin/_semester_progression_actions.html" with row=row %}
               </td>
             </tr>
           {% empty %}
@@ -153,7 +156,7 @@
       {% for row in table_rows %}
         <div class="mobile-card">
           <div class="flex-1 min-w-0">
-            <strong class="block truncate"><a class="link" href="{% url 'progression:admin_student_detail' row.student.id %}">{{ row.student.full_name|default:row.student }}</a></strong>
+            <strong class="block truncate"><a class="link" href="{% url 'progression:admin_contextual_student_detail' diploma.id cohort.id semester.id row.student.id row.enrollment.id %}">{{ row.student.full_name|default:row.student }}</a></strong>
             {% if row.components %}
               <small class="block text-muted" dir="ltr">{% trans "Exam" %}: {% if row.components.semester_exam is not None %}{{ row.components.semester_exam|floatformat:2 }}%{% else %}—{% endif %} · {% trans "Attendance" %}: {% if row.components.attendance is not None %}{{ row.components.attendance|floatformat:2 }}%{% else %}—{% endif %} · {% trans "Homework" %}: {% if row.components.homework is not None %}{{ row.components.homework|floatformat:2 }}%{% else %}—{% endif %}</small>
             {% endif %}
@@ -169,34 +172,7 @@
             {% if row.outcome %}<small class="block text-muted">{% trans "Final" %}: {{ row.outcome.get_final_result_display|default:row.outcome.get_status_display }}</small>{% endif %}
             {% if row.interview %}{% include "ui/components/_status.html" with code=row.interview.status label=row.interview.get_status_display %}{% endif %}
           </div>
-          <div class="flex flex-col gap-1 shrink-0">
-            <form method="post" action="{% url 'progression:admin_grade_sync' row.enrollment.id semester.id %}" class="inline">{% csrf_token %}
-              <button class="btn-ghost" type="submit">{% trans "Sync" %}</button>
-            </form>
-            {% if not row.evaluation and row.preview and not row.preview.blocked %}
-              <form method="post" action="{% url 'progression:admin_evaluate_semester' row.student.id %}" class="inline">{% csrf_token %}
-                <input type="hidden" name="enrollment_id" value="{{ row.enrollment.id }}">
-                <input type="hidden" name="semester_id" value="{{ semester.id }}">
-                <button class="btn-ghost" type="submit">{% trans "Finalize" %}</button>
-              </form>
-            {% elif row.evaluation %}
-              <form method="post" action="{% url 'progression:admin_grade_reevaluate' row.enrollment.id semester.id %}" class="inline">{% csrf_token %}
-                <input type="hidden" name="next" value="{% url 'progression:admin_cohort_semester_progression' diploma.id cohort.id semester.id %}">
-                <button class="btn-ghost" type="submit">{% trans "Re-evaluate" %}</button>
-              </form>
-              {% if not row.outcome or row.outcome.status != "resolved" %}
-                {% if not row.interview or row.interview.status != "requested" %}
-                  <form method="post" action="{% url 'progression:admin_exceptional_promote' row.student.id %}" class="inline flex flex-col gap-1">{% csrf_token %}
-                    <input type="hidden" name="enrollment_id" value="{{ row.enrollment.id }}">
-                    <input type="hidden" name="semester_id" value="{{ semester.id }}">
-                    <input type="hidden" name="next" value="{% url 'progression:admin_cohort_semester_progression' diploma.id cohort.id semester.id %}">
-                    <input class="form-input" name="reason" required placeholder="{% trans 'Reason for exceptional promotion' %}">
-                    <button class="btn-warning" type="submit">{% trans "Exceptional Promote" %}</button>
-                  </form>
-                {% endif %}
-              {% endif %}
-            {% endif %}
-          </div>
+          {% include "ui/fragments/admin/_semester_progression_actions.html" with row=row mobile=True %}
         </div>
       {% empty %}
         <div class="border border-line rounded-sm p-4 text-center">

@@ -115,9 +115,9 @@
 
         <fieldset class="field-group">
           <legend class="field-label">{% trans "Grading access" %}</legend>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {% for value, label in reviewer_access_choices %}
-              <label class="choice-card"><input class="form-radio" type="radio" name="access_mode" value="{{ value }}"{% if value == reviewer_access_mode %} checked{% endif %}><span>{{ label }}</span></label>
+              <label class="choice-card gap-4 px-4 py-4"><input class="form-radio" type="radio" name="access_mode" value="{{ value }}"{% if value == reviewer_access_mode %} checked{% endif %}><span>{{ label }}</span></label>
             {% endfor %}
           </div>
         </fieldset>

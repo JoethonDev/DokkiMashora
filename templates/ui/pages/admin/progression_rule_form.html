@@ -3,8 +3,12 @@
 {% block title %}{{ title }}{% endblock %}
 {% block content %}
 <div class="page-stack animate-enter-view">
-  {% include "ui/components/_page_header.html" with eyebrow=_("Diploma") title=diploma.title description=_("Progression Rule") back_button=True %}
+  {% include "ui/components/_page_header.html" with eyebrow=_("Diploma") title=diploma.title description=_("Diploma progression defaults") back_button=True %}
   <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
+    <div class="rounded-md border border-line bg-subtle p-4 text-sm text-muted">
+      <p class="m-0">{% trans "These values are diploma-wide progression defaults; semesters may override each value independently." %}</p>
+      <p class="mt-2 mb-0">{% trans "Canonical semester score weights and minimums are configured separately for each cohort and semester." %}</p>
+    </div>
     {% if form.non_field_errors %}
       <div class="py-4 px-5 border border-red rounded-md bg-red-soft text-red" role="alert">{% for error in form.non_field_errors %}<p class="m-0">{{ error }}</p>{% endfor %}</div>
     {% endif %}

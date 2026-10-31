@@ -7,7 +7,7 @@
   <div class="page-stack animate-enter-view">{% trans "Academic operations" as eyebrow %}
     {% trans "Progression" as title %}
     {% trans "Review semester progress, decisions, evaluations, interviews, and rejoin plans." as description %}
-    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description back_button=True %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description breadcrumb_items=breadcrumb_items back_button=True back_url=back_url %}
     <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Evaluation" %}</p>
             <h3>
@@ -50,14 +50,15 @@
           </dl>
         {% endif %}
         <div class="flex gap-2.5 items-center flex-wrap"><form method="post"
-                action="{% url 'progression:admin_grade_sync' enrollment.id semester.id %}">{% csrf_token %}
+                action="{% url 'progression:admin_contextual_grade_sync' enrollment.cohort.diploma_id enrollment.cohort_id semester.id enrollment.id %}">{% csrf_token %}
+            <input type="hidden" name="next" value="{{ back_url }}">
             <button class="btn-secondary" type="submit">{% trans "Synchronize grade items" %}</button>
           </form>
           <a class="btn-secondary"
-             href="{% url 'progression:admin_request_interview' enrollment.id semester.id %}">{% trans "Request interview" %}
+             href="{% url 'progression:admin_contextual_request_interview' enrollment.cohort.diploma_id enrollment.cohort_id semester.id enrollment.id %}?next={{ back_url|urlencode }}">{% trans "Request interview" %}
           </a>
           <a class="btn-secondary"
-             href="{% url 'progression:admin_interview_decision' enrollment.id semester.id %}">{% trans "Interview decision" %}
+             href="{% url 'progression:admin_contextual_interview_decision' enrollment.cohort.diploma_id enrollment.cohort_id semester.id enrollment.id %}?next={{ back_url|urlencode }}">{% trans "Interview decision" %}
           </a>
         </div>
       </section>

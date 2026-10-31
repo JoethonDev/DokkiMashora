@@ -1,8 +1,6 @@
 {% extends "ui/layouts/admin.html" %}
 {% load i18n ui_tags %}
-{% block title %}
-  {{ session }}
-{% endblock %}
+{% block title %}{% trans "Attendance session" %}{% endblock %}
 {% block content %}
   <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=_("Attendance session") eyebrow=_("Attendance session") back_button=True back_url=back_url %}
     <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
@@ -11,7 +9,9 @@
           {% if period %}<a class="text-sm text-link inline-block mt-2" href="{% url 'attendance:attendance_period_detail' period.id %}">{% trans "Back to attendance period" %}</a>{% endif %}
         </div>
         {% if is_admin %}
-          <div class="flex gap-2.5 items-center flex-wrap">{% if session.status == 'scheduled' %}
+          <div class="flex gap-2.5 items-center flex-wrap">
+            {% if session.status != 'cancelled' %}<a class="btn-secondary" href="{% url 'attendance:attendance_session_edit' session.id %}">{% trans "Edit attendance session" %}</a>{% endif %}
+            {% if session.status == 'scheduled' %}
               <form method="post"
                     action="{% url 'attendance:attendance_session_open' session.id %}"
                     >{% csrf_token %}
@@ -25,6 +25,9 @@
                 <button class="btn-warning" type="submit">{% trans "Close session" %}</button>
               </form>
             {% endif %}
+            {% if session.raw_record_count %}
+              <small class="text-muted">{% trans "A session with scan records cannot be deleted." %}</small>
+            {% else %}
             <span x-data="{ confirming: false }">
               <button class="btn-ghost text-red" type="button" x-show="!confirming" x-transition.opacity @click="confirming = true">{% trans "Delete" %}</button>
               <span x-show="confirming" x-transition.opacity x-cloak class="inline-flex gap-2 items-center">
@@ -36,6 +39,7 @@
                 <button class="btn-ghost" type="button" @click="confirming = false">{% trans "Cancel" %}</button>
               </span>
             </span>
+            {% endif %}
           </div>
         {% endif %}
       </div>
@@ -84,21 +88,27 @@
         <div>
           <dt class="dt">{% trans "Date" %}</dt>
           <dd class="dd">
-            <span dir="ltr">{{ session.date|date:"d/m/Y"|default:'—' }}</span>
+            <span dir="ltr">{{ session.date|date:"DATE_FORMAT"|default:'—' }}</span>
           </dd>
         </div>
         <div>
           <dt class="dt">{% trans "Opens" %}</dt>
           <dd class="dd">
-            <span dir="ltr">{{ session.open_at|date:"d/m/Y H:i" }}</span>
+            <span dir="ltr">{{ session.open_at|ui_datetime }}</span>
           </dd>
         </div>
         <div>
           <dt class="dt">{% trans "Closes" %}</dt>
           <dd class="dd">
-            <span dir="ltr">{{ session.close_at|date:"d/m/Y H:i" }}</span>
+            <span dir="ltr">{{ session.close_at|ui_datetime }}</span>
           </dd>
         </div>
+        {% if session.closed_at %}
+          <div>
+            <dt class="dt">{% trans "Manually closed at" %}</dt>
+            <dd class="dd"><span dir="ltr">{{ session.closed_at|ui_datetime }}</span></dd>
+          </div>
+        {% endif %}
         {% if session.opened_by %}
           <div>
             <dt class="dt">{% trans "Opened by" %}</dt>
@@ -121,6 +131,20 @@
           <p class="eyebrow">{% trans "Records" %}</p>
           <h3>{% trans "Attendance records" %}</h3>
         </div>
+        <dl class="flex flex-wrap gap-2 m-0">
+          <div class="rounded-sm border border-green/30 bg-green-soft px-3 py-1.5 text-center">
+            <dt class="text-xs font-bold text-muted">{% trans "Counted records" %}</dt>
+            <dd class="m-0 text-lg font-black text-green leading-tight">{{ counted_record_count }}</dd>
+          </div>
+          <div class="rounded-sm border border-amber/30 bg-amber-soft px-3 py-1.5 text-center">
+            <dt class="text-xs font-bold text-muted">{% trans "Excluded records" %}</dt>
+            <dd class="m-0 text-lg font-black text-amber leading-tight">{{ excluded_record_count }}</dd>
+          </div>
+          <div class="rounded-sm border border-line bg-surface-soft px-3 py-1.5 text-center">
+            <dt class="text-xs font-bold text-muted">{% trans "All scan records" %}</dt>
+            <dd class="m-0 text-lg font-black leading-tight">{{ raw_record_count }}</dd>
+          </div>
+        </dl>
       </div>
       {% if records %}
         <div class="table-wrap hidden lg:block"><table class="table">
@@ -129,6 +153,7 @@
                 <th class="table-th">{% trans "Student" %}</th>
                 <th class="table-th">{% trans "Status" %}</th>
                 <th class="table-th">{% trans "Scanned at" %}</th>
+                <th class="table-th">{% trans "Evaluation" %}</th>
                 <th class="table-th">{% trans "Scanned by" %}</th>
                 <th class="table-th">{% trans "Notes" %}</th>
               </tr>
@@ -138,7 +163,8 @@
                 <tr>
                   <td class="table-td">{{ record.student.full_name }}</td>
                   <td class="table-td">{% include "ui/components/_status.html" with code=record.status label=record.get_status_display %}</td>
-                  <td class="table-td"><span dir="ltr">{{ record.scanned_at|date:"d/m/Y H:i"|default:'—' }}</span></td>
+                  <td class="table-td"><span dir="ltr">{{ record.scanned_at|ui_datetime|default:'—' }}</span></td>
+                  <td class="table-td">{% if record.is_counted %}<strong>{% trans "Counted" %}</strong>{% else %}<span class="text-muted">{{ record.exclusion_reason }}</span>{% endif %}</td>
                   <td class="table-td">{{ record.scanned_by.full_name|default:'—' }}</td>
                    <td class="table-td">{{ record.metadata.note|default:'—' }}</td>
                 </tr>
@@ -152,7 +178,8 @@
               <div class="flex-1 min-w-0">
                 <strong class="block truncate">{{ record.student.full_name }}</strong>
                 {% include "ui/components/_status.html" with code=record.status label=record.get_status_display %}
-                <small class="block text-muted">{% trans "Scanned at" %}: <span dir="ltr">{{ record.scanned_at|date:"d/m/Y H:i"|default:'—' }}</span> &middot; {% trans "by" %} {{ record.scanned_by.full_name|default:'—' }}</small>
+                <small class="block text-muted">{% trans "Scanned at" %}: <span dir="ltr">{{ record.scanned_at|ui_datetime|default:'—' }}</span> &middot; {% trans "by" %} {{ record.scanned_by.full_name|default:'—' }}</small>
+                <small class="block text-muted">{% if record.is_counted %}{% trans "Counted" %}{% else %}{{ record.exclusion_reason }}{% endif %}</small>
                  <small class="block text-muted">{{ record.metadata.note|default:'—' }}</small>
               </div>
             </div>

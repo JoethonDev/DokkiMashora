@@ -5,9 +5,126 @@
 {% endblock %}
 {% block content %}
   <div class="page-stack animate-enter-view">{% trans "Records" as eyebrow %}
-    {% trans "Certificates" as title %}
-    {% trans "Generate, download, and manage student certificates." as description %}
+    {% if templates is not None %}
+      {% trans "Certificate templates" as title %}
+      {% trans "Upload certificate artwork and position the dynamic fields." as description %}
+    {% else %}
+      {% trans "Certificates" as title %}
+      {% trans "Generate, download, and manage student certificates." as description %}
+    {% endif %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
+    {% if show_certificate_filters %}
+      <section class="card-surface page-stack">
+        <div class="section-head"><div>
+              <p class="eyebrow">{% trans "Search and filter" %}</p>
+              <h3>{% trans "Find a completed student or certificate" %}</h3>
+              <p class="text-sm text-muted">{% trans "Search by student name, email, or phone, then narrow by course or diploma." %}</p>
+            </div>
+          </div>
+        <form class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_18rem_auto] gap-3 items-end" method="get" action="{% url 'certificates:admin_certificate_list' %}">
+          {% if student_filter_active %}<input type="hidden" name="student_id" value="{{ student_id }}">{% endif %}
+          <label class="field">
+            <span class="field-label">{% trans "Search" %}</span>
+            <input class="form-input"
+                   id="certificate-search"
+                   type="search"
+                   name="q"
+                   value="{{ search_value }}"
+                   maxlength="100"
+                   placeholder="{% trans 'Search by name, email, or phone…' %}"
+                   aria-label="{% trans 'Search by student name, email, or phone' %}">
+          </label>
+          <label class="field">
+            <span class="field-label">{% trans "Course or diploma" %}</span>
+            <select class="form-select" id="certificate-program" name="program" aria-label="{% trans 'Filter by course or diploma' %}">
+              <option value="">{% trans "All courses and diplomas" %}</option>
+              {% for option in program_options %}
+                <option value="{{ option.value }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <div class="flex gap-2.5 items-center flex-wrap">
+            <button class="btn-secondary" type="submit">{% trans "Filter" %}</button>
+            <a class="btn-ghost" href="{% url 'certificates:admin_certificate_list' %}">{% trans "Reset" %}</a>
+          </div>
+        </form>
+        <p class="text-xs text-muted">{% trans "Filters apply to the manual regeneration list and certificate history." %}</p>
+        {% if student_filter_active %}
+          <p class="text-xs text-muted">{% trans "Showing results for one student." %} <a class="text-link" href="{% url 'certificates:admin_certificate_list' %}">{% trans "Show all students" %}</a></p>
+        {% endif %}
+      </section>
+    {% endif %}
+    {% if show_manual_issuance %}
+      <section class="card-surface flex flex-col gap-4">
+        <div class="section-head"><div>
+              <p class="eyebrow">{% trans "Manual issuance" %}</p>
+              <h3>{% trans "Generate or regenerate a certificate" %}</h3>
+              <p class="text-sm text-muted">{% trans "Automatic issuance runs when an admin marks completion or graduation. Use this form when a manual retry or replacement is needed." %}</p>
+            </div>
+          </div>
+        {% if manual_items %}
+          {% if manual_truncated %}
+            <p class="text-xs text-muted">{% blocktrans with total=manual_total %}Showing the most recent 50 of {{ total }} matches. Refine the search to narrow the list.{% endblocktrans %}</p>
+          {% endif %}
+          <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            {% for item in manual_items %}
+              <article class="border border-line rounded-sm p-4 flex flex-col gap-3">
+                <div class="flex flex-col gap-1 min-w-0">
+                  <strong class="block truncate">{{ item.student.full_name|default:item.student.user.email }}</strong>
+                  <small class="block text-muted truncate" dir="ltr">{{ item.student.user.email }}</small>
+                  <small class="block text-muted">{{ item.program_title }} · {{ item.program_detail }}</small>
+                  <small class="block text-muted">{% trans "Completion" %}: {{ item.completion_status }} · <span dir="ltr" class="inline-block">{{ item.completed_at|date:"d/m/Y"|default:'—' }}</span></small>
+                  {% if item.active_certificate %}
+                    <span class="flex items-center gap-2 flex-wrap">
+                      {% include "ui/components/_status.html" with code=item.active_certificate.status label=item.active_certificate.get_status_display %}
+                      <small dir="ltr" class="text-muted">{{ item.active_certificate.certificate_number }}</small>
+                    </span>
+                  {% else %}
+                    <small class="block text-muted">{% trans "No active certificate." %}</small>
+                  {% endif %}
+                </div>
+                {% if item.active_certificate %}
+                  {% if item.active_certificate.status == "available" %}
+                    <form class="flex flex-col sm:flex-row sm:items-end gap-2" method="post" action="{% url 'certificates:admin_regenerate_certificate' item.active_certificate.id %}">{% csrf_token %}
+                      <label class="field flex-1 min-w-40"><span class="field-label">{% trans "Regeneration reason" %}</span><input name="reason" class="form-input"></label>
+                      <button class="btn-warning" type="submit">{% trans "Regenerate" %}</button>
+                    </form>
+                  {% else %}
+                    {% if item.scope == "course" %}
+                      <form method="post" action="{% url 'certificates:admin_generate_course_certificate' item.enrollment_id %}">{% csrf_token %}
+                        <button class="btn-secondary" type="submit">{% trans "Retry generation" %}</button>
+                      </form>
+                    {% else %}
+                      <form method="post" action="{% url 'certificates:admin_generate_certificate' item.student_id %}">{% csrf_token %}
+                        <input type="hidden" name="enrollment_id" value="{{ item.enrollment_id }}">
+                        <button class="btn-secondary" type="submit">{% trans "Retry generation" %}</button>
+                      </form>
+                    {% endif %}
+                  {% endif %}
+                {% else %}
+                  {% if item.scope == "course" %}
+                    <form method="post" action="{% url 'certificates:admin_generate_course_certificate' item.enrollment_id %}">{% csrf_token %}
+                      <button class="btn-primary" type="submit">{% trans "Generate certificate" %}</button>
+                    </form>
+                  {% else %}
+                    <form method="post" action="{% url 'certificates:admin_generate_certificate' item.student_id %}">{% csrf_token %}
+                      <input type="hidden" name="enrollment_id" value="{{ item.enrollment_id }}">
+                      <button class="btn-primary" type="submit">{% trans "Generate certificate" %}</button>
+                    </form>
+                  {% endif %}
+                {% endif %}
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          {% if has_active_filters %}
+            {% include "ui/components/_empty_state.html" with title=_("No completed students match these filters.") message=_("Try a different name, email, phone, or program.") %}
+          {% else %}
+            {% include "ui/components/_empty_state.html" with title=_("No completed students are ready for a certificate.") message=_("Completed and graduated students will appear here.") %}
+          {% endif %}
+        {% endif %}
+      </section>
+    {% endif %}
     {% if form %}
       <section class="card-surface max-w-form mx-auto w-full page-stack">
         <div class="section-head"><div>
@@ -16,6 +133,11 @@
             </div>
           </div>
         <form class="page-stack" method="post" enctype="multipart/form-data">{% csrf_token %}
+          {% if form.non_field_errors %}
+            <div class="alert-error space-y-1" role="alert">
+              {% for error in form.non_field_errors %}<p class="m-0">{{ error }}</p>{% endfor %}
+            </div>
+          {% endif %}
           {% for field in form %}
             {% include "ui/components/_field.html" %}
           {% endfor %}
@@ -43,6 +165,12 @@
           {% else %}
             <p class="text-sm text-muted mb-3">{% trans "No PDF/PSD artwork uploaded. The HTML body above is used instead." %}</p>
           {% endif %}
+          <div class="actions-row">
+            <a class="btn-secondary"
+               href="{% url 'certificates:admin_template_generated_preview' template.id %}"
+               target="_blank"
+               rel="noopener">{% trans "Preview generated certificate" %}</a>
+          </div>
           <form class="mt-4 flex items-end gap-2.5 flex-wrap" method="post" action="{% url 'certificates:admin_template_upload_source' template.id %}" enctype="multipart/form-data">{% csrf_token %}
             <label class="field"><span class="field-label">{% trans "PDF or PSD artwork" %}</span>
               <input class="form-input" type="file" name="source_file" accept=".pdf,.psd,.jpg,.jpeg,application/pdf,image/vnd.adobe.photoshop,image/jpeg" required>
@@ -68,11 +196,21 @@
       <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {% for item in templates %}
           <article class="card-surface flex flex-col gap-4">
-            <h3>{{ item }}</h3>
-            {% if item.description %}<p>{{ item.description }}</p>{% endif %}
-            {% if item.diploma %}<p class="text-muted">{{ item.diploma }}</p>{% endif %}
+            <div>
+              <h3>{{ item }}</h3>
+              {% if item.program_title %}<p class="text-muted">{{ item.program_title }}</p>{% endif %}
+              <small class="block text-muted">{{ item.get_language_display }} · {{ item.get_template_type_display }}</small>
+            </div>
+            {% if item.source_status == "ready" %}
+              <span class="text-xs font-bold text-brand">{% trans "Artwork source" %}</span>
+            {% else %}
+              <span class="text-xs font-bold text-red">{% trans "Artwork required" %}</span>
+            {% endif %}
           <div class="flex gap-2.5 items-center flex-wrap">
-            <a class="btn-ghost" href="{% url 'certificates:admin_template_edit' item.id %}">{% trans "Edit" %}</a>
+            <a class="btn-ghost" href="{% url 'certificates:admin_template_edit' item.id %}">{% trans "Edit template" %}</a>
+            {% if item.source_status == "ready" %}
+              <a class="btn-ghost" href="{% url 'certificates:admin_template_preview' item.id %}" target="_blank" rel="noopener">{% trans "View artwork preview" %}</a>
+            {% endif %}
             <form method="post" action="{% url 'certificates:admin_template_delete' item.id %}" class="m-0" data-confirm="{% trans 'Delete this certificate template? Generated certificates will be preserved.' %}">{% csrf_token %}
               <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
             </form>
@@ -84,7 +222,13 @@
       </section>
       {% include "ui/components/_pagination.html" %}
     {% elif page_obj is not None %}
-      <section class="card-surface flex flex-col gap-4"><div class="table-wrap hidden lg:block"><table class="table">
+      <section class="card-surface flex flex-col gap-4">
+        <div class="section-head"><div>
+              <p class="eyebrow">{% trans "Issued certificates" %}</p>
+              <h3>{% trans "Certificate history" %}</h3>
+            </div>
+          </div>
+        <div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>
                 <th class="table-th">{% trans "Certificate number" %}</th>
@@ -99,10 +243,13 @@
               {% for item in page_obj %}
                 <tr>
                   <td class="table-td">{{ item.certificate_number|default:item.id }}</td>
-                  <td class="table-td">{{ item.student.full_name|default:item.student }}</td>
-                  <td class="table-td">{{ item.diploma_enrollment.cohort.diploma|default:'—' }}</td>
+                  <td class="table-td">
+                    <strong class="block">{{ item.student.full_name|default:item.student }}</strong>
+                    <small class="block text-muted" dir="ltr">{{ item.student.user.email }}</small>
+                  </td>
+                  <td class="table-td">{{ item.program_title|default:'—' }}</td>
                   <td class="table-td">{% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}</td>
-                  <td class="table-td">{{ item.issued_at|default:item.created_at|date:"DATE_FORMAT"|default:'—' }}</td>
+                  <td class="table-td">{{ item.generated_at|date:"DATE_FORMAT"|default:'—' }}</td>
                   <td class="table-td">
                     <div class="flex gap-2.5 items-center flex-wrap">{% if item.status == "available" %}
                         <a class="btn-secondary"
@@ -110,20 +257,32 @@
                         </a>
                         <form method="post"
                               action="{% url 'certificates:admin_regenerate_certificate' item.id %}"
-                              class="m-0">{% csrf_token %}
+                              class="m-0"
+                              data-confirm="{% trans 'Are you sure?' %}"
+                              data-confirm-label="{% trans 'Regenerate' %}">{% csrf_token %}
+                          <input type="hidden" name="reason" value="">
                           <button class="btn-warning" type="submit">{% trans "Regenerate" %}</button>
                         </form>
-      <form method="post"
+                        <form method="post"
               action="{% url 'certificates:admin_revoke_certificate' item.id %}"
               class="m-0"
               data-confirm="{% trans 'Revoke this certificate?' %}">{% csrf_token %}
-          <input type="hidden"
-                 name="reason"
-                 value="{% trans 'Revoked by administrator' %}"><button class="btn-danger" type="submit">{% trans "Revoke" %}</button>
-        </form>
+                          <input type="hidden"
+                                 name="reason"
+                                 value="{% trans 'Revoked by administrator' %}">
+                          <button class="btn-danger" type="submit">{% trans "Revoke" %}</button>
+                        </form>
+                      {% elif item.status == "superseded" %}
+                        <a class="btn-secondary"
+                           href="{% url 'certificates:admin_download_certificate' item.id %}">{% trans "Download" %}
+                        </a>
                       {% elif item.status == "failed" and item.diploma_enrollment_id %}
                         <form method="post" action="{% url 'certificates:admin_generate_certificate' item.student_id %}" class="m-0">{% csrf_token %}
                           <input type="hidden" name="enrollment_id" value="{{ item.diploma_enrollment_id }}">
+                          <button class="btn-secondary" type="submit">{% trans "Retry generation" %}</button>
+                        </form>
+                      {% elif item.status == "failed" and item.course_enrollment_id %}
+                        <form method="post" action="{% url 'certificates:admin_generate_course_certificate' item.course_enrollment_id %}" class="m-0">{% csrf_token %}
                           <button class="btn-secondary" type="submit">{% trans "Retry generation" %}</button>
                         </form>
                       {% endif %}
@@ -132,7 +291,12 @@
                 </tr>
               {% empty %}
                 <tr>
-                  <td class="table-td" colspan="6">{% include "ui/components/_empty_state.html" with title=_("No certificates have been generated.") %}
+                  <td class="table-td" colspan="6">
+                    {% if has_active_filters %}
+                      {% include "ui/components/_empty_state.html" with title=_("No certificates match these filters.") message=_("Try a different name, email, phone, or program.") %}
+                    {% else %}
+                      {% include "ui/components/_empty_state.html" with title=_("No certificates have been generated.") %}
+                    {% endif %}
                   </td>
                 </tr>
               {% endfor %}
@@ -144,18 +308,25 @@
             <div class="mobile-card">
               <div class="flex-1 min-w-0">
                 <strong class="block truncate">{{ item.student.full_name|default:item.student }}</strong>
-                <small class="block text-muted truncate">{{ item.diploma_enrollment.cohort.diploma|default:'—' }}</small>
+                <small class="block text-muted truncate" dir="ltr">{{ item.student.user.email }}</small>
+                <small class="block text-muted truncate">{{ item.program_title|default:'—' }}</small>
                 <small class="block text-muted">{{ item.certificate_number|default:item.id }}</small>
                 {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
-                <small class="block text-muted">{% trans "Issued" %}: {{ item.issued_at|default:item.created_at|date:"DATE_FORMAT"|default:'—' }}</small>
+                <small class="block text-muted">{% trans "Issued" %}: {{ item.generated_at|date:"DATE_FORMAT"|default:'—' }}</small>
               </div>
-              {% if item.id and item.student_id %}
+              {% if item.status == "superseded" %}
+                <a class="btn-soft-primary shrink-0" href="{% url 'certificates:admin_download_certificate' item.id %}">{% trans "Download" %}</a>
+              {% elif item.id and item.student_id and item.status == "available" %}
                 <a class="btn-soft-primary shrink-0" href="{% url 'certificates:admin_download_certificate' item.id %}">{% trans "Download" %}</a>
               {% endif %}
             </div>
           {% empty %}
             <div class="border border-line rounded-sm p-4 text-center">
-              {% include "ui/components/_empty_state.html" with title=_("No certificates have been generated.") fill=True %}
+              {% if has_active_filters %}
+                {% include "ui/components/_empty_state.html" with title=_("No certificates match these filters.") message=_("Try a different name, email, phone, or program.") fill=True %}
+              {% else %}
+                {% include "ui/components/_empty_state.html" with title=_("No certificates have been generated.") fill=True %}
+              {% endif %}
             </div>
           {% endfor %}
         </div>

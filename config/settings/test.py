@@ -1,4 +1,4 @@
-"""Test settings used by pytest."""
+"""Lightweight settings for CI checks and browser QA."""
 
 from .base import *  # noqa: F401,F403
 

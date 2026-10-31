@@ -15,9 +15,7 @@
             <article class="card-surface">
               <h3>{{ card.assessment.title }}</h3>
               <p class="text-muted">{{ card.assessment.get_assessment_type_display }}</p>
-              {% if card.latest_attempt %}
-                {% include "ui/components/_status.html" with code=card.latest_attempt.status label=card.latest_attempt.get_status_display %}
-              {% endif %}
+              <p class="text-sm text-muted">{% if card.assessment.is_required_for_semester_evaluation %}{% trans "Required for semester evaluation" %}{% else %}{% trans "Optional for semester evaluation" %}{% endif %}</p>
               {% include "ui/components/_state_banner.html" with state=card.readiness.state label=card.readiness.state_label primary_action=card.readiness.primary_action %}
             </article>
           {% endfor %}
@@ -34,9 +32,7 @@
             <article class="card-surface">
               <h3>{{ card.assessment.title }}</h3>
               <p class="text-muted">{{ card.assessment.get_assessment_type_display }}</p>
-              {% if card.latest_attempt %}
-                {% include "ui/components/_status.html" with code=card.latest_attempt.status label=card.latest_attempt.get_status_display %}
-              {% endif %}
+              <p class="text-sm text-muted">{% if card.assessment.is_required_for_semester_evaluation %}{% trans "Required for semester evaluation" %}{% else %}{% trans "Optional for semester evaluation" %}{% endif %}</p>
               {% include "ui/components/_state_banner.html" with state=card.readiness.state label=card.readiness.state_label primary_action=card.readiness.primary_action %}
             </article>
           {% endfor %}
@@ -53,10 +49,7 @@
             <article class="card-surface">
               <h3>{{ card.assessment.title }}</h3>
               <p class="text-muted">{{ card.assessment.get_assessment_type_display }}</p>
-              {% if card.latest_attempt %}
-                {% include "ui/components/_status.html" with code=card.latest_attempt.status label=card.latest_attempt.get_status_display %}
-              {% endif %}
-              {% include "ui/components/_state_banner.html" with state=card.readiness.state label=card.readiness.state_label primary_action=card.readiness.primary_action %}
+              {% include "ui/components/_state_banner.html" with state=card.readiness.state label=card.readiness.state_label primary_action=card.readiness.primary_action description=card.readiness.block_reason %}
             </article>
           {% endfor %}
         </div>

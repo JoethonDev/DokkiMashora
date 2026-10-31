@@ -7,10 +7,10 @@
   <div class="page-stack animate-enter-view">{% trans "Academic operations" as eyebrow %}
     {% trans "Progression" as title %}
     {% trans "Review semester progress, decisions, evaluations, interviews, and rejoin plans." as description %}
-    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description back_button=True back_url=back_url back_label=_('Back') %}
     <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
       {% if selected_semester and target_cohort %}
-      <input type="hidden" name="semester_id" value="{{ selected_semester.id }}">
+      {% if not semester_in_url %}<input type="hidden" name="semester_id" value="{{ selected_semester.id }}">{% endif %}
       <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div><dt class="field-label">{% trans "Failed semester" %}</dt><dd>{{ selected_semester }}</dd></div>
         <div><dt class="field-label">{% trans "Target cohort" %}</dt><dd>{{ target_cohort }}</dd></div>
@@ -21,6 +21,7 @@
       <button class="btn-primary" type="submit">{% trans "Create rejoin plan" %}</button>
       {% else %}
         {% include "ui/components/_empty_state.html" with title=_("No eligible rejoin transition is available.") compact=True %}
+        {% if transition_blocked_reason %}<p class="m-0 text-sm text-muted">{{ transition_blocked_reason }}</p>{% endif %}
       {% endif %}
     </form>
   </div>

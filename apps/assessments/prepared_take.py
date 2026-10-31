@@ -5,6 +5,7 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
+import logging
 from datetime import datetime, timedelta
 
 import redis
@@ -14,14 +15,14 @@ from django.utils import timezone
 
 CHUNK_SIZE = 25
 COMPRESSLEVEL = 5
-VERSION = "v2"
+VERSION = "v4"
 TAKE_CACHE_BUDGET_BYTES = 80 * 1024 * 1024  # 80 MB rebuildable budget
 TAKE_CACHE_TTL = 7 * 24 * 60 * 60  # 7 days secondary cleanup
 
 # Key namespace per spec
-# assessment-attempt:{attempt_id}:take:v2:chunk:{n}:gzip
-# assessment-attempt:{attempt_id}:take:v2:meta
-# assessment-attempt:{attempt_id}:take:v2:valid_choices
+# assessment-attempt:{attempt_id}:take:v4:chunk:{n}:gzip
+# assessment-attempt:{attempt_id}:take:v4:meta
+# assessment-attempt:{attempt_id}:take:v4:valid_choices
 
 
 def _client():
@@ -89,6 +90,33 @@ def _render_chunk_html(chunk_questions, attempt) -> str:
     )
 
 
+def chunk_snapshot_questions(questions, chunk_size: int = CHUNK_SIZE):
+    """Pack whole lecture groups into chunks so a lecture is never split.
+
+    Questions are ordered section by section in the snapshot. Keeping each
+    lecture whole lets the take fragment render one collapsible group per
+    lecture without repeating a group across lazy-loaded chunks. A lecture
+    that is larger than ``chunk_size`` forms its own oversized chunk.
+    """
+    groups = []
+    for question in questions:
+        if groups and groups[-1][0].section_id == question.section_id:
+            groups[-1].append(question)
+        else:
+            groups.append([question])
+
+    chunks = []
+    current = []
+    for group in groups:
+        if current and len(current) + len(group) > chunk_size:
+            chunks.append(current)
+            current = []
+        current.extend(group)
+    if current:
+        chunks.append(current)
+    return chunks
+
+
 def build_prepared_take(attempt) -> dict:
     """Render all chunks for attempt and store gzip bytes. Returns meta."""
     client = _client()
@@ -97,13 +125,17 @@ def build_prepared_take(attempt) -> dict:
         raise RuntimeError("Redis cache not configured")
 
     # Load immutable snapshot with choices
-    qs = list(attempt.snapshot_questions.order_by("order").prefetch_related("choices"))
+    qs = list(
+        attempt.snapshot_questions.select_related("section__lecture")
+        .order_by("order")
+        .prefetch_related("choices")
+    )
     if not qs:
         raise ValueError("No snapshot questions to prepare")
 
     snap_hash = _snapshot_hash(qs)
-    # Split into chunks
-    chunks = [qs[i : i + CHUNK_SIZE] for i in range(0, len(qs), CHUNK_SIZE)]
+    # Split into chunks, keeping each lecture group whole
+    chunks = chunk_snapshot_questions(qs)
     chunk_count = len(chunks)
 
     # Prepare compressed payloads
@@ -127,7 +159,6 @@ def build_prepared_take(attempt) -> dict:
         current_budget = 0
     if current_budget + total_compressed > TAKE_CACHE_BUDGET_BYTES:
         # Do not write if would exceed budget - log and fallback path will rebuild per request
-        import logging
         logging.getLogger(__name__).warning(
             "take_cache_budget_exceeded attempt=%s need=%s current=%s budget=%s",
             attempt.pk, total_compressed, current_budget, TAKE_CACHE_BUDGET_BYTES,
@@ -192,12 +223,22 @@ def get_chunk(attempt_id: int, chunk_no: int) -> bytes | None:
     return client.get(_chunk_key(attempt_id, chunk_no))
 
 
+def _load_json(raw):
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+
+
 def get_meta(attempt_id: int) -> dict | None:
     tclient = _text_client()
     if tclient is None:
         return None
     raw = tclient.get(_meta_key(attempt_id))
-    return json.loads(raw) if raw else None
+    data = _load_json(raw)
+    return data if isinstance(data, dict) else None
 
 
 def get_valid_choices(attempt_id: int) -> dict | None:
@@ -205,7 +246,8 @@ def get_valid_choices(attempt_id: int) -> dict | None:
     if tclient is None:
         return None
     raw = tclient.get(_valid_choices_key(attempt_id))
-    return json.loads(raw) if raw else None
+    data = _load_json(raw)
+    return data if isinstance(data, dict) else None
 
 
 def delete_prepared_take(attempt_id: int) -> int:

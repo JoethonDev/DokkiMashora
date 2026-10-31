@@ -1,8 +1,10 @@
+from urllib.parse import urlsplit
+
 from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.models import LANDING_CONTENT_DEFAULTS, LandingPageSettings
+from apps.core.models import LANDING_CONTENT_DEFAULTS, LandingAnnouncement, LandingPageSettings
 
 WIDGET_CLASSES = {
     "Select": "form-select",
@@ -19,6 +21,20 @@ DEFAULT_WIDGET_CLASS = "form-input"
 CANONICAL_WIDGET_CLASSES = {"form-input", "form-select", "form-checkbox", "form-radio", "form-file"}
 
 
+def canonical_widget_class(widget) -> str:
+    """Return the canonical presentation class for a widget.
+
+    Resolve through the widget's MRO so project subclasses keep their widget
+    family's class: MultipleFileInput(ClearableFileInput) is a file control and
+    must render as form-file, not fall back to the generic input class.
+    """
+    for widget_cls in type(widget).__mro__:
+        canonical = WIDGET_CLASSES.get(widget_cls.__name__)
+        if canonical:
+            return canonical
+    return DEFAULT_WIDGET_CLASS
+
+
 class StyledFormMixin:
     """R1 layer 1: assigns the canonical widget class to every field.
 
@@ -30,7 +46,7 @@ class StyledFormMixin:
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             widget = field.widget
-            canonical = WIDGET_CLASSES.get(type(widget).__name__, DEFAULT_WIDGET_CLASS)
+            canonical = canonical_widget_class(widget)
             existing = set(widget.attrs.get("class", "").split()) - CANONICAL_WIDGET_CLASSES
             widget.attrs["class"] = " ".join(sorted(existing | {canonical}))
 
@@ -42,8 +58,6 @@ CONTENT_SECTIONS = {
         "hero_body",
         "hero_primary",
         "hero_secondary",
-        "announcement_title",
-        "announcement_body",
     ),
     _("Introduction"): ("intro_eyebrow", "intro_title", "intro_body"),
     _("Benefits"): (
@@ -154,14 +168,14 @@ class LandingPageSettingsForm(StyledFormMixin, forms.ModelForm):
                 )
                 self.fields[f"{key}_{language}"] = field
                 widget = field.widget
-                canonical = WIDGET_CLASSES.get(type(widget).__name__, DEFAULT_WIDGET_CLASS)
-                widget.attrs["class"] = canonical
+                widget.attrs["class"] = canonical_widget_class(widget)
 
     def clean(self):
         cleaned = super().clean()
         for name in ("hero_image", "parenting_image", "diploma_image"):
             image = cleaned.get(name)
-            if image and getattr(getattr(image, "image", None), "format", "") != "WEBP":
+            uploaded = getattr(image, "image", None) if image else None
+            if uploaded is not None and getattr(uploaded, "format", "") != "WEBP":
                 self.add_error(name, ValidationError(_("Please upload a WebP image.")))
         return cleaned
 
@@ -192,3 +206,64 @@ class LandingPageSettingsForm(StyledFormMixin, forms.ModelForm):
             self[name]
             for name in ("contact_email", "contact_phone", "facebook_url", "instagram_url", "youtube_url")
         ]
+
+
+class LandingAnnouncementForm(StyledFormMixin, forms.ModelForm):
+    class Meta:
+        model = LandingAnnouncement
+        fields = (
+            "title_ar",
+            "title_en",
+            "message_ar",
+            "message_en",
+            "cta_label_ar",
+            "cta_label_en",
+            "cta_url",
+            "starts_at",
+            "ends_at",
+            "is_active",
+        )
+        widgets = {
+            "title_ar": forms.TextInput(),
+            "title_en": forms.TextInput(),
+            "message_ar": forms.Textarea(attrs={"rows": 3}),
+            "message_en": forms.Textarea(attrs={"rows": 3}),
+            "cta_label_ar": forms.TextInput(),
+            "cta_label_en": forms.TextInput(),
+            "cta_url": forms.TextInput(attrs={"placeholder": "/apply"}),
+            "is_active": forms.CheckboxInput(),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name in ("starts_at", "ends_at"):
+            field = self.fields[name]
+            field.input_formats = ["%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"]
+            field.widget = forms.DateTimeInput(
+                format="%Y-%m-%dT%H:%M",
+                attrs={"type": "datetime-local", "class": "form-input"},
+            )
+
+    def clean(self):
+        cleaned = super().clean()
+        if not cleaned.get("title_ar") or not cleaned.get("title_en"):
+            raise ValidationError(_("Enter the announcement title in both Arabic and English."))
+        if not cleaned.get("message_ar") or not cleaned.get("message_en"):
+            raise ValidationError(_("Enter the announcement message in both Arabic and English."))
+        starts_at = cleaned.get("starts_at")
+        ends_at = cleaned.get("ends_at")
+        if starts_at and ends_at and ends_at <= starts_at:
+            self.add_error("ends_at", _("The end time must be after the start time."))
+        cta_label = cleaned.get("cta_label_ar") or cleaned.get("cta_label_en")
+        cta_url = (cleaned.get("cta_url") or "").strip()
+        if bool(cta_label) != bool(cta_url):
+            raise ValidationError(_("Provide both a button label and a button URL, or leave both empty."))
+        if cta_url:
+            parsed = urlsplit(cta_url)
+            if cta_url.startswith("//"):
+                self.add_error("cta_url", _("Use an http(s) link or a site-relative path."))
+            elif parsed.scheme and parsed.scheme.lower() not in {"http", "https"}:
+                self.add_error("cta_url", _("Use an http(s) link or a site-relative path."))
+            elif not parsed.scheme and not cta_url.startswith("/"):
+                self.add_error("cta_url", _("Use an http(s) link or a site-relative path starting with /."))
+        return cleaned

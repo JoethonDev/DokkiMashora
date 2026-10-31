@@ -17,14 +17,13 @@ from apps.audit.constants import (
     ACTION_INTAKE_FORM_FIELD_CREATED,
     ACTION_INTAKE_FORM_FIELD_DELETED,
     ACTION_INTAKE_FORM_TOGGLED,
-    ACTION_INTAKE_REQUEST_SENT,
+    SECTION_ADMISSIONS,
 )
 from apps.audit.services import record_audit_event
 from apps.core.pagination import paginate
 from apps.core.permissions import ROLE_SENIOR_STAFF, is_admin, role_required, student_required
 
 from .constants import (
-    FIELD_TYPE_BOOLEAN,
     FIELD_TYPE_CHOICE,
     FIELD_TYPE_MULTI_CHOICE,
     INTAKE_REQUEST_STATUS_CANCELLED,
@@ -96,6 +95,8 @@ def admin_intake_form_create(request: HttpRequest) -> HttpResponse:
                 action=ACTION_INTAKE_FORM_CREATED,
                 target_type="intake_form",
                 target_id=str(intake_form.pk),
+                section=SECTION_ADMISSIONS,
+                target_label=intake_form.title,
                 metadata={"title": intake_form.title, "target_type": target_type},
             )
             messages.success(request, _("Intake form created."))
@@ -157,7 +158,15 @@ def admin_intake_form_detail(request: HttpRequest, form_id: int) -> HttpResponse
                     action=ACTION_INTAKE_FORM_FIELD_CREATED,
                     target_type="intake_form_field",
                     target_id=str(field.pk),
-                    metadata={"form_id": str(intake_form.pk), "label": field.label, "field_type": field.field_type},
+                    section=SECTION_ADMISSIONS,
+                    target_label=field.label,
+                    metadata={
+                        "form_id": str(intake_form.pk),
+                        "form_title": intake_form.title,
+                        "label": field.label,
+                        "field_type": field.field_type,
+                        "order": field.order,
+                    },
                 )
                 messages.success(request, _("Field added."))
             else:
@@ -166,6 +175,7 @@ def admin_intake_form_detail(request: HttpRequest, form_id: int) -> HttpResponse
                         messages.error(request, err)
             return redirect("intake_forms:admin_intake_form_detail", form_id=intake_form.pk)
         if action == "toggle_active":
+            active_before = intake_form.is_active
             intake_form.is_active = not intake_form.is_active
             intake_form.save(update_fields=["is_active"])
             record_audit_event(
@@ -173,13 +183,31 @@ def admin_intake_form_detail(request: HttpRequest, form_id: int) -> HttpResponse
                 action=ACTION_INTAKE_FORM_TOGGLED,
                 target_type="intake_form",
                 target_id=str(intake_form.pk),
-                metadata={"is_active": intake_form.is_active},
+                section=SECTION_ADMISSIONS,
+                target_label=intake_form.title,
+                metadata={
+                    "active_before": active_before,
+                    "active_after": intake_form.is_active,
+                },
             )
             messages.success(request, _("Form active state toggled."))
             return redirect("intake_forms:admin_intake_form_detail", form_id=intake_form.pk)
         if action == "toggle_required":
+            required_before = intake_form.is_required
             intake_form.is_required = not intake_form.is_required
             intake_form.save(update_fields=["is_required"])
+            record_audit_event(
+                actor=request.user,
+                action=ACTION_INTAKE_FORM_TOGGLED,
+                target_type="intake_form",
+                target_id=str(intake_form.pk),
+                section=SECTION_ADMISSIONS,
+                target_label=intake_form.title,
+                metadata={
+                    "required_before": required_before,
+                    "required_after": intake_form.is_required,
+                },
+            )
             messages.success(request, _("Form required state toggled."))
             return redirect("intake_forms:admin_intake_form_detail", form_id=intake_form.pk)
     return render(request, "ui/pages/admin/intake.html", {
@@ -212,16 +240,21 @@ def admin_intake_response_detail(request: HttpRequest, form_id: int, response_id
 def admin_intake_form_field_delete(request: HttpRequest, form_id: int, field_id: int) -> HttpResponse:
     if not is_admin(request.user):
         raise PermissionDenied
-    field = get_object_or_404(IntakeFormField, pk=field_id, form_id=form_id)
+    field = get_object_or_404(
+        IntakeFormField.objects.select_related("form"), pk=field_id, form_id=form_id,
+    )
     f_id = field.pk
     f_label = field.label
+    form_title = field.form.title
     field.delete()
     record_audit_event(
         actor=request.user,
         action=ACTION_INTAKE_FORM_FIELD_DELETED,
         target_type="intake_form_field",
         target_id=str(f_id),
-        metadata={"form_id": str(form_id), "label": f_label},
+        section=SECTION_ADMISSIONS,
+        target_label=f_label,
+        metadata={"form_id": str(form_id), "form_title": form_title, "label": f_label},
     )
     messages.success(request, _("Field deleted."))
     return redirect("intake_forms:admin_intake_form_detail", form_id=form_id)
@@ -273,15 +306,8 @@ def admin_intake_request_send(request: HttpRequest, application_id: int) -> Http
         messages.error(request, _("Intake forms can only be requested after the admissions decision and required document submission."))
         return redirect("applications:program_detail", application_id=application.pk)
     try:
-        intake_request = request_intake_form_for_application(
+        request_intake_form_for_application(
             application, actor=request.user, send_email=True,
-        )
-        record_audit_event(
-            actor=request.user,
-            action=ACTION_INTAKE_REQUEST_SENT,
-            target_type="intake_form_request",
-            target_id=str(intake_request.pk),
-            metadata={"application_id": str(application.pk)},
         )
         messages.success(request, _("Intake request created. Survey email queued."))
     except (ValueError, PermissionError) as exc:
@@ -376,17 +402,7 @@ def _render_intake_form(
     if request.method == "POST":
         submit_form = IntakeFormSubmitForm(form_instance, request.POST, prefix="intake")
         if submit_form.is_valid():
-            answers = {}
-            for key, value in submit_form.cleaned_data.items():
-                if key.startswith("field_"):
-                    field_id = key.replace("field_", "")
-                    answers[field_id] = value if value is not None else ""
-            # ponytail: convert string booleans to Python bools for consistent JSON storage
-            for field in active_fields:
-                if field.field_type == FIELD_TYPE_BOOLEAN:
-                    pk = str(field.pk)
-                    if pk in answers:
-                        answers[pk] = answers[pk] == "true"
+            answers = submit_form.cleaned_answers(active_fields)
             try:
                 submit_intake_form_response(
                     intake_request, request.user,

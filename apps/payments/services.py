@@ -23,6 +23,7 @@ from apps.audit.constants import (
     ACTION_PAYMENT_RECORD_UPDATED,
     ACTION_PAYMENT_WAIVER_GRANTED,
     ACTION_PAYMENT_WAIVER_REVOKED,
+    SECTION_PAYMENTS,
 )
 from apps.audit.services import record_audit_event
 from apps.core.dates import parse_date
@@ -300,6 +301,23 @@ def _build_target_snapshot(
             "course_version_name": enroll.course_version.label if enroll.course_version else "",
         }
     return "", {}
+
+
+def _payment_audit_target_label(student, snapshot: dict | None) -> str:
+    """Human target label from the already-persisted snapshot (no extra queries)."""
+    snapshot = snapshot or {}
+    parts = [str(getattr(student, "full_name", "") or student.pk)]
+    program = (
+        snapshot.get("diploma_title")
+        or snapshot.get("course_title")
+        or snapshot.get("program_title")
+    )
+    if program:
+        parts.append(str(program))
+    detail = snapshot.get("cohort_name") or snapshot.get("course_version_name")
+    if detail:
+        parts.append(str(detail))
+    return " · ".join(part for part in parts if part)
 
 
 def preview_upload(upload_id: int) -> PaymentUpload:
@@ -625,7 +643,7 @@ def reconcile_payment_record(
 
     record = None
     if record_id is not None:
-        record = PaymentRecord.objects.select_for_update().select_related(
+        record = PaymentRecord.objects.select_for_update(of=("self",)).select_related(
             "application", "student", "diploma_enrollment", "course_enrollment",
         ).get(pk=record_id)
         if application is None:
@@ -768,9 +786,21 @@ def reconcile_payment_record(
         action=ACTION_PAYMENT_RECORD_DELETED if soft_delete else ACTION_PAYMENT_RECORD_UPDATED,
         target_type="PaymentRecord",
         target_id=str(record.pk),
+        section=SECTION_PAYMENTS,
+        target_label=_payment_audit_target_label(student, record.target_snapshot),
+        subject_type="student",
+        subject_id=str(student.id),
+        subject_label=student.full_name,
         metadata={
             "source": source,
             "reason": reason,
+            "target_type": record.target_type or "",
+            "target_ref": record.target_ref or "",
+            "status_before": before["status"] if before else "",
+            "status_after": record.status,
+            "amount_before": before["amount"] if before else "",
+            "amount_after": str(record.amount),
+            "currency": record.currency,
             "before": before,
             "after": {
                 "status": record.status,
@@ -976,10 +1006,19 @@ def grant_payment_waiver(application, actor, *, reason: str) -> PaymentWaiver:
         action=ACTION_PAYMENT_WAIVER_GRANTED,
         target_type="PaymentWaiver",
         target_id=str(waiver.pk),
+        section=SECTION_PAYMENTS,
+        target_label=_payment_audit_target_label(locked.student, waiver.target_snapshot),
+        subject_type="student",
+        subject_id=str(locked.student_id),
+        subject_label=locked.student.full_name,
         metadata={
             "application_id": str(locked.pk),
             "student_id": locked.student_id,
             "reason": waiver.reason,
+            "status_before": "",
+            "status_after": waiver.status,
+            "application_status_before": before.get("application_status", ""),
+            "application_status_after": after.get("application_status", ""),
             "requirement_before": before,
             "requirement_after": after,
         },
@@ -1030,10 +1069,17 @@ def revoke_payment_waiver(waiver, actor, *, reason: str = "") -> PaymentWaiver:
         action=ACTION_PAYMENT_WAIVER_REVOKED,
         target_type="PaymentWaiver",
         target_id=str(locked.pk),
+        section=SECTION_PAYMENTS,
+        target_label=_payment_audit_target_label(locked.student, locked.target_snapshot),
+        subject_type="student",
+        subject_id=str(locked.student_id),
+        subject_label=locked.student.full_name,
         metadata={
             "application_id": str(locked.application_id) if locked.application_id else "",
             "student_id": locked.student_id,
             "reason": locked.revoke_reason,
+            "status_before": WAIVER_STATUS_ACTIVE,
+            "status_after": locked.status,
             "application_status_before": rollback.get("application_status_before", ""),
             "application_status_after": rollback.get("application_status_after", ""),
             "activation_rolled_back": rollback.get("rolled_back", False),

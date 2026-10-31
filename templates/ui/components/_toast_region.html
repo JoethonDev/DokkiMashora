@@ -3,13 +3,39 @@
      class="fixed end-4 max-sm:start-4 max-sm:w-[calc(100vw-2rem)] top-16 z-toast flex flex-col gap-2.5"
      aria-live="polite"
      aria-atomic="true"
-     x-data="{toasts:[]}"
-      @show-toast.window="let idx = toasts.length; toasts.push({...$event.detail, visible: true}); setTimeout(() => { if (toasts[idx]) { toasts[idx].visible = false; setTimeout(() => { if (toasts[idx]) toasts.splice(idx, 1); }, 300); } }, 5000)">
+     x-data="{
+       toasts: [],
+       pushToast(detail) {
+         this.toasts.push({ ...detail, visible: true });
+         const toast = this.toasts[this.toasts.length - 1];
+         if (!toast.sticky) {
+           setTimeout(() => {
+             toast.visible = false;
+             setTimeout(() => {
+               const index = this.toasts.indexOf(toast);
+               if (index > -1) this.toasts.splice(index, 1);
+             }, 300);
+           }, toast.duration || 5000);
+         }
+       },
+       runToastAction(toast) {
+         if (toast.action === 'reload') { window.location.reload(); return; }
+         if (toast.actionUrl) { window.location.assign(toast.actionUrl); }
+       }
+     }"
+      @show-toast.window="pushToast($event.detail)">
   <template x-for="(toast, index) in toasts" :key="index">
     <div class="min-w-72 max-w-96 p-4 border border-line rounded-sm bg-surface shadow-modal flex items-start gap-2.5 transition-all duration-300"
-         role="status"
+         :role="toast.type === 'error' ? 'alert' : 'status'"
          :class="(toast.visible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-full') + ' ' + (toast.type === 'success' ? 'border-green' : toast.type === 'warning' ? 'border-amber' : toast.type === 'error' ? 'border-red' : 'border-blue')">
-      <span class="flex-1 min-w-0 whitespace-normal break-words leading-snug" x-text="toast.message || toast.detail || ''"></span>
+      <div class="flex-1 min-w-0 flex flex-col gap-2">
+        <span class="whitespace-normal break-words leading-snug" x-text="toast.message || toast.detail || ''"></span>
+        <button type="button"
+                x-show="toast.actionLabel"
+                x-text="toast.actionLabel"
+                @click="runToastAction(toast)"
+                class="self-start border-0 bg-transparent p-0 text-xs font-extrabold underline text-brand cursor-pointer"></button>
+      </div>
       <button type="button"
               @click="toasts[index].visible = false; setTimeout(() => toasts.splice(index, 1), 300)"
               class="border-0 bg-transparent text-muted cursor-pointer font-extrabold shrink-0"

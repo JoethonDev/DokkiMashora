@@ -4,7 +4,6 @@ from django import forms
 from django.utils.translation import gettext_lazy as _
 
 from apps.academics.models import Cohort, CourseVersion
-
 from apps.core.forms import StyledFormMixin
 
 from .constants import (
@@ -38,7 +37,7 @@ class IntakeFormBuildForm(StyledFormMixin, forms.Form):
         widget=forms.Select(attrs={}),
     )
     is_required = forms.BooleanField(required=False, label=_("Required"))
-    is_active = forms.BooleanField(required=False, label=_("Active"))
+    is_active = forms.BooleanField(required=False, initial=True, label=_("Active"))
     open_at = forms.DateTimeField(
         required=False, label=_("Open at"),
         widget=forms.DateTimeInput(attrs={"type": "datetime-local"}),
@@ -125,3 +124,22 @@ class IntakeFormSubmitForm(StyledFormMixin, forms.Form):
                     max_length=500,
                     widget=forms.TextInput(attrs={}),
                 )
+
+    def cleaned_answers(self, active_fields) -> dict:
+        """Return validated answers keyed by field id.
+
+        Shared by the student submission and the admin on-behalf submission so
+        both map the dynamic field keys identically (including Python bools for
+        Yes/No fields stored in JSON).
+        """
+        answers: dict = {}
+        for key, value in self.cleaned_data.items():
+            if key.startswith("field_"):
+                field_id = key.replace("field_", "")
+                answers[field_id] = value if value is not None else ""
+        for field in active_fields:
+            if field.field_type == FIELD_TYPE_BOOLEAN:
+                pk = str(field.pk)
+                if pk in answers:
+                    answers[pk] = answers[pk] == "true"
+        return answers

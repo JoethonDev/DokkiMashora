@@ -5,10 +5,18 @@
 {% endblock %}
 {% block content %}
   <div class="page-stack animate-enter-view">{% trans "Academic operations" as eyebrow %}
-    {% trans "Progression" as title %}
-    {% trans "Review semester progress, decisions, evaluations, interviews, and rejoin plans." as description %}
-    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description back_button=True %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title back_button=True back_url=back_url %}
+    <section class="card-surface">
+      <p class="eyebrow">{% trans "Student" %}</p>
+      <h2 class="mt-0">{{ enrollment.student }}</h2>
+      <dl class="grid grid-cols-1 sm:grid-cols-3 gap-4 m-0">
+        <div><dt class="field-label">{% trans "Diploma" %}</dt><dd class="m-0">{{ enrollment.cohort.diploma.title }}</dd></div>
+        <div><dt class="field-label">{% trans "Cohort" %}</dt><dd class="m-0">{{ enrollment.cohort.name }}</dd></div>
+        <div><dt class="field-label">{% trans "Semester" %}</dt><dd class="m-0">{{ semester.title }}</dd></div>
+      </dl>
+    </section>
     <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
+      {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
       <label class="field"><span class="field-label">{% trans "Decision" %}</span>
         <select name="decision" class="form-select" required>
           <option value="pass">{% trans "Pass" %}</option>

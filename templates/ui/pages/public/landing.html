@@ -1,331 +1,740 @@
 {% extends "ui/layouts/public.html" %}
 {% load i18n static %}
+{% get_current_language as LANGUAGE_CODE %}
 {% block title %}
   {% if LANGUAGE_CODE == 'ar' %}{{ SITE_NAME_AR }}{% else %}{{ SITE_NAME }}{% endif %}
 {% endblock %}
+{% block extra_head %}
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&display=swap" rel="stylesheet">
+  <meta name="description" content="{{ landing_content.hero_body|striptags|truncatechars:160 }}">
+  <meta name="theme-color" content="#8A2E1A">
+{% endblock %}
 {% block content %}
+  {% trans "Explore our programs" as hero_primary_fallback %}
+  {% trans "Log in" as hero_secondary_fallback %}
+  {% trans "Apply now" as apply_now_fallback %}
+  {% trans "Apply for a program" as cta_label_fallback %}
+  {% trans "No programs available" as no_programs_title %}
+  {% trans "Check back soon for current programs." as no_programs_message %}
+  {% trans "Dokki · Giza" as location_fallback %}
+  {% firstof landing_content.hero_primary hero_primary_fallback as hero_primary_label %}
+  {% firstof landing_content.hero_secondary hero_secondary_fallback as hero_secondary_label %}
+  {% firstof landing_content.apply_now apply_now_fallback as apply_now_label %}
+  {% firstof landing_content.cta_label cta_label_fallback as cta_label %}
 
-  {# ── Announcement ── #}
-  {% if landing_announcement %}
-    <aside class="page-container pt-4" aria-label="{% trans 'Announcement' %}">
-      <div class="border-s-2 border-brand ps-4">
-        <div class="card-surface flex items-center gap-4 flex-wrap">
-          <div class="flex-1 min-w-0">
-            <strong class="block text-sm">{{ landing_announcement.title }}</strong>
-            <p class="m-0 text-muted text-xs">{{ landing_announcement.message }}</p>
-          </div>
-          {% if landing_announcement.cta_label and landing_announcement.cta_url %}
-            <a class="btn-primary shrink-0" href="{{ landing_announcement.cta_url }}">{{ landing_announcement.cta_label }}</a>
+  <div class="landing-page bg-bg text-text">
+    {# ── Announcement ribbon ── #}
+    {% if landing_announcement %}
+      <aside class="border-b border-line bg-brand-soft/35" aria-label="{% trans 'Announcement' %}">
+        <div class="page-container flex flex-wrap items-center gap-x-4 gap-y-2 py-3.5 text-sm">
+          <span class="eyebrow inline-flex shrink-0 items-center gap-2">
+            <span class="h-1.5 w-1.5 rounded-full bg-brand"></span>
+            {% trans "Notice" %}
+          </span>
+          <strong class="font-black text-text">{{ announcement_content.title }}</strong>
+          <span class="min-w-0 text-muted">{{ announcement_content.message }}</span>
+          {% if announcement_content.cta_label and landing_announcement.safe_cta_url %}
+            <a class="group ms-auto inline-flex items-center gap-1.5 text-xs font-black text-brand no-underline hover:text-brand-800"
+               href="{{ landing_announcement.safe_cta_url }}">
+              {{ announcement_content.cta_label }}
+              <svg class="landing-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M5 12h14M13 6l6 6-6 6"></path>
+              </svg>
+            </a>
           {% endif %}
         </div>
-      </div>
-    </aside>
-  {% endif %}
+      </aside>
+    {% endif %}
 
-  {# ── Hero ── #}
-  <section class="relative overflow-hidden bg-gradient-to-br from-brand-soft/30 via-surface to-surface pt-12 pb-16 lg:pt-20 lg:pb-24">
-    <div class="landing-hero-deco landing-hero-deco--1"></div>
-    <div class="landing-hero-deco landing-hero-deco--2"></div>
-    <div class="landing-hero-deco landing-hero-deco--3"></div>
-    <div class="page-container relative z-10">
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
-        <div class="page-stack">
-          <span class="eyebrow">{{ landing_content.hero_eyebrow }}</span>
-          <h1 class="display hero-heading">{{ landing_content.hero_title }}</h1>
-          <p class="text-muted text-base lg:text-lg max-w-lg">{{ landing_content.hero_body }}</p>
-          <div class="actions-row pt-2">
-            <a class="btn-primary" href="#programs">{{ landing_content.hero_primary|default:_("Explore our programs") }}</a>
-            {% if request.user.is_authenticated %}
-              <a class="btn-soft" href="{% url 'accounts:dashboard' %}">{% if is_student %}{% trans "My learning" %}{% else %}{% trans "Dashboard" %}{% endif %}</a>
-            {% else %}
-              <a class="btn-soft" href="{% url 'accounts:login' %}">{{ landing_content.hero_secondary|default:_("Log in") }}</a>
-            {% endif %}
+    {# ── Hero ── #}
+    <section class="relative overflow-hidden">
+      <div class="landing-pattern pointer-events-none absolute inset-0" aria-hidden="true"></div>
+      <div class="pointer-events-none absolute inset-0 bg-gradient-to-b from-bg/50 via-transparent to-bg" aria-hidden="true"></div>
+      <div class="pointer-events-none absolute -top-52 end-0 h-[34rem] w-[34rem] rounded-full bg-brand-soft/60 blur-3xl" aria-hidden="true"></div>
+      <div class="page-container relative py-14 sm:py-16 lg:py-24">
+        <div class="grid items-center gap-14 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-16">
+          <div class="relative">
+            <div class="flex items-center gap-3">
+              <svg class="h-4 w-4 text-accent-500" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true">
+                <path d="M20 1.5 38.5 20 20 38.5 1.5 20Z"></path>
+                <path d="M7 7h26v26H7z"></path>
+                <circle cx="20" cy="20" r="2.2"></circle>
+              </svg>
+              <span class="eyebrow">{{ landing_content.hero_eyebrow }}</span>
+            </div>
+            <h1 class="landing-display mt-6 max-w-[19ch] text-balance text-[clamp(2.55rem,5vw,4.8rem)] text-text">
+              {{ landing_content.hero_title }}
+            </h1>
+            <p class="mt-6 max-w-xl text-base leading-relaxed text-muted sm:text-lg">
+              {{ landing_content.hero_body }}
+            </p>
+            <div class="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <a class="btn-primary group gap-2.5" href="#programs">
+                {{ hero_primary_label }}
+                <svg class="landing-arrow" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M5 12h14M13 6l6 6-6 6"></path>
+                </svg>
+              </a>
+              {% if request.user.is_authenticated %}
+                <a class="btn-soft" href="{% url 'accounts:dashboard' %}">
+                  {% if CAN_VIEW_STUDENT_NAV %}{% trans "My learning" %}{% else %}{% trans "Dashboard" %}{% endif %}
+                </a>
+              {% else %}
+                <a class="btn-soft" href="{% url 'accounts:login' %}">{{ hero_secondary_label }}</a>
+              {% endif %}
+            </div>
+            <ul class="mt-10 grid gap-3 border-t border-line/80 pt-6 text-[13px] font-semibold text-muted sm:grid-cols-3">
+              <li class="flex items-center gap-2.5">
+                <span class="grid h-4 w-4 shrink-0 place-items-center rounded-full border border-brand/25 text-brand">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m20 6-11 11-5-5"></path></svg>
+                </span>
+                {% trans "Structured learning" %}
+              </li>
+              <li class="flex items-center gap-2.5">
+                <span class="grid h-4 w-4 shrink-0 place-items-center rounded-full border border-brand/25 text-brand">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m20 6-11 11-5-5"></path></svg>
+                </span>
+                {% trans "Real student support" %}
+              </li>
+              <li class="flex items-center gap-2.5">
+                <span class="grid h-4 w-4 shrink-0 place-items-center rounded-full border border-brand/25 text-brand">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m20 6-11 11-5-5"></path></svg>
+                </span>
+                {% trans "Clear progress" %}
+              </li>
+            </ul>
           </div>
-          <div class="flex gap-4 flex-wrap text-muted text-xs">
-            <span class="flex items-center gap-1.5"><svg class="shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> {% trans "Structured learning" %}</span>
-            <span class="flex items-center gap-1.5"><svg class="shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> {% trans "Real student support" %}</span>
-            <span class="flex items-center gap-1.5"><svg class="shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> {% trans "Clear progress" %}</span>
-          </div>
-        </div>
-        <div class="relative">
-          {% if landing_settings.hero_image %}
-            <div class="rounded-lg overflow-hidden shadow-card"><img src="{{ landing_settings.hero_image.url }}" alt="" loading="lazy" class="w-full h-auto"></div>
-          {% else %}
-            <div class="rounded-lg bg-gradient-to-br from-brand-soft to-brand/10 p-8 lg:p-12 grid place-items-center min-h-60">
-              <div class="text-center">
-                <div class="w-20 h-20 rounded-full bg-brand-soft grid place-items-center mx-auto mb-4">
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-brand"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+
+          <div class="relative mx-auto w-full max-w-[30rem] lg:max-w-none">
+            <div class="landing-arch-frame">
+              <div class="relative aspect-[4/5] overflow-hidden rounded-t-full rounded-b-md border border-line bg-brand-soft shadow-card">
+                {% if landing_settings.hero_image %}
+                  <img src="{{ landing_settings.hero_image.url }}"
+                       alt=""
+                       class="h-full w-full object-cover object-center"
+                       loading="eager"
+                       fetchpriority="high"
+                       decoding="async">
+                {% else %}
+                  <img src="{% static 'img/landing-family-hero.webp' %}"
+                       alt=""
+                       class="h-full w-full object-cover object-center"
+                       width="1536"
+                       height="1024"
+                       loading="eager"
+                       fetchpriority="high"
+                       decoding="async">
+                {% endif %}
+                <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-surface-inverse/55 via-transparent to-transparent" aria-hidden="true"></div>
+                <div class="absolute inset-x-4 bottom-4 flex items-center gap-3 rounded-sm border border-white/20 bg-surface-inverse/70 px-4 py-3 text-white backdrop-blur-sm sm:inset-x-5 sm:bottom-5">
+                  <svg class="h-5 w-5 shrink-0 text-brand-200" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true">
+                    <path d="M20 1.5 38.5 20 20 38.5 1.5 20Z"></path>
+                    <path d="M7 7h26v26H7z"></path>
+                    <circle cx="20" cy="20" r="2.2"></circle>
+                  </svg>
+                  <span class="min-w-0 truncate text-[11px] font-bold">
+                    {{ landing_content.footer_address|default:location_fallback }}
+                  </span>
                 </div>
-                <p class="text-muted font-bold text-sm">{% trans "Coptic Orthodox Family Formation" %}</p>
               </div>
             </div>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-  </section>
-
-  {# ── Live Stats ── #}
-  {% if landing_settings.show_live_stats %}
-    <section class="page-container -mt-8 relative z-20">
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div class="card-surface text-center flex flex-col gap-1.5 items-center">
-          <strong class="text-3xl font-black text-brand">{{ landing_settings.stat_value_1 }}</strong>
-          <span class="text-muted text-xs font-bold uppercase tracking-wider">{{ landing_content.stat_1 }}</span>
-        </div>
-        <div class="card-surface text-center flex flex-col gap-1.5 items-center">
-          <strong class="text-3xl font-black text-brand">{{ landing_settings.stat_value_2 }}</strong>
-          <span class="text-muted text-xs font-bold uppercase tracking-wider">{{ landing_content.stat_2 }}</span>
-        </div>
-        <div class="card-surface text-center flex flex-col gap-1.5 items-center">
-          <strong class="text-3xl font-black text-brand">{{ landing_settings.stat_value_3 }}</strong>
-          <span class="text-muted text-xs font-bold uppercase tracking-wider">{{ landing_content.stat_3 }}</span>
-        </div>
-        <div class="card-surface text-center flex flex-col gap-1.5 items-center">
-          <strong class="text-3xl font-black text-brand">{{ landing_settings.stat_value_4 }}</strong>
-          <span class="text-muted text-xs font-bold uppercase tracking-wider">{{ landing_content.stat_4 }}</span>
+          </div>
         </div>
       </div>
     </section>
-  {% endif %}
 
-  {# ── Intro ── #}
-  {% if landing_content.intro_title %}
-    <section class="page-container py-12 lg:py-16 animate-enter-view">
-      <div class="max-w-3xl mx-auto text-center page-stack">
-        <span class="eyebrow">{{ landing_content.intro_eyebrow }}</span>
-        <div class="section-accent"></div>
-        <h2>{{ landing_content.intro_title }}</h2>
-        <p class="text-muted text-base lg:text-lg">{{ landing_content.intro_body }}</p>
-      </div>
-    </section>
-  {% endif %}
+    {# ── Live stats ── #}
+    {% if landing_settings.show_live_stats %}
+      <section class="border-y border-line bg-surface" aria-label="{% trans 'Institute at a glance' %}">
+        <dl class="page-container grid grid-cols-2 gap-px overflow-hidden bg-line lg:grid-cols-4">
+          <div class="flex flex-col-reverse gap-2 bg-surface px-5 py-8 text-center sm:px-8 sm:py-10">
+            <dt class="eyebrow">{{ landing_content.stat_1 }}</dt>
+            <dd class="landing-display m-0 text-4xl text-brand sm:text-5xl">{{ landing_settings.stat_value_1 }}</dd>
+          </div>
+          <div class="flex flex-col-reverse gap-2 bg-surface px-5 py-8 text-center sm:px-8 sm:py-10">
+            <dt class="eyebrow">{{ landing_content.stat_2 }}</dt>
+            <dd class="landing-display m-0 text-4xl text-brand sm:text-5xl">{{ landing_settings.stat_value_2 }}</dd>
+          </div>
+          <div class="flex flex-col-reverse gap-2 bg-surface px-5 py-8 text-center sm:px-8 sm:py-10">
+            <dt class="eyebrow">{{ landing_content.stat_3 }}</dt>
+            <dd class="landing-display m-0 text-4xl text-brand sm:text-5xl">{{ landing_settings.stat_value_3 }}</dd>
+          </div>
+          <div class="flex flex-col-reverse gap-2 bg-surface px-5 py-8 text-center sm:px-8 sm:py-10">
+            <dt class="eyebrow">{{ landing_content.stat_4 }}</dt>
+            <dd class="landing-display m-0 text-4xl text-brand sm:text-5xl">{{ landing_settings.stat_value_4 }}</dd>
+          </div>
+        </dl>
+      </section>
+    {% endif %}
 
-  {# ── Benefits ── #}
-  {% if landing_content.benefits_title %}
-    <section class="bg-brand-soft/30 border-t border-line py-12 lg:py-16 animate-enter-view">
-      <div class="page-container page-stack">
-        <div class="max-w-3xl mx-auto text-center page-stack">
-          <span class="eyebrow">{{ landing_content.benefits_eyebrow }}</span>
-          <div class="section-accent"></div>
-          <h2>{{ landing_content.benefits_title }}</h2>
-          <p class="text-muted">{{ landing_content.benefits_body }}</p>
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4">
-          <article class="card-surface flex flex-col gap-4 text-center card-hover-lift animate-enter-view animate-delay-1">
-            <div class="w-12 h-12 rounded-md bg-brand-soft text-brand grid place-items-center mx-auto">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+    {# ── Introduction ── #}
+    {% if landing_content.intro_title %}
+      <section id="about" class="scroll-mt-28 bg-surface" aria-labelledby="about-title">
+        <div class="page-container py-16 sm:py-20 lg:py-24">
+          <div class="grid gap-10 lg:grid-cols-12 lg:gap-16">
+            <div class="lg:col-span-4">
+              <span class="landing-kicker">{{ landing_content.intro_eyebrow }}</span>
+              <div class="relative mt-10 hidden lg:block" aria-hidden="true">
+                <span class="landing-display block text-[8rem] leading-none text-brand/10">01</span>
+                <svg class="absolute bottom-0 start-0 h-10 w-10 text-accent-400/60" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.2">
+                  <path d="M20 1.5 38.5 20 20 38.5 1.5 20Z"></path>
+                  <path d="M7 7h26v26H7z"></path>
+                  <circle cx="20" cy="20" r="2.2"></circle>
+                </svg>
+              </div>
+              <p class="mt-5 hidden max-w-[13rem] text-xs font-bold leading-relaxed text-muted lg:block">
+                {{ landing_content.footer_about_title }}
+              </p>
             </div>
-            <strong class="block text-sm font-black text-text">{{ landing_content.benefit_1_title }}</strong>
-            <p class="text-muted text-xs m-0">{{ landing_content.benefit_1_body }}</p>
-          </article>
-          <article class="card-surface flex flex-col gap-4 text-center card-hover-lift animate-enter-view animate-delay-2">
-            <div class="w-12 h-12 rounded-md bg-blue-soft text-blue grid place-items-center mx-auto">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-            </div>
-            <strong class="block text-sm font-black text-text">{{ landing_content.benefit_2_title }}</strong>
-            <p class="text-muted text-xs m-0">{{ landing_content.benefit_2_body }}</p>
-          </article>
-          <article class="card-surface flex flex-col gap-4 text-center card-hover-lift animate-enter-view animate-delay-3">
-            <div class="w-12 h-12 rounded-md bg-amber-soft text-amber grid place-items-center mx-auto">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            </div>
-            <strong class="block text-sm font-black text-text">{{ landing_content.benefit_3_title }}</strong>
-            <p class="text-muted text-xs m-0">{{ landing_content.benefit_3_body }}</p>
-          </article>
-          <article class="card-surface flex flex-col gap-4 text-center card-hover-lift animate-enter-view animate-delay-4">
-            <div class="w-12 h-12 rounded-md bg-green-soft text-green grid place-items-center mx-auto">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-            </div>
-            <strong class="block text-sm font-black text-text">{{ landing_content.benefit_4_title }}</strong>
-            <p class="text-muted text-xs m-0">{{ landing_content.benefit_4_body }}</p>
-          </article>
-        </div>
-      </div>
-    </section>
-  {% endif %}
-
-  {# ── Programs (diplomas + courses) ── #}
-  <section id="programs" class="page-container py-12 lg:py-16 animate-enter-view">
-    <div class="page-stack">
-      <div class="max-w-3xl mx-auto text-center page-stack">
-        <span class="eyebrow">{{ landing_content.programs_eyebrow }}</span>
-        <div class="section-accent"></div>
-        <h2>{{ landing_content.programs_title }}</h2>
-        <p class="text-muted">{{ landing_content.programs_body }}</p>
-      </div>
-
-      {% if active_diplomas %}
-        <div class="page-stack">
-          <div class="section-head">
-            <div>
-              <span class="eyebrow">{{ landing_content.diplomas_eyebrow }}</span>
-              <h3 class="m-0">{{ landing_content.diplomas_title }}</h3>
+            <div class="lg:col-span-8">
+              <h2 id="about-title" class="landing-display text-3xl text-text sm:text-4xl lg:text-[3.35rem] lg:leading-[1.15]">
+                {{ landing_content.intro_title }}
+              </h2>
+              <div class="mt-8 h-px w-20 bg-gradient-to-r from-brand to-transparent" aria-hidden="true"></div>
+              <p class="mt-8 max-w-3xl text-lg leading-relaxed text-muted sm:text-xl">
+                {{ landing_content.intro_body }}
+              </p>
             </div>
           </div>
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {% for item in program_items %}
-              {% if item.kind == "diploma" %}
-                <article class="card-surface-interactive flex flex-col gap-4">
-                  <div class="flex items-start justify-between gap-2.5">
-                    <strong class="text-base font-black text-text m-0">{{ item.title }}</strong>
-                    <span class="status-pill-success shrink-0">{% trans "Open" %}</span>
+        </div>
+      </section>
+    {% endif %}
+
+    {# ── Formation pillars ── #}
+    {% if landing_content.benefits_title %}
+      <section id="approach" class="scroll-mt-28 border-t border-line bg-bg" aria-labelledby="approach-title">
+        <div class="page-container py-16 sm:py-20 lg:py-24">
+          <div class="grid gap-6 lg:grid-cols-12 lg:items-end lg:gap-12">
+            <div class="lg:col-span-8">
+              <span class="landing-kicker">{{ landing_content.benefits_eyebrow }}</span>
+              <h2 id="approach-title" class="landing-display mt-5 text-3xl text-text sm:text-4xl lg:text-[3.1rem] lg:leading-[1.15]">
+                {{ landing_content.benefits_title }}
+              </h2>
+            </div>
+            <p class="max-w-xl text-sm leading-relaxed text-muted lg:col-span-4 lg:pb-2 lg:text-base">
+              {{ landing_content.benefits_body }}
+            </p>
+          </div>
+
+          <div class="mt-12 grid gap-px overflow-hidden rounded-md border border-line bg-line sm:grid-cols-2">
+            <article class="group bg-bg p-7 transition-colors duration-200 hover:bg-surface sm:p-9">
+              <div class="flex items-start justify-between gap-6">
+                <span class="grid h-12 w-12 place-items-center rounded-sm border border-brand/15 bg-brand-soft/60 text-brand">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 2 2 7l10 5 10-5-10-5z"></path>
+                    <path d="M2 17l10 5 10-5"></path>
+                    <path d="M2 12l10 5 10-5"></path>
+                  </svg>
+                </span>
+                <span class="landing-display text-3xl leading-none text-brand/15 transition-colors group-hover:text-brand/35" aria-hidden="true">01</span>
+              </div>
+              <h3 class="mt-6 text-lg font-black text-text">{{ landing_content.benefit_1_title }}</h3>
+              <p class="mt-3 text-sm leading-relaxed text-muted">{{ landing_content.benefit_1_body }}</p>
+            </article>
+            <article class="group bg-bg p-7 transition-colors duration-200 hover:bg-surface sm:p-9">
+              <div class="flex items-start justify-between gap-6">
+                <span class="grid h-12 w-12 place-items-center rounded-sm border border-brand/15 bg-brand-soft/60 text-brand">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <path d="m22 4-10 10.01-3-3"></path>
+                  </svg>
+                </span>
+                <span class="landing-display text-3xl leading-none text-brand/15 transition-colors group-hover:text-brand/35" aria-hidden="true">02</span>
+              </div>
+              <h3 class="mt-6 text-lg font-black text-text">{{ landing_content.benefit_2_title }}</h3>
+              <p class="mt-3 text-sm leading-relaxed text-muted">{{ landing_content.benefit_2_body }}</p>
+            </article>
+            <article class="group bg-bg p-7 transition-colors duration-200 hover:bg-surface sm:p-9">
+              <div class="flex items-start justify-between gap-6">
+                <span class="grid h-12 w-12 place-items-center rounded-sm border border-brand/15 bg-brand-soft/60 text-brand">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    <path d="m9 12 2 2 4-4"></path>
+                  </svg>
+                </span>
+                <span class="landing-display text-3xl leading-none text-brand/15 transition-colors group-hover:text-brand/35" aria-hidden="true">03</span>
+              </div>
+              <h3 class="mt-6 text-lg font-black text-text">{{ landing_content.benefit_3_title }}</h3>
+              <p class="mt-3 text-sm leading-relaxed text-muted">{{ landing_content.benefit_3_body }}</p>
+            </article>
+            <article class="group bg-bg p-7 transition-colors duration-200 hover:bg-surface sm:p-9">
+              <div class="flex items-start justify-between gap-6">
+                <span class="grid h-12 w-12 place-items-center rounded-sm border border-brand/15 bg-brand-soft/60 text-brand">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M2 12h20"></path>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                  </svg>
+                </span>
+                <span class="landing-display text-3xl leading-none text-brand/15 transition-colors group-hover:text-brand/35" aria-hidden="true">04</span>
+              </div>
+              <h3 class="mt-6 text-lg font-black text-text">{{ landing_content.benefit_4_title }}</h3>
+              <p class="mt-3 text-sm leading-relaxed text-muted">{{ landing_content.benefit_4_body }}</p>
+            </article>
+          </div>
+        </div>
+      </section>
+    {% endif %}
+
+    {# ── Parenting spotlight ── #}
+    {% if landing_content.parenting_title %}
+      <section class="border-t border-line bg-surface" aria-labelledby="parenting-title">
+        <div class="page-container py-16 sm:py-20 lg:py-24">
+          <div class="grid items-center gap-12 lg:grid-cols-2 lg:gap-20">
+            <div class="relative">
+              <div class="absolute -inset-3 rounded-md border border-accent-400/30" aria-hidden="true"></div>
+              <div class="relative aspect-[3/2] overflow-hidden rounded-md border border-line bg-brand-soft">
+                {% if landing_settings.parenting_image %}
+                  <img src="{{ landing_settings.parenting_image.url }}"
+                       alt=""
+                       class="h-full w-full object-cover object-center"
+                       loading="lazy"
+                       decoding="async">
+                {% else %}
+                  <img src="{% static 'img/landing-parenting.webp' %}"
+                       alt=""
+                       class="h-full w-full object-cover object-center"
+                       width="1717"
+                       height="916"
+                       loading="lazy"
+                       decoding="async">
+                {% endif %}
+              </div>
+              <div class="absolute -bottom-6 -end-4 hidden h-20 w-20 place-items-center rounded-full border border-accent-400/50 bg-bg text-brand shadow-card sm:grid" aria-hidden="true">
+                <svg class="h-9 w-9" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.2">
+                  <path d="M20 1.5 38.5 20 20 38.5 1.5 20Z"></path>
+                  <path d="M7 7h26v26H7z"></path>
+                  <circle cx="20" cy="20" r="2.2"></circle>
+                </svg>
+              </div>
+            </div>
+
+            <div>
+              <span class="landing-kicker">{{ landing_content.parenting_eyebrow }}</span>
+              <h2 id="parenting-title" class="landing-display mt-5 text-3xl text-text sm:text-4xl lg:text-[3.1rem] lg:leading-[1.15]">
+                {{ landing_content.parenting_title }}
+              </h2>
+              <div class="mt-7 h-px w-16 bg-gradient-to-r from-brand to-transparent" aria-hidden="true"></div>
+              <p class="mt-7 max-w-xl text-base leading-relaxed text-muted sm:text-lg">
+                {{ landing_content.parenting_body }}
+              </p>
+              <a class="group mt-8 inline-flex items-center gap-2 text-sm font-black text-brand no-underline hover:text-brand-800" href="#programs">
+                {% trans "Explore family programs" %}
+                <svg class="landing-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M5 12h14M13 6l6 6-6 6"></path>
+                </svg>
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+    {% endif %}
+
+    {# ── Diploma spotlight ── #}
+    {% if landing_content.diploma_title %}
+      <section class="relative overflow-hidden bg-surface-inverse text-white" aria-labelledby="diploma-title">
+        <div class="landing-pattern-light pointer-events-none absolute inset-0" aria-hidden="true"></div>
+        <div class="page-container relative py-16 sm:py-20 lg:py-24">
+          <div class="grid items-center gap-12 lg:grid-cols-2 lg:gap-20">
+            <div>
+              <span class="landing-kicker landing-kicker-light">{{ landing_content.diploma_eyebrow }}</span>
+              <h2 id="diploma-title" class="landing-display mt-5 text-3xl text-white sm:text-4xl lg:text-[3.1rem] lg:leading-[1.15]">
+                {{ landing_content.diploma_title }}
+              </h2>
+              <p class="mt-7 max-w-xl text-base leading-relaxed text-white/70 sm:text-lg">
+                {{ landing_content.diploma_body }}
+              </p>
+              <p class="mt-7 inline-flex items-start gap-2.5 rounded-sm border border-brand-200/25 bg-white/5 px-4 py-3 text-xs leading-relaxed text-brand-100">
+                <svg class="mt-0.5 h-4 w-4 shrink-0 text-brand-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <path d="M14 2v6h6"></path>
+                  <path d="m9 15 2 2 4-4"></path>
+                </svg>
+                {{ landing_content.entrance_note }}
+              </p>
+              <div class="mt-8">
+                <a class="group inline-flex items-center gap-2 text-sm font-black text-brand-200 no-underline hover:text-white" href="#programs">
+                  {% trans "See diploma programs" %}
+                  <svg class="landing-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M5 12h14M13 6l6 6-6 6"></path>
+                  </svg>
+                </a>
+              </div>
+            </div>
+
+            <div class="relative">
+              <div class="absolute -inset-3 rounded-md border border-accent-400/30" aria-hidden="true"></div>
+              <div class="relative aspect-[4/3] overflow-hidden rounded-md border border-white/10 bg-brand-strong">
+                {% if landing_settings.diploma_image %}
+                  <img src="{{ landing_settings.diploma_image.url }}"
+                       alt=""
+                       class="h-full w-full object-cover object-center"
+                       loading="lazy"
+                       decoding="async">
+                {% else %}
+                  <img src="{% static 'img/landing-diploma.webp' %}"
+                       alt=""
+                       class="h-full w-full object-cover object-center"
+                       width="1655"
+                       height="950"
+                       loading="lazy"
+                       decoding="async">
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    {% endif %}
+
+    {# ── Programs ── #}
+    <section id="programs" class="scroll-mt-28 bg-bg" aria-labelledby="programs-title">
+      <div class="page-container py-16 sm:py-20 lg:py-24">
+        <div class="grid gap-6 lg:grid-cols-12 lg:items-end lg:gap-12">
+          <div class="lg:col-span-8">
+            <span class="landing-kicker">{{ landing_content.programs_eyebrow }}</span>
+            <h2 id="programs-title" class="landing-display mt-5 text-3xl text-text sm:text-4xl lg:text-[3.1rem] lg:leading-[1.15]">
+              {{ landing_content.programs_title }}
+            </h2>
+          </div>
+          <p class="max-w-xl text-sm leading-relaxed text-muted lg:col-span-4 lg:pb-2 lg:text-base">
+            {{ landing_content.programs_body }}
+          </p>
+        </div>
+
+        {% if active_diplomas or courses %}
+          {# Diplomas #}
+          <div id="diplomas" class="mt-14 scroll-mt-28">
+          <div class="flex flex-col gap-5 border-b border-line pb-5 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <span class="landing-kicker">{{ landing_content.diplomas_eyebrow }}</span>
+              <h3 id="diplomas-title" class="landing-display mt-3 text-2xl text-text sm:text-3xl">{{ landing_content.diplomas_title }}</h3>
+            </div>
+            <div class="flex flex-col items-start gap-3 sm:items-end">
+              {% if active_diplomas %}
+                <span class="status-pill border-green bg-white text-green">
+                  <span class="h-1.5 w-1.5 rounded-full bg-green" aria-hidden="true"></span>
+                  {{ landing_content.status_open }}
+                </span>
+              {% endif %}
+              <p class="max-w-md text-sm text-muted sm:text-end">{{ landing_content.diplomas_body }}</p>
+            </div>
+          </div>
+
+          {% if active_diplomas %}
+            <div class="mt-6 grid gap-5 md:grid-cols-2">
+              {% for item in active_diplomas %}
+                <article class="group relative flex flex-col overflow-hidden rounded-md border border-line bg-surface p-6 transition duration-200 hover:-translate-y-1 hover:border-brand/30 hover:shadow-card-hover sm:p-7">
+                  <span class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand via-brand-500 to-accent-400" aria-hidden="true"></span>
+                  <div class="flex items-center justify-between gap-4">
+                    <span class="eyebrow">{% trans "Diploma" %} · {{ forloop.counter|stringformat:"02d" }}</span>
                   </div>
-                  <p class="text-muted text-sm m-0">{{ item.description }}</p>
-                  {% if item.target_label %}
-                    <small class="text-xs text-muted flex items-center gap-1.5">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                      {{ item.target_label }}
-                    </small>
+                  <h4 class="landing-display mt-6 text-2xl text-text">{{ item.title }}</h4>
+                  {% if item.description %}
+                    <p class="mt-3 line-clamp-4 text-sm leading-relaxed text-muted">{{ item.description }}</p>
                   {% endif %}
-                  <div class="pt-2 border-t border-line mt-auto">
-                    <p class="text-xs text-muted flex items-center gap-1.5 mb-2">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                  <div class="mt-auto border-t border-line pt-5">
+                    <p class="flex items-start gap-2 text-[11px] leading-relaxed text-muted">
+                      <svg class="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <path d="M14 2v6h6"></path>
+                        <path d="m9 15 2 2 4-4"></path>
+                      </svg>
                       {{ landing_content.entrance_note }}
                     </p>
-                    <a class="btn-primary w-full" href="{{ item.apply_url }}">{{ landing_content.apply_now|default:_("Apply") }}</a>
+                    <a class="mt-5 inline-flex items-center gap-2 border-b border-brand/30 pb-1 text-sm font-black text-brand no-underline transition-colors hover:border-brand hover:text-brand-800"
+                       href="{{ item.apply_url }}"
+                       aria-label="{{ apply_now_label }} — {{ item.title }}">
+                      {{ apply_now_label }}
+                      <svg class="landing-arrow" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M5 12h14M13 6l6 6-6 6"></path>
+                      </svg>
+                    </a>
                   </div>
                 </article>
-              {% endif %}
-            {% endfor %}
-          </div>
-        </div>
-      {% endif %}
-
-      {% if courses %}
-        <div class="page-stack">
-          <div class="section-head">
-            <div>
-              <span class="eyebrow">{{ landing_content.courses_eyebrow }}</span>
-              <h3 class="m-0">{{ landing_content.courses_title }}</h3>
+              {% endfor %}
             </div>
-          </div>
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {% for item in program_items %}
-              {% if item.kind == "course" %}
-                <article class="card-surface-interactive flex flex-col gap-4">
-                  <strong class="text-base font-black text-text m-0">{{ item.title }}</strong>
-                  <p class="text-muted text-sm m-0">{{ item.description }}</p>
-                  <span class="status-pill-success w-fit">{% trans "Open" %}</span>
-                  <div class="pt-2 border-t border-line mt-auto">
-                    <a class="btn-primary w-full" href="{{ item.apply_url }}">{{ landing_content.apply_now|default:_("Apply") }}</a>
-                  </div>
-                </article>
-              {% endif %}
-            {% endfor %}
-          </div>
-        </div>
-      {% endif %}
-
-      {% if not active_diplomas and not courses %}
-        {% include "ui/components/_empty_state.html" with title=_("No programs available") message=_("Check back soon for current programs.") %}
-      {% endif %}
-    </div>
-  </section>
-
-  {# ── Quote ── #}
-  {% if landing_content.quote %}
-    <section class="bg-surface-inverse py-14 lg:py-20 animate-enter-view">
-      <div class="page-container">
-        <div class="max-w-3xl mx-auto text-center page-stack">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor" class="text-brand-200/40 mx-auto"><path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10H14.017zM0 21v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151C7.564 6.068 6 8.789 6 11h4v10H0z"/></svg>
-          <blockquote class="m-0">
-            <p class="text-white/90 text-lg lg:text-xl font-bold leading-relaxed">“{{ landing_content.quote }}”</p>
-          </blockquote>
-          <div>
-            <strong class="text-white block text-sm">{{ landing_content.quote_name }}</strong>
-            <span class="text-brand-200/60 text-xs">{{ landing_content.quote_role }}</span>
-          </div>
-        </div>
-      </div>
-    </section>
-  {% endif %}
-
-  {# ── CTA ── #}
-  {% if landing_content.cta_title %}
-    <section class="page-container py-14 lg:py-20 animate-enter-view">
-      <div class="card-surface bg-gradient-to-br from-brand-soft to-surface text-center max-w-4xl mx-auto flex flex-col gap-4 items-center">
-        <span class="eyebrow">{{ landing_content.cta_eyebrow }}</span>
-        <h2>{{ landing_content.cta_title }}</h2>
-        <p class="text-muted max-w-lg mx-auto">{{ landing_content.cta_body }}</p>
-        <a class="btn-primary" href="{% url 'applications:register' %}">{{ landing_content.cta_label|default:_("Apply for a program") }}</a>
-      </div>
-    </section>
-  {% endif %}
-
-  {# ── Footer ── #}
-  <footer class="bg-surface-inverse text-white/85">
-    <div class="page-container py-12">
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-        <div class="flex flex-col gap-4">
-          <h3 class="text-white m-0">{{ landing_content.footer_about_title }}</h3>
-          <p class="text-white/70 text-sm m-0 leading-relaxed">{{ landing_content.footer_tagline }}</p>
-          <address class="not-italic text-white/70 text-sm flex flex-col gap-1.5">
-            <span class="flex items-center gap-1.5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> {{ landing_content.footer_address }}</span>
-            {% if landing_settings.contact_email %}
-              <span class="flex items-center gap-1.5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> <a class="text-brand-200 no-underline hover:text-white" href="mailto:{{ landing_settings.contact_email }}">{{ landing_settings.contact_email }}</a></span>
-            {% endif %}
-            {% if landing_settings.contact_phone %}
-              <span class="flex items-center gap-1.5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg> <span class="bidi">{{ landing_settings.contact_phone }}</span></span>
-            {% endif %}
-            <span class="flex items-center gap-1.5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> {{ landing_content.footer_hours }}</span>
-          </address>
-        </div>
-        <div class="flex flex-col gap-4">
-          <h3 class="text-white m-0">{{ landing_content.footer_links_title }}</h3>
-          <nav class="flex flex-col gap-2.5">
-            <a class="text-brand-200 no-underline hover:text-white text-sm flex items-center gap-1.5" href="{% url 'core:landing' %}#programs">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-              {{ landing_content.footer_programs_link }}
-            </a>
-            {% if request.user.is_authenticated %}
-              <a class="text-brand-200 no-underline hover:text-white text-sm flex items-center gap-1.5" href="{% url 'accounts:dashboard' %}">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-                {% trans "Dashboard" %}
-              </a>
-            {% else %}
-              <a class="text-brand-200 no-underline hover:text-white text-sm flex items-center gap-1.5" href="{% url 'applications:register' %}">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-                {{ landing_content.footer_apply_link }}
-              </a>
-              <a class="text-brand-200 no-underline hover:text-white text-sm flex items-center gap-1.5" href="{% url 'accounts:login' %}">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-                {{ landing_content.footer_login_link }}
-              </a>
-            {% endif %}
-          </nav>
-        </div>
-        <div class="flex flex-col gap-4">
-          <h3 class="text-white m-0">{{ landing_content.footer_follow_title }}</h3>
-          {% if landing_settings.facebook_url or landing_settings.instagram_url or landing_settings.youtube_url %}
-            <nav class="flex gap-2.5 flex-wrap">
-              {% if landing_settings.facebook_url %}
-                <a class="inline-flex items-center gap-1.5 border border-white/20 rounded-sm px-3 py-1.5 text-xs text-brand-200 no-underline hover:border-brand-200 hover:bg-white/5 transition-colors" href="{{ landing_settings.facebook_url }}" rel="noopener noreferrer" target="_blank" aria-label="Facebook">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
-                  {% trans "Facebook" %}
-                </a>
-              {% endif %}
-              {% if landing_settings.instagram_url %}
-                <a class="inline-flex items-center gap-1.5 border border-white/20 rounded-sm px-3 py-1.5 text-xs text-brand-200 no-underline hover:border-brand-200 hover:bg-white/5 transition-colors" href="{{ landing_settings.instagram_url }}" rel="noopener noreferrer" target="_blank" aria-label="Instagram">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
-                  {% trans "Instagram" %}
-                </a>
-              {% endif %}
-              {% if landing_settings.youtube_url %}
-                <a class="inline-flex items-center gap-1.5 border border-white/20 rounded-sm px-3 py-1.5 text-xs text-brand-200 no-underline hover:border-brand-200 hover:bg-white/5 transition-colors" href="{{ landing_settings.youtube_url }}" rel="noopener noreferrer" target="_blank" aria-label="YouTube">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.94 2C5.12 20 12 20 12 20s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/><polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02"/></svg>
-                  {% trans "YouTube" %}
-                </a>
-              {% endif %}
-            </nav>
+          {% else %}
+            <p class="mt-6 rounded-md border border-dashed border-line bg-surface px-5 py-6 text-sm text-muted">
+              {{ landing_content.status_closed }}
+            </p>
           {% endif %}
         </div>
-      </div>
-      <div class="border-t border-white/20 pt-5 mt-8 flex flex-col sm:flex-row items-center justify-between gap-2.5">
-        <small class="text-white/70 text-xs">{{ landing_content.footer_note }}</small>
-        <small class="text-white/60 text-xs">&copy; {% now "Y" %} {{ SITE_NAME }}</small>
-      </div>
-    </div>
-  </footer>
 
+        {# Courses #}
+        <div id="courses" class="mt-14 scroll-mt-28">
+          <div class="flex flex-col gap-5 border-b border-line pb-5 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <span class="landing-kicker">{{ landing_content.courses_eyebrow }}</span>
+              <h3 id="courses-title" class="landing-display mt-3 text-2xl text-text sm:text-3xl">{{ landing_content.courses_title }}</h3>
+            </div>
+            <div class="flex flex-col items-start gap-3 sm:items-end">
+              {% if courses %}
+                <span class="status-pill border-green bg-white text-green">
+                  <span class="h-1.5 w-1.5 rounded-full bg-green" aria-hidden="true"></span>
+                  {{ landing_content.status_open }}
+                </span>
+              {% endif %}
+              <p class="max-w-md text-sm text-muted sm:text-end">{{ landing_content.courses_body }}</p>
+            </div>
+          </div>
+
+          {% if courses %}
+            <div class="mt-6 grid gap-5 md:grid-cols-2">
+              {% for item in courses %}
+                <article class="group relative flex flex-col overflow-hidden rounded-md border border-line bg-surface p-6 transition duration-200 hover:-translate-y-1 hover:border-brand/30 hover:shadow-card-hover sm:p-7">
+                  <span class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand via-brand-500 to-accent-400" aria-hidden="true"></span>
+                  <div class="flex items-center justify-between gap-4">
+                    <span class="eyebrow">{% trans "Course" %} · {{ forloop.counter|stringformat:"02d" }}</span>
+                  </div>
+                  <h4 class="landing-display mt-6 text-2xl text-text">{{ item.title }}</h4>
+                  {% if item.description %}
+                    <p class="mt-3 line-clamp-4 text-sm leading-relaxed text-muted">{{ item.description }}</p>
+                  {% endif %}
+                  <div class="mt-auto border-t border-line pt-5">
+                    <p class="flex items-start gap-2 text-[11px] leading-relaxed text-muted">
+                      <svg class="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                        <line x1="8" y1="21" x2="16" y2="21"></line>
+                        <line x1="12" y1="17" x2="12" y2="21"></line>
+                      </svg>
+                      {% trans "Online" %}
+                    </p>
+                    <a class="mt-5 inline-flex items-center gap-2 border-b border-brand/30 pb-1 text-sm font-black text-brand no-underline transition-colors hover:border-brand hover:text-brand-800"
+                       href="{{ item.apply_url }}"
+                       aria-label="{{ apply_now_label }} — {{ item.title }}">
+                      {{ apply_now_label }}
+                      <svg class="landing-arrow" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M5 12h14M13 6l6 6-6 6"></path>
+                      </svg>
+                    </a>
+                  </div>
+                </article>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="mt-6 rounded-md border border-dashed border-line bg-surface px-5 py-6 text-sm text-muted">
+              {{ landing_content.status_closed }}
+            </p>
+          {% endif %}
+        </div>
+
+        {% else %}
+          <div id="courses" class="mt-10 scroll-mt-28 rounded-md border border-line bg-surface px-6 py-10 text-center">
+            <svg class="mx-auto h-10 w-10 text-brand/25" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true">
+              <path d="M20 1.5 38.5 20 20 38.5 1.5 20Z"></path>
+              <path d="M7 7h26v26H7z"></path>
+              <circle cx="20" cy="20" r="2.2"></circle>
+            </svg>
+            <h3 class="mt-5 text-lg font-black text-text">{{ no_programs_title }}</h3>
+            <p class="mt-2 text-sm text-muted">{{ no_programs_message }}</p>
+          </div>
+        {% endif %}
+      </div>
+    </section>
+
+    {# ── Quote ── #}
+    {% if landing_content.quote %}
+      <section class="relative overflow-hidden bg-surface-inverse text-white">
+        <div class="landing-pattern-light pointer-events-none absolute inset-0" aria-hidden="true"></div>
+        <div class="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent-400/50 to-transparent" aria-hidden="true"></div>
+        <div class="page-container relative py-20 lg:py-28">
+          <figure class="mx-auto max-w-4xl text-center">
+            <svg class="mx-auto h-10 w-10 text-accent-400/80" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true">
+              <path d="M20 1.5 38.5 20 20 38.5 1.5 20Z"></path>
+              <path d="M7 7h26v26H7z"></path>
+              <circle cx="20" cy="20" r="2.2"></circle>
+            </svg>
+            <blockquote class="m-0 mt-8">
+              <p class="landing-serif text-2xl leading-relaxed text-white sm:text-3xl lg:text-[2.6rem] lg:leading-[1.4]">
+                “{{ landing_content.quote }}”
+              </p>
+            </blockquote>
+            <figcaption class="mt-10 flex flex-col items-center gap-1">
+              <span class="h-px w-10 bg-brand-200/40" aria-hidden="true"></span>
+              <strong class="mt-4 text-sm font-black text-white">{{ landing_content.quote_name }}</strong>
+              <span class="text-xs text-white/60">{{ landing_content.quote_role }}</span>
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+    {% endif %}
+
+    {# ── Call to action ── #}
+    {% if landing_content.cta_title %}
+      <section class="relative isolate overflow-hidden bg-brand-950">
+        <img src="{% static 'img/landing-institute.webp' %}"
+             alt=""
+             class="absolute inset-0 -z-10 h-full w-full object-cover opacity-50"
+             width="1857"
+             height="847"
+             loading="lazy"
+             decoding="async">
+        <div class="absolute inset-0 -z-10 bg-gradient-to-b from-brand-950/85 via-brand-950/70 to-brand-900/85" aria-hidden="true"></div>
+        <div class="page-container relative py-16 sm:py-20 lg:py-24">
+          <div class="max-w-2xl">
+            <span class="landing-kicker landing-kicker-light">{{ landing_content.cta_eyebrow }}</span>
+            <h2 class="landing-display mt-5 text-3xl text-white sm:text-4xl lg:text-5xl lg:leading-[1.12]">
+              {{ landing_content.cta_title }}
+            </h2>
+            <p class="mt-5 max-w-xl text-base leading-relaxed text-white/70 sm:text-lg">{{ landing_content.cta_body }}</p>
+            {% if request.user.is_authenticated %}
+              <a class="btn group mt-8 bg-bg px-6 text-brand-800 shadow-btn hover:bg-white"
+                 href="{% if CAN_VIEW_STUDENT_NAV %}{% url 'students:apply' %}{% else %}{% url 'accounts:dashboard' %}{% endif %}">
+                {% if CAN_VIEW_STUDENT_NAV %}{{ cta_label }}{% else %}{% trans "Go to dashboard" %}{% endif %}
+                <svg class="landing-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M5 12h14M13 6l6 6-6 6"></path>
+                </svg>
+              </a>
+            {% else %}
+              <a class="btn group mt-8 bg-bg px-6 text-brand-800 shadow-btn hover:bg-white" href="{% url 'applications:register' %}">
+                {{ cta_label }}
+                <svg class="landing-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M5 12h14M13 6l6 6-6 6"></path>
+                </svg>
+              </a>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+    {% endif %}
+
+    {# ── Footer ── #}
+    <footer id="contact" class="relative scroll-mt-28 overflow-hidden bg-surface-inverse text-white/80" aria-label="{% trans 'Contact and institute links' %}">
+      <div class="landing-pattern-light pointer-events-none absolute inset-0 opacity-60" aria-hidden="true"></div>
+      <div class="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent-400/30 to-transparent" aria-hidden="true"></div>
+      <div class="page-container relative py-14 lg:py-20">
+        <div class="grid gap-12 lg:grid-cols-12 lg:gap-10">
+          <div class="lg:col-span-5">
+            <a class="inline-flex items-center gap-3 no-underline text-white" href="{% url 'core:landing' %}">
+              <span class="grid h-11 w-11 place-items-center rounded-t-full rounded-b-md border border-brand-200/30 bg-white/5 text-brand-200">
+                <svg width="22" height="22" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.25" aria-hidden="true">
+                  <path d="M20 1.5 38.5 20 20 38.5 1.5 20Z"></path>
+                  <path d="M7 7h26v26H7z"></path>
+                  <circle cx="20" cy="20" r="2.6"></circle>
+                </svg>
+              </span>
+              <span class="landing-display text-2xl text-white sm:text-3xl">{% if LANGUAGE_CODE == 'ar' %}{{ SITE_NAME_AR }}{% else %}DokkiMashora{% endif %}</span>
+            </a>
+            <p class="mt-6 max-w-md text-sm leading-relaxed text-white/60">{{ landing_content.footer_tagline }}</p>
+
+            <div class="mt-8">
+              <h3 class="landing-label text-white/60">{{ landing_content.footer_contact_title }}</h3>
+              <address class="mt-4 flex flex-col gap-3 text-sm not-italic text-white/65">
+                <span class="flex items-start gap-2.5">
+                  <svg class="mt-0.5 h-4 w-4 shrink-0 text-brand-200/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                    <circle cx="12" cy="10" r="3"></circle>
+                  </svg>
+                  {{ landing_content.footer_address }}
+                </span>
+                {% if landing_settings.contact_email %}
+                  <span class="flex items-start gap-2.5">
+                    <svg class="mt-0.5 h-4 w-4 shrink-0 text-brand-200/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                      <polyline points="22,6 12,13 2,6"></polyline>
+                    </svg>
+                    <a class="break-all text-white/65 no-underline hover:text-white" href="mailto:{{ landing_settings.contact_email }}">{{ landing_settings.contact_email }}</a>
+                  </span>
+                {% endif %}
+                {% if landing_settings.contact_phone %}
+                  <span class="flex items-start gap-2.5">
+                    <svg class="mt-0.5 h-4 w-4 shrink-0 text-brand-200/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                    </svg>
+                    <span class="bidi">{{ landing_settings.contact_phone }}</span>
+                  </span>
+                {% endif %}
+                <span class="flex items-start gap-2.5">
+                  <svg class="mt-0.5 h-4 w-4 shrink-0 text-brand-200/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                  </svg>
+                  {{ landing_content.footer_hours }}
+                </span>
+              </address>
+            </div>
+          </div>
+
+          <div class="lg:col-span-3">
+            <h3 class="landing-label text-white/60">{{ landing_content.footer_links_title }}</h3>
+            <nav class="mt-5 flex flex-col gap-3 text-sm" aria-label="{% trans 'Explore' %}">
+              <a class="w-fit text-white/65 no-underline transition-colors hover:text-white" href="{% url 'core:landing' %}#about">{% trans "Our approach" %}</a>
+              <a class="w-fit text-white/65 no-underline transition-colors hover:text-white" href="{% url 'core:landing' %}#programs">{{ landing_content.footer_programs_link }}</a>
+              {% if request.user.is_authenticated %}
+                <a class="w-fit text-white/65 no-underline transition-colors hover:text-white" href="{% url 'accounts:dashboard' %}">{% trans "Dashboard" %}</a>
+              {% else %}
+                <a class="w-fit text-white/65 no-underline transition-colors hover:text-white" href="{% url 'applications:register' %}">{{ landing_content.footer_apply_link }}</a>
+                <a class="w-fit text-white/65 no-underline transition-colors hover:text-white" href="{% url 'accounts:login' %}">{{ landing_content.footer_login_link }}</a>
+              {% endif %}
+            </nav>
+          </div>
+
+          <div class="lg:col-span-4">
+            <h3 class="landing-label text-white/60">{{ landing_content.footer_follow_title }}</h3>
+            {% if landing_settings.facebook_url or landing_settings.instagram_url or landing_settings.youtube_url %}
+              <nav class="mt-5 flex flex-wrap gap-2.5" aria-label="{% trans 'Social media' %}">
+                {% if landing_settings.facebook_url %}
+                  <a class="inline-flex items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-xs font-bold text-white/70 no-underline transition-colors hover:border-brand-200/50 hover:text-white"
+                     href="{{ landing_settings.facebook_url }}"
+                     rel="noopener noreferrer"
+                     target="_blank">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path>
+                    </svg>
+                    {% trans "Facebook" %}
+                  </a>
+                {% endif %}
+                {% if landing_settings.instagram_url %}
+                  <a class="inline-flex items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-xs font-bold text-white/70 no-underline transition-colors hover:border-brand-200/50 hover:text-white"
+                     href="{{ landing_settings.instagram_url }}"
+                     rel="noopener noreferrer"
+                     target="_blank">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+                      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+                      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+                    </svg>
+                    {% trans "Instagram" %}
+                  </a>
+                {% endif %}
+                {% if landing_settings.youtube_url %}
+                  <a class="inline-flex items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-xs font-bold text-white/70 no-underline transition-colors hover:border-brand-200/50 hover:text-white"
+                     href="{{ landing_settings.youtube_url }}"
+                     rel="noopener noreferrer"
+                     target="_blank">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.94 2C5.12 20 12 20 12 20s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"></path>
+                      <polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02"></polygon>
+                    </svg>
+                    {% trans "YouTube" %}
+                  </a>
+                {% endif %}
+              </nav>
+            {% endif %}
+            {% if not landing_settings.facebook_url and not landing_settings.instagram_url and not landing_settings.youtube_url %}
+              <div class="mt-8 hidden h-28 w-28 place-items-center rounded-full border border-white/10 text-brand-200/25 lg:grid" aria-hidden="true">
+                <svg class="h-14 w-14" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.2">
+                  <path d="M20 1.5 38.5 20 20 38.5 1.5 20Z"></path>
+                  <path d="M7 7h26v26H7z"></path>
+                  <circle cx="20" cy="20" r="2.2"></circle>
+                </svg>
+              </div>
+            {% endif %}
+            <a class="group mt-7 inline-flex items-center gap-2 text-xs font-bold text-white/70 no-underline transition-colors hover:text-white" href="#">
+              {% trans "Back to top" %}
+              <svg class="landing-arrow -rotate-90" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M5 12h14M13 6l6 6-6 6"></path>
+              </svg>
+            </a>
+          </div>
+        </div>
+
+        <div class="mt-14 flex flex-col gap-4 border-t border-white/10 pt-6 sm:flex-row sm:items-center sm:justify-between">
+          <p class="text-xs leading-relaxed text-white/60">{{ landing_content.footer_note }}</p>
+          <p class="shrink-0 text-xs text-white/60">&copy; {% now "Y" %} {% if LANGUAGE_CODE == 'ar' %}{{ SITE_NAME_AR }}{% else %}{{ SITE_NAME }}{% endif %}</p>
+        </div>
+      </div>
+    </footer>
+  </div>
 {% endblock %}

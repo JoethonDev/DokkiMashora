@@ -9,7 +9,7 @@
         <input name="next" type="hidden" value="{{ request.get_full_path }}">
         <button type="submit"
                 class="btn-icon"
-                aria-label="{{ lang_name }}">{{ lang_name|slice:":2"|upper }}</button>
+                aria-label="{{ lang_name }}">{{ lang_code|upper }}</button>
       </form>
     {% endif %}
   {% endfor %}

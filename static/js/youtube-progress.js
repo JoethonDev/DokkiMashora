@@ -35,6 +35,7 @@
       accessDenied: container.dataset.msgAccessDenied || "",
       completed: container.dataset.msgCompleted || "",
       startFailed: container.dataset.msgStartFailed || "",
+      tryAgain: container.dataset.msgTryAgain || "",
     };
 
     var elements = {
@@ -46,6 +47,9 @@
 
     var heartbeat = Core.createHeartbeat(sendCheckpoint);
     var showError = Core.createErrorDisplay(elements, labels, heartbeat);
+    var inFlight = false;
+    var lastSentAt = 0;
+    var blocked = false;
 
     function startHeartbeat() { heartbeat.start(); }
     function stopHeartbeat() { heartbeat.stop(); }
@@ -72,31 +76,51 @@
             startHeartbeat();
           } else {
             stopHeartbeat();
+            if (e.data === YT.PlayerState.PAUSED || e.data === YT.PlayerState.ENDED) {
+              sendFinalCheckpoint();
+            }
           }
         },
       },
     });
 
-    function sendCheckpoint() {
-      if (!sessionId) return;
+    function sendCheckpoint(options) {
+      if (!sessionId || inFlight || blocked) return;
       var pos = ytPlayer.getCurrentTime();
       var rate = ytPlayer.getPlaybackRate();
       var dur = ytPlayer.getDuration() || 0;
       seq++;
+      inFlight = true;
+      lastSentAt = Date.now();
       Core.postJSON(checkpointUrl, {
         session_id: sessionId,
         sequence: seq,
         position: pos,
-        player_state: "playing",
+        player_state: (options && options.keepalive) ? "paused" : "playing",
         rate: rate,
         duration: dur,
-      }).then(function (res) {
-        Core.handleCheckpointResponse(res, elements, labels, heartbeat, showError);
+      }, { keepalive: !!(options && options.keepalive) }).then(function (res) {
+        if (Core.handleCheckpointResponse(res, elements, labels, heartbeat, showError)) {
+          blocked = true;
+        }
+      }).catch(function () {
+        // Leave the last saved position in place; the next heartbeat retries.
+      }).then(function () {
+        inFlight = false;
       });
     }
 
+    function sendFinalCheckpoint() {
+      if (!sessionId || inFlight || blocked || Date.now() - lastSentAt < 3000) return;
+      sendCheckpoint({ keepalive: true });
+    }
+
     window.addEventListener("pagehide", function () {
+      sendFinalCheckpoint();
       stopHeartbeat();
+    });
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "hidden") sendFinalCheckpoint();
     });
   }
 })();

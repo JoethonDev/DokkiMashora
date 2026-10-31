@@ -73,6 +73,11 @@ urlpatterns = [
         views.admin_toggle_all_grades,
         name="admin_toggle_grades",
     ),
+    path(
+        "manage/<int:assessment_id>/grades/global-toggle/",
+        views.admin_toggle_global_grade_visibility,
+        name="admin_toggle_global_grade_visibility",
+    ),
     path("manage/exam-review/", views.admin_exam_review_list, name="admin_exam_review_list"),
     path("manage/exam-review/<int:attempt_id>/", views.admin_exam_review_detail, name="admin_exam_review_detail"),
     path("manage/exam-review/<int:attempt_id>/submit/", views.admin_exam_review_submit, name="admin_exam_review_submit"),
@@ -172,4 +177,5 @@ urlpatterns = [
     path("reviewer/online/<int:assignment_id>/claim/", views.reviewer_claim_submission, name="reviewer_claim_submission"),
     path("manage/reviewer-assignments/", views.admin_reviewer_assignment_list, name="admin_reviewer_assignment_list"),
     path("manage/reviewer-assignments/create/", views.admin_reviewer_assignment_create, name="admin_reviewer_assignment_create"),
+    path("manage/reviewer-assignments/<int:assignment_id>/revoke/", views.admin_reviewer_assignment_revoke, name="admin_reviewer_assignment_revoke"),
 ]

@@ -43,6 +43,12 @@ class DiplomaProgressionRule(TimeStampedModel):
         decimal_places=2,
         validators=[MinValueValidator(0), MaxValueValidator(100)],
     )
+    require_all_required_assessments = models.BooleanField(
+        _("require all required assessments"), default=True,
+    )
+    allow_missing_optional_assessments = models.BooleanField(
+        _("allow missing optional assessments"), default=False,
+    )
     final_exam_pass_percent = models.DecimalField(
         _("final exam pass percent"),
         max_digits=5,
@@ -146,13 +152,15 @@ class SemesterProgressionRule(TimeStampedModel):
         _("pass percent"),
         max_digits=5,
         decimal_places=2,
+        blank=True,
+        null=True,
         validators=[MinValueValidator(0), MaxValueValidator(100)],
     )
     require_all_required_assessments = models.BooleanField(
-        _("require all required assessments"), default=True,
+        _("require all required assessments"), blank=True, default=None, null=True,
     )
     allow_missing_optional_assessments = models.BooleanField(
-        _("allow missing optional assessments"), default=False,
+        _("allow missing optional assessments"), blank=True, default=None, null=True,
     )
     is_active = models.BooleanField(_("active"), default=True)
 
@@ -319,6 +327,17 @@ class PromotionDecision(TimeStampedModel):
     )
     decided_at = models.DateTimeField(_("decided at"), auto_now_add=True, db_index=True)
     metadata = models.JSONField(_("metadata"), null=True, blank=True)
+    superseded_at = models.DateTimeField(
+        _("superseded at"), null=True, blank=True, db_index=True,
+    )
+    superseded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="superseded_promotion_decisions",
+        verbose_name=_("superseded by"),
+    )
 
     class Meta:
         verbose_name = _("promotion decision")
@@ -716,17 +735,19 @@ class SemesterEvaluationConfig(TimeStampedModel):
         return f"{self.cohort} - {self.semester} ({self.get_status_display()})"
 
     def clean(self):
-        if self.semester.diploma_id != self.cohort.diploma_id:
-            raise ValidationError(_("Semester must belong to the same diploma as the cohort."))
+        if self.semester_id and self.cohort_id:
+            if self.semester.diploma_id != self.cohort.diploma_id:
+                raise ValidationError(_("Semester must belong to the same diploma as the cohort."))
         if self.status == EVALUATION_CONFIG_STATUS_ACTIVE:
-            total = (
-                self.attendance_weight_percent
-                + self.homework_weight_percent
-                + self.semester_exam_weight_percent
+            weights = (
+                self.attendance_weight_percent,
+                self.homework_weight_percent,
+                self.semester_exam_weight_percent,
             )
-            if total != 100:
-                raise ValidationError(_("Active evaluation weights must sum to 100."))
-            if self.overall_min_percent <= 0:
+            if all(weight is not None for weight in weights):
+                if sum(weights) != 100:
+                    raise ValidationError(_("Active evaluation weights must sum to 100."))
+            if self.overall_min_percent is not None and self.overall_min_percent <= 0:
                 raise ValidationError(_("Overall minimum must be positive."))
 
 
@@ -902,13 +923,15 @@ class SemesterInterview(TimeStampedModel):
 
     Requested after a finalized evaluation (PASS or FAIL); while requested it
     blocks final resolution. Completion records the structured outcome and may
-    be followed by either final direction.
+    be followed by either final direction. Re-evaluation supersedes the old
+    interview instead of deleting it, so a fresh active interview can be
+    requested for the new evaluation.
     """
 
-    outcome = models.OneToOneField(
+    outcome = models.ForeignKey(
         FinalProgressionOutcome,
         on_delete=models.CASCADE,
-        related_name="interview",
+        related_name="interviews",
         verbose_name=_("final progression outcome"),
     )
     status = models.CharField(
@@ -944,10 +967,28 @@ class SemesterInterview(TimeStampedModel):
         verbose_name=_("completed by"),
     )
     completed_at = models.DateTimeField(_("completed at"), null=True, blank=True)
+    superseded_at = models.DateTimeField(
+        _("superseded at"), null=True, blank=True, db_index=True,
+    )
+    superseded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="superseded_semester_interviews",
+        verbose_name=_("superseded by"),
+    )
 
     class Meta:
         verbose_name = _("semester interview")
         verbose_name_plural = _("semester interviews")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["outcome"],
+                condition=models.Q(superseded_at__isnull=True),
+                name="uq_active_interview_per_outcome",
+            ),
+        ]
 
     def __str__(self):
         return f"Interview {self.get_status_display()} for {self.outcome}"

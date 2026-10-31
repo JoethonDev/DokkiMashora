@@ -1,14 +1,14 @@
 {% extends "ui/base.html" %}
 {% load i18n %}
 {% block shell %}
-  <div class="grid min-h-screen grid-cols-1 lg:grid-cols-shell"
+  <div class="grid min-h-screen grid-cols-1 {% if HIDE_STAFF_SIDEBAR %}grid-rows-[minmax(0,1fr)_auto]{% endif %} {% if not HIDE_STAFF_SIDEBAR %}lg:grid-cols-shell{% endif %}"
        x-data="{sidebarOpen:false, sidebarTrigger:null, isDesktop:false}"
        @keydown.escape.window="sidebarOpen=false; $nextTick(() => { if (sidebarTrigger) sidebarTrigger.focus(); })"
        @sidebar-open.window="sidebarOpen=true; sidebarTrigger=$event.detail?.trigger || $event.target; $nextTick(() => { document.body.classList.add('overflow-hidden'); if (!$data.isDesktop) { window.dispatchEvent(new CustomEvent('focus-trap:enable', {detail:{container: document.getElementById('admin-sidebar')}})); setTimeout(() => { $refs.sidebarClose && $refs.sidebarClose.focus(); }, 80); } })"
        @sidebar-close.window="sidebarOpen=false; $nextTick(() => { document.body.classList.remove('overflow-hidden'); window.dispatchEvent(new CustomEvent('focus-trap:disable')); if (sidebarTrigger) sidebarTrigger.focus(); })"
        x-init="$watch('sidebarOpen', val => { document.body.classList.toggle('overflow-hidden', val); if (val && !isDesktop) { window.dispatchEvent(new CustomEvent('focus-trap:enable', {detail:{container: document.getElementById('admin-sidebar')}})); setTimeout(() => { $refs.sidebarClose && $refs.sidebarClose.focus(); }, 80); } else if (!val) { window.dispatchEvent(new CustomEvent('focus-trap:disable')); if (sidebarTrigger) { $nextTick(() => sidebarTrigger.focus()); } } });
                  (() => { const mq = window.matchMedia('(min-width: 1024px)'); const sync = () => { isDesktop = mq.matches; if (isDesktop && sidebarOpen) { sidebarOpen=false; document.body.classList.remove('overflow-hidden'); window.dispatchEvent(new CustomEvent('focus-trap:disable')); } }; sync(); mq.addEventListener('change', sync); })()"
-       data-page-shell><div class="fixed inset-0 top-14 bg-surface-inverse/40 z-backdrop opacity-0 pointer-events-none transition-opacity duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)]"
+       data-page-shell>{% if not HIDE_STAFF_SIDEBAR %}<div class="fixed inset-0 top-14 bg-surface-inverse/40 z-backdrop opacity-0 pointer-events-none transition-opacity duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)]"
             :class="{open:sidebarOpen}"
             @click="sidebarOpen=false; $dispatch('sidebar-close')"></div><aside id="admin-sidebar"
              class="fixed -start-72 top-14 w-72 shadow-modal bg-surface-inverse text-white flex flex-col gap-1 z-sidebar transition-all duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)] lg:h-screen lg:sticky lg:top-0 lg:start-auto lg:w-sidebar lg:p-5 lg:shadow-none lg:transition-none"
@@ -24,12 +24,12 @@
        <nav class="overflow-y-auto scrollbar-none py-2 lg:block"
             aria-label="{% trans 'Admin navigation' %}"
             data-content-navigation
-            hx-boost="true"
-            hx-target="#main"
-            hx-select="#main"
-            hx-swap="outerHTML"
-            hx-push-url="true"
-            hx-indicator="#global-loading">{% regroup WORKSPACE_NAVIGATION by section_key as nav_sections %}
+            hx-boost:inherited="true"
+            hx-target:inherited="#main"
+            hx-select:inherited="#main"
+            hx-swap:inherited="outerHTML"
+            hx-push-url:inherited="true"
+            hx-indicator:inherited="#global-loading">{% regroup WORKSPACE_NAVIGATION by section_key as nav_sections %}
         {% for section in nav_sections %}
           <div class="sidebar-section">{{ section.list.0.section }}</div>
           {% for item in section.list %}
@@ -42,13 +42,14 @@
           {% endfor %}
         {% endfor %}
       </nav>
-      {% include "ui/components/_profile_menu.html" with role_label=user.primary_role|default:_("Staff") %}
+      {% include "ui/components/_profile_menu.html" with role_label=user.primary_role|default:"Staff" %}
     </aside>
-    <section class="min-w-0 lg:col-start-2" :inert="sidebarOpen && !isDesktop ? 'true' : null">
+    {% endif %}
+    <section class="min-w-0 {% if not HIDE_STAFF_SIDEBAR %}lg:col-start-2{% endif %}" :inert="sidebarOpen && !isDesktop ? 'true' : null">
       {% include "ui/components/_workspace_topbar.html" with show_global_search=True profile_url="accounts:profile" profile_icon="&#9813;" section_label=section_label|default:_("Workspace") sidebar_id="admin-sidebar" %}
       <main id="main" tabindex="-1" class="pt-3 px-5 pb-9 lg:pt-3.5 lg:px-8 lg:pb-12 max-w-7xl mx-auto w-full focus:outline-none">
         {% block content %}{% endblock %}</main>
     </section>
-    <footer class="shrink-0 bg-white border-t border-line py-4 px-4 lg:px-8 lg:col-span-2 text-center text-xs text-muted">{% block footer %}{% now "Y" as current_year %}&copy; {{ current_year }} DokkiMashora. {% trans "All rights reserved." %}{% endblock %}</footer>
+    <footer class="shrink-0 bg-white border-t border-line py-4 px-4 lg:px-8 {% if not HIDE_STAFF_SIDEBAR %}lg:col-span-2{% endif %} text-center text-xs text-muted">{% block footer %}{% now "Y" as current_year %}&copy; {{ current_year }} DokkiMashora. {% trans "All rights reserved." %}{% endblock %}</footer>
   </div>
 {% endblock %}

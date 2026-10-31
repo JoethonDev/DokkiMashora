@@ -6,7 +6,10 @@
   var active = null;
 
   function findElement(root, selector) {
-    root = root || document;
+    if (!root || !root.isConnected) {
+      var replacement = root && root.id ? document.getElementById(root.id) : null;
+      root = replacement || document;
+    }
     if (root.nodeType === 1 && root.matches(selector)) return root;
     return root.querySelector(selector);
   }
@@ -82,11 +85,9 @@
     destroy: destroyActive,
   };
 
-  document.addEventListener("htmx:afterSwap", function (event) {
-    initAssessmentTimer(event.detail && event.detail.target);
-  });
-  document.addEventListener("htmx:load", function (event) {
-    initAssessmentTimer(event.target);
+  document.addEventListener("htmx:after:swap", function (event) {
+    var ctx = event.detail && event.detail.ctx;
+    initAssessmentTimer(ctx && ctx.target);
   });
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", function () { initAssessmentTimer(document); });

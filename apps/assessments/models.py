@@ -62,6 +62,20 @@ class Assessment(TimeStampedModel):
         choices=ASSESSMENT_TYPE_CHOICES,
         db_index=True,
     )
+    is_completion_exam = models.BooleanField(
+        _("end-course exam"),
+        default=False,
+        help_text=_(
+            "Passing this course quiz defines course completion. Only one quiz per course version can be the end-course exam."
+        ),
+    )
+    is_required_for_semester_evaluation = models.BooleanField(
+        _("Required for semester evaluation"),
+        default=True,
+        help_text=_(
+            "If absent, this assessment may block the semester result depending on the diploma or semester progression policy."
+        ),
+    )
     course_version = models.ForeignKey(
         CourseVersion,
         on_delete=models.CASCADE,
@@ -206,6 +220,33 @@ class Assessment(TimeStampedModel):
                 condition=models.Q(~models.Q(legacy_status=LEGACY_STATUS_ACTIVE)) | models.Q(max_attempts=1),
                 name="check_assessment_active_one_attempt",
             ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        course_version__isnull=True,
+                        semester__isnull=False,
+                        cohort__isnull=False,
+                        assessment_type__in=(ASSESSMENT_TYPE_HOMEWORK, ASSESSMENT_TYPE_SEMESTER_EXAM),
+                    )
+                    | models.Q(is_required_for_semester_evaluation=True)
+                ),
+                name="check_asmt_optional_scope",
+            ),
+            models.UniqueConstraint(
+                fields=("course_version",),
+                condition=models.Q(is_completion_exam=True),
+                name="uq_assessment_completion_exam_per_course_version",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(is_completion_exam=False)
+                    | models.Q(
+                        assessment_type=ASSESSMENT_TYPE_QUIZ,
+                        course_version__isnull=False,
+                    )
+                ),
+                name="check_assessment_completion_exam_course_quiz",
+            ),
         ]
 
     def __str__(self):
@@ -227,6 +268,15 @@ class Assessment(TimeStampedModel):
     def clean(self):
         if self.open_at and self.close_at and self.open_at >= self.close_at:
             raise ValidationError(_("Open time must be before close time."))
+        if not self.is_required_for_semester_evaluation and not (
+            self.course_version_id is None
+            and self.semester_id is not None
+            and self.cohort_id is not None
+            and self.assessment_type in (ASSESSMENT_TYPE_HOMEWORK, ASSESSMENT_TYPE_SEMESTER_EXAM)
+        ):
+            raise ValidationError(
+                _("Only diploma Homework and Semester Exam assessments can be optional for semester evaluation.")
+            )
         if self.duration_minutes is not None and self.duration_minutes < 1:
             raise ValidationError(_("Duration must be positive for timed assessments."))
         if self.max_attempts < 1:
@@ -361,6 +411,14 @@ class AssessmentAttempt(TimeStampedModel):
         decimal_places=2,
         null=True,
         blank=True,
+    )
+    possible_points_snapshot = models.DecimalField(
+        _("possible points snapshot"),
+        max_digits=7,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=_("Maximum possible points frozen for this attempt's online questions or offline section layout."),
     )
     score_percent = models.DecimalField(
         _("score (percent)"),
@@ -773,7 +831,7 @@ class AssessmentAttemptQuestion(TimeStampedModel):
     source_type = models.CharField(_("source type"), max_length=10, choices=SNAPSHOT_QUESTION_SOURCE_CHOICES)
     text_snapshot = models.TextField(_("question text snapshot"))
     question_type = models.CharField(_("type"), max_length=15, choices=QUESTION_TYPE_CHOICES)
-    points = models.DecimalField(_("points"), max_digits=5, decimal_places=2)
+    points = models.DecimalField(_("points"), max_digits=7, decimal_places=2)
     order = models.PositiveIntegerField(_("order"))
     required = models.BooleanField(_("required"), default=True)
     rubric_snapshot = models.TextField(_("rubric snapshot"), blank=True)
@@ -809,7 +867,7 @@ class AssessmentAttemptSnapshotAnswer(TimeStampedModel):
     attempt_question = models.ForeignKey(AssessmentAttemptQuestion, on_delete=models.CASCADE, related_name="answers", verbose_name=_("attempt question"))
     selected_choice = models.ForeignKey(AssessmentAttemptChoice, on_delete=models.SET_NULL, null=True, blank=True, related_name="answers", verbose_name=_("selected choice"))
     written_text = models.TextField(_("written text"), blank=True)
-    score = models.DecimalField(_("score"), max_digits=5, decimal_places=2, null=True, blank=True)
+    score = models.DecimalField(_("score"), max_digits=7, decimal_places=2, null=True, blank=True)
     feedback = models.TextField(_("feedback"), blank=True)
     graded_at = models.DateTimeField(_("graded at"), null=True, blank=True)
     graded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="graded_snapshot_answers", verbose_name=_("graded by"))
@@ -1021,6 +1079,40 @@ class SemesterExamCode(TimeStampedModel):
         return f"{self.code_number} - {self.assessment}"
 
 
+class SemesterExamCodeSectionMaximum(TimeStampedModel):
+    """Freeze the section identity and maximum used for one issued exam code."""
+
+    exam_code = models.ForeignKey(
+        SemesterExamCode,
+        on_delete=models.CASCADE,
+        related_name="section_maximums",
+        verbose_name=_("exam code"),
+    )
+    section = models.ForeignKey(
+        AssessmentLectureSection,
+        on_delete=models.RESTRICT,
+        related_name="exam_code_maximum_snapshots",
+        verbose_name=_("assessment section"),
+    )
+    order_snapshot = models.PositiveIntegerField(_("section order"))
+    section_title_snapshot = models.CharField(_("section title"), max_length=255)
+    max_grade_snapshot = models.DecimalField(_("maximum grade"), max_digits=7, decimal_places=2)
+
+    class Meta:
+        verbose_name = _("exam code section maximum")
+        verbose_name_plural = _("exam code section maximums")
+        ordering = ("order_snapshot", "pk")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("exam_code", "section"),
+                name="uq_exam_code_section_maximum",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.exam_code.code_number} - {self.section_title_snapshot}"
+
+
 class OfflineSectionGrade(TimeStampedModel):
     exam_code = models.ForeignKey(SemesterExamCode, on_delete=models.CASCADE, related_name="section_grades", verbose_name=_("exam code"))
     section = models.ForeignKey(AssessmentLectureSection, on_delete=models.CASCADE, related_name="offline_grades", verbose_name=_("section"))
@@ -1037,8 +1129,16 @@ class OfflineSectionGrade(TimeStampedModel):
         ]
 
     def clean(self):
-        if self.section_id and self.score is not None and self.score > self.section.max_grade:
-            raise ValidationError(_("Score cannot exceed section max grade of %(max)s.") % {"max": self.section.max_grade})
+        if not self.section_id or self.score is None:
+            return
+        max_grade = SemesterExamCodeSectionMaximum.objects.filter(
+            exam_code_id=self.exam_code_id,
+            section_id=self.section_id,
+        ).values_list("max_grade_snapshot", flat=True).first()
+        if max_grade is None:
+            max_grade = self.section.max_grade
+        if self.score > max_grade:
+            raise ValidationError(_("Score cannot exceed section max grade of %(max)s.") % {"max": max_grade})
 
     def save(self, *args, **kwargs):
         self.clean()
@@ -1143,7 +1243,7 @@ class ReviewerAssignment(TimeStampedModel):
 
 
 class ReviewerExamClaim(TimeStampedModel):
-    """Exclusive anonymous claim for one Reviewer/Exam section submission."""
+    """Exclusive anonymous claim for one whole Reviewer/Exam attempt."""
 
     assignment = models.ForeignKey(
         ReviewerAssignment, on_delete=models.PROTECT,
@@ -1156,6 +1256,7 @@ class ReviewerExamClaim(TimeStampedModel):
     section = models.ForeignKey(
         AssessmentLectureSection, on_delete=models.PROTECT,
         related_name="reviewer_exam_claims", verbose_name=_("section"),
+        null=True, blank=True,
     )
     claimed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
@@ -1177,9 +1278,9 @@ class ReviewerExamClaim(TimeStampedModel):
         verbose_name_plural = _("reviewer exam claims")
         constraints = [
             models.UniqueConstraint(
-                fields=["attempt", "section"],
+                fields=["attempt"],
                 condition=models.Q(status=REVIEWER_CLAIM_IN_PROGRESS),
-                name="uq_active_reviewer_claim_attempt_section",
+                name="uq_active_reviewer_claim_attempt",
             ),
             models.UniqueConstraint(
                 fields=["assignment"],

@@ -21,6 +21,7 @@ from django.utils import timezone
 from apps.accounts.models import UserUploadRow
 from apps.communications.constants import EMAIL_STATUS_FAILED, EMAIL_STATUS_SENT
 from apps.communications.email_message import EmailMessage
+from apps.deployment.models import SystemJobRun
 from apps.entrance_exams.constants import ATTEMPT_STATUS_COMPLETED, ATTEMPT_STATUS_GRADED
 from apps.entrance_exams.models import EntranceSnapshot
 from apps.payments.models import PaymentUploadRow
@@ -29,22 +30,21 @@ logger = logging.getLogger("apps.core.tasks")
 
 #: Retention window for ephemeral data (DECISION #33).
 RETENTION_DAYS = 30
+#: Operational job-run history is much larger than business audit history.
+JOB_RUN_RETENTION_DAYS = 90
 #: Max rows mutated per atomic batch — keeps each transaction small under the
 #: 2 vCPU / 4 GB infrastructure ceiling and avoids unbounded loads.
 BATCH_SIZE = 500
 
 
 def _iter_pk_batches(queryset, batch_size: int = BATCH_SIZE):
-    """Yield bounded lists of primary keys from ``queryset``.
-
-    Each iteration re-evaluates the queryset, so rows that no longer match the
-    retention filter (already blanked or deleted) disappear from the next slice
-    without ever loading more than ``batch_size`` rows at once.
-    """
+    """Yield bounded lists of primary keys using keyset pagination."""
+    last_pk = 0
     while True:
-        batch = list(queryset.values_list("pk", flat=True)[:batch_size])
+        batch = list(queryset.filter(pk__gt=last_pk).order_by("pk").values_list("pk", flat=True)[:batch_size])
         if not batch:
             return
+        last_pk = batch[-1]
         yield batch
 
 
@@ -56,13 +56,11 @@ def _blank_email_bodies(cutoff) -> int:
     produce an empty send. The delivery record (status, to_email, sent_at,
     template_slug, subject) is kept so audit/traceability stays intact.
     """
-    queryset = (
-        EmailMessage.objects.filter(
-            created_at__lt=cutoff,
-            status__in=[EMAIL_STATUS_SENT, EMAIL_STATUS_FAILED],
-            body__gt="",
-        ).order_by("pk")
-    )
+    queryset = EmailMessage.objects.filter(
+        created_at__lt=cutoff,
+        status__in=[EMAIL_STATUS_SENT, EMAIL_STATUS_FAILED],
+        body__gt="",
+    ).order_by("pk")
     total = 0
     for batch in _iter_pk_batches(queryset):
         with transaction.atomic():
@@ -109,6 +107,15 @@ def _blank_import_raw_payloads(cutoff) -> dict[str, int]:
     return totals
 
 
+def _delete_old_job_runs(cutoff) -> int:
+    queryset = SystemJobRun.objects.filter(created_at__lt=cutoff).order_by("pk")
+    total = 0
+    for batch in _iter_pk_batches(queryset):
+        with transaction.atomic():
+            total += SystemJobRun.objects.filter(pk__in=batch).delete()[0]
+    return total
+
+
 @shared_task(ignore_result=True)
 def purge_ephemeral_data_task() -> dict:
     """Enforce the 30-day retention policy for ephemeral data (DECISION #33).
@@ -119,10 +126,13 @@ def purge_ephemeral_data_task() -> dict:
     data is logged or returned.
     """
     cutoff = timezone.now() - timedelta(days=RETENTION_DAYS)
+    job_cutoff = timezone.now() - timedelta(days=JOB_RUN_RETENTION_DAYS)
     summary = {
         "retention_days": RETENTION_DAYS,
+        "job_run_retention_days": JOB_RUN_RETENTION_DAYS,
         "email_bodies_blanked": _blank_email_bodies(cutoff),
         "entrance_snapshots_deleted": _delete_terminal_snapshots(cutoff),
+        "job_runs_deleted": _delete_old_job_runs(job_cutoff),
         **_blank_import_raw_payloads(cutoff),
     }
     logger.info("Ephemeral data retention cleanup: %s", summary)

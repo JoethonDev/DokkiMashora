@@ -1,19 +1,37 @@
 {% load i18n %}
-{% for question in questions %}
-  <div class="border border-line rounded-sm p-4" data-assessment-question="{{ question.order }}" data-question-id="{{ question.id }}">
-    <div class="flex items-center gap-2 mb-2">
-      <span class="text-xs font-bold text-muted uppercase">#{{ question.order }}</span>
-      <span class="px-2 py-0.5 text-xs font-bold rounded-full {% if question.question_type == 'mcq' %}bg-info-soft text-info-text{% else %}bg-warning-soft text-warning-text{% endif %}">{{ question.get_question_type_display }}</span>
-    </div>
-    <p class="text-sm font-medium m-0">{{ question.text_snapshot }}</p>
-    {% if question.question_type == "written" %}
-      <textarea class="form-textarea mt-3" name="q_{{ question.order }}" rows="5" data-q="{{ question.order }}"></textarea>
-    {% else %}
-      <div class="flex flex-col gap-1.5 mt-3 ps-2 border-s-2 border-line">
-        {% for choice in question.choices.all %}
-          <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="radio" name="q_{{ question.order }}" value="{{ choice.id }}" class="form-radio" data-q="{{ question.order }}"><span>{{ choice.text_snapshot }}</span></label>
-        {% endfor %}
+{% regroup questions by section as lecture_groups %}
+<div class="flex flex-col gap-4">
+{% for lecture_group in lecture_groups %}
+  <details class="group border border-line rounded-sm bg-surface" open>
+    <summary class="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer list-none hover:bg-surface-soft rounded-sm group-open:border-b group-open:border-line [&::-webkit-details-marker]:hidden">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <span class="text-xs text-muted shrink-0 transition-transform group-open:rotate-90" aria-hidden="true">&#9654;</span>
+        <span class="text-xs font-bold text-muted uppercase shrink-0">{% trans "Lecture" %} {{ lecture_group.grouper.order }}</span>
+        <span class="text-xs text-muted shrink-0" aria-hidden="true">&middot;</span>
+        <strong class="truncate">{{ lecture_group.grouper.lecture.title }}</strong>
       </div>
-    {% endif %}
-  </div>
+      <span class="text-xs text-muted shrink-0">{% trans "Questions" %}: {{ lecture_group.list|length }}</span>
+    </summary>
+    <div class="flex flex-col gap-4 p-3">
+      {% for question in lecture_group.list %}
+        <div class="border border-line rounded-sm p-4" data-assessment-question="{{ question.order }}" data-question-id="{{ question.id }}">
+          <div class="flex items-center gap-2 mb-2 flex-wrap">
+            <span class="text-xs font-bold text-muted uppercase">#{{ question.order }}</span>
+            <span class="px-2 py-0.5 text-xs font-bold rounded-full {% if question.question_type == 'mcq' %}bg-info-soft text-info-text{% else %}bg-warning-soft text-warning-text{% endif %}">{{ question.get_question_type_display }}</span>
+          </div>
+          <p class="text-sm font-medium m-0">{{ question.text_snapshot }}</p>
+          {% if question.question_type == "written" %}
+            <textarea class="form-textarea mt-3" name="q_{{ question.order }}" rows="5" data-q="{{ question.order }}"></textarea>
+          {% else %}
+            <div class="flex flex-col gap-1.5 mt-3 ps-2 border-s-2 border-line">
+              {% for choice in question.choices.all %}
+                <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="radio" name="q_{{ question.order }}" value="{{ choice.id }}" class="form-radio" data-q="{{ question.order }}"><span>{{ choice.text_snapshot }}</span></label>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  </details>
 {% endfor %}
+</div>

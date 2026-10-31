@@ -28,6 +28,9 @@ from apps.academics.constants import (
     AUDIO_PROCESSING_COMPLETED,
     AUDIO_PROCESSING_FAILED,
     AUDIO_PROCESSING_PROCESSING,
+    YOUTUBE_METADATA_STATUS_PENDING,
+    YOUTUBE_METADATA_STATUS_READY,
+    YOUTUBE_METADATA_STATUS_UNAVAILABLE,
 )
 from apps.academics.models import DiplomaLecture, Lecture
 from apps.storage.services import record_deferred_storage_deletion, storage_service
@@ -51,31 +54,53 @@ def _iso8601_duration_to_seconds(value: str) -> int | None:
     return int(timedelta(**parts).total_seconds())
 
 
-def _mark_metadata_unavailable(lecture, *, reason: str = "") -> None:
-    """Persist the 'metadata unavailable' state on the lecture.
+def _youtube_request_queryset(model, lecture_id, video_id, request_id):
+    queryset = model.objects.filter(pk=lecture_id, youtube_video_id=video_id)
+    if request_id is None:
+        return queryset.filter(youtube_metadata_request_id__isnull=True)
+    return queryset.filter(youtube_metadata_request_id=request_id)
 
-    The lecture model has no dedicated metadata-status field, so the state is
-    recorded with the existing field set: ``youtube_metadata_fetched_at`` set
-    (an attempt happened) with ``youtube_duration_seconds`` left NULL. Staff
-    can see the attempt timestamp and the missing duration; the duration-
-    weighted progress selector excludes lectures without a saved duration.
-    """
-    lecture.youtube_metadata_fetched_at = timezone.now()
-    lecture.save(update_fields=["youtube_metadata_fetched_at"])
+
+def _mark_metadata_unavailable(
+    model,
+    lecture_id,
+    video_id,
+    request_id,
+    *,
+    reason: str = "",
+) -> None:
+    """Persist failure only for the still-current video metadata request."""
+    now = timezone.now()
+    updated = _youtube_request_queryset(
+        model, lecture_id, video_id, request_id,
+    ).filter(youtube_metadata_status=YOUTUBE_METADATA_STATUS_PENDING).update(
+        youtube_metadata_status=YOUTUBE_METADATA_STATUS_UNAVAILABLE,
+        youtube_metadata_fetched_at=now,
+        updated_at=now,
+    )
+    if not updated:
+        logger.info("Ignoring stale YouTube metadata failure for lecture %s", lecture_id)
+        return
     if reason:
-        logger.error("YouTube metadata unavailable for lecture %s: %s", lecture.id, reason)
+        logger.error("YouTube metadata unavailable for lecture %s: %s", lecture_id, reason)
     else:
-        logger.error("YouTube metadata unavailable for lecture %s", lecture.id)
+        logger.error("YouTube metadata unavailable for lecture %s", lecture_id)
 
 
 @shared_task(ignore_result=True, max_retries=2, default_retry_delay=60)
-def refresh_youtube_metadata_task(lecture_id: int, *, diploma: bool = False) -> None:
+def refresh_youtube_metadata_task(
+    lecture_id: int,
+    *,
+    diploma: bool = False,
+    expected_video_id: str | None = None,
+    request_id: str | None = None,
+) -> None:
     """Fetch duration/embeddable state from the official YouTube Data API.
 
     Only runs when ``settings.YOUTUBE_API_KEY`` is set. On success the
-    duration is persisted into ``youtube_duration_seconds``; on any failure
-    (missing key, API error, unembeddable video) the lecture is left with a
-    persisted 'metadata unavailable' state and an ERROR log entry.
+    duration is persisted into ``youtube_duration_seconds``. Completion or
+    failure only applies while both the source video and request generation
+    still match, so edits and retries cannot be overwritten by stale work.
     """
     model = DiplomaLecture if diploma else Lecture
     try:
@@ -84,12 +109,59 @@ def refresh_youtube_metadata_task(lecture_id: int, *, diploma: bool = False) -> 
         logger.warning("YouTube metadata task: lecture %s (diploma=%s) no longer exists", lecture_id, diploma)
         return
 
+    video_id = expected_video_id or lecture.youtube_video_id
+    if expected_video_id and expected_video_id != lecture.youtube_video_id:
+        logger.info("Ignoring stale YouTube metadata task for lecture %s", lecture_id)
+        return
+
+    if request_id is None:
+        # A queued pre-deployment task is valid only while no newer request has
+        # claimed this lecture. New tasks always carry their request UUID.
+        if lecture.youtube_metadata_request_id is not None:
+            logger.info("Ignoring superseded YouTube metadata task for lecture %s", lecture_id)
+            return
+        request_token = None
+    else:
+        request_token = request_id
+        if str(lecture.youtube_metadata_request_id or "") != request_id:
+            logger.info("Ignoring stale YouTube metadata task for lecture %s", lecture_id)
+            return
+
+    if not video_id:
+        logger.error("YouTube metadata unavailable for lecture %s: no video ID", lecture_id)
+        return
+    if (
+        lecture.youtube_metadata_status == YOUTUBE_METADATA_STATUS_READY
+        and lecture.youtube_duration_seconds
+        and lecture.youtube_duration_seconds > 0
+    ):
+        return
+
+    request_queryset = _youtube_request_queryset(model, lecture_id, video_id, request_token)
+    if lecture.youtube_metadata_status != YOUTUBE_METADATA_STATUS_PENDING:
+        now = timezone.now()
+        claimed = request_queryset.filter(
+            youtube_metadata_status__in=("", YOUTUBE_METADATA_STATUS_UNAVAILABLE),
+        ).update(
+            youtube_metadata_status=YOUTUBE_METADATA_STATUS_PENDING,
+            youtube_metadata_fetched_at=None,
+            updated_at=now,
+        )
+        if not claimed:
+            logger.info("Ignoring inactive YouTube metadata task for lecture %s", lecture_id)
+            return
+    elif not request_queryset.filter(
+        youtube_metadata_status=YOUTUBE_METADATA_STATUS_PENDING,
+    ).exists():
+        logger.info("Ignoring stale YouTube metadata task for lecture %s", lecture_id)
+        return
+
     api_key = getattr(settings, "YOUTUBE_API_KEY", None)
     if not api_key:
-        _mark_metadata_unavailable(lecture, reason="YOUTUBE_API_KEY not configured")
-        return
-    if not lecture.youtube_video_id:
-        _mark_metadata_unavailable(lecture, reason="no video id")
+        _mark_metadata_unavailable(
+            model, lecture_id, video_id, request_token,
+            reason="YOUTUBE_API_KEY not configured",
+        )
         return
 
     try:
@@ -105,23 +177,35 @@ def refresh_youtube_metadata_task(lecture_id: int, *, diploma: bool = False) -> 
         response.raise_for_status()
         items = response.json().get("items") or []
         if not items:
-            _mark_metadata_unavailable(lecture, reason="video not found")
+            _mark_metadata_unavailable(model, lecture_id, video_id, request_token, reason="video not found")
             return
         item = items[0]
         embeddable = item.get("status", {}).get("embeddable", True)
         if not embeddable:
-            _mark_metadata_unavailable(lecture, reason="video not embeddable")
+            _mark_metadata_unavailable(model, lecture_id, video_id, request_token, reason="video not embeddable")
             return
         duration = _iso8601_duration_to_seconds(item.get("contentDetails", {}).get("duration", ""))
-        if duration is None:
-            _mark_metadata_unavailable(lecture, reason="unparseable duration")
+        if duration is None or duration <= 0:
+            _mark_metadata_unavailable(model, lecture_id, video_id, request_token, reason="invalid duration")
             return
-        lecture.youtube_duration_seconds = duration
-        lecture.youtube_metadata_fetched_at = timezone.now()
-        lecture.save(update_fields=["youtube_duration_seconds", "youtube_metadata_fetched_at"])
+        now = timezone.now()
+        updated = request_queryset.filter(
+            youtube_metadata_status=YOUTUBE_METADATA_STATUS_PENDING,
+        ).update(
+            youtube_duration_seconds=duration,
+            youtube_metadata_status=YOUTUBE_METADATA_STATUS_READY,
+            youtube_metadata_fetched_at=now,
+            updated_at=now,
+        )
+        if not updated:
+            logger.info("Ignoring stale YouTube metadata success for lecture %s", lecture_id)
     except Exception as exc:  # noqa: BLE001 - bounded external call, failure is persisted
-        logger.error("YouTube metadata fetch failed for lecture %s: %s", lecture_id, exc)
-        _mark_metadata_unavailable(lecture, reason="fetch failed")
+        logger.error(
+            "YouTube metadata fetch failed for lecture %s (%s)",
+            lecture_id,
+            type(exc).__name__,
+        )
+        _mark_metadata_unavailable(model, lecture_id, video_id, request_token, reason="fetch failed")
 
 
 @shared_task(ignore_result=True)

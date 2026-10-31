@@ -1,7 +1,7 @@
 {% load i18n ui_tags %}
 <section id="attendance-results" class="mt-3 space-y-6" aria-live="polite">
   <section>
-    <div class="section-head"><div><p class="eyebrow">{% trans "Diploma attendance" %}</p><h3>{{ periods|length }} {% trans "periods" %}</h3></div></div>
+    <div class="section-head"><div><p class="eyebrow">{% trans "Diploma attendance" %}</p><h3>{% blocktrans count count=period_count %}{{ count }} period{% plural %}{{ count }} periods{% endblocktrans %}</h3></div></div>
     {% if periods %}
       <div class="table-wrap hidden lg:block"><table class="table">
         <thead><tr><th class="table-th">{% trans "Period" %}</th><th class="table-th">{% trans "Cohort" %}</th><th class="table-th">{% trans "Semester" %}</th><th class="table-th">{% trans "Range" %}</th><th class="table-th">{% trans "Status" %}</th><th class="table-th">{% trans "Days" %}</th><th class="table-th">{% trans "Records" %}</th><th class="table-th">{% trans "Actions" %}</th></tr></thead>
@@ -10,16 +10,16 @@
             <td class="table-td"><strong>{{ period.title|default:_('Attendance period') }}</strong><small class="block text-muted">{% trans "by" %} {{ period.created_by.full_name }}</small></td>
             <td class="table-td">{{ period.cohort }}</td>
             <td class="table-td">{{ period.semester }}</td>
-            <td class="table-td"><span dir="ltr">{{ period.starts_at|date:"d/m/Y H:i" }}</span><span class="block text-muted" dir="ltr">{{ period.ends_at|date:"d/m/Y H:i" }}</span></td>
+            <td class="table-td whitespace-nowrap"><span dir="ltr">{{ period.starts_at|ui_datetime }}</span><span class="block text-muted" dir="ltr">{{ period.ends_at|ui_datetime }}</span></td>
             <td class="table-td">{% include "ui/components/_status.html" with code=period.status label=period.get_status_display %}</td>
             <td class="table-td">{{ period.day_count }}</td>
-            <td class="table-td">{{ period.record_count }}</td>
+            <td class="table-td">{% include "ui/fragments/admin/_attendance_count_breakdown.html" with counted=period.counted_record_count excluded=period.excluded_record_count total=period.raw_record_count only %}</td>
             <td class="table-td"><a class="btn-secondary" href="{% url 'attendance:attendance_period_detail' period.id %}">{% trans "Open" %}</a></td>
           </tr>
         {% endfor %}</tbody>
       </table></div>
       <div class="card-stack lg:hidden">{% for period in periods %}
-        <div class="mobile-card"><div class="flex-1 min-w-0"><strong class="block truncate">{{ period.title|default:_('Attendance period') }}</strong><small class="block text-muted">{{ period.cohort }} · {{ period.semester }}</small><small class="block text-muted" dir="ltr">{{ period.starts_at|date:"d/m/Y H:i" }} — {{ period.ends_at|date:"d/m/Y H:i" }}</small>{% include "ui/components/_status.html" with code=period.status label=period.get_status_display %}<small class="block text-muted">{{ period.day_count }} {% trans "days" %} · {{ period.record_count }} {% trans "records" %}</small></div><a class="btn-soft-primary shrink-0" href="{% url 'attendance:attendance_period_detail' period.id %}">{% trans "Open" %}</a></div>
+        <div class="mobile-card"><div class="flex-1 min-w-0"><strong class="block truncate">{{ period.title|default:_('Attendance period') }}</strong><small class="block text-muted">{{ period.cohort }} · {{ period.semester }}</small><small class="block text-muted flex flex-wrap gap-x-1" dir="ltr"><span class="whitespace-nowrap">{{ period.starts_at|ui_datetime }}</span><span aria-hidden="true">—</span><span class="whitespace-nowrap">{{ period.ends_at|ui_datetime }}</span></small>{% include "ui/components/_status.html" with code=period.status label=period.get_status_display %}<small class="block text-muted">{{ period.day_count }} {% trans "days" %}</small><div class="mt-2">{% include "ui/fragments/admin/_attendance_count_breakdown.html" with counted=period.counted_record_count excluded=period.excluded_record_count total=period.raw_record_count only %}</div></div><a class="btn-soft-primary shrink-0" href="{% url 'attendance:attendance_period_detail' period.id %}">{% trans "Open" %}</a></div>
       {% endfor %}</div>
       {% include "ui/components/_pagination.html" %}
     {% else %}
@@ -27,11 +27,22 @@
     {% endif %}
   </section>
 
-  {% if sessions %}
+  {% if legacy_diploma_sessions %}
+    <section class="card-surface" role="note">
+      <div class="section-head"><div><p class="eyebrow">{% trans "Attendance" %}</p><h3>{% trans "Diploma sessions without an attendance period" %}</h3></div></div>
+      <p class="text-muted">{% trans "These sessions are preserved for review and are not shown as course attendance." %}</p>
+      <div class="table-wrap hidden lg:block"><table class="table"><thead><tr><th class="table-th">{% trans "Session" %}</th><th class="table-th">{% trans "Cohort" %}</th><th class="table-th">{% trans "Semester" %}</th><th class="table-th">{% trans "Date" %}</th><th class="table-th">{% trans "Records" %}</th><th class="table-th">{% trans "Actions" %}</th></tr></thead><tbody>
+        {% for s in legacy_diploma_sessions %}<tr><td class="table-td"><strong>{{ s.title|default:_('Attendance') }}</strong></td><td class="table-td">{{ s.cohort }}</td><td class="table-td">{{ s.semester|default:'—' }}</td><td class="table-td"><span dir="ltr">{{ s.date|date:"DATE_FORMAT"|default:'—' }}</span></td><td class="table-td">{% include "ui/fragments/admin/_attendance_count_breakdown.html" with counted=s.counted_record_count excluded=s.excluded_record_count total=s.raw_record_count only %}</td><td class="table-td"><a class="btn-secondary" href="{% url 'attendance:attendance_session_detail' s.id %}">{% trans "Open" %}</a></td></tr>{% endfor %}
+      </tbody></table></div>
+      <div class="card-stack lg:hidden">{% for s in legacy_diploma_sessions %}<div class="mobile-card"><div class="flex-1 min-w-0"><strong class="block">{{ s.title|default:_('Attendance') }}</strong><small class="block text-muted">{{ s.cohort }}{% if s.semester %} · {{ s.semester }}{% endif %}</small><small class="block text-muted" dir="ltr">{{ s.date|date:"DATE_FORMAT"|default:'—' }}</small><div class="mt-2">{% include "ui/fragments/admin/_attendance_count_breakdown.html" with counted=s.counted_record_count excluded=s.excluded_record_count total=s.raw_record_count only %}</div></div><a class="btn-soft-primary shrink-0" href="{% url 'attendance:attendance_session_detail' s.id %}">{% trans "Open" %}</a></div>{% endfor %}</div>
+    </section>
+  {% endif %}
+
+  {% if course_sessions %}
     <section>
       <div class="section-head"><div><p class="eyebrow">{% trans "Course attendance" %}</p><h3>{% trans "Standalone sessions" %}</h3></div></div>
-      <div class="table-wrap hidden lg:block"><table class="table"><thead><tr><th class="table-th">{% trans "Session" %}</th><th class="table-th">{% trans "Target" %}</th><th class="table-th">{% trans "Date" %}</th><th class="table-th">{% trans "Status" %}</th><th class="table-th">{% trans "Records" %}</th><th class="table-th">{% trans "Actions" %}</th></tr></thead><tbody>{% for s in sessions %}<tr><td class="table-td"><strong>{{ s.title|default:_('Attendance') }}</strong><small class="block text-muted">{% trans "by" %} {{ s.created_by.full_name }}</small></td><td class="table-td">{% if s.course_version %}{{ s.course_version }}{% else %}{{ s.cohort }}{% endif %}</td><td class="table-td"><span dir="ltr">{{ s.date|date:"DATE_FORMAT"|default:'—' }}</span></td><td class="table-td">{% include "ui/components/_status.html" with code=s.status label=s.get_status_display %}</td><td class="table-td">{{ s.record_count }}</td><td class="table-td"><a class="btn-secondary" href="{% url 'attendance:attendance_session_detail' s.id %}">{% trans "Open" %}</a></td></tr>{% endfor %}</tbody></table></div>
-      <div class="card-stack lg:hidden">{% for s in sessions %}<div class="mobile-card"><div class="flex-1 min-w-0"><strong class="block truncate">{{ s.title|default:_('Attendance') }}</strong><small class="block text-muted">{% if s.course_version %}{{ s.course_version }}{% else %}{{ s.cohort }}{% endif %}</small><small class="block text-muted" dir="ltr">{{ s.date|date:"DATE_FORMAT"|default:'—' }}</small>{% include "ui/components/_status.html" with code=s.status label=s.get_status_display %}<small class="block text-muted">{{ s.record_count }} {% trans "records" %}</small></div><a class="btn-soft-primary shrink-0" href="{% url 'attendance:attendance_session_detail' s.id %}">{% trans "Open" %}</a></div>{% endfor %}</div>
+      <div class="table-wrap hidden lg:block"><table class="table"><thead><tr><th class="table-th">{% trans "Session" %}</th><th class="table-th">{% trans "Target" %}</th><th class="table-th">{% trans "Date" %}</th><th class="table-th">{% trans "Status" %}</th><th class="table-th">{% trans "Records" %}</th><th class="table-th">{% trans "Actions" %}</th></tr></thead><tbody>{% for s in course_sessions %}<tr><td class="table-td"><strong>{{ s.title|default:_('Attendance') }}</strong><small class="block text-muted">{% trans "by" %} {{ s.created_by.full_name }}</small></td><td class="table-td">{{ s.course_version }}</td><td class="table-td"><span dir="ltr">{{ s.date|date:"DATE_FORMAT"|default:'—' }}</span></td><td class="table-td">{% include "ui/components/_status.html" with code=s.status label=s.get_status_display %}</td><td class="table-td">{% include "ui/fragments/admin/_attendance_count_breakdown.html" with counted=s.counted_record_count excluded=s.excluded_record_count total=s.raw_record_count only %}</td><td class="table-td"><a class="btn-secondary" href="{% url 'attendance:attendance_session_detail' s.id %}">{% trans "Open" %}</a></td></tr>{% endfor %}</tbody></table></div>
+      <div class="card-stack lg:hidden">{% for s in course_sessions %}<div class="mobile-card"><div class="flex-1 min-w-0"><strong class="block truncate">{{ s.title|default:_('Attendance') }}</strong><small class="block text-muted">{{ s.course_version }}</small><small class="block text-muted" dir="ltr">{{ s.date|date:"DATE_FORMAT"|default:'—' }}</small>{% include "ui/components/_status.html" with code=s.status label=s.get_status_display %}<div class="mt-2">{% include "ui/fragments/admin/_attendance_count_breakdown.html" with counted=s.counted_record_count excluded=s.excluded_record_count total=s.raw_record_count only %}</div></div><a class="btn-soft-primary shrink-0" href="{% url 'attendance:attendance_session_detail' s.id %}">{% trans "Open" %}</a></div>{% endfor %}</div>
     </section>
   {% endif %}
 </section>

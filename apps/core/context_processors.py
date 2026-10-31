@@ -6,6 +6,8 @@ import logging
 from urllib.parse import urlsplit
 
 from django.conf import settings
+from django.contrib.auth.models import AnonymousUser
+from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 
 from apps.accounts.constants import (
@@ -17,10 +19,7 @@ from apps.accounts.constants import (
 )
 from apps.core.models import LandingPageSettings
 from apps.core.navigation import workspace_navigation
-from django.contrib.auth.models import AnonymousUser
-
 from apps.core.permissions import is_student
-from django.urls import reverse
 
 logger = logging.getLogger(__name__)
 
@@ -30,12 +29,16 @@ def site_meta(request) -> dict[str, object]:
     user = getattr(request, "user", AnonymousUser())
     is_authenticated = user.is_authenticated
     user_roles = set(user.groups.values_list("name", flat=True)) if is_authenticated else set()
-    can_view_staff_nav = bool(is_authenticated and (user.is_superuser or (user_roles & {
-        GROUP_SUPER_ADMIN, GROUP_ADMIN, GROUP_MODERATOR})))
+    can_view_staff_nav = bool(
+        is_authenticated
+        and (user.is_superuser or (user_roles & {GROUP_SUPER_ADMIN, GROUP_ADMIN, GROUP_MODERATOR}))
+    )
     can_view_student_nav = bool(is_authenticated and is_student(user) and not can_view_staff_nav)
 
     # Per-role capability flags for nav scoping
-    can_view_admin_nav = bool(is_authenticated and (user.is_superuser or user_roles & {GROUP_ADMIN, GROUP_SUPER_ADMIN}))
+    can_view_admin_nav = bool(
+        is_authenticated and (user.is_superuser or user_roles & {GROUP_ADMIN, GROUP_SUPER_ADMIN})
+    )
     can_view_moderator_nav = bool(is_authenticated and GROUP_MODERATOR in user_roles)
     can_view_reviewer_nav = bool(is_authenticated and GROUP_REVIEWER in user_roles)
     can_view_secretary_nav = bool(is_authenticated and GROUP_SECRETARY in user_roles)
@@ -45,7 +48,7 @@ def site_meta(request) -> dict[str, object]:
     # Only kwargs the parent route actually accepts are forwarded; child-only
     # ids are never passed. This is the single canonical parent owner — pages
     # must not fall back to browser history.
-    BACK_URL_MAP = {
+    back_url_map = {
         "entrance_exams:admin_detail": ("entrance_exams:admin_list", {}),
         "entrance_exams:admin_edit_exam": ("entrance_exams:admin_detail", {"exam_id": "exam_id"}),
         "entrance_exams:admin_preview": ("entrance_exams:admin_detail", {"exam_id": "exam_id"}),
@@ -64,8 +67,14 @@ def site_meta(request) -> dict[str, object]:
         "assessments:admin_grade_homework": ("assessments:admin_grade_list", {}),
         "assessments:admin_exam_review_detail": ("assessments:admin_exam_review_list", {}),
         "assessments:admin_roster": ("assessments:admin_detail", {"assessment_id": "assessment_id"}),
-        "assessments:admin_exceptional_access": ("assessments:admin_detail", {"assessment_id": "assessment_id"}),
-        "assessments:admin_offline_grade_entry": ("assessments:admin_detail", {"assessment_id": "assessment_id"}),
+        "assessments:admin_exceptional_access": (
+            "assessments:admin_detail",
+            {"assessment_id": "assessment_id"},
+        ),
+        "assessments:admin_offline_grade_entry": (
+            "assessments:admin_detail",
+            {"assessment_id": "assessment_id"},
+        ),
         "assessments:reviewer_section_grading": ("assessments:reviewer_dashboard", {}),
         "assessments:reviewer_online_grading": ("assessments:reviewer_dashboard", {}),
         "assessments:admin_reviewer_assignment_create": ("assessments:admin_reviewer_assignment_list", {}),
@@ -78,10 +87,12 @@ def site_meta(request) -> dict[str, object]:
             {"course_id": "course_id", "version_id": "version_id"},
         ),
         "academics:admin_version_detail": (
-            "academics:admin_course_detail", {"course_id": "course_id"},
+            "academics:admin_course_detail",
+            {"course_id": "course_id"},
         ),
         "academics:admin_diploma_lecture_preview": (
-            "academics:admin_diploma_detail", {"diploma_id": "diploma_id"},
+            "academics:admin_diploma_detail",
+            {"diploma_id": "diploma_id"},
         ),
         "academics:admin_student_detail": ("academics:admin_student_list", {}),
         "academics:admin_student_edit": ("academics:admin_student_detail", {"student_id": "student_id"}),
@@ -102,9 +113,10 @@ def site_meta(request) -> dict[str, object]:
         "attendance:attendance_session_detail": ("attendance:attendance_session_list", {}),
         "attendance:attendance_scan": ("attendance:attendance_session_list", {}),
         "certificates:admin_template_editor": (
-            "certificates:admin_template_edit", {"template_id": "template_id"},
+            "certificates:admin_template_edit",
+            {"template_id": "template_id"},
         ),
-        "progression:admin_rejoin_eligibility": ("progression:admin_dashboard", {}),
+        "progression:admin_rejoin_eligibility": ("academics:admin_diploma_list", {}),
         "progression:admin_create_rejoin_plan": ("progression:admin_rejoin_eligibility", {}),
     }
 
@@ -130,8 +142,8 @@ def site_meta(request) -> dict[str, object]:
 
     page_back_url = ""
     view_name = getattr(request.resolver_match, "view_name", "")
-    if view_name in BACK_URL_MAP:
-        parent_name, kwarg_map = BACK_URL_MAP[view_name]
+    if view_name in back_url_map:
+        parent_name, kwarg_map = back_url_map[view_name]
         kwargs = {
             parent_key: request.resolver_match.kwargs[child_key]
             for child_key, parent_key in kwarg_map.items()
@@ -155,6 +167,9 @@ def site_meta(request) -> dict[str, object]:
         "CAN_VIEW_REVIEWER_NAV": can_view_reviewer_nav,
         "CAN_VIEW_SECRETARY_NAV": can_view_secretary_nav,
         "CAN_VIEW_MANAGE_NAV": can_view_manage_nav,
+        # Pure Reviewers have one workspace destination; use the full-width shell
+        # instead of duplicating the same dashboard link in a sidebar.
+        "HIDE_STAFF_SIDEBAR": bool(can_view_reviewer_nav and not can_view_admin_nav),
         "LANDING_SETTINGS": landing_settings,
         "FOOTER_CONTENT": landing_settings.localized_content(
             getattr(request, "LANGUAGE_CODE", settings.LANGUAGE_CODE)

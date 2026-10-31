@@ -18,12 +18,13 @@ from apps.core.forms import StyledFormMixin
 class DiplomaForm(StyledFormMixin, forms.ModelForm):
     class Meta:
         model = Diploma
-        fields = ["title", "description", "total_semesters", "is_active", "video_tracking_enabled", "video_completion_percent"]
+        fields = ["title", "description", "total_semesters", "is_active", "attendance_enabled", "video_tracking_enabled", "video_completion_percent"]
         widgets = {
             "title": forms.TextInput(attrs={}),
             "description": forms.Textarea(attrs={"rows": 4}),
             "total_semesters": forms.NumberInput(attrs={}),
             "is_active": forms.CheckboxInput(attrs={}),
+            "attendance_enabled": forms.CheckboxInput(attrs={}),
             "video_tracking_enabled": forms.CheckboxInput(attrs={}),
             "video_completion_percent": forms.NumberInput(attrs={}),
         }
@@ -70,11 +71,12 @@ class SemesterForm(StyledFormMixin, forms.ModelForm):
 class CourseForm(StyledFormMixin, forms.ModelForm):
     class Meta:
         model = Course
-        fields = ["title", "description", "is_active", "video_tracking_enabled", "video_completion_percent"]
+        fields = ["title", "description", "is_active", "attendance_enabled", "video_tracking_enabled", "video_completion_percent"]
         widgets = {
             "title": forms.TextInput(attrs={}),
             "description": forms.Textarea(attrs={"rows": 4}),
             "is_active": forms.CheckboxInput(attrs={}),
+            "attendance_enabled": forms.CheckboxInput(attrs={}),
             "video_tracking_enabled": forms.CheckboxInput(attrs={}),
             "video_completion_percent": forms.NumberInput(attrs={}),
         }
@@ -119,6 +121,26 @@ class CourseVersionForm(StyledFormMixin, forms.ModelForm):
             "access_duration_days": forms.NumberInput(attrs={}),
             "is_active": forms.CheckboxInput(attrs={}),
         }
+
+    def __init__(self, *args, **kwargs):
+        self.course = kwargs.pop("course", None)
+        super().__init__(*args, **kwargs)
+        if self.course is not None:
+            self.instance.course = self.course
+
+    def clean_label(self):
+        label = (self.cleaned_data.get("label") or "").strip()
+        if not label:
+            label = CourseVersion._meta.get_field("label").default
+        if self.course is not None:
+            duplicates = CourseVersion.objects.filter(course=self.course, label=label)
+            if self.instance.pk:
+                duplicates = duplicates.exclude(pk=self.instance.pk)
+            if duplicates.exists():
+                raise forms.ValidationError(
+                    _("A version with this label already exists for this course.")
+                )
+        return label
 
 class LectureForm(StyledFormMixin, forms.ModelForm):
     audio_file = forms.FileField(required=False, label=_("Audio file (upload)"), widget=forms.FileInput(attrs={}))

@@ -6,6 +6,7 @@ import json
 import logging
 import re
 import uuid
+from datetime import date, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -14,14 +15,14 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Count, OuterRef, Prefetch, Q, Subquery
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_http_methods, require_POST
 
 from apps.academics.audio import validate_audio_file
 from apps.academics.constants import (
@@ -29,6 +30,9 @@ from apps.academics.constants import (
     AUDIO_PROCESSING_PENDING,
     ENROLLMENT_STATUS_ACTIVE,
     ENROLLMENT_STATUS_CHOICES,
+    YOUTUBE_METADATA_STATUS_PENDING,
+    YOUTUBE_METADATA_STATUS_READY,
+    YOUTUBE_METADATA_STATUS_UNAVAILABLE,
 )
 from apps.academics.forms import (
     CohortForm,
@@ -60,6 +64,7 @@ from apps.academics.services import (
     can_access_course,
     can_access_diploma_lecture,
     can_access_lecture,
+    checkpoint_error_user_message,
     course_progress_for_enrollment,
     create_cohort,
     delete_cohort_record,
@@ -72,15 +77,18 @@ from apps.academics.services import (
     diploma_progress_for_enrollment,
     enqueue_youtube_metadata_refresh,
     extract_youtube_video_id,
+    get_course_completion_readiness,
     get_student_diploma_access,
     get_visible_diploma_lectures,
     get_visible_lectures,
+    mark_course_completed,
     record_diploma_lecture_checkpoint,
     record_lecture_audio_checkpoint,
     record_lecture_checkpoint,
     start_diploma_lecture_watch,
     start_lecture_audio,
     start_lecture_watch,
+    violation_user_message,
 )
 from apps.academics.tasks import transcode_lecture_audio_task
 from apps.applications.constants import PROGRAM_APP_STATUS_REJECTED, PROGRAM_TYPE_DIPLOMA
@@ -93,10 +101,19 @@ from apps.assessments.constants import (
 from apps.assessments.models import AssessmentAttempt
 from apps.assessments.services import (
     change_diploma_enrollment_delivery_mode,
+    get_assessment_readiness,
     get_student_assessments,
 )
 from apps.attendance.models import AttendanceCode
 from apps.attendance.services import build_attendance_qr_payload, get_attendance_summary
+from apps.audit.constants import (
+    ACTION_ACADEMIC_CREATED,
+    ACTION_ACADEMIC_TOGGLED,
+    ACTION_ACADEMIC_UPDATED,
+    ACTION_ENROLLMENT_CHANGE,
+    SECTION_ACADEMICS,
+)
+from apps.audit.services import record_audit_event
 from apps.core.htmx import hx_toast, is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import (
@@ -105,16 +122,111 @@ from apps.core.permissions import (
     is_admin,
     is_student,
     role_required,
+    safe_int,
     student_required,
 )
 from apps.core.views import safe_next_url
 from apps.intake_forms.models import IntakeForm
 from apps.progression.models import DiplomaProgressionRule, SemesterProgressionRule
-from apps.progression.services import save_progression_rule
+from apps.progression.services import resolve_progression_policy, save_progression_rule
 from apps.storage.services import record_deferred_storage_deletion, storage_service
 from apps.students.models import StudentProfile
 
 logger = logging.getLogger(__name__)
+
+
+# --- Audit instrumentation ---------------------------------------------------
+
+# Scalar model fields snapshotted into academic audit events. Related objects
+# are deliberately excluded so an audit write never adds a lazy query.
+_AUDIT_SNAPSHOT_FIELDS = {
+    "diploma": (
+        "title",
+        "is_active",
+        "total_semesters",
+        "attendance_enabled",
+        "video_tracking_enabled",
+        "video_completion_percent",
+    ),
+    "semester": ("order", "title", "is_active"),
+    "course": (
+        "title",
+        "is_active",
+        "attendance_enabled",
+        "video_tracking_enabled",
+        "video_completion_percent",
+    ),
+    "cohort": ("name", "start_date", "end_date", "is_active"),
+    "course_version": ("label", "access_duration_days", "is_active"),
+    "lecture": (
+        "order",
+        "title",
+        "youtube_url",
+        "release_at",
+        "is_published",
+        "youtube_video_id",
+        "youtube_metadata_status",
+        "audio_processing_status",
+    ),
+    "diploma_lecture": (
+        "order",
+        "title",
+        "youtube_url",
+        "release_at",
+        "is_published",
+        "youtube_video_id",
+        "youtube_metadata_status",
+        "audio_processing_status",
+    ),
+}
+
+
+def _audit_snapshot(instance, fields) -> dict:
+    """Return a JSON-safe snapshot of scalar fields as they are now."""
+    snapshot = {}
+    for field in fields:
+        value = getattr(instance, field)
+        if isinstance(value, date):
+            value = value.isoformat()
+        elif value is not None and not isinstance(value, (str, int, float, bool)):
+            value = str(value)
+        snapshot[field] = value
+    return snapshot
+
+
+def _record_academic_audit(
+    request,
+    action,
+    *,
+    target_type,
+    target_id,
+    target_label,
+    changed_fields=None,
+    before=None,
+    after=None,
+    metadata=None,
+    subject=None,
+) -> None:
+    """Append one academic audit event using the loaded objects as the snapshot."""
+    payload = dict(metadata or {})
+    if changed_fields is not None:
+        payload["changed_fields"] = list(changed_fields)
+    if before is not None:
+        payload["before"] = before
+    if after is not None:
+        payload["after"] = after
+    record_audit_event(
+        actor=request.user,
+        action=action,
+        target_type=target_type,
+        target_id=str(target_id),
+        section=SECTION_ACADEMICS,
+        target_label=target_label,
+        subject_type="student" if subject is not None else "",
+        subject_id=str(subject.pk) if subject is not None else "",
+        subject_label=(getattr(subject, "full_name", "") or str(subject)) if subject is not None else "",
+        metadata=payload,
+    )
 
 
 def _diploma_breadcrumbs(diploma=None):
@@ -170,6 +282,10 @@ def admin_diploma_list(request):
 @role_required(*ROLE_EXAM_STAFF)
 def admin_diploma_detail(request, diploma_id):
     diploma = get_object_or_404(Diploma, id=diploma_id)
+    progression_rule = DiplomaProgressionRule.objects.filter(
+        diploma=diploma,
+        is_active=True,
+    ).first()
     semesters = diploma.semesters.all()
     cohorts = diploma.cohorts.prefetch_related(
         Prefetch(
@@ -209,6 +325,7 @@ def admin_diploma_detail(request, diploma_id):
         "ui/pages/admin/diploma_detail.html",
         {
             "diploma": diploma,
+            "progression_rule": progression_rule,
             "semesters": semesters,
             "cohorts": cohorts,
             "cohort_groups": cohort_groups,
@@ -228,6 +345,15 @@ def admin_diploma_create(request):
             diploma = form.save(commit=False)
             diploma.created_by = request.user
             diploma.save()
+            _record_academic_audit(
+                request,
+                ACTION_ACADEMIC_CREATED,
+                target_type="diploma",
+                target_id=diploma.id,
+                target_label=diploma.title,
+                changed_fields=form.changed_data,
+                after=_audit_snapshot(diploma, _AUDIT_SNAPSHOT_FIELDS["diploma"]),
+            )
             messages.success(request, _("Diploma created."))
             return redirect(next_url) if next_url else redirect("academics:admin_diploma_detail", diploma_id=diploma.id)
     else:
@@ -250,9 +376,21 @@ def admin_diploma_edit(request, diploma_id):
     diploma = get_object_or_404(Diploma, id=diploma_id)
     next_url = safe_next_url(request)
     if request.method == "POST":
+        before = _audit_snapshot(diploma, _AUDIT_SNAPSHOT_FIELDS["diploma"])
         form = DiplomaForm(request.POST, instance=diploma)
         if form.is_valid():
             form.save()
+            if form.changed_data:
+                _record_academic_audit(
+                    request,
+                    ACTION_ACADEMIC_UPDATED,
+                    target_type="diploma",
+                    target_id=diploma.id,
+                    target_label=diploma.title,
+                    changed_fields=form.changed_data,
+                    before=before,
+                    after=_audit_snapshot(diploma, _AUDIT_SNAPSHOT_FIELDS["diploma"]),
+                )
             messages.success(request, _("Diploma updated."))
             return redirect(next_url) if next_url else redirect("academics:admin_diploma_detail", diploma_id=diploma.id)
     else:
@@ -311,6 +449,16 @@ def admin_semester_create(request, diploma_id):
             semester = form.save(commit=False)
             semester.diploma = diploma
             semester.save()
+            _record_academic_audit(
+                request,
+                ACTION_ACADEMIC_CREATED,
+                target_type="semester",
+                target_id=semester.id,
+                target_label=f"{diploma.title} - {semester.title}",
+                changed_fields=form.changed_data,
+                after=_audit_snapshot(semester, _AUDIT_SNAPSHOT_FIELDS["semester"]),
+                metadata={"diploma_id": diploma.id},
+            )
             messages.success(request, _("Semester created."))
             return redirect(next_url) if next_url else redirect("academics:admin_diploma_detail", diploma_id=diploma.id)
     else:
@@ -336,11 +484,38 @@ def admin_semester_edit(request, diploma_id, semester_id):
     next_url = safe_next_url(request)
 
     diploma_rule = DiplomaProgressionRule.objects.filter(diploma=diploma, is_active=True).first()
-    semester_rule = SemesterProgressionRule.objects.filter(
-        semester=semester, diploma_rule__diploma=diploma, is_active=True,
-    ).first()
+    semester_rule = None
+    if diploma_rule:
+        semester_rule = SemesterProgressionRule.objects.filter(
+            semester=semester,
+            diploma_rule=diploma_rule,
+            is_active=True,
+        ).first()
+    try:
+        progression_policy = resolve_progression_policy(diploma, semester)
+    except ValueError as exc:
+        raise Http404(_("Semester progression policy is not configured correctly.")) from exc
+    pass_percent_override = (
+        str(semester_rule.pass_percent)
+        if semester_rule and semester_rule.pass_percent is not None
+        else ""
+    )
+    require_all_override = (
+        "" if not semester_rule or semester_rule.require_all_required_assessments is None
+        else "1" if semester_rule.require_all_required_assessments else "0"
+    )
+    allow_missing_override = (
+        "" if not semester_rule or semester_rule.allow_missing_optional_assessments is None
+        else "1" if semester_rule.allow_missing_optional_assessments else "0"
+    )
 
     if request.method == "POST":
+        before = {
+            **_audit_snapshot(semester, _AUDIT_SNAPSHOT_FIELDS["semester"]),
+            "semester_pass_percent_override": pass_percent_override,
+            "require_all_required_assessments": require_all_override,
+            "allow_missing_optional_assessments": allow_missing_override,
+        }
         form = SemesterForm(request.POST, instance=semester, diploma=diploma)
         pass_percent_raw = request.POST.get("semester_pass_percent_override", "").strip()
         pass_percent = None
@@ -357,14 +532,27 @@ def admin_semester_edit(request, diploma_id, semester_id):
                     override_valid = False
                 else:
                     pass_percent = parsed
-        require_all = request.POST.get("semester_require_all_required") == "1"
-        allow_missing = request.POST.get("semester_allow_missing_optional") == "1"
+        require_all_override = request.POST.get("semester_require_all_required", "")
+        allow_missing_override = request.POST.get("semester_allow_missing_optional", "")
+        valid_boolean_values = {"", "1", "0"}
+        if require_all_override not in valid_boolean_values or allow_missing_override not in valid_boolean_values:
+            messages.error(request, _("Choose Inherit, Yes, or No for each semester policy override."))
+            override_valid = False
+        require_all = {"1": True, "0": False}.get(require_all_override)
+        allow_missing = {"1": True, "0": False}.get(allow_missing_override)
         if form.is_valid() and override_valid:
             try:
                 with transaction.atomic():
                     form.save()
-                    if diploma_rule and pass_percent is not None:
-                        semester_rule, _created = SemesterProgressionRule.objects.update_or_create(
+                    has_override = any((
+                        pass_percent is not None,
+                        require_all is not None,
+                        allow_missing is not None,
+                    ))
+                    if has_override and not diploma_rule:
+                        raise ValueError(_("An active diploma progression rule is required before setting semester overrides."))
+                    if diploma_rule and (has_override or semester_rule is not None):
+                        semester_override, _created = SemesterProgressionRule.objects.update_or_create(
                             semester=semester,
                             diploma_rule=diploma_rule,
                             defaults={
@@ -374,25 +562,37 @@ def admin_semester_edit(request, diploma_id, semester_id):
                                 "is_active": True,
                             },
                         )
-                        save_progression_rule(semester_rule, request.user)
+                        save_progression_rule(semester_override, request.user)
             except (ValueError, ValidationError) as exc:
                 messages.error(request, str(exc))
-                return render(
-                    request,
-                    "ui/pages/admin/academic_form.html",
-                    {
-                        "form": form,
-                        "title": _("Edit semester"),
-                        "diploma": diploma,
-                        "semester_pass_percent_override": str(pass_percent) if pass_percent is not None else pass_percent_raw,
-                        "semester_require_all_required": require_all,
-                        "semester_allow_missing_optional": allow_missing,
-                        "next": next_url,
-                        "breadcrumb_items": _diploma_breadcrumbs(diploma) + [{"label": _("Edit semester")}],
-                    },
+            else:
+                after_overrides = {
+                    "semester_pass_percent_override": pass_percent_raw,
+                    "require_all_required_assessments": require_all_override,
+                    "allow_missing_optional_assessments": allow_missing_override,
+                }
+                changed_fields = list(form.changed_data)
+                changed_fields.extend(
+                    field for field, value in after_overrides.items() if before[field] != value
                 )
-            messages.success(request, _("Semester updated."))
-            return redirect(next_url) if next_url else redirect("academics:admin_diploma_detail", diploma_id=diploma.id)
+                if changed_fields:
+                    _record_academic_audit(
+                        request,
+                        ACTION_ACADEMIC_UPDATED,
+                        target_type="semester",
+                        target_id=semester.id,
+                        target_label=f"{diploma.title} - {semester.title}",
+                        changed_fields=changed_fields,
+                        before=before,
+                        after={
+                            **_audit_snapshot(semester, _AUDIT_SNAPSHOT_FIELDS["semester"]),
+                            **after_overrides,
+                        },
+                        metadata={"diploma_id": diploma.id},
+                    )
+                messages.success(request, _("Semester updated."))
+                return redirect(next_url) if next_url else redirect("academics:admin_diploma_detail", diploma_id=diploma.id)
+        pass_percent_override = pass_percent_raw
     else:
         form = SemesterForm(instance=semester, diploma=diploma)
     return render(
@@ -402,9 +602,10 @@ def admin_semester_edit(request, diploma_id, semester_id):
             "form": form,
             "title": _("Edit semester"),
             "diploma": diploma,
-            "semester_pass_percent_override": str(semester_rule.pass_percent) if semester_rule else "",
-            "semester_require_all_required": semester_rule.require_all_required_assessments if semester_rule else True,
-            "semester_allow_missing_optional": semester_rule.allow_missing_optional_assessments if semester_rule else False,
+            "semester_pass_percent_override": pass_percent_override,
+            "semester_require_all_required": require_all_override,
+            "semester_allow_missing_optional": allow_missing_override,
+            "semester_progression_policy": progression_policy,
             "next": next_url,
             "breadcrumb_items": _diploma_breadcrumbs(diploma) + [{"label": _("Edit semester")}],
         },
@@ -478,17 +679,21 @@ def admin_course_list(request):
 @role_required(*ROLE_EXAM_STAFF)
 def admin_course_detail(request, course_id):
     course = get_object_or_404(Course, id=course_id)
-    versions = course.versions.prefetch_related("lectures").all()
-    lectures = Lecture.objects.filter(course_version__course=course).order_by("course_version", "order")
-    enrollments = CourseEnrollment.objects.filter(course_version__course=course).select_related("student", "course_version")
+    versions = course.versions.annotate(lecture_count=Count("lectures", distinct=True))
+    enrollments = CourseEnrollment.objects.filter(course_version__course=course).select_related(
+        "student__user",
+        "course_version",
+    ).order_by("-created_at", "-pk")
+    page_obj, pagination_qs = paginate(request, enrollments)
     return render(
         request,
         "ui/pages/admin/course_detail.html",
         {
             "course": course,
             "versions": versions,
-            "lectures": lectures,
-            "enrollments": enrollments,
+            "page_obj": page_obj,
+            "pagination_qs": pagination_qs,
+            "back_url": reverse("academics:admin_course_list"),
             "breadcrumb_items": [
                 {"label": _("Courses"), "href": reverse("academics:admin_course_list")},
                 {"label": course.title},
@@ -507,6 +712,15 @@ def admin_course_create(request):
             course = form.save(commit=False)
             course.created_by = request.user
             course.save()
+            _record_academic_audit(
+                request,
+                ACTION_ACADEMIC_CREATED,
+                target_type="course",
+                target_id=course.id,
+                target_label=course.title,
+                changed_fields=form.changed_data,
+                after=_audit_snapshot(course, _AUDIT_SNAPSHOT_FIELDS["course"]),
+            )
             messages.success(request, _("Course created."))
             return redirect(next_url) if next_url else redirect("academics:admin_course_detail", course_id=course.id)
     else:
@@ -524,9 +738,21 @@ def admin_course_edit(request, course_id):
     course = get_object_or_404(Course, id=course_id)
     next_url = safe_next_url(request)
     if request.method == "POST":
+        before = _audit_snapshot(course, _AUDIT_SNAPSHOT_FIELDS["course"])
         form = CourseForm(request.POST, instance=course)
         if form.is_valid():
             form.save()
+            if form.changed_data:
+                _record_academic_audit(
+                    request,
+                    ACTION_ACADEMIC_UPDATED,
+                    target_type="course",
+                    target_id=course.id,
+                    target_label=course.title,
+                    changed_fields=form.changed_data,
+                    before=before,
+                    after=_audit_snapshot(course, _AUDIT_SNAPSHOT_FIELDS["course"]),
+                )
             messages.success(request, _("Course updated."))
             return redirect(next_url) if next_url else redirect("academics:admin_course_detail", course_id=course.id)
     else:
@@ -570,10 +796,20 @@ def admin_cohort_create(request, diploma_id):
     if request.method == "POST":
         form = CohortForm(request.POST)
         if form.is_valid():
-            create_cohort(
+            cohort = create_cohort(
                 diploma=diploma,
                 form_data=form.cleaned_data,
                 actor=request.user,
+            )
+            _record_academic_audit(
+                request,
+                ACTION_ACADEMIC_CREATED,
+                target_type="cohort",
+                target_id=cohort.id,
+                target_label=f"{diploma.title} - {cohort.name}",
+                changed_fields=form.changed_data,
+                after=_audit_snapshot(cohort, _AUDIT_SNAPSHOT_FIELDS["cohort"]),
+                metadata={"diploma_id": diploma.id},
             )
             messages.success(request, _("Cohort created."))
             return redirect(next_url) if next_url else redirect("academics:admin_diploma_detail", diploma_id=diploma.id)
@@ -599,9 +835,22 @@ def admin_cohort_edit(request, diploma_id, cohort_id):
     cohort = get_object_or_404(Cohort, id=cohort_id, diploma=diploma)
     next_url = safe_next_url(request)
     if request.method == "POST":
+        before = _audit_snapshot(cohort, _AUDIT_SNAPSHOT_FIELDS["cohort"])
         form = CohortForm(request.POST, instance=cohort)
         if form.is_valid():
             form.save()
+            if form.changed_data:
+                _record_academic_audit(
+                    request,
+                    ACTION_ACADEMIC_UPDATED,
+                    target_type="cohort",
+                    target_id=cohort.id,
+                    target_label=f"{diploma.title} - {cohort.name}",
+                    changed_fields=form.changed_data,
+                    before=before,
+                    after=_audit_snapshot(cohort, _AUDIT_SNAPSHOT_FIELDS["cohort"]),
+                    metadata={"diploma_id": diploma.id},
+                )
             messages.success(request, _("Cohort updated."))
             return redirect(next_url) if next_url else redirect("academics:admin_diploma_detail", diploma_id=diploma.id)
     else:
@@ -650,16 +899,36 @@ def admin_version_create(request, course_id):
     course = get_object_or_404(Course, id=course_id)
     next_url = safe_next_url(request)
     if request.method == "POST":
-        form = CourseVersionForm(request.POST)
+        form = CourseVersionForm(request.POST, course=course)
         if form.is_valid():
             version = form.save(commit=False)
             version.course = course
             version.created_by = request.user
-            version.save()
-            messages.success(request, _("Course version created."))
-            return redirect(next_url) if next_url else redirect("academics:admin_course_detail", course_id=course.id)
+            try:
+                with transaction.atomic():
+                    version.save()
+            except IntegrityError:
+                form.add_error(
+                    "label",
+                    _("A version with this label already exists for this course."),
+                )
+            else:
+                _record_academic_audit(
+                    request,
+                    ACTION_ACADEMIC_CREATED,
+                    target_type="course_version",
+                    target_id=version.id,
+                    target_label=f"{course.title} - {version.label}",
+                    changed_fields=form.changed_data,
+                    after=_audit_snapshot(
+                        version, _AUDIT_SNAPSHOT_FIELDS["course_version"],
+                    ),
+                    metadata={"course_id": course.id},
+                )
+                messages.success(request, _("Course version created."))
+                return redirect(next_url) if next_url else redirect("academics:admin_course_detail", course_id=course.id)
     else:
-        form = CourseVersionForm(initial={"course": course.id})
+        form = CourseVersionForm(initial={"course": course.id}, course=course)
     return render(
         request,
         "ui/pages/admin/academic_form.html",
@@ -672,28 +941,110 @@ def admin_version_create(request, course_id):
 def admin_version_detail(request, course_id, version_id):
     course = get_object_or_404(Course, id=course_id)
     version = get_object_or_404(CourseVersion, id=version_id, course=course)
-    lectures = version.lectures.all()
-    intake_forms = IntakeForm.objects.filter(course_version=version).annotate(
-        responses_count=Count("responses"),
-    )
-    return render(
-        request,
-        "ui/pages/admin/academic_detail.html",
+    lectures = list(version.lectures.order_by("order", "pk"))
+    now = timezone.now()
+    context = {
+        "course": course, "version": version, "lectures": lectures,
+        "retryable_youtube_metadata_ids": {
+            lecture.pk for lecture in lectures if _youtube_metadata_retryable(lecture, now=now)
+        },
+        "poll_youtube_metadata": any(
+            _youtube_metadata_polling(lecture, now=now) for lecture in lectures
+        ),
+    }
+    if is_htmx(request):
+        return render(request, "ui/fragments/admin/_version_lecture_rows.html", context)
+    context.update(
         {
-            "course": course, "version": version, "lectures": lectures, "intake_forms": intake_forms,
+            "intake_forms": IntakeForm.objects.filter(course_version=version).annotate(
+                responses_count=Count("responses"),
+            ),
             "title": version.label, "object": version,
             "breadcrumb_items": [
                 {"label": _("Academics"), "href": reverse("academics:admin_course_list")},
                 {"label": course.title, "href": reverse("academics:admin_course_detail", args=[course.id])},
                 {"label": version.label},
             ],
-        },
+            "back_url": reverse("academics:admin_course_detail", args=[course.id]),
+        }
     )
+    return render(request, "ui/pages/admin/academic_detail.html", context)
 
 
 # ---------------------------------------------------------------------------
 # Admin: Lecture management
 # ---------------------------------------------------------------------------
+
+
+def _youtube_metadata_retryable(lecture, *, now=None) -> bool:
+    if lecture.youtube_metadata_status == YOUTUBE_METADATA_STATUS_UNAVAILABLE:
+        return bool(lecture.youtube_video_id)
+    if lecture.youtube_metadata_status != YOUTUBE_METADATA_STATUS_PENDING:
+        return False
+    now = now or timezone.now()
+    stale_before = now - timedelta(minutes=5)
+    return (
+        lecture.youtube_metadata_request_id is None
+        or lecture.updated_at <= stale_before
+    )
+
+
+def _youtube_metadata_polling(lecture, *, now=None) -> bool:
+    """Whether a YouTube metadata check is still in flight for this lecture.
+
+    Only a fresh pending request generation qualifies. Once the check settles,
+    or the retry window opens (``_youtube_metadata_retryable``), the lecture
+    list stops polling so the visible retry button is the remaining action.
+    """
+    return (
+        lecture.youtube_metadata_status == YOUTUBE_METADATA_STATUS_PENDING
+        and lecture.youtube_metadata_request_id is not None
+        and not _youtube_metadata_retryable(lecture, now=now)
+    )
+
+
+def _request_youtube_metadata_retry(request, lecture, *, diploma=False) -> None:
+    if not lecture.youtube_video_id:
+        messages.error(request, _("Add a valid YouTube video link before retrying."))
+        return
+    if (
+        lecture.youtube_metadata_status == YOUTUBE_METADATA_STATUS_READY
+        and lecture.youtube_duration_seconds
+        and lecture.youtube_duration_seconds > 0
+    ):
+        messages.info(request, _("Video details are already ready."))
+        return
+    if not _youtube_metadata_retryable(lecture):
+        messages.info(request, _("Video details are already being checked."))
+        return
+    result = enqueue_youtube_metadata_refresh(lecture, diploma=diploma, force=True)
+    if result == "queued":
+        scope = {
+            field: getattr(lecture, field)
+            for field in ("course_version_id", "cohort_id", "semester_id")
+            if getattr(lecture, field, None) is not None
+        }
+        _record_academic_audit(
+            request,
+            ACTION_ACADEMIC_UPDATED,
+            target_type="diploma_lecture" if isinstance(lecture, DiplomaLecture) else "lecture",
+            target_id=lecture.id,
+            target_label=lecture.title,
+            changed_fields=["youtube_metadata_request_id"],
+            after=_audit_snapshot(
+                lecture,
+                (
+                    "youtube_video_id",
+                    "youtube_metadata_status",
+                    "youtube_metadata_request_id",
+                    "youtube_metadata_fetched_at",
+                ),
+            ),
+            metadata={"reason": "youtube_metadata_retry", **scope},
+        )
+        messages.success(request, _("A video details refresh was requested."))
+    else:
+        messages.error(request, _("Video details could not be queued. Please try again."))
 
 
 @login_required
@@ -710,8 +1061,22 @@ def admin_lecture_create(request, course_id, version_id):
             lecture = form.save(commit=False)
             lecture.course_version = version
             lecture.save()
-            _process_lecture_audio(request, lecture, request.FILES)
+            audio_uploaded = _process_lecture_audio(request, lecture, request.FILES)
             enqueue_youtube_metadata_refresh(lecture)
+            _record_academic_audit(
+                request,
+                ACTION_ACADEMIC_CREATED,
+                target_type="lecture",
+                target_id=lecture.id,
+                target_label=lecture.title,
+                changed_fields=form.changed_data,
+                after=_audit_snapshot(lecture, _AUDIT_SNAPSHOT_FIELDS["lecture"]),
+                metadata={
+                    "course_id": course.id,
+                    "course_version_id": version.id,
+                    "audio_uploaded": audio_uploaded,
+                },
+            )
             messages.success(request, _("Lecture created."))
             return redirect(next_url) if next_url else redirect("academics:admin_version_detail", course_id=course.id, version_id=version.id)
     else:
@@ -733,6 +1098,7 @@ def admin_lecture_edit(request, course_id, version_id, lecture_id):
         raise PermissionDenied
     next_url = safe_next_url(request)
     if request.method == "POST":
+        before = _audit_snapshot(lecture, _AUDIT_SNAPSHOT_FIELDS["lecture"])
         form = LectureForm(request.POST, request.FILES, instance=lecture)
         if form.is_valid():
             previous_pending_key = lecture.audio_pending_storage_key
@@ -746,6 +1112,26 @@ def admin_lecture_edit(request, course_id, version_id, lecture_id):
             enqueue_youtube_metadata_refresh(lecture)
             if pending_replaced and previous_pending_prefix:
                 _cleanup_audio_after_commit([], [previous_pending_prefix])
+            changed_fields = list(form.changed_data)
+            if pending_replaced and "audio_processing_status" not in changed_fields:
+                changed_fields.append("audio_processing_status")
+            after = _audit_snapshot(lecture, _AUDIT_SNAPSHOT_FIELDS["lecture"])
+            if changed_fields or before != after:
+                _record_academic_audit(
+                    request,
+                    ACTION_ACADEMIC_UPDATED,
+                    target_type="lecture",
+                    target_id=lecture.id,
+                    target_label=lecture.title,
+                    changed_fields=changed_fields,
+                    before=before,
+                    after=after,
+                    metadata={
+                        "course_id": course.id,
+                        "course_version_id": version.id,
+                        "audio_uploaded": pending_replaced,
+                    },
+                )
             messages.success(request, _("Lecture updated."))
             return redirect(next_url) if next_url else redirect("academics:admin_version_detail", course_id=course.id, version_id=version.id)
     else:
@@ -755,6 +1141,19 @@ def admin_lecture_edit(request, course_id, version_id, lecture_id):
         "ui/pages/admin/academic_form.html",
         {"form": form, "title": _("Edit lecture"), "course": course, "version": version, "next": next_url},
     )
+
+
+@login_required
+@role_required(*ROLE_EXAM_STAFF)
+@require_POST
+def admin_lecture_metadata_retry(request, course_id, version_id, lecture_id):
+    course = get_object_or_404(Course, id=course_id)
+    version = get_object_or_404(CourseVersion, id=version_id, course=course)
+    lecture = get_object_or_404(Lecture, id=lecture_id, course_version=version)
+    if not is_admin(request.user):
+        raise PermissionDenied
+    _request_youtube_metadata_retry(request, lecture)
+    return redirect("academics:admin_version_detail", course_id=course.id, version_id=version.id)
 
 
 @login_required
@@ -802,8 +1201,22 @@ def admin_version_delete(request, course_id, version_id):
 def admin_version_toggle_active(request, course_id, version_id):
     course = get_object_or_404(Course, id=course_id)
     version = get_object_or_404(CourseVersion, id=version_id, course=course)
+    before_active = version.is_active
     version.is_active = not version.is_active
     version.save(update_fields=["is_active", "updated_at"])
+    _record_academic_audit(
+        request,
+        ACTION_ACADEMIC_TOGGLED,
+        target_type="course_version",
+        target_id=version.id,
+        target_label=f"{course.title} - {version.label}",
+        changed_fields=["is_active"],
+        metadata={
+            "course_id": course.id,
+            "active_before": before_active,
+            "active_after": version.is_active,
+        },
+    )
     messages.success(request, _("Course version status updated."))
     return redirect("academics:admin_course_detail", course_id=course.id)
 
@@ -967,6 +1380,26 @@ def _learning_assessments(user, *, course_version_id=None, cohort_id=None):
     ]
 
 
+def _learning_assessment_cards(user, *, course_version_id):
+    """Return course assessments with their student-facing readiness state."""
+    assessments = _learning_assessments(user, course_version_id=course_version_id)
+    latest_attempts = {}
+    for attempt in AssessmentAttempt.objects.filter(
+        student=user,
+        assessment__in=assessments,
+    ).order_by("assessment_id", "-attempt_number", "-id"):
+        latest_attempts.setdefault(attempt.assessment_id, attempt)
+    return [
+        {
+            "assessment": assessment,
+            "readiness": get_assessment_readiness(
+                user, assessment, latest_attempts.get(assessment.id)
+            ),
+        }
+        for assessment in assessments
+    ]
+
+
 def _lecture_navigation(lectures, lecture, *, version=None, enrollment=None, semester=None, unlock_map=None):
     ordered = list(lectures)
     index = ordered.index(lecture)
@@ -1005,7 +1438,7 @@ def student_course_detail(request, version_id):
     ).first()
     course_attendance_code = None
     course_attendance_qr = ""
-    if course_enrollment:
+    if course_enrollment and version.course.attendance_enabled:
         course_attendance_code = AttendanceCode.objects.filter(
             course_enrollment=course_enrollment, active=True
         ).first()
@@ -1026,6 +1459,9 @@ def student_course_detail(request, version_id):
     ] if course_enrollment else []
     due_work = _assessment_due_work(request.user, course_version_id=version.id)
     learning_assessments = _learning_assessments(request.user, course_version_id=version.id)
+    learning_assessment_cards = _learning_assessment_cards(
+        request.user, course_version_id=version.id
+    )
     return render(
         request,
         "ui/pages/student/content.html",
@@ -1041,6 +1477,7 @@ def student_course_detail(request, version_id):
             "completed_lecture_ids": completed_lecture_ids,
             "due_work": due_work,
             "learning_assessments": learning_assessments,
+            "learning_assessment_cards": learning_assessment_cards,
             "access_state": course_enrollment.get_status_display() if course_enrollment else _("No active enrollment"),
             "back_url": reverse("students:diploma_course"),
             "back_label": _("Back to learning"),
@@ -1071,8 +1508,30 @@ def student_lecture_view(request, version_id, lecture_id):
     ).first()
     unlock_map = _course_unlock_map(profile, enrollment, visible) if enrollment else {}
     navigation = _lecture_navigation(visible, lecture, version=version, unlock_map=unlock_map)
-    watch_progress = LectureWatchProgress.objects.filter(student=profile, lecture=lecture, course_enrollment__isnull=False).first()
-    audio_progress = LectureAudioProgress.objects.filter(student=profile, lecture=lecture).first()
+    watch_progress = (
+        LectureWatchProgress.objects.filter(
+            student=profile, lecture=lecture, course_enrollment=enrollment
+        ).first()
+        if enrollment
+        else None
+    )
+    audio_progress = (
+        LectureAudioProgress.objects.filter(
+            student=profile, lecture=lecture, course_enrollment=enrollment
+        ).first()
+        if enrollment
+        else None
+    )
+    watch_resume_seconds = (
+        int(watch_progress.resume_position_seconds)
+        if watch_progress
+        else 0
+    )
+    audio_resume_seconds = (
+        int(audio_progress.resume_position_seconds)
+        if audio_progress
+        else 0
+    )
     return render(
         request,
         "ui/pages/student/content.html",
@@ -1085,6 +1544,8 @@ def student_lecture_view(request, version_id, lecture_id):
             "navigation": navigation,
             "watch_progress": watch_progress,
             "audio_progress": audio_progress,
+            "watch_resume_seconds": watch_resume_seconds,
+            "audio_resume_seconds": audio_resume_seconds,
             "back_url": reverse("academics:student_course_detail", args=[version.id]),
             "back_label": _("Back to course"),
         },
@@ -1184,19 +1645,27 @@ def admin_diploma_lecture_list(request, diploma_id, cohort_id, semester_id):
     diploma = get_object_or_404(Diploma, id=diploma_id)
     cohort = get_object_or_404(Cohort, id=cohort_id, diploma=diploma)
     semester = get_object_or_404(Semester, id=semester_id, diploma=diploma)
-    lectures = DiplomaLecture.objects.filter(cohort=cohort, semester=semester).order_by("order")
-    return render(
-        request,
-        "ui/pages/admin/diploma_lecture_list.html",
-        {
-            "diploma": diploma, "cohort": cohort, "semester": semester, "lectures": lectures,
-            "breadcrumb_items": [
-                {"label": _("Academics"), "href": reverse("academics:admin_diploma_list")},
-                {"label": diploma.title, "href": reverse("academics:admin_diploma_detail", args=[diploma.id])},
-                {"label": cohort.name}, {"label": semester.title},
-            ],
-        },
+    lectures = list(
+        DiplomaLecture.objects.filter(cohort=cohort, semester=semester).order_by("order", "pk")
     )
+    now = timezone.now()
+    context = {
+        "diploma": diploma, "cohort": cohort, "semester": semester, "lectures": lectures,
+        "retryable_youtube_metadata_ids": {
+            lecture.pk for lecture in lectures if _youtube_metadata_retryable(lecture, now=now)
+        },
+        "poll_youtube_metadata": any(
+            _youtube_metadata_polling(lecture, now=now) for lecture in lectures
+        ),
+    }
+    if is_htmx(request):
+        return render(request, "ui/fragments/admin/_diploma_lecture_rows.html", context)
+    context["breadcrumb_items"] = [
+        {"label": _("Academics"), "href": reverse("academics:admin_diploma_list")},
+        {"label": diploma.title, "href": reverse("academics:admin_diploma_detail", args=[diploma.id])},
+        {"label": cohort.name}, {"label": semester.title},
+    ]
+    return render(request, "ui/pages/admin/diploma_lecture_list.html", context)
 
 
 @login_required
@@ -1213,8 +1682,25 @@ def admin_diploma_lecture_create(request, diploma_id, cohort_id, semester_id):
             lecture.cohort = cohort
             lecture.semester = semester
             lecture.save()
-            _process_lecture_audio(request, lecture, request.FILES, key_prefix=f"diploma-lectures/{lecture.id}/audio")
+            audio_uploaded = _process_lecture_audio(
+                request, lecture, request.FILES, key_prefix=f"diploma-lectures/{lecture.id}/audio",
+            )
             enqueue_youtube_metadata_refresh(lecture, diploma=True)
+            _record_academic_audit(
+                request,
+                ACTION_ACADEMIC_CREATED,
+                target_type="diploma_lecture",
+                target_id=lecture.id,
+                target_label=lecture.title,
+                changed_fields=form.changed_data,
+                after=_audit_snapshot(lecture, _AUDIT_SNAPSHOT_FIELDS["diploma_lecture"]),
+                metadata={
+                    "diploma_id": diploma.id,
+                    "cohort_id": cohort.id,
+                    "semester_id": semester.id,
+                    "audio_uploaded": audio_uploaded,
+                },
+            )
             messages.success(request, _("Diploma lecture created."))
             return redirect(next_url) if next_url else redirect("academics:admin_diploma_detail", diploma_id=diploma.id)
     else:
@@ -1236,6 +1722,7 @@ def admin_diploma_lecture_edit(request, diploma_id, cohort_id, semester_id, lect
     lecture = get_object_or_404(DiplomaLecture, id=lecture_id, cohort=cohort, semester=semester)
     next_url = safe_next_url(request)
     if request.method == "POST":
+        before = _audit_snapshot(lecture, _AUDIT_SNAPSHOT_FIELDS["diploma_lecture"])
         form = DiplomaLectureForm(request.POST, request.FILES, instance=lecture)
         if form.is_valid():
             previous_pending_key = lecture.audio_pending_storage_key
@@ -1252,6 +1739,27 @@ def admin_diploma_lecture_edit(request, diploma_id, cohort_id, semester_id, lect
             enqueue_youtube_metadata_refresh(lecture, diploma=True)
             if pending_replaced and previous_pending_prefix:
                 _cleanup_audio_after_commit([], [previous_pending_prefix])
+            changed_fields = list(form.changed_data)
+            if pending_replaced and "audio_processing_status" not in changed_fields:
+                changed_fields.append("audio_processing_status")
+            after = _audit_snapshot(lecture, _AUDIT_SNAPSHOT_FIELDS["diploma_lecture"])
+            if changed_fields or before != after:
+                _record_academic_audit(
+                    request,
+                    ACTION_ACADEMIC_UPDATED,
+                    target_type="diploma_lecture",
+                    target_id=lecture.id,
+                    target_label=lecture.title,
+                    changed_fields=changed_fields,
+                    before=before,
+                    after=after,
+                    metadata={
+                        "diploma_id": diploma.id,
+                        "cohort_id": cohort.id,
+                        "semester_id": semester.id,
+                        "audio_uploaded": pending_replaced,
+                    },
+                )
             messages.success(request, _("Diploma lecture updated."))
             return redirect(next_url) if next_url else redirect("academics:admin_diploma_detail", diploma_id=diploma.id)
     else:
@@ -1260,6 +1768,28 @@ def admin_diploma_lecture_edit(request, diploma_id, cohort_id, semester_id, lect
         request,
         "ui/pages/admin/academic_form.html",
         {"form": form, "title": _("Edit diploma lecture"), "diploma": diploma, "cohort": cohort, "semester": semester, "lecture": lecture, "next": next_url},
+    )
+
+
+@login_required
+@role_required(*ROLE_EXAM_STAFF)
+@require_POST
+def admin_diploma_lecture_metadata_retry(request, diploma_id, cohort_id, semester_id, lecture_id):
+    diploma = get_object_or_404(Diploma, id=diploma_id)
+    cohort = get_object_or_404(Cohort, id=cohort_id, diploma=diploma)
+    semester = get_object_or_404(Semester, id=semester_id, diploma=diploma)
+    lecture = get_object_or_404(
+        DiplomaLecture,
+        id=lecture_id,
+        cohort=cohort,
+        semester=semester,
+    )
+    _request_youtube_metadata_retry(request, lecture, diploma=True)
+    return redirect(
+        "academics:admin_diploma_lecture_list",
+        diploma_id=diploma.id,
+        cohort_id=cohort.id,
+        semester_id=semester.id,
     )
 
 
@@ -1346,13 +1876,14 @@ def admin_course_enrollment_list(request, course_id):
     """Show who is enrolled in each version of a course."""
     course = get_object_or_404(Course, id=course_id)
     version_filter = request.GET.get("version", "")
+    version_filter_id = safe_int(version_filter)
     enrollments = CourseEnrollment.objects.filter(
         course_version__course=course
     ).select_related(
         "student", "student__user", "course_version"
     ).order_by("-created_at")
-    if version_filter:
-        enrollments = enrollments.filter(course_version_id=version_filter)
+    if version_filter_id is not None:
+        enrollments = enrollments.filter(course_version_id=version_filter_id)
     page_obj, pagination_qs, q, status_filter = _enrollment_list_context(request, enrollments)
     versions = CourseVersion.objects.filter(course=course)
     status_choices = [
@@ -1387,13 +1918,13 @@ def admin_course_enrollment_list(request, course_id):
 def admin_course_enrollment_migrate(request, course_id, enrollment_id):
     course = get_object_or_404(Course, id=course_id)
     enrollment = get_object_or_404(
-        CourseEnrollment,
+        CourseEnrollment.objects.select_related("student__user"),
         id=enrollment_id,
         course_version__course=course,
     )
     target = get_object_or_404(
         CourseVersion,
-        id=request.POST.get("version_id"),
+        id=safe_int(request.POST.get("version_id")),
         course=course,
         is_active=True,
     )
@@ -1402,10 +1933,82 @@ def admin_course_enrollment_migrate(request, course_id, enrollment_id):
     ).exists():
         messages.error(request, _("The student already has an enrollment for that version."))
     else:
+        previous_version_id = enrollment.course_version_id
         enrollment.course_version = target
         enrollment.save(update_fields=["course_version", "updated_at"])
+        if previous_version_id != target.id:
+            _record_academic_audit(
+                request,
+                ACTION_ENROLLMENT_CHANGE,
+                target_type="course_enrollment",
+                target_id=enrollment.id,
+                target_label=f"{enrollment.student.full_name} · {course.title} · {target.label}",
+                changed_fields=["course_version"],
+                metadata={
+                    "type": "version_migration",
+                    "course_id": course.id,
+                    "course_version_before": previous_version_id,
+                    "course_version_after": target.id,
+                },
+                subject=enrollment.student,
+            )
         messages.success(request, _("Student migrated to the selected course version."))
     return redirect("academics:admin_course_enrollment_list", course_id=course.id)
+
+
+@login_required
+@role_required(*ROLE_EXAM_STAFF)
+@require_http_methods(["GET", "POST"])
+def admin_course_enrollment_complete(request, course_id, enrollment_id):
+    """Readiness review and explicit course-completion confirmation."""
+    course = get_object_or_404(Course, id=course_id)
+    enrollment = get_object_or_404(
+        CourseEnrollment.objects.select_related(
+            "student__user",
+            "course_version__course",
+            "completed_by",
+        ),
+        id=enrollment_id,
+        course_version__course=course,
+    )
+    if request.method == "POST":
+        notes = request.POST.get("notes", "").strip()
+        try:
+            mark_course_completed(enrollment, actor=request.user, notes=notes)
+            messages.success(
+                request,
+                _("Course marked as completed. Certificate issuance has started."),
+            )
+            return redirect(
+                "academics:admin_course_enrollment_list",
+                course_id=course.id,
+            )
+        except ValueError as exc:
+            messages.error(request, str(exc))
+
+    readiness = get_course_completion_readiness(enrollment)
+    ctx = {
+        "course": course,
+        "enrollment": enrollment,
+        "readiness": readiness,
+        "back_url": reverse(
+            "academics:admin_course_enrollment_list",
+            args=[course.id],
+        ),
+        "breadcrumb_items": [
+            {"label": _("Courses"), "href": reverse("academics:admin_course_list")},
+            {
+                "label": course.title,
+                "href": reverse("academics:admin_course_detail", args=[course.id]),
+            },
+            {"label": _("Complete course")},
+        ],
+    }
+    return render(
+        request,
+        "ui/pages/admin/course_enrollment_complete.html",
+        {**ctx, "title": _("Complete course")},
+    )
 
 
 @login_required
@@ -1414,6 +2017,7 @@ def admin_diploma_enrollment_list(request, diploma_id):
     """Show who is enrolled in a diploma, optionally filtered by cohort."""
     diploma = get_object_or_404(Diploma, id=diploma_id)
     cohort_filter = request.GET.get("cohort", "")
+    cohort_filter_id = safe_int(cohort_filter)
     application_mode = ProgramApplication.objects.filter(
         student_id=OuterRef("student_id"),
         cohort_id=OuterRef("cohort_id"),
@@ -1426,8 +2030,8 @@ def admin_diploma_enrollment_list(request, diploma_id):
     ).select_related(
         "student", "student__user", "cohort"
     ).annotate(application_delivery_mode=Subquery(application_mode)).order_by("-created_at")
-    if cohort_filter:
-        enrollments = enrollments.filter(cohort_id=cohort_filter)
+    if cohort_filter_id:
+        enrollments = enrollments.filter(cohort_id=cohort_filter_id)
     page_obj, pagination_qs, q, status_filter = _enrollment_list_context(request, enrollments)
     cohorts = diploma.cohorts.all()
     status_choices = [
@@ -1463,8 +2067,14 @@ def admin_diploma_enrollment_list(request, diploma_id):
 def admin_diploma_enrollment_update(request, diploma_id, enrollment_id):
     """Update a diploma enrollment's status or cohort."""
     diploma = get_object_or_404(Diploma, id=diploma_id)
-    enrollment = get_object_or_404(DiplomaEnrollment, id=enrollment_id, cohort__diploma=diploma)
+    enrollment = get_object_or_404(
+        DiplomaEnrollment.objects.select_related("student__user", "cohort__diploma"),
+        id=enrollment_id,
+        cohort__diploma=diploma,
+    )
     if request.POST.get("action") == "change_delivery_mode":
+        # The assessments service already records ACTION_STUDENT_ACCESS_CHANGE
+        # for this delivery-mode workflow; do not duplicate it here.
         try:
             change_diploma_enrollment_delivery_mode(
                 enrollment.id,
@@ -1476,18 +2086,43 @@ def admin_diploma_enrollment_update(request, diploma_id, enrollment_id):
         else:
             messages.success(request, _("Student delivery mode updated."))
         return redirect("academics:admin_diploma_enrollment_list", diploma_id=diploma.id)
+    previous_status = enrollment.status
+    previous_cohort_id = enrollment.cohort_id
     new_status = request.POST.get("status")
-    new_cohort_id = request.POST.get("cohort_id")
+    new_cohort_id = safe_int(request.POST.get("cohort_id"))
     if new_status and new_status in dict(ENROLLMENT_STATUS_CHOICES):
         enrollment.status = new_status
         if new_status == "active" and not enrollment.activated_at:
             enrollment.activated_at = timezone.now()
         enrollment.save(update_fields=["status", "activated_at", "updated_at"])
-    if new_cohort_id:
+    if new_cohort_id is not None:
         new_cohort = get_object_or_404(Cohort, id=new_cohort_id, diploma=diploma)
-        if new_cohort_id != str(enrollment.cohort_id):
+        if new_cohort_id != enrollment.cohort_id:
             enrollment.cohort = new_cohort
             enrollment.save(update_fields=["cohort", "updated_at"])
+    changed_fields = []
+    if previous_status != enrollment.status:
+        changed_fields.append("status")
+    if previous_cohort_id != enrollment.cohort_id:
+        changed_fields.append("cohort")
+    if changed_fields:
+        audit_metadata = {}
+        if "status" in changed_fields:
+            audit_metadata["status_before"] = previous_status
+            audit_metadata["status_after"] = enrollment.status
+        if "cohort" in changed_fields:
+            audit_metadata["cohort_before"] = previous_cohort_id
+            audit_metadata["cohort_after"] = enrollment.cohort_id
+        _record_academic_audit(
+            request,
+            ACTION_ENROLLMENT_CHANGE,
+            target_type="diploma_enrollment",
+            target_id=enrollment.id,
+            target_label=f"{enrollment.student.full_name} · {diploma.title} · {enrollment.cohort.name}",
+            changed_fields=changed_fields,
+            metadata=audit_metadata,
+            subject=enrollment.student,
+        )
     msg = _("Enrollment updated.")
     messages.success(request, msg)
     if is_htmx(request):
@@ -1501,6 +2136,16 @@ def admin_diploma_enrollment_update(request, diploma_id, enrollment_id):
 
 
 # --- Watch API ----------------------------------------------------------------
+
+
+def _attach_checkpoint_message(result: dict) -> dict:
+    """Attach a non-technical message to checkpoint error responses."""
+    if result.get("error"):
+        if result.get("violation"):
+            result["message"] = violation_user_message(result["violation"])
+        else:
+            result["message"] = checkpoint_error_user_message(result["error"])
+    return result
 
 
 @require_POST
@@ -1546,6 +2191,7 @@ def api_watch_checkpoint(request, version_id, lecture_id):
         return JsonResponse({"error": "invalid_json"}, status=400)
 
     result = record_lecture_checkpoint(student=student, lecture=lecture, payload=payload)
+    result = _attach_checkpoint_message(result)
     http_status = result.pop("status", 200)
     if not isinstance(http_status, int):
         http_status = 200
@@ -1595,6 +2241,7 @@ def api_audio_checkpoint(request, version_id, lecture_id):
         return JsonResponse({"error": "invalid_json"}, status=400)
 
     result = record_lecture_audio_checkpoint(student=student, lecture=lecture, payload=payload)
+    result = _attach_checkpoint_message(result)
     http_status = result.pop("status", 200)
     if not isinstance(http_status, int):
         http_status = 200
@@ -1626,26 +2273,31 @@ def student_diploma_detail(request, enrollment_id):
     cohort = enrollment.cohort
     access = get_student_diploma_access(enrollment)
 
+    all_lectures = list(
+        get_visible_diploma_lectures(profile, enrollment, access=access)
+    )
+    lectures_by_semester = {}
+    for lecture in all_lectures:
+        lectures_by_semester.setdefault(lecture.semester_id, []).append(lecture)
     semester_lectures = []
-    all_lectures = []
     for semester in access["visible_semesters"]:
-        lectures = get_visible_diploma_lectures(profile, enrollment, semester=semester)
-        all_lectures.extend(lectures)
         semester_lectures.append({
             "semester": semester,
-            "lectures": lectures,
+            "lectures": lectures_by_semester.get(semester.id, []),
         })
 
-    attendance_code = AttendanceCode.objects.filter(
-        diploma_enrollment=enrollment, active=True
-    ).first()
+    attendance_code = None
     attendance_qr = ""
-    if attendance_code:
-        payload = build_attendance_qr_payload(attendance_code)
-        img = qrcode.make(payload, box_size=6)
-        buf = _io.BytesIO()
-        img.save(buf, format="PNG")
-        attendance_qr = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+    if diploma.attendance_enabled:
+        attendance_code = AttendanceCode.objects.filter(
+            diploma_enrollment=enrollment, active=True
+        ).first()
+        if attendance_code:
+            payload = build_attendance_qr_payload(attendance_code)
+            img = qrcode.make(payload, box_size=6)
+            buf = _io.BytesIO()
+            img.save(buf, format="PNG")
+            attendance_qr = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
     progress = diploma_progress_for_enrollment(profile, enrollment)
     attendance_summary = (
         get_attendance_summary(enrollment, access.get("current_semester"))
@@ -1691,7 +2343,9 @@ def student_diploma_semester_detail(request, enrollment_id, semester_id):
     access = get_student_diploma_access(enrollment)
     if semester.id not in {item.id for item in access["visible_semesters"]}:
         raise PermissionDenied(_("This semester is not available yet."))
-    lectures = list(get_visible_diploma_lectures(profile, enrollment, semester=semester))
+    lectures = list(
+        get_visible_diploma_lectures(profile, enrollment, semester=semester, access=access)
+    )
     watch_rows = DiplomaLectureWatchProgress.objects.filter(student=profile, diploma_enrollment=enrollment, lecture__semester=semester)
     lecture_watch = {row.lecture_id: row for row in watch_rows}
     for lecture in lectures:
@@ -1753,6 +2407,11 @@ def student_diploma_lecture_view(request, enrollment_id, semester_id, lecture_id
         enrollment=enrollment, semester=semester,
     )
     watch_progress = DiplomaLectureWatchProgress.objects.filter(student=profile, lecture=lecture, diploma_enrollment=enrollment).first()
+    watch_resume_seconds = (
+        int(watch_progress.resume_position_seconds)
+        if watch_progress
+        else 0
+    )
     return render(request, "ui/pages/student/content.html", {
         "lecture": lecture,
         "enrollment": enrollment,
@@ -1763,6 +2422,7 @@ def student_diploma_lecture_view(request, enrollment_id, semester_id, lecture_id
         "video_tracking_enabled": diploma.video_tracking_enabled,
         "navigation": navigation,
         "watch_progress": watch_progress,
+        "watch_resume_seconds": watch_resume_seconds,
         "back_url": reverse("academics:student_diploma_semester_detail", args=[enrollment.id, semester.id]),
         "back_label": _("Back to semester"),
     })
@@ -1918,6 +2578,7 @@ def api_diploma_watch_checkpoint(request, enrollment_id, semester_id, lecture_id
         return JsonResponse({"error": "invalid_json"}, status=400)
 
     result = record_diploma_lecture_checkpoint(student=student, enrollment=enrollment, lecture=lecture, payload=payload)
+    result = _attach_checkpoint_message(result)
     http_status = result.pop("status", 200)
     if not isinstance(http_status, int):
         http_status = 200

@@ -71,51 +71,6 @@
             </div>
           </div>
         </div>
-      {% else %}
-        <div class="max-w-2xl mx-auto">
-          <h2 class="text-lg font-bold mb-3">{% trans "Exam rules" %}</h2>
-          <dl class="dl">
-            <div>
-              <dt class="dt">{% trans "Duration" %}</dt>
-              <dd class="dd">{{ exam.duration_minutes }} {% trans "minutes" %}</dd>
-            </div>
-            <div>
-              <dt class="dt">{% trans "Questions" %}</dt>
-              <dd class="dd">{{ question_count }}</dd>
-            </div>
-            {% if exam.open_at %}
-              <div>
-                <dt class="dt">{% trans "Opens at" %}</dt>
-                <dd class="dd"><span dir="ltr" class="bidi">{{ exam.open_at|ui_datetime }}</span></dd>
-              </div>
-            {% endif %}
-            {% if exam.close_at %}
-              <div>
-                <dt class="dt">{% trans "Closes at" %}</dt>
-                <dd class="dd"><span dir="ltr" class="bidi">{{ exam.close_at|ui_datetime }}</span></dd>
-              </div>
-            {% endif %}
-          </dl>
-          <ul class="mt-4 space-y-2 text-sm">
-            <li>{% blocktrans with interval=60 %}Your answers are saved automatically every {{ interval }} seconds.{% endblocktrans %}</li>
-            <li>{% trans "You may leave the page and return to continue from where you stopped." %}</li>
-            <li>{% trans "You must answer all questions before submitting." %}</li>
-            <li>{% trans "Once submitted, your answers cannot be changed." %}</li>
-          </ul>
-          {% if exam_readiness == 'scheduled' %}
-            <p class="mt-4">{% trans "This exam has not opened yet." %}</p>
-            {% if exam.open_at %}<p class="text-muted">{% trans "Opens at" %}: <span dir="ltr" class="bidi">{{ exam.open_at|ui_datetime }}</span></p>{% endif %}
-          {% elif exam_readiness == 'closed' %}
-            <p class="mt-4">{% trans "This exam has closed." %}</p>
-          {% else %}
-            <p class="mt-4">{% trans "Follow the instructions to continue." %}</p>
-            {% if attempt %}
-              <form method="post" action="{% url 'entrance_exams:start_exam' token=access_token %}">{% csrf_token %}
-                <button class="btn-primary" type="submit">{% trans "Start exam" %}</button>
-              </form>
-            {% endif %}
-          {% endif %}
-        </div>
 {% endif %}
     </section>
   </div>

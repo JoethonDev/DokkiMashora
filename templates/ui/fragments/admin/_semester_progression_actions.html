@@ -1,0 +1,85 @@
+{% load i18n %}
+<div class="{% if mobile %}flex flex-col gap-2{% else %}flex flex-wrap items-center gap-2{% endif %}">
+  {% for action in row.available_actions %}
+    {% if action == "sync" %}
+      <form method="post" action="{% url 'progression:admin_contextual_grade_sync' diploma.id cohort.id semester.id row.enrollment.id %}" class="m-0">{% csrf_token %}
+        <input type="hidden" name="next" value="{{ row.workspace_url }}">
+        <button class="btn-ghost" type="submit">{% trans "Sync" %}</button>
+      </form>
+    {% elif action == "finalize" %}
+      <form method="post" action="{% url 'progression:admin_contextual_evaluate_semester' diploma.id cohort.id semester.id row.student.id row.enrollment.id %}" class="m-0">{% csrf_token %}
+        <input type="hidden" name="next" value="{{ row.workspace_url }}">
+        <button class="btn-ghost" type="submit">{% trans "Finalize" %}</button>
+      </form>
+    {% elif action == "reevaluate" %}
+      <form method="post" action="{% url 'progression:admin_contextual_grade_reevaluate' diploma.id cohort.id semester.id row.enrollment.id %}" class="m-0">{% csrf_token %}
+        <input type="hidden" name="next" value="{{ row.workspace_url }}">
+        <button class="btn-ghost" type="submit">{% trans "Re-evaluate" %}</button>
+      </form>
+    {% elif action == "request_interview" %}
+      <a class="btn-ghost" href="{% url 'progression:admin_contextual_request_interview' diploma.id cohort.id semester.id row.enrollment.id %}?next={{ row.workspace_url|urlencode }}">{% trans "Interview" %}</a>
+    {% elif action == "complete_interview" %}
+      <a class="btn-secondary" href="{% url 'progression:admin_contextual_interview_decision' diploma.id cohort.id semester.id row.enrollment.id %}?next={{ row.workspace_url|urlencode }}">{% trans "Interview decision" %}</a>
+    {% elif action == "final_pass" or action == "recover_final_pass" %}
+      <form method="post" action="{% url 'progression:admin_contextual_confirm_pass' diploma.id cohort.id semester.id row.enrollment.id %}" class="m-0">{% csrf_token %}
+        <input type="hidden" name="next" value="{{ row.workspace_url }}">
+        <button class="btn-success" type="submit">{% if action == "recover_final_pass" %}{% trans "Promote" %}{% else %}{% trans "Final Pass" %}{% endif %}</button>
+      </form>
+    {% elif action == "final_fail" %}
+      <form method="post" action="{% url 'progression:admin_contextual_demote' diploma.id cohort.id semester.id row.student.id row.enrollment.id %}" class="m-0">{% csrf_token %}
+        <input type="hidden" name="next" value="{{ row.workspace_url }}">
+        <button class="btn-warning" type="submit">{% trans "Final Fail" %}</button>
+      </form>
+    {% elif action == "exceptional_fail" %}
+      <form method="post"
+            action="{% url 'progression:admin_contextual_demote' diploma.id cohort.id semester.id row.student.id row.enrollment.id %}"
+            class="m-0"
+            data-confirm="{% trans 'An explicit reason is required for an exceptional final decision.' %}"
+            data-confirm-label="{% trans 'Final Fail' %}"
+            data-confirm-reason-required="true"
+            data-confirm-reason-name="reason">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ row.workspace_url }}">
+        <input type="hidden" name="reason" value="">
+        <button class="btn-warning" type="submit">{% trans "Final Fail" %}</button>
+      </form>
+    {% elif action == "exceptional_promote" %}
+      <form method="post"
+            action="{% url 'progression:admin_contextual_exceptional_promote' diploma.id cohort.id semester.id row.student.id row.enrollment.id %}"
+            class="m-0"
+            data-confirm="{% trans 'An explicit reason is required for an exceptional final decision.' %}"
+            data-confirm-label="{% trans 'Promote' %}"
+            data-confirm-reason-required="true"
+            data-confirm-reason-name="reason">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ row.workspace_url }}">
+        <input type="hidden" name="reason" value="">
+        <button class="btn-warning" type="submit">{% trans "Promote" %}</button>
+      </form>
+    {% endif %}
+  {% endfor %}
+  {% if row.can_mark_graduate %}
+    <form method="post"
+          action="{% url 'progression:admin_mark_graduate' row.student.id %}"
+          class="m-0"
+          data-confirm="{% trans 'Mark this student as graduated and issue the certificate?' %}"
+          data-confirm-label="{% trans 'Mark graduated' %}">
+      {% csrf_token %}
+      <input type="hidden" name="enrollment_id" value="{{ row.enrollment.id }}">
+      <input type="hidden" name="next" value="{{ row.workspace_url }}">
+      <button class="btn-success" type="submit">{% trans "Mark graduated" %}</button>
+    </form>
+  {% endif %}
+  {% if row.can_mark_complete %}
+    <form method="post"
+          action="{% url 'progression:admin_mark_complete' row.student.id %}"
+          class="m-0"
+          data-confirm="{% trans 'Mark this student as complete and issue the certificate?' %}"
+          data-confirm-label="{% trans 'Mark complete' %}">
+      {% csrf_token %}
+      <input type="hidden" name="enrollment_id" value="{{ row.enrollment.id }}">
+      <input type="hidden" name="next" value="{{ row.workspace_url }}">
+      <button class="btn-secondary" type="submit">{% trans "Mark complete" %}</button>
+    </form>
+  {% endif %}
+</div>

@@ -4,42 +4,136 @@
   {{ assignment.title }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack animate-enter-view">{% trans "Online written" as eyebrow %}
-     {% include "ui/components/_page_header.html" with title=assignment.title eyebrow=eyebrow back_button=True %}
+  {{ item_states|json_script:"reviewer-item-states" }}
+  <div class="page-stack animate-enter-view"
+       x-data="{
+         pageState: {
+           graded: {{ graded_count }},
+           total: {{ item_count }},
+           remaining: {{ remaining_count }},
+           savingId: null,
+         },
+         items: JSON.parse(document.getElementById('reviewer-item-states').textContent),
+         async saveGrade(form, answerId) {
+           const state = this.pageState;
+           if (state.savingId !== null) return;
+           const item = this.items[answerId];
+           if (!item || item.graded) return;
+           state.savingId = answerId;
+           item.saving = true;
+           item.error = '';
+           try {
+             const token = form.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+             const response = await fetch(form.action, {
+               method: 'POST',
+               headers: {
+                 'X-CSRFToken': token,
+                 'X-Requested-With': 'XMLHttpRequest',
+                 'Accept': 'application/json',
+               },
+               body: new FormData(form),
+               credentials: 'same-origin',
+             });
+             if (response.redirected) {
+               window.location.assign(response.url);
+               return;
+             }
+             let data = null;
+             try { data = await response.json(); } catch (e) {}
+             if (!response.ok || !data || !data.ok) {
+               item.error = (data && data.error) || '{{ _("Could not save grade. Please try again.")|escapejs }}';
+               if (data && data.redirect) window.location.assign(data.redirect);
+               return;
+             }
+             state.graded = data.graded_count;
+             state.total = data.total_count;
+             state.remaining = data.remaining_count;
+             item.graded = true;
+             item.score = data.score;
+             window.dispatchEvent(new CustomEvent('show-toast', {
+               detail: { message: data.message, type: 'success' },
+             }));
+             const card = form.closest('[data-grade-card]');
+             if (card) {
+               card.dispatchEvent(new CustomEvent('reviewer-grade-saved', {
+                 detail: data,
+                 bubbles: true,
+               }));
+             }
+           } catch (e) {
+             item.error = '{{ _("Could not save grade. Please try again.")|escapejs }}';
+           } finally {
+             item.saving = false;
+             state.savingId = null;
+           }
+         },
+       }">
+    {% trans "Online written" as eyebrow %}
+    {% include "ui/components/_page_header.html" with title=assignment.title eyebrow=eyebrow back_button=True %}
     <section class="card-surface flex flex-col gap-4">
-       <div class="section-head"><div><p class="eyebrow">{% trans "Online written grading" %}</p><h2>{{ assignment.title }}</h2></div></div>
+      <div class="section-head"><div><p class="eyebrow">{% trans "Online written grading" %}</p><h2>{{ assignment.title }}</h2></div></div>
       <div class="state-banner state-banner-info mb-4"><div><strong>{% trans "Submission claimed" %}</strong>
+          <p class="m-0 mt-1 text-sm">{% trans "Sections" %}: <strong>{{ section_count }}</strong> &middot; {% trans "Questions" %}: <strong>{{ item_count }}</strong> &middot; {% trans "Graded" %}: <strong><span x-text="pageState.graded">{{ graded_count }}</span>/{{ item_count }}</strong></p>
           {% if submission_code %}<p class="m-0 mt-1 text-sm">{% trans "Exam code" %}: <strong dir="ltr">{{ submission_code }}</strong></p>{% endif %}
-          <p class="m-0 mt-1 text-sm">{% trans "Grade every written question below, then finalize this anonymous submission before requesting another one." %}</p></div></div>
-       {% include "ui/components/_pagination.html" with page_obj=online_items pagination_qs=pagination_qs %}
-       <div class="space-y-4 mt-4">
-        {% for item in online_items %}
-          <div class="border border-line rounded-sm p-4">
-            <div class="flex items-center justify-end gap-2 flex-wrap">
-              <span>{% trans "Points" %}: {{ item.points }}</span>
+          <p class="m-0 mt-1 text-sm">{% trans "Grade every written question below, then finalize this anonymous submission before requesting another one." %}</p>
+          <p class="m-0 mt-1 text-sm font-bold text-green{% if remaining_count or not item_count %} hidden{% endif %}"
+             x-bind:class="{ 'hidden': pageState.remaining !== 0 || pageState.total === 0 }">{% trans "All written answers are graded. You can finalize the submission." %}</p></div></div>
+      <div class="flex flex-col gap-4 mt-4">
+        {% for group in section_groups %}
+          <details class="group border border-line rounded-sm bg-surface" open
+                   x-data="{ graded: {{ group.graded_count }}, total: {{ group.total_count }} }"
+                   @reviewer-grade-saved="if ($event.detail.section_id === {{ group.id }}) { graded = $event.detail.section_graded_count; total = $event.detail.section_total_count; }">
+            <summary class="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer list-none hover:bg-surface-soft rounded-sm group-open:border-b group-open:border-line [&::-webkit-details-marker]:hidden">
+              <div class="flex items-center gap-2.5 min-w-0">
+                <span class="text-xs text-muted shrink-0 transition-transform group-open:rotate-90" aria-hidden="true">&#9654;</span>
+                <span class="text-xs font-bold text-muted uppercase shrink-0">{% trans "Section" %} {{ group.order }}</span>
+                <span class="text-xs text-muted shrink-0" aria-hidden="true">&middot;</span>
+                <strong class="truncate">{{ group.title }}</strong>
               </div>
-            <p class="text-sm font-bold mt-2 mb-1">{{ item.question_text }}</p>
-            <p class="text-sm text-muted border-s-2 border-line ps-3">{{ item.answer_text }}</p>
-            {% if item.score is not None %}
-              <div class="flex items-center justify-between gap-2.5 flex-wrap mt-3 pt-3 border-t border-line">
-                {% include "ui/components/_status.html" with code="graded" label=_("Graded") %}
-                <span dir="ltr" class="font-bold">{% trans "Score" %}: {{ item.score }} / {{ item.points }}</span>
-              </div>
-            {% else %}
-              <form method="post" class="flex items-end gap-2 flex-wrap mt-2">{% csrf_token %}
-                <input type="hidden" name="answer_id" value="{{ item.answer_id }}">
-                <label class="min-w-32"><span class="field-label">{% trans "Score (points)" %}</span>
-                  <input name="score" class="form-input" type="number" step="0.01" min="0" max="{{ item.points }}" value="{{ item.score|default:'' }}" required>
-                </label>
-                <button class="btn-primary" type="submit">{% trans "Save grade" %}</button>
-              </form>
-            {% endif %}
-           </div>
-         {% empty %}
-           {% include "ui/components/_empty_state.html" with title=_("No written answers waiting") %}
-         {% endfor %}
-       </div>
-       <form method="post" class="actions-row mt-5 pt-4 border-t border-line">{% csrf_token %}<input type="hidden" name="action" value="finalize"><button class="btn-primary" type="submit">{% trans "Finalize submission grading" %}</button></form>
+              <span class="text-xs text-muted shrink-0">{% trans "Graded" %}: <span x-text="graded">{{ group.graded_count }}</span>/<span x-text="total">{{ group.total_count }}</span></span>
+            </summary>
+            <div class="flex flex-col gap-4 p-3">
+              {% for item in group.items %}
+                <div class="border border-line rounded-sm p-4" data-grade-card data-answer-id="{{ item.answer_id }}">
+                  <div class="flex items-center justify-between gap-2 flex-wrap">
+                    <span class="text-xs font-bold text-muted uppercase">#{{ item.question_order }}</span>
+                    <span>{% trans "Points" %}: {{ item.points }}</span>
+                  </div>
+                  <p class="text-sm font-bold mt-2 mb-1">{{ item.question_text }}</p>
+                  {% if item.answer_text %}
+                    <p class="text-sm text-muted border-s-2 border-line ps-3 whitespace-pre-wrap">{{ item.answer_text }}</p>
+                  {% else %}
+                    <p class="text-sm text-muted border-s-2 border-line ps-3 italic">{% trans "No written answer provided." %}</p>
+                  {% endif %}
+                  <form method="post" class="flex items-end gap-2 flex-wrap mt-2" @submit.prevent="saveGrade($el, {{ item.answer_id }})">{% csrf_token %}
+                    <input type="hidden" name="answer_id" value="{{ item.answer_id }}">
+                    <label class="min-w-32"><span class="field-label">{% trans "Score (points)" %}</span>
+                      <input name="score" class="form-input" type="number" step="0.01" min="0" max="{{ item.points }}" value="{{ item.score|default:'' }}" required
+                             x-model="items[{{ item.answer_id }}].score"
+                             :disabled="items[{{ item.answer_id }}].graded || items[{{ item.answer_id }}].saving"
+                             {% if item.score is not None %}disabled{% endif %}>
+                    </label>
+                    <span x-bind:class="{ 'hidden': items[{{ item.answer_id }}].graded }" {% if item.score is not None %}class="hidden"{% endif %}>
+                      <button class="btn-primary" type="submit" :disabled="pageState.savingId !== null">
+                        <span x-show="pageState.savingId !== {{ item.answer_id }}">{% trans "Save grade" %}</span>
+                        <span x-show="pageState.savingId === {{ item.answer_id }}" x-cloak>{% trans "Saving…" %}</span>
+                      </button>
+                    </span>
+                    <span class="status-pill-success" x-bind:class="{ 'hidden': !items[{{ item.answer_id }}].graded }" {% if item.score is None %}class="hidden"{% endif %}>
+                      <span class="status-icon" aria-hidden="true">&#10003;</span>
+                      <span>{% trans "Graded" %}: <span x-text="items[{{ item.answer_id }}].score">{{ item.score|default:"" }}</span> / {{ item.points }}</span>
+                    </span>
+                  </form>
+                  <p class="field-error" x-show="items[{{ item.answer_id }}].error" x-text="items[{{ item.answer_id }}].error" x-cloak role="alert"></p>
+                </div>
+              {% endfor %}
+            </div>
+          </details>
+        {% empty %}
+          {% include "ui/components/_empty_state.html" with title=_("No written answers waiting") %}
+        {% endfor %}
+      </div>
+      <form method="post" class="actions-row mt-5 pt-4 border-t border-line">{% csrf_token %}<input type="hidden" name="action" value="finalize"><button class="btn-primary" type="submit" :disabled="pageState.remaining > 0 || pageState.savingId !== null">{% trans "Finalize submission grading" %}</button></form>
     </section>
   </div>
 {% endblock %}

@@ -99,8 +99,9 @@
       renderSelected();
       syncCheckboxes();
     });
-    document.body.addEventListener("htmx:afterSwap", function (event) {
-      if (event.detail && event.detail.target === picker) syncCheckboxes();
+    document.body.addEventListener("htmx:after:swap", function (event) {
+      var ctx = event.detail && event.detail.ctx;
+      if (ctx && ctx.target === picker) syncCheckboxes();
     });
 
     renderSelected();

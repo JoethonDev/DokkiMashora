@@ -24,12 +24,12 @@
        <nav class="overflow-y-auto scrollbar-none py-2 lg:block"
             aria-label="{% trans 'Student navigation' %}"
             data-content-navigation
-            hx-boost="true"
-            hx-target="#main"
-            hx-select="#main"
-            hx-swap="outerHTML"
-            hx-push-url="true"
-            hx-indicator="#global-loading"><div class="sidebar-section">{% trans "My workspace" %}</div>
+            hx-boost:inherited="true"
+            hx-target:inherited="#main"
+            hx-select:inherited="#main"
+            hx-swap:inherited="outerHTML"
+            hx-push-url:inherited="true"
+            hx-indicator:inherited="#global-loading"><div class="sidebar-section">{% trans "My workspace" %}</div>
         <a class="sidebar-link{% if request.resolver_match.url_name == 'dashboard' %} active{% endif %}"
            href="{% url 'students:dashboard' %}">
           {% trans "Dashboard" %}
@@ -56,7 +56,7 @@
           {% trans "Profile" %}
         </a>
       </nav>
-      {% include "ui/components/_profile_menu.html" with role_label=_("Student") %}
+      {% include "ui/components/_profile_menu.html" with role_label="Student" %}
     </aside>
     <section class="min-w-0 lg:col-start-2" :inert="sidebarOpen && !isDesktop ? 'true' : null">
       {% include "ui/components/_workspace_topbar.html" with show_global_search=True profile_url="students:details" profile_icon="&#9813;" section_label=_("Student portal") sidebar_id="student-sidebar" %}

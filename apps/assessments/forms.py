@@ -5,7 +5,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from django import forms
-from django.db.models import Sum
 from django.utils.translation import gettext_lazy as _
 
 from apps.academics.models import Cohort, Course, CourseVersion, Diploma, DiplomaLecture, Semester
@@ -20,6 +19,7 @@ from apps.assessments.constants import (
     RELEASE_MODE_MANUAL,
 )
 from apps.core.forms import StyledFormMixin
+from apps.core.permissions import safe_int
 
 from .models import (
     Assessment,
@@ -126,6 +126,31 @@ SCOPE_CHOICES = [
 ]
 
 
+def assessment_type_choices_for_scope(scope_type):
+    """Return only the assessment types the selected scope supports."""
+    if scope_type == SCOPE_COURSE:
+        allowed = {ASSESSMENT_TYPE_QUIZ}
+    elif scope_type == SCOPE_DIPLOMA:
+        allowed = {ASSESSMENT_TYPE_HOMEWORK, ASSESSMENT_TYPE_SEMESTER_EXAM}
+    else:
+        return ASSESSMENT_TYPE_ACTIVE_CHOICES
+    return [choice for choice in ASSESSMENT_TYPE_ACTIVE_CHOICES if choice[0] in allowed]
+
+
+class AssessmentTypeSelect(forms.Select):
+    """Tag type options with their scope so the form can filter them live."""
+
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        option = super().create_option(
+            name, value, label, selected, index, subindex=subindex, attrs=attrs,
+        )
+        if value:
+            option["attrs"]["data-scope"] = (
+                SCOPE_COURSE if value == ASSESSMENT_TYPE_QUIZ else SCOPE_DIPLOMA
+            )
+        return option
+
+
 class AssessmentForm(StyledFormMixin, forms.ModelForm):
     scope_type = forms.ChoiceField(choices=SCOPE_CHOICES, label=_("Scope"))
     course = forms.ModelChoiceField(
@@ -143,6 +168,8 @@ class AssessmentForm(StyledFormMixin, forms.ModelForm):
             "title",
             "description",
             "assessment_type",
+            "is_completion_exam",
+            "is_required_for_semester_evaluation",
             "course",
             "diploma",
             "course_version",
@@ -151,7 +178,6 @@ class AssessmentForm(StyledFormMixin, forms.ModelForm):
             "open_at",
             "close_at",
             "duration_minutes",
-            "total_points",
             "passing_score",
             "max_upload_files",
             "is_active",
@@ -163,37 +189,48 @@ class AssessmentForm(StyledFormMixin, forms.ModelForm):
         widgets = {
             "title": forms.TextInput(attrs={}),
             "description": forms.Textarea(attrs={"rows": 3}),
-            "assessment_type": forms.Select(attrs={}),
+            "assessment_type": AssessmentTypeSelect(attrs={}),
             "course_version": forms.Select(attrs={}),
             "semester": forms.Select(attrs={}),
             "cohort": forms.Select(attrs={}),
             "open_at": forms.DateTimeInput(attrs={"type": "datetime-local"}),
             "close_at": forms.DateTimeInput(attrs={"type": "datetime-local"}),
             "duration_minutes": forms.NumberInput(attrs={}),
-            "total_points": forms.NumberInput(attrs={"readonly": "readonly", "inputmode": "decimal"}),
             "passing_score": forms.NumberInput(attrs={}),
             "max_upload_files": forms.NumberInput(attrs={}),
             "release_mode": forms.Select(attrs={}),
             "penalty_percent": forms.NumberInput(attrs={}),
         }
         labels = {
-            "total_points": _("Total points available (number)"),
             "passing_score": _("Passing score (%)"),
             "penalty_percent": _("Wrong-answer penalty (%)"),
+            "is_completion_exam": _("End-course exam"),
         }
         help_texts = {
-            "total_points": _("e.g., 100"),
             "passing_score": _("0–100"),
             "penalty_percent": _("0–100"),
+            "is_completion_exam": _(
+                "Passing this exam is required to complete the course. Only one quiz per course version can be the end-course exam."
+            ),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         instance = self.instance
-        # Active vocabulary only: Quiz / Semester Exam / Homework. Deprecated
-        # types (final_exam, additional_assessment) are historical and are
-        # never offered for new or edited assessments (P2-01).
-        self.fields["assessment_type"].choices = ASSESSMENT_TYPE_ACTIVE_CHOICES
+        if self.is_bound:
+            scope_type = self.data.get("scope_type")
+        elif instance.pk:
+            scope_type = (
+                SCOPE_COURSE if instance.course_version_id else SCOPE_DIPLOMA
+            )
+        else:
+            scope_type = None
+        # Active vocabulary only: a course offers Quiz only, a diploma offers
+        # Homework / Semester Exam. Deprecated types (final_exam,
+        # additional_assessment) are historical and never offered (P2-01).
+        self.fields["assessment_type"].choices = assessment_type_choices_for_scope(
+            scope_type,
+        )
         # Locked release defaults on create (P2-04): Course Quiz = Automatic,
         # Diploma Homework/Semester Exam = Manual; both remain configurable.
         if not instance:
@@ -224,6 +261,8 @@ class AssessmentForm(StyledFormMixin, forms.ModelForm):
             selected_course_id = selected_course_id.pk
         if hasattr(selected_diploma_id, "pk"):
             selected_diploma_id = selected_diploma_id.pk
+        selected_course_id = safe_int(str(selected_course_id)) if selected_course_id is not None else None
+        selected_diploma_id = safe_int(str(selected_diploma_id)) if selected_diploma_id is not None else None
         self.fields["course_version"].queryset = CourseVersion.objects.filter(
             is_active=True, course_id=selected_course_id,
         ) if selected_course_id else CourseVersion.objects.none()
@@ -267,6 +306,24 @@ class AssessmentForm(StyledFormMixin, forms.ModelForm):
                     "assessment_type",
                     _("Course-scoped assessments can only be a Quiz."),
                 )
+                cleaned["is_completion_exam"] = False
+            elif cleaned.get("is_completion_exam"):
+                if not cv.course.video_tracking_enabled:
+                    self.add_error(
+                        "is_completion_exam",
+                        _("Enable lecture tracking for this course before designating an end-course exam."),
+                    )
+                conflicting_exam = Assessment.objects.filter(
+                    course_version=cv,
+                    is_completion_exam=True,
+                )
+                if self.instance.pk:
+                    conflicting_exam = conflicting_exam.exclude(pk=self.instance.pk)
+                if conflicting_exam.exists():
+                    self.add_error(
+                        "is_completion_exam",
+                        _("This course version already has an end-course exam."),
+                    )
         elif scope_type == SCOPE_DIPLOMA:
             if not semester or not cohort:
                 self.add_error(
@@ -274,11 +331,7 @@ class AssessmentForm(StyledFormMixin, forms.ModelForm):
                     _("Both semester and cohort are required for diploma-scoped assessments."),
                 )
             cleaned["course_version"] = None
-            if self.instance.pk:
-                cleaned["total_points"] = sum(
-                    section.calculated_max_grade()
-                    for section in self.instance.lecture_sections.all()
-                )
+            cleaned["is_completion_exam"] = False
             if semester and cohort and semester.diploma_id != cohort.diploma_id:
                 raise forms.ValidationError(
                     _("Semester and cohort must belong to the same diploma.")
@@ -293,12 +346,11 @@ class AssessmentForm(StyledFormMixin, forms.ModelForm):
                 _("Please select a scope (course or diploma).")
             )
 
-        if assessment_type == ASSESSMENT_TYPE_QUIZ:
-            cleaned["total_points"] = (
-                self.instance.questions.aggregate(total=Sum("points"))["total"]
-                if self.instance.pk
-                else 0
-            ) or 0
+        if scope_type != SCOPE_DIPLOMA or assessment_type not in (
+            ASSESSMENT_TYPE_HOMEWORK,
+            ASSESSMENT_TYPE_SEMESTER_EXAM,
+        ):
+            cleaned["is_required_for_semester_evaluation"] = True
 
         # Locked active assessments allow exactly one attempt (P2-01); the
         # field is not user-configurable.

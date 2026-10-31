@@ -1,0 +1,103 @@
+{% extends "ui/layouts/student.html" %}
+{% load i18n ui_tags %}
+{% block title %}
+  {{ exam.title|default:_("Entrance exam") }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack">
+    {% url 'students:exam_results' as student_exam_results_url %}
+    {% include "ui/components/_page_header.html" with eyebrow=_("Entrance exam") title=exam.title|default:_("Entrance exam") back_url=student_exam_results_url back_label=_("Back to exam results") %}
+
+    <section class="card-surface">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">{% trans "Before you begin" %}</p>
+          <h2>{% trans "Exam overview" %}</h2>
+        </div>
+        {% include "ui/components/_status.html" with code=readiness.state label=readiness.state_label %}
+      </div>
+      <dl class="dl">
+        <div>
+          <dt class="dt">{% trans "Duration" %}</dt>
+          <dd class="dd">{{ exam.duration_minutes }} {% trans "minutes" %}</dd>
+        </div>
+        <div>
+          <dt class="dt">{% trans "Questions" %}</dt>
+          <dd class="dd">{{ question_count }}</dd>
+        </div>
+      </dl>
+      {% if exam.description %}
+        <div class="mt-5 pt-5 border-t border-line">
+          <h3 class="text-base font-bold mb-2">{% trans "Instructions" %}</h3>
+          <p class="text-muted whitespace-pre-line">{{ exam.description }}</p>
+        </div>
+      {% endif %}
+    </section>
+
+    <section class="card-surface">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">{% trans "Before you start" %}</p>
+          <h2>{% trans "How this exam works" %}</h2>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div>
+          <h3 class="text-base font-bold">{% trans "Access window" %}</h3>
+          <ul class="mt-3 space-y-2 text-muted">
+            <li>{% trans "You can start only while the exam access window is open." %}</li>
+            {% if exam.open_at or exam.close_at %}
+              <li>
+                {% if exam.open_at %}{% trans "Opens" %}: <span dir="ltr" class="bidi">{{ exam.open_at|ui_datetime }}</span>{% endif %}
+                {% if exam.open_at and exam.close_at %} — {% endif %}
+                {% if exam.close_at %}{% trans "closes" %}: <span dir="ltr" class="bidi">{{ exam.close_at|ui_datetime }}</span>{% endif %}
+              </li>
+            {% endif %}
+          </ul>
+        </div>
+        <div>
+          <h3 class="text-base font-bold">{% trans "Attempt and saving" %}</h3>
+          <ul class="mt-3 space-y-2 text-muted">
+            <li>{% trans "The timer starts when you start the exam. Reloading the page does not reset it." %}</li>
+            <li>{% trans "Your answers are saved automatically while you work." %}</li>
+            <li>{% trans "You may leave the page and return to continue from where you stopped." %}</li>
+            <li>{% trans "Once submitted, your answers cannot be changed." %}</li>
+          </ul>
+        </div>
+      </div>
+      <div class="mt-5 pt-5 border-t border-line">
+        <h3 class="text-base font-bold">{% trans "Questions and submission" %}</h3>
+        <p class="text-muted mt-2">{% trans "You must answer all questions before submitting. The admissions office reviews your answers after submission." %}</p>
+      </div>
+    </section>
+
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <article class="card-surface">
+        <p class="eyebrow">{% trans "What is included" %}</p>
+        <h2>{% trans "Exam contents" %}</h2>
+        <dl class="dl mt-4">
+          <div>
+            <dt class="dt">{% trans "Questions" %}</dt>
+            <dd class="dd">{{ question_count }}</dd>
+          </div>
+          {% if mcq_count %}<div><dt class="dt">{% trans "Multiple-choice questions" %}</dt><dd class="dd">{{ mcq_count }}</dd></div>{% endif %}
+          {% if written_count %}<div><dt class="dt">{% trans "Written questions" %}</dt><dd class="dd">{{ written_count }}</dd></div>{% endif %}
+        </dl>
+      </article>
+      <article class="card-surface">
+        <p class="eyebrow">{% trans "Your next step" %}</p>
+        <h2>{% trans "Ready when you are" %}</h2>
+        <div class="mt-4">
+          {% include "ui/components/_state_banner.html" with state=readiness.state label=readiness.state_label description=readiness.description %}
+        </div>
+        {% if readiness.state == "ready" and attempt %}
+          <div class="mt-5 pt-5 border-t border-line">
+            <form method="post" action="{% url 'entrance_exams:start_exam' token=access_token %}">{% csrf_token %}
+              <button class="btn-primary" type="submit">{% trans "Start exam" %}</button>
+            </form>
+          </div>
+        {% endif %}
+      </article>
+    </section>
+  </div>
+{% endblock %}

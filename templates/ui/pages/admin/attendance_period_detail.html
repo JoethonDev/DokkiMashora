@@ -1,6 +1,6 @@
 {% extends "ui/layouts/admin.html" %}
-{% load i18n %}
-{% block title %}{{ period }}{% endblock %}
+{% load i18n ui_tags %}
+{% block title %}{% trans "Attendance period" %}{% endblock %}
 {% block content %}
   <div class="page-stack animate-enter-view">
     {% include "ui/components/_page_header.html" with title=_('Attendance period') eyebrow=_('Attendance period') back_button=True back_url=back_url %}
@@ -11,24 +11,34 @@
           <p class="eyebrow">{% trans "Cohort semester attendance" %}</p>
           <h2>{% trans "Period details" %}</h2>
         </div>
-        {% if is_admin and period.status == 'open' %}
-          <form method="post" action="{% url 'attendance:attendance_period_close' period.id %}">
-            {% csrf_token %}
-            <button class="btn-warning" type="submit">{% trans "Close period" %}</button>
-          </form>
+        {% if is_admin %}
+          <div class="flex flex-wrap items-center gap-2">
+            {% if period.status != 'cancelled' %}
+              <a class="btn-secondary" href="{% url 'attendance:attendance_period_edit' period.id %}">{% trans "Edit attendance period" %}</a>
+            {% endif %}
+            {% if period.status == 'open' %}
+              <form method="post" action="{% url 'attendance:attendance_period_close' period.id %}">
+                {% csrf_token %}
+                <button class="btn-warning" type="submit">{% trans "Close period" %}</button>
+              </form>
+            {% endif %}
+          </div>
         {% endif %}
       </div>
       <dl class="dl">
         <div><dt class="dt">{% trans "Cohort" %}</dt><dd class="dd">{{ period.cohort }}</dd></div>
         <div><dt class="dt">{% trans "Semester" %}</dt><dd class="dd">{{ period.semester }}</dd></div>
-        <div><dt class="dt">{% trans "Status" %}</dt><dd class="dd">{{ period.get_status_display }}</dd></div>
-        <div><dt class="dt">{% trans "Starts" %}</dt><dd class="dd"><span dir="ltr">{{ period.starts_at|date:"d/m/Y H:i" }}</span></dd></div>
-        <div><dt class="dt">{% trans "Ends" %}</dt><dd class="dd"><span dir="ltr">{{ period.ends_at|date:"d/m/Y H:i" }}</span></dd></div>
+        <div><dt class="dt">{% trans "Status" %}</dt><dd class="dd">{% include "ui/components/_status.html" with code=period.status label=period.get_status_display %}</dd></div>
+        <div><dt class="dt">{% trans "Starts" %}</dt><dd class="dd"><span dir="ltr">{{ period.starts_at|ui_datetime }}</span></dd></div>
+        <div><dt class="dt">{% trans "Ends" %}</dt><dd class="dd"><span dir="ltr">{{ period.ends_at|ui_datetime }}</span></dd></div>
         <div><dt class="dt">{% trans "Daily sessions" %}</dt><dd class="dd">{{ days|length }}</dd></div>
+        <div><dt class="dt">{% trans "Counted records" %}</dt><dd class="dd">{{ period.counted_record_count }}</dd></div>
+        <div><dt class="dt">{% trans "Excluded records" %}</dt><dd class="dd">{{ period.excluded_record_count }}</dd></div>
+        <div><dt class="dt">{% trans "All scan records" %}</dt><dd class="dd">{{ period.raw_record_count }}</dd></div>
       </dl>
     </section>
 
-    {% if is_admin and period.status == 'open' %}
+    {% if is_admin and period.status != 'closed' and period.status != 'cancelled' %}
       <section class="card-surface">
         <div class="section-head">
           <div>
@@ -53,19 +63,19 @@
       <div class="section-head"><div><p class="eyebrow">{% trans "Period sessions" %}</p><h2>{% trans "Attendance days" %}</h2></div></div>
       {% if days %}
         <div class="table-wrap hidden lg:block"><table class="table">
-          <thead><tr><th class="table-th">{% trans "Session" %}</th><th class="table-th">{% trans "Date" %}</th><th class="table-th">{% trans "Status" %}</th><th class="table-th">{% trans "Records" %}</th><th class="table-th">{% trans "Actions" %}</th></tr></thead>
+        <thead><tr><th class="table-th">{% trans "Session" %}</th><th class="table-th">{% trans "Date" %}</th><th class="table-th">{% trans "Status" %}</th><th class="table-th">{% trans "Records" %}</th><th class="table-th">{% trans "Actions" %}</th></tr></thead>
           <tbody>{% for day in days %}
             <tr>
               <td class="table-td"><strong>{{ day.session_number }}</strong>{% if day.title %}<small class="block text-muted">{{ day.title }}</small>{% endif %}</td>
-              <td class="table-td"><span dir="ltr">{{ day.date|date:"d/m/Y" }}</span></td>
-              <td class="table-td">{{ day.get_status_display }}</td>
-              <td class="table-td">{{ day.record_count }}</td>
-              <td class="table-td"><a class="btn-secondary" href="{% url 'attendance:attendance_session_detail' day.id %}">{% trans "Open" %}</a></td>
+              <td class="table-td"><span dir="ltr">{{ day.date|date:"DATE_FORMAT" }}</span></td>
+              <td class="table-td">{% include "ui/components/_status.html" with code=day.status label=day.get_status_display %}</td>
+              <td class="table-td">{% include "ui/fragments/admin/_attendance_count_breakdown.html" with counted=day.counted_record_count excluded=day.excluded_record_count total=day.raw_record_count only %}</td>
+              <td class="table-td"><div class="flex flex-wrap gap-2"><a class="btn-secondary" href="{% url 'attendance:attendance_session_detail' day.id %}">{% trans "Open" %}</a>{% if is_admin and day.status != 'cancelled' %}<a class="btn-ghost" href="{% url 'attendance:attendance_session_edit' day.id %}">{% trans "Edit attendance session" %}</a>{% endif %}</div>{% if day.outside_parent_period_window %}<small class="block text-muted mt-2">{% trans "The session window extends outside the current attendance period; scans outside the period are excluded." %}</small>{% endif %}</td>
             </tr>
           {% endfor %}</tbody>
         </table></div>
         <div class="card-stack lg:hidden">{% for day in days %}
-          <div class="mobile-card"><div class="flex-1 min-w-0"><strong class="block">{% trans "Session" %} {{ day.session_number }}</strong><small class="block text-muted"><span dir="ltr">{{ day.date|date:"d/m/Y" }}</span> · {{ day.get_status_display }} · {{ day.record_count }} {% trans "records" %}</small></div><a class="btn-soft-primary shrink-0" href="{% url 'attendance:attendance_session_detail' day.id %}">{% trans "Open" %}</a></div>
+          <div class="mobile-card"><div class="flex-1 min-w-0"><strong class="block">{% trans "Session" %} {{ day.session_number }}</strong><small class="block text-muted"><span dir="ltr">{{ day.date|date:"DATE_FORMAT" }}</span></small>{% include "ui/components/_status.html" with code=day.status label=day.get_status_display %}<div class="mt-2">{% include "ui/fragments/admin/_attendance_count_breakdown.html" with counted=day.counted_record_count excluded=day.excluded_record_count total=day.raw_record_count only %}</div>{% if day.outside_parent_period_window %}<small class="block text-muted">{% trans "The session window extends outside the current attendance period; scans outside the period are excluded." %}</small>{% endif %}<div class="flex flex-wrap gap-2 mt-3"><a class="btn-soft-primary shrink-0" href="{% url 'attendance:attendance_session_detail' day.id %}">{% trans "Open" %}</a>{% if is_admin and day.status != 'cancelled' %}<a class="btn-ghost" href="{% url 'attendance:attendance_session_edit' day.id %}">{% trans "Edit attendance session" %}</a>{% endif %}</div></div></div>
         {% endfor %}</div>
       {% else %}
         {% include "ui/components/_empty_state.html" with title=_('No attendance days yet.') message=_('Add the first dated session when the cohort meets.') %}

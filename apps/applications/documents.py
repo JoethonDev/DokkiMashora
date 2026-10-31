@@ -16,7 +16,10 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 from PIL import Image, ImageOps
 
+from apps.audit.constants import ACTION_APPLICATION_STATUS_CHANGE, SECTION_ADMISSIONS
+from apps.audit.services import record_audit_event
 from apps.communications.services import queue_program_application_email
+from apps.core.permissions import is_admin
 from apps.storage.services import (
     FileValidationError,
     record_deferred_storage_deletion,
@@ -215,7 +218,11 @@ def request_documents_program_application(
 ) -> ApplicationDocumentRequest:
     """Request documents for an accepted diploma application."""
     with transaction.atomic():
-        locked = ProgramApplication.objects.select_for_update().get(pk=application.pk)
+        locked = (
+            ProgramApplication.objects.select_for_update(of=("self",))
+            .select_related("student", "cohort__diploma", "course")
+            .get(pk=application.pk)
+        )
 
         if locked.program_type != PROGRAM_TYPE_DIPLOMA:
             raise ValueError(_("Document requests are only for diploma applications."))
@@ -223,8 +230,6 @@ def request_documents_program_application(
             raise ValueError(_("Documents can only be requested for accepted applications."))
         if not locked.cohort:
             raise ValueError(_("Application has no cohort target."))
-        if not locked.student.user.email_activated_at:
-            raise ValueError(_("Student account must be activated before requesting documents."))
         if timezone.is_naive(expires_at):
             raise ValueError(_("Expiry time must be timezone-aware."))
         if expires_at <= timezone.now():
@@ -278,6 +283,19 @@ def request_documents_program_application(
                 metadata={"document_request_id": doc_request.pk},
             )
 
+        record_audit_event(
+            actor=actor,
+            action=ACTION_APPLICATION_STATUS_CHANGE,
+            section=SECTION_ADMISSIONS,
+            metadata={
+                "status_before": old_status,
+                "status_after": PROGRAM_APP_STATUS_DOCUMENTS_REQUESTED,
+                "document_request_id": str(doc_request.pk),
+                "expires_at": expires_at.isoformat(),
+            },
+            **application_services.application_audit_fields(locked),
+        )
+
         if send_email:
             transaction.on_commit(
                 lambda: _send_document_upload_request_email(locked, doc_request, raw_token)
@@ -299,9 +317,22 @@ def get_document_request_by_token(raw_token: str) -> ApplicationDocumentRequest 
 
 def submit_application_documents(
     request_obj: ApplicationDocumentRequest, actor, *, persona_file, attachment_files,
+    on_behalf: bool = False,
 ) -> ApplicationDocumentUpload:
-    """Submit persona image and attachments for a document request."""
+    """Submit persona image and attachments for a document request.
+
+    ``on_behalf`` lets an authorized administrator complete the upload for the
+    applicant (e.g. when documents are handed in in person). The applicant
+    ownership gate is replaced by an explicit admin check, and every decision
+    and audit record marks the submission as acting on behalf of the student.
+    """
     application = request_obj.program_application
+
+    if on_behalf:
+        if not is_admin(actor):
+            raise PermissionError(
+                _("Only an administrator can submit documents on behalf of an applicant.")
+            )
 
     # Check ownership and state under short-lived locks. Storage and image/PDF
     # processing must not hold database locks or run inside a transaction.
@@ -317,7 +348,7 @@ def submit_application_documents(
             raise ValueError(_("Not a diploma application."))
         if locked_app.status != PROGRAM_APP_STATUS_DOCUMENTS_REQUESTED:
             raise ValueError(_("Application is not in documents-requested state."))
-        if locked_app.student.user != actor:
+        if not on_behalf and locked_app.student.user != actor:
             raise ValueError(_("You can only upload documents for your own application."))
 
     # Validate and prepare all file bytes outside the transaction.
@@ -350,7 +381,11 @@ def submit_application_documents(
         # Re-lock and re-check after storage work so a concurrent submission
         # cannot create a second logical upload for the same request.
         with transaction.atomic():
-            locked_app = ProgramApplication.objects.select_for_update().get(pk=application.pk)
+            locked_app = (
+                ProgramApplication.objects.select_for_update(of=("self",))
+                .select_related("student", "cohort__diploma", "course")
+                .get(pk=application.pk)
+            )
             locked_request = ApplicationDocumentRequest.objects.select_for_update().get(pk=request_obj.pk)
             if locked_request.status != DOCUMENT_REQUEST_STATUS_REQUESTED:
                 raise ValueError(_("This document request is no longer open."))
@@ -358,7 +393,7 @@ def submit_application_documents(
                 raise ValueError(_("This document request has expired."))
             if locked_app.status != PROGRAM_APP_STATUS_DOCUMENTS_REQUESTED:
                 raise ValueError(_("Application is not in documents-requested state."))
-            if locked_app.student.user != actor:
+            if not on_behalf and locked_app.student.user != actor:
                 raise ValueError(_("You can only upload documents for your own application."))
 
             upload = ApplicationDocumentUpload.objects.create(
@@ -400,7 +435,22 @@ def submit_application_documents(
                     "original_file_count": payload["file_count"],
                     "persona_file_size": len(persona_data),
                     "attachments_file_size": len(pdf_data),
+                    "on_behalf": on_behalf,
                 },
+            )
+            record_audit_event(
+                actor=actor,
+                action=ACTION_APPLICATION_STATUS_CHANGE,
+                section=SECTION_ADMISSIONS,
+                metadata={
+                    "status_before": old_status,
+                    "status_after": PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED,
+                    "document_request_id": str(locked_request.pk),
+                    "document_upload_id": str(upload.pk),
+                    "original_file_count": payload["file_count"],
+                    "on_behalf": on_behalf,
+                },
+                **application_services.application_audit_fields(locked_app),
             )
     except Exception:
         if persona_key:

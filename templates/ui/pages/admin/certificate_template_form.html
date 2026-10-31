@@ -1,0 +1,143 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n %}
+{% block title %}
+  {{ title|default:_("Certificate template") }}
+{% endblock %}
+{% block content %}
+  <div class="page-stack animate-enter-view">
+    {% if is_edit %}
+      {% trans "Manage template details and certificate artwork." as description %}
+      {% trans "Certificate template" as page_title %}
+    {% else %}
+      {% trans "Upload certificate artwork, save the template, then place the dynamic fields." as description %}
+      {% trans "Create certificate template" as page_title %}
+    {% endif %}
+    {% include "ui/components/_page_header.html" with eyebrow=_("Certificates") title=page_title description=description back_url=back_url back_label=back_label %}
+
+    {% if source_required %}
+      <section class="card-surface page-stack max-w-3xl w-full mx-auto">
+        <div class="section-head"><div>
+              <p class="eyebrow">{% trans "Artwork required" %}</p>
+              <h3>{% trans "Upload certificate artwork" %}</h3>
+              <p class="text-sm text-muted">{% trans "Certificate artwork is required. Upload a PDF, PSD, or JPG/JPEG file to continue." %}</p>
+            </div>
+          </div>
+        {% if template %}
+          <p class="text-sm text-muted">{{ template.name }}{% if template.program_title %} · {{ template.program_title }}{% endif %}</p>
+          {% if template.source_status == "failed" %}
+            <p class="text-sm text-red">{{ template.source_error|default:_("Artwork processing failed. Upload the file again.") }}</p>
+          {% endif %}
+          <form class="page-stack" method="post" action="{% url 'certificates:admin_template_upload_source' template.id %}" enctype="multipart/form-data">{% csrf_token %}
+            <label class="field"><span class="field-label">{% trans "Certificate artwork" %}</span>
+              <input class="form-input" type="file" name="source_file" accept=".pdf,.psd,.jpg,.jpeg,application/pdf,image/vnd.adobe.photoshop,image/jpeg" required>
+            </label>
+            <div class="flex justify-end">
+              <button class="btn-primary w-full sm:w-auto" type="submit">{% trans "Upload artwork" %}</button>
+            </div>
+          </form>
+        {% else %}
+          <form class="page-stack" method="post" enctype="multipart/form-data">{% csrf_token %}
+            {% include "ui/fragments/admin/_certificate_template_fields.html" %}
+            {% include "ui/components/_field.html" with field=form.source_file %}
+            <div class="flex justify-end">
+              <button class="btn-primary w-full sm:w-auto" type="submit">{% trans "Save and continue" %}</button>
+            </div>
+          </form>
+        {% endif %}
+      </section>
+    {% else %}
+      <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_20rem] gap-4 items-start max-w-5xl w-full mx-auto">
+        <section class="card-surface page-stack order-2 lg:order-1">
+          <div class="section-head"><div>
+                <p class="eyebrow">{% trans "Template" %}</p>
+                <h3>{% trans "Template details" %}</h3>
+              </div>
+            </div>
+          <form class="page-stack" method="post" enctype="multipart/form-data">{% csrf_token %}
+            {% include "ui/fragments/admin/_certificate_template_fields.html" %}
+            <div class="flex justify-end">
+              <button class="btn-primary w-full sm:w-auto" type="submit">{% trans "Save template" %}</button>
+            </div>
+          </form>
+        </section>
+        <aside class="card-surface page-stack order-1 lg:order-2 lg:sticky lg:top-4">
+          <div class="section-head"><div>
+                <p class="eyebrow">{% trans "Certificate artwork" %}</p>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <h3>{% trans "Artwork preview" %}</h3>
+                  <span class="status-pill-success">&#10003; {% trans "Ready" %}</span>
+                </div>
+              </div>
+            </div>
+          <a class="block rounded-sm border border-line bg-surface-soft overflow-hidden"
+             href="{% url 'certificates:admin_template_preview' template.id %}"
+             target="_blank"
+             rel="noopener"
+             title="{% trans 'View artwork preview' %}">
+            <img class="block mx-auto max-h-56 w-auto max-w-full"
+                 src="{% url 'certificates:admin_template_preview' template.id %}"
+                 width="{{ template.preview_width|default:1400 }}"
+                 height="{{ template.preview_height|default:989 }}"
+                 decoding="async"
+                 alt="{% trans 'Certificate artwork preview' %}">
+          </a>
+          <div class="flex items-center justify-between gap-2 text-xs text-muted">
+            <span>{{ template.get_source_format_display }} · {{ template.preview_page_count }} {% trans "page(s)" %}</span>
+            <a class="text-link" href="{% url 'certificates:admin_template_preview' template.id %}" target="_blank" rel="noopener">{% trans "Open full preview" %}</a>
+          </div>
+          <a class="btn-primary w-full" href="{% url 'certificates:admin_template_editor' template.id %}">{% trans "Edit field placement" %}</a>
+          {% if pdf_preview_url %}
+            <a class="btn-secondary w-full" href="{{ pdf_preview_url }}" target="_blank" rel="noopener">{% trans "Preview certificate" %}</a>
+          {% endif %}
+          <details class="group border border-line rounded-sm">
+            <summary class="flex items-center justify-between gap-3 px-3 py-2.5 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+              <span class="text-sm font-bold text-text">{% trans "Replace artwork" %}</span>
+              <span class="text-muted transition-transform group-open:rotate-180" aria-hidden="true">&#9662;</span>
+            </summary>
+            <div class="border-t border-line p-3">
+              <form class="page-stack" method="post" action="{% url 'certificates:admin_template_upload_source' template.id %}" enctype="multipart/form-data">{% csrf_token %}
+                <label class="field"><span class="field-label">{% trans "New artwork file" %}</span>
+                  <input class="form-input" type="file" name="source_file" accept=".pdf,.psd,.jpg,.jpeg,application/pdf,image/vnd.adobe.photoshop,image/jpeg" required>
+                </label>
+                <p class="text-xs text-muted">{% trans "Uploading replacement artwork resets field placement." %}</p>
+                <button class="btn-secondary w-full sm:w-auto" type="submit">{% trans "Upload replacement" %}</button>
+              </form>
+            </div>
+          </details>
+        </aside>
+      </div>
+    {% endif %}
+
+    {% if is_edit %}
+      <section class="card-surface w-full mx-auto {% if source_ready %}max-w-5xl{% else %}max-w-3xl{% endif %}">
+        <details class="group">
+          <summary class="flex items-center justify-between gap-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+            <div>
+              <span class="block eyebrow text-red">{% trans "Danger zone" %}</span>
+              <span class="block text-lg font-bold text-text">{% if source_ready %}{% trans "Remove artwork or delete template" %}{% else %}{% trans "Delete template" %}{% endif %}</span>
+            </div>
+            <span class="text-muted transition-transform group-open:rotate-180" aria-hidden="true">&#9662;</span>
+          </summary>
+          <div class="mt-4 grid grid-cols-1 {% if source_ready %}md:grid-cols-2{% endif %} gap-4">
+            {% if source_ready %}
+              <div class="rounded-sm border border-red/20 bg-surface-soft p-4 page-stack">
+                <strong>{% trans "Remove artwork" %}</strong>
+                <p class="text-sm text-muted">{% trans "Removing the artwork makes this template unavailable until new artwork is uploaded." %}</p>
+                <form method="post" action="{% url 'certificates:admin_template_clear_source' template.id %}" class="m-0" data-confirm="{% trans 'Remove this template artwork?' %}">{% csrf_token %}
+                  <button class="btn-danger w-fit" type="submit">{% trans "Remove artwork" %}</button>
+                </form>
+              </div>
+            {% endif %}
+            <div class="rounded-sm border border-red/20 bg-surface-soft p-4 page-stack">
+              <strong>{% trans "Delete template" %}</strong>
+              <p class="text-sm text-muted">{% trans "Generated certificates are preserved. Deactivate the template in Template details before deleting it." %}</p>
+              <form method="post" action="{% url 'certificates:admin_template_delete' template.id %}" class="m-0" data-confirm="{% trans 'Delete this certificate template? Generated certificates will be preserved.' %}">{% csrf_token %}
+                <button class="btn-danger w-fit" type="submit">{% trans "Delete template" %}</button>
+              </form>
+            </div>
+          </div>
+        </details>
+      </section>
+    {% endif %}
+  </div>
+{% endblock %}

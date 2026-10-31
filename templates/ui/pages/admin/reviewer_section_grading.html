@@ -27,8 +27,8 @@
               {% if row.grade %}
                 <div class="flex items-center justify-between gap-2.5 flex-wrap border-b border-line pb-4 last:border-b-0">
                   <div>
-                    <strong class="block">{{ row.section }}</strong>
-                    <small class="text-muted">{% trans "Maximum" %}: {{ row.section.max_grade }}</small>
+                    <strong class="block">{{ row.section_title }}</strong>
+                    <small class="text-muted">{% trans "Maximum" %}: {{ row.max_grade }}</small>
                   </div>
                   <div class="flex items-center gap-2.5">
                     {% include "ui/components/_status.html" with code="graded" label=_('Graded') %}
@@ -39,8 +39,8 @@
                 <form class="flex items-end gap-2.5 flex-wrap border-b border-line pb-4 last:border-b-0" method="post">{% csrf_token %}
                   <input type="hidden" name="code_number" value="{{ code.code_number }}">
                   <input type="hidden" name="section_id" value="{{ row.section.id }}">
-                  <label class="field flex-1 min-w-48"><span class="field-label">{{ row.section }}</span><span class="field-help">{% trans "Maximum" %}: {{ row.section.max_grade }}</span>
-                    <input name="score" class="form-input" value="{{ row.score }}" type="number" min="0" max="{{ row.section.max_grade }}" step="0.01" required>
+                  <label class="field flex-1 min-w-48"><span class="field-label">{{ row.section_title }}</span><span class="field-help">{% trans "Maximum" %}: {{ row.max_grade }}</span>
+                    <input name="score" class="form-input" value="{{ row.score }}" type="number" min="0" max="{{ row.max_grade }}" step="0.01" required>
                   </label>
                   <button class="btn-primary" type="submit">{% trans "Save grade" %}</button>
                 </form>

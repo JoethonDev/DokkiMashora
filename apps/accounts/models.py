@@ -11,18 +11,13 @@ from django.utils.translation import gettext_lazy as _
 from apps.core.models import TimeStampedModel
 
 from .constants import (
-    GROUP_STUDENT,
+    ACTIVE_ROLE_PRECEDENCE,
     MATCH_METHOD_CHOICES,
     MATCH_METHOD_NONE,
     ROW_STATUS_CHOICES,
     ROW_STATUS_PARSED,
-    STAFF_ROLE_GROUPS,
     UPLOAD_STATUS_CHOICES,
     UPLOAD_STATUS_PENDING,
-    USER_STATUS_ACTIVE,
-    USER_STATUS_CHOICES,
-    USER_STATUS_INACTIVE,
-    USER_STATUS_SUSPENDED,
 )
 from .managers import UserManager
 
@@ -58,14 +53,6 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
         db_index=True,
         help_text=_("Stored identity number (National ID or Passport ID)."),
     )
-    status = models.CharField(
-        _("status"),
-        max_length=16,
-        choices=USER_STATUS_CHOICES,
-        default=USER_STATUS_ACTIVE,
-        db_index=True,
-    )
-
     is_staff = models.BooleanField(_("staff status"), default=False)
     is_active = models.BooleanField(_("active"), default=True)
     date_joined = models.DateTimeField(_("date joined"), default=timezone.now)
@@ -82,7 +69,6 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
         ordering = ("-date_joined",)
         indexes = [
             models.Index(fields=("email",)),
-            models.Index(fields=("status",)),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -97,10 +83,10 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
         return self.full_name or self.email
 
     def save(self, *args, **kwargs):
-        if self.is_active:
-            self.status = USER_STATUS_ACTIVE
-        elif self.status != USER_STATUS_SUSPENDED:
-            self.status = USER_STATUS_INACTIVE
+        if not self.full_name_ar and self.full_name:
+            self.full_name_ar = self.full_name
+            if kwargs.get("update_fields") is not None:
+                kwargs["update_fields"] = {*kwargs["update_fields"], "full_name_ar"}
         super().save(*args, **kwargs)
 
     def get_full_name(self) -> str:
@@ -116,8 +102,10 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
     @property
     def primary_role(self) -> str:
         """Return the highest-priority group for the user, or empty string."""
-        groups = set(self.groups.values_list("name", flat=True))
-        for candidate in STAFF_ROLE_GROUPS + (GROUP_STUDENT,):
+        groups = getattr(self, "_group_names_cache", None)
+        if groups is None:
+            groups = set(self.groups.values_list("name", flat=True))
+        for candidate in ACTIVE_ROLE_PRECEDENCE:
             if candidate in groups:
                 return candidate
         return ""
@@ -200,6 +188,12 @@ class UserUploadRow(TimeStampedModel):
         blank=True,
         related_name="import_rows",
         verbose_name=_("matched user"),
+    )
+    preview_identity = models.JSONField(
+        _("preview identity"),
+        default=dict,
+        blank=True,
+        help_text=_("Non-reversible identity snapshot used to reject stale confirmations."),
     )
     action = models.CharField(
         _("action"),

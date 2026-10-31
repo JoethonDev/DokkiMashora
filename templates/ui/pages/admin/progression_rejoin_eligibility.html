@@ -3,7 +3,8 @@
 {% block title %}{% trans "Rejoin Eligibility" %}{% endblock %}
 {% block content %}
   <div class="page-stack animate-enter-view">
-    {% include "ui/components/_page_header.html" with eyebrow=_("Progression") title=_("Rejoin Eligibility") description=_("Students eligible for the immediately next cohort at the same failed semester.") back_button=True %}
+    {% include "ui/components/_page_header.html" with eyebrow=_("Progression") title=_("Rejoin Eligibility") description=_("Students eligible for the immediately next cohort at the same failed semester.") back_button=True back_url=context_back_url back_label=_("Back") %}
+    {% if not context_route %}{% include "ui/fragments/admin/_progression_context_filter.html" %}{% endif %}
     {% include "ui/components/_pagination.html" with page_obj=page_obj pagination_qs=pagination_qs %}
     <section class="card-surface flex flex-col gap-4">
       {% if rows.object_list %}
@@ -34,16 +35,11 @@
                   </td>
                   <td class="table-td">
                     {% if row.eligible and not row.plan %}
-                      <form method="post"
-                            action="{% url 'progression:admin_create_rejoin_plan' row.from_enrollment_id %}"
-                            class="inline">{% csrf_token %}
-                        <input type="hidden" name="semester_id" value="{{ row.failed_semester_id }}">
+                      <form method="post" action="{% if context_exact %}{% url 'progression:admin_contextual_create_rejoin_plan' context_diploma.id context_cohort.id context_semester.id row.from_enrollment_id %}{% else %}{% url 'progression:admin_create_rejoin_plan_for_semester' row.from_enrollment_id row.failed_semester_id %}{% endif %}" class="inline">{% csrf_token %}
                         <button class="btn-ghost" type="submit">{% trans "Prepare" %}</button>
                       </form>
                     {% elif row.plan and row.plan.status == "planned" and row.eligible %}
-                      <form method="post"
-                            action="{% url 'progression:admin_activate_rejoin_plan' row.plan.id %}"
-                            class="inline">{% csrf_token %}
+                      <form method="post" action="{% if context_exact %}{% url 'progression:admin_contextual_activate_rejoin_plan' context_diploma.id context_cohort.id context_semester.id row.plan.id %}{% else %}{% url 'progression:admin_activate_rejoin_plan' row.plan.id %}{% endif %}" class="inline">{% csrf_token %}
                         <button class="btn-primary" type="submit">{% trans "Activate" %}</button>
                       </form>
                     {% elif row.plan %}
@@ -71,12 +67,11 @@
               </div>
               <div class="shrink-0">
                 {% if row.eligible and not row.plan %}
-                  <form method="post" action="{% url 'progression:admin_create_rejoin_plan' row.from_enrollment_id %}" class="m-0">{% csrf_token %}
-                    <input type="hidden" name="semester_id" value="{{ row.failed_semester_id }}">
+                  <form method="post" action="{% if context_exact %}{% url 'progression:admin_contextual_create_rejoin_plan' context_diploma.id context_cohort.id context_semester.id row.from_enrollment_id %}{% else %}{% url 'progression:admin_create_rejoin_plan_for_semester' row.from_enrollment_id row.failed_semester_id %}{% endif %}" class="m-0">{% csrf_token %}
                     <button class="btn-ghost" type="submit">{% trans "Prepare" %}</button>
                   </form>
                 {% elif row.plan and row.plan.status == "planned" and row.eligible %}
-                  <form method="post" action="{% url 'progression:admin_activate_rejoin_plan' row.plan.id %}" class="m-0">{% csrf_token %}
+                  <form method="post" action="{% if context_exact %}{% url 'progression:admin_contextual_activate_rejoin_plan' context_diploma.id context_cohort.id context_semester.id row.plan.id %}{% else %}{% url 'progression:admin_activate_rejoin_plan' row.plan.id %}{% endif %}" class="m-0">{% csrf_token %}
                     <button class="btn-primary" type="submit">{% trans "Activate" %}</button>
                   </form>
                 {% elif row.plan %}
@@ -92,5 +87,6 @@
         {% include "ui/components/_empty_state.html" with title=_("No eligible students") %}
       {% endif %}
     </section>
+    {% include "ui/components/_pagination.html" with page_obj=page_obj pagination_qs=pagination_qs %}
   </div>
 {% endblock %}

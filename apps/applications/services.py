@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import BooleanField, Case, Exists, IntegerField, OuterRef, Q, Subquery, Value, When
 from django.urls import reverse
 from django.utils import timezone
@@ -19,13 +19,25 @@ from django.utils.translation import gettext as _
 from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE, ENROLLMENT_STATUS_PENDING
 from apps.academics.models import Cohort, Course, CourseEnrollment, CourseVersion, DiplomaEnrollment
 from apps.academics.services import activate_course_enrollment, activate_diploma_enrollment
-from apps.accounts.constants import GROUP_STUDENT, USER_STATUS_INACTIVE
+from apps.accounts.constants import GROUP_STUDENT
 from apps.applications import documents as application_documents
 from apps.attendance.services import get_or_create_attendance_code_for_enrollment
-from apps.audit.constants import ACTION_APPLICATION_DECISION_REVERTED, ACTION_APPLICATION_STATUS_CHANGE
+from apps.audit.constants import (
+    ACTION_APPLICATION_ACCOUNT_ACTIVATED,
+    ACTION_APPLICATION_ACTIVATED,
+    ACTION_APPLICATION_APPROVED,
+    ACTION_APPLICATION_DECISION_REVERTED,
+    ACTION_APPLICATION_ENTRANCE_SUBMITTED,
+    ACTION_APPLICATION_INTERVIEW_REQUESTED,
+    ACTION_APPLICATION_PAID,
+    ACTION_APPLICATION_REJECTED,
+    ACTION_APPLICATION_STATUS_CHANGE,
+    SECTION_ADMISSIONS,
+)
 from apps.audit.services import record_audit_event
 from apps.communications.constants import (
     TEMPLATE_ACCEPTANCE,
+    TEMPLATE_APPLICATION_PAYMENT_PENDING,
     TEMPLATE_COURSE_PAYMENT_INSTRUCTIONS,
     TEMPLATE_DIPLOMA_ENTRANCE_EXAM_SCHEDULE,
     TEMPLATE_DIPLOMA_INTERVIEW_REQUEST,
@@ -75,6 +87,7 @@ from .constants import (
     DOCUMENT_REQUEST_STATUS_REQUESTED,
     DOCUMENT_REQUEST_STATUS_SUBMITTED,
     EMAIL_ACTION_ACCEPTANCE,
+    EMAIL_ACTION_APPLICATION_PAYMENT_PENDING,
     EMAIL_ACTION_REJECTION,
     PROGRAM_APP_STATUS_ACCEPTED,
     PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED,
@@ -104,11 +117,42 @@ from .models import (
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
 
-from apps.accounts.services import send_activation_email
+from apps.accounts.services import lock_identity_writes, send_activation_email
 
 User = get_user_model()
 
 logger = logging.getLogger(__name__)
+
+
+def application_audit_fields(application: ProgramApplication) -> dict[str, str]:
+    """Return the canonical audit target/subject fields for one application.
+
+    The caller must have loaded ``student`` and the program relation
+    (``select_related``) so the snapshots never add per-event queries. The
+    target is the program the application is for; the subject is the applicant.
+    """
+    student = application.student
+    subject_label = student.full_name or ""
+    program_label = ""
+    if application.cohort_id:
+        cohort = application.cohort
+        if cohort is not None:
+            diploma = cohort.diploma if cohort.diploma_id else None
+            diploma_title = diploma.title if diploma is not None else ""
+            program_label = " · ".join(
+                part for part in (diploma_title, cohort.name) if part
+            )
+    elif application.course_id:
+        course = application.course
+        program_label = (course.title if course is not None else "") or ""
+    return {
+        "target_type": "program_application",
+        "target_id": str(application.pk),
+        "target_label": program_label or subject_label or f"#{application.pk}",
+        "subject_type": "student",
+        "subject_id": str(application.student_id),
+        "subject_label": subject_label,
+    }
 
 
 @dataclass
@@ -144,18 +188,18 @@ def find_duplicate(data: RegistrationData) -> str | None:
     """
     normalized_id = normalize_identity_number(data.country_code, data.national_id)
     if normalized_id:
-        if StudentProfile.objects.filter(national_id=normalized_id).exists():
+        if StudentProfile.objects.filter(national_id__iexact=normalized_id).exists():
             return "national_id"
-        if User.objects.filter(national_id=normalized_id).exists():
+        if User.objects.filter(national_id__iexact=normalized_id).exists():
             return "national_id"
         if data.national_id != normalized_id and (
-            StudentProfile.objects.filter(national_id=data.national_id).exists()
-            or User.objects.filter(national_id=data.national_id).exists()
+            StudentProfile.objects.filter(national_id__iexact=data.national_id).exists()
+            or User.objects.filter(national_id__iexact=data.national_id).exists()
         ):
             return "national_id"
     elif data.national_id and (
-        StudentProfile.objects.filter(national_id=data.national_id).exists()
-        or User.objects.filter(national_id=data.national_id).exists()
+        StudentProfile.objects.filter(national_id__iexact=data.national_id).exists()
+        or User.objects.filter(national_id__iexact=data.national_id).exists()
     ):
         return "national_id"
     if User.objects.filter(email__iexact=data.email).exists():
@@ -189,61 +233,115 @@ def is_apply_target_open(cohort=None, course=None) -> bool:
     return False
 
 
-@transaction.atomic
+def open_cohorts_queryset(*, diploma=None, diploma_ids=None):
+    """Set-based twin of :func:`is_apply_target_open` for Cohort querysets.
+
+    Must stay in lockstep with ``is_apply_target_open``: a cohort is open when
+    it is active, its application window has not ended, and it has an active
+    entrance exam. Callers add their own ordering.
+    """
+    qs = Cohort.objects.filter(
+        is_active=True,
+        end_date__isnull=False,
+        end_date__gte=timezone.now().date(),
+        entrance_exams__is_active=True,
+    )
+    if diploma is not None:
+        qs = qs.filter(diploma=diploma)
+    if diploma_ids is not None:
+        qs = qs.filter(diploma_id__in=diploma_ids)
+    return qs
+
+
+def resolve_latest_open_cohort(diploma) -> Cohort | None:
+    """Return the latest open cohort for a diploma (highest start_date, newest id).
+
+    Diploma applications assign this cohort automatically; the applicant chooses
+    only the diploma.
+    """
+    if diploma is None:
+        return None
+    return (
+        open_cohorts_queryset(diploma=diploma)
+        .select_related("diploma")
+        .distinct()
+        .order_by("-start_date", "-id")
+        .first()
+    )
+
+
+def open_diploma_ids_queryset():
+    """Diploma ids that currently have at least one open cohort."""
+    return open_cohorts_queryset().order_by().values_list("diploma_id", flat=True).distinct()
+
+
 def submit_registration(
+    data: RegistrationData,
+) -> tuple[StudentProfile, ProgramApplication | None]:
+    return _submit_registration_atomic(data)
+
+
+@transaction.atomic
+def _submit_registration_atomic(
     data: RegistrationData,
 ) -> tuple[StudentProfile, ProgramApplication | None]:
     """Create a user, profile, and optional program application.
 
     Returns (StudentProfile, ProgramApplication | None).
-    Raises ValueError with a duplicate field name if the data conflicts.
+    Raises a translated ValueError when the request cannot be completed.
     """
+    lock_identity_writes()
     duplicate_on = find_duplicate(data)
     if duplicate_on:
-        raise ValueError(duplicate_on)
+        raise ValueError(_("An account with one of these identity values already exists."))
 
-    # Random, never-derived initial password: it is never delivered to the
-    # user (S2-24); the password is established during account activation.
-    user_password = secrets.token_urlsafe(16)
-    normalized_id = normalize_identity_number(data.country_code, data.national_id)
-    normalized_phone = normalize_phone(data.phone)
-    # Students never store phone on User; StudentProfile.phone is the single
-    # owner (created below).
-    user = User.objects.create_user(
-        email=data.email,
-        password=user_password,
-        full_name=data.full_name,
-        country_code=data.country_code,
-        national_id=normalized_id,
-    )
-    user.is_active = False
-    user.status = USER_STATUS_INACTIVE
-    user.save(update_fields=["is_active", "status", "updated_at"])
-    user.groups.add(_student_group())
+    try:
+        with transaction.atomic():
+            # Random, never-derived initial password: it is never delivered
+            # to the user; activation establishes the real password.
+            user_password = secrets.token_urlsafe(16)
+            normalized_id = normalize_identity_number(data.country_code, data.national_id)
+            normalized_phone = normalize_phone(data.phone)
+            # Students never store phone on User; StudentProfile.phone is the
+            # single owner (created below).
+            user = User.objects.create_user(
+                email=data.email,
+                password=user_password,
+                full_name=data.full_name,
+                country_code=data.country_code,
+                national_id=normalized_id,
+            )
+            user.is_active = False
+            user.save(update_fields=["is_active", "updated_at"])
+            user.groups.add(_student_group())
 
-    profile = StudentProfile.objects.create(
-        user=user,
-        full_name=data.full_name,
-        date_of_birth=data.date_of_birth,
-        gender=data.gender,
-        address=data.address,
-        phone=normalized_phone,
-        country_code=data.country_code,
-        national_id=normalized_id,
-        education=data.education,
-        specialization=data.specialization,
-        employer=data.employer,
-        current_job=data.current_job,
-        church=data.church,
-        priest_name=data.priest_name,
-        priest_contact=data.priest_contact,
-    )
+            profile = StudentProfile.objects.create(
+                user=user,
+                full_name=data.full_name,
+                date_of_birth=data.date_of_birth,
+                gender=data.gender,
+                address=data.address,
+                phone=normalized_phone,
+                country_code=data.country_code,
+                national_id=normalized_id,
+                education=data.education,
+                specialization=data.specialization,
+                employer=data.employer,
+                current_job=data.current_job,
+                church=data.church,
+                priest_name=data.priest_name,
+                priest_contact=data.priest_contact,
+            )
+    except IntegrityError:
+        # Only this nested block contains the identity rows. Application
+        # constraint failures remain distinguishable to the caller.
+        raise ValueError(_("An account with one of these identity values already exists.")) from None
 
     program_application = None
     if data.program_type == PROGRAM_TYPE_DIPLOMA and data.cohort_id:
         if data.delivery_mode not in dict(DELIVERY_MODE_CHOICES):
             raise ValueError(_("Please select an attendance mode."))
-        cohort = Cohort.objects.filter(pk=data.cohort_id).first()
+        cohort = Cohort.objects.select_related("diploma").filter(pk=data.cohort_id).first()
         if cohort is None or not is_apply_target_open(cohort=cohort):
             raise ValueError(_("This program is no longer accepting applications."))
         program_application = ProgramApplication.objects.create(
@@ -277,6 +375,7 @@ def _send_activation_email_safely(user) -> None:
         logger.exception("Failed to queue activation email for user_id=%s", user.pk)
 
 
+@transaction.atomic
 def submit_program_application(
     profile: StudentProfile,
     program_type: str,
@@ -285,6 +384,11 @@ def submit_program_application(
     delivery_mode: str = DELIVERY_MODE_ONLINE,
 ) -> ProgramApplication:
     """Create a new program application for an existing student."""
+    # Serialize applications for one root identity before the friendly
+    # duplicate check. The database constraints remain the final race-time
+    # backstop when two requests arrive before either check can observe the
+    # other row.
+    profile = StudentProfile.objects.select_for_update().get(pk=profile.pk)
     if program_type == PROGRAM_TYPE_COURSE:
         if course is None or not is_apply_target_open(course=course):
             raise ValueError(_("This course has no active version available for enrollment."))
@@ -295,14 +399,25 @@ def submit_program_application(
             raise ValueError(_("Please select an attendance mode."))
     _check_duplicate_program_application(profile, program_type, cohort=cohort, course=course)
 
-    return ProgramApplication.objects.create(
-        student=profile,
-        program_type=program_type,
-        cohort=cohort,
-        course=course,
-        delivery_mode=delivery_mode if program_type == PROGRAM_TYPE_DIPLOMA else DELIVERY_MODE_ONLINE,
-        status=PROGRAM_APP_STATUS_SUBMITTED,
-    )
+    try:
+        with transaction.atomic():
+            return ProgramApplication.objects.create(
+                student=profile,
+                program_type=program_type,
+                cohort=cohort,
+                course=course,
+                delivery_mode=delivery_mode if program_type == PROGRAM_TYPE_DIPLOMA else DELIVERY_MODE_ONLINE,
+                status=PROGRAM_APP_STATUS_SUBMITTED,
+            )
+    except IntegrityError:
+        # A concurrent request can win the unique active-target constraint
+        # after the explicit duplicate check. Surface the same user-facing
+        # eligibility response instead of leaking a 500.
+        raise ValueError(
+            _(
+                "You already have a pending or active application for this target."
+            )
+        ) from None
 
 
 def _check_duplicate_program_application(
@@ -373,7 +488,11 @@ def _set_status(application, new_status):
 @transaction.atomic
 def mark_application_account_activated(application, actor=None) -> None:
     """Transition submitted -> account_activated."""
-    locked = ProgramApplication.objects.select_for_update().get(pk=application.pk)
+    locked = (
+        ProgramApplication.objects.select_for_update(of=("self",))
+        .select_related("student", "cohort__diploma", "course")
+        .get(pk=application.pk)
+    )
     if locked.status != PROGRAM_APP_STATUS_SUBMITTED:
         raise ValueError(_("Only submitted applications can be marked account_activated."))
     old_status = locked.status
@@ -381,10 +500,10 @@ def mark_application_account_activated(application, actor=None) -> None:
     _record_decision(locked, DECISION_ACTION_ACCOUNT_ACTIVATED, old_status, PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED, actor)
     record_audit_event(
         actor=actor,
-        action="application.account_activated",
-        target_type="program_application",
-        target_id=str(locked.pk),
-        metadata={"old_status": old_status},
+        action=ACTION_APPLICATION_ACCOUNT_ACTIVATED,
+        section=SECTION_ADMISSIONS,
+        metadata={"status_before": old_status, "status_after": PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED},
+        **application_audit_fields(locked),
     )
 
 
@@ -407,7 +526,11 @@ def send_post_activation_application_email(application, actor=None, force_resend
 
     Emails are sent via on_commit so they only fire after the transaction commits.
     """
-    locked = ProgramApplication.objects.select_for_update().get(pk=application.pk)
+    locked = (
+        ProgramApplication.objects.select_for_update(of=("self",))
+        .select_related("student", "cohort__diploma", "course")
+        .get(pk=application.pk)
+    )
     allowed = [
         PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED,
         PROGRAM_APP_STATUS_ACCEPTED,
@@ -446,6 +569,10 @@ def send_post_activation_application_email(application, actor=None, force_resend
 
     elif locked.program_type == PROGRAM_TYPE_DIPLOMA:
         if locked.status == PROGRAM_APP_STATUS_SURVEY_SUBMITTED:
+            # The required survey is complete, so the application is now at the
+            # payment stage: notify the applicant automatically. The explicit
+            # "Request payment" action reuses this idempotent send.
+            transaction.on_commit(lambda: _send_application_payment_pending_email(locked, actor))
             _advance_to(locked, PROGRAM_APP_STATUS_PAYMENT_PENDING, DECISION_ACTION_PAYMENT_PENDING, actor)
             return
         email_action = "diploma_entrance_exam_schedule"
@@ -461,10 +588,14 @@ def _advance_to(application, new_status, decision_action, actor):
     _record_decision(application, decision_action, old_status, new_status, actor)
     record_audit_event(
         actor=actor,
-        action=f"application.{new_status}",
-        target_type="program_application",
-        target_id=str(application.pk),
-        metadata={"old_status": old_status, "new_status": new_status, "decision_action": decision_action},
+        action=ACTION_APPLICATION_STATUS_CHANGE,
+        section=SECTION_ADMISSIONS,
+        metadata={
+            "status_before": old_status,
+            "status_after": new_status,
+            "decision_action": decision_action,
+        },
+        **application_audit_fields(application),
     )
 
 
@@ -516,13 +647,61 @@ def _send_diploma_entrance_schedule_email(prog_app, actor=None) -> None:
     )
 
 
+def _send_application_payment_pending_email(prog_app, actor=None, *, is_resend: bool = False) -> None:
+    """Notify the applicant that the application has reached the payment stage.
+
+    Uses the existing ``application_payment_pending`` template. The default
+    idempotency key makes the automatic survey-stage send and the first explicit
+    "Request payment" action share one delivery. When ``is_resend`` is set the key
+    carries a sequence counter so an operator can deliberately re-send.
+    """
+    email = prog_app.student.user.email
+    if not email:
+        return
+    cohort = prog_app.cohort
+    context = {
+        "full_name": prog_app.student.full_name or "",
+        "program_type": prog_app.program_type or "",
+        "course_title": prog_app.course.title if prog_app.course else "",
+        "diploma_title": cohort.diploma.title if cohort and cohort.diploma else "",
+        "cohort_name": cohort.name if cohort else "",
+        "staff_phone": "",
+    }
+    idempotency_key = f"application:application_payment_pending:app:{prog_app.pk}"
+    if is_resend:
+        resend_count = ProgramApplicationEmailLog.objects.filter(
+            program_application=prog_app,
+            action=EMAIL_ACTION_APPLICATION_PAYMENT_PENDING,
+            is_resend=True,
+        ).count()
+        idempotency_key = f"{idempotency_key}:resend:{resend_count}"
+    try:
+        queue_program_application_email(
+            program_application=prog_app,
+            action=EMAIL_ACTION_APPLICATION_PAYMENT_PENDING,
+            template_slug=TEMPLATE_APPLICATION_PAYMENT_PENDING,
+            to_email=email,
+            context=context,
+            sent_by=actor,
+            is_resend=is_resend,
+            idempotency_key=idempotency_key,
+            reference=f"app:{prog_app.pk}",
+        )
+    except Exception:
+        logger.exception("Payment pending email queue failed for application %s", prog_app.pk)
+
+
 @transaction.atomic
 def mark_entrance_submitted(application, actor=None, attempt=None) -> None:
     """Transition invited_to_entrance -> entrance_submitted.
     
     Also accepts submitted for backward compat with pre-Phase-2 fixtures.
     """
-    locked = ProgramApplication.objects.select_for_update().get(pk=application.pk)
+    locked = (
+        ProgramApplication.objects.select_for_update(of=("self",))
+        .select_related("student", "cohort__diploma", "course")
+        .get(pk=application.pk)
+    )
     if locked.status not in (PROGRAM_APP_STATUS_INVITED, PROGRAM_APP_STATUS_SUBMITTED):
         raise ValueError(_("Only invited applications can submit entrance exam."))
     old_status = locked.status
@@ -535,18 +714,30 @@ def mark_entrance_submitted(application, actor=None, attempt=None) -> None:
         old_status, PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED, actor,
         metadata=metadata,
     )
+    audit_metadata = {
+        "status_before": old_status,
+        "status_after": PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
+    }
+    if attempt:
+        audit_metadata["attempt_id"] = attempt.pk
+        audit_metadata["exam_title"] = attempt.exam.title
     record_audit_event(
         actor=actor,
-        action="application.entrance_submitted",
-        target_type="program_application",
-        target_id=str(locked.pk),
-        metadata={"old_status": old_status, **(metadata or {})},
+        action=ACTION_APPLICATION_ENTRANCE_SUBMITTED,
+        section=SECTION_ADMISSIONS,
+        metadata=audit_metadata,
+        **application_audit_fields(locked),
     )
 
 
+@transaction.atomic
 def invite_to_entrance_exam(application, actor) -> None:
     """Transition an activated diploma application to entrance invitation."""
-    locked = ProgramApplication.objects.select_for_update().get(pk=application.pk)
+    locked = (
+        ProgramApplication.objects.select_for_update(of=("self",))
+        .select_related("student", "cohort__diploma", "course")
+        .get(pk=application.pk)
+    )
     if ACTION_INVITE_TO_ENTRANCE not in allowed_application_actions(locked):
         raise ValueError(_("Application must be awaiting admin review before invitation."))
     if locked.program_type != PROGRAM_TYPE_DIPLOMA:
@@ -591,11 +782,15 @@ def _attempt_intake_request_safe(application, actor=None) -> str | None:
 @transaction.atomic
 def accept_program_application(application, actor, notes: str = "", send_email: bool = False) -> None:
     """Accept a course or diploma without requiring an entrance score decision."""
-    locked = ProgramApplication.objects.select_for_update().get(pk=application.pk)
+    locked = (
+        ProgramApplication.objects.select_for_update(of=("self",))
+        .select_related("student", "cohort__diploma", "course")
+        .get(pk=application.pk)
+    )
     if ACTION_ACCEPT not in allowed_application_actions(locked):
         raise ValueError(_("Application cannot be accepted from current status."))
     if locked.program_type == PROGRAM_TYPE_COURSE:
-        allowed = {PROGRAM_APP_STATUS_SUBMITTED, PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED, PROGRAM_APP_STATUS_PAYMENT_PENDING}
+        allowed = {PROGRAM_APP_STATUS_SUBMITTED, PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED}
     else:
         allowed = {
             PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
@@ -608,10 +803,15 @@ def accept_program_application(application, actor, notes: str = "", send_email: 
     _record_decision(locked, DECISION_ACTION_ACCEPT, old_status, PROGRAM_APP_STATUS_ACCEPTED, actor)
     record_audit_event(
         actor=actor,
-        action="application.approved",
-        target_type="program_application",
-        target_id=str(locked.pk),
-        metadata={"student_id": locked.student_id, "send_email": send_email},
+        action=ACTION_APPLICATION_APPROVED,
+        section=SECTION_ADMISSIONS,
+        metadata={
+            "status_before": old_status,
+            "status_after": PROGRAM_APP_STATUS_ACCEPTED,
+            "program_type": locked.program_type,
+            "send_email": send_email,
+        },
+        **application_audit_fields(locked),
     )
     if send_email:
         transaction.on_commit(lambda: _send_program_app_acceptance_email(locked, actor=actor))
@@ -627,7 +827,11 @@ def accept_program_application(application, actor, notes: str = "", send_email: 
 @transaction.atomic
 def reject_program_application(application, actor, reason: str, notes: str = "", send_email: bool = False) -> None:
     """Reject a course or diploma from any active pre-decision admissions state."""
-    locked = ProgramApplication.objects.select_for_update().get(pk=application.pk)
+    locked = (
+        ProgramApplication.objects.select_for_update(of=("self",))
+        .select_related("student", "cohort__diploma", "course")
+        .get(pk=application.pk)
+    )
     if ACTION_REJECT not in allowed_application_actions(locked):
         raise ValueError(_("Application cannot be rejected from current status."))
     if not reason.strip():
@@ -638,7 +842,7 @@ def reject_program_application(application, actor, reason: str, notes: str = "",
         PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
     }
     if locked.program_type == PROGRAM_TYPE_COURSE:
-        allowed |= {PROGRAM_APP_STATUS_SUBMITTED, PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED, PROGRAM_APP_STATUS_PAYMENT_PENDING}
+        allowed |= {PROGRAM_APP_STATUS_SUBMITTED, PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED}
     if locked.status not in allowed:
         raise ValueError(_("Application cannot be rejected from current status."))
     old_status = locked.status
@@ -646,10 +850,15 @@ def reject_program_application(application, actor, reason: str, notes: str = "",
     _record_decision(locked, DECISION_ACTION_REJECT, old_status, PROGRAM_APP_STATUS_REJECTED, actor, reason=reason)
     record_audit_event(
         actor=actor,
-        action="application.rejected",
-        target_type="program_application",
-        target_id=str(locked.pk),
-        metadata={"reason": reason, "student_id": locked.student_id, "send_email": send_email},
+        action=ACTION_APPLICATION_REJECTED,
+        section=SECTION_ADMISSIONS,
+        metadata={
+            "status_before": old_status,
+            "status_after": PROGRAM_APP_STATUS_REJECTED,
+            "reason": reason,
+            "send_email": send_email,
+        },
+        **application_audit_fields(locked),
     )
     if send_email:
         transaction.on_commit(lambda: _send_program_app_rejection_email(locked, reason, actor=actor))
@@ -658,7 +867,11 @@ def reject_program_application(application, actor, reason: str, notes: str = "",
 @transaction.atomic
 def request_interview_program_application(application, actor, *, interview_at=None, phone_number="", expires_at, notes="", send_email=True) -> None:
     """Transition entrance_submitted -> interview_requested."""
-    locked = ProgramApplication.objects.select_for_update().get(pk=application.pk)
+    locked = (
+        ProgramApplication.objects.select_for_update(of=("self",))
+        .select_related("student", "cohort__diploma", "course")
+        .get(pk=application.pk)
+    )
     if ACTION_REQUEST_INTERVIEW not in allowed_application_actions(locked):
         raise ValueError(_("Interview can only be requested for applications with submitted entrance exam."))
     if locked.status != PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED:
@@ -690,10 +903,16 @@ def request_interview_program_application(application, actor, *, interview_at=No
         record_program_application_note(locked, actor, note=notes, metadata=metadata)
     record_audit_event(
         actor=actor,
-        action="application.interview_requested",
-        target_type="program_application",
-        target_id=str(locked.pk),
-        metadata=metadata,
+        action=ACTION_APPLICATION_INTERVIEW_REQUESTED,
+        section=SECTION_ADMISSIONS,
+        metadata={
+            "status_before": old_status,
+            "status_after": PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
+            "interview_at": metadata["interview_at"],
+            "expires_at": metadata["expires_at"],
+            "staff_contact_provided": bool(phone_number),
+        },
+        **application_audit_fields(locked),
     )
     if send_email:
         transaction.on_commit(lambda: _send_interview_request_email(locked, metadata))
@@ -725,7 +944,11 @@ def _send_interview_request_email(prog_app, metadata: dict) -> None:
 
 @transaction.atomic
 def revert_program_application_decision(application, actor, reason: str = "") -> None:
-    locked = ProgramApplication.objects.select_for_update().get(pk=application.pk)
+    locked = (
+        ProgramApplication.objects.select_for_update(of=("self",))
+        .select_related("student", "cohort__diploma", "course")
+        .get(pk=application.pk)
+    )
     if ACTION_REVERT not in allowed_application_actions(locked):
         raise ValueError(_("This application decision cannot be reverted in its current state."))
     if locked.entrance_attempts.exists():
@@ -745,9 +968,13 @@ def revert_program_application_decision(application, actor, reason: str = "") ->
         record_audit_event(
             actor=actor,
             action=ACTION_APPLICATION_DECISION_REVERTED,
-            target_type="program_application",
-            target_id=str(locked.pk),
-            metadata={"student_id": locked.student_id, "reason": reason},
+            section=SECTION_ADMISSIONS,
+            metadata={
+                "status_before": old_status,
+                "status_after": locked.status,
+                "reason": reason,
+            },
+            **application_audit_fields(locked),
         )
 
 
@@ -779,7 +1006,11 @@ def change_entrance_decision(
     activation), the decision is locked and this raises ValueError. The academic
     entrance score is never rewritten by a decision change.
     """
-    locked = ProgramApplication.objects.select_for_update().get(pk=application.pk)
+    locked = (
+        ProgramApplication.objects.select_for_update(of=("self",))
+        .select_related("student", "cohort__diploma", "course")
+        .get(pk=application.pk)
+    )
     if locked.status not in ENTRANCE_DECISION_STATUSES:
         raise ValueError(_("The decision can no longer be changed for this application."))
     if target not in ENTRANCE_DECISION_STATUSES:
@@ -808,9 +1039,9 @@ def change_entrance_decision(
         PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED: DECISION_ACTION_REVERT,
     }[target]
     audit_action = {
-        PROGRAM_APP_STATUS_ACCEPTED: "application.approved",
-        PROGRAM_APP_STATUS_REJECTED: "application.rejected",
-        PROGRAM_APP_STATUS_INTERVIEW_REQUESTED: "application.interview_requested",
+        PROGRAM_APP_STATUS_ACCEPTED: ACTION_APPLICATION_APPROVED,
+        PROGRAM_APP_STATUS_REJECTED: ACTION_APPLICATION_REJECTED,
+        PROGRAM_APP_STATUS_INTERVIEW_REQUESTED: ACTION_APPLICATION_INTERVIEW_REQUESTED,
         PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED: ACTION_APPLICATION_DECISION_REVERTED,
     }[target]
     metadata = {}
@@ -829,12 +1060,22 @@ def change_entrance_decision(
     _record_decision(locked, decision_action, old_status, target, actor, reason=reason, metadata=metadata)
     if notes:
         record_program_application_note(locked, actor, note=notes, metadata=metadata)
+    audit_metadata = {
+        "status_before": old_status,
+        "status_after": target,
+        "reason": reason,
+        "send_email": send_email,
+    }
+    if metadata:
+        audit_metadata["interview_at"] = metadata["interview_at"]
+        audit_metadata["expires_at"] = metadata["expires_at"]
+        audit_metadata["staff_contact_provided"] = bool(metadata["phone_number"])
     record_audit_event(
         actor=actor,
         action=audit_action,
-        target_type="program_application",
-        target_id=str(locked.pk),
-        metadata={"old_status": old_status, "new_status": target, "reason": reason, "send_email": send_email, **metadata},
+        section=SECTION_ADMISSIONS,
+        metadata=audit_metadata,
+        **application_audit_fields(locked),
     )
     if send_email:
         if target == PROGRAM_APP_STATUS_ACCEPTED:
@@ -977,9 +1218,9 @@ def can_activate_application(application) -> ActivationCheck:
 
     reasons: list[str] = []
 
-    if not application.student.user.email_activated_at:
-        reasons.append("account_not_activated")
-
+    # Account email activation is intentionally NOT an admissions gate: ingested
+    # and Admin-created accounts stay usable without the emailed link. Activating
+    # the email remains a separate account concern (profile / Admin resend).
     if application.program_type == PROGRAM_TYPE_COURSE:
         if application.status not in (PROGRAM_APP_STATUS_ACCEPTED, PROGRAM_APP_STATUS_PAYMENT_PENDING):
             reasons.append("not_accepted")
@@ -1030,7 +1271,11 @@ def activate_application_if_ready(application, actor=None) -> ActivationResult:
     Idempotent: if already activated, return existing enrollment.
     """
     # Lock the application row first, then check state
-    locked = ProgramApplication.objects.select_for_update().get(pk=application.pk)
+    locked = (
+        ProgramApplication.objects.select_for_update(of=("self",))
+        .select_related("student", "cohort__diploma", "course")
+        .get(pk=application.pk)
+    )
 
     # Guard: already activated (re-check under lock for concurrency safety)
     if locked.status == PROGRAM_APP_STATUS_ACTIVATED:
@@ -1108,14 +1353,15 @@ def activate_application_if_ready(application, actor=None) -> ActivationResult:
     # Record audit event
     record_audit_event(
         actor=actor,
-        action="application.activated",
-        target_type="program_application",
-        target_id=str(locked.pk),
+        action=ACTION_APPLICATION_ACTIVATED,
+        section=SECTION_ADMISSIONS,
         metadata={
-            "student_id": locked.student_id,
+            "status_before": old_status,
+            "status_after": PROGRAM_APP_STATUS_ACTIVATED,
             "enrollment_id": enrollment_id,
             "enrollment_type": enrollment_type,
         },
+        **application_audit_fields(locked),
     )
 
     return ActivationResult(
@@ -1194,7 +1440,11 @@ def rollback_waiver_activation(application_id, waiver_id, actor=None, reason: st
     whether this exact waiver caused activation, so unrelated later/manual
     activation is never rolled back.
     """
-    locked = ProgramApplication.objects.select_for_update().get(pk=application_id)
+    locked = (
+        ProgramApplication.objects.select_for_update(of=("self",))
+        .select_related("student", "cohort__diploma", "course")
+        .get(pk=application_id)
+    )
     if locked.status != PROGRAM_APP_STATUS_ACTIVATED:
         return {
             "rolled_back": False,
@@ -1255,16 +1505,16 @@ def rollback_waiver_activation(application_id, waiver_id, actor=None, reason: st
     record_audit_event(
         actor=actor,
         action=ACTION_APPLICATION_STATUS_CHANGE,
-        target_type="program_application",
-        target_id=str(locked.pk),
+        section=SECTION_ADMISSIONS,
         metadata={
-            "old_status": old_status,
-            "new_status": restored_status,
+            "status_before": old_status,
+            "status_after": restored_status,
             "reason": reason,
             "payment_waiver_id": str(waiver_id),
             "enrollment_id": metadata.get("enrollment_id"),
             "enrollment_reset": enrollment is not None,
         },
+        **application_audit_fields(locked),
     )
     return {
         "rolled_back": True,
@@ -1277,7 +1527,11 @@ def rollback_waiver_activation(application_id, waiver_id, actor=None, reason: st
 @transaction.atomic
 def rollback_payment_activation(application_id, payment_record_id, actor=None, reason: str = "") -> dict:
     """Rollback only an activation proven to depend on one payment record."""
-    locked = ProgramApplication.objects.select_for_update().get(pk=application_id)
+    locked = (
+        ProgramApplication.objects.select_for_update(of=("self",))
+        .select_related("student", "cohort__diploma", "course")
+        .get(pk=application_id)
+    )
     result = {
         "rolled_back": False,
         "application_status_before": locked.status,
@@ -1322,16 +1576,16 @@ def rollback_payment_activation(application_id, payment_record_id, actor=None, r
     record_audit_event(
         actor=actor,
         action=ACTION_APPLICATION_STATUS_CHANGE,
-        target_type="program_application",
-        target_id=str(locked.pk),
+        section=SECTION_ADMISSIONS,
         metadata={
-            "old_status": old_status,
-            "new_status": restored_status,
+            "status_before": old_status,
+            "status_after": restored_status,
             "payment_record_id": str(payment_record_id),
             "enrollment_id": metadata.get("enrollment_id"),
             "enrollment_reset": enrollment is not None,
             "reason": reason,
         },
+        **application_audit_fields(locked),
     )
     return {
         "rolled_back": True,
@@ -1402,6 +1656,7 @@ LEGAL_PAYMENT_STATUSES = {
 ACTION_ACCEPT = "accept"
 ACTION_REJECT = "reject"
 ACTION_MARK_PAID = "mark_paid"
+ACTION_REQUEST_PAYMENT = "request_payment"
 ACTION_REQUEST_INTAKE = "request_intake"
 ACTION_REQUEST_DOCUMENTS = "request_documents"
 ACTION_REQUEST_INTERVIEW = "request_interview"
@@ -1411,22 +1666,24 @@ ACTION_ACTIVATE = "activate"
 ACTION_REVERT = "revert"
 
 APPLICATION_ACTION_LABELS = {
-    ACTION_ACCEPT: _("Accept application"),
-    ACTION_REJECT: _("Reject application"),
-    ACTION_MARK_PAID: _("Record payment"),
-    ACTION_REQUEST_INTAKE: _("Request survey"),
-    ACTION_REQUEST_DOCUMENTS: _("Request documents"),
-    ACTION_REQUEST_INTERVIEW: _("Request interview"),
-    ACTION_INVITE_TO_ENTRANCE: _("Assign entrance assessment"),
-    ACTION_GRANT_WAIVER: _("Grant payment waiver"),
-    ACTION_ACTIVATE: _("Activate application"),
-    ACTION_REVERT: _("Revert decision"),
+    ACTION_ACCEPT: "Accept application",
+    ACTION_REJECT: "Reject application",
+    ACTION_MARK_PAID: "Record payment",
+    ACTION_REQUEST_PAYMENT: "Request payment",
+    ACTION_REQUEST_INTAKE: "Request survey",
+    ACTION_REQUEST_DOCUMENTS: "Request documents",
+    ACTION_REQUEST_INTERVIEW: "Request interview",
+    ACTION_INVITE_TO_ENTRANCE: "Assign entrance assessment",
+    ACTION_GRANT_WAIVER: "Grant payment waiver",
+    ACTION_ACTIVATE: "Activate application",
+    ACTION_REVERT: "Revert decision",
 }
 
 APPLICATION_ACTION_CATEGORIES = {
     ACTION_ACCEPT: "review",
     ACTION_REJECT: "review",
     ACTION_MARK_PAID: "payment",
+    ACTION_REQUEST_PAYMENT: "payment",
     ACTION_REQUEST_INTAKE: "survey",
     ACTION_REQUEST_DOCUMENTS: "documents",
     ACTION_REQUEST_INTERVIEW: "review",
@@ -1443,6 +1700,7 @@ APPLICATION_ACTION_PRIORITY = {
     ACTION_REQUEST_INTERVIEW: 30,
     ACTION_REQUEST_DOCUMENTS: 40,
     ACTION_REQUEST_INTAKE: 50,
+    ACTION_REQUEST_PAYMENT: 55,
     ACTION_MARK_PAID: 60,
     ACTION_GRANT_WAIVER: 65,
     ACTION_ACTIVATE: 70,
@@ -1471,6 +1729,7 @@ APPLICATION_QUEUE_ACTIONS = frozenset(
         ACTION_ACCEPT,
         ACTION_REJECT,
         ACTION_MARK_PAID,
+        ACTION_REQUEST_PAYMENT,
         ACTION_REQUEST_INTAKE,
         ACTION_REQUEST_DOCUMENTS,
         ACTION_REQUEST_INTERVIEW,
@@ -1480,11 +1739,14 @@ APPLICATION_QUEUE_ACTIONS = frozenset(
     }
 )
 
+# A Course reaches ``payment_pending`` only through acceptance, which queues the
+# payment instructions and advances the status. The decision is already made at
+# that point, so accepting/rejecting again would create a duplicate decision and
+# offer a post-acceptance rejection path.
 _ACCEPT_ALLOWED_STATUSES = {
     PROGRAM_TYPE_COURSE: frozenset({
         PROGRAM_APP_STATUS_SUBMITTED,
         PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED,
-        PROGRAM_APP_STATUS_PAYMENT_PENDING,
     }),
     PROGRAM_TYPE_DIPLOMA: frozenset({
         PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
@@ -1496,7 +1758,6 @@ _REJECT_ALLOWED_STATUSES = {
     PROGRAM_TYPE_COURSE: frozenset({
         PROGRAM_APP_STATUS_SUBMITTED,
         PROGRAM_APP_STATUS_ACCOUNT_ACTIVATED,
-        PROGRAM_APP_STATUS_PAYMENT_PENDING,
         PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED,
         PROGRAM_APP_STATUS_INTERVIEW_REQUESTED,
     }),
@@ -1564,7 +1825,6 @@ def _application_action_predicates() -> dict[str, Q]:
     )
     intake_ready = status(_has_required_intake_response=True)
     payment_ready = status(_has_paid_record=True) | status(_has_active_waiver=True)
-    account_ready = status(student__user__email_activated_at__isnull=False)
 
     accept = Q()
     reject = Q()
@@ -1599,6 +1859,14 @@ def _application_action_predicates() -> dict[str, Q]:
             & documents_ready
             & intake_ready
         ),
+        ACTION_REQUEST_PAYMENT: (
+            status(program_type=PROGRAM_TYPE_DIPLOMA)
+            & status(status__in=LEGAL_PAYMENT_STATUSES)
+            & ~status(_has_paid_record=True)
+            & ~status(_has_active_waiver=True)
+            & documents_ready
+            & intake_ready
+        ),
         ACTION_REQUEST_INTAKE: (
             status(status__in=INTAKE_REQUESTABLE_STATUSES)
             & status(_has_required_intake_form=True)
@@ -1609,7 +1877,6 @@ def _application_action_predicates() -> dict[str, Q]:
             program_type=PROGRAM_TYPE_DIPLOMA,
             status__in=_REQUEST_DOCUMENTS_ALLOWED_STATUSES,
             cohort_id__isnull=False,
-            student__user__email_activated_at__isnull=False,
         ),
         ACTION_REQUEST_INTERVIEW: status(
             program_type=PROGRAM_TYPE_DIPLOMA,
@@ -1627,8 +1894,7 @@ def _application_action_predicates() -> dict[str, Q]:
             & intake_ready
         ),
         ACTION_ACTIVATE: (
-            account_ready
-            & payment_ready
+            payment_ready
             & intake_ready
             & (course_activation | diploma_activation)
         ),
@@ -1797,19 +2063,24 @@ def allowed_application_actions(application) -> frozenset[str]:
         program_type != PROGRAM_TYPE_DIPLOMA or has_documents
     )
     intake_gate_satisfied = has_required_response
+    payment_gate_open = (
+        not has_paid
+        and not has_waiver
+        and documents_gate_satisfied
+        and intake_gate_satisfied
+    )
 
     if status in _ACCEPT_ALLOWED_STATUSES.get(program_type, frozenset()):
         allowed.add(ACTION_ACCEPT)
     if status in _REJECT_ALLOWED_STATUSES.get(program_type, frozenset()):
         allowed.add(ACTION_REJECT)
-    if (
-        status in LEGAL_PAYMENT_STATUSES
-        and not has_paid
-        and not has_waiver
-        and documents_gate_satisfied
-        and intake_gate_satisfied
-    ):
+    if status in LEGAL_PAYMENT_STATUSES and payment_gate_open:
         allowed.add(ACTION_MARK_PAID)
+        # The explicit payment request belongs to the Diploma lifecycle, which
+        # has no automatic payment-instructions email; Course applications
+        # already receive course_payment_instructions on acceptance.
+        if program_type == PROGRAM_TYPE_DIPLOMA:
+            allowed.add(ACTION_REQUEST_PAYMENT)
     if (
         status in INTAKE_REQUESTABLE_STATUSES
         and has_required_form
@@ -1821,20 +2092,13 @@ def allowed_application_actions(application) -> frozenset[str]:
         program_type == PROGRAM_TYPE_DIPLOMA
         and status in _REQUEST_DOCUMENTS_ALLOWED_STATUSES
         and application.cohort_id
-        and application.student.user.email_activated_at
     ):
         allowed.add(ACTION_REQUEST_DOCUMENTS)
     if program_type == PROGRAM_TYPE_DIPLOMA and status == PROGRAM_APP_STATUS_ENTRANCE_SUBMITTED:
         allowed.add(ACTION_REQUEST_INTERVIEW)
     if program_type == PROGRAM_TYPE_DIPLOMA and status in _INVITE_TO_ENTRANCE_ALLOWED_STATUSES:
         allowed.add(ACTION_INVITE_TO_ENTRANCE)
-    if (
-        status in waiver_statuses
-        and not has_paid
-        and not has_waiver
-        and documents_gate_satisfied
-        and intake_gate_satisfied
-    ):
+    if status in waiver_statuses and payment_gate_open:
         allowed.add(ACTION_GRANT_WAIVER)
     if can_activate_application(application).ready:
         allowed.add(ACTION_ACTIVATE)
@@ -1863,7 +2127,9 @@ def get_application_action_projection(application) -> dict:
         actions.append(
             {
                 "key": action,
-                "label": APPLICATION_ACTION_LABELS.get(action, _("Available action")),
+                # Translate per request locale; evaluating gettext in this
+                # module-level map would freeze labels at import-time language.
+                "label": _(APPLICATION_ACTION_LABELS.get(action, "Available action")),
                 "category": APPLICATION_ACTION_CATEGORIES.get(action, "workflow"),
                 "method": "POST",
                 "queue_relevant": action in APPLICATION_QUEUE_ACTIONS,
@@ -1909,7 +2175,7 @@ def filter_applications_for_action(queryset, action_filter: str):
             ACTION_INVITE_TO_ENTRANCE,
         }
     elif action_filter == "payment":
-        actions = {ACTION_MARK_PAID, ACTION_GRANT_WAIVER}
+        actions = {ACTION_MARK_PAID, ACTION_REQUEST_PAYMENT, ACTION_GRANT_WAIVER}
     elif action_filter == "documents":
         actions = {ACTION_REQUEST_DOCUMENTS}
     elif action_filter == "survey":
@@ -2172,12 +2438,54 @@ def mark_application_paid(
     )
     record_audit_event(
         actor=actor,
-        action="application.paid",
-        target_type="program_application",
-        target_id=str(application.pk),
-        metadata={"amount": str(record.amount), "external_reference": external_reference, "payment_record_id": str(record.pk)},
+        action=ACTION_APPLICATION_PAID,
+        section=SECTION_ADMISSIONS,
+        metadata={
+            "amount": str(record.amount),
+            "external_reference": external_reference,
+            "payment_record_id": str(record.pk),
+            "payment_status": record.status,
+        },
+        **application_audit_fields(application),
     )
     return record
+
+
+@transaction.atomic
+def request_application_payment(application, actor, *, send_email: bool = True) -> None:
+    """Move an application to the payment stage and request payment.
+
+    Mirrors the ``mark_application_paid`` gate: the request is allowed only once
+    Diploma documents and any required survey are satisfied and the application
+    is neither paid nor waived. The status advances to ``payment_pending`` and
+    the existing payment-pending email is queued for the applicant.
+    """
+    locked = (
+        ProgramApplication.objects.select_for_update(of=("self",))
+        .select_related("student", "cohort__diploma", "course")
+        .get(pk=application.pk)
+    )
+    if ACTION_REQUEST_PAYMENT not in allowed_application_actions(locked):
+        raise ValueError(_("Payment cannot be requested from the current application status."))
+    if locked.status != PROGRAM_APP_STATUS_PAYMENT_PENDING:
+        _advance_to(
+            locked,
+            PROGRAM_APP_STATUS_PAYMENT_PENDING,
+            DECISION_ACTION_PAYMENT_PENDING,
+            actor,
+        )
+    if send_email:
+        # A prior payment-pending email means this click is a deliberate resend;
+        # use the sequence-keyed resend so it actually delivers again.
+        already_requested = ProgramApplicationEmailLog.objects.filter(
+            program_application=locked,
+            action=EMAIL_ACTION_APPLICATION_PAYMENT_PENDING,
+        ).exists()
+        transaction.on_commit(
+            lambda: _send_application_payment_pending_email(
+                locked, actor, is_resend=already_requested
+            )
+        )
 
 
 def _build_application_snapshot(application) -> dict:

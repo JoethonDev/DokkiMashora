@@ -25,10 +25,56 @@ def ui_datetime(value):
     return date_format(value, format=f"j F Y{separator} H:i", use_l10n=True)
 
 
-_SUCCESS = frozenset({"active", "accepted", "activated", "paid", "passed", "completed", "released", "sent", "matched", "published", "graded", "present", "pass"})
-_INFO = frozenset({"submitted", "under_review", "in_progress", "scheduled", "open", "processing", "assigned", "invited", "ready", "continue", "interview_requested", "entrance_submitted"})
-_WARNING = frozenset({"pending", "payment_pending", "documents_requested", "previewed", "ungraded", "late", "restricted", "unmatched", "absent", "awaiting_release"})
-_DANGER = frozenset({"rejected", "failed", "error", "overdue", "suspended", "violated", "revoked", "max_attempts", "fail"})
+_SUCCESS = frozenset(
+    {
+        "active",
+        "accepted",
+        "activated",
+        "paid",
+        "passed",
+        "completed",
+        "released",
+        "sent",
+        "matched",
+        "published",
+        "graded",
+        "present",
+        "pass",
+    }
+)
+_INFO = frozenset(
+    {
+        "submitted",
+        "under_review",
+        "in_progress",
+        "scheduled",
+        "open",
+        "processing",
+        "assigned",
+        "invited",
+        "ready",
+        "continue",
+        "interview_requested",
+        "entrance_submitted",
+    }
+)
+_WARNING = frozenset(
+    {
+        "pending",
+        "payment_pending",
+        "documents_requested",
+        "previewed",
+        "ungraded",
+        "late",
+        "restricted",
+        "unmatched",
+        "absent",
+        "awaiting_release",
+    }
+)
+_DANGER = frozenset(
+    {"rejected", "failed", "error", "overdue", "suspended", "violated", "revoked", "max_attempts", "fail"}
+)
 
 # Non-color-only semantic glyphs per tone (P1-02). Direction-neutral, render
 # identically in RTL/LTR, and remain understandable without color.

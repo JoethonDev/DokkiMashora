@@ -2,6 +2,8 @@
 .github
 .env
 .env.*
+opencode.json
+.opencode/
 __pycache__/
 *.py[cod]
 *.sqlite3
@@ -18,3 +20,16 @@ docs/
 scripts/
 tests/
 localhost_*.png
+# Local/generated artifacts that must never enter the image (RV-009/RV-020)
+output/
+tmp/
+*.html.py
+*.bak
+*.bak2
+requirements*.txt.py
+landing_creative.html
+landing_prototype.html
+landing_rich.html
+tailwind.config.js.bak
+test_phase0_ui_regression.py
+test_rendered_html_lint.py

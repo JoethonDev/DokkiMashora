@@ -351,7 +351,7 @@
         <a class="btn-ghost"
            href="{% url 'communications:admin_footer_edit' %}">{% trans "Edit footer" %}</a>
       </div>
-    {% elif page_obj %}
+    {% elif page_obj is not None %}
       <section class="card-surface flex flex-col gap-4"><div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>

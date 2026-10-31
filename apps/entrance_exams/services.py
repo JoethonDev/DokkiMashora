@@ -25,6 +25,7 @@ from apps.applications.constants import (
 )
 from apps.applications.models import ProgramApplication, ProgramApplicationEmailLog
 from apps.applications.services import mark_entrance_submitted, record_program_application_note
+from apps.audit.constants import ACTION_ENTRANCE_EXAM_COMPLETED, SECTION_ADMISSIONS
 from apps.audit.services import record_audit_event
 from apps.communications.constants import (
     TEMPLATE_ENTRANCE_EXAM_FAIL,
@@ -77,6 +78,35 @@ ENTRANCE_RESULT_EMAIL_SUBJECTS = {
     "ar": "تم تقديم امتحان القبول",
     "en": "Your entrance exam was submitted",
 }
+
+
+def entrance_attempt_audit_fields(attempt: EntranceAttempt) -> dict[str, str]:
+    """Snapshot audit target/subject labels for one entrance attempt.
+
+    Uses the loaded ``exam``/``student``/``program_application`` relations when
+    the caller selected them; the values are stable identifiers, not secrets.
+    """
+    application = attempt.program_application
+    student = attempt.student
+    program_label = ""
+    if application.cohort_id:
+        cohort = application.cohort
+        if cohort is not None:
+            diploma = cohort.diploma if cohort.diploma_id else None
+            program_label = " · ".join(
+                part for part in ((diploma.title if diploma is not None else ""), cohort.name) if part
+            )
+    elif application.course_id:
+        course = application.course
+        program_label = (course.title if course is not None else "") or ""
+    return {
+        "target_type": "entrance_attempt",
+        "target_id": str(attempt.pk),
+        "target_label": program_label or attempt.exam.title,
+        "subject_type": "student",
+        "subject_id": str(attempt.student_id),
+        "subject_label": student.full_name or "",
+    }
 
 
 def resolve_exam_access_token(token, *, active_only: bool = True) -> EntranceExam:
@@ -258,9 +288,19 @@ def submit_attempt(
     language_code: str | None = None,
 ) -> EntranceAttempt:
     with transaction.atomic():
-        locked = EntranceAttempt.objects.select_for_update().select_related(
-            "exam", "program_application",
-        ).get(pk=attempt.pk)
+        locked = (
+            EntranceAttempt.objects.select_for_update(
+                of=("self", "exam", "program_application"),
+            )
+            .select_related(
+                "exam",
+                "student",
+                "program_application__student",
+                "program_application__cohort__diploma",
+                "program_application__course",
+            )
+            .get(pk=attempt.pk)
+        )
         _validate_attempt_assignment(locked)
         # A replay after a durable terminal transition is a no-op.  The first
         # submission remains the only writer of answers and submitted_at.
@@ -344,6 +384,7 @@ def grade_answer(
     grader: User,
     *,
     language_code: str | None = None,
+    attempt: EntranceAttempt | None = None,
 ) -> EntranceAnswer:
     validate_score(score)
     answer.score = score
@@ -351,7 +392,9 @@ def grade_answer(
     answer.graded_at = timezone.now()
     answer.graded_by = grader
     answer.save(update_fields=["score", "feedback", "graded_at", "graded_by"])
-    _recompute_attempt_grade(answer.attempt, actor=grader, language_code=language_code)
+    # Callers that already loaded the attempt pass it so the resulting
+    # recompute and audit snapshot do not reload the same row per answer.
+    _recompute_attempt_grade(attempt or answer.attempt, actor=grader, language_code=language_code)
     return answer
 
 
@@ -398,15 +441,16 @@ def _update_program_application_from_result(
 
     record_audit_event(
         actor=actor,
-        action="exam_completed",
-        target_type="entrance_attempt",
-        target_id=str(attempt.id),
+        action=ACTION_ENTRANCE_EXAM_COMPLETED,
+        section=SECTION_ADMISSIONS,
         metadata={
-            "student_id": attempt.student_id,
+            "application_id": str(attempt.program_application_id),
             "exam_id": attempt.exam_id,
             "score": str(attempt.score),
             "result": result,
+            "pass_percentage": str(attempt.exam.pass_percentage),
         },
+        **entrance_attempt_audit_fields(attempt),
     )
 
     if prog_app.status in ("invited_to_entrance", "submitted"):
@@ -633,9 +677,19 @@ def finalize_attempt_from_snapshots(
     a terminal attempt is returned unchanged.
     """
     with transaction.atomic():
-        locked = EntranceAttempt.objects.select_for_update().select_related(
-            "exam", "program_application",
-        ).get(pk=attempt.pk)
+        locked = (
+            EntranceAttempt.objects.select_for_update(
+                of=("self", "exam", "program_application"),
+            )
+            .select_related(
+                "exam",
+                "student",
+                "program_application__student",
+                "program_application__cohort__diploma",
+                "program_application__course",
+            )
+            .get(pk=attempt.pk)
+        )
         if locked.submitted_at or locked.status in (ATTEMPT_STATUS_COMPLETED, ATTEMPT_STATUS_GRADED):
             return locked
         _validate_attempt_assignment(locked)
@@ -719,9 +773,19 @@ def finalize_expired_attempt(
     is returned unchanged with its current result/state.
     """
     with transaction.atomic():
-        locked = EntranceAttempt.objects.select_for_update().select_related(
-            "exam", "program_application",
-        ).get(pk=attempt.pk)
+        locked = (
+            EntranceAttempt.objects.select_for_update(
+                of=("self", "exam", "program_application"),
+            )
+            .select_related(
+                "exam",
+                "student",
+                "program_application__student",
+                "program_application__cohort__diploma",
+                "program_application__course",
+            )
+            .get(pk=attempt.pk)
+        )
         if locked.submitted_at or locked.status in (ATTEMPT_STATUS_COMPLETED, ATTEMPT_STATUS_GRADED):
             return locked
         _validate_attempt_assignment(locked)

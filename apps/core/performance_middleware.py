@@ -44,9 +44,7 @@ def stage(request, name: str):
     finally:
         metrics = getattr(request, "_assessment_perf", None)
         if metrics is not None:
-            metrics["stages"][name] = metrics["stages"].get(name, 0.0) + (
-                time.perf_counter() - started
-            )
+            metrics["stages"][name] = metrics["stages"].get(name, 0.0) + (time.perf_counter() - started)
 
 
 class PerformanceTimingMiddleware:
@@ -87,7 +85,9 @@ class PerformanceTimingMiddleware:
 
         if request.path.endswith(("/take/", "/start/", "/autosave/", "/submit/")):
             timing_parts = [f"django;dur={metrics['total'] * 1000:.1f}"]
-            timing_parts += [f"{name};dur={duration * 1000:.1f}" for name, duration in metrics["stages"].items()]
+            timing_parts += [
+                f"{name};dur={duration * 1000:.1f}" for name, duration in metrics["stages"].items()
+            ]
             timing_parts.append(f"sql;dur={probe.total * 1000:.1f};desc=queries:{probe.count}")
             if queue_ms is not None:
                 timing_parts.append(f"queue;dur={queue_ms:.1f}")

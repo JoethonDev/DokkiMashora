@@ -13,7 +13,7 @@
       <strong id="assessment-timer-value" class="shrink-0 text-2xl font-black tabular-nums" dir="ltr">--:--</strong>
     </div>
   {% endif %}
-  <section class="card-surface"><div class="max-w-2xl mx-auto">
+  <section class="card-surface"><div class="max-w-2xl mx-auto w-full">
     <form method="post" action="{% url 'assessments:submit' assessment.id %}" id="assessment-take-form"
           data-autosave-url="{% url 'assessments:api_diploma_autosave' assessment.id %}"
           data-assessment-kind="diploma" data-confirm-unanswered="true"
@@ -32,7 +32,6 @@
     </form>
   </div></section>
 </div>
-<script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js" defer></script>
 <script id="take-answer-state" type="application/json">{{ answer_state_json|safe }}</script>
 <script>
 (function(){
@@ -53,7 +52,7 @@
   function markInteractive(){
     document.dispatchEvent(new CustomEvent('take:first-interactive',{detail:{at:performance.now()}}));
   }
-  document.body.addEventListener('htmx:afterSwap', function(e){
+  document.body.addEventListener('htmx:after:swap', function(e){
     applyAnswers(answerState);
   });
   function init(){

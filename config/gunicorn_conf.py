@@ -1,4 +1,9 @@
-"""Gunicorn config with queue visibility for Take burst investigation."""
+"""Gunicorn config with queue visibility for Take burst investigation.
+
+Request access logging is owned by nginx so one-time token paths can be
+redacted and every request carries a single request ID shared with Django and
+the audit trail. Gunicorn keeps its error log for worker/exception visibility.
+"""
 
 import os
 import time
@@ -10,35 +15,26 @@ backlog = int(os.getenv("GUNICORN_BACKLOG", "2048"))
 keepalive = int(os.getenv("GUNICORN_KEEPALIVE", "65"))
 timeout = int(os.getenv("GUNICORN_TIMEOUT", "120"))
 bind = f"0.0.0.0:{os.getenv('PORT', '8000')}"
-accesslog = "-"
+accesslog = None
 errorlog = "-"
 loglevel = os.getenv("GUNICORN_LOGLEVEL", "info")
-# Include duration (%D microseconds) and nginx-supplied header for queue estimation.
-# %({header}i)s may be '-' if header absent.
-access_log_format = '%(h)s "%(r)s" %(s)s %(b)s "%(a)s" dur=%(D)sus qhdr=%({X-Request-Start}i)s worker=%(p)s'
 
 
 def pre_request(worker, req):
     # Store wall-clock when Gunicorn hands request to worker thread.
-    # This is after any accept/thread-queue wait inside Gunicorn.
     req._gunicorn_pre_request_msec = time.time() * 1000.0
-    # If nginx forwarded its receive time, log the delta as rough queue estimate.
     hdr = None
     try:
-        hdr = req.headers.find("X-Request-Start", None)  # type: ignore[attr-defined]
-        # req.headers is list of tuples in gunicorn Request
-        if hdr is None and hasattr(req, "headers"):
-            for k, v in getattr(req, "headers", []):
-                if k.lower() == "x-request-start":
-                    hdr = v
+        if hasattr(req, "headers"):
+            for key, value in req.headers:
+                if key.lower() == "x-request-start":
+                    hdr = value
                     break
     except Exception:
         hdr = None
     if hdr:
         try:
             nginx_ms = float(hdr) * 1000.0 if "." in hdr else float(hdr)
-            # Header from nginx is $msec (seconds.millis). Convert to ms if needed.
-            # If hdr looks like seconds (e.g. 1725...), assume seconds*1000.
             queue_ms = req._gunicorn_pre_request_msec - nginx_ms
             if -5000 < queue_ms < 120000:
                 worker.log.info("gunicorn queue_ms=%.1f nginx_start=%s", queue_ms, hdr)
@@ -48,5 +44,4 @@ def pre_request(worker, req):
 
 
 def post_request(worker, req, environ, resp):
-    # Lightweight post hook; access log already captures duration.
     pass

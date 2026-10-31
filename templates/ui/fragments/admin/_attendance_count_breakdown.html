@@ -1,0 +1,15 @@
+{% load i18n %}
+<dl class="m-0 space-y-1 text-sm">
+  <div class="flex items-baseline justify-between gap-3">
+    <dt class="text-xs font-bold text-muted">{% trans "Counted records" %}</dt>
+    <dd class="m-0 font-black text-green">{{ counted }}</dd>
+  </div>
+  <div class="flex items-baseline justify-between gap-3">
+    <dt class="text-xs font-bold text-muted">{% trans "Excluded records" %}</dt>
+    <dd class="m-0 font-black text-amber">{{ excluded }}</dd>
+  </div>
+  <div class="flex items-baseline justify-between gap-3">
+    <dt class="text-xs font-bold text-muted">{% trans "All scan records" %}</dt>
+    <dd class="m-0 font-black">{{ total }}</dd>
+  </div>
+</dl>

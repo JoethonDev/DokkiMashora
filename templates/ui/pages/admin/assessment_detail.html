@@ -49,6 +49,27 @@
         </form>
       </div>
     {% endif %}
+    {% if not assessment.is_legacy %}
+      <section class="card-surface flex flex-col gap-3">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">{% trans "Grade visibility" %}</p>
+            <h3>{% trans "Student grades" %}</h3>
+          </div>
+          {% include "ui/components/_status.html" with code=assessment.grade_visibility label=assessment.get_grade_visibility_display %}
+        </div>
+        <p class="text-sm text-muted m-0">{% trans "Use the global switch to apply visibility to all students at once. You can then override individual students." %}</p>
+        <form method="post" action="{% url 'assessments:admin_toggle_global_grade_visibility' assessment.id %}" class="m-0">{% csrf_token %}
+          <button class="{% if assessment.grade_visibility == 'released' %}btn-warning{% else %}btn-success{% endif %}" type="submit">
+            {% if assessment.grade_visibility == "released" %}
+              {% trans "Hide grades globally" %}
+            {% else %}
+              {% trans "Show grades globally" %}
+            {% endif %}
+          </button>
+        </form>
+      </section>
+    {% endif %}
     <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Details" %}</p>
           <h3>{% trans "Assessment info" %}</h3>
@@ -60,6 +81,20 @@
             {{ assessment.get_assessment_type_display }}
           </dd>
         </div>
+        {% if assessment.is_completion_exam %}
+          <div>
+            <dt class="dt">{% trans "Completion gate" %}</dt>
+            <dd class="dd">{% include "ui/components/_status.html" with code="completed" label=_("End-course exam") %}</dd>
+          </div>
+        {% endif %}
+        {% if assessment.is_diploma_scoped %}
+          {% if assessment.assessment_type == "homework" or assessment.assessment_type == "semester_exam" %}
+            <div>
+              <dt class="dt">{% trans "Semester evaluation requirement" %}</dt>
+              <dd class="dd">{% if assessment.is_required_for_semester_evaluation %}{% trans "Required" %}{% else %}{% trans "Optional" %}{% endif %}</dd>
+            </div>
+          {% endif %}
+        {% endif %}
         <div>
           <dt class="dt">{% trans "Total points" %}</dt>
           <dd class="dd">
@@ -274,6 +309,7 @@
                 <th class="table-th">{% trans "Score" %}</th>
                 <th class="table-th">{% trans "Status" %}</th>
                 <th class="table-th">{% trans "Submitted" %}</th>
+                <th class="table-th">{% trans "Student grade" %}</th>
                 <th class="table-th">{% trans "Actions" %}</th>
               </tr>
             </thead>
@@ -282,12 +318,34 @@
                 <tr>
                   <td class="table-td">{{ attempt.student }}</td>
                   <td class="table-td">
-                    {{ attempt.score|default:'-' }}
+                    {{ attempt.score_points|default:'-' }}
                     /
-                    {{ attempt.assessment.total_points }}
+                    {{ assessment.total_points }}
                   </td>
                   <td class="table-td">{% include "ui/components/_status.html" with code=attempt.status label=attempt.get_status_display %}</td>
                   <td class="table-td">{{ attempt.submitted_at|date:"d/m/Y H:i"|default:'-' }}</td>
+                  <td class="table-td">
+                    <div class="flex flex-col gap-1.5 items-start">
+                      {% if attempt.visible_to_student %}
+                        {% include "ui/components/_status.html" with code="released" label=_("Visible") %}
+                      {% else %}
+                        {% include "ui/components/_status.html" with code="hidden" label=_("Hidden") %}
+                      {% endif %}
+                      {% if attempt.status == "graded" %}
+                        <form method="post" action="{% url 'assessments:admin_release_grades' attempt.id %}" class="m-0">{% csrf_token %}
+                          <input type="hidden" name="next" value="{% url 'assessments:admin_detail' assessment.id %}">
+                          <button class="btn-ghost" type="submit">{% trans "Show for student" %}</button>
+                        </form>
+                      {% elif attempt.status == "released" %}
+                        <form method="post" action="{% url 'assessments:admin_hide_grades' attempt.id %}" class="m-0">{% csrf_token %}
+                          <input type="hidden" name="next" value="{% url 'assessments:admin_detail' assessment.id %}">
+                          <button class="btn-ghost" type="submit">{% trans "Hide for student" %}</button>
+                        </form>
+                      {% else %}
+                        <small class="text-muted">{% trans "Not ready" %}</small>
+                      {% endif %}
+                    </div>
+                  </td>
                   <td class="table-td">
                     <a class="btn-secondary"
                        href="{% url 'assessments:admin_grade_detail' attempt.id %}">{% trans "Grade" %}</a>
@@ -303,7 +361,23 @@
               <div class="flex-1 min-w-0">
                 <strong class="block truncate">{{ attempt.student }}</strong>
                 {% include "ui/components/_status.html" with code=attempt.status label=attempt.get_status_display %}
-                <small class="block text-muted">{% trans "Score" %}: {{ attempt.score|default:'-' }} / {{ attempt.assessment.total_points }} &middot; {{ attempt.submitted_at|date:"d/m/Y H:i"|default:'-' }}</small>
+                <small class="block text-muted">{% trans "Score" %}: {{ attempt.score_points|default:'-' }} / {{ assessment.total_points }} &middot; {{ attempt.submitted_at|date:"d/m/Y H:i"|default:'-' }}</small>
+                {% if attempt.visible_to_student %}
+                  <small class="block text-muted">{% trans "Student grade" %}: {% trans "Visible" %}</small>
+                {% else %}
+                  <small class="block text-muted">{% trans "Student grade" %}: {% trans "Hidden" %}</small>
+                {% endif %}
+                {% if attempt.status == "graded" %}
+                  <form method="post" action="{% url 'assessments:admin_release_grades' attempt.id %}" class="mt-1">{% csrf_token %}
+                    <input type="hidden" name="next" value="{% url 'assessments:admin_detail' assessment.id %}">
+                    <button class="btn-ghost" type="submit">{% trans "Show for student" %}</button>
+                  </form>
+                {% elif attempt.status == "released" %}
+                  <form method="post" action="{% url 'assessments:admin_hide_grades' attempt.id %}" class="mt-1">{% csrf_token %}
+                    <input type="hidden" name="next" value="{% url 'assessments:admin_detail' assessment.id %}">
+                    <button class="btn-ghost" type="submit">{% trans "Hide for student" %}</button>
+                  </form>
+                {% endif %}
               </div>
               <a class="btn-soft-primary shrink-0" href="{% url 'assessments:admin_grade_detail' attempt.id %}">{% trans "Grade" %}</a>
             </div>

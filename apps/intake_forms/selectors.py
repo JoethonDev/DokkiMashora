@@ -6,7 +6,6 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.academics.models import Cohort, CourseVersion
 from apps.applications.constants import (
-    PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED,
     PROGRAM_TYPE_COURSE,
     PROGRAM_TYPE_DIPLOMA,
 )
@@ -218,6 +217,17 @@ def get_intake_responses_for_target(target) -> list[dict]:
     return result
 
 
+def _has_submitted_documents(application: ProgramApplication) -> bool:
+    """True when every Diploma document request has a submitted upload.
+
+    Imported lazily because ``apps.applications.documents`` imports
+    ``apps.applications.services``, which imports this selectors module.
+    """
+    from apps.applications.documents import has_application_documents_submitted
+
+    return has_application_documents_submitted(application)
+
+
 def get_application_intake_state(application: ProgramApplication) -> dict:
     """Return intake form state for an application (used in admin detail)."""
     states = get_intake_requirement_states(application)
@@ -236,13 +246,18 @@ def get_application_intake_state(application: ProgramApplication) -> dict:
         (item["latest_request"] for item in pending if item["latest_request"] is not None),
         None,
     )
+    # Mirror request_intake_form_for_application: any requestable status is
+    # eligible while the requirement window is open, and Diploma additionally
+    # requires submitted documents. A status equality here would strand an
+    # application whose status advanced before the requirement was configured.
+    documents_ready = (
+        application.program_type != PROGRAM_TYPE_DIPLOMA
+        or _has_submitted_documents(application)
+    )
     can_request = (
         application.status in INTAKE_REQUESTABLE_STATUSES
         and bool(open_pending)
-        and (
-            application.program_type != PROGRAM_TYPE_DIPLOMA
-            or application.status == PROGRAM_APP_STATUS_DOCUMENTS_SUBMITTED
-        )
+        and documents_ready
     )
     blocked_reason = None
     if pending and not open_pending:

@@ -19,7 +19,14 @@ from apps.applications.constants import (
     PROGRAM_TYPE_DIPLOMA,
 )
 from apps.applications.models import ProgramApplication
+from apps.audit.constants import (
+    ACTION_APPLICATION_STATUS_CHANGE,
+    ACTION_INTAKE_REQUEST_SENT,
+    SECTION_ADMISSIONS,
+)
+from apps.audit.services import record_audit_event
 from apps.communications.services import queue_program_application_email
+from apps.core.permissions import is_admin
 
 from .constants import (
     INTAKE_REQUEST_STATUS_CANCELLED,
@@ -57,10 +64,16 @@ def request_intake_form_for_application(
 ) -> IntakeFormRequest:
     """Create or replace one exact required intake request under an app lock."""
     with transaction.atomic():
-        locked = ProgramApplication.objects.select_for_update().get(pk=application.pk)
+        locked = (
+            ProgramApplication.objects.select_for_update(of=("self",))
+            .select_related("student", "cohort__diploma", "course")
+            .get(pk=application.pk)
+        )
         if locked.status not in INTAKE_REQUESTABLE_STATUSES:
             raise ValueError(_("Intake forms can only be requested after the admissions decision and required document submission."))
         if locked.program_type == PROGRAM_TYPE_DIPLOMA:
+            # Local import: applications.documents imports applications.services,
+            # which imports this module.
             from apps.applications.documents import has_application_documents_submitted
 
             if not has_application_documents_submitted(locked):
@@ -145,6 +158,26 @@ def request_intake_form_for_application(
                 locked, "request_survey",
                 old_status, PROGRAM_APP_STATUS_SURVEY_REQUESTED, actor,
             )
+
+        labels = application_services.application_audit_fields(locked)
+        record_audit_event(
+            actor=actor,
+            action=ACTION_INTAKE_REQUEST_SENT,
+            section=SECTION_ADMISSIONS,
+            target_type="intake_form_request",
+            target_id=str(intake_request.pk),
+            target_label=required_form.title,
+            subject_type=labels["subject_type"],
+            subject_id=labels["subject_id"],
+            subject_label=labels["subject_label"],
+            metadata={
+                "application_id": str(locked.pk),
+                "form_id": str(required_form.pk),
+                "expires_at": expires_at.isoformat(),
+                "status_before": old_status,
+                "status_after": locked.status,
+            },
+        )
 
         if send_email:
             transaction.on_commit(lambda: _send_intake_request_email(locked, required_form, raw_token, intake_request))
@@ -244,12 +277,14 @@ def submit_intake_form_response(
     *,
     application: ProgramApplication,
     answers: dict,
+    on_behalf: bool = False,
 ) -> IntakeFormResponse:
     response = _submit_intake_form_response_atomic(
         request_or_form,
         actor,
         application=application,
         answers=answers,
+        on_behalf=on_behalf,
     )
     if response is None:
         raise ValueError(_("This intake form request has expired."))
@@ -263,28 +298,45 @@ def _submit_intake_form_response_atomic(
     *,
     application: ProgramApplication,
     answers: dict,
+    on_behalf: bool = False,
 ) -> IntakeFormResponse | None:
-    """Submit one owned request and advance only after all requirements pass."""
+    """Submit one owned request and advance only after all requirements pass.
+
+    ``on_behalf`` lets an authorized administrator complete the required intake
+    form for the applicant. The applicant ownership gate is replaced by an
+    explicit admin check, and the response decision is marked as on-behalf.
+    """
     if not isinstance(request_or_form, IntakeFormRequest):
         raise ValueError(_("Invalid request or form."))
 
+    if on_behalf:
+        if not is_admin(actor):
+            raise PermissionError(
+                _("Only an administrator can submit a survey on behalf of an applicant.")
+            )
+
     # Lock the application first, matching the application-owned workflow
     # services, then lock the exact request under that application.
-    application = ProgramApplication.objects.select_for_update().select_related(
-        "student__user",
-    ).get(pk=application.pk)
+    application = (
+        ProgramApplication.objects.select_for_update(of=("self",))
+        .select_related("student__user", "cohort__diploma", "course")
+        .get(pk=application.pk)
+    )
+    status_before = application.status
     intake_request = IntakeFormRequest.objects.select_for_update().select_related(
         "form", "program_application",
     ).get(pk=request_or_form.pk)
     if intake_request.program_application_id != application.pk:
         raise ValueError(_("This intake form link does not belong to this application."))
-    if application.student.user_id != actor.pk:
+    if not on_behalf and application.student.user_id != actor.pk:
         raise PermissionError(_("You do not own this application."))
     if intake_request.program_application.student_id != application.student_id:
         raise ValueError(_("This intake form request has invalid ownership."))
     if application.status not in INTAKE_REQUESTABLE_STATUSES:
         raise ValueError(_("This intake form is no longer available for the application."))
     if application.program_type == PROGRAM_TYPE_DIPLOMA:
+        # Local import: applications.documents imports applications.services,
+        # which imports this module.
         from apps.applications.documents import has_application_documents_submitted
 
         if not has_application_documents_submitted(application):
@@ -339,6 +391,7 @@ def _submit_intake_form_response_atomic(
         "form_id": form.pk,
         "request_id": intake_request.pk,
         "all_required_forms_submitted": all_responses,
+        "on_behalf": on_behalf,
     }
     if all_responses and application.status != PROGRAM_APP_STATUS_SURVEY_SUBMITTED:
         old_status = application.status
@@ -367,6 +420,23 @@ def _submit_intake_form_response_atomic(
             actor,
             metadata=response_metadata,
         )
+
+    record_audit_event(
+        actor=actor,
+        action=ACTION_APPLICATION_STATUS_CHANGE,
+        section=SECTION_ADMISSIONS,
+        metadata={
+            "status_before": status_before,
+            "status_after": application.status,
+            "form_id": str(form.pk),
+            "form_title": form.title,
+            "request_id": str(intake_request.pk),
+            "response_id": str(response.pk),
+            "on_behalf": on_behalf,
+            "all_required_forms_submitted": all_responses,
+        },
+        **application_services.application_audit_fields(application),
+    )
 
     if all_responses:
         result = application_services.activate_application_if_ready(application, actor=actor)

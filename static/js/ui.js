@@ -1,6 +1,17 @@
 (function () {
   "use strict";
 
+  function getHtmxSwapRoot(event) {
+    var ctx = event && event.detail && event.detail.ctx;
+    var target = ctx && ctx.target;
+    if (target && target.isConnected) return target;
+    if (target && target.id) {
+      var replacement = document.getElementById(target.id);
+      if (replacement) return replacement;
+    }
+    return document.body;
+  }
+
   // --- Shared focus trap (P: drawers & modal) --------------------------------
   // One narrow focus-management implementation used by both the mobile sidebar
   // drawer and the confirm modal. Tab is contained while a container is active;
@@ -230,7 +241,7 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () { initFilePickers(); });
-  document.addEventListener("htmx:afterSwap", function (e) { initFilePickers(e.detail.target); });
+  document.addEventListener("htmx:after:swap", function (e) { initFilePickers(getHtmxSwapRoot(e)); });
 
   // --- Native form submit guard ---
   document.addEventListener("submit", function (e) {
@@ -239,10 +250,21 @@
       return;
     }
     if (!form.checkValidity()) return;
+    var submitter = e.submitter || null;
     var buttons = form.querySelectorAll("button[type='submit']");
     Array.from(buttons).forEach(function (btn) {
+      // A disabled control is not successful, so disabling the clicked submit
+      // button here would silently drop its name/value from the POST (that is
+      // how the Accept/Reject name="action" buttons submitted no action at
+      // all). The browser builds the form data set right after this event, so
+      // leave the submitter enabled for now and disable it on the next task to
+      // still block double submits.
+      if (btn === submitter) return;
       btn.disabled = true;
     });
+    if (submitter) {
+      window.setTimeout(function () { submitter.disabled = true; }, 0);
+    }
   });
 
   // --- HTMX error handling ---
@@ -262,25 +284,14 @@
     }, 6000);
   }
 
-  var htmxEvents = [
-    "htmx:sendError",
-    "htmx:timeout",
-    "htmx:responseError",
-    "htmx:targetError",
-    "htmx:swapError",
-    "htmx:onLoadError"
-  ];
+  var htmxEvents = ["htmx:error", "htmx:response:error"];
 
   htmxEvents.forEach(function (eventName) {
     document.addEventListener(eventName, function (e) {
       if (e.defaultPrevented) return;
-      var indicator = document.getElementById("global-loading");
-      if (indicator) indicator.classList.remove("htmx-request");
-      var target = e.detail && e.detail.target;
-      if (target) target.removeAttribute("aria-busy");
-      var path = (e.detail && (e.detail.path || (e.detail.requestConfig && e.detail.requestConfig.path))) || "unknown";
-      var status = e.detail && e.detail.xhr && e.detail.xhr.status;
-      console.error(eventName, path, status);
+      var ctx = e.detail && e.detail.ctx;
+      var status = ctx && ctx.response && ctx.response.status;
+      console.error("HTMX request failed", { event: e.type, status: status });
       showFeedback();
     });
   });
@@ -359,7 +370,8 @@
   });
 
   // Init on page load and after HTMX swaps
-  document.addEventListener("DOMContentLoaded", function () { initAssessmentChoices(); });  document.addEventListener("htmx:afterSwap", function (e) { initAssessmentChoices(e.detail.target); });
+  document.addEventListener("DOMContentLoaded", function () { initAssessmentChoices(); });
+  document.addEventListener("htmx:after:swap", function (e) { initAssessmentChoices(getHtmxSwapRoot(e)); });
 
   // --- Entrance exam choices ---
   function initEntranceChoices(container) {
@@ -401,22 +413,49 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () { initEntranceChoices(); });
-  document.addEventListener("htmx:afterSwap", function (e) { initEntranceChoices(e.detail.target); });
+  document.addEventListener("htmx:after:swap", function (e) { initEntranceChoices(getHtmxSwapRoot(e)); });
 
   // --- Normal assessment autosave ---
+  var activeAssessmentAutosave = null;
+
+  function destroyAssessmentAutosave() {
+    var state = activeAssessmentAutosave;
+    if (!state) return;
+
+    window.clearInterval(state.interval);
+    state.form.removeEventListener("change", state.onAnswerChange);
+    state.form.removeEventListener("input", state.onAnswerChange);
+    state.form.removeEventListener("submit", state.onSubmit);
+    // Let an already scheduled one-shot save finish, but stop the recurring
+    // timer and listeners once the form is no longer part of the page.
+    state.form.removeAttribute("data-autosave-initialized");
+    activeAssessmentAutosave = null;
+  }
+
   function initAssessmentAutosave(container) {
     if (!container) container = document;
+    if (activeAssessmentAutosave && !activeAssessmentAutosave.form.isConnected) {
+      destroyAssessmentAutosave();
+    }
     var form = container.querySelector("#assessment-take-form");
-    if (!form || form.dataset.autosaveInitialized === "true") return;
+    if (!form || (activeAssessmentAutosave && activeAssessmentAutosave.form === form)) return;
+    if (activeAssessmentAutosave) destroyAssessmentAutosave();
+    if (form.dataset.autosaveInitialized === "true") return;
     var autosaveUrl = form.getAttribute("data-autosave-url");
     var csrf = form.querySelector("input[name='csrfmiddlewaretoken']");
     var status = form.querySelector("#assessment-autosave-status");
     if (!autosaveUrl || !csrf || !status) return;
     form.dataset.autosaveInitialized = "true";
-    var pendingTimer = null;
-    var isSubmitting = false;
     var dirty = new Map();
     var hasBaseline = false;
+    var state = {
+      form: form,
+      interval: null,
+      pendingTimer: null,
+      isSubmitting: false,
+      onAnswerChange: null,
+      onSubmit: null,
+    };
 
     function collectAnswers() {
       var answers = {};
@@ -436,7 +475,7 @@
     }
 
     function save() {
-      if (isSubmitting) return;
+      if (state.isSubmitting) return;
       var keys = hasBaseline ? Array.from(dirty.entries()) : null;
       if (hasBaseline && !keys.length) return;
       var answers = collectAnswers();
@@ -474,8 +513,11 @@
     }
 
     function scheduleSave() {
-      window.clearTimeout(pendingTimer);
-      pendingTimer = window.setTimeout(save, 1200);
+      window.clearTimeout(state.pendingTimer);
+      state.pendingTimer = window.setTimeout(function () {
+        state.pendingTimer = null;
+        save();
+      }, 1200);
     }
 
     function markDirty(event) {
@@ -484,16 +526,17 @@
       }
       scheduleSave();
     }
-    form.addEventListener("change", markDirty);
-    form.addEventListener("input", markDirty);
-    form.addEventListener("submit", function () {
-      isSubmitting = true;
-    });
-    window.setInterval(save, 30000);
+    state.onAnswerChange = markDirty;
+    state.onSubmit = function () { state.isSubmitting = true; };
+    state.interval = window.setInterval(save, 30000);
+    form.addEventListener("change", state.onAnswerChange);
+    form.addEventListener("input", state.onAnswerChange);
+    form.addEventListener("submit", state.onSubmit);
+    activeAssessmentAutosave = state;
   }
 
   document.addEventListener("DOMContentLoaded", function () { initAssessmentAutosave(); });
-  document.addEventListener("htmx:afterSwap", function (e) { initAssessmentAutosave(e.detail.target); });
+  document.addEventListener("htmx:after:swap", function (e) { initAssessmentAutosave(getHtmxSwapRoot(e)); });
 
   // --- Intake form choices ---
   var intakeChoiceIdx = 1;
@@ -545,7 +588,7 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () { initIntakeChoices(); });
-  document.addEventListener("htmx:afterSwap", function (e) { initIntakeChoices(e.detail.target); });
+  document.addEventListener("htmx:after:swap", function (e) { initIntakeChoices(getHtmxSwapRoot(e)); });
 
   // Intake choice remove
   document.addEventListener("click", function (e) {
@@ -589,6 +632,8 @@
   var reasonInput = document.getElementById("confirm-modal-reason");
   var reasonError = document.getElementById("confirm-modal-reason-error");
   var pendingForm = null;
+  var pendingSubmitter = null;
+  var approvedSubmission = null;
   var confirmTrigger = null;
   var confirmSubmitting = false;
   var confirmReasonRequired = false;
@@ -600,7 +645,10 @@
     if (confirmMessage) confirmMessage.textContent = message;
     // Label comes from data-confirm-label or the trigger's own translated
     // text; the modal's default confirm button already renders {% trans "Delete" %}.
-    if (confirmBtn) confirmBtn.textContent = label || confirmBtn.getAttribute("data-default-label") || "";
+    if (confirmBtn) {
+      confirmBtn.textContent = label || confirmBtn.getAttribute("data-default-label") || "";
+      confirmBtn.disabled = false;
+    }
     if (reasonWrap) reasonWrap.classList.toggle("hidden", !confirmReasonRequired);
     if (reasonInput) {
       reasonInput.value = "";
@@ -622,6 +670,7 @@
     if (!confirmModal) return;
     if (confirmModal.classList.contains("hidden")) return;
     confirmModal.classList.add("hidden");
+    if (confirmBtn) confirmBtn.disabled = false;
     confirmReasonRequired = false;
     focusTrap.disable();
     var shell = document.querySelector("[data-page-shell]");
@@ -633,6 +682,7 @@
       Array.prototype.forEach.call(buttons, function (btn) { btn.disabled = false; });
     }
     pendingForm = null;
+    pendingSubmitter = null;
     confirmSubmitting = false;
     if (confirmTrigger && confirmTrigger.focus) {
       confirmTrigger.focus();
@@ -651,6 +701,8 @@
     confirmBtn.addEventListener("click", function () {
       if (confirmSubmitting) return;
       if (pendingForm) {
+        var formToSubmit = pendingForm;
+        var submitterToSubmit = pendingSubmitter;
         if (confirmReasonRequired) {
           var reason = reasonInput ? reasonInput.value.trim() : "";
           if (!reason) {
@@ -658,45 +710,166 @@
             if (reasonInput) reasonInput.focus();
             return;
           }
-          var reasonName = pendingForm.getAttribute("data-confirm-reason-name") || "reason";
+          var reasonName = (submitterToSubmit && submitterToSubmit.getAttribute("data-confirm-reason-name"))
+            || formToSubmit.getAttribute("data-confirm-reason-name")
+            || "reason";
           var reasonField = Array.prototype.find.call(
-            pendingForm.querySelectorAll("input, textarea"),
+            formToSubmit.querySelectorAll("input, textarea"),
             function (field) { return field.name === reasonName; }
           );
           if (reasonField) reasonField.value = reason;
         }
         confirmSubmitting = true;
         confirmBtn.disabled = true;
-        var buttons = pendingForm.querySelectorAll("button[type='submit']");
-        Array.prototype.forEach.call(buttons, function (btn) { btn.disabled = true; });
-        pendingForm.submit();
+        if (submitterToSubmit && submitterToSubmit.form === formToSubmit) {
+          // The first submit attempt ran the global guard before opening this
+          // modal, so its original submitter may currently be disabled.
+          submitterToSubmit.disabled = false;
+        }
+        hideConfirmModal(false);
+
+        if (!formToSubmit.isConnected || typeof formToSubmit.requestSubmit !== "function") {
+          showFeedback();
+          return;
+        }
+
+        var submission = {
+          form: formToSubmit,
+          submitter: submitterToSubmit && submitterToSubmit.form === formToSubmit ? submitterToSubmit : null,
+        };
+        approvedSubmission = submission;
+        try {
+          if (submission.submitter) formToSubmit.requestSubmit(submission.submitter);
+          else formToSubmit.requestSubmit();
+        } catch (error) {
+          console.error("Confirmed form submission could not resume its submit lifecycle.", error);
+          showFeedback();
+        } finally {
+          // requestSubmit dispatches its submit event synchronously. If browser
+          // validation blocks that event, discard this one-shot approval too.
+          if (approvedSubmission === submission) approvedSubmission = null;
+        }
+        return;
       }
       hideConfirmModal(false);
     });
   }
 
+  function questionBlockAnswered(block) {
+    var controls = block.querySelectorAll("input[type='radio'], input[type='checkbox']");
+    if (controls.length) {
+      return Array.prototype.some.call(controls, function (control) { return control.checked; });
+    }
+    return Array.prototype.some.call(
+      block.querySelectorAll("textarea, input:not([type='hidden']), select"),
+      function (control) { return String(control.value || "").trim() !== ""; }
+    );
+  }
+
+  // Show unanswered questions in the danger tone and keep the inline alert in
+  // sync while the student answers them. Returns the still-unanswered blocks.
+  function updateUnansweredHighlights(form, scrollIntoSight) {
+    var blocks = Array.prototype.slice.call(form.querySelectorAll("[data-assessment-question]"));
+    var unanswered = [];
+    blocks.forEach(function (block) {
+      var answered = questionBlockAnswered(block);
+      block.classList.toggle("!border-red", !answered);
+      block.classList.toggle("!bg-red-soft", !answered);
+      if (!answered) unanswered.push(block);
+    });
+
+    var alert = form.querySelector("[data-unanswered-alert]");
+    if (!unanswered.length) {
+      if (alert) alert.remove();
+      return [];
+    }
+
+    var numbers = unanswered.map(function (block) {
+      return block.getAttribute("data-assessment-question") || "";
+    }).filter(Boolean);
+
+    if (!alert) {
+      alert = document.createElement("div");
+      alert.className = "alert-error space-y-1 mb-4";
+      alert.setAttribute("data-unanswered-alert", "");
+      alert.setAttribute("role", "alert");
+      alert.setAttribute("tabindex", "-1");
+      var title = document.createElement("p");
+      title.className = "m-0 font-bold";
+      title.setAttribute("data-unanswered-title", "");
+      alert.appendChild(title);
+      var body = document.createElement("p");
+      body.className = "m-0";
+      body.setAttribute("data-unanswered-body", "");
+      alert.appendChild(body);
+
+      var questionContainer = form.querySelector("#take-chunks");
+      if (questionContainer && questionContainer.parentNode === form) {
+        form.insertBefore(alert, questionContainer);
+      } else {
+        form.insertBefore(alert, form.firstChild);
+      }
+    }
+
+    var title = alert.querySelector("[data-unanswered-title]");
+    var prefix = form.getAttribute("data-unanswered-prefix") || "";
+    if (title.textContent !== prefix) title.textContent = prefix;
+    var detail = numbers.join(", ");
+    var suffix = form.getAttribute("data-unanswered-suffix") || "";
+    if (suffix) detail += ". " + suffix;
+    var body = alert.querySelector("[data-unanswered-body]");
+    if (body.textContent !== detail) body.textContent = detail;
+
+    // Collapsed lecture groups must reveal their unanswered questions.
+    unanswered.forEach(function (block) {
+      var group = block.closest("details");
+      if (group) group.open = true;
+    });
+
+    if (scrollIntoSight && alert.scrollIntoView) {
+      alert.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    return unanswered;
+  }
+
+  function keepUnansweredHighlightsCurrent(e) {
+    var form = e.target.closest && e.target.closest("form[data-confirm-unanswered]");
+    if (!form || !form.querySelector("[data-unanswered-alert]")) return;
+    updateUnansweredHighlights(form, false);
+  }
+
+  document.addEventListener("change", keepUnansweredHighlightsCurrent);
+  document.addEventListener("input", keepUnansweredHighlightsCurrent);
+
   // Intercept form submits with data-confirm
   document.addEventListener("submit", function (e) {
     var form = e.target;
-    var msg = form.getAttribute("data-confirm");
+    var submitter = e.submitter || null;
+    if (approvedSubmission && approvedSubmission.form === form && approvedSubmission.submitter === submitter) {
+      approvedSubmission = null;
+      // The global submit guard disables controls earlier in the event path.
+      // Keep the actual submitter enabled so its name/value remains successful.
+      if (submitter && submitter.form === form) submitter.disabled = false;
+      return;
+    }
+
+    var msg = (submitter && submitter.getAttribute("data-confirm")) || form.getAttribute("data-confirm");
     if (!msg && form.hasAttribute("data-confirm-unanswered")) {
-      var unanswered = [];
-      var questionBlocks = form.querySelectorAll("[data-assessment-question]");
-      Array.prototype.forEach.call(questionBlocks, function (block) {
-        var controls = block.querySelectorAll("input[type='radio'], input[type='checkbox']");
-        var answered = controls.length
-          ? Array.prototype.some.call(controls, function (control) { return control.checked; })
-          : Array.prototype.some.call(
-              block.querySelectorAll("textarea, input:not([type='hidden']), select"),
-              function (control) { return String(control.value || "").trim() !== ""; }
-            );
-        if (!answered) unanswered.push(block.getAttribute("data-assessment-question"));
-      });
-      if (unanswered.length) {
+      var unansweredBlocks = updateUnansweredHighlights(form, true);
+      if (unansweredBlocks.length) {
         e.preventDefault();
         pendingForm = form;
+        pendingSubmitter = submitter;
+        var unanswered = unansweredBlocks.map(function (block) {
+          return block.getAttribute("data-assessment-question") || "";
+        }).filter(Boolean);
         var prefix = form.getAttribute("data-unanswered-prefix") || "";
         var suffix = form.getAttribute("data-unanswered-suffix") || "";
+        // Make the inline alert the focus-return target so canceling the
+        // confirmation leaves the student at the warning, not at the submit
+        // button below the questions.
+        var warning = form.querySelector("[data-unanswered-alert]");
+        if (warning && warning.focus) warning.focus({ preventScroll: true });
         showConfirmModal(
           prefix + ": " + unanswered.join(", ") + ". " + suffix,
           form.getAttribute("data-confirm-label") || "",
@@ -708,9 +881,22 @@
     if (!msg) return;
     e.preventDefault();
     pendingForm = form;
+    pendingSubmitter = submitter;
     var defaultLabel = confirmBtn ? confirmBtn.getAttribute("data-default-label") : "";
-    var label = form.getAttribute("data-confirm-label") || form.querySelector("[type='submit']")?.textContent?.trim() || defaultLabel;
-    showConfirmModal(msg, label, form.getAttribute("data-confirm-reason-required") === "true");
+    var submitterLabel = submitter && (
+      submitter.getAttribute("data-confirm-label")
+      || submitter.textContent?.trim()
+      || submitter.value
+    );
+    var firstSubmitControl = form.querySelector("button[type='submit'], input[type='submit']");
+    var label = form.getAttribute("data-confirm-label")
+      || submitterLabel
+      || firstSubmitControl?.textContent?.trim()
+      || firstSubmitControl?.value
+      || defaultLabel;
+    var reasonRequired = form.getAttribute("data-confirm-reason-required") === "true"
+      || (submitter && submitter.getAttribute("data-confirm-reason-required") === "true");
+    showConfirmModal(msg, label, reasonRequired);
   });
 
   // Intercept button clicks with data-confirm (for non-form use)
@@ -726,6 +912,7 @@
         if (!msg) return;
         e.stopPropagation();
         pendingForm = form;
+        pendingSubmitter = null;
         var defaultLabel = confirmBtn ? confirmBtn.getAttribute("data-default-label") : "";
         var label = btn.textContent?.trim() || defaultLabel;
         showConfirmModal(msg, label, false);
@@ -792,7 +979,7 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () { initProgramSelection(); });
-  document.addEventListener("htmx:afterSwap", function (e) { initProgramSelection(e.detail.target); });
+  document.addEventListener("htmx:after:swap", function (e) { initProgramSelection(getHtmxSwapRoot(e)); });
 
   // Diploma applications capture attendance mode once. The server remains
   // authoritative; this only keeps the course form from showing a Diploma
@@ -815,7 +1002,7 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () { initStudentApplySelection(); });
-  document.addEventListener("htmx:afterSwap", function (e) { initStudentApplySelection(e.detail.target); });
+  document.addEventListener("htmx:after:swap", function (e) { initStudentApplySelection(getHtmxSwapRoot(e)); });
 
   // --- Registration wizard (multi-step) ---
   function initRegistrationWizard(container) {
@@ -910,7 +1097,7 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () { initRegistrationWizard(); });
-  document.addEventListener("htmx:afterSwap", function (e) { initRegistrationWizard(e.detail.target); });
+  document.addEventListener("htmx:after:swap", function (e) { initRegistrationWizard(getHtmxSwapRoot(e)); });
 
   // --- Entrance decision tabs ---
   // The default panel is rendered without JavaScript. This initializer only
@@ -957,7 +1144,7 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () { initDecisionTabs(); });
-  document.addEventListener("htmx:afterSwap", function (e) { initDecisionTabs(e.detail.target); });
+  document.addEventListener("htmx:after:swap", function (e) { initDecisionTabs(getHtmxSwapRoot(e)); });
 
   // --- Lucide Icons (loaded via CDN) ---
   function initLucide() {
@@ -966,15 +1153,14 @@
     }
   }
   document.addEventListener("DOMContentLoaded", initLucide);
-  document.addEventListener("htmx:afterSettle", initLucide);
+  document.addEventListener("htmx:after:settle", initLucide);
 
   // --- Alpine init for HTMX-inserted content ---
   // Inline x-data components (e.g. _expandable_text.html) must initialize when
   // HTMX swaps new fragments in, not only on initial page load (P8-01).
-  document.addEventListener("htmx:afterSwap", function (e) {
-    if (window.Alpine && e.detail && e.detail.target) {
-      window.Alpine.initTree(e.detail.target);
-    }
+  document.addEventListener("htmx:after:swap", function (e) {
+    var target = getHtmxSwapRoot(e);
+    if (window.Alpine && target) window.Alpine.initTree(target);
   });
 
   // Keep the persistent sidebar's active state in sync after content-only
@@ -1010,7 +1196,7 @@
   }
 
   document.addEventListener("DOMContentLoaded", syncContentNavigation);
-  document.addEventListener("htmx:afterSwap", syncContentNavigation);
-  document.addEventListener("htmx:pushedIntoHistory", syncContentNavigation);
+  document.addEventListener("htmx:after:swap", syncContentNavigation);
+  document.addEventListener("htmx:after:history:push", syncContentNavigation);
 
 })();

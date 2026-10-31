@@ -1,10 +1,9 @@
+from django.utils.translation import gettext_lazy as _
+
 SESSION_STATUS_SCHEDULED = "scheduled"
 SESSION_STATUS_OPEN = "open"
 SESSION_STATUS_CLOSED = "closed"
 SESSION_STATUS_CANCELLED = "cancelled"
-
-from django.utils.translation import gettext_lazy as _
-
 
 SESSION_STATUS_CHOICES = [
     (SESSION_STATUS_SCHEDULED, _("Scheduled")),

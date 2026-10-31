@@ -41,16 +41,10 @@ STAFF_ROLE_GROUPS = (
     GROUP_SECRETARY,
 )
 
-# User status choices.
-USER_STATUS_ACTIVE = "active"
-USER_STATUS_INACTIVE = "inactive"
-USER_STATUS_SUSPENDED = "suspended"
-
-USER_STATUS_CHOICES = (
-    (USER_STATUS_ACTIVE, _("Active")),
-    (USER_STATUS_INACTIVE, _("Inactive")),
-    (USER_STATUS_SUSPENDED, _("Suspended")),
-)
+# When legacy accounts contain more than one active role, this is the single
+# role used by dashboards, navigation, and permission helpers until the next
+# account edit normalizes the memberships.
+ACTIVE_ROLE_PRECEDENCE = STAFF_ROLE_GROUPS + (GROUP_STUDENT,)
 
 # Bulk upload statuses.
 UPLOAD_STATUS_PENDING = "pending"

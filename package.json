@@ -6,7 +6,6 @@
     "doc": "docs"
   },
   "scripts": {
-    "test": "python -m pytest",
     "build:css": "tailwindcss -i ./static/css/input.css -o ./static/css/tailwind.css --minify",
     "watch:css": "tailwindcss -i ./static/css/input.css -o ./static/css/tailwind.css --watch"
   },

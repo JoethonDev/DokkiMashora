@@ -3,17 +3,20 @@
 from __future__ import annotations
 
 from django.contrib import messages
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods
 
-from apps.academics.models import Cohort, Course
+from apps.academics.models import Course, Diploma
+from apps.accounts.services import lock_identity_writes
 from apps.applications.constants import DELIVERY_MODE_CHOICES, DELIVERY_MODE_ONLINE
-from apps.applications.services import is_apply_target_open
+from apps.applications.services import is_apply_target_open, resolve_latest_open_cohort
 from apps.core.htmx import hx_toast, is_htmx
 from apps.core.pagination import paginate
-from apps.core.permissions import student_required
+from apps.core.permissions import safe_int, student_required
 
 from .forms import StudentProfileUpdateForm
 from .policies import EDITABLE_FIELDS, RESTRICTED_FIELDS, get_field_label
@@ -89,10 +92,22 @@ def edit_profile(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         form = StudentProfileUpdateForm(request.POST, instance=profile)
         if form.is_valid():
-            # StudentProfile.phone is the single owner; no User.phone mirror.
-            form.save()
-            messages.success(request, _("Profile updated."))
-            return redirect("students:details")
+            try:
+                with transaction.atomic():
+                    lock_identity_writes()
+                    form.cleaned_data["phone"] = form.clean_phone()
+                    # StudentProfile.phone is the single owner; no User.phone mirror.
+                    form.save()
+                    if profile.user.phone:
+                        profile.user.phone = ""
+                        profile.user.save(update_fields=["phone", "updated_at"])
+            except ValidationError as exc:
+                form.add_error("phone", exc)
+            except IntegrityError:
+                form.add_error("phone", _("This phone number is already in use."))
+            else:
+                messages.success(request, _("Profile updated."))
+                return redirect("students:details")
     else:
         form = StudentProfileUpdateForm(instance=profile)
     return _render_profile(request, "ui/pages/student/profile.html", {"form": form})
@@ -213,11 +228,11 @@ def apply(request: HttpRequest) -> HttpResponse:
         profile=profile,
         page_size=100,
     )
-    cohorts = open_targets["items"] if selected_program_type == "diploma" else []
+    diplomas = open_targets["items"] if selected_program_type == "diploma" else []
     courses = open_targets["items"] if selected_program_type == "course" else []
     context = {
         "eligibility": eligibility,
-        "cohorts": cohorts,
+        "diplomas": diplomas,
         "courses": courses,
         "selected_program_type": selected_program_type,
         "selected_target_id": selected_target_id,
@@ -242,14 +257,20 @@ def apply(request: HttpRequest) -> HttpResponse:
             return response
 
         if program_type == "diploma":
-            cohort = Cohort.objects.filter(pk=target_id).select_related("diploma").first()
-            if not cohort:
-                error_message = _("Invalid cohort selected.")
+            diploma_id = safe_int(target_id)
+            diploma = (
+                Diploma.objects.filter(pk=diploma_id).first()
+                if diploma_id is not None else None
+            )
+            if not diploma:
+                error_message = _("Invalid diploma selected.")
                 messages.error(request, error_message)
                 response = _render_profile(request, "ui/pages/student/apply.html", context)
                 response = hx_toast(response, str(error_message), type='error')
                 return response
-            if not is_apply_target_open(cohort=cohort):
+            # The exact cohort is assigned automatically to the latest open one.
+            cohort = resolve_latest_open_cohort(diploma)
+            if cohort is None:
                 error_message = _("This program is no longer accepting applications.")
                 messages.error(request, error_message)
                 response = _render_profile(request, "ui/pages/student/apply.html", context)
@@ -277,8 +298,11 @@ def apply(request: HttpRequest) -> HttpResponse:
                 response = hx_toast(response, error_message, type='error')
                 return response
         elif program_type == "course":
-            course_id = target_id.removeprefix("course_")
-            course = Course.objects.filter(pk=course_id).first()
+            course_id = safe_int(target_id.removeprefix("course_"))
+            course = (
+                Course.objects.filter(pk=course_id).first()
+                if course_id is not None else None
+            )
             if not course:
                 error_message = _("Invalid course selected.")
                 messages.error(request, error_message)

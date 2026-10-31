@@ -1,10 +1,10 @@
 {% extends "ui/layouts/admin.html" %}
 {% load i18n ui_tags %}
-{% block title %}
-  {% trans "Semester Exam review" %}
-{% endblock %}
+{% block title %}{{ page_title|default:_('Semester Exam review') }}{% endblock %}
 {% block content %}
-  <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with eyebrow=_("Assessments") title=_("Semester Exam review") description=_("Graded semester exams awaiting the explicit Admin stage decision.") %}
+  <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with eyebrow=_("Assessments") title=page_title|default:_("Semester Exam review") breadcrumb_items=breadcrumb_items back_button=back_url back_url=back_url %}
+    <p class="text-sm text-muted -mt-2">{% trans "Optional" %} · {% trans "Release grades" %} · {% trans "Audit" %}</p>
+    {% include "ui/fragments/admin/_assessment_scope_context.html" %}
     <section class="card-surface flex flex-col gap-4">
       {% include "ui/components/_pagination.html" with page_obj=page_obj pagination_qs=pagination_qs %}
       {% if page_obj.object_list %}
@@ -29,7 +29,7 @@
                   <td class="table-td">{{ item.graded_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</td>
                   <td class="table-td">
                     <a class="btn-secondary"
-                       href="{% url 'assessments:admin_exam_review_detail' item.id %}">{% trans "Review" %}</a>
+                       href="{% url 'assessments:admin_exam_review_detail' item.id %}?next={{ detail_return_url|urlencode }}">{% trans "Review" %}</a>
                   </td>
                 </tr>
               {% endfor %}
@@ -43,7 +43,7 @@
                 <small class="block text-muted truncate">{{ item.assessment.title|default:item.assessment }}</small>
                 {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
               </div>
-              <a class="btn-soft-primary shrink-0" href="{% url 'assessments:admin_exam_review_detail' item.id %}">{% trans "Review" %}</a>
+              <a class="btn-soft-primary shrink-0" href="{% url 'assessments:admin_exam_review_detail' item.id %}?next={{ detail_return_url|urlencode }}">{% trans "Review" %}</a>
             </div>
           {% endfor %}
         </div>

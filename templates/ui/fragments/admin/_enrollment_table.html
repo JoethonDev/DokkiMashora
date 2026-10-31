@@ -9,6 +9,9 @@
             <th class="table-th">{% trans "Student" %}</th>
             <th class="table-th">{% trans "Program" %}</th>
             <th class="table-th">{% trans "Status" %}</th>
+            {% if enrollment_type == "course" %}
+              <th class="table-th">{% trans "Completed" %}</th>
+            {% endif %}
             {% if enrollment_type == "diploma" %}
               <th class="table-th">{% trans "Delivery mode" %}</th>
             {% endif %}
@@ -34,6 +37,9 @@
                 {% endif %}
               </td>
               <td>{% include "ui/components/_status.html" with code=e.status label=e.get_status_display %}</td>
+              {% if enrollment_type == "course" %}
+                <td><span dir="ltr" class="inline-block">{{ e.completed_at|date:"DATE_FORMAT"|default:'—' }}</span></td>
+              {% endif %}
               {% if enrollment_type == "diploma" %}
                 <td>
                   {% if e.application_delivery_mode %}
@@ -67,7 +73,8 @@
               <td>
                 {% if enrollment_type == "course" %}
                   <a class="btn-secondary"
-                     href="{% url 'academics:admin_course_enrollment_list' course.id %}?q={{ e.student.full_name|urlencode }}">{% trans "View" %}
+                     href="{% url 'academics:admin_course_enrollment_complete' course.id e.id %}">
+                    {% if e.status == "completed" %}{% trans "Completion" %}{% else %}{% trans "Complete course" %}{% endif %}
                   </a>
                 {% else %}
                   <a class="btn-secondary"
@@ -86,6 +93,9 @@
             <strong class="block truncate">{{ e.student.full_name }}</strong>
             <small class="block text-muted truncate">{% if enrollment_type == "course" %}{{ e.course_version }}{% else %}{{ e.cohort }}{% endif %}</small>
             {% include "ui/components/_status.html" with code=e.status label=e.get_status_display %}
+            {% if enrollment_type == "course" and e.completed_at %}
+              <small class="block text-muted">{% trans "Completed" %}: <span dir="ltr" class="inline-block">{{ e.completed_at|date:"DATE_FORMAT" }}</span></small>
+            {% endif %}
             {% if enrollment_type == "diploma" and e.application_delivery_mode %}
               <div class="mt-3 pt-3 border-t border-line">
                 <form method="post"
@@ -111,8 +121,15 @@
               </div>
             {% endif %}
           </div>
-          <a class="btn-soft-primary shrink-0"
-             href="{% if enrollment_type == 'course' %}{% url 'academics:admin_course_enrollment_list' course.id %}?q={{ e.student.full_name|urlencode }}{% else %}{% url 'academics:admin_diploma_enrollment_list' diploma.id %}?q={{ e.student.full_name|urlencode }}{% endif %}">{% trans "View" %}</a>
+          {% if enrollment_type == "course" %}
+            <a class="btn-soft-primary shrink-0"
+               href="{% url 'academics:admin_course_enrollment_complete' course.id e.id %}">
+              {% if e.status == "completed" %}{% trans "Completion" %}{% else %}{% trans "Complete" %}{% endif %}
+            </a>
+          {% else %}
+            <a class="btn-soft-primary shrink-0"
+               href="{% url 'academics:admin_diploma_enrollment_list' diploma.id %}?q={{ e.student.full_name|urlencode }}">{% trans "View" %}</a>
+          {% endif %}
         </div>
       {% endfor %}
 {% endblock %}

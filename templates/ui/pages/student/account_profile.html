@@ -9,5 +9,17 @@
       {% for field in form %}{% include "ui/components/_field.html" %}{% endfor %}
       <div class="actions-row"><button class="btn-primary" type="submit">{% trans "Save" %}</button></div>
     </form>
+    {% if needs_email_activation %}
+      <article class="card-surface max-w-form mx-auto w-full page-stack">
+        <div class="section-head"><div>
+          <p class="eyebrow">{% trans "Email" %}</p>
+          <h3>{% trans "Activate your email" %}</h3>
+        </div></div>
+        <p class="text-sm text-muted">{% trans "Your email address is not activated yet. Send yourself a new activation link to finish activating your account." %}</p>
+        <form method="post" action="{% url 'accounts:send_my_activation_email' %}">{% csrf_token %}
+          <div class="actions-row"><button class="btn-primary" type="submit">{% trans "Send activation link" %}</button></div>
+        </form>
+      </article>
+    {% endif %}
   </div>
 {% endblock %}

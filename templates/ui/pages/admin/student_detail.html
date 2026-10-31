@@ -16,7 +16,7 @@
       <dl class="dl"><div>
           <dt class="dt">{% trans "Status" %}</dt>
           <dd class="dd">
-            {% include "ui/components/_status.html" with code=user_obj.status label=user_obj.get_status_display %}
+            {% include "ui/components/_status.html" with code=user_obj.is_active|yesno:"active,inactive" label=user_obj.is_active|boolean_label:"Active,Inactive" %}
           </dd>
         </div>
         <div>
@@ -34,7 +34,7 @@
         <div>
           <dt class="dt">{% trans "Role" %}</dt>
           <dd class="dd">
-            {{ user_obj.primary_role }}
+            {% translate user_obj.primary_role context "role" %}
           </dd>
         </div>
       </dl>
@@ -162,6 +162,46 @@
             {% include "ui/components/_empty_state.html" with title=_("No enrollments") message=_("This student is not enrolled in any programs.") %}
           {% endif %}
         </article>
+      </section>
+      <section class="card-surface flex flex-col gap-4">
+        <div class="section-head"><div>
+          <p class="eyebrow">{% trans "Attendance" %}</p>
+          <h3>{% trans "Attendance history" %}</h3>
+          <p class="text-sm text-muted mt-2 mb-0">{{ attendance_summary.countable }} / {{ attendance_summary.excluded }} / {{ attendance_summary.total }} {% trans "countable / excluded / total" %}</p>
+        </div></div>
+        {% if attendance_records %}
+          <div class="table-wrap hidden lg:block"><table class="table">
+            <thead><tr>
+              <th class="table-th">{% trans "Date" %}</th>
+              <th class="table-th">{% trans "Session" %}</th>
+              <th class="table-th">{% trans "Status" %}</th>
+              <th class="table-th">{% trans "Scanned at" %}</th>
+              <th class="table-th">{% trans "Attendance evaluation" %}</th>
+              <th class="table-th">{% trans "Actions" %}</th>
+            </tr></thead>
+            <tbody>{% for record in attendance_records %}
+              <tr>
+                <td class="table-td"><span dir="ltr">{{ record.session.date|date:"DATE_FORMAT" }}</span></td>
+                <td class="table-td">{{ record.session }}</td>
+                <td class="table-td">{% include "ui/components/_status.html" with code=record.status label=record.get_status_display %}</td>
+                <td class="table-td"><span dir="ltr">{{ record.scanned_at|date:"DATETIME_FORMAT" }}</span></td>
+                <td class="table-td">{% if record.is_countable %}{% trans "Countable" %}{% else %}<span class="text-muted">{{ record.exclusion_reason }}</span>{% endif %}</td>
+                <td class="table-td"><a class="btn-secondary" href="{% url 'attendance:attendance_session_detail' record.session_id %}">{% trans "Open" %}</a></td>
+              </tr>
+            {% endfor %}</tbody>
+          </table></div>
+          <div class="card-stack lg:hidden">{% for record in attendance_records %}
+            <article class="mobile-card"><div class="flex-1 min-w-0">
+              <strong class="block">{{ record.session }}</strong>
+              <small class="block text-muted"><span dir="ltr">{{ record.session.date|date:"DATE_FORMAT" }}</span> · <span dir="ltr">{{ record.scanned_at|date:"DATETIME_FORMAT" }}</span></small>
+              {% include "ui/components/_status.html" with code=record.status label=record.get_status_display %}
+              <small class="block text-muted">{% if record.is_countable %}{% trans "Countable" %}{% else %}{{ record.exclusion_reason }}{% endif %}</small>
+              <a class="btn-soft-primary inline-flex mt-3" href="{% url 'attendance:attendance_session_detail' record.session_id %}">{% trans "Open" %}</a>
+            </div></article>
+          {% endfor %}</div>
+        {% else %}
+          {% include "ui/components/_empty_state.html" with title=_("No attendance records") message=_("Attendance records will appear after your sessions.") %}
+        {% endif %}
       </section>
       <section class="card-surface flex flex-col gap-4">
         <div class="section-head"><div>

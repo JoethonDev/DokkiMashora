@@ -1,0 +1,42 @@
+{% load i18n %}
+<form method="get" action="{{ context_filter_action }}" class="card-surface grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-end"
+      x-data="{ selectedDiplomaId: '{{ context_diploma_id|escapejs }}', filterOptions(resetChildren = false) { if (resetChildren) { $refs.cohort.value = ''; $refs.semester.value = ''; } const diplomaId = this.selectedDiplomaId; for (const select of [$refs.cohort, $refs.semester]) { select.disabled = !diplomaId; Array.from(select.options).forEach(option => { const visible = !option.value || (diplomaId && option.dataset.diplomaId === diplomaId); option.hidden = !visible; option.disabled = !visible; }); } } }"
+      x-init="filterOptions()">
+  <label class="field">
+    <span class="field-label">{% trans "Diploma" %}</span>
+    <select class="form-select" name="diploma_id" x-model="selectedDiplomaId" @change="filterOptions(true); $el.form.requestSubmit()">
+      <option value="">{% trans "All diplomas" %}</option>
+      {% for option in diploma_options %}
+        <option value="{{ option.id }}" {% if option.id == context_diploma_id %}selected{% endif %}>{{ option.title }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="field">
+    <span class="field-label">{% trans "Cohort" %}</span>
+    <select class="form-select" name="cohort_id" x-ref="cohort">
+      <option value="">{% trans "All cohorts" %}</option>
+      {% for option in cohort_options %}
+        <option value="{{ option.id }}" data-diploma-id="{{ option.diploma_id }}" {% if option.id == context_cohort_id %}selected{% endif %}>{{ option.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="field">
+    <span class="field-label">{% trans "Semester" %}</span>
+    <select class="form-select" name="semester_id" x-ref="semester">
+      <option value="">{% trans "All semesters" %}</option>
+      {% for option in semester_options %}
+        <option value="{{ option.id }}" data-diploma-id="{{ option.diploma_id }}" {% if option.id == context_semester_id %}selected{% endif %}>{{ option.title }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  {% if current_status %}<input type="hidden" name="status" value="{{ current_status }}">{% endif %}
+  <div class="actions-row">
+    <button class="btn-secondary" type="submit">{% trans "Filter" %}</button>
+    {% if context_diploma or context_cohort or context_semester %}
+      <a class="btn-ghost" href="{{ context_filter_action }}">{% trans "Reset" %}</a>
+    {% endif %}
+  </div>
+</form>
+{% if context_filter_error %}
+  <p class="alert-warning" role="alert">{% trans "The selected cohort or semester does not belong to this diploma. Choose from the available options." %}</p>
+{% endif %}

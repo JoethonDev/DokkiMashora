@@ -4,7 +4,7 @@
   {% trans "Grade submission" %}
 {% endblock %}
 {% block content %}
-  <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=_("Grade submission") back_button=True %}
+  <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=_("Grade submission") back_button=True back_url=back_url %}
     {% if attempt %}
       <p>{{ attempt.student }} - {{ attempt.assessment }}</p>
     {% elif submission %}
@@ -14,20 +14,68 @@
       <section class="card-surface mb-4 flex flex-col gap-4">
         <div class="section-head"><div>
               <p class="eyebrow">{% trans "Grades" %}</p>
-              <h3>{% trans "Release / hide" %}</h3>
+              <h3>{% trans "Attempt grade" %}</h3>
             </div>
+            {% include "ui/components/_status.html" with code=attempt.status label=attempt.get_status_display %}
           </div>
+        <dl class="dl">
+          <div>
+            <dt class="dt">{% trans "Score" %}</dt>
+            <dd class="dd">
+              {% if attempt.score_points is not None %}{{ attempt.score_points }}{% else %}—{% endif %}
+              /
+              {{ attempt.possible_points_snapshot|default:attempt.assessment.total_points }}
+            </dd>
+          </div>
+          <div>
+            <dt class="dt">{% trans "Percent" %}</dt>
+            <dd class="dd">
+              {% if attempt.score_percent is not None %}{{ attempt.score_percent }}%{% else %}—{% endif %}
+            </dd>
+          </div>
+          <div>
+            <dt class="dt">{% trans "Graded by" %}</dt>
+            <dd class="dd">{{ attempt.graded_by|default:'—' }}</dd>
+          </div>
+          <div>
+            <dt class="dt">{% trans "Grading date" %}</dt>
+            <dd class="dd">{{ attempt.graded_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</dd>
+          </div>
+        </dl>
+      </section>
+      <section class="card-surface mb-4 flex flex-col gap-4">
+        <div class="section-head"><div>
+              <p class="eyebrow">{% trans "Grades" %}</p>
+              <h3>{% trans "Student grade visibility" %}</h3>
+            </div>
+            {% include "ui/components/_status.html" with code=attempt.assessment.grade_visibility label=attempt.assessment.get_grade_visibility_display %}
+          </div>
+        <p class="text-sm text-muted m-0">{% trans "Use the global switch to apply visibility to all students at once. The student switch below controls only this student." %}</p>
         <div class="flex gap-2.5 items-center flex-wrap">
+          <form method="post" action="{% url 'assessments:admin_toggle_global_grade_visibility' attempt.assessment.id %}">{% csrf_token %}<input type="hidden" name="next" value="{{ back_url }}">
+            <button class="{% if attempt.assessment.grade_visibility == 'released' %}btn-warning{% else %}btn-success{% endif %}" type="submit">
+              {% if attempt.assessment.grade_visibility == "released" %}
+                {% trans "Hide grades globally" %}
+              {% else %}
+                {% trans "Show grades globally" %}
+              {% endif %}
+            </button>
+          </form>
           {% if attempt.status == "graded" %}
-            <form method="post" action="{% url 'assessments:admin_release_grades' attempt.id %}">{% csrf_token %}
-              <button class="btn-success" type="submit">{% trans "Release grades" %}</button>
+            <form method="post" action="{% url 'assessments:admin_release_grades' attempt.id %}">{% csrf_token %}<input type="hidden" name="next" value="{{ back_url }}">
+              <button class="btn-success" type="submit">{% trans "Show this student's grade" %}</button>
             </form>
           {% elif attempt.status == "released" %}
-            <form method="post" action="{% url 'assessments:admin_hide_grades' attempt.id %}">{% csrf_token %}
-              <button class="btn-warning" type="submit">{% trans "Hide grades" %}</button>
+            <form method="post" action="{% url 'assessments:admin_hide_grades' attempt.id %}">{% csrf_token %}<input type="hidden" name="next" value="{{ back_url }}">
+              <button class="btn-warning" type="submit">{% trans "Hide this student's grade" %}</button>
             </form>
           {% else %}
             <p class="text-sm text-muted">{% trans "Grades are not in a releasable state." %}</p>
+          {% endif %}
+          {% if attempt.visible_to_student %}
+            {% include "ui/components/_status.html" with code="released" label=_("Visible") %}
+          {% else %}
+            {% include "ui/components/_status.html" with code="hidden" label=_("Hidden") %}
           {% endif %}
         </div>
       </section>
@@ -52,7 +100,7 @@
           </ul>
         </div>
       {% endif %}
-      <form class="max-w-form mx-auto w-full page-stack mt-4" method="post">{% csrf_token %}
+      <form class="max-w-form mx-auto w-full page-stack mt-4" method="post">{% csrf_token %}<input type="hidden" name="next" value="{{ back_url }}">
         <div class="section-head"><div>
               <p class="eyebrow">{% trans "Grading" %}</p>
               <h3>{% trans "Save grade" %}</h3>
@@ -73,13 +121,14 @@
       </form>
     </section>
   {% elif is_diploma_random %}
-    <form class="max-w-3xl mx-auto w-full page-stack" method="post">{% csrf_token %}
+    <form class="max-w-3xl mx-auto w-full page-stack" method="post">{% csrf_token %}<input type="hidden" name="next" value="{{ back_url }}">
       {% for question,answer in snapshot_pairs %}
         <fieldset class="border border-line rounded-sm p-4">
           <legend class="sr-only">{% trans "Question" %} #{{ question.order }}</legend>
-          <div class="flex items-center gap-2 mb-4">
+          <div class="flex items-center gap-2 mb-4 flex-wrap">
             <span class="text-xs font-bold text-muted uppercase">#{{ question.order }}</span>
             <span class="px-2 py-0.5 text-xs font-bold rounded-full bg-warning-soft text-warning-text">{% trans "Written" %}</span>
+            {% include "ui/components/_question_lecture.html" with title=question.source_lecture.title %}
           </div>
           <div>
             <p class="eyebrow mb-1">{% trans "Question" %}</p>
@@ -116,7 +165,7 @@
       {% endif %}
     </form>
   {% else %}
-    <form class="max-w-3xl mx-auto w-full page-stack" method="post">{% csrf_token %}
+    <form class="max-w-3xl mx-auto w-full page-stack" method="post">{% csrf_token %}<input type="hidden" name="next" value="{{ back_url }}">
       {% for question,answer in question_answer_pairs %}
         <fieldset class="border border-line rounded-sm p-4">
           <legend class="sr-only">{% trans "Question" %} #{{ question.order }}</legend>

@@ -21,54 +21,7 @@
         </div>
       </div>
       {% if lectures %}
-        <div class="table-wrap hidden lg:block"><table class="table">
-            <thead>
-              <tr>
-                <th class="table-th">{% trans "Order" %}</th>
-                <th class="table-th">{% trans "Title" %}</th>
-                <th class="table-th">{% trans "Actions" %}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for item in lectures %}
-                <tr>
-                  <td class="table-td">{{ item.order }}</td>
-                  <td class="table-td">{{ item.title }}</td>
-                  <td class="table-td">
-                    <div class="flex gap-2.5 items-center flex-wrap">
-                      <a class="btn-ghost"
-                         href="{% url 'academics:admin_diploma_lecture_edit' diploma.id cohort.id semester.id item.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Edit" %}</a>
-                      <a class="btn-secondary"
-                         href="{% url 'academics:admin_diploma_lecture_preview' diploma.id cohort.id semester.id item.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Preview" %}</a>
-                      <a class="btn-ghost"
-                         href="{% url 'assessments:admin_lecture_bank_list' diploma.id cohort.id semester.id item.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Questions" %}</a>
-                      <form method="post" action="{% url 'academics:admin_diploma_lecture_delete' diploma.id cohort.id semester.id item.id %}" data-confirm="{% trans 'Delete this lecture?' %}" class="m-0">{% csrf_token %}
-                        <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
-                      </form>
-                    </div>
-                  </td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-        <div class="card-stack lg:hidden">
-          {% for item in lectures %}
-            <div class="mobile-card">
-              <div class="flex-1 min-w-0">
-                <strong class="block truncate">{{ item.title }}</strong>
-                <small class="block text-muted">#{{ item.order }}</small>
-              </div>
-              <div class="flex gap-2 shrink-0">
-                <a class="btn-ghost" href="{% url 'academics:admin_diploma_lecture_edit' diploma.id cohort.id semester.id item.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Edit" %}</a>
-                <a class="btn-soft-primary shrink-0" href="{% url 'academics:admin_diploma_lecture_preview' diploma.id cohort.id semester.id item.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Preview" %}</a>
-                <form method="post" action="{% url 'academics:admin_diploma_lecture_delete' diploma.id cohort.id semester.id item.id %}" data-confirm="{% trans 'Delete this lecture?' %}" class="m-0">{% csrf_token %}
-                  <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
-                </form>
-              </div>
-            </div>
-          {% endfor %}
-        </div>
+        {% include "ui/fragments/admin/_diploma_lecture_rows.html" %}
       {% else %}
         {% include "ui/components/_empty_state.html" with title=_("No lectures") message=_("No lectures found for this cohort and semester.") %}
       {% endif %}

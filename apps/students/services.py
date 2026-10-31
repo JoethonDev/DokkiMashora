@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.academics.constants import (
@@ -18,8 +17,10 @@ from apps.academics.models import (
     Cohort,
     Course,
     CourseEnrollment,
+    Diploma,
     DiplomaEnrollment,
 )
+from apps.accounts.services import lock_identity_writes
 from apps.applications.constants import (
     DELIVERY_MODE_ONLINE,
     PROGRAM_APP_STATUS_REJECTED,
@@ -29,6 +30,7 @@ from apps.applications.constants import (
 from apps.applications.models import ProgramApplication
 from apps.applications.services import (
     is_apply_target_open,
+    open_diploma_ids_queryset,
     submit_program_application,
 )
 from apps.progression.constants import (
@@ -36,6 +38,7 @@ from apps.progression.constants import (
     DIPLOMA_COMPLETION_GRADUATED,
 )
 from apps.progression.models import StudentDiplomaCompletion
+from apps.students.identity import validate_unique_identity_values
 
 if TYPE_CHECKING:
     from apps.students.models import StudentProfile
@@ -49,10 +52,23 @@ def update_profile(profile, data: dict) -> StudentProfile:
     """
     allowed = {"phone", "address"}
     with transaction.atomic():
-        for key, value in data.items():
+        lock_identity_writes()
+        updates = {key: value for key, value in data.items() if key in allowed}
+        if "phone" in updates:
+            updates["phone"], _identity = validate_unique_identity_values(
+                country_code=profile.country_code,
+                phone=updates["phone"],
+                user_id=profile.user_id,
+                profile_id=profile.pk,
+            )
+        for key, value in updates.items():
             if key in allowed:
                 setattr(profile, key, value)
-        profile.save(update_fields=allowed & set(data.keys()))
+        profile.save(update_fields=updates.keys())
+        user = profile.user
+        if user.phone:
+            user.phone = ""
+            user.save(update_fields=["phone", "updated_at"])
     return profile
 
 
@@ -187,30 +203,23 @@ def get_open_apply_targets(
 ) -> dict:
     """Return currently open targets for one program type.
 
-    The open-target rule is the shared predicate ``is_apply_target_open``;
-    per-profile exclusions (completed/enrolled/pending) are applied as
-    set-based queryset filters, never per-target Python eligibility loops.
+    Diploma targets are diplomas that currently have at least one open cohort;
+    the exact cohort is assigned automatically to the latest open cohort, so the
+    applicant never selects a cohort. Course targets are courses with an active
+    version. The open-target rule is the shared predicate
+    ``is_apply_target_open``; per-profile exclusions (completed/enrolled/pending)
+    are applied as set-based queryset filters, never per-target Python loops.
     """
-    now = timezone.now()
-    today = now.date()
-
     if program_type == PROGRAM_TYPE_DIPLOMA:
-        cohorts_qs = (
-            Cohort.objects.filter(
-                is_active=True,
-                end_date__isnull=False,
-                end_date__gte=today,
-                entrance_exams__is_active=True,
-            )
-            .select_related("diploma")
-            .order_by("-start_date")
-            .distinct()
+        diplomas_qs = (
+            Diploma.objects.filter(pk__in=open_diploma_ids_queryset())
+            .order_by("title")
         )
         if profile is not None:
             blocked_diploma_ids = _blocked_diploma_ids(profile)
             if blocked_diploma_ids:
-                cohorts_qs = cohorts_qs.exclude(diploma_id__in=blocked_diploma_ids)
-        paginator = Paginator(cohorts_qs, page_size)
+                diplomas_qs = diplomas_qs.exclude(pk__in=blocked_diploma_ids)
+        paginator = Paginator(diplomas_qs, page_size)
         page_obj = paginator.get_page(page)
         return {"items": list(page_obj.object_list), "has_more": page_obj.has_next(), "next_page": page_obj.next_page_number() if page_obj.has_next() else None}
 

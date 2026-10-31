@@ -20,4 +20,6 @@ urlpatterns = [
     path("templates/<slug:slug>/edit/", views.admin_template_edit, name="admin_template_edit"),
     path("templates/<slug:slug>/preview/", views.admin_template_preview, name="admin_template_preview"),
     path("templates/footer/", views.admin_footer_edit, name="admin_footer_edit"),
+    path("emails/log/", views.admin_email_log, name="admin_email_log"),
+    path("emails/log/<int:message_id>/", views.admin_email_log_detail, name="admin_email_log_detail"),
 ]

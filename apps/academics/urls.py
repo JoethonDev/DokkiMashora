@@ -55,6 +55,7 @@ urlpatterns = [
     path("manage/courses/<int:course_id>/delete/", views.admin_course_delete, name="admin_course_delete"),
     path("manage/courses/<int:course_id>/enrollments/", views.admin_course_enrollment_list, name="admin_course_enrollment_list"),
     path("manage/courses/<int:course_id>/enrollments/<int:enrollment_id>/migrate/", views.admin_course_enrollment_migrate, name="admin_course_enrollment_migrate"),
+    path("manage/courses/<int:course_id>/enrollments/<int:enrollment_id>/complete/", views.admin_course_enrollment_complete, name="admin_course_enrollment_complete"),
     # Admin: course versions
     path(
         "manage/courses/<int:course_id>/versions/create/",
@@ -88,6 +89,11 @@ urlpatterns = [
         name="admin_lecture_edit",
     ),
     path(
+        "manage/courses/<int:course_id>/versions/<int:version_id>/lectures/<int:lecture_id>/youtube-metadata/retry/",
+        views.admin_lecture_metadata_retry,
+        name="admin_lecture_metadata_retry",
+    ),
+    path(
         "manage/courses/<int:course_id>/versions/<int:version_id>/lectures/<int:lecture_id>/delete/",
         views.admin_lecture_delete,
         name="admin_lecture_delete",
@@ -112,6 +118,11 @@ urlpatterns = [
         "manage/diplomas/<int:diploma_id>/cohorts/<int:cohort_id>/semesters/<int:semester_id>/lectures/<int:lecture_id>/edit/",
         views.admin_diploma_lecture_edit,
         name="admin_diploma_lecture_edit",
+    ),
+    path(
+        "manage/diplomas/<int:diploma_id>/cohorts/<int:cohort_id>/semesters/<int:semester_id>/lectures/<int:lecture_id>/youtube-metadata/retry/",
+        views.admin_diploma_lecture_metadata_retry,
+        name="admin_diploma_lecture_metadata_retry",
     ),
     path(
         "manage/diplomas/<int:diploma_id>/cohorts/<int:cohort_id>/semesters/<int:semester_id>/lectures/<int:lecture_id>/delete/",

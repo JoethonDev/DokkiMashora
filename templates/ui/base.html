@@ -11,18 +11,26 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}DokkiMashora{% endblock %}</title>
+    <meta name="htmx-config" content='{"defaultTimeout":0,"noSwap":[204,304,"4xx","5xx"]}'>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;800;900&family=Tajawal:wght@400;700;800;900&family=Inter:wght@400;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'css/tailwind.css' %}">
+    {% block extra_head %}{% endblock %}
     <script src="{% static 'js/htmx.min.js' %}" defer></script>
     <script src="{% static 'js/alpine.min.js' %}" defer></script>
     <script src="{% static 'js/ui.js' %}" defer></script>
     <script src="https://unpkg.com/lucide@latest" defer></script>
     <meta name="csrf-token" content="{{ csrf_token }}">
-    <script>document.addEventListener('htmx:configRequest', function(e) { e.detail.headers['X-CSRFToken'] = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'); });</script>
+    <script>
+      document.addEventListener('htmx:config:request', function (event) {
+        var headers = event.detail && event.detail.ctx && event.detail.ctx.request && event.detail.ctx.request.headers;
+        var token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        if (headers && token) headers['X-CSRFToken'] = token;
+      });
+    </script>
   </head>
-  <body hx-indicator="#global-loading" class="antialiased">
+  <body hx-indicator:inherited="#global-loading" class="antialiased">
     <a href="#main" class="skip-link sr-only focus:not-sr-only focus:fixed focus:top-2 focus:start-2 focus:z-[100] focus:px-4 focus:py-2 focus:rounded-sm focus:bg-brand focus:text-white focus:font-bold">
       {% trans "Skip to main content" %}
     </a>

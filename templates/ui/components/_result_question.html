@@ -1,0 +1,46 @@
+{% load i18n %}
+<div class="border border-line rounded-sm p-4" data-assessment-question="{{ question.order }}">
+  <div class="flex items-start justify-between gap-4">
+    <div class="flex-1 min-w-0">
+      <div class="flex items-center gap-2 mb-2 flex-wrap">
+        <span class="text-xs font-bold text-muted uppercase">#{{ question.order }}</span>
+        <span class="px-2 py-0.5 text-xs font-bold rounded-full {% if question.question_type == 'mcq' %}bg-info-soft text-info-text{% else %}bg-warning-soft text-warning-text{% endif %}">{{ question.question_type_label }}</span>
+      </div>
+      <p class="text-sm font-medium m-0">{{ question.text }}</p>
+      {% if question.question_type == "written" %}
+        <label class="sr-only" for="result_written_{{ question.order }}">{% blocktrans with question_text=question.text %}Answer for question: {{ question_text }}{% endblocktrans %}</label>
+        <textarea id="result_written_{{ question.order }}"
+                  class="form-textarea mt-3 resize-none bg-surface-soft cursor-default"
+                  rows="5"
+                  readonly
+                  placeholder="{% trans 'No written answer provided.' %}">{{ question.written_text }}</textarea>
+      {% else %}
+        <div class="flex flex-col gap-1.5 mt-3 ps-2 border-s-2 border-line">
+          {% for choice in question.choices %}
+            <label class="flex items-center gap-2 text-sm{% if choice.selected %} font-semibold text-brand-strong{% endif %}"{% if choice.selected %} aria-current="true"{% endif %}>
+              <input type="radio"
+                     name="result_question_{{ question.order }}"
+                     value="{{ choice.id }}"
+                     class="form-radio"
+                     disabled{% if choice.selected %} checked{% endif %}>
+              <span>{{ choice.text }}</span>
+            </label>
+          {% endfor %}
+          {% if not question.selected_choice_id %}
+            <p class="text-sm text-muted m-0 italic">{% trans "No answer selected." %}</p>
+          {% endif %}
+        </div>
+      {% endif %}
+      {% if question.score is not None or question.feedback %}
+        <div class="mt-3 pt-3 border-t border-line flex flex-col gap-1 text-sm">
+          {% if question.score is not None %}
+            <p class="m-0"><strong>{% trans "Score" %}:</strong> {{ question.score }} / {{ question.points|default:'—' }}</p>
+          {% endif %}
+          {% if question.feedback %}
+            <p class="m-0"><strong>{% trans "Feedback" %}:</strong> {{ question.feedback }}</p>
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>

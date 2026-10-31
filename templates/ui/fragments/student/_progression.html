@@ -125,6 +125,9 @@
                 ·
                 {{ item.decided_at|date:"d/m/Y" }}
               </small>
+              {% if item.superseded_at %}
+                {% include "ui/components/_status.html" with code="superseded" label=_("Superseded") %}
+              {% endif %}
             </p>
           </div>
         {% empty %}

@@ -8,6 +8,9 @@ services:
   postgres:
     image: postgres:18
     restart: unless-stopped
+    # Checkpoints on the host bind mount can take longer than Docker's
+    # default 10s stop timeout; a clean shutdown avoids crash recovery.
+    stop_grace_period: 90s
     environment:
       POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
       POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
@@ -33,12 +36,16 @@ services:
       - -c
       - checkpoint_timeout=15min
     volumes:
-      - postgres_data:/var/lib/postgresql
+      # Host bind mount so database data survives Docker resets/prunes.
+      - ./.docker-data/postgres:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      # pg_isready only proves the postmaster is listening; this query also
+      # proves recovery is complete and the configured database is usable.
+      test: ["CMD-SHELL", "PGPASSWORD=$$POSTGRES_PASSWORD psql -w -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\" -qAt -c 'SELECT 1'"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 30s
     cpuset: "0-3"
     cpu_shares: 1024
     mem_limit: 2048m
@@ -50,7 +57,7 @@ services:
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory", "384mb", "--maxmemory-policy", "noeviction"]
     volumes:
-      - redis_data:/data
+      - ./.docker-data/redis:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -72,10 +79,10 @@ services:
       CACHE_URL: redis://redis:6379/1
       CELERY_BROKER_URL: redis://redis:6379/0
       DJANGO_SETTINGS_MODULE: config.settings.prod
-    command: celery -A config worker --loglevel=INFO --concurrency=1 --max-tasks-per-child=200 -Q exam_submission
+    command: ["sh", "-c", "python manage.py wait_for_db && exec celery -A config worker --loglevel=INFO --concurrency=1 --max-tasks-per-child=200 -Q exam_submission"]
     volumes:
       - ${APP_SOURCE:-.}:/app:ro
-      - media_data:/app/media
+      - ./media:/app/media
     depends_on:
       postgres:
         condition: service_healthy
@@ -103,10 +110,10 @@ services:
       CACHE_URL: redis://redis:6379/1
       CELERY_BROKER_URL: redis://redis:6379/0
       DJANGO_SETTINGS_MODULE: config.settings.prod
-    command: celery -A config worker --loglevel=INFO --concurrency=1 --max-tasks-per-child=200 -Q exam_autosave,celery
+    command: ["sh", "-c", "python manage.py wait_for_db && exec celery -A config worker --loglevel=INFO --concurrency=1 --max-tasks-per-child=200 -Q exam_autosave,celery"]
     volumes:
       - ${APP_SOURCE:-.}:/app:ro
-      - media_data:/app/media
+      - ./media:/app/media
     depends_on:
       postgres:
         condition: service_healthy
@@ -136,10 +143,10 @@ services:
       CACHE_URL: redis://redis:6379/1
       CELERY_BROKER_URL: redis://redis:6379/0
       DJANGO_SETTINGS_MODULE: config.settings.prod
-    command: celery -A config worker --loglevel=INFO --concurrency=1 --max-tasks-per-child=200
+    command: ["sh", "-c", "python manage.py wait_for_db && exec celery -A config worker --loglevel=INFO --concurrency=1 --max-tasks-per-child=200"]
     volumes:
       - ${APP_SOURCE:-.}:/app:ro
-      - media_data:/app/media
+      - ./media:/app/media
     depends_on:
       postgres:
         condition: service_healthy
@@ -161,10 +168,10 @@ services:
       CACHE_URL: redis://redis:6379/1
       CELERY_BROKER_URL: redis://redis:6379/0
       DJANGO_SETTINGS_MODULE: config.settings.prod
-    command: celery -A config beat --loglevel=INFO -s /tmp/celerybeat-schedule
+    command: ["sh", "-c", "python manage.py wait_for_db && exec celery -A config beat --loglevel=INFO -s /tmp/celerybeat-schedule"]
     volumes:
       - ${APP_SOURCE:-.}:/app:ro
-      - media_data:/app/media
+      - ./media:/app/media
     depends_on:
       postgres:
         condition: service_healthy
@@ -213,7 +220,7 @@ services:
       PGPASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - ./backups:/backups
-      - media_data:/media:ro
+      - ./media:/media:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -233,7 +240,5 @@ networks:
     driver: bridge
 
 volumes:
-  postgres_data:
-  redis_data:
+  # Regenerable output only; keeps collectstatic working on Windows bind mounts.
   static_data:
-  media_data:

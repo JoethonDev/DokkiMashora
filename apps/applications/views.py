@@ -5,21 +5,34 @@ from __future__ import annotations
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods
 
 from apps.academics.models import Cohort
+from apps.audit.constants import (
+    ACTION_APPLICATION_STATUS_CHANGE,
+    SECTION_ADMISSIONS,
+    SOURCE_PUBLIC,
+)
+from apps.audit.services import record_audit_event
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import ROLE_SENIOR_STAFF, is_admin, role_required, safe_date_str, safe_int
 from apps.entrance_exams.services import assign_exam_for_application, queue_entrance_invitation_email
+from apps.intake_forms.constants import INTAKE_REQUEST_STATUS_REQUESTED  # noqa: E402
+from apps.intake_forms.forms import IntakeFormSubmitForm  # noqa: E402
+from apps.intake_forms.models import IntakeFormRequest  # noqa: E402
 from apps.intake_forms.selectors import get_application_intake_state  # noqa: E402
-from apps.intake_forms.services import request_intake_form_for_application  # noqa: E402
+from apps.intake_forms.services import (  # noqa: E402
+    request_intake_form_for_application,
+    submit_intake_form_response,
+)
 from apps.payments.services import grant_payment_waiver, revoke_payment_waiver
 from apps.storage.services import StorageError, storage_service
 from apps.students.services import get_open_apply_targets
@@ -66,7 +79,7 @@ from .documents import (
     submit_application_documents,
 )
 from .forms import AdminDocumentRequestForm, RegistrationForm, StudentDocumentUploadForm
-from .models import ApplicationDocumentUpload, ProgramApplication
+from .models import ApplicationDocumentRequest, ApplicationDocumentUpload, ProgramApplication
 from .services import (
     ACTION_ACCEPT,
     ACTION_ACTIVATE,
@@ -77,19 +90,24 @@ from .services import (
     ACTION_REQUEST_DOCUMENTS,
     ACTION_REQUEST_INTAKE,
     ACTION_REQUEST_INTERVIEW,
+    ACTION_REQUEST_PAYMENT,
     ACTION_REVERT,
     RegistrationData,
     accept_program_application,
     activate_application_if_ready,
     allowed_application_actions,
     annotate_application_action_readiness,
+    application_audit_fields,
+    can_activate_application,
     filter_applications_for_action,
     get_active_application_waiver,
     get_application_action_projection,
     has_application_paid_record,
+    has_application_payment_readiness,
     invite_to_entrance_exam,
     mark_application_paid,
     reject_program_application,
+    request_application_payment,
     request_interview_program_application,
     revert_program_application_decision,
     submit_registration,
@@ -147,7 +165,7 @@ def program_targets(request: HttpRequest) -> HttpResponse:
         loader_id = "course-loader"
         load_url = f"{request.path}?kind=course&page={targets['next_page']}" if targets["has_more"] and targets["next_page"] else ""
     else:
-        options = [(str(c.pk), f"{c.diploma.title} — {c.name}") for c in targets["items"]]
+        options = [(str(d.pk), d.title) for d in targets["items"]]
         placeholder = _("Select a diploma")
         loader_id = "diploma-loader"
         load_url = f"{request.path}?kind=diploma&page={targets['next_page']}" if targets["has_more"] and targets["next_page"] else ""
@@ -177,33 +195,52 @@ def register(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         form = RegistrationForm(request.POST)
         if form.is_valid():
-            with transaction.atomic():
-                program_data = form.get_program_data()
-                data = RegistrationData(
-                    email=form.cleaned_data["email"],
-                    full_name=form.cleaned_data["full_name"],
-                    date_of_birth=form.cleaned_data["date_of_birth"],
-                    gender=form.cleaned_data["gender"],
-                    address=form.cleaned_data["address"],
-                    phone=form.cleaned_data["phone"],
-                    national_id=form.cleaned_data["national_id"],
-                    country_code=form.cleaned_data.get("country_code", "EG"),
-                    education=form.cleaned_data["education"],
-                    specialization=form.cleaned_data.get("specialization", ""),
-                    employer=form.cleaned_data.get("employer", ""),
-                    current_job=form.cleaned_data.get("current_job", ""),
-                    church=form.cleaned_data.get("church", ""),
-                    priest_name=form.cleaned_data.get("priest_name", ""),
-                    priest_contact=form.cleaned_data.get("priest_contact", ""),
-                    program_type=program_data["program_type"],
-                    cohort_id=program_data["cohort_id"],
-                    course_id=program_data["course_id"],
-                    delivery_mode=program_data["delivery_mode"],
-                )
-                _profile, _program_application = submit_registration(data)
-            request.session[PUBLIC_REGISTRATION_SESSION_KEY] = form.cleaned_data["email"]
-            messages.success(request, _("Account created! Check your email for the activation link."))
-            return redirect("applications:registration_success")
+            try:
+                with transaction.atomic():
+                    program_data = form.get_program_data()
+                    data = RegistrationData(
+                        email=form.cleaned_data["email"],
+                        full_name=form.cleaned_data["full_name"],
+                        date_of_birth=form.cleaned_data["date_of_birth"],
+                        gender=form.cleaned_data["gender"],
+                        address=form.cleaned_data["address"],
+                        phone=form.cleaned_data["phone"],
+                        national_id=form.cleaned_data["national_id"],
+                        country_code=form.cleaned_data.get("country_code", "EG"),
+                        education=form.cleaned_data["education"],
+                        specialization=form.cleaned_data.get("specialization", ""),
+                        employer=form.cleaned_data.get("employer", ""),
+                        current_job=form.cleaned_data.get("current_job", ""),
+                        church=form.cleaned_data.get("church", ""),
+                        priest_name=form.cleaned_data.get("priest_name", ""),
+                        priest_contact=form.cleaned_data.get("priest_contact", ""),
+                        program_type=program_data["program_type"],
+                        cohort_id=program_data["cohort_id"],
+                        course_id=program_data["course_id"],
+                        delivery_mode=program_data["delivery_mode"],
+                    )
+                    _profile, _program_application = submit_registration(data)
+                    if _program_application is not None:
+                        record_audit_event(
+                            actor=None,
+                            action=ACTION_APPLICATION_STATUS_CHANGE,
+                            section=SECTION_ADMISSIONS,
+                            metadata={
+                                "status_before": "",
+                                "status_after": PROGRAM_APP_STATUS_SUBMITTED,
+                                "registration": "public_form",
+                            },
+                            source=SOURCE_PUBLIC,
+                            **application_audit_fields(_program_application),
+                        )
+            except ValueError as exc:
+                form.add_error(None, str(exc))
+            except IntegrityError:
+                form.add_error(None, _("Registration could not be completed. Please review the selected program and try again."))
+            else:
+                request.session[PUBLIC_REGISTRATION_SESSION_KEY] = form.cleaned_data["email"]
+                messages.success(request, _("Account created! Check your email for the activation link."))
+                return redirect("applications:registration_success")
     else:
         program_type = request.GET.get("program_type", "")
         target_id = request.GET.get("target_id", "")
@@ -259,6 +296,52 @@ def review_queue_applications():
     return filter_applications_for_action(ProgramApplication.objects.all(), "review")
 
 
+def _open_document_request(application):
+    """Return the open document upload request for an application, if any."""
+    return (
+        ApplicationDocumentRequest.objects.filter(
+            program_application=application,
+            status=DOCUMENT_REQUEST_STATUS_REQUESTED,
+            expires_at__gt=timezone.now(),
+        )
+        .order_by("-requested_at", "-id")
+        .first()
+    )
+
+
+def _open_intake_request(application):
+    """Return the open intake form request for an application, if any."""
+    return (
+        IntakeFormRequest.objects.filter(
+            program_application=application,
+            status=INTAKE_REQUEST_STATUS_REQUESTED,
+            expires_at__gt=timezone.now(),
+        )
+        .select_related("form")
+        .order_by("-requested_at", "-id")
+        .first()
+    )
+
+
+def _activation_blocker_reason(application) -> str | None:
+    """Return a translated description of the first activation blocker, if any."""
+    blockers = {
+        "not_accepted": _("the application has not been accepted"),
+        "no_course_target": _("no course is selected"),
+        "no_active_course_version": _("the course has no active version"),
+        "not_accepted_or_documents_not_submitted": _("the document step is not complete"),
+        "documents_not_uploaded": _("the requested documents have not been uploaded"),
+        "no_cohort_target": _("no cohort is assigned"),
+        "not_paid": _("payment is not satisfied"),
+        "intake_form_required": _("the required survey has not been submitted"),
+    }
+    for code in can_activate_application(application).reasons:
+        label = blockers.get(code)
+        if label:
+            return str(label)
+    return None
+
+
 def _decision_unavailable_reason(application) -> str | None:
     """Explain why no accept/reject decision is possible right now (A10)."""
     if application.status == PROGRAM_APP_STATUS_ACCEPTED:
@@ -277,6 +360,13 @@ def _decision_unavailable_reason(application) -> str | None:
     }:
         return _("The application must complete its requested documents and survey steps first.")
     if application.status == PROGRAM_APP_STATUS_PAYMENT_PENDING:
+        if has_application_payment_readiness(application):
+            blocker = _activation_blocker_reason(application)
+            if blocker:
+                return _("Payment received, but the application cannot be activated yet: %(reason)s.") % {
+                    "reason": blocker,
+                }
+            return _("Payment received. The application is ready for activation.")
         return _("The application is awaiting payment confirmation.")
     return _("No decision is available for the current application status.")
 
@@ -291,6 +381,7 @@ def program_application_list(request: HttpRequest) -> HttpResponse:
     from_filter = request.GET.get("from", "")
     to_filter = request.GET.get("to", "")
     cohort_filter = request.GET.get("cohort", "")
+    cohort_filter_id = safe_int(cohort_filter)
     student_filter = request.GET.get("student_id", "")
     q = request.GET.get("q", "")
     applications = annotate_application_action_readiness(
@@ -310,8 +401,8 @@ def program_application_list(request: HttpRequest) -> HttpResponse:
         applications = applications.filter(status=status_filter)
     if program_type_filter:
         applications = applications.filter(program_type=program_type_filter)
-    if cohort_filter:
-        applications = applications.filter(cohort_id=cohort_filter)
+    if cohort_filter_id:
+        applications = applications.filter(cohort_id=cohort_filter_id)
     if student_filter and student_filter.isdigit():
         applications = applications.filter(student_id=int(student_filter))
     if action_filter:
@@ -437,6 +528,15 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
             else:
                 messages.info(request, _("Application reverted."))
                 return redirect("applications:program_detail", application_id=application.id)
+
+        if action == "request_payment" and is_admin(request.user) and ACTION_REQUEST_PAYMENT in allowed_actions:
+            try:
+                request_application_payment(application, request.user)
+            except ValueError as exc:
+                messages.error(request, str(exc))
+            else:
+                messages.success(request, _("Payment request sent to the applicant."))
+            return redirect("applications:program_detail", application_id=application.id)
 
         if action == "mark_paid" and is_admin(request.user) and ACTION_MARK_PAID in allowed_actions:
             try:
@@ -593,6 +693,58 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
                     messages.error(request, _("Activation failed: %(reason)s") % {"reason": ", ".join(result.reasons)})
             return redirect("applications:program_detail", application_id=application.id)
 
+        if action == "admin_upload_documents" and is_admin(request.user):
+            doc_request = _open_document_request(application)
+            if doc_request is None:
+                messages.error(request, _("No open document request. Request documents before uploading."))
+                return redirect("applications:program_detail", application_id=application.id)
+            doc_form = StudentDocumentUploadForm(request.POST, request.FILES)
+            if doc_form.is_valid():
+                try:
+                    submit_application_documents(
+                        doc_request,
+                        request.user,
+                        persona_file=request.FILES["persona_image"],
+                        attachment_files=request.FILES.getlist("attachments"),
+                        on_behalf=True,
+                    )
+                except (ValueError, PermissionError, StorageError) as exc:
+                    messages.error(request, str(exc))
+                else:
+                    messages.success(request, _("Documents uploaded on behalf of the applicant."))
+            else:
+                for _field, errs in doc_form.errors.items():
+                    for err in errs:
+                        messages.error(request, err)
+            return redirect("applications:program_detail", application_id=application.id)
+
+        if action == "admin_submit_intake" and is_admin(request.user):
+            intake_request = _open_intake_request(application)
+            if intake_request is None:
+                messages.error(request, _("No open survey request. Request the survey before filling it."))
+                return redirect("applications:program_detail", application_id=application.id)
+            active_fields = list(intake_request.form.fields.filter(is_active=True).order_by("order"))
+            intake_form = IntakeFormSubmitForm(intake_request.form, request.POST, prefix="intake")
+            if intake_form.is_valid():
+                answers = intake_form.cleaned_answers(active_fields)
+                try:
+                    submit_intake_form_response(
+                        intake_request,
+                        request.user,
+                        application=application,
+                        answers=answers,
+                        on_behalf=True,
+                    )
+                except (ValueError, PermissionError) as exc:
+                    messages.error(request, str(exc))
+                else:
+                    messages.success(request, _("Survey submitted on behalf of the applicant."))
+            else:
+                for _field, errs in intake_form.errors.items():
+                    for err in errs:
+                        messages.error(request, err)
+            return redirect("applications:program_detail", application_id=application.id)
+
         messages.error(request, _("Action not allowed for the current status."))
 
     decision_action_tones = {
@@ -639,6 +791,12 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
         and not is_waived
         and ACTION_MARK_PAID in allowed_actions
     )
+    can_request_payment = (
+        is_admin(request.user)
+        and not is_paid
+        and not is_waived
+        and ACTION_REQUEST_PAYMENT in allowed_actions
+    )
 
     # Document request state
     doc_request = get_latest_document_request(application)
@@ -647,8 +805,22 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
     if is_admin(request.user) and ACTION_REQUEST_DOCUMENTS in allowed_actions:
         request_doc_form = AdminDocumentRequestForm()
 
+    # Admin on-behalf submission state (documents + required survey)
+    admin_open_doc_request = _open_document_request(application) if is_admin(request.user) else None
+    admin_doc_upload_form = None
+    if (
+        admin_open_doc_request is not None
+        and application.status == PROGRAM_APP_STATUS_DOCUMENTS_REQUESTED
+    ):
+        admin_doc_upload_form = StudentDocumentUploadForm()
+
     # Intake form state
     intake_state = get_application_intake_state(application)
+    admin_open_intake_request = _open_intake_request(application) if is_admin(request.user) else None
+    admin_intake_form = None
+    if admin_open_intake_request is not None:
+        admin_intake_form = IntakeFormSubmitForm(admin_open_intake_request.form, prefix="intake")
+
     workflow_projection = get_application_action_projection(application)
 
     return render(
@@ -665,6 +837,7 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
             "active_waiver": active_waiver,
             "is_waived": is_waived,
             "can_record_payment": can_record_payment,
+            "can_request_payment": can_request_payment,
             "can_activate": is_admin(request.user) and ACTION_ACTIVATE in allowed_actions,
             "can_grant_waiver": (
                 is_admin(request.user)
@@ -678,6 +851,13 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
             ),
             "doc_request": doc_request,
             "doc_upload": doc_upload,
+            "admin_open_doc_request": admin_open_doc_request,
+            "admin_doc_upload_form": admin_doc_upload_form,
+            "admin_open_intake_request": admin_open_intake_request,
+            "admin_intake_form": admin_intake_form,
+            "student_edit_url": reverse("accounts:admin_user_edit", args=[application.student.user_id])
+            if is_admin(request.user)
+            else None,
             "doc_uploads": list(
                 ApplicationDocumentUpload.objects.filter(
                     request__program_application=application,

@@ -2,7 +2,7 @@
 
 from django import template
 
-from apps.core.forms import CANONICAL_WIDGET_CLASSES, DEFAULT_WIDGET_CLASS, WIDGET_CLASSES
+from apps.core.forms import CANONICAL_WIDGET_CLASSES, canonical_widget_class
 
 register = template.Library()
 
@@ -30,7 +30,7 @@ def widget_class(field):
     """
     widget = field.field.widget
     is_choice_group = type(widget).__name__ in {"RadioSelect", "CheckboxSelectMultiple"}
-    canonical = WIDGET_CLASSES.get(type(widget).__name__, DEFAULT_WIDGET_CLASS)
+    canonical = canonical_widget_class(widget)
     existing = set(widget.attrs.get("class", "").split()) - CANONICAL_WIDGET_CLASSES
     attrs = {} if is_choice_group else {"class": " ".join(sorted(existing | {canonical}))}
     field_id = field.id_for_label or field.auto_id

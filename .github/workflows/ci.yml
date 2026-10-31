@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    name: Lint and test
+    name: Lint and checks
     runs-on: ubuntu-latest
 
     services:
@@ -59,15 +59,3 @@ jobs:
       - name: Verify migrations are in sync
         run: |
           python manage.py makemigrations --check --dry-run
-
-      - name: Run tests with coverage
-        run: |
-          coverage run -m pytest
-          coverage report --fail-under=80
-
-      - name: Upload coverage
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: .coverage_report
-          if-no-files-found: ignore

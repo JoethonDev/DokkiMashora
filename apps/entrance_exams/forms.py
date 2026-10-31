@@ -1,11 +1,13 @@
 from django import forms
-from django.forms import inlineformset_factory
+from django.forms import BaseInlineFormSet, inlineformset_factory
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
 from apps.academics.models import Cohort, Diploma
 from apps.core.forms import StyledFormMixin
+from apps.core.permissions import safe_int
 
+from .constants import QUESTION_TYPE_MCQ
 from .models import EntranceChoice, EntranceExam, EntranceQuestion
 
 
@@ -46,8 +48,8 @@ class EntranceExamForm(StyledFormMixin, forms.ModelForm):
             }
         )
         cohort_qs = Cohort.objects.none()
-        cohort_val = self.data.get("cohort") or self.initial.get("cohort")
-        if cohort_val:
+        cohort_val = safe_int(self.data.get("cohort") or self.initial.get("cohort"))
+        if cohort_val is not None:
             cohort_qs = Cohort.objects.filter(pk=cohort_val)
         self.fields["cohort"].queryset = cohort_qs
         self.fields["diploma"].empty_label = _("— Select —")
@@ -100,10 +102,34 @@ class EntranceChoiceForm(StyledFormMixin, forms.ModelForm):
         self.fields["order"].label = _("Order")
 
 
+class BaseEntranceChoiceFormSet(BaseInlineFormSet):
+    """Validate choices against the parent question's cap.
+
+    The parent instance is the question parsed from the submitted form, so the
+    cap the admin just entered is used without extra queries.
+    """
+
+    def clean(self):
+        super().clean()
+        if any(self.errors):
+            return
+        question = self.instance
+        if question.question_type != QUESTION_TYPE_MCQ:
+            return
+        max_score = question.max_score
+        for form in self.forms:
+            score = form.cleaned_data.get("score")
+            if form.cleaned_data.get("DELETE") or score is None:
+                continue
+            if score > max_score:
+                form.add_error("score", _("Score cannot exceed %(max)s.") % {"max": max_score})
+
+
 EntranceChoiceFormSet = inlineformset_factory(
     EntranceQuestion,
     EntranceChoice,
     form=EntranceChoiceForm,
+    formset=BaseEntranceChoiceFormSet,
     extra=2,
     can_delete=True,
 )

@@ -1,0 +1,194 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n %}
+{% block title %}
+  {% trans "Complete course" %}
+{% endblock %}
+{% block content %}
+  <div class="page-stack animate-enter-view">
+    {% trans "Course completion" as eyebrow %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=course.title description=enrollment.student.full_name back_url=back_url back_label=_("Back to enrollments") %}
+    <section class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <article class="stat-card">
+        <div class="stat-body gap-1">
+          <span>{% trans "Lectures completed" %}</span>
+          <strong>{{ readiness.lectures_completed }} / {{ readiness.lectures_total }}</strong>
+          <small>{% trans "Published and released lectures" %}</small>
+        </div>
+      </article>
+      <article class="stat-card">
+        <div class="stat-body gap-1">
+          <span>{% trans "Quizzes passed" %}</span>
+          <strong>{{ readiness.quizzes_passed }} / {{ readiness.quizzes_total }}</strong>
+          <small>{% trans "Latest attempt per active quiz" %}</small>
+        </div>
+      </article>
+      <article class="stat-card">
+        <div class="stat-body gap-1">
+          <span>{% trans "Readiness" %}</span>
+          <strong>
+            {% if readiness.ready %}{% trans "Ready" %}{% else %}{% trans "Not ready" %}{% endif %}
+          </strong>
+          <small>
+            {% if readiness.last_requirement_at %}
+              {% trans "Last requirement" %}: <span dir="ltr" class="inline-block">{{ readiness.last_requirement_at|date:"DATETIME_FORMAT" }}</span>
+            {% else %}
+              {% trans "No requirement timestamp yet" %}
+            {% endif %}
+          </small>
+        </div>
+      </article>
+    </section>
+
+    <section class="card-surface flex flex-col gap-3">
+      <div class="section-head"><div>
+          <p class="eyebrow">{% trans "Completion gate" %}</p>
+          <h3>{% trans "End-course exam" %}</h3>
+        </div>
+      </div>
+      {% if readiness.completion_exam %}
+        <div class="flex items-center gap-2 flex-wrap">
+          <strong>{{ readiness.completion_exam.title }}</strong>
+          {% if readiness.completion_exam_passed %}
+            {% include "ui/components/_status.html" with code="passed" label=_("Passed") %}
+          {% else %}
+            {% include "ui/components/_status.html" with code="failed" label=_("Not passed") %}
+          {% endif %}
+          {% if not readiness.completion_exam_active %}
+            {% include "ui/components/_status.html" with code="inactive" label=_("Inactive") %}
+          {% endif %}
+        </div>
+      {% else %}
+        {% include "ui/components/_status.html" with code="restricted" label=_("Not configured") %}
+      {% endif %}
+    </section>
+
+    {% if enrollment.status == "completed" %}
+      <section class="card-surface flex flex-col gap-4">
+        <div class="py-4 px-5 border border-green rounded-md bg-green-soft text-green" role="status">
+          <strong>{% trans "This course is already completed." %}</strong>
+          <p class="m-0">{% trans "The enrollment is completed and its certificate history is preserved." %}</p>
+        </div>
+        <dl class="grid grid-cols-1 sm:grid-cols-3 gap-4 m-0">
+          <div>
+            <dt class="field-label">{% trans "Completed at" %}</dt>
+            <dd class="m-0" dir="ltr">{{ enrollment.completed_at|date:"DATETIME_FORMAT"|default:'—' }}</dd>
+          </div>
+          <div>
+            <dt class="field-label">{% trans "Completed by" %}</dt>
+            <dd class="m-0">{{ enrollment.completed_by|default:'—' }}</dd>
+          </div>
+          <div>
+            <dt class="field-label">{% trans "Notes" %}</dt>
+            <dd class="m-0">{{ enrollment.completion_notes|default:'—' }}</dd>
+          </div>
+        </dl>
+        <div class="actions-row">
+          <a class="btn-secondary"
+             href="{% url 'certificates:admin_certificate_list' %}?student_id={{ enrollment.student_id }}">{% trans "Open certificates" %}</a>
+        </div>
+      </section>
+    {% else %}
+      {% if readiness.block_reasons %}
+        <div class="alert-error space-y-1" role="alert">
+          <strong>{% trans "Completion requirements are not met." %}</strong>
+          <ul class="m-0">
+            {% for reason in readiness.block_reasons %}<li>{{ reason }}</li>{% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+
+      <section class="card-surface flex flex-col gap-4">
+        <div class="section-head"><div>
+              <p class="eyebrow">{% trans "Requirements" %}</p>
+              <h3>{% trans "Course quizzes" %}</h3>
+            </div>
+          </div>
+        {% if readiness.quizzes %}
+          <div class="table-wrap hidden lg:block"><table class="table">
+              <thead>
+                <tr>
+                  <th class="table-th">{% trans "Quiz" %}</th>
+                  <th class="table-th">{% trans "Latest attempt" %}</th>
+                  <th class="table-th">{% trans "Result" %}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in readiness.quizzes %}
+                  <tr>
+                    <td class="table-td">
+                      {{ row.assessment.title }}
+                      {% if row.assessment.is_completion_exam %}
+                        <span class="ms-1 inline-block rounded bg-info-soft text-info-text px-1.5 py-0.5 text-xs font-bold">{% trans "End-course exam" %}</span>
+                      {% endif %}
+                    </td>
+                    <td class="table-td">
+                      {% if row.attempt %}
+                        {% include "ui/components/_status.html" with code=row.attempt.status label=row.attempt.get_status_display %}
+                        <small class="block text-muted">{% trans "Attempt" %} {{ row.attempt.attempt_number }}</small>
+                      {% else %}
+                        <span class="text-muted">{% trans "No attempt" %}</span>
+                      {% endif %}
+                    </td>
+                    <td class="table-td">
+                      {% if row.passed %}
+                        {% include "ui/components/_status.html" with code="passed" label=_("Passed") %}
+                      {% else %}
+                        {% include "ui/components/_status.html" with code="failed" label=_("Not passed") %}
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <div class="card-stack lg:hidden">
+            {% for row in readiness.quizzes %}
+              <div class="mobile-card">
+                <div class="flex-1 min-w-0">
+                  <strong class="block truncate">{{ row.assessment.title }}</strong>
+                  {% if row.assessment.is_completion_exam %}
+                    <span class="inline-block rounded bg-info-soft text-info-text px-1.5 py-0.5 text-xs font-bold">{% trans "End-course exam" %}</span>
+                  {% endif %}
+                  {% if row.attempt %}
+                    <small class="block text-muted">{% trans "Latest attempt" %}: {{ row.attempt.get_status_display }}</small>
+                  {% else %}
+                    <small class="block text-muted">{% trans "No attempt" %}</small>
+                  {% endif %}
+                  {% if row.passed %}
+                    {% include "ui/components/_status.html" with code="passed" label=_("Passed") %}
+                  {% else %}
+                    {% include "ui/components/_status.html" with code="failed" label=_("Not passed") %}
+                  {% endif %}
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          {% include "ui/components/_empty_state.html" with title=_("No active course quizzes.") message=_("Completion only requires the published lectures.") %}
+        {% endif %}
+      </section>
+
+      <section class="card-surface flex flex-col gap-4">
+        <div class="section-head"><div>
+              <p class="eyebrow">{% trans "Confirmation" %}</p>
+              <h3>{% trans "Mark course completed" %}</h3>
+              <p class="text-sm text-muted">{% trans "The completion date is the last requirement timestamp; if none exists, the confirmation time is used." %}</p>
+            </div>
+          </div>
+        {% if readiness.ready %}
+          <form class="page-stack" method="post">{% csrf_token %}
+            <label class="field">
+              <span class="field-label">{% trans "Completion notes" %}</span>
+              <textarea name="notes" class="form-input" rows="3"></textarea>
+            </label>
+            <div class="actions-row">
+              <button class="btn-primary" type="submit">{% trans "Mark course completed" %}</button>
+            </div>
+          </form>
+        {% else %}
+          <p class="text-muted m-0">{% trans "Complete all lectures and pass every active quiz before confirming completion." %}</p>
+        {% endif %}
+      </section>
+    {% endif %}
+  </div>
+{% endblock %}

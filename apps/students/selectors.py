@@ -34,9 +34,9 @@ from apps.academics.models import (
 )
 from apps.academics.services import (
     course_progress_for_enrollment,
-    diploma_progress_for_enrollment,
-    get_student_diploma_access,
+    diploma_progress_for_enrollments,
     get_visible_semester_ids_by_enrollment,
+    get_visible_semesters_by_enrollment,
 )
 from apps.applications.constants import PROGRAM_APP_STATUS_REJECTED
 from apps.applications.models import ProgramApplication
@@ -49,9 +49,14 @@ from apps.assessments.models import (
     OfflineSectionGrade,
     SemesterExamCode,
 )
-from apps.assessments.services import get_student_assessments, get_student_attempts
+from apps.assessments.services import attempt_grades_visible, get_student_assessments, get_student_attempts
 from apps.attendance.models import AttendanceRecord
+from apps.attendance.selectors import (
+    annotate_attendance_history_records,
+    student_attendance_history_queryset,
+)
 from apps.attendance.services import (
+    counted_attendance_record_q,
     get_attendance_evaluation_percent,
     get_attendance_summaries,
 )
@@ -200,7 +205,7 @@ def _home_context(data: dict) -> dict:
     for certificate in data.get("certificates", []):
         actions.append({
             "kind": "certificate", "priority": "normal", "title": _("Certificate available"),
-            "description": certificate.diploma_enrollment.cohort.diploma.title if certificate.diploma_enrollment_id else _("Your completed program"),
+            "description": certificate.program_title or _("Your completed program"),
             "url": reverse("certificates:student_certificate_download", args=[certificate.id]),
             "cta_label": _("Download certificate"), "due_at": None, "blocked_reason": None,
         })
@@ -254,6 +259,7 @@ def _home_context(data: dict) -> dict:
                 progress_by_enrollment.setdefault(eid, set()).add(lid)
 
     visible_sem_ids_by_enrollment = get_visible_semester_ids_by_enrollment(enrollments)
+    diploma_progress_by_enrollment = diploma_progress_for_enrollments(student, enrollments)
 
     for enrollment in enrollments:
         if enrollment.status != ENROLLMENT_STATUS_ACTIVE:
@@ -269,7 +275,7 @@ def _home_context(data: dict) -> dict:
         if lectures:
             completed_ids = progress_by_enrollment.get(enrollment.id, set()) & {lec.id for lec in lectures}
         next_lecture = next((lec for lec in lectures if lec.id not in completed_ids), None)
-        progress = diploma_progress_for_enrollment(student, enrollment)
+        progress = diploma_progress_by_enrollment[enrollment.id]
         diploma_attempt = next((attempt for attempt in all_attempts if attempt.status in {"assigned", "in_progress"} and attempt.assessment.cohort_id == enrollment.cohort_id), None)
         if not diploma_attempt and enrollment.cohort_id in open_by_cohort:
             a = open_by_cohort[enrollment.cohort_id]
@@ -654,24 +660,29 @@ def get_application_row(application: ProgramApplication) -> dict:
 
 def _get_assessment_attempts(user: User) -> list[AssessmentAttempt]:
     """Return a safe profile projection for submitted assessment attempts."""
-    attempts = (
+    attempts = list(
         get_student_attempts(user)
         .filter(submitted_at__isnull=False)
         .select_related("assessment__course_version__course")[:50]
     )
-    return [
-        SimpleNamespace(
-            id=attempt.id,
-            assessment=attempt.assessment,
-            status=attempt.status,
-            status_label=attempt.get_status_display(),
-            submitted_at=attempt.submitted_at,
-            visible_to_student=bool(attempt.visible_to_student),
-            score_percent=attempt.score_percent if attempt.visible_to_student else None,
-            result_url=reverse("assessments:results", args=[attempt.assessment_id]) if attempt.visible_to_student else None,
+    projected = []
+    for attempt in attempts:
+        visible = attempt_grades_visible(attempt)
+        projected.append(
+            SimpleNamespace(
+                id=attempt.id,
+                assessment=attempt.assessment,
+                status=attempt.status,
+                status_label=attempt.get_status_display(),
+                submitted_at=attempt.submitted_at,
+                visible_to_student=visible,
+                score_percent=attempt.score_percent if visible else None,
+                # The review page is safe before release: it shows only the
+                # student's own locked answers, never scores or correctness.
+                result_url=reverse("assessments:results", args=[attempt.assessment_id]),
+            )
         )
-        for attempt in attempts
-    ]
+    return projected
 
 
 # ---------------------------------------------------------------------------
@@ -715,7 +726,7 @@ def _get_offline_exam_records(user: User) -> list[SimpleNamespace]:
                 assessment_constants.ATTEMPT_STATUS_GRADED,
                 assessment_constants.ATTEMPT_STATUS_RELEASED,
             ],
-        ).order_by("-created_at")
+        ).select_related("assessment").order_by("-created_at")
     }
     records = []
     for code in codes:
@@ -724,7 +735,7 @@ def _get_offline_exam_records(user: User) -> list[SimpleNamespace]:
         graded_count = sum(1 for section in sections if section.id in grades)
         complete = bool(sections) and graded_count == len(sections)
         attempt = attempts_by_assessment.get(code.assessment_id)
-        released = bool(attempt and attempt.visible_to_student)
+        released = bool(attempt and attempt_grades_visible(attempt))
         if released:
             status = attempt.status
             status_label = attempt.get_status_display()
@@ -780,20 +791,23 @@ def _get_homework_submissions(user: User) -> list[HomeworkSubmission]:
 
 def _get_attendance(student_profile: StudentProfile) -> dict:
     attendance_qs = AttendanceRecord.objects.filter(student=student_profile)
-    records = list(
-        attendance_qs
-        .select_related("session")
-        .order_by("-session__date", "-id")[:50]
+    records = annotate_attendance_history_records(
+        list(student_attendance_history_queryset(student_profile)[:50])
     )
     totals = attendance_qs.aggregate(
         total=Count("id"),
+        countable=Count("id", filter=counted_attendance_record_q()),
         present=Count("id", filter=Q(status="present")),
         late=Count("id", filter=Q(status="late")),
         excused=Count("id", filter=Q(status="excused")),
-        absent=Count("id", filter=Q(status="absent")),
+        invalid=Count("id", filter=Q(status="invalid")),
     )
-    counts = {status: totals[status] or 0 for status in ("present", "late", "excused", "absent")}
+    counts = {
+        status: totals[status] or 0
+        for status in ("present", "late", "excused", "invalid")
+    }
     total = totals["total"] or 0
+    countable = totals["countable"] or 0
     # The card percentage is the canonical evaluation-equivalent percentage
     # (DECISION §13), not a record-based all-time count; the record list and
     # counts stay the recent attendance history display.
@@ -801,6 +815,8 @@ def _get_attendance(student_profile: StudentProfile) -> dict:
         "records": records,
         "counts": counts,
         "total": total,
+        "countable_record_count": countable,
+        "excluded_record_count": max(total - countable, 0),
         "attendance_percent": _canonical_attendance_percent(student_profile),
     }
 
@@ -815,13 +831,14 @@ def _canonical_attendance_percent(student_profile: StudentProfile) -> Decimal:
     """
     enrollments = _get_student_visible_diploma_enrollments(list(
         student_profile.diploma_enrollments.filter(status=ENROLLMENT_STATUS_ACTIVE)
-        .select_related("cohort")
+        .select_related("cohort__diploma")
     ))
+    visible_semesters_by_enrollment = get_visible_semesters_by_enrollment(enrollments)
     pairs_by_semester: dict[int, list[DiplomaEnrollment]] = {}
     semester_by_id: dict[int, Semester] = {}
     cohort_ids: set[int] = set()
     for enrollment in enrollments:
-        visible_semesters = get_student_diploma_access(enrollment)["visible_semesters"]
+        visible_semesters = visible_semesters_by_enrollment.get(enrollment.id, [])
         for semester in visible_semesters:
             pairs_by_semester.setdefault(semester.id, []).append(enrollment)
             semester_by_id[semester.id] = semester
@@ -926,6 +943,7 @@ def _get_record_history(student_profile: StudentProfile) -> dict:
         for interview in SemesterInterview.objects.select_related("outcome").filter(
             outcome__student=student_profile,
             outcome__diploma_enrollment_id__in=enrollment_ids,
+            superseded_at__isnull=True,
         )
     }
     rejoins = list(
@@ -1049,7 +1067,11 @@ def _get_certificates(student_profile: StudentProfile) -> list[GeneratedCertific
         GeneratedCertificate.objects.filter(
             student=student_profile,
             status=CERTIFICATE_STATUS_AVAILABLE,
-        ).select_related("diploma_enrollment__cohort__diploma", "certificate_template")
+        ).select_related(
+            "diploma_enrollment__cohort__diploma",
+            "course_enrollment__course_version__course",
+            "certificate_template",
+        )
     )
 
 

@@ -1,0 +1,30 @@
+{% load i18n %}
+<!DOCTYPE html>
+<html dir="{{ LANGUAGE_BIDI|yesno:'rtl,ltr' }}">
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: A4 landscape; margin: 1.5cm; }
+  body { font-family: 'Arial', sans-serif; text-align: center; padding: 40px; }
+  .border { border: 3px double #8B4513; padding: 30px; min-height: 400px; }
+  h1 { font-size: 28px; color: #8B4513; margin-bottom: 10px; }
+  h2 { font-size: 22px; color: #333; margin-bottom: 20px; }
+  h3 { font-size: 24px; color: #000; margin: 15px 0; }
+  .number { font-size: 12px; color: #999; margin-bottom: 30px; }
+  .footer { margin-top: 40px; font-size: 12px; color: #666; }
+</style>
+</head>
+<body>
+<div class="border">
+  <div class="number">{{ certificate_number }}</div>
+  <h1>{{ course_title }}</h1>
+  <p>{% trans "The center certifies that" %}</p>
+  <h3>{{ student_name }}</h3>
+  <p>{% trans "has successfully completed the requirements of" %}</p>
+  <h2>{{ course_version }}</h2>
+  <p>{% trans "Completion date:" %} {{ completion_date }}</p>
+  <p>{% trans "Issue date:" %} {{ issue_date }}</p>
+  <div class="footer">{% trans "Placeholder Certificate" %}</div>
+</div>
+</body>
+</html>

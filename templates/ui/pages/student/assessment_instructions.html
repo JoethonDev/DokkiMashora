@@ -14,13 +14,18 @@
           <p class="eyebrow">{% trans "Before you begin" %}</p>
           <h2>{% trans "Assessment overview" %}</h2>
         </div>
-        {% include "ui/components/_status.html" with code=readiness.state label=readiness.state_label %}
       </div>
       <dl class="dl">
         <div>
           <dt class="dt">{% trans "Assessment type" %}</dt>
           <dd class="dd">{{ assessment.get_assessment_type_display }}</dd>
         </div>
+        {% if is_semester_evaluation_assessment %}
+          <div>
+            <dt class="dt">{% trans "Semester evaluation requirement" %}</dt>
+            <dd class="dd">{% if assessment.is_required_for_semester_evaluation %}{% trans "Required" %}{% else %}{% trans "Optional" %}{% endif %}</dd>
+          </div>
+        {% endif %}
         <div>
           <dt class="dt">{% trans "Duration" %}</dt>
           <dd class="dd">{% if assessment.duration_minutes %}{{ assessment.duration_minutes }} {% trans "minutes" %}{% else %}{% trans "No time limit" %}{% endif %}</dd>
@@ -34,6 +39,9 @@
           <dd class="dd">{{ assessment.passing_score }}%</dd>
         </div>
       </dl>
+      {% if is_semester_evaluation_assessment %}
+        <p class="text-sm text-muted mt-3">{% trans "Whether missing this assessment blocks your semester result depends on the progression policy for your diploma and semester." %}</p>
+      {% endif %}
       {% if assessment.description %}
         <div class="mt-5 pt-5 border-t border-line">
           <h3 class="text-base font-bold mb-2">{% trans "Instructions" %}</h3>
@@ -120,8 +128,8 @@
             <form method="post" action="{% url 'assessments:start' assessment.id %}">{% csrf_token %}<button class="btn-primary" type="submit">{% trans "Start assessment" %}</button></form>
           {% elif readiness.state == "continue" %}
             <a class="btn-primary" href="{% if readiness.action_url %}{{ readiness.action_url }}{% else %}{% url 'assessments:take' assessment.id %}{% endif %}">{{ readiness.action_label|default:_('Continue') }}</a>
-          {% elif readiness.state == "completed" %}
-            <a class="btn-soft-primary" href="{{ readiness.action_url }}">{{ readiness.action_label|default:_('View result') }}</a>
+          {% elif readiness.primary_action %}
+            <a class="btn-soft-primary" href="{{ readiness.primary_action.url }}">{{ readiness.primary_action.label }}</a>
           {% endif %}
         </div>
       </article>

@@ -122,8 +122,9 @@ class EntranceExam(TimeStampedModel):
 
     def recompute_total_score(self) -> None:
         total = Decimal("0.00")
-        for q in self.questions.all():
-            if q.question_type == "mcq":
+        questions = self.questions.prefetch_related("choices")
+        for q in questions:
+            if q.question_type == QUESTION_TYPE_MCQ:
                 total += max((c.score for c in q.choices.all()), default=0)
             else:
                 total += q.max_score
@@ -207,6 +208,16 @@ class EntranceChoice(TimeStampedModel):
         validators=[MinValueValidator(0)],
     )
     order = models.PositiveIntegerField(_("order"), db_index=True)
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        self.question.exam.recompute_total_score()
+
+    def delete(self, *args, **kwargs):
+        exam = self.question.exam
+        result = super().delete(*args, **kwargs)
+        exam.recompute_total_score()
+        return result
 
     class Meta:
         verbose_name = _("entrance choice")

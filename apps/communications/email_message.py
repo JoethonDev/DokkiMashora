@@ -61,10 +61,6 @@ class EmailMessage(TimeStampedModel):
         verbose_name = _("email message")
         verbose_name_plural = _("email messages")
         ordering = ("-created_at",)
-        indexes = [
-            models.Index(fields=("to_email",)),
-            models.Index(fields=("status",)),
-        ]
 
     def __str__(self) -> str:
         return f"{self.to_email} - {self.subject[:40]}"

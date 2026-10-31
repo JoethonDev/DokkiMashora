@@ -15,6 +15,7 @@ from apps.accounts.constants import GROUP_ADMIN, GROUP_SUPER_ADMIN
 from apps.audit.constants import (
     ACTION_PAYMENT_UPLOAD_CONFIRMED,
     ACTION_PAYMENT_UPLOAD_PREVIEWED,
+    SECTION_PAYMENTS,
 )
 from apps.audit.services import record_audit_event
 from apps.communications.constants import TEMPLATE_PAYMENT_NOTIFICATION
@@ -29,6 +30,7 @@ from .constants import (
     PAYMENT_STATUS_CHOICES,
     UPLOAD_STATUS_CHOICES,
     UPLOAD_STATUS_FAILED,
+    UPLOAD_STATUS_PENDING,
     UPLOAD_STATUS_PREVIEWED,
     WAIVER_STATUS_CHOICES,
 )
@@ -132,10 +134,15 @@ def upload_create(request):
                     action=ACTION_PAYMENT_UPLOAD_PREVIEWED,
                     target_type="PaymentUpload",
                     target_id=str(upload.id),
+                    section=SECTION_PAYMENTS,
+                    target_label=upload.original_filename,
                     metadata={
                         "filename": upload.original_filename,
+                        "status_before": UPLOAD_STATUS_PENDING,
+                        "status_after": upload.status,
                         "total_rows": upload.total_rows,
                         "matched_rows": upload.matched_rows,
+                        "unmatched_rows": upload.unmatched_rows,
                         "failed_rows": upload.failed_rows,
                     },
                 )
@@ -191,8 +198,14 @@ def upload_confirm(request, upload_id):
             action=ACTION_PAYMENT_UPLOAD_CONFIRMED,
             target_type="PaymentUpload",
             target_id=str(upload.id),
+            section=SECTION_PAYMENTS,
+            target_label=upload.original_filename,
             metadata={
                 "filename": upload.original_filename,
+                "status_before": UPLOAD_STATUS_PREVIEWED,
+                "status_after": upload.status,
+                "total_rows": upload.total_rows,
+                "matched_rows": upload.matched_rows,
                 "created_rows": upload.created_rows,
                 "updated_rows": upload.updated_rows,
                 "failed_rows": upload.failed_rows,

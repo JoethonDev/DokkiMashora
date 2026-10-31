@@ -1,0 +1,96 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n %}
+{% block title %}
+  {% trans "Email log" %}
+{% endblock %}
+{% block content %}
+  <div class="page-stack animate-enter-view">{% trans "Settings" as eyebrow %}
+    {% trans "Email log" as title %}
+    {% trans "Search every system and bulk email delivery." as description %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
+    <div class="actions-row">
+      <a class="btn-secondary" href="{% url 'accounts:admin_settings' %}?tab=email">&larr; {% trans "Back to email settings" %}</a>
+    </div>
+    <section class="card-surface flex flex-col gap-4">
+      <form class="actions-row items-end flex-wrap" method="get">
+        <label class="min-w-56 flex-1"><span class="field-label">{% trans "Search" %}</span>
+          <input name="q" class="form-input" value="{{ current_search }}" placeholder="{% trans 'Recipient, subject, error, reference…' %}">
+        </label>
+        <label class="min-w-36"><span class="field-label">{% trans "Status" %}</span>
+          <select name="status" class="form-select">
+            <option value="">{% trans "All statuses" %}</option>
+            {% for value,label in status_choices %}
+              <option value="{{ value }}" {% if value == current_status %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="min-w-44"><span class="field-label">{% trans "Template" %}</span>
+          <select name="template_slug" class="form-select">
+            <option value="">{% trans "All templates" %}</option>
+            {% for slug in template_choices %}
+              <option value="{{ slug }}" {% if slug == current_template_slug %}selected{% endif %}>{{ slug }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="min-w-36"><span class="field-label">{% trans "Date from" %}</span>
+          <input name="date_from" class="form-input" value="{{ current_date_from }}" type="date">
+        </label>
+        <label class="min-w-36"><span class="field-label">{% trans "Date to" %}</span>
+          <input name="date_to" class="form-input" value="{{ current_date_to }}" type="date">
+        </label>
+        <button class="btn-secondary" type="submit">{% trans "Filter" %}</button>
+        <a class="btn-ghost" href="{% url 'communications:admin_email_log' %}">{% trans "Reset" %}</a>
+      </form>
+      <div class="table-wrap hidden lg:block"><table class="table">
+          <thead>
+            <tr>
+              <th class="table-th">{% trans "Time" %}</th>
+              <th class="table-th">{% trans "Recipient" %}</th>
+              <th class="table-th">{% trans "Subject" %}</th>
+              <th class="table-th">{% trans "Template" %}</th>
+              <th class="table-th">{% trans "Status" %}</th>
+              <th class="table-th">{% trans "Attempts" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in page_obj %}
+              <tr>
+                <td class="table-td whitespace-nowrap">{{ item.created_at|date:"Y-m-d H:i:s" }}</td>
+                <td class="table-td">{{ item.to_email }}</td>
+                <td class="table-td"><a href="{% url 'communications:admin_email_log_detail' item.id %}">{{ item.subject }}</a></td>
+                <td class="table-td">{{ item.template_slug|default:"—" }}</td>
+                <td class="table-td">
+                  <span class="{% if item.status == 'failed' %}status-pill-danger{% elif item.status == 'sent' %}status-pill-success{% elif item.status == 'processing' %}status-pill-warning{% else %}status-pill-info{% endif %}">
+                    {{ item.get_status_display }}
+                  </span>
+                  {% if item.error %}<small class="block text-red break-words">{{ item.error|truncatechars:120 }}</small>{% endif %}
+                </td>
+                <td class="table-td">{{ item.attempts }}</td>
+              </tr>
+            {% empty %}
+              <tr><td class="table-td" colspan="6">{% include "ui/components/_empty_state.html" with title=_("No email deliveries found.") %}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="card-stack lg:hidden">
+        {% for item in page_obj %}
+          <div class="mobile-card">
+            <div class="flex-1 min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="{% if item.status == 'failed' %}status-pill-danger{% elif item.status == 'sent' %}status-pill-success{% else %}status-pill-info{% endif %}">{{ item.get_status_display }}</span>
+                <small class="text-muted">{{ item.created_at|date:"Y-m-d H:i:s" }}</small>
+              </div>
+              <strong class="block mt-1">{{ item.subject }}</strong>
+              <small class="block text-muted">{{ item.to_email }} · {{ item.template_slug|default:"—" }}</small>
+              <a class="btn-ghost mt-1" href="{% url 'communications:admin_email_log_detail' item.id %}">{% trans "View" %}</a>
+            </div>
+          </div>
+        {% empty %}
+          <div class="border border-line rounded-sm p-4 text-center">{% include "ui/components/_empty_state.html" with title=_("No email deliveries found.") fill=True %}</div>
+        {% endfor %}
+      </div>
+      {% include "ui/components/_pagination.html" %}
+    </section>
+  </div>
+{% endblock %}

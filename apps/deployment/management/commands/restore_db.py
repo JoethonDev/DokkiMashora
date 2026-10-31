@@ -40,10 +40,12 @@ class Command(BaseCommand):
         backend = parsed.scheme.split("+")[0]
 
         if not options["yes"]:
-            self.stdout.write(self.style.WARNING(
-                f"This will REPLACE the {backend} database at {parsed.hostname or parsed.path} "
-                f"with {backup}. Existing data will be lost."
-            ))
+            self.stdout.write(
+                self.style.WARNING(
+                    f"This will REPLACE the {backend} database at {parsed.hostname or parsed.path} "
+                    f"with {backup}. Existing data will be lost."
+                )
+            )
             confirm = input("Type 'yes' to continue: ")
             if confirm.strip().lower() != "yes":
                 raise CommandError("Aborted.")
@@ -56,7 +58,9 @@ class Command(BaseCommand):
             else:
                 cmd = ["psql", database_url, "-f", str(backup)]
             try:
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=OPERATION_TIMEOUT_SECONDS)
+                result = subprocess.run(
+                    cmd, capture_output=True, text=True, timeout=OPERATION_TIMEOUT_SECONDS
+                )
             except subprocess.TimeoutExpired as exc:
                 raise CommandError(
                     f"Restore timed out after {OPERATION_TIMEOUT_SECONDS}s and was terminated."

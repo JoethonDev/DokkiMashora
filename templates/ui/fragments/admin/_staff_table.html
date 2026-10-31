@@ -36,7 +36,7 @@
                   —
                 {% endfor %}
               </td>
-              <td class="table-td">{% include "ui/components/_status.html" with code=staff.status label=staff.get_status_display %}</td>
+              <td class="table-td">{% include "ui/components/_status.html" with code=staff.is_active|yesno:"active,inactive" label=staff.is_active|boolean_label:"Active,Inactive" %}</td>
               <td class="table-td"><span dir="ltr" class="inline-block">{{ staff.last_login|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</span></td>
               <td class="table-td">
                 <div class="flex gap-2.5 items-center flex-wrap"><a class="btn-secondary"
@@ -58,7 +58,7 @@
           <div class="flex-1 min-w-0">
             <strong class="block truncate">{{ staff.full_name }}</strong>
             <small class="block text-muted truncate">{% for g in staff.groups.all %}{{ g.name }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</small>
-            {% include "ui/components/_status.html" with code=staff.status label=staff.get_status_display %}
+            {% include "ui/components/_status.html" with code=staff.is_active|yesno:"active,inactive" label=staff.is_active|boolean_label:"Active,Inactive" %}
           </div>
           <div class="flex gap-2 shrink-0">
             <a class="btn-soft-primary" href="{% url 'accounts:admin_user_detail' staff.id %}">{% trans "View" %}</a>

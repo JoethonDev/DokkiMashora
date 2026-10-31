@@ -20,7 +20,7 @@
               <td class="table-td"><div class="flex flex-col gap-0.5"><strong>{{ a.title }}</strong>
                 {% if a.description %}{% include "ui/components/_expandable_text.html" with text=a.description clamp=2 muted=True %}{% else %}<small class="text-muted">—</small>{% endif %}</div>
               </td>
-              <td class="table-td">{{ a.get_assessment_type_display }}{% if a.is_legacy %}<span class="ms-1 inline-block rounded bg-amber-soft text-amber px-1.5 py-0.5 text-xs" title="{{ a.legacy_note }}">{% trans "legacy" %}</span>{% endif %}</td>
+              <td class="table-td">{{ a.get_assessment_type_display }}{% if a.is_completion_exam %}<span class="ms-1 inline-block rounded bg-info-soft text-info-text px-1.5 py-0.5 text-xs font-bold">{% trans "End-course exam" %}</span>{% endif %}{% if a.is_legacy %}<span class="ms-1 inline-block rounded bg-amber-soft text-amber px-1.5 py-0.5 text-xs" title="{{ a.legacy_note }}">{% trans "legacy" %}</span>{% endif %}</td>
               <td class="table-td">{{ a.attempt_count }}</td>
               <td class="table-td">
                 {% include "ui/components/_status.html" with code=a.is_active|yesno:"active,inactive" label=a.is_active|boolean_label:"Active,Inactive" %}
@@ -47,7 +47,7 @@
           <div class="flex-1 min-w-0">
             <strong class="block">{{ a.title }}</strong>
             {% if a.description %}{% include "ui/components/_expandable_text.html" with text=a.description clamp=2 muted=True %}{% endif %}
-            <small class="block text-muted">{{ a.get_assessment_type_display }}{% if a.is_legacy %} &middot; {% trans "legacy" %}{% endif %} &middot; {{ a.attempt_count }} {% trans "attempts" %}</small>
+            <small class="block text-muted">{{ a.get_assessment_type_display }}{% if a.is_completion_exam %} &middot; {% trans "End-course exam" %}{% endif %}{% if a.is_legacy %} &middot; {% trans "legacy" %}{% endif %} &middot; {{ a.attempt_count }} {% trans "attempts" %}</small>
             {% include "ui/components/_status.html" with code=a.is_active|yesno:"active,inactive" label=a.is_active|boolean_label:"Active,Inactive" %}
           </div>
           <div class="flex gap-2 items-center shrink-0">

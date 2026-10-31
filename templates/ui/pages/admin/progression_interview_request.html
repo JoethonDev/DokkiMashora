@@ -7,8 +7,9 @@
   <div class="page-stack animate-enter-view">{% trans "Academic operations" as eyebrow %}
     {% trans "Progression" as title %}
     {% trans "Review semester progress, decisions, evaluations, interviews, and rejoin plans." as description %}
-    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description back_button=True %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description back_button=True back_url=back_url back_label=_("Back") %}
     <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
+      {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
       <label class="field"><span class="field-label">{% trans "Interview date/time" %}</span>
         <input type="datetime-local" name="interview_at" class="form-input"></label>
       <label class="field"><span class="field-label">{% trans "Notes" %}</span>

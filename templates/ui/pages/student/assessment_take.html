@@ -24,7 +24,7 @@
         <strong id="assessment-timer-value" class="shrink-0 text-2xl font-black tabular-nums" dir="ltr">--:--</strong>
       </div>
     {% endif %}
-    <section class="card-surface"><div class="max-w-2xl mx-auto">
+    <section class="card-surface"><div class="max-w-2xl mx-auto w-full">
       {% if assessment.assessment_type == "homework" %}
         {% if homework_submission and homework_submission.status != "uploaded" %}
           {% include "ui/components/_state_banner.html" with state=homework_submission.status label=homework_submission.get_status_display description=_("Your homework has been submitted. You can no longer add or remove files.") %}

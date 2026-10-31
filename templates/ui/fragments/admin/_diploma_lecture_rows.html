@@ -1,0 +1,84 @@
+{% load i18n %}
+{% comment %}
+Lecture rows for a diploma cohort/semester. While a YouTube metadata check is
+still in flight the container polls itself so the status resolves without a
+manual page reload; the server drops the polling attributes once the check
+settles (ready or unavailable) or the retry window opens, so the polling
+self-terminates.
+{% endcomment %}
+<div id="lecture-rows"{% if poll_youtube_metadata %} hx-get="{{ request.get_full_path }}" hx-trigger="every 5s" hx-swap="outerHTML"{% endif %}>
+  <div class="table-wrap hidden lg:block"><table class="table">
+      <thead>
+        <tr>
+          <th class="table-th">{% trans "Order" %}</th>
+          <th class="table-th">{% trans "Title" %}</th>
+          <th class="table-th">{% trans "Actions" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in lectures %}
+          <tr>
+            <td class="table-td">{{ item.order }}</td>
+            <td class="table-td">
+              <div class="flex flex-col items-start gap-2">
+                <span>{{ item.title }}</span>
+                {% if item.youtube_url or item.youtube_video_id %}
+                  {% if item.youtube_metadata_status %}
+                    {% include "ui/components/_status.html" with code=item.youtube_metadata_status label=item.get_youtube_metadata_status_display %}
+                  {% endif %}
+                  {% if item.youtube_video_id and item.id in retryable_youtube_metadata_ids %}
+                    <form method="post" action="{% url 'academics:admin_diploma_lecture_metadata_retry' diploma.id cohort.id semester.id item.id %}" class="m-0">
+                      {% csrf_token %}
+                      <button class="btn-ghost" type="submit">{% trans "Retry video check" %}</button>
+                    </form>
+                  {% endif %}
+                {% endif %}
+              </div>
+            </td>
+            <td class="table-td">
+              <div class="flex gap-2.5 items-center flex-wrap">
+                <a class="btn-ghost"
+                   href="{% url 'academics:admin_diploma_lecture_edit' diploma.id cohort.id semester.id item.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Edit" %}</a>
+                <a class="btn-secondary"
+                   href="{% url 'academics:admin_diploma_lecture_preview' diploma.id cohort.id semester.id item.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Preview" %}</a>
+                <a class="btn-ghost"
+                   href="{% url 'assessments:admin_lecture_bank_list' diploma.id cohort.id semester.id item.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Questions" %}</a>
+                <form method="post" action="{% url 'academics:admin_diploma_lecture_delete' diploma.id cohort.id semester.id item.id %}" data-confirm="{% trans 'Delete this lecture?' %}" class="m-0">{% csrf_token %}
+                  <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card-stack lg:hidden">
+    {% for item in lectures %}
+      <div class="mobile-card">
+        <div class="flex-1 min-w-0">
+          <strong class="block truncate">{{ item.title }}</strong>
+          <small class="block text-muted">#{{ item.order }}</small>
+          {% if item.youtube_url or item.youtube_video_id %}
+            {% if item.youtube_metadata_status %}
+              <small class="block text-muted">{{ item.get_youtube_metadata_status_display }}</small>
+            {% endif %}
+            {% if item.youtube_video_id and item.id in retryable_youtube_metadata_ids %}
+              <form method="post" action="{% url 'academics:admin_diploma_lecture_metadata_retry' diploma.id cohort.id semester.id item.id %}" class="m-0">
+                {% csrf_token %}
+                <button class="btn-ghost" type="submit">{% trans "Retry video check" %}</button>
+              </form>
+            {% endif %}
+          {% endif %}
+        </div>
+        <div class="flex gap-2 shrink-0">
+          <a class="btn-ghost" href="{% url 'academics:admin_diploma_lecture_edit' diploma.id cohort.id semester.id item.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Edit" %}</a>
+          <a class="btn-soft-primary shrink-0" href="{% url 'academics:admin_diploma_lecture_preview' diploma.id cohort.id semester.id item.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Preview" %}</a>
+          <form method="post" action="{% url 'academics:admin_diploma_lecture_delete' diploma.id cohort.id semester.id item.id %}" data-confirm="{% trans 'Delete this lecture?' %}" class="m-0">{% csrf_token %}
+            <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
+          </form>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>

@@ -12,6 +12,10 @@ from .base import (
 DEBUG = False
 PRODUCTION_DEPLOYMENT = True
 
+# Use the active database-managed SMTP configuration when one exists; fall
+# back to the environment settings otherwise.
+EMAIL_BACKEND = "apps.communications.email_backend.DatabaseEmailBackend"
+
 # Fail fast on a missing, example, or weak signing key (RV-021). The Django
 # placeholder and this repo's example values must never reach production,
 # because the storage signed URLs and all signed tokens derive from it.

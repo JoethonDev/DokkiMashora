@@ -8,28 +8,53 @@ compact contextual set. Service-side validation remains the authority.
 {% with targets=actions.targets|dict_key:key %}
 {% if key == "evaluate" %}
   {% for target in targets %}
-  <form class="flex items-end gap-2 flex-wrap" method="post" action="{% url 'progression:admin_evaluate_semester' student.id %}">{% csrf_token %}
-    <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}">
-    <input type="hidden" name="semester_id" value="{{ target.id }}">
+  <form class="flex items-end gap-2 flex-wrap" method="post" action="{% if is_contextual_detail %}{% url 'progression:admin_contextual_evaluate_semester' selected_diploma.id selected_cohort.id selected_semester.id student.id selected_enrollment.id %}{% else %}{% url 'progression:admin_evaluate_semester' student.id %}{% endif %}">{% csrf_token %}
+    {% if not is_contextual_detail %}<input type="hidden" name="enrollment_id" value="{{ enrollment.id }}"><input type="hidden" name="semester_id" value="{{ target.id }}">{% else %}<input type="hidden" name="next" value="{{ context_detail_url }}">{% endif %}
     <button class="btn-secondary" type="submit">{% trans "Evaluate" %}: {{ target }}</button>
   </form>
   {% endfor %}
 {% elif key == "promote" %}
   {% for target in targets %}
-  <form class="flex items-end gap-2 flex-wrap" method="post" action="{% url 'progression:admin_promote' student.id %}">{% csrf_token %}
-    <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}">
-    <input type="hidden" name="semester_id" value="{{ target.id }}">
-    <label class="field flex-1 min-w-40"><span class="field-label">{% trans "Reason (required for exceptional decisions)" %}</span><input name="reason" class="form-input" value=""></label>
+  <form class="flex items-end gap-2 flex-wrap" method="post" action="{% if is_contextual_detail %}{% url 'progression:admin_contextual_promote' selected_diploma.id selected_cohort.id selected_semester.id student.id selected_enrollment.id %}{% else %}{% url 'progression:admin_promote' student.id %}{% endif %}">{% csrf_token %}
+    {% if not is_contextual_detail %}<input type="hidden" name="enrollment_id" value="{{ enrollment.id }}"><input type="hidden" name="semester_id" value="{{ target.id }}">{% else %}<input type="hidden" name="next" value="{{ context_detail_url }}">{% endif %}
+    <label class="field flex-1 min-w-40"><span class="field-label">{% trans "Reason" %}</span><input name="reason" class="form-input" value=""></label>
     <button class="btn-success" type="submit">{% trans "Promote" %}: {{ target }}</button>
   </form>
   {% endfor %}
 {% elif key == "demote" %}
   {% for target in targets %}
-  <form class="flex items-end gap-2 flex-wrap" method="post" action="{% url 'progression:admin_demote' student.id %}">{% csrf_token %}
-    <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}">
-    <input type="hidden" name="semester_id" value="{{ target.id }}">
-    <label class="field flex-1 min-w-40"><span class="field-label">{% trans "Reason (required for exceptional decisions)" %}</span><input name="reason" class="form-input" value=""></label>
+  <form class="flex items-end gap-2 flex-wrap" method="post" action="{% if is_contextual_detail %}{% url 'progression:admin_contextual_demote' selected_diploma.id selected_cohort.id selected_semester.id student.id selected_enrollment.id %}{% else %}{% url 'progression:admin_demote' student.id %}{% endif %}">{% csrf_token %}
+    {% if not is_contextual_detail %}<input type="hidden" name="enrollment_id" value="{{ enrollment.id }}"><input type="hidden" name="semester_id" value="{{ target.id }}">{% else %}<input type="hidden" name="next" value="{{ context_detail_url }}">{% endif %}
+    <label class="field flex-1 min-w-40"><span class="field-label">{% trans "Reason" %}</span><input name="reason" class="form-input" value=""></label>
     <button class="btn-warning" type="submit">{% trans "Demote" %}: {{ target }}</button>
+  </form>
+  {% endfor %}
+{% elif key == "exceptional_promote" %}
+  {% for target in targets %}
+  <form class="flex items-end gap-2 flex-wrap"
+        method="post"
+        action="{% if is_contextual_detail %}{% url 'progression:admin_contextual_exceptional_promote' selected_diploma.id selected_cohort.id selected_semester.id student.id selected_enrollment.id %}{% else %}{% url 'progression:admin_exceptional_promote' student.id %}{% endif %}"
+        data-confirm="{% trans 'An explicit reason is required for an exceptional final decision.' %}"
+        data-confirm-label="{% trans 'Promote' %}"
+        data-confirm-reason-required="true"
+        data-confirm-reason-name="reason">{% csrf_token %}
+    {% if not is_contextual_detail %}<input type="hidden" name="enrollment_id" value="{{ enrollment.id }}"><input type="hidden" name="semester_id" value="{{ target.id }}">{% else %}<input type="hidden" name="next" value="{{ context_detail_url }}">{% endif %}
+    <input type="hidden" name="reason" value="">
+    <button class="btn-warning" type="submit">{% trans "Promote" %}: {{ target }}</button>
+  </form>
+  {% endfor %}
+{% elif key == "exceptional_demote" %}
+  {% for target in targets %}
+  <form class="flex items-end gap-2 flex-wrap"
+        method="post"
+        action="{% if is_contextual_detail %}{% url 'progression:admin_contextual_demote' selected_diploma.id selected_cohort.id selected_semester.id student.id selected_enrollment.id %}{% else %}{% url 'progression:admin_demote' student.id %}{% endif %}"
+        data-confirm="{% trans 'An explicit reason is required for an exceptional final decision.' %}"
+        data-confirm-label="{% trans 'Final Fail' %}"
+        data-confirm-reason-required="true"
+        data-confirm-reason-name="reason">{% csrf_token %}
+    {% if not is_contextual_detail %}<input type="hidden" name="enrollment_id" value="{{ enrollment.id }}"><input type="hidden" name="semester_id" value="{{ target.id }}">{% else %}<input type="hidden" name="next" value="{{ context_detail_url }}">{% endif %}
+    <input type="hidden" name="reason" value="">
+    <button class="btn-warning" type="submit">{% trans "Final Fail" %}: {{ target }}</button>
   </form>
   {% endfor %}
 {% elif key == "lock" %}
@@ -46,18 +71,16 @@ compact contextual set. Service-side validation remains the authority.
   </form>
 {% elif key == "assign_retake" %}
   {% for target in targets %}
-  <form class="flex items-end gap-2 flex-wrap" method="post" action="{% url 'progression:admin_assign_retake' student.id %}">{% csrf_token %}
-    <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}">
-    <input type="hidden" name="semester_id" value="{{ target.id }}">
+  <form class="flex items-end gap-2 flex-wrap" method="post" action="{% if is_contextual_detail %}{% url 'progression:admin_contextual_assign_retake' selected_diploma.id selected_cohort.id selected_semester.id student.id selected_enrollment.id %}{% else %}{% url 'progression:admin_assign_retake' student.id %}{% endif %}">{% csrf_token %}
+    {% if not is_contextual_detail %}<input type="hidden" name="enrollment_id" value="{{ enrollment.id }}"><input type="hidden" name="semester_id" value="{{ target.id }}">{% else %}<input type="hidden" name="next" value="{{ context_detail_url }}">{% endif %}
     <label class="field flex-1 min-w-40"><span class="field-label">{% trans "Retake reason" %}</span><input name="reason" class="form-input" value="" required></label>
     <button class="btn-warning" type="submit">{% trans "Assign retake" %}: {{ target }}</button>
   </form>
   {% endfor %}
 {% elif key == "clear_retake" %}
   {% for target in targets %}
-  <form class="flex items-end gap-2 flex-wrap" method="post" action="{% url 'progression:admin_clear_retake' student.id %}">{% csrf_token %}
-    <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}">
-    <input type="hidden" name="semester_id" value="{{ target.id }}">
+  <form class="flex items-end gap-2 flex-wrap" method="post" action="{% if is_contextual_detail %}{% url 'progression:admin_contextual_clear_retake' selected_diploma.id selected_cohort.id selected_semester.id student.id selected_enrollment.id %}{% else %}{% url 'progression:admin_clear_retake' student.id %}{% endif %}">{% csrf_token %}
+    {% if not is_contextual_detail %}<input type="hidden" name="enrollment_id" value="{{ enrollment.id }}"><input type="hidden" name="semester_id" value="{{ target.id }}">{% else %}<input type="hidden" name="next" value="{{ context_detail_url }}">{% endif %}
     <label class="field flex-1 min-w-40"><span class="field-label">{% trans "Reason" %}</span><input name="reason" class="form-input" value=""></label>
     <button class="btn-secondary" type="submit">{% trans "Clear retake" %}: {{ target }}</button>
   </form>
@@ -65,23 +88,27 @@ compact contextual set. Service-side validation remains the authority.
 {% elif key == "mark_complete" %}
   <form class="flex items-end gap-2 flex-wrap" method="post" action="{% url 'progression:admin_mark_complete' student.id %}">{% csrf_token %}
     <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}">
+    {% if is_contextual_detail %}<input type="hidden" name="next" value="{{ context_detail_url }}">{% endif %}
     <label class="field flex-1 min-w-40"><span class="field-label">{% trans "Completion notes" %}</span><input name="notes" class="form-input" value=""></label>
     <button class="btn-success" type="submit">{% trans "Mark complete" %}</button>
   </form>
 {% elif key == "mark_graduate" %}
   <form class="flex items-end gap-2 flex-wrap" method="post" action="{% url 'progression:admin_mark_graduate' student.id %}">{% csrf_token %}
     <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}">
+    {% if is_contextual_detail %}<input type="hidden" name="next" value="{{ context_detail_url }}">{% endif %}
     <label class="field flex-1 min-w-40"><span class="field-label">{% trans "Graduation notes" %}</span><input name="notes" class="form-input" value=""></label>
     <button class="btn-success" type="submit">{% trans "Mark graduated" %}</button>
   </form>
 {% elif key == "generate_certificate" %}
   <form method="post" action="{% url 'certificates:admin_generate_certificate' student.id %}">{% csrf_token %}
-    <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}"><button class="btn-primary" type="submit">{% trans "Generate certificate" %}</button>
+    <input type="hidden" name="enrollment_id" value="{{ enrollment.id }}">
+    {% if is_contextual_detail %}<input type="hidden" name="next" value="{{ context_detail_url }}">{% endif %}
+    <button class="btn-primary" type="submit">{% trans "Generate certificate" %}</button>
   </form>
 {% elif key == "create_rejoin_plan" %}
   {% for target in targets %}
   <a class="btn-secondary"
-     href="{% url 'progression:admin_create_rejoin_plan' enrollment.id %}?semester_id={{ target.id }}">{% trans "Create rejoin plan" %}: {{ target }}
+     href="{% if is_contextual_detail %}{% url 'progression:admin_contextual_create_rejoin_plan' selected_diploma.id selected_cohort.id selected_semester.id selected_enrollment.id %}{% else %}{% url 'progression:admin_create_rejoin_plan_for_semester' enrollment.id target.id %}{% endif %}">{% trans "Create rejoin plan" %}: {{ target }}
   </a>
   {% endfor %}
 {% endif %}

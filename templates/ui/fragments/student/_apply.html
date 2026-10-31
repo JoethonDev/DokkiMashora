@@ -23,12 +23,10 @@
       <label class="field-label" for="target-id">{% trans "Program" %}</label>
       <div id="target-host"><select id="target-id" name="target_id" class="form-select" required>
           <option value="">{% trans "Select a program" %}</option>
-          {% for item in cohorts %}
+          {% for item in diplomas %}
             <option value="{{ item.id }}"
                     {% if selected_target_id == item.id|stringformat:'s' %} selected {% endif %}>
-              {{ item.diploma.title }}
-              ·
-              {{ item.name }}
+              {{ item.title }}
             </option>
           {% endfor %}
           {% for item in courses %}

@@ -7,16 +7,15 @@ from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
-from django.db.models import IntegerField, Q, Sum, Value
+from django.db.models import Count, F, IntegerField, Q, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-logger = logging.getLogger(__name__)
-
 from apps.academics import tasks as academic_tasks
 from apps.academics.constants import (
     ENROLLMENT_STATUS_ACTIVE,
+    ENROLLMENT_STATUS_COMPLETED,
     ENROLLMENT_STATUS_EXPIRED,
     SCOPE_COURSE_VERSION,
     SCOPE_DIPLOMA_COHORT,
@@ -31,11 +30,12 @@ from apps.academics.constants import (
     WATCH_STATUS_COMPLETED,
     WATCH_STATUS_IN_PROGRESS,
     WATCH_STATUS_VIOLATED,
+    YOUTUBE_METADATA_STATUS_PENDING,
+    YOUTUBE_METADATA_STATUS_READY,
+    YOUTUBE_METADATA_STATUS_UNAVAILABLE,
 )
-from apps.assessments.models import Assessment
 from apps.academics.models import (
     Cohort,
-    Course,
     CourseEnrollment,
     CourseVersion,
     DiplomaEnrollment,
@@ -44,18 +44,24 @@ from apps.academics.models import (
     Lecture,
     LectureAudioProgress,
     LectureWatchProgress,
-    Semester,
     ModeratorAssignment,
     ModeratorStudentAssignment,
+    Semester,
     TeacherAssignment,
 )
 from apps.accounts.models import User
+from apps.assessments.constants import ASSESSMENT_TYPE_QUIZ, LEGACY_STATUS_ACTIVE
+from apps.assessments.models import Assessment, AssessmentAttempt
+from apps.audit.constants import (
+    ACTION_ACADEMIC_DELETED,
+    ACTION_ENROLLMENT_CHANGE,
+    SECTION_ACADEMICS,
+)
 from apps.audit.services import record_audit_event
 from apps.progression.constants import (
     COMPONENT_TYPE_ATTENDANCE,
     COMPONENT_TYPE_HOMEWORK_ASSESSMENT,
     COMPONENT_TYPE_SEMESTER_EXAM,
-    PROMOTION_DECISION_ACADEMIC_YEAR_PROMOTE,
     SEMESTER_PROGRESS_COMPLETED,
     SEMESTER_PROGRESS_IN_PROGRESS,
     SEMESTER_PROGRESS_NOT_STARTED,
@@ -64,12 +70,12 @@ from apps.progression.constants import (
     SEMESTER_PROGRESS_PROMOTED,
 )
 from apps.progression.models import (
-    CohortAcademicYear,
-    PromotionDecision,
     SemesterGradeComponent,
     StudentSemesterProgress,
 )
 from apps.storage.services import record_deferred_storage_deletion, storage_service
+
+logger = logging.getLogger(__name__)
 
 
 def activate_diploma_enrollment(enrollment: DiplomaEnrollment) -> DiplomaEnrollment:
@@ -161,56 +167,23 @@ _DIPLOMA_IN_PROGRESS_STATUSES = {
 }
 
 
-def _requires_academic_year_promotion(
-    previous_semester: Semester,
-    next_semester: Semester,
-    years: list,
-    promotions: list,
-) -> bool:
-    """Pure year-boundary check (DUP-001 canonical).
-
-    Returns True when moving from previous to next crosses an academic year
-    and no matching PROMOTION_DECISION_ACADEMIC_YEAR_PROMOTE exists.
-    ``years`` is a list of CohortAcademicYear for the cohort, ``promotions``
-    is a list of PromotionDecision rows for the enrollment.
-    """
-    if not years:
-        return False
-    semesters_per_year = years[0].semesters_per_year
-    previous_year = ((previous_semester.order - 1) // semesters_per_year) + 1
-    next_year = ((next_semester.order - 1) // semesters_per_year) + 1
-    if previous_year == next_year:
-        return False
-    return not any(
-        p.from_semester_id == previous_semester.id and p.to_semester_id == next_semester.id
-        for p in promotions
-    )
-
-
 def _decide_visible_ids(
     semesters: list[Semester],
     progress_map: dict[int, StudentSemesterProgress],
-    years: list,
-    promotions: list,
 ) -> list[int]:
     """Canonical per-enrollment visibility decision (DUP-001).
 
-    Completed semesters are visible; the first non-completed semester is the
-    current one unless an academic-year promotion is pending, in which case
-    visibility stops before it. Single and batch paths share this exact logic.
+    Completed semesters remain visible, and the first non-completed semester
+    is the only current semester shown. Semester completion/progression state
+    is authoritative; legacy academic-year metadata and promotion rows never
+    create or block access. Single and batch paths share this exact logic.
     """
-    semester_by_id = {s.id: s for s in semesters}
     visible_ids: list[int] = []
     for semester in semesters:
         item = progress_map.get(semester.id)
         if item and item.status in _DIPLOMA_COMPLETED_STATUSES:
             visible_ids.append(semester.id)
             continue
-        # First non-completed semester is the candidate "current"
-        if visible_ids:
-            previous = semester_by_id.get(visible_ids[-1])
-            if previous and _requires_academic_year_promotion(previous, semester, years, promotions):
-                break
         visible_ids.append(semester.id)
         break
     return visible_ids
@@ -234,16 +207,7 @@ def get_student_diploma_access(enrollment):
         item.semester_id: item
         for item in StudentSemesterProgress.objects.filter(diploma_enrollment=enrollment)
     }
-    years = list(
-        CohortAcademicYear.objects.filter(cohort=enrollment.cohort).order_by("year_number")
-    )
-    promotions = list(
-        PromotionDecision.objects.filter(
-            diploma_enrollment=enrollment,
-            decision_type=PROMOTION_DECISION_ACADEMIC_YEAR_PROMOTE,
-        )
-    )
-    visible_ids = _decide_visible_ids(available_semesters, progress, years, promotions)
+    visible_ids = _decide_visible_ids(available_semesters, progress)
     semester_by_id = {s.id: s for s in semesters}
     visible = [semester_by_id[sid] for sid in visible_ids]
 
@@ -257,17 +221,7 @@ def get_student_diploma_access(enrollment):
             current = last
 
     blockers: list[str] = []
-    # Promotion blocker when visibility stopped before the next semester
-    if len(visible_ids) < len(available_semesters) and visible_ids:
-        next_semester = available_semesters[len(visible_ids)]
-        previous = semester_by_id.get(visible_ids[-1])
-        if previous and _requires_academic_year_promotion(previous, next_semester, years, promotions):
-            blockers.append("academic_year_promotion_pending")
-        elif current is not None:
-            item = progress.get(current.id)
-            if item and item.status not in _DIPLOMA_IN_PROGRESS_STATUSES:
-                blockers.append(item.status)
-    elif current is not None:
+    if current is not None:
         item = progress.get(current.id)
         if item and item.status not in _DIPLOMA_IN_PROGRESS_STATUSES:
             blockers.append(item.status)
@@ -303,19 +257,6 @@ def get_visible_semester_ids_by_enrollment(enrollments) -> dict[int, set[int]]:
     for prog in StudentSemesterProgress.objects.filter(diploma_enrollment_id__in=enrollment_ids):
         progress_by_enrollment.setdefault(prog.diploma_enrollment_id, {})[prog.semester_id] = prog
 
-    years_by_cohort: dict[int, list] = {}
-    for year in CohortAcademicYear.objects.filter(
-        cohort_id__in={e.cohort_id for e in enrollments},
-    ).order_by("cohort_id", "year_number"):
-        years_by_cohort.setdefault(year.cohort_id, []).append(year)
-
-    promotions_by_enrollment: dict[int, list] = {}
-    for promotion in PromotionDecision.objects.filter(
-        diploma_enrollment_id__in=enrollment_ids,
-        decision_type=PROMOTION_DECISION_ACADEMIC_YEAR_PROMOTE,
-    ):
-        promotions_by_enrollment.setdefault(promotion.diploma_enrollment_id, []).append(promotion)
-
     visible_by_enrollment: dict[int, set[int]] = {}
     for enrollment in enrollments:
         semesters = semesters_by_diploma.get(enrollment.cohort.diploma_id, [])
@@ -325,25 +266,37 @@ def get_visible_semester_ids_by_enrollment(enrollments) -> dict[int, set[int]]:
         )
         available_semesters = semesters[entry_index:]
         progress = progress_by_enrollment.get(enrollment.id, {})
-        years = years_by_cohort.get(enrollment.cohort_id, [])
-        promotions = promotions_by_enrollment.get(enrollment.id, [])
-        visible_ids = _decide_visible_ids(available_semesters, progress, years, promotions)
+        visible_ids = _decide_visible_ids(available_semesters, progress)
         visible_by_enrollment[enrollment.id] = set(visible_ids)
     return visible_by_enrollment
 
 
-def _academic_year_promotion_pending(enrollment, previous_semester, next_semester):
-    """Legacy helper kept for import compatibility; delegates to canonical."""
-    periods = list(CohortAcademicYear.objects.filter(cohort=enrollment.cohort).order_by("year_number"))
-    promotions = list(
-        PromotionDecision.objects.filter(
-            diploma_enrollment=enrollment,
-            from_semester=previous_semester,
-            to_semester=next_semester,
-            decision_type=PROMOTION_DECISION_ACADEMIC_YEAR_PROMOTE,
+def get_visible_semesters_by_enrollment(enrollments) -> dict[int, list[Semester]]:
+    """Return canonical visible Semester objects for each enrollment in batches."""
+    enrollments = list(enrollments)
+    if not enrollments:
+        return {}
+
+    visible_ids_by_enrollment = get_visible_semester_ids_by_enrollment(enrollments)
+    semesters_by_id = {
+        semester.id: semester
+        for semester in Semester.objects.filter(
+            diploma_id__in={enrollment.cohort.diploma_id for enrollment in enrollments},
+            is_active=True,
+        ).order_by("diploma_id", "order")
+    }
+    visible_semesters_by_enrollment = {}
+    for enrollment in enrollments:
+        visible_semesters = [
+            semesters_by_id[semester_id]
+            for semester_id in visible_ids_by_enrollment.get(enrollment.id, set())
+            if semester_id in semesters_by_id
+        ]
+        visible_semesters_by_enrollment[enrollment.id] = sorted(
+            visible_semesters,
+            key=lambda semester: (semester.order, semester.id),
         )
-    )
-    return _requires_academic_year_promotion(previous_semester, next_semester, periods, promotions)
+    return visible_semesters_by_enrollment
 
 
 def can_access_course(student_profile, course_version) -> bool:
@@ -692,18 +645,9 @@ def create_cohort(*, diploma, form_data, actor):
 
 # --- Deletion services -------------------------------------------------------
 
-# Delete-event action codes. apps/audit/constants.py is user-owned WIP outside
-# this group's file list, so descriptive literals are passed to
-# record_audit_event instead of new constants; add matching constants (plus an
-# AlterField migration) there if audit-filter labels are wanted.
-_ACTION_ASSIGNMENT_REMOVED = "academic.assignment_removed"
-_ACTION_DIPLOMA_DELETED = "academic.diploma_deleted"
-_ACTION_SEMESTER_DELETED = "academic.semester_deleted"
-_ACTION_COURSE_DELETED = "academic.course_deleted"
-_ACTION_COURSE_VERSION_DELETED = "academic.course_version_deleted"
-_ACTION_LECTURE_DELETED = "academic.lecture_deleted"
-_ACTION_DIPLOMA_LECTURE_DELETED = "academic.diploma_lecture_deleted"
-_ACTION_COHORT_DELETED = "academic.cohort_deleted"
+# apps/audit/constants.py has no per-entity delete actions and no dedicated
+# assignment-removal action. Every hard deletion therefore uses
+# ACTION_ACADEMIC_DELETED and carries the concrete entity in metadata.
 
 
 def _remove_scope_assignment_rows(queryset, *, actor, assignment_type):
@@ -715,24 +659,63 @@ def _remove_scope_assignment_rows(queryset, *, actor, assignment_type):
     """
     removed = 0
     for assignment in queryset:
+        before = {"active": assignment.active, "assigned_by_id": assignment.assigned_by_id}
+        for field in (
+            "teacher_id",
+            "moderator_id",
+            "course_id",
+            "course_version_id",
+            "diploma_id",
+            "semester_id",
+            "cohort_id",
+            "cluster_id",
+        ):
+            if hasattr(assignment, field):
+                before[field] = getattr(assignment, field)
+        scope_label = (
+            assignment.get_scope_type_display()
+            if hasattr(assignment, "get_scope_type_display")
+            else ""
+        )
+        base_label = str(assignment._meta.verbose_name)
+        entity_label = f"{base_label} - {scope_label}" if scope_label else base_label
         record_audit_event(
             actor=actor,
-            action=_ACTION_ASSIGNMENT_REMOVED,
+            action=ACTION_ACADEMIC_DELETED,
             target_type=assignment_type,
             target_id=str(assignment.id),
-            metadata={"scope_type": assignment.scope_type},
+            section=SECTION_ACADEMICS,
+            target_label=entity_label,
+            metadata={
+                "entity_type": assignment_type,
+                "entity_id": str(assignment.id),
+                "entity_label": entity_label,
+                "before": before,
+            },
         )
         assignment.delete()
         removed += 1
     return removed
 
 
-def _record_academic_delete(*, actor, action, target_type, target):
+def _record_academic_delete(*, actor, target_type, target, before, target_label=""):
+    """Append the single entity-agnostic deletion event for a target record."""
+    label = target_label or str(
+        before.get("title") or before.get("name") or before.get("label") or ""
+    )
     record_audit_event(
         actor=actor,
-        action=action,
+        action=ACTION_ACADEMIC_DELETED,
         target_type=target_type,
-        target_id=str(target.id),
+        target_id=str(target.pk),
+        section=SECTION_ACADEMICS,
+        target_label=label,
+        metadata={
+            "entity_type": target_type,
+            "entity_id": str(target.pk),
+            "entity_label": label,
+            "before": before,
+        },
     )
 
 
@@ -823,7 +806,17 @@ def delete_diploma_record(*, diploma, actor):
         lecture_keys = [row[1] for row in lecture_rows]
         prefixes = [_audio_prefix_for_lecture(row[0], diploma=True) for row in lecture_rows]
         _record_academic_delete(
-            actor=actor, action=_ACTION_DIPLOMA_DELETED, target_type="diploma", target=diploma,
+            actor=actor,
+            target_type="diploma",
+            target=diploma,
+            before={
+                "title": diploma.title,
+                "is_active": diploma.is_active,
+                "total_semesters": diploma.total_semesters,
+                "attendance_enabled": diploma.attendance_enabled,
+                "video_tracking_enabled": diploma.video_tracking_enabled,
+                "video_completion_percent": diploma.video_completion_percent,
+            },
         )
         diploma.delete()
         _schedule_audio_cleanup(lecture_keys, prefixes)
@@ -841,7 +834,15 @@ def delete_semester_record(*, semester, actor):
         lecture_keys = [row[1] for row in lecture_rows]
         prefixes = [_audio_prefix_for_lecture(row[0], diploma=True) for row in lecture_rows]
         _record_academic_delete(
-            actor=actor, action=_ACTION_SEMESTER_DELETED, target_type="semester", target=semester,
+            actor=actor,
+            target_type="semester",
+            target=semester,
+            before={
+                "diploma_id": semester.diploma_id,
+                "order": semester.order,
+                "title": semester.title,
+                "is_active": semester.is_active,
+            },
         )
         semester.delete()
         _schedule_audio_cleanup(lecture_keys, prefixes)
@@ -872,7 +873,16 @@ def delete_course_record(*, course, actor):
         lecture_keys = [row[1] for row in lecture_rows]
         prefixes = [_audio_prefix_for_lecture(row[0], diploma=False) for row in lecture_rows]
         _record_academic_delete(
-            actor=actor, action=_ACTION_COURSE_DELETED, target_type="course", target=course,
+            actor=actor,
+            target_type="course",
+            target=course,
+            before={
+                "title": course.title,
+                "is_active": course.is_active,
+                "attendance_enabled": course.attendance_enabled,
+                "video_tracking_enabled": course.video_tracking_enabled,
+                "video_completion_percent": course.video_completion_percent,
+            },
         )
         course.delete()
         _schedule_audio_cleanup(lecture_keys, prefixes)
@@ -900,7 +910,15 @@ def delete_course_version_record(*, version, actor):
         lecture_keys = [row[1] for row in lecture_rows]
         prefixes = [_audio_prefix_for_lecture(row[0], diploma=False) for row in lecture_rows]
         _record_academic_delete(
-            actor=actor, action=_ACTION_COURSE_VERSION_DELETED, target_type="course_version", target=version,
+            actor=actor,
+            target_type="course_version",
+            target=version,
+            before={
+                "course_id": version.course_id,
+                "label": version.label,
+                "access_duration_days": version.access_duration_days,
+                "is_active": version.is_active,
+            },
         )
         version.delete()
         _schedule_audio_cleanup(lecture_keys, prefixes)
@@ -915,7 +933,23 @@ def delete_lecture_record(*, lecture, actor):
         lecture_keys = [lecture.audio_storage_key]
         prefix = _audio_prefix_for_lecture(lecture.id, diploma=False)
         _record_academic_delete(
-            actor=actor, action=_ACTION_LECTURE_DELETED, target_type="lecture", target=lecture,
+            actor=actor,
+            target_type="lecture",
+            target=lecture,
+            before={
+                "course_version_id": lecture.course_version_id,
+                "order": lecture.order,
+                "title": lecture.title,
+                "is_published": lecture.is_published,
+                "release_at": lecture.release_at.isoformat() if lecture.release_at else "",
+                "youtube_video_id": lecture.youtube_video_id,
+                "audio_processing_status": lecture.audio_processing_status,
+                "has_audio": bool(
+                    lecture.audio_url
+                    or lecture.audio_storage_key
+                    or lecture.audio_hls_playlist_key
+                ),
+            },
         )
         lecture.delete()
         _schedule_audio_cleanup(lecture_keys, [prefix])
@@ -930,7 +964,24 @@ def delete_diploma_lecture_record(*, lecture, actor):
         lecture_keys = [lecture.audio_storage_key]
         prefix = _audio_prefix_for_lecture(lecture.id, diploma=True)
         _record_academic_delete(
-            actor=actor, action=_ACTION_DIPLOMA_LECTURE_DELETED, target_type="diploma_lecture", target=lecture,
+            actor=actor,
+            target_type="diploma_lecture",
+            target=lecture,
+            before={
+                "cohort_id": lecture.cohort_id,
+                "semester_id": lecture.semester_id,
+                "order": lecture.order,
+                "title": lecture.title,
+                "is_published": lecture.is_published,
+                "release_at": lecture.release_at.isoformat() if lecture.release_at else "",
+                "youtube_video_id": lecture.youtube_video_id,
+                "audio_processing_status": lecture.audio_processing_status,
+                "has_audio": bool(
+                    lecture.audio_url
+                    or lecture.audio_storage_key
+                    or lecture.audio_hls_playlist_key
+                ),
+            },
         )
         lecture.delete()
         _schedule_audio_cleanup(lecture_keys, [prefix])
@@ -956,7 +1007,16 @@ def delete_cohort_record(*, cohort, actor):
         lecture_keys = [row[1] for row in lecture_rows]
         prefixes = [_audio_prefix_for_lecture(row[0], diploma=True) for row in lecture_rows]
         _record_academic_delete(
-            actor=actor, action=_ACTION_COHORT_DELETED, target_type="cohort", target=cohort,
+            actor=actor,
+            target_type="cohort",
+            target=cohort,
+            before={
+                "diploma_id": cohort.diploma_id,
+                "name": cohort.name,
+                "start_date": cohort.start_date.isoformat(),
+                "end_date": cohort.end_date.isoformat() if cohort.end_date else "",
+                "is_active": cohort.is_active,
+            },
         )
         cohort.delete()
         _schedule_audio_cleanup(lecture_keys, prefixes)
@@ -984,30 +1044,116 @@ def canonicalize_youtube_id(lecture) -> None:
     is configured.
     """
     video_id = extract_youtube_video_id(lecture.youtube_url) if lecture.youtube_url else ""
-    if video_id and video_id != lecture.youtube_video_id:
+    changed_fields = []
+
+    if video_id != lecture.youtube_video_id:
         lecture.youtube_video_id = video_id
-        lecture.save(update_fields=["youtube_video_id"])
+        lecture.youtube_duration_seconds = None
+        lecture.youtube_metadata_fetched_at = None
+        lecture.youtube_metadata_request_id = None
+        changed_fields.extend(
+            [
+                "youtube_video_id",
+                "youtube_duration_seconds",
+                "youtube_metadata_fetched_at",
+                "youtube_metadata_request_id",
+            ]
+        )
+
+    if video_id and lecture.youtube_duration_seconds and lecture.youtube_duration_seconds > 0:
+        status = YOUTUBE_METADATA_STATUS_READY
+    elif video_id and lecture.youtube_metadata_fetched_at:
+        status = YOUTUBE_METADATA_STATUS_UNAVAILABLE
+    elif video_id:
+        status = YOUTUBE_METADATA_STATUS_PENDING
+    elif lecture.youtube_url:
+        status = YOUTUBE_METADATA_STATUS_UNAVAILABLE
+    else:
+        status = ""
+
+    if lecture.youtube_metadata_status != status:
+        lecture.youtube_metadata_status = status
+        changed_fields.append("youtube_metadata_status")
+    if not video_id and lecture.youtube_metadata_request_id is not None:
+        lecture.youtube_metadata_request_id = None
+        changed_fields.append("youtube_metadata_request_id")
+
+    if changed_fields:
+        lecture.save(update_fields=[*dict.fromkeys(changed_fields), "updated_at"])
 
 
-def enqueue_youtube_metadata_refresh(lecture, *, diploma: bool = False) -> None:
-    """Enqueue the bounded metadata fetch for a lecture, unless already fetched.
+def enqueue_youtube_metadata_refresh(
+    lecture,
+    *,
+    diploma: bool = False,
+    force: bool = False,
+) -> str:
+    """Queue a metadata fetch and bind its result to this video/request generation.
 
-    Called from the lecture create/edit views. A lecture with a saved duration
-    does not need another fetch; an enqueue failure (broker unavailable) is
-    recorded as an explicit 'metadata unavailable' attempt state instead of
-    failing silently.
+    ``force`` is reserved for an explicit staff retry. A failed broker enqueue
+    becomes a durable unavailable state. Tasks are published only after the
+    lecture write commits, and a stale request cannot update a changed video
+    or a newer retry for the same video.
     """
     canonicalize_youtube_id(lecture)
-    if lecture.youtube_duration_seconds:
-        return
     if not lecture.youtube_video_id:
-        return
-    try:
-        academic_tasks.refresh_youtube_metadata_task.delay(lecture.id, diploma=diploma)
-    except Exception as exc:  # noqa: BLE001 - broker down; persist the unavailable state
-        logger.error("Could not enqueue YouTube metadata fetch for lecture %s: %s", lecture.id, exc)
-        lecture.youtube_metadata_fetched_at = timezone.now()
-        lecture.save(update_fields=["youtube_metadata_fetched_at"])
+        return "invalid"
+    if (
+        not force
+        and lecture.youtube_metadata_status == YOUTUBE_METADATA_STATUS_READY
+        and lecture.youtube_duration_seconds
+        and lecture.youtube_duration_seconds > 0
+    ):
+        return "ready"
+    if (
+        not force
+        and lecture.youtube_metadata_status == YOUTUBE_METADATA_STATUS_PENDING
+        and lecture.youtube_metadata_request_id is not None
+    ):
+        return "pending"
+
+    request_id = uuid.uuid4()
+    model = lecture.__class__
+    now = timezone.now()
+    queued = model.objects.filter(
+        pk=lecture.pk,
+        youtube_video_id=lecture.youtube_video_id,
+    ).update(
+        youtube_metadata_status=YOUTUBE_METADATA_STATUS_PENDING,
+        youtube_metadata_request_id=request_id,
+        youtube_metadata_fetched_at=None,
+        updated_at=now,
+    )
+    if not queued:
+        return "changed"
+
+    lecture.youtube_metadata_status = YOUTUBE_METADATA_STATUS_PENDING
+    lecture.youtube_metadata_request_id = request_id
+    lecture.youtube_metadata_fetched_at = None
+    video_id = lecture.youtube_video_id
+
+    def publish_request():
+        try:
+            academic_tasks.refresh_youtube_metadata_task.delay(
+                lecture.pk,
+                diploma=diploma,
+                expected_video_id=video_id,
+                request_id=str(request_id),
+            )
+        except Exception as exc:  # noqa: BLE001 - broker down; persist the unavailable state
+            logger.error("Could not enqueue YouTube metadata fetch for lecture %s: %s", lecture.pk, exc)
+            model.objects.filter(
+                pk=lecture.pk,
+                youtube_video_id=video_id,
+                youtube_metadata_request_id=request_id,
+            ).update(
+                youtube_metadata_status=YOUTUBE_METADATA_STATUS_UNAVAILABLE,
+                youtube_metadata_fetched_at=timezone.now(),
+                updated_at=timezone.now(),
+            )
+
+    transaction.on_commit(publish_request, robust=True)
+    return "queued"
 
 
 # --- Duration-weighted progress (S2-05) --------------------------------------
@@ -1094,6 +1240,246 @@ def course_progress_for_enrollment(student_profile, course_version) -> dict:
     )
 
 
+def _active_course_quizzes(course_version):
+    return Assessment.objects.filter(
+        course_version=course_version,
+        assessment_type=ASSESSMENT_TYPE_QUIZ,
+        is_active=True,
+        legacy_status=LEGACY_STATUS_ACTIVE,
+    ).order_by("open_at", "id")
+
+
+def get_course_lecture_readiness(enrollment: CourseEnrollment) -> dict:
+    """Return published/released lecture completion for one course enrollment."""
+    now = timezone.now()
+    lectures = list(
+        enrollment.course_version.lectures.filter(
+            Q(release_at__isnull=True) | Q(release_at__lte=now),
+            is_published=True,
+        ).order_by("order")
+    )
+    completion_map = _course_lecture_completion_map(
+        enrollment.student,
+        enrollment,
+        lectures,
+    )
+    completed = sum(1 for done in completion_map.values() if done)
+    remaining = [
+        lecture for lecture in lectures
+        if not completion_map.get(lecture.id, False)
+    ]
+    return {
+        "ready": all(completion_map.values()),
+        "lectures_total": len(lectures),
+        "lectures_completed": completed,
+        "remaining_lectures": remaining,
+        "completion_map": completion_map,
+        "lectures": lectures,
+    }
+
+
+def get_course_completion_readiness(enrollment: CourseEnrollment) -> dict:
+    """Compute lecture and quiz readiness for one course enrollment.
+
+    All published/released lectures must be completed. Every active course quiz
+    must have a latest attempt marked as passed, and the course must have one
+    active designated end-course exam that is passed.
+    """
+    course_version = enrollment.course_version
+    lecture_readiness = get_course_lecture_readiness(enrollment)
+    total_lectures = lecture_readiness["lectures_total"]
+    completed_lectures = lecture_readiness["lectures_completed"]
+    all_lectures_completed = lecture_readiness["ready"]
+
+    required_quizzes = list(_active_course_quizzes(course_version))
+    latest_attempts = {}
+    for attempt in AssessmentAttempt.objects.filter(
+        student=enrollment.student.user,
+        assessment__in=required_quizzes,
+    ).order_by("assessment_id", "-attempt_number", "-id"):
+        latest_attempts.setdefault(attempt.assessment_id, attempt)
+
+    quiz_rows = []
+    for quiz in required_quizzes:
+        attempt = latest_attempts.get(quiz.id)
+        quiz_rows.append({
+            "assessment": quiz,
+            "attempt": attempt,
+            "passed": bool(attempt and attempt.is_pass is True),
+        })
+    all_quizzes_passed = all(row["passed"] for row in quiz_rows)
+
+    completion_exam = Assessment.objects.filter(
+        course_version=course_version,
+        is_completion_exam=True,
+    ).first()
+    completion_exam_active = bool(
+        completion_exam
+        and completion_exam.is_active
+        and completion_exam.legacy_status == LEGACY_STATUS_ACTIVE
+    )
+    completion_exam_passed = bool(
+        completion_exam
+        and any(
+            row["assessment"].id == completion_exam.id and row["passed"]
+            for row in quiz_rows
+        )
+    )
+
+    lecture_timestamps = []
+    lecture_ids = list(lecture_readiness["completion_map"])
+    if lecture_ids:
+        lecture_timestamps.extend(
+            LectureWatchProgress.objects.filter(
+                student=enrollment.student,
+                course_enrollment=enrollment,
+                lecture_id__in=lecture_ids,
+                status=WATCH_STATUS_COMPLETED,
+                completed_at__isnull=False,
+            ).values_list("completed_at", flat=True)
+        )
+        lecture_timestamps.extend(
+            LectureAudioProgress.objects.filter(
+                student=enrollment.student,
+                course_enrollment=enrollment,
+                lecture_id__in=lecture_ids,
+                status=WATCH_STATUS_COMPLETED,
+                completed_at__isnull=False,
+            ).values_list("completed_at", flat=True)
+        )
+
+    quiz_timestamps = [
+        row["attempt"].graded_at or row["attempt"].submitted_at
+        for row in quiz_rows
+        if row["passed"] and row["attempt"] is not None
+    ]
+    timestamps = [stamp for stamp in [*lecture_timestamps, *quiz_timestamps] if stamp]
+    last_requirement_at = max(timestamps) if timestamps else None
+
+    block_reasons = []
+    remaining_lectures = total_lectures - completed_lectures
+    if remaining_lectures:
+        block_reasons.append(
+            _("%(count)s course lecture(s) are not completed.")
+            % {"count": remaining_lectures}
+        )
+    failed_quizzes = [
+        row["assessment"].title for row in quiz_rows if not row["passed"]
+    ]
+    if failed_quizzes:
+        block_reasons.append(
+            _("Required quizzes not passed: %(quizzes)s")
+            % {"quizzes": ", ".join(failed_quizzes)}
+        )
+    if completion_exam is None:
+        block_reasons.append(_("No end-course exam is configured for this course."))
+    elif not completion_exam_active:
+        block_reasons.append(_("The configured end-course exam is not active."))
+
+    return {
+        "ready": (
+            all_lectures_completed
+            and all_quizzes_passed
+            and completion_exam_active
+            and completion_exam_passed
+        ),
+        "lectures_total": total_lectures,
+        "lectures_completed": completed_lectures,
+        "all_lectures_completed": all_lectures_completed,
+        "quizzes": quiz_rows,
+        "quizzes_total": len(quiz_rows),
+        "quizzes_passed": sum(1 for row in quiz_rows if row["passed"]),
+        "all_quizzes_passed": all_quizzes_passed,
+        "completion_exam": completion_exam,
+        "completion_exam_active": completion_exam_active,
+        "completion_exam_passed": completion_exam_passed,
+        "last_requirement_at": last_requirement_at,
+        "block_reasons": block_reasons,
+    }
+
+
+def _schedule_course_certificate_issuance(enrollment: CourseEnrollment, *, actor) -> None:
+    """Issue the course certificate after the completion transaction commits."""
+
+    def _issue():
+        # Lazy import: certificates.services imports academics models.
+        from apps.certificates.services import issue_course_certificate
+
+        try:
+            issue_course_certificate(
+                enrollment.student,
+                enrollment,
+                actor=actor,
+                source="auto_course_completion",
+            )
+        except ValueError as exc:
+            logger.info(
+                "Course certificate auto-issuance skipped for enrollment %s: %s",
+                enrollment.pk,
+                exc,
+            )
+        except Exception:
+            logger.exception(
+                "Course certificate auto-issuance failed for enrollment %s",
+                enrollment.pk,
+            )
+
+    transaction.on_commit(_issue, robust=True)
+
+
+def mark_course_completed(
+    enrollment: CourseEnrollment,
+    *,
+    actor=None,
+    notes: str = "",
+) -> CourseEnrollment:
+    """Mark a course completed once every lecture and active quiz requirement passes."""
+    with transaction.atomic():
+        locked = CourseEnrollment.objects.select_for_update().select_related(
+            "student__user",
+            "course_version__course",
+        ).get(pk=enrollment.pk)
+        if locked.status == ENROLLMENT_STATUS_COMPLETED:
+            raise ValueError(_("This course enrollment is already completed."))
+        readiness = get_course_completion_readiness(locked)
+        if not readiness["ready"]:
+            raise ValueError(_("Course completion requirements are not met."))
+        completed_at = readiness["last_requirement_at"] or timezone.now()
+        previous_status = locked.status
+        locked.status = ENROLLMENT_STATUS_COMPLETED
+        locked.completed_at = completed_at
+        locked.completed_by = actor
+        locked.completion_notes = notes
+        locked.save(update_fields=[
+            "status", "completed_at", "completed_by", "completion_notes", "updated_at",
+        ])
+        record_audit_event(
+            actor=actor,
+            action=ACTION_ENROLLMENT_CHANGE,
+            target_type="course_enrollment",
+            target_id=str(locked.id),
+            section=SECTION_ACADEMICS,
+            target_label=f"{locked.student.full_name} · {locked.course_version.course.title}",
+            subject_type="student",
+            subject_id=str(locked.student_id),
+            subject_label=locked.student.full_name,
+            metadata={
+                "type": "course_completed",
+                "changed_fields": ["status", "completed_at", "completed_by", "completion_notes"],
+                "student_id": locked.student_id,
+                "course_id": locked.course_version.course_id,
+                "course_version_id": locked.course_version_id,
+                "previous_status": previous_status,
+                "new_status": locked.status,
+                "completed_at": completed_at.isoformat(),
+                "notes": notes,
+            },
+        )
+
+    _schedule_course_certificate_issuance(locked, actor=actor)
+    return locked
+
+
 def diploma_progress_for_enrollment(student_profile, diploma_enrollment) -> dict:
     """Duration-weighted video progress scoped to the enrollment's cohort.
 
@@ -1113,6 +1499,61 @@ def diploma_progress_for_enrollment(student_profile, diploma_enrollment) -> dict
     return _duration_weighted_progress(lecture_qs, completed_lecture_ids)
 
 
+def diploma_progress_for_enrollments(student_profile, diploma_enrollments) -> dict[int, dict]:
+    """Return duration-weighted Diploma progress with set-based queries."""
+    enrollments = list(diploma_enrollments)
+    if not enrollments:
+        return {}
+
+    enrollment_ids = [enrollment.id for enrollment in enrollments]
+    cohort_ids = {enrollment.cohort_id for enrollment in enrollments}
+    lecture_totals_by_cohort = {
+        row["cohort_id"]: row
+        for row in DiplomaLecture.objects.filter(
+            _progress_lecture_filter(),
+            cohort_id__in=cohort_ids,
+        ).values("cohort_id").annotate(
+            total_seconds=Sum("youtube_duration_seconds"),
+            total_lectures=Count("id"),
+        )
+    }
+    eligible_lecture_ids = DiplomaLecture.objects.filter(
+        _progress_lecture_filter(),
+        cohort_id__in=cohort_ids,
+    ).values("id")
+    completed_by_enrollment = {
+        row["diploma_enrollment_id"]: row
+        for row in DiplomaLectureWatchProgress.objects.filter(
+            student=student_profile,
+            diploma_enrollment_id__in=enrollment_ids,
+            lecture_id__in=eligible_lecture_ids,
+            lecture__cohort_id=F("diploma_enrollment__cohort_id"),
+            status=WATCH_STATUS_COMPLETED,
+        ).values("diploma_enrollment_id").annotate(
+            completed_seconds=Sum("lecture__youtube_duration_seconds"),
+            completed_count=Count("lecture_id"),
+        )
+    }
+
+    results = {}
+    for enrollment in enrollments:
+        lecture_totals = lecture_totals_by_cohort.get(enrollment.cohort_id, {})
+        completed = completed_by_enrollment.get(enrollment.id, {})
+        total_seconds = Decimal(str(lecture_totals.get("total_seconds") or 0))
+        completed_seconds = Decimal(str(completed.get("completed_seconds") or 0))
+        results[enrollment.id] = {
+            "percent": (
+                (completed_seconds / total_seconds * 100).quantize(_PROGRESS_QUANTIZER)
+                if total_seconds else Decimal("0")
+            ),
+            "completed_count": completed.get("completed_count", 0),
+            "total_lectures": lecture_totals.get("total_lectures", 0),
+            "total_seconds": total_seconds,
+            "completed_seconds": completed_seconds,
+        }
+    return results
+
+
 # --- Watch server ------------------------------------------------------------
 
 DEFAULT_COMPLETION_THRESHOLD = Decimal("80.0")
@@ -1121,6 +1562,8 @@ DEFAULT_CHECKPOINT_INTERVAL_SECONDS = 5
 
 def _parse_checkpoint_payload(payload):
     """Parse untrusted checkpoint JSON into bounded primitive values."""
+    if not isinstance(payload, dict):
+        return None, {"error": "invalid_checkpoint", "status": 400}
     session_id_str = payload.get("session_id", "")
     if not isinstance(session_id_str, str) or not session_id_str:
         return None, {"error": "missing_session_id", "status": 400}
@@ -1137,6 +1580,37 @@ def _parse_checkpoint_payload(payload):
     if not isinstance(player_state, str) or len(player_state) > 32:
         return None, {"error": "invalid_checkpoint", "status": 400}
     return (session_id, sequence, position, rate, player_state), None
+
+
+def violation_user_message(reason: str) -> str:
+    """Return a non-technical, student-facing explanation for a violation."""
+    messages = {
+        VIOLATION_SPEED: _(
+            "The playback speed was too fast. Reload the page and continue at normal speed."
+        ),
+        VIOLATION_FORWARD_SKIP: _(
+            "You skipped ahead in the lecture. Reload the page and continue in order from your last saved position."
+        ),
+        VIOLATION_INVALID_SEQUENCE: _(
+            "The playback session was interrupted. Reload the page and continue from your last saved position."
+        ),
+        VIOLATION_INVALID_POSITION: _(
+            "The playback position changed unexpectedly. Reload the page and continue from your last saved position."
+        ),
+    }
+    return str(messages.get(
+        reason,
+        _("Playback was stopped because a viewing rule was broken. Reload the page and continue from your last saved position."),
+    ))
+
+
+def checkpoint_error_user_message(error: str) -> str:
+    """Return a non-technical, student-facing explanation for a checkpoint error."""
+    if error in {"no_access", "enrollment_not_active", "enrollment_expired", "forbidden"}:
+        return str(_("You no longer have access to this lecture."))
+    if error == "unknown_session":
+        return str(_("Your playback session expired. Reload the page and continue."))
+    return str(_("Your progress could not be saved. Reload the page and try again."))
 
 
 def start_lecture_watch(*, student, lecture):
@@ -1182,17 +1656,13 @@ def start_lecture_watch(*, student, lecture):
                 "threshold": float(threshold),
                 "completed": True,
             }
-        # A violated session must restart from zero with a fresh session (S2-04);
-        # other restarts keep the validated resume position.
-        violated = lwp.status == WATCH_STATUS_VIOLATED
-        resume_pos = Decimal("0") if violated else lwp.resume_position_seconds
+        # A violation blocks only the session in which it happened. Keep the
+        # validated progress and resume from the last server-accepted position.
+        resume_pos = lwp.resume_position_seconds
         lwp.status = WATCH_STATUS_IN_PROGRESS
         lwp.violation_reason = VIOLATION_NONE
         lwp.last_sequence = 0
         lwp.last_position_seconds = resume_pos
-        if violated:
-            lwp.validated_contiguous_seconds = Decimal("0")
-            lwp.resume_position_seconds = Decimal("0")
         lwp.last_checkpoint_at = timezone.now()
         session_id = uuid.uuid4()
         lwp.active_session_id = session_id
@@ -1262,8 +1732,8 @@ def record_lecture_checkpoint(*, student, lecture, payload, now=None):
                 "violation": VIOLATION_NONE,
                 "resume_position": float(lwp.resume_position_seconds),
             }
-        # A violated session cannot be resumed; the client must start a new
-        # session from zero (S2-04).
+        # A violated session is blocked; the next session starts fresh but
+        # keeps the progress already validated for this lecture.
         if lwp.status == WATCH_STATUS_VIOLATED:
             return {
                 "error": "session_violated",
@@ -1408,17 +1878,13 @@ def start_lecture_audio(*, student, lecture):
                 "threshold": float(threshold),
                 "completed": True,
             }
-        # A violated session restarts from zero with a fresh session; other
-        # restarts keep the validated resume position (S2-04).
-        violated = lap.status == WATCH_STATUS_VIOLATED
-        resume_pos = Decimal("0") if violated else lap.resume_position_seconds
+        # A violation blocks only the session in which it happened. Keep the
+        # validated progress and resume from the last server-accepted position.
+        resume_pos = lap.resume_position_seconds
         lap.status = WATCH_STATUS_IN_PROGRESS
         lap.violation_reason = VIOLATION_NONE
         lap.last_sequence = 0
         lap.last_position_seconds = resume_pos
-        if violated:
-            lap.validated_contiguous_seconds = Decimal("0")
-            lap.resume_position_seconds = Decimal("0")
         lap.last_checkpoint_at = timezone.now()
         session_id = uuid.uuid4()
         lap.active_session_id = session_id
@@ -1439,7 +1905,8 @@ def record_lecture_audio_checkpoint(*, student, lecture, payload, now=None):
 
     payload must contain: session_id, sequence, position, player_state, rate.
     Mirrors the video checkpoint validation: no client-trusted duration, no
-    manufactured completion, violated sessions must restart from zero.
+    manufactured completion, and the violated session is blocked until a new
+    session starts. Validated progress is preserved across sessions.
     """
     if now is None:
         now = timezone.now()
@@ -1574,23 +2041,29 @@ def record_lecture_audio_checkpoint(*, student, lecture, payload, now=None):
     }
 
 
-def get_visible_diploma_lectures(student_profile, enrollment, semester=None):
-    """Return visible (published & released) diploma lectures for an enrollment."""
+def get_visible_diploma_lectures(student_profile, enrollment, semester=None, *, access=None):
+    """Return published, released lectures from visible semesters only."""
     if enrollment.status != ENROLLMENT_STATUS_ACTIVE:
         return DiplomaLecture.objects.none()
     if enrollment.expires_at and timezone.now() >= enrollment.expires_at:
         return DiplomaLecture.objects.none()
-    access = get_student_diploma_access(enrollment)
-    if semester is not None and semester.id not in {item.id for item in access["visible_semesters"]}:
+    access = access or get_student_diploma_access(enrollment)
+    visible_semester_ids = {
+        item.id for item in access["visible_semesters"]
+    }
+    if semester is not None:
+        if semester.id not in visible_semester_ids:
+            return DiplomaLecture.objects.none()
+        visible_semester_ids = {semester.id}
+    if not visible_semester_ids:
         return DiplomaLecture.objects.none()
     qs = DiplomaLecture.objects.filter(
         cohort=enrollment.cohort,
+        semester_id__in=visible_semester_ids,
         is_published=True,
     ).filter(
         Q(release_at__isnull=True) | Q(release_at__lte=timezone.now()),
     )
-    if semester is not None:
-        qs = qs.filter(semester=semester)
     return qs.order_by("order").select_related("semester")
 
 
@@ -1652,16 +2125,13 @@ def start_diploma_lecture_watch(*, student, enrollment, lecture):
                 "threshold": float(threshold),
                 "completed": True,
             }
-        # A violated session must restart from zero with a fresh session (S2-04).
-        violated = lwp.status == WATCH_STATUS_VIOLATED
-        resume_pos = Decimal("0") if violated else lwp.resume_position_seconds
+        # A violation blocks only the session in which it happened. Keep the
+        # validated progress and resume from the last server-accepted position.
+        resume_pos = lwp.resume_position_seconds
         lwp.status = WATCH_STATUS_IN_PROGRESS
         lwp.violation_reason = VIOLATION_NONE
         lwp.last_sequence = 0
         lwp.last_position_seconds = resume_pos
-        if violated:
-            lwp.validated_contiguous_seconds = Decimal("0")
-            lwp.resume_position_seconds = Decimal("0")
         lwp.last_checkpoint_at = timezone.now()
         session_id = uuid.uuid4()
         lwp.active_session_id = session_id

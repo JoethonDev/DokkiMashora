@@ -14,7 +14,7 @@
       {% include "ui/fragments/admin/dashboard/_secretary.html" %}
     {% else %}
       <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
-            <p class="eyebrow">{{ user_role|default:_("Staff") }}</p>
+            <p class="eyebrow">{% if user_role %}{% translate user_role context "role" %}{% else %}{% translate "Staff" context "role" %}{% endif %}</p>
             <h2>{% trans "Workspace" %}</h2>
           </div>
         </div>

@@ -4,7 +4,7 @@
   {% trans "Semester Exam review" %}
 {% endblock %}
 {% block content %}
-  <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with eyebrow=_("Assessments") title=_("Semester Exam review") back_button=True %}
+  <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with eyebrow=_("Assessments") title=_("Semester Exam review") back_button=True back_url=back_url %}
     <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Review" %}</p>
           <h3>
@@ -35,7 +35,7 @@
           <dt class="dt">{% trans "Student visibility" %}</dt>
           <dd class="dd">
             {% if attempt.visible_to_student %}
-              {% include "ui/components/_status.html" with code="released" label=_("Released") %}
+              {% include "ui/components/_status.html" with code="released" label=_("Visible") %}
             {% else %}
               {% include "ui/components/_status.html" with code="hidden" label=_("Hidden from student") %}
             {% endif %}
@@ -46,13 +46,13 @@
         <div class="flex gap-2.5 items-center flex-wrap mt-4">
           {% if attempt.visible_to_student %}
             <form method="post" action="{% url 'assessments:admin_hide_grades' attempt.id %}" class="inline">{% csrf_token %}
-              <input type="hidden" name="next" value="{{ request.get_full_path }}">
-              <button class="btn-secondary" type="submit">{% trans "Hide grades from student" %}</button>
+              <input type="hidden" name="next" value="{{ back_url }}">
+              <button class="btn-secondary" type="submit">{% trans "Hide this student's grade" %}</button>
             </form>
           {% else %}
             <form method="post" action="{% url 'assessments:admin_release_grades' attempt.id %}" class="inline">{% csrf_token %}
-              <input type="hidden" name="next" value="{{ request.get_full_path }}">
-              <button class="btn-primary" type="submit">{% trans "Release grades to student" %}</button>
+              <input type="hidden" name="next" value="{{ back_url }}">
+              <button class="btn-primary" type="submit">{% trans "Show this student's grade" %}</button>
             </form>
           {% endif %}
         </div>
@@ -61,6 +61,7 @@
         {% include "ui/components/_state_banner.html" with state="pending" label=_("Not all parts graded") description=_("Every configured exam part must be graded before the stage decision.") %}
       {% else %}
         <form method="post" action="{% url 'assessments:admin_exam_review_submit' attempt.id %}" class="page-stack mt-4">{% csrf_token %}
+          <input type="hidden" name="next" value="{{ back_url }}">
           <fieldset>
             <legend>{% trans "Stage decision" %}</legend>
             <div class="flex gap-4 flex-wrap">

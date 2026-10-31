@@ -1,0 +1,150 @@
+{% load certificate_tags %}<!DOCTYPE html>
+<html lang="{{ html_lang }}"{% if is_rtl %} dir="rtl"{% endif %}>
+<head>
+<meta charset="utf-8">
+<style>
+  {% if for_pdf %}
+  @font-face { font-family: Cairo; src: url({{ font_regular_path }}); }
+  @font-face { font-family: Cairo; font-weight: bold; src: url({{ font_bold_path }}); }
+  @page { size: A4 landscape; margin: 10mm; }
+  {% else %}
+  html, body { overflow: hidden; }
+  body { padding: 10mm; background-color: #E5E7EB; }
+  {% endif %}
+  div, p, table, tr, td { margin: 0; padding: 0; }
+  table { border-collapse: collapse; }
+  body { margin: 0; font-family: {{ font_stack }}; color: {{ ink_color }}; }
+  .frame {
+    width: 100%;
+    border-style: solid;
+    border-width: {{ border_width }};
+    border-color: {{ accent_color }};
+    background-color: {{ background_color }};
+  }
+  .frame-cell { vertical-align: middle; }
+  .layout-classic .frame-cell { padding: 27mm 6mm; }
+  .layout-modern .frame-cell { padding: 20mm 6mm 18mm 6mm; }
+  .layout-minimal .frame-cell { padding: 27mm 12mm; }
+  .content { width: 100%; }
+  .content td { text-align: center; }
+  .band { width: 100%; }
+  .band-cell { height: 4mm; font-size: 1pt; }
+  .layout-modern .band-top { margin-bottom: 7mm; }
+  .layout-modern .band-bottom { margin-top: 7mm; }
+  .logo { height: {{ logo_height }}; }
+  .brand {
+    font-size: 13pt;
+    font-weight: bold;
+    color: {{ heading_color }};
+    padding-top: 2mm;
+  }
+  .rule { width: 100%; margin: 3mm auto 4mm auto; }
+  .rule-cell { height: 2.2pt; font-size: 1pt; }
+  .layout-minimal .rule-cell { height: 1.2pt; }
+  .title {
+    font-size: 29pt;
+    line-height: 1.1;
+    font-weight: bold;
+    color: {{ heading_color }};
+    padding-bottom: 5mm;
+  }
+  .intro { color: {{ muted_color }}; padding-bottom: 2mm; }
+  .student { font-size: 27pt; font-weight: bold; color: {{ ink_color }}; padding-bottom: 4mm; }
+  .closing { color: {{ muted_color }}; padding-bottom: 2mm; }
+  .program { font-size: 18pt; font-weight: bold; color: {{ heading_color }}; padding-bottom: 2mm; }
+  .detail { font-size: 11pt; color: {{ muted_color }}; padding-bottom: 5mm; }
+  .meta {
+    width: 100%;
+    border-top: 0.75pt solid {{ muted_color }};
+    border-bottom: 0.75pt solid {{ muted_color }};
+    margin-bottom: 5mm;
+  }
+  .meta td { padding: 2mm; font-size: 8.5pt; color: {{ muted_color }}; }
+  .meta .value { font-size: 10pt; font-weight: bold; color: {{ ink_color }}; }
+  .signature-cell { padding-top: 7mm; }
+  .signature-line { width: 100%; }
+  .signature-line-cell { height: 1pt; font-size: 1pt; }
+  .signature-name { font-size: 11pt; font-weight: bold; color: {{ ink_color }}; padding-top: 1.5mm; }
+  .signature-title { font-size: 9pt; color: {{ muted_color }}; }
+  .footer { font-size: 8pt; color: {{ muted_color }}; padding-top: 4mm; }
+  .text-compact .title { font-size: 25pt; }
+  .text-compact .student { font-size: 23pt; }
+  .text-compact .student, .text-compact .program { line-height: 1.15; }
+  .text-compact .intro, .text-compact .closing { font-size: 11pt; }
+  .text-compact .program { font-size: 16pt; }
+  .text-compact .detail { font-size: 10pt; }
+  .text-large .title { font-size: 33pt; }
+  .text-large .student { font-size: 31pt; }
+  .text-large .intro, .text-large .closing { font-size: 13pt; }
+  .text-large .program { font-size: 20pt; }
+  .text-large .detail { font-size: 12pt; }
+  .text-large .meta td { font-size: 9pt; }
+  .text-large .meta .value { font-size: 10.5pt; }
+  {% if text_align == "start" %}
+  .align-start .title, .align-start .intro, .align-start .student,
+  .align-start .closing, .align-start .program, .align-start .detail,
+  .align-start .footer { text-align: {% if is_rtl %}right{% else %}left{% endif %}; }
+  {% endif %}
+</style>
+</head>
+<body class="layout-{{ layout }} text-{{ text_size }} align-{{ text_align }}">
+  <table class="frame"><tr><td class="frame-cell">
+    {% if show_band %}
+      <table class="band band-top"><tr><td class="band-cell" style="background-color: {{ accent_color }};">&nbsp;</td></tr></table>
+    {% endif %}
+    <table class="content">
+      {% if logo_data_uri %}
+        <tr><td><img class="logo" src="{{ logo_data_uri }}" alt=""></td></tr>
+      {% endif %}
+      {% if site_name %}
+        <tr><td class="brand">{% pdf_text site_name %}</td></tr>
+      {% endif %}
+      {% if show_rule %}
+        <tr><td>
+          <table class="rule"><tr>
+            <td width="42%" style="font-size: 1pt;">&nbsp;</td>
+            <td width="16%" class="rule-cell" style="background-color: {{ accent_color }};">&nbsp;</td>
+            <td width="42%" style="font-size: 1pt;">&nbsp;</td>
+          </tr></table>
+        </td></tr>
+      {% endif %}
+      <tr><td class="title">{% pdf_text title %}</td></tr>
+      <tr><td class="intro">{% pdf_text intro %}</td></tr>
+      <tr><td class="student">{% pdf_text student_name %}</td></tr>
+      <tr><td class="closing">{% pdf_text closing %}</td></tr>
+      {% if show_program %}
+        <tr><td class="program">{% pdf_text program_title %}</td></tr>
+      {% endif %}
+      {% if show_cohort %}
+        <tr><td class="detail">{% pdf_text program_detail %}</td></tr>
+      {% endif %}
+      {% if show_meta %}
+        <tr><td>
+          <table class="meta"><tr>
+            {% for item in meta_items %}
+              <td>{% pdf_text item.label %}<div class="value">{% pdf_text item.value %}</div></td>
+            {% endfor %}
+          </tr></table>
+        </td></tr>
+      {% endif %}
+      {% if show_signature %}
+        <tr><td class="signature-cell">
+          <table class="signature-line"><tr>
+            <td width="38%" style="font-size: 1pt;">&nbsp;</td>
+            <td width="24%" class="signature-line-cell" style="border-top: 0.75pt solid {{ muted_color }};">&nbsp;</td>
+            <td width="38%" style="font-size: 1pt;">&nbsp;</td>
+          </tr></table>
+          {% if signature_name %}<div class="signature-name">{% pdf_text signature_name %}</div>{% endif %}
+          {% if signature_title %}<div class="signature-title">{% pdf_text signature_title %}</div>{% endif %}
+        </td></tr>
+      {% endif %}
+      {% if footer_note %}
+        <tr><td class="footer">{% pdf_text footer_note %}</td></tr>
+      {% endif %}
+    </table>
+    {% if show_band %}
+      <table class="band band-bottom"><tr><td class="band-cell" style="background-color: {{ accent_color }};">&nbsp;</td></tr></table>
+    {% endif %}
+  </td></tr></table>
+</body>
+</html>

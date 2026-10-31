@@ -1,0 +1,14 @@
+{% load i18n %}
+{% if form.non_field_errors %}
+  <div class="alert-error space-y-1" role="alert">
+    {% for error in form.non_field_errors %}<p class="m-0">{{ error }}</p>{% endfor %}
+  </div>
+{% endif %}
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+  {% include "ui/components/_field.html" with field=form.name %}
+  {% include "ui/components/_field.html" with field=form.program %}
+  {% include "ui/components/_field.html" with field=form.language %}
+  {% include "ui/components/_field.html" with field=form.template_type %}
+  {% include "ui/components/_field.html" with field=form.active %}
+  {% include "ui/components/_field.html" with field=form.is_placeholder %}
+</div>

@@ -73,9 +73,20 @@ def flush_snapshot(self, attempt_id: int, generation: int) -> None:
 
             def persist(values):
                 if attempt.status == ATTEMPT_STATUS_IN_PROGRESS:
-                    diploma_autosave_attempt(attempt, values, write_behind=False)
+                    diploma_autosave_attempt(
+                        attempt,
+                        values,
+                        write_behind=False,
+                        flush_accepted_delta=True,
+                    )
 
-            flush(attempt_id, generation, persist)
+            if attempt.status == ATTEMPT_STATUS_IN_PROGRESS:
+                flush(attempt_id, generation, persist)
+            else:
+                transaction.on_commit(
+                    lambda aid=attempt_id: discard(aid),
+                    robust=True,
+                )
     except AssessmentAttempt.DoesNotExist:
         discard(attempt_id)
         return
@@ -100,7 +111,22 @@ def flush_snapshot_batch(self, attempt_id: int, generation: int) -> None:
         attempt_ids.append(attempt_id)
     try:
         with transaction.atomic():
+            locked_attempts = list(
+                AssessmentAttempt.objects.select_for_update()
+                .filter(pk__in=attempt_ids)
+                .order_by("pk")
+            )
+            in_progress_ids = {
+                attempt.pk
+                for attempt in locked_attempts
+                if attempt.status == ATTEMPT_STATUS_IN_PROGRESS
+            }
             flush_batch(attempt_ids, diploma_autosave_attempt_batch)
+            for stale_id in set(attempt_ids) - in_progress_ids:
+                transaction.on_commit(
+                    lambda aid=stale_id: discard(aid),
+                    robust=True,
+                )
     except Exception:
         requeue_pending(attempt_ids)
         raise

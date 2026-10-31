@@ -8,6 +8,7 @@ from functools import lru_cache
 
 import redis
 from django.conf import settings
+from django.db import transaction
 
 
 def enabled() -> bool:
@@ -46,26 +47,28 @@ def enqueue(attempt_id: int, values: dict[str, object]) -> int:
         raise RuntimeError("Redis cache is not configured")
     snapshot_key, generation_key, _ = _keys(attempt_id)
     closed_key = _closed_key(attempt_id)
-    args = [snapshot_key, generation_key, closed_key, len(values)]
+    pending_key = _pending_attempts_key()
+    args = [snapshot_key, generation_key, closed_key, pending_key, attempt_id, len(values)]
     for field, value in values.items():
         args.extend((field, json.dumps(value)))
     script = """
     local hash_key = ARGV[1]
     local generation_key = ARGV[2]
     local closed_key = ARGV[3]
+    local pending_key = ARGV[4]
+    local attempt_id = ARGV[5]
     if redis.call('EXISTS', closed_key) == 1 then return 0 end
-    local count = tonumber(ARGV[4])
-    local index = 5
+    local count = tonumber(ARGV[6])
+    local index = 7
     for i = 1, count do
         redis.call('HSET', hash_key, ARGV[index], ARGV[index + 1])
         index = index + 2
     end
-    return redis.call('INCR', generation_key)
+    local generation = redis.call('INCR', generation_key)
+    redis.call('SADD', pending_key, attempt_id)
+    return generation
     """
     generation = int(client.eval(script, 0, *args))
-    if generation == 0:
-        return 0
-    register_pending(attempt_id)
     return generation
 
 
@@ -116,14 +119,30 @@ def _read(client, attempt_id: int) -> tuple[int, dict[str, object]]:
 
 def _clear_if_current(client, attempt_id: int, generation: int) -> None:
     snapshot_key, generation_key, _ = _keys(attempt_id)
+    pending_key = _pending_attempts_key()
     script = """
     if redis.call('GET', KEYS[2]) == ARGV[1] then
         redis.call('DEL', KEYS[1], KEYS[2])
+        redis.call('SREM', KEYS[3], ARGV[2])
         return 1
     end
     return 0
     """
-    client.eval(script, 2, snapshot_key, generation_key, str(generation))
+    client.eval(script, 3, snapshot_key, generation_key, pending_key, str(generation), str(attempt_id))
+
+
+def _clear_after_commit(client, attempt_id: int, generation: int) -> None:
+    """Clear only the persisted generation, and only after its DB commit."""
+    def clear():
+        try:
+            _clear_if_current(client, attempt_id, generation)
+        except Exception:
+            try:
+                register_pending(attempt_id)
+            except Exception:
+                pass
+
+    transaction.on_commit(clear, robust=True)
 
 
 def claim_schedule(attempt_id: int) -> bool:
@@ -167,7 +186,7 @@ def drain(attempt_id: int, persist: Callable[[dict[str, object]], None]) -> bool
         if not values:
             return False
         persist(values)
-        _clear_if_current(client, attempt_id, generation)
+        _clear_after_commit(client, attempt_id, generation)
     return True
 
 
@@ -182,7 +201,7 @@ def flush(attempt_id: int, generation: int, persist: Callable[[dict[str, object]
         if not values or current_generation < generation:
             return False
         persist(values)
-        _clear_if_current(client, attempt_id, current_generation)
+        _clear_after_commit(client, attempt_id, current_generation)
     return True
 
 
@@ -210,7 +229,7 @@ def flush_batch(
         if flushed:
             persist(flushed)
             for attempt_id, generation in generations.items():
-                _clear_if_current(client, attempt_id, generation)
+                _clear_after_commit(client, attempt_id, generation)
         return list(flushed)
     finally:
         for lock in reversed(locks):

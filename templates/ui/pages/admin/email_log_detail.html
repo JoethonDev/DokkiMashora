@@ -1,0 +1,45 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n %}
+{% block title %}
+  {% trans "Email detail" %}
+{% endblock %}
+{% block content %}
+  <div class="page-stack animate-enter-view">{% trans "Settings" as eyebrow %}
+    {% trans "Email detail" as title %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=message.subject %}
+    <div class="actions-row">
+      <a class="btn-secondary" href="{% url 'communications:admin_email_log' %}">&larr; {% trans "Back to email log" %}</a>
+      <a class="btn-ghost" href="{% url 'audit:list' %}?q=email%3A{{ message.id }}">{% trans "Trace in audit" %}</a>
+    </div>
+    <section class="card-surface flex flex-col gap-4">
+      <dl class="dl">
+        <div><dt class="dt">{% trans "Status" %}</dt><dd class="dd">
+          <span class="{% if message.status == 'failed' %}status-pill-danger{% elif message.status == 'sent' %}status-pill-success{% elif message.status == 'processing' %}status-pill-warning{% else %}status-pill-info{% endif %}">{{ message.get_status_display }}</span>
+        </dd></div>
+        <div><dt class="dt">{% trans "Recipient" %}</dt><dd class="dd">{{ message.to_email }}{% if message.cc_emails %}<small class="block text-muted">CC: {{ message.cc_emails }}</small>{% endif %}</dd></div>
+        <div><dt class="dt">{% trans "Subject" %}</dt><dd class="dd">{{ message.subject }}</dd></div>
+        <div><dt class="dt">{% trans "Template" %}</dt><dd class="dd">{{ message.template_slug|default:"—" }}</dd></div>
+        <div><dt class="dt">{% trans "Reference" %}</dt><dd class="dd">{{ message.reference|default:"—" }}</dd></div>
+        <div><dt class="dt">{% trans "Requested by" %}</dt><dd class="dd">{{ message.sent_by|default:_("System") }}</dd></div>
+        <div><dt class="dt">{% trans "Bulk send" %}</dt><dd class="dd">{% if message.bulk_send %}{{ message.bulk_send }}{% else %}—{% endif %}</dd></div>
+        <div><dt class="dt">{% trans "Attempts" %}</dt><dd class="dd">{{ message.attempts }}</dd></div>
+        <div><dt class="dt">{% trans "Queued at" %}</dt><dd class="dd">{{ message.queued_at|date:"Y-m-d H:i:s"|default:"—" }}</dd></div>
+        <div><dt class="dt">{% trans "Started at" %}</dt><dd class="dd">{{ message.started_at|date:"Y-m-d H:i:s"|default:"—" }}</dd></div>
+        <div><dt class="dt">{% trans "Sent at" %}</dt><dd class="dd">{{ message.sent_at|date:"Y-m-d H:i:s"|default:"—" }}</dd></div>
+        <div><dt class="dt">{% trans "Created at" %}</dt><dd class="dd">{{ message.created_at|date:"Y-m-d H:i:s" }}</dd></div>
+      </dl>
+      {% if message.error %}
+        <div>
+          <h3>{% trans "Last error" %}</h3>
+          <pre class="whitespace-pre-wrap break-words text-red">{{ message.error }}</pre>
+        </div>
+      {% endif %}
+      {% if message.display_body %}
+        <div>
+          <h3>{% trans "Body" %}</h3>
+          <pre class="whitespace-pre-wrap break-words max-h-96 overflow-auto">{{ message.display_body }}</pre>
+        </div>
+      {% endif %}
+    </section>
+  </div>
+{% endblock %}

@@ -8,13 +8,13 @@ from django.http import HttpRequest, HttpResponse
 
 
 def is_htmx(request: HttpRequest) -> bool:
-    # Boosted shell navigation needs the full page so the client can select the
-    # replaceable content boundary; ordinary HTMX interactions still receive
-    # their fragments.
-    return (
-        request.headers.get("HX-Request") == "true"
-        and request.headers.get("HX-Boosted") != "true"
-    )
+    """Whether HTMX 4 requested a targeted partial response.
+
+    Boosted navigation and requests using ``hx-select`` are marked ``full``;
+    those must keep the canonical full-page response for selection and refresh.
+    This header only chooses presentation and is never an authorization signal.
+    """
+    return request.headers.get("HX-Request-Type") == "partial"
 
 
 def hx_toast(
@@ -26,11 +26,8 @@ def hx_toast(
     """Set HX-Trigger header for toast notifications.
 
     Merges extra_events without overwriting the toast event.
-    Supports both hyphen and camelCase keys for compatibility.
     """
     payload: dict = {"show-toast": {"message": str(message), "type": type}}
-    # Alias for spec compatibility (showToast camelCase)
-    payload["showToast"] = payload["show-toast"]
     # Merge existing HX-Trigger if already set (preserve without overwriting toast)
     existing_raw = response.headers.get("HX-Trigger") if hasattr(response, "headers") else None
     if not existing_raw:
@@ -41,9 +38,10 @@ def hx_toast(
     if existing_raw:
         try:
             existing = json.loads(existing_raw) if isinstance(existing_raw, str) else {}
-            for k, v in existing.items():
-                if k not in payload:
-                    payload[k] = v
+            if isinstance(existing, dict):
+                for k, v in existing.items():
+                    if k not in payload:
+                        payload[k] = v
         except (ValueError, TypeError):
             pass
     if extra_events:

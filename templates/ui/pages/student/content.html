@@ -21,11 +21,22 @@
       <article class="card-surface flex flex-col gap-4{% if not video_tracking_enabled %} lg:col-span-3{% endif %}">
         <div class="section-head"><div><p class="eyebrow">{% trans "Assessments" %}</p><h3>{% trans "Quizzes and assessments" %}</h3></div></div>
         <div class="flex flex-col gap-4">
-          {% for assessment in learning_assessments %}
-            <a class="flex flex-col gap-1 border border-line rounded-sm p-4 no-underline text-inherit hover:bg-surface-soft" href="{% url 'assessments:instructions' assessment.id %}">
-              <strong class="block">{{ assessment.title }}</strong>
-              <small class="text-muted">{{ assessment.get_assessment_type_display }}</small>
-            </a>
+          {% for card in learning_assessment_cards %}
+            {% if card.readiness.state == "restricted" %}
+              <div class="flex flex-col gap-1 rounded-sm border border-line bg-surface-soft p-4" aria-disabled="true">
+                <div class="flex items-center justify-between gap-2 flex-wrap">
+                  <strong>{{ card.assessment.title }}</strong>
+                  {% include "ui/components/_status.html" with code="restricted" label=_("Locked") %}
+                </div>
+                <small class="text-muted">{{ card.assessment.get_assessment_type_display }}</small>
+                {% if card.readiness.block_reason %}<small class="text-muted">{{ card.readiness.block_reason }}</small>{% endif %}
+              </div>
+            {% else %}
+              <a class="flex flex-col gap-1 border border-line rounded-sm p-4 no-underline text-inherit hover:bg-surface-soft" href="{% url 'assessments:instructions' card.assessment.id %}">
+                <strong class="block">{{ card.assessment.title }}</strong>
+                <small class="text-muted">{{ card.assessment.get_assessment_type_display }}</small>
+              </a>
+            {% endif %}
           {% empty %}
             <p class="text-sm text-muted m-0">{% trans "No quizzes or assessments are currently available." %}</p>
           {% endfor %}
@@ -45,6 +56,32 @@
     {% include "ui/components/_page_header.html" with eyebrow=_("Learning") title=lecture.title back_url=learning_back_url back_label=_("Back to learning") %}
     <section class="card-surface flex flex-col gap-4">
       {% if lecture.description %}<p>{{ lecture.description }}</p>{% endif %}
+      {% if video_tracking_enabled and lecture.youtube_metadata_status == "pending" %}
+        <div class="alert-warning space-y-1" role="status">
+          <p class="m-0">{% trans "Video details are still being checked, so watch progress cannot be recorded yet." %}</p>
+          {% if version and lecture.audio_hls_playlist_key %}
+            <p class="m-0">{% trans "You can use the audio player below to complete this lesson while the video is being checked." %}</p>
+          {% elif version %}
+            <p class="m-0">{% trans "If this continues, contact course staff. This lesson and later lessons remain locked until a supported media option is available." %}</p>
+          {% elif diploma %}
+            <p class="m-0">{% trans "If this continues, contact the administration. The lesson remains available, but its video progress cannot be recorded yet." %}</p>
+          {% endif %}
+        </div>
+      {% elif video_tracking_enabled and lecture.youtube_metadata_status == "unavailable" %}
+        <div class="alert-warning space-y-1" role="alert">
+          <p class="m-0">{% trans "Video details could not be loaded, so watch progress cannot be recorded." %}</p>
+          {% if version and lecture.audio_hls_playlist_key %}
+            <p class="m-0">{% trans "Use the audio player below to complete this lesson, or contact course staff about the video." %}</p>
+          {% elif version %}
+            <p class="m-0">{% trans "Contact course staff to restore a supported media option. This lesson and later lessons remain locked until then." %}</p>
+          {% elif diploma %}
+            <p class="m-0">{% trans "Contact the administration to restore video progress tracking. The lesson remains available." %}</p>
+          {% endif %}
+        </div>
+      {% endif %}
+      {% if watch_progress and lecture.youtube_duration_seconds %}
+        {% widthratio watch_progress.validated_contiguous_seconds lecture.youtube_duration_seconds 100 as watch_pct %}
+      {% endif %}
       {% if youtube_video_id|default:lecture.youtube_video_id %}<div{% if video_tracking_enabled %}
      data-youtube-progress="{{ youtube_video_id|default:lecture.youtube_video_id }}"
      data-watch-start-url="{% if version %}{% url 'academics:api_watch_start' version.id lecture.id %}{% elif diploma %}{% url 'academics:api_diploma_watch_start' enrollment.id semester.id lecture.id %}{% endif %}"
@@ -54,29 +91,35 @@
      data-msg-violation-prefix="{% trans 'Violation' %}"
      data-msg-access-denied="{% trans 'Access denied' %}"
      data-msg-completed="{% trans 'Completed' %}"
-     data-msg-start-failed="{% trans 'Could not start tracking.' %}"{% endif %}><div class="aspect-video overflow-hidden rounded-md bg-surface-inverse"><iframe class="yt-iframe w-full h-full" src="https://www.youtube-nocookie.com/embed/{{ youtube_video_id|default:lecture.youtube_video_id }}?enablejsapi=1&rel=0&modestbranding=1&origin={{ request.scheme }}://{{ request.get_host }}&widget_referrer={{ request.scheme }}://{{ request.get_host }}" title="{{ lecture.title }}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope, picture-in-picture, web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div>
-  {% if video_tracking_enabled %}<div class="flex items-center gap-2.5 mt-3"><div class="progress-track flex-1"><div class="progress-bar yt-progress-bar" style="--progress:0%"></div></div><span class="yt-progress-text text-sm text-muted">0%</span></div>
+     data-msg-start-failed="{% trans 'Could not start tracking.' %}"
+     data-msg-try-again="{% trans 'Try again.' %}"{% endif %}><div class="aspect-video overflow-hidden rounded-md bg-surface-inverse"><iframe class="yt-iframe w-full h-full" src="https://www.youtube-nocookie.com/embed/{{ youtube_video_id|default:lecture.youtube_video_id }}?enablejsapi=1&rel=0&modestbranding=1&origin={{ request.scheme }}://{{ request.get_host }}&widget_referrer={{ request.scheme }}://{{ request.get_host }}{% if watch_resume_seconds %}&start={{ watch_resume_seconds }}{% endif %}" title="{{ lecture.title }}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope, picture-in-picture, web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div>
+  {% if video_tracking_enabled %}<div class="flex items-center gap-2.5 mt-3"><div class="progress-track flex-1"><div class="progress-bar yt-progress-bar" style="--progress:{{ watch_pct|default:0 }}%"></div></div><span class="yt-progress-text text-sm text-muted">{{ watch_pct|default:0 }}%</span></div>
   <p class="yt-status text-sm mt-2" role="status" aria-live="polite" aria-atomic="true"></p>
   <p class="yt-violation hidden text-red text-sm mt-2" role="status" aria-live="polite" aria-atomic="true"></p>{% endif %}
 </div>
       {% elif lecture.youtube_url %}<a class="btn-primary" href="{{ lecture.youtube_url }}" target="_blank" rel="noopener noreferrer">{% trans "Open video" %}</a>{% endif %}
+      {% if audio_progress and lecture.audio_duration_seconds %}
+        {% widthratio audio_progress.validated_contiguous_seconds lecture.audio_duration_seconds 100 as audio_pct %}
+      {% endif %}
       {% if lecture.audio_hls_playlist_key and version %}
         <div class="mt-4"
              data-audio-progress
              data-audio-start-url="{% url 'academics:api_audio_start' version.id lecture.id %}"
              data-audio-checkpoint-url="{% url 'academics:api_audio_checkpoint' version.id lecture.id %}"
+             data-audio-resume="{{ audio_resume_seconds|default:0 }}"
              data-msg-refresh="{% trans 'Refresh' %}"
              data-msg-paused="{% trans 'Paused' %}"
              data-msg-playback-error="{% trans 'Playback error' %}"
              data-msg-violation-prefix="{% trans 'Violation' %}"
              data-msg-access-denied="{% trans 'Access denied' %}"
              data-msg-start-failed="{% trans 'Could not start tracking.' %}"
-             data-msg-completed="{% trans 'Completed' %}">
+             data-msg-completed="{% trans 'Completed' %}"
+             data-msg-try-again="{% trans 'Try again.' %}">
           <audio class="w-full" controls preload="metadata">
             <source src="{% url 'academics:student_lecture_audio' version.id lecture.id lecture.audio_hls_playlist_key %}" type="application/vnd.apple.mpegurl">
             <source src="{% url 'academics:student_lecture_audio_download' version.id lecture.id %}" type="{{ lecture.audio_content_type|default:'audio/mpeg' }}">
           </audio>
-          <div class="flex items-center gap-2.5 mt-3"><div class="progress-track flex-1"><div class="progress-bar audio-progress-bar" style="--progress:0%"></div></div><span class="audio-progress-text text-sm text-muted">0%</span></div>
+          <div class="flex items-center gap-2.5 mt-3"><div class="progress-track flex-1"><div class="progress-bar audio-progress-bar" style="--progress:{{ audio_pct|default:0 }}%"></div></div><span class="audio-progress-text text-sm text-muted">{{ audio_pct|default:0 }}%</span></div>
           <p class="audio-status text-sm mt-2" role="status" aria-live="polite" aria-atomic="true"></p>
           <p class="audio-violation hidden text-red text-sm mt-2" role="status" aria-live="polite" aria-atomic="true"></p>
         </div>
@@ -112,47 +155,11 @@
       {% for group in semester_lectures %}<section class="card-surface flex flex-col gap-4"><div class="section-head"><div><p class="eyebrow">{% trans "Semester" %}</p><h3>{{ group.semester.title }}</h3></div></div>{% for item in group.lectures %}<article class="flex flex-col gap-4 py-3 border-b border-line first:pt-0 last:border-b-0 last:pb-0"><h3>{{ item.order }}. {{ item.title }}</h3><a class="btn-soft self-start" href="{% url 'academics:student_diploma_lecture_view' enrollment.id group.semester.id item.id %}">{% trans "Open lesson" %}</a></article>{% empty %}{% include "ui/components/_empty_state.html" with title=_("No published lessons yet.") %}{% endfor %}</section>{% empty %}<section class="card-surface flex flex-col gap-4">{% include "ui/components/_empty_state.html" with title=_("No semesters available.") %}</section>{% endfor %}
     {% endif %}
   {% else %}{% include "ui/components/_page_header.html" with eyebrow=_("Learning") title=course_version.course.title description=course_version.label|default:'' back_url=learning_back_url back_label=_("Back to learning") %}
-    <section class="flex flex-col lg:flex-row gap-4"><aside class="card-surface flex flex-col gap-4 self-start w-80 shrink-0"><div class="section-head"><div>
-            <p class="eyebrow">{% trans "Course content" %}</p>
-            <h3>
-              {{ lectures|length }}
-              {% trans "lessons" %}
-            </h3>
-          </div>
-        </div>
-        <div class="flex flex-col gap-4">
-        {% for item in lectures %}
-          {% with unlocked=lecture_unlock|get_item:item.id %}
-          <a class="flex items-center gap-2.5 py-3 border-b border-line first:pt-0 last:border-b-0 last:pb-0 no-underline text-inherit{% if item.id in completed_lecture_ids %} font-bold text-brand{% endif %}"
-             href="{% if unlocked %}{% url 'academics:student_lecture_view' version.id item.id %}{% else %}#lecture-{{ item.id }}{% endif %}"><span class="avatar">{% if item.id in completed_lecture_ids %}
-              &#10003;
-            {% elif unlocked %}
-              {{ item.order }}
-            {% else %}
-              &#128274;
-            {% endif %}
-          </span>
-          <span class="flex flex-col gap-1"><strong>{{ item.title }}</strong>
-            <small>
-              {% if item.id in completed_lecture_ids %}
-                {% trans "Completed" %}
-              {% elif unlocked %}
-                {% trans "Not started" %}
-              {% else %}
-                {% trans "Locked" %}
-              {% endif %}
-            </small></span></a>
-          {% endwith %}
-        {% empty %}
-          {% include "ui/components/_empty_state.html" with title=_("No published lessons yet.") %}
-        {% endfor %}
-        </div>
-      </aside>
-    </section>
     <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Lessons" %}</p>
           <h3>{% trans "Published content" %}</h3>
         </div>
+        <small class="text-muted">{{ lectures|length }} {% trans "lessons" %}</small>
       </div>
       {% for item in lectures %}
         {% with unlocked=lecture_unlock|get_item:item.id %}
@@ -173,6 +180,11 @@
           </div>
           {% if item.description %}
             <p class="text-sm text-muted m-0">{{ item.description }}</p>
+          {% endif %}
+          {% if video_tracking_enabled and item.youtube_metadata_status == "pending" and not item.audio_hls_playlist_key %}
+            <p class="alert-warning text-sm m-0" role="status">{% trans "This lesson's video is still being checked. If it does not become available, contact course staff; this lesson and later lessons cannot be completed until supported media is ready." %}</p>
+          {% elif video_tracking_enabled and item.youtube_metadata_status == "unavailable" and not item.audio_hls_playlist_key %}
+            <p class="alert-warning text-sm m-0" role="alert">{% trans "This lesson's video progress is unavailable. Contact course staff to restore a supported media option; this lesson and later lessons remain locked until then." %}</p>
           {% endif %}
           {% if unlocked %}
           <a class="btn-soft self-start"

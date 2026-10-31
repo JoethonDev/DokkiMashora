@@ -17,6 +17,7 @@ from .constants import (
     AUDIO_PROCESSING_STATUS_CHOICES,
     ENROLLMENT_STATUS_ACTIVE,
     ENROLLMENT_STATUS_CHOICES,
+    ENROLLMENT_STATUS_COMPLETED,
     ENROLLMENT_STATUS_PENDING,
     SCOPE_CHOICES,
     SCOPE_COURSE_VERSION,
@@ -28,6 +29,10 @@ from .constants import (
     VIOLATION_NONE,
     WATCH_STATUS_CHOICES,
     WATCH_STATUS_IN_PROGRESS,
+    YOUTUBE_METADATA_STATUS_CHOICES,
+    YOUTUBE_METADATA_STATUS_PENDING,
+    YOUTUBE_METADATA_STATUS_READY,
+    YOUTUBE_METADATA_STATUS_UNAVAILABLE,
 )
 
 
@@ -38,6 +43,11 @@ class Diploma(TimeStampedModel):
     description = models.TextField(_("description"), blank=True)
     total_semesters = models.PositiveIntegerField(_("total semesters"), default=2)
     is_active = models.BooleanField(_("active"), default=True)
+    attendance_enabled = models.BooleanField(
+        _("attendance enabled"),
+        default=True,
+        help_text=_("Enable attendance QR codes, periods, and sessions for this diploma."),
+    )
     video_tracking_enabled = models.BooleanField(_("video tracking enabled"), default=False)
     video_completion_percent = models.PositiveSmallIntegerField(
         _("video completion percent"),
@@ -89,6 +99,11 @@ class Course(TimeStampedModel):
     title = models.CharField(_("title"), max_length=255)
     description = models.TextField(_("description"), blank=True)
     is_active = models.BooleanField(_("active"), default=True)
+    attendance_enabled = models.BooleanField(
+        _("attendance enabled"),
+        default=True,
+        help_text=_("Enable attendance QR codes and sessions for this course."),
+    )
     video_tracking_enabled = models.BooleanField(_("video tracking enabled"), default=False)
     video_completion_percent = models.PositiveSmallIntegerField(
         _("video completion percent"),
@@ -200,6 +215,16 @@ class Lecture(TimeStampedModel):
     youtube_duration_seconds = models.PositiveIntegerField(
         _("YouTube duration (seconds)"), null=True, blank=True,
     )
+    youtube_metadata_status = models.CharField(
+        _("YouTube metadata status"),
+        max_length=16,
+        choices=YOUTUBE_METADATA_STATUS_CHOICES,
+        blank=True,
+        default="",
+    )
+    youtube_metadata_request_id = models.UUIDField(
+        _("YouTube metadata request ID"), null=True, blank=True, editable=False,
+    )
     youtube_metadata_fetched_at = models.DateTimeField(
         _("YouTube metadata fetched at"), null=True, blank=True,
     )
@@ -247,15 +272,25 @@ class Lecture(TimeStampedModel):
     )
 
     def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
         update_fields = kwargs.get("update_fields")
-        if not update_fields and self.youtube_url and not self.youtube_video_id:
-            m = self._YT_VIDEO_ID_RE.search(self.youtube_url)
-            video_id = m.group(1) if m else ""
-            if video_id:
-                self.youtube_video_id = video_id
-                self.youtube_metadata_fetched_at = timezone.now()
-                self.save(update_fields=["youtube_video_id", "youtube_metadata_fetched_at"])
+        if update_fields is None and self._state.adding:
+            if self.youtube_url:
+                match = self._YT_VIDEO_ID_RE.search(self.youtube_url)
+                self.youtube_video_id = match.group(1) if match else ""
+                self.youtube_metadata_status = (
+                    YOUTUBE_METADATA_STATUS_READY
+                    if self.youtube_duration_seconds and self.youtube_duration_seconds > 0
+                    else YOUTUBE_METADATA_STATUS_PENDING
+                    if self.youtube_video_id
+                    else YOUTUBE_METADATA_STATUS_UNAVAILABLE
+                )
+            elif self.youtube_video_id:
+                self.youtube_metadata_status = (
+                    YOUTUBE_METADATA_STATUS_READY
+                    if self.youtube_duration_seconds and self.youtube_duration_seconds > 0
+                    else YOUTUBE_METADATA_STATUS_PENDING
+                )
+        super().save(*args, **kwargs)
 
     @property
     def is_released(self):
@@ -310,6 +345,13 @@ class DiplomaEnrollment(TimeStampedModel):
     def __str__(self):
         return f"{self.student} - {self.cohort}"
 
+    @property
+    def is_access_expired(self):
+        """True when this Diploma enrollment's access window has passed."""
+        if self.expires_at is None:
+            return False
+        return timezone.now() >= self.expires_at
+
 
 class CourseEnrollment(TimeStampedModel):
     """Enrollment of a student in a course version."""
@@ -335,6 +377,16 @@ class CourseEnrollment(TimeStampedModel):
     )
     activated_at = models.DateTimeField(_("activated at"), null=True, blank=True)
     expires_at = models.DateTimeField(_("expires at"), null=True, blank=True)
+    completed_at = models.DateTimeField(_("completed at"), null=True, blank=True)
+    completed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="completed_course_enrollments",
+        verbose_name=_("completed by"),
+    )
+    completion_notes = models.TextField(_("completion notes"), blank=True)
 
     class Meta:
         verbose_name = _("course enrollment")
@@ -351,6 +403,10 @@ class CourseEnrollment(TimeStampedModel):
         if self.expires_at is None:
             return False
         return timezone.now() >= self.expires_at
+
+    @property
+    def is_completed(self):
+        return self.status == ENROLLMENT_STATUS_COMPLETED
 
 
 class TeacherAssignment(TimeStampedModel):
@@ -899,6 +955,16 @@ class DiplomaLecture(TimeStampedModel):
     youtube_duration_seconds = models.PositiveIntegerField(
         _("YouTube duration (seconds)"), null=True, blank=True,
     )
+    youtube_metadata_status = models.CharField(
+        _("YouTube metadata status"),
+        max_length=16,
+        choices=YOUTUBE_METADATA_STATUS_CHOICES,
+        blank=True,
+        default="",
+    )
+    youtube_metadata_request_id = models.UUIDField(
+        _("YouTube metadata request ID"), null=True, blank=True, editable=False,
+    )
     youtube_metadata_fetched_at = models.DateTimeField(
         _("YouTube metadata fetched at"), null=True, blank=True,
     )
@@ -955,15 +1021,25 @@ class DiplomaLecture(TimeStampedModel):
 
     def save(self, *args, **kwargs):
         self.clean()
-        super().save(*args, **kwargs)
         update_fields = kwargs.get("update_fields")
-        if not update_fields and self.youtube_url and not self.youtube_video_id:
-            m = self._YT_VIDEO_ID_RE.search(self.youtube_url)
-            video_id = m.group(1) if m else ""
-            if video_id:
-                self.youtube_video_id = video_id
-                self.youtube_metadata_fetched_at = timezone.now()
-                self.save(update_fields=["youtube_video_id", "youtube_metadata_fetched_at"])
+        if update_fields is None and self._state.adding:
+            if self.youtube_url:
+                match = self._YT_VIDEO_ID_RE.search(self.youtube_url)
+                self.youtube_video_id = match.group(1) if match else ""
+                self.youtube_metadata_status = (
+                    YOUTUBE_METADATA_STATUS_READY
+                    if self.youtube_duration_seconds and self.youtube_duration_seconds > 0
+                    else YOUTUBE_METADATA_STATUS_PENDING
+                    if self.youtube_video_id
+                    else YOUTUBE_METADATA_STATUS_UNAVAILABLE
+                )
+            elif self.youtube_video_id:
+                self.youtube_metadata_status = (
+                    YOUTUBE_METADATA_STATUS_READY
+                    if self.youtube_duration_seconds and self.youtube_duration_seconds > 0
+                    else YOUTUBE_METADATA_STATUS_PENDING
+                )
+        super().save(*args, **kwargs)
 
     @property
     def is_released(self):

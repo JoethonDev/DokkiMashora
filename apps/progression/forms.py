@@ -119,6 +119,8 @@ class DiplomaProgressionRuleForm(StyledFormMixin, forms.ModelForm):
         model = DiplomaProgressionRule
         fields = [
             "semester_pass_percent",
+            "require_all_required_assessments",
+            "allow_missing_optional_assessments",
             "require_all_semesters_passed",
             "auto_promote_enabled",
             "allow_admin_override",
@@ -130,7 +132,9 @@ class DiplomaProgressionRuleForm(StyledFormMixin, forms.ModelForm):
             "max_retake_count": forms.NumberInput(attrs={"step": "1", "min": "0"}),
         }
         labels = {
-            "semester_pass_percent": _("Semester passing threshold (%)"),
+            "semester_pass_percent": _("Diploma default semester pass threshold (%)"),
+            "require_all_required_assessments": _("Require all required assessments by default"),
+            "allow_missing_optional_assessments": _("Allow missing optional assessments by default"),
             "require_all_semesters_passed": _("Require all semesters passed"),
             "auto_promote_enabled": _("Auto promote enabled"),
             "allow_admin_override": _("Allow admin override"),
@@ -138,5 +142,13 @@ class DiplomaProgressionRuleForm(StyledFormMixin, forms.ModelForm):
             "max_retake_count": _("Maximum retakes (number)"),
         }
         help_texts = {
-            "semester_pass_percent": _("0–100"),
+            "semester_pass_percent": _(
+                "A legacy progression threshold only; canonical semester scores use cohort-specific evaluation settings."
+            ),
+            "require_all_required_assessments": _(
+                "A missing Required Diploma assessment blocks finalization when enabled; otherwise it is omitted. Pending work always blocks."
+            ),
+            "allow_missing_optional_assessments": _(
+                "A missing Optional Diploma assessment blocks finalization when disabled; when enabled it is omitted. Pending work always blocks."
+            ),
         }

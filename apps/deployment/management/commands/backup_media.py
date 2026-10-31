@@ -2,7 +2,7 @@
 
 Media is a separate durable source from the database (S2-10); a DB-only dump
 cannot restore uploaded documents, lecture audio, or generated media. This
-command snapshots the local MEDIA_ROOT used by the Compose media_data volume.
+command snapshots the local MEDIA_ROOT used by the Compose media bind mount.
 It is bounded by an operational timeout and reports a FAILED backup rather
 than hanging. Credentials and private URLs never live under MEDIA_ROOT and are
 not part of the archive.

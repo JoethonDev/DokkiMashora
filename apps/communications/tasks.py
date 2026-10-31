@@ -40,18 +40,21 @@ def send_queued_email_task(self, delivery_id: int) -> None:
     except Exception as exc:  # noqa: BLE001 - SMTP failure is retried then surfaced as FAILED
         logger.exception(
             "Email delivery %s attempt %s failed: %s",
-            delivery_id, self.request.retries + 1, exc,
+            delivery_id,
+            self.request.retries + 1,
+            exc,
         )
         if self.request.retries < self.max_retries:
             communication_services.record_email_delivery_failure(delivery_id, str(exc), final=False)
             raise self.retry(
                 exc=exc,
-                countdown=EMAIL_TASK_RETRY_BACKOFF_SECONDS * (2 ** self.request.retries),
+                countdown=EMAIL_TASK_RETRY_BACKOFF_SECONDS * (2**self.request.retries),
             ) from exc
         communication_services.record_email_delivery_failure(delivery_id, str(exc), final=True)
         logger.error(
             "Email delivery %s failed permanently after %s attempts",
-            delivery_id, self.max_retries + 1,
+            delivery_id,
+            self.max_retries + 1,
         )
         return
     if delivered:

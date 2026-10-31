@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from urllib.parse import urlsplit
+
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -13,8 +16,6 @@ LANDING_CONTENT_DEFAULTS = {
         "hero_body": "Christ-centered, practical learning for Egyptian Coptic Orthodox parents, couples, church servants, counselors, and everyone called to help a family grow.",
         "hero_primary": "Explore our programs",
         "hero_secondary": "Student login",
-        "announcement_title": "Registration open",
-        "announcement_body": "Applications are open through the official program application flow.",
         "intro_eyebrow": "Learning that changes daily life",
         "intro_title": "Orthodox faith, sound psychology, and guidance you can use.",
         "intro_body": "Rooted in the life of the Coptic Orthodox Church in Egypt, our courses turn psychology and family-care principles into calm conversations, healthier boundaries, and practical tools for home and service.",
@@ -82,8 +83,6 @@ LANDING_CONTENT_DEFAULTS = {
         "hero_body": "تعلّم عملي محوره المسيح للوالدين والمقبلين على الزواج والخدام والمرشدين في الكنيسة القبطية الأرثوذكسية بمصر.",
         "hero_primary": "اكتشف برامجنا",
         "hero_secondary": "دخول الطلاب",
-        "announcement_title": "التقديم مفتوح",
-        "announcement_body": "التقديم متاح الآن من خلال مسار التقديم الرسمي للبرامج.",
         "intro_eyebrow": "تعلّم يغيّر الحياة اليومية",
         "intro_title": "إيمان أرثوذكسي وعلم نفس رصين وإرشاد قابل للتطبيق.",
         "intro_body": "من قلب حياة الكنيسة القبطية الأرثوذكسية في مصر، نحوّل مبادئ علم النفس والرعاية الأسرية إلى حوار هادئ وحدود صحية وأدوات عملية للبيت والخدمة.",
@@ -167,9 +166,12 @@ class TimeStampedModel(models.Model):
 class LandingAnnouncement(TimeStampedModel):
     """Admin-controlled public landing announcement."""
 
-    title = models.CharField(_("title"), max_length=160)
-    message = models.CharField(_("message"), max_length=280)
-    cta_label = models.CharField(_("button label"), max_length=80, blank=True)
+    title_ar = models.CharField(_("title (Arabic)"), max_length=160, blank=True)
+    title_en = models.CharField(_("title (English)"), max_length=160, blank=True)
+    message_ar = models.CharField(_("message (Arabic)"), max_length=280, blank=True)
+    message_en = models.CharField(_("message (English)"), max_length=280, blank=True)
+    cta_label_ar = models.CharField(_("button label (Arabic)"), max_length=80, blank=True)
+    cta_label_en = models.CharField(_("button label (English)"), max_length=80, blank=True)
     cta_url = models.CharField(_("button URL"), max_length=240, blank=True)
     starts_at = models.DateTimeField(_("starts at"), null=True, blank=True)
     ends_at = models.DateTimeField(_("ends at"), null=True, blank=True)
@@ -180,8 +182,37 @@ class LandingAnnouncement(TimeStampedModel):
         verbose_name_plural = _("landing announcements")
         ordering = ("-updated_at", "-created_at")
 
-    def __str__(self):
-        return self.title
+    def __str__(self) -> str:
+        return self.title_ar or self.title_en or str(_("Landing announcement"))
+
+    def localized(self, language_code: str) -> dict[str, str]:
+        language = "ar" if str(language_code or "").startswith("ar") else "en"
+        other = "en" if language == "ar" else "ar"
+        return {
+            "title": getattr(self, f"title_{language}") or getattr(self, f"title_{other}"),
+            "message": getattr(self, f"message_{language}") or getattr(self, f"message_{other}"),
+            "cta_label": getattr(self, f"cta_label_{language}") or getattr(self, f"cta_label_{other}"),
+        }
+
+    @property
+    def safe_cta_url(self) -> str:
+        url = (self.cta_url or "").strip()
+        if not url or url.startswith("//"):
+            return ""
+        parsed = urlsplit(url)
+        if parsed.scheme.lower() in {"http", "https"}:
+            return url
+        if not parsed.scheme and url.startswith("/"):
+            return url
+        return ""
+
+    def clean(self) -> None:
+        super().clean()
+        url = (self.cta_url or "").strip()
+        if url and not self.safe_cta_url:
+            raise ValidationError({"cta_url": _("Use an http(s) link or a site-relative path.")})
+        if self.starts_at and self.ends_at and self.ends_at <= self.starts_at:
+            raise ValidationError({"ends_at": _("The end time must be after the start time.")})
 
     @classmethod
     def current(cls):

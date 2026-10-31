@@ -6,7 +6,8 @@
 {% block content %}
   <div class="page-stack animate-enter-view">{% url 'students:record' as student_record_url %}{% include "ui/components/_page_header.html" with eyebrow=_("Records") title=_("Certificates") back_url=student_record_url back_label=_("Back to record") %}
     <section class="grid grid-cols-1 md:grid-cols-3 gap-4">{% for certificate in certificates %}
-        <article class="card-surface"><h3>{{ certificate }}</h3>
+        <article class="card-surface"><h3>{{ certificate.program_title|default:certificate }}</h3>
+          <small class="block text-muted" dir="ltr">{{ certificate.certificate_number }}</small>
           <a class="btn-primary"
              href="{% url 'certificates:student_certificate_download' certificate.id %}">{% trans "Download" %}</a></article>
       {% empty %}

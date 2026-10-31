@@ -1,168 +1,182 @@
 {% extends "ui/layouts/admin.html" %}
 {% load i18n ui_tags %}
 {% block title %}
-  {{ title|default:_("Audit") }}
+  {% trans "Audit" %}
 {% endblock %}
 {% block content %}
   <div class="page-stack animate-enter-view">{% trans "Compliance" as eyebrow %}
     {% trans "Audit" as title %}
-    {% trans "Trace business actions and system changes." as description %}
+    {% trans "Trace business actions, system email, and background jobs." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    {% if event %}
-      <section class="card-surface flex flex-col gap-4"><dl class="dl"><div>
-            <dt class="dt">{% trans "Event type" %}</dt>
-            <dd class="dd">
-              {{ event.get_action_display|default:event.action }}
-            </dd>
-          </div>
-          <div>
-            <dt class="dt">{% trans "Target" %}</dt>
-            <dd class="dd">
-              {% if event.target_type %}
-                {{ event.target_type }}
-                #
-                {{ event.target_id }}
-              {% else %}
-                —
-              {% endif %}
-            </dd>
-          </div>
-          <div>
-            <dt class="dt">{% trans "Actor" %}</dt>
-            <dd class="dd">
-              {{ event.actor|default:_("System") }}
-            </dd>
-          </div>
-          <div>
-            <dt class="dt">{% trans "IP address" %}</dt>
-            <dd class="dd">
-              {{ event.ip_address|default:'—' }}
-            </dd>
-          </div>
-          <div>
-            <dt class="dt">{% trans "Time" %}</dt>
-            <dd class="dd">
-              {{ event.created_at|date:"SHORT_DATETIME_FORMAT" }}
-            </dd>
-          </div>
-          <div>
-            <dt class="dt">{% trans "Details" %}</dt>
-            <dd class="dd">
-              {% if event.metadata %}
-                <ul class="page-stack">
-                  {% for key, value in event.metadata.items|slice:":5" %}
-                    <li>
-                      <strong>{{ key }}</strong>:
-                      <div class="mt-1">{% include "ui/components/_expandable_text.html" with text=value|stringformat:'s' clamp=3 %}</div>
-                    </li>
-                  {% endfor %}
-                </ul>
-              {% else %}
-                —
-              {% endif %}
-            </dd>
-          </div>
-        </dl>
-      </section>
-    {% elif page_obj %}
-      <section class="card-surface flex flex-col gap-4"><form class="actions-row items-end" method="get"><label class="min-w-40"><span class="field-label">{% trans "Action" %}</span>
-            <select name="action" class="form-select"><option value="">{% trans "All actions" %}</option>
-              {% for value,label in action_choices %}
-                <option value="{{ value }}"
-                        {% if value == current_action %} selected {% endif %}>{{ label }}</option>
-              {% endfor %}
-            </select>
-          </label>
-          <label class="min-w-40"><span class="field-label">{% trans "Actor" %}</span>
-            <input name="actor" class="form-input"
-                   value="{{ current_actor|default:'' }}"
-                   placeholder="{% trans 'Actor name' %}"></label>
-          <label class="min-w-40"><span class="field-label">{% trans "Target type" %}</span>
-            <select name="target_type" class="form-select"><option value="">{% trans "All types" %}</option>
-              {% for value,label in target_type_choices %}
-                <option value="{{ value }}"
-                        {% if value == current_target_type %} selected {% endif %}>{{ label }}</option>
-              {% endfor %}
-            </select>
-          </label>
-          <label class="min-w-40"><span class="field-label">{% trans "Date from" %}</span>
-            <input name="date_from" class="form-input"
-                   value="{{ current_date_from|default:'' }}"
-                   type="date"></label>
-          <label class="min-w-40"><span class="field-label">{% trans "Date to" %}</span>
-            <input name="date_to" class="form-input" value="{{ current_date_to|default:'' }}" type="date"></label>
-          <button class="btn-secondary" type="submit">{% trans "Filter" %}</button>
-          <a class="btn-ghost" href="{% url 'audit:list' %}">{% trans "Reset" %}</a>
-        </form>
-        <div class="table-wrap hidden lg:block"><table class="table">
-            <thead>
+    <section class="card-surface flex flex-col gap-4">
+      <div class="actions-row flex-wrap gap-2">
+        <a class="{% if not current_section %}status-pill-info{% else %}status-pill-neutral{% endif %}"
+           href="?period={{ current_period }}{% if current_search %}&q={{ current_search|urlencode }}{% endif %}">
+          {% trans "All sections" %}
+          <span class="ms-1 font-semibold">{{ total_count }}</span>
+        </a>
+        {% for key,label in section_choices %}
+          <a class="{% if current_section == key %}status-pill-info{% else %}status-pill-neutral{% endif %}"
+             href="?section={{ key }}&period={{ current_period }}{% if current_search %}&q={{ current_search|urlencode }}{% endif %}">
+            {{ label }}
+            <span class="ms-1 font-semibold">{{ section_counts|dict_key:key|default:0 }}</span>
+          </a>
+        {% endfor %}
+      </div>
+      <form class="actions-row items-end flex-wrap" method="get">
+        <label class="min-w-56 flex-1"><span class="field-label">{% trans "Search" %}</span>
+          <input name="q" class="form-input" value="{{ current_search }}" placeholder="{% trans 'Actor, student, assessment, email, correlation ID…' %}">
+        </label>
+        <label class="min-w-40"><span class="field-label">{% trans "Section" %}</span>
+          <select name="section" class="form-select">
+            <option value="">{% trans "All sections" %}</option>
+            {% for value,label in section_choices %}
+              <option value="{{ value }}" {% if value == current_section %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="min-w-52"><span class="field-label">{% trans "Action" %}</span>
+          <select name="action" class="form-select">
+            <option value="">{% trans "All actions" %}</option>
+            {% for group in action_groups %}
+              <optgroup label="{{ group.label }}">
+                {% for value,label in group.actions %}
+                  <option value="{{ value }}" {% if value == current_action %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </optgroup>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="min-w-40"><span class="field-label">{% trans "Actor" %}</span>
+          <input name="actor" class="form-input" value="{{ current_actor }}" placeholder="{% trans 'Name or email' %}">
+        </label>
+        <label class="min-w-40"><span class="field-label">{% trans "Target type" %}</span>
+          <select name="target_type" class="form-select">
+            <option value="">{% trans "All types" %}</option>
+            {% for value,label in target_type_choices %}
+              <option value="{{ value }}" {% if value == current_target_type %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="min-w-32"><span class="field-label">{% trans "Source" %}</span>
+          <select name="source" class="form-select">
+            <option value="">{% trans "All sources" %}</option>
+            {% for value,label in source_choices %}
+              <option value="{{ value }}" {% if value == current_source %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="min-w-32"><span class="field-label">{% trans "Outcome" %}</span>
+          <select name="outcome" class="form-select">
+            <option value="">{% trans "All outcomes" %}</option>
+            {% for value,label in outcome_choices %}
+              <option value="{{ value }}" {% if value == current_outcome %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="min-w-36"><span class="field-label">{% trans "Period" %}</span>
+          <select name="period" class="form-select">
+            {% for value,label in period_choices %}
+              <option value="{{ value }}" {% if value == current_period %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="min-w-36"><span class="field-label">{% trans "Date from" %}</span>
+          <input name="date_from" class="form-input" value="{{ current_date_from }}" type="date">
+        </label>
+        <label class="min-w-36"><span class="field-label">{% trans "Date to" %}</span>
+          <input name="date_to" class="form-input" value="{{ current_date_to }}" type="date">
+        </label>
+        <button class="btn-secondary" type="submit">{% trans "Filter" %}</button>
+        <a class="btn-ghost" href="{% url 'audit:list' %}">{% trans "Reset" %}</a>
+      </form>
+      <div class="table-wrap hidden lg:block"><table class="table">
+          <thead>
+            <tr>
+              <th class="table-th">{% trans "Time" %}</th>
+              <th class="table-th">{% trans "Section" %}</th>
+              <th class="table-th">{% trans "Action" %}</th>
+              <th class="table-th">{% trans "Actor" %}</th>
+              <th class="table-th">{% trans "Affected" %}</th>
+              <th class="table-th">{% trans "Details" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in page_obj %}
               <tr>
-                <th class="table-th">{% trans "Event" %}</th>
-                <th class="table-th">{% trans "Target" %}</th>
-                <th class="table-th">{% trans "Actor" %}</th>
-                <th class="table-th">{% trans "IP address" %}</th>
-                <th class="table-th">{% trans "Time" %}</th>
-                <th class="table-th">{% trans "Details" %}</th>
+                <td class="table-td whitespace-nowrap">
+                  <span class="block">{{ item.created_at|date:"Y-m-d" }}</span>
+                  <small class="block text-muted">{{ item.created_at|date:"H:i:s" }}</small>
+                </td>
+                <td class="table-td"><span class="status-pill-neutral">{{ item.section_label|default:_("Other") }}</span></td>
+                <td class="table-td">
+                  <span class="block font-semibold">{{ item.action_label }}</span>
+                  <small class="block text-muted">
+                    {{ item.source_label }}
+                    &middot;
+                    <span class="{% if item.outcome == 'denied' %}text-amber{% elif item.outcome == 'failure' %}text-red{% endif %}">{{ item.outcome_label }}</span>
+                  </small>
+                </td>
+                <td class="table-td">
+                  <span class="block">{{ item.actor_display }}</span>
+                  {% if item.actor_role_display %}<small class="block text-muted">{{ item.actor_role_display }}</small>{% endif %}
+                </td>
+                <td class="table-td">
+                  <span class="block">{{ item.target_display }}</span>
+                  {% if item.subject_display %}<small class="block text-muted">{% trans "Affected:" %} {{ item.subject_display }}</small>{% endif %}
+                  {% if item.target_id %}<small class="block text-muted">{{ item.target_type_label|default:item.target_type }} #{{ item.target_id }}</small>{% endif %}
+                </td>
+                <td class="table-td">
+                  {% if item.display_metadata %}
+                    <div class="flex flex-col gap-1">
+                      {% for entry in item.display_metadata|slice:":3" %}
+                        <small class="block min-w-0 break-words"><strong>{{ entry.label }}:</strong>
+                          {% if entry.is_long %}
+                            <details class="mt-1">
+                              <summary class="cursor-pointer font-semibold text-brand">{% trans "Show more" %}</summary>
+                              <span class="block whitespace-pre-wrap break-words">{{ entry.value }}</span>
+                            </details>
+                          {% else %}
+                            {{ entry.value }}
+                          {% endif %}
+                        </small>
+                      {% endfor %}
+                      <a class="btn-ghost w-fit" href="{% url 'audit:detail' item.id %}">{% trans "View full details" %}</a>
+                    </div>
+                  {% else %}
+                    <a class="btn-ghost w-fit" href="{% url 'audit:detail' item.id %}">{% trans "View" %}</a>
+                  {% endif %}
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {% for item in page_obj %}
-                <tr>
-                  <td class="table-td">{{ item.get_action_display|default:item.action }}</td>
-                  <td class="table-td">
-                    {% if item.target_type %}
-                      {{ item.target_type }}
-                      #
-                      {{ item.target_id }}
-                    {% else %}
-                      —
-                    {% endif %}
-                  </td>
-                  <td class="table-td">{{ item.actor|default:_("System") }}</td>
-                  <td class="table-td">{{ item.ip_address|default:'—' }}</td>
-                  <td class="table-td">{{ item.created_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</td>
-                  <td class="table-td">
-                    {% if item.metadata %}
-                      <div class="flex flex-col gap-1">
-                        {% for key, value in item.metadata.items|slice:":3" %}
-                          <small><strong>{{ key }}:</strong>
-                            {% include "ui/components/_expandable_text.html" with text=value|stringformat:'s' clamp=1 muted=True %}
-                          </small>
-                        {% endfor %}
-                        <a class="btn-ghost w-fit" href="{% url 'audit:detail' item.id %}">{% trans "View full details" %}</a>
-                      </div>
-                    {% else %}
-                      —
-                    {% endif %}
-                  </td>
-                </tr>
-              {% empty %}
-                <tr>
-                  <td class="table-td" colspan="6">{% include "ui/components/_empty_state.html" with title=_("No audit events found.") %}
-                  </td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-        <div class="card-stack lg:hidden">
-          {% for item in page_obj %}
-            <div class="mobile-card">
-              <div class="flex-1 min-w-0">
-                <strong class="block">{{ item.get_action_display|default:item.action }}</strong>
-                <small class="block text-muted">{% if item.target_type %}{{ item.target_type }} #{{ item.target_id }}{% else %}—{% endif %} &middot; {{ item.actor|default:_("System") }}</small>
-                <small class="block text-muted">{{ item.ip_address|default:'—' }} &middot; {{ item.created_at|date:"SHORT_DATETIME_FORMAT"|default:'—' }}</small>
-                <a class="btn-ghost mt-1" href="{% url 'audit:detail' item.id %}">{% trans "View full details" %}</a>
+            {% empty %}
+              <tr>
+                <td class="table-td" colspan="6">{% include "ui/components/_empty_state.html" with title=_("No audit events found.") %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="card-stack lg:hidden">
+        {% for item in page_obj %}
+          <div class="mobile-card">
+            <div class="flex-1 min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="status-pill-neutral">{{ item.section_label|default:_("Other") }}</span>
+                <small class="text-muted">{{ item.created_at|date:"Y-m-d H:i:s" }}</small>
               </div>
+              <strong class="block mt-1">{{ item.action_label }}</strong>
+              <small class="block text-muted">{{ item.actor_display }}{% if item.actor_role_display %} &middot; {{ item.actor_role_display }}{% endif %}</small>
+              <small class="block text-muted">{{ item.target_display }}{% if item.subject_display %} &middot; {% trans "Affected:" %} {{ item.subject_display }}{% endif %}</small>
+              <a class="btn-ghost mt-1" href="{% url 'audit:detail' item.id %}">{% trans "View full details" %}</a>
             </div>
-          {% empty %}
-            <div class="border border-line rounded-sm p-4 text-center">
-              {% include "ui/components/_empty_state.html" with title=_("No audit events found.") fill=True %}
-            </div>
-          {% endfor %}
-        </div>
-        {% include "ui/components/_pagination.html" %}
-      </section>
-    {% endif %}
+          </div>
+        {% empty %}
+          <div class="border border-line rounded-sm p-4 text-center">
+            {% include "ui/components/_empty_state.html" with title=_("No audit events found.") fill=True %}
+          </div>
+        {% endfor %}
+      </div>
+      {% include "ui/components/_pagination.html" %}
+    </section>
   </div>
 {% endblock %}

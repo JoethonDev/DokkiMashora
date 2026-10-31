@@ -12,7 +12,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from apps.academics.models import Cohort, Course
+from apps.academics.models import Course, Diploma
 from apps.applications.constants import (
     DELIVERY_MODE_CHOICES,
     DELIVERY_MODE_ONLINE,
@@ -23,6 +23,8 @@ from apps.applications.services import (
     RegistrationData,
     find_duplicate,
     is_apply_target_open,
+    open_diploma_ids_queryset,
+    resolve_latest_open_cohort,
 )
 from apps.core.forms import StyledFormMixin
 from apps.core.phone import validate_phone
@@ -115,15 +117,12 @@ class RegistrationForm(StyledFormMixin, forms.Form):
 
     def _load_program_choices(self) -> None:
         self.fields["program_type"].choices = PROGRAM_TYPE_CHOICES
-        today = timezone.now().date()
-        cohorts = Cohort.objects.filter(
-            is_active=True,
-            entrance_exams__is_active=True,
-            end_date__isnull=False,
-            end_date__gte=today,
-        ).select_related("diploma").order_by("-start_date")
+        # A diploma application assigns the latest open cohort internally, so
+        # the applicant selects a diploma (never a cohort).
+        open_diploma_ids = list(open_diploma_ids_queryset())
+        diplomas = Diploma.objects.filter(pk__in=open_diploma_ids).order_by("title")
         self.fields["diploma"].choices = [("", _("Select a diploma"))] + [
-            (str(c.pk), f"{c.diploma.title} — {c.name}") for c in cohorts
+            (str(d.pk), d.title) for d in diplomas
         ]
         courses = (
             Course.objects.filter(is_active=True, versions__is_active=True)
@@ -227,8 +226,10 @@ class RegistrationForm(StyledFormMixin, forms.Form):
                     if not cleaned.get("delivery_mode"):
                         self.add_error("delivery_mode", _("Please select an attendance mode."))
                     if diploma:
-                        cohort = Cohort.objects.filter(pk=diploma).select_related("diploma").first()
-                        if not cohort or not is_apply_target_open(cohort=cohort):
+                        cohort = resolve_latest_open_cohort(
+                            Diploma.objects.filter(pk=diploma).first()
+                        )
+                        if cohort is None:
                             self.add_error("diploma", _("No active cohort with an entrance exam found for this diploma."))
                         else:
                             self._auto_cohort_id = cohort.pk

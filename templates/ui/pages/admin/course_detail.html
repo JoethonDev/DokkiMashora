@@ -4,8 +4,9 @@
   {{ course.title }}
 {% endblock %}
 {% block content %}
-  <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=course.title description=course.description eyebrow=_("Course") back_button=True %}
+  <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=course.title description=course.description eyebrow=_("Course") back_button=True back_url=back_url %}
     <div class="actions-row">
+      <a class="btn-secondary" href="{% url 'academics:admin_course_edit' course.id %}">{% trans "Edit course" %}</a>
       <form method="post" action="{% url 'academics:admin_course_delete' course.id %}" data-confirm="{% trans 'Delete this course and its versions?' %}" class="m-0">{% csrf_token %}
         <button class="btn-danger" type="submit">{% trans "Delete course" %}</button>
       </form>
@@ -34,13 +35,14 @@
                   <td class="table-td">{{ version.label }}</td>
                   <td class="table-td">{% if version.access_duration_days %}{{ version.access_duration_days }} {% trans "days" %}{% else %}{% trans "Unlimited" %}{% endif %}</td>
                   <td class="table-td">{% include "ui/components/_status.html" with code=version.is_active|yesno:"active,inactive" label=version.is_active|boolean_label:"Active,Inactive" %}</td>
-                  <td class="table-td">{{ version.lectures|length }}</td>
+                  <td class="table-td">{{ version.lecture_count }}</td>
                   <td class="table-td">
-                    <a class="btn-secondary"
-                       href="{% url 'academics:admin_version_detail' course.id version.id %}">{% trans "Open" %}</a>
-                    <form method="post" action="{% url 'academics:admin_version_delete' course.id version.id %}" data-confirm="{% trans 'Delete this course version and its lectures?' %}" class="inline m-0">{% csrf_token %}
-                      <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
-                    </form>
+                    <div class="table-actions">
+                      <a class="btn-secondary" href="{% url 'academics:admin_version_detail' course.id version.id %}">{% trans "Open" %}</a>
+                      <form method="post" action="{% url 'academics:admin_version_delete' course.id version.id %}" data-confirm="{% trans 'Delete this course version and its lectures?' %}" class="m-0">{% csrf_token %}
+                        <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
+                      </form>
+                    </div>
                   </td>
                 </tr>
               {% endfor %}
@@ -53,7 +55,7 @@
               <div class="flex-1 min-w-0">
                 <strong class="block truncate">{{ version.label }}</strong>
                 <small class="block text-muted">{{ version.is_active|boolean_label:"Active,Inactive" }} &middot; {% if version.access_duration_days %}{{ version.access_duration_days }} {% trans "days" %}{% else %}{% trans "Unlimited" %}{% endif %}</small>
-                <small class="block text-muted">{{ version.lectures|length }} {% trans "lectures" %}</small>
+                <small class="block text-muted">{{ version.lecture_count }} {% trans "lectures" %}</small>
               </div>
               <div class="flex gap-2 items-center shrink-0">
                 <a class="btn-soft-primary" href="{% url 'academics:admin_version_detail' course.id version.id %}">{% trans "Open" %}</a>
@@ -69,33 +71,33 @@
       {% endif %}
     </section>
     <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
-          <p class="eyebrow">{% trans "Content" %}</p>
-          <h3>{% trans "Lectures" %}</h3>
+          <p class="eyebrow">{% trans "Students" %}</p>
+          <h3>{% trans "Enrollments" %}</h3>
         </div>
       </div>
-      {% if lectures %}
+      {% if page_obj.object_list %}
         <div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>
-                <th class="table-th">{% trans "Order" %}</th>
-                <th class="table-th">{% trans "Title" %}</th>
+                <th class="table-th">{% trans "Student name" %}</th>
                 <th class="table-th">{% trans "Version" %}</th>
+                <th class="table-th">{% trans "Status" %}</th>
+                <th class="table-th">{% trans "Enrollment date" %}</th>
                 <th class="table-th">{% trans "Actions" %}</th>
               </tr>
             </thead>
             <tbody>
-              {% for lecture in lectures %}
+              {% for enrollment in page_obj %}
                 <tr>
-                  <td class="table-td">{{ lecture.order }}</td>
-                  <td class="table-td">{{ lecture.title }}</td>
-                  <td class="table-td">{{ lecture.course_version.label }}</td>
+                  <td class="table-td">{{ enrollment.student }}</td>
+                  <td class="table-td">{{ enrollment.course_version.label }}</td>
+                  <td class="table-td">{% include "ui/components/_status.html" with code=enrollment.status label=enrollment.get_status_display %}</td>
+                  <td class="table-td">{{ enrollment.created_at|date:"d/m/Y" }}</td>
                   <td class="table-td">
-                    <a class="btn-ghost"
-                       href="{% url 'academics:admin_lecture_edit' course.id lecture.course_version.id lecture.id %}">{% trans "Edit" %}
+                    <a class="btn-secondary"
+                       href="{% url 'academics:admin_course_enrollment_complete' course.id enrollment.id %}">
+                      {% if enrollment.status == "completed" %}{% trans "Completion" %}{% else %}{% trans "Complete course" %}{% endif %}
                     </a>
-                    <form method="post" action="{% url 'academics:admin_lecture_delete' course.id lecture.course_version.id lecture.id %}" data-confirm="{% trans 'Delete this lecture?' %}" class="inline m-0">{% csrf_token %}
-                      <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
-                    </form>
                   </td>
                 </tr>
               {% endfor %}
@@ -103,63 +105,21 @@
           </table>
         </div>
         <div class="card-stack lg:hidden">
-          {% for lecture in lectures %}
-            <div class="mobile-card">
-              <div class="flex-1 min-w-0">
-                <strong class="block truncate">{{ lecture.title }}</strong>
-                <small class="block text-muted">#{{ lecture.order }} &middot; {{ lecture.course_version.label }}</small>
-              </div>
-              <div class="flex gap-2 items-center shrink-0">
-                <a class="btn-ghost" href="{% url 'academics:admin_lecture_edit' course.id lecture.course_version.id lecture.id %}">{% trans "Edit" %}</a>
-                <form method="post" action="{% url 'academics:admin_lecture_delete' course.id lecture.course_version.id lecture.id %}" data-confirm="{% trans 'Delete this lecture?' %}" class="m-0">{% csrf_token %}
-                  <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
-                </form>
-              </div>
-            </div>
-          {% endfor %}
-        </div>
-      {% else %}
-        {% include "ui/components/_empty_state.html" with title=_("No lectures") message=_("No lectures found for this course.") %}
-      {% endif %}
-    </section>
-    <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
-          <p class="eyebrow">{% trans "Students" %}</p>
-          <h3>{% trans "Enrollments" %}</h3>
-        </div>
-      </div>
-      {% if enrollments %}
-        <div class="table-wrap hidden lg:block"><table class="table">
-            <thead>
-              <tr>
-                <th class="table-th">{% trans "Student" %}</th>
-                <th class="table-th">{% trans "Version" %}</th>
-                <th class="table-th">{% trans "Status" %}</th>
-                <th class="table-th">{% trans "Enrolled" %}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for enrollment in enrollments %}
-                <tr>
-                  <td class="table-td">{{ enrollment.student }}</td>
-                  <td class="table-td">{{ enrollment.course_version }}</td>
-                  <td class="table-td">{% include "ui/components/_status.html" with code=enrollment.status label=enrollment.get_status_display %}</td>
-                  <td class="table-td">{{ enrollment.created_at|date:"d/m/Y" }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-        <div class="card-stack lg:hidden">
-          {% for enrollment in enrollments %}
+          {% for enrollment in page_obj %}
             <div class="mobile-card">
               <div class="flex-1 min-w-0">
                 <strong class="block truncate">{{ enrollment.student }}</strong>
                 {% include "ui/components/_status.html" with code=enrollment.status label=enrollment.get_status_display %}
-                <small class="block text-muted">{{ enrollment.course_version }} &middot; {{ enrollment.created_at|date:"d/m/Y" }}</small>
+                <small class="block text-muted">{{ enrollment.course_version.label }} &middot; {{ enrollment.created_at|date:"d/m/Y" }}</small>
               </div>
+              <a class="btn-soft-primary shrink-0"
+                 href="{% url 'academics:admin_course_enrollment_complete' course.id enrollment.id %}">
+                {% if enrollment.status == "completed" %}{% trans "Completion" %}{% else %}{% trans "Complete" %}{% endif %}
+              </a>
             </div>
           {% endfor %}
         </div>
+        {% include "ui/components/_pagination.html" with page_obj=page_obj pagination_qs=pagination_qs %}
       {% else %}
         {% include "ui/components/_empty_state.html" with title=_("No enrollments") message=_("No student enrollments for this course.") %}
       {% endif %}

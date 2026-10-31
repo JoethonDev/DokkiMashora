@@ -7,7 +7,7 @@
   <div class="page-stack animate-enter-view">{% trans "Academic operations" as eyebrow %}
     {% trans "Progression" as title %}
     {% trans "Review semester progress, decisions, evaluations, interviews, and rejoin plans." as description %}
-    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description back_button=True %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description back_button=True back_url=back_url back_label=_("Back") %}
     <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
             <p class="eyebrow">{% trans "Student" %}</p>
             <h3>{{ student }}</h3>
@@ -18,6 +18,16 @@
           :
           {{ current_progress|default:'—' }}
         </p>
+        {% if is_contextual_detail %}
+          <div class="rounded-sm border border-line bg-surface-soft p-4">
+            <p class="eyebrow">{% trans "Academic context" %}</p>
+            <dl class="grid grid-cols-1 sm:grid-cols-3 gap-3 m-0">
+              <div><dt class="field-label">{% trans "Diploma" %}</dt><dd class="m-0">{{ selected_diploma.title }}</dd></div>
+              <div><dt class="field-label">{% trans "Cohort" %}</dt><dd class="m-0">{{ selected_cohort.name }}</dd></div>
+              <div><dt class="field-label">{% trans "Selected semester" %}</dt><dd class="m-0">{{ selected_semester.title }}</dd></div>
+            </dl>
+          </div>
+        {% endif %}
         {% for enrollment in enrollments %}
           {% with actions=allowed_actions|dict_key:enrollment.id enrollment_semesters=semesters_by_enrollment|dict_key:enrollment.id %}
           <div class="flex flex-col gap-4 pt-4 mt-4 border-t border-line first:border-t-0 first:pt-0 first:mt-0">
@@ -49,7 +59,12 @@
             </details>
             {% endif %}
             {% if actions.interview_requested %}
-              <p class="text-sm text-muted">{% trans "An interview is requested and blocks final decisions until it is completed." %}</p>
+              <div class="flex flex-wrap items-center gap-3 rounded-sm border border-line bg-surface-soft p-4">
+                <p class="m-0 text-sm text-muted">{% trans "An interview is requested and blocks final decisions until it is completed." %}</p>
+                {% if is_contextual_detail and interview_decision_url %}
+                  <a class="btn-secondary" href="{{ interview_decision_url }}?next={{ context_detail_url|urlencode }}">{% trans "Interview decision" %}</a>
+                {% endif %}
+              </div>
             {% endif %}
           </div>
           {% endwith %}

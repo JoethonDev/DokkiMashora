@@ -24,16 +24,27 @@ MAX_DOWNLOAD_BYTES = 10 * 1024 * 1024
 CHUNK_SIZE = 64 * 1024
 
 FILES: dict[str, str] = {
-    "htmx.min.js": "https://cdn.jsdelivr.net/npm/htmx.org@1.9.12/dist/htmx.min.js",
-    "htmx-loading-states.min.js": "https://cdn.jsdelivr.net/npm/htmx.org@1.9.12/dist/ext/loading-states.js",
+    "htmx.min.js": "https://cdn.jsdelivr.net/npm/htmx.org@4.0.0/dist/htmx.min.js",
     "alpine.min.js": "https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js",
 }
 
 
 class Command(BaseCommand):
-    help = "Download vendor JS files (Tailwind, HTMX, Alpine) to local static with digest verification."
+    help = "Download pinned vendor JS files to local static with digest verification."
 
     def add_arguments(self, parser):
+        parser.add_argument(
+            "--file",
+            dest="files",
+            action="append",
+            choices=tuple(FILES),
+            help="Download only this vendor file; may be repeated.",
+        )
+        parser.add_argument(
+            "--replace",
+            action="store_true",
+            help="Replace an existing file only after its download passes SHA-256 verification.",
+        )
         parser.add_argument(
             "--sha256",
             action="append",
@@ -53,16 +64,23 @@ class Command(BaseCommand):
                 raise CommandError(f"--sha256 digest for {name} is not a 64-character hex string")
             expected_digests[name.strip()] = digest
 
+        unknown_digests = set(expected_digests) - set(FILES)
+        if unknown_digests:
+            raise CommandError("Unknown vendor file(s) in --sha256: " + ", ".join(sorted(unknown_digests)))
+
         dest_dir = Path(settings.STATIC_DIR) / "js"
         dest_dir.mkdir(parents=True, exist_ok=True)
-        for name, url in FILES.items():
+        for name in options["files"] or FILES:
+            url = FILES[name]
             dest = dest_dir / name
-            if dest.exists():
+            if dest.exists() and not options["replace"]:
                 self.stdout.write(f"  {name} already exists")
                 continue
             expected = expected_digests.get(name)
             if expected is None:
-                raise CommandError(f"--sha256 digest is required for {name}; run with --sha256 {name}=<digest>")
+                raise CommandError(
+                    f"--sha256 digest is required for {name}; run with --sha256 {name}=<digest>"
+                )
             self.stdout.write(f"Downloading {name}...")
             try:
                 self._download_verified(name, url, dest, expected)
@@ -90,9 +108,7 @@ class Command(BaseCommand):
                         out.write(chunk)
             actual = digest.hexdigest()
             if not hmac.compare_digest(actual, expected_digest):
-                raise CommandError(
-                    f"SHA-256 mismatch for {name}: expected {expected_digest}, got {actual}"
-                )
+                raise CommandError(f"SHA-256 mismatch for {name}: expected {expected_digest}, got {actual}")
             os.replace(tmp_path, dest)
         except BaseException:
             try:

@@ -61,7 +61,6 @@ from apps.applications.constants import (
     DECISION_ACTION_REQUEST_DOCUMENTS,
     DECISION_ACTION_REQUEST_INTERVIEW,
     DECISION_ACTION_REQUEST_SURVEY,
-    DECISION_ACTION_SUBMIT_DOCUMENTS,
     DECISION_ACTION_SUBMIT_SURVEY,
     DELIVERY_MODE_OFFLINE,
     DELIVERY_MODE_ONLINE,
@@ -82,12 +81,12 @@ from apps.applications.constants import (
 )
 from apps.applications.documents import request_documents_program_application
 from apps.applications.models import (
-    ApplicationDocumentRequest,
     ProgramApplication,
     ProgramApplicationDecision,
 )
 from apps.applications.services import (
     accept_program_application,
+    invite_to_entrance_exam,
     mark_application_paid,
     request_interview_program_application,
     submit_program_application,
@@ -96,17 +95,14 @@ from apps.assessments.constants import (
     ASSESSMENT_TYPE_HOMEWORK,
     ASSESSMENT_TYPE_QUIZ,
     ASSESSMENT_TYPE_SEMESTER_EXAM,
-    ATTEMPT_STATUS_ASSIGNED,
     ATTEMPT_STATUS_GRADED,
-    ATTEMPT_STATUS_IN_PROGRESS,
-    DELIVERY_MODE_OFFLINE as EXAM_DELIVERY_OFFLINE,
-    DELIVERY_MODE_ONLINE as EXAM_DELIVERY_ONLINE,
+    ATTEMPT_STATUS_RELEASED,
+    ATTEMPT_STATUS_SUBMITTED,
     EXAM_OVERRIDE_ACTIVE,
-    EXAM_REVIEW_STATUS_PASSED,
     GRADE_VISIBILITY_HIDDEN,
     GRADE_VISIBILITY_RELEASED,
-    HOMEWORK_STATUS_NEEDS_REVISION,
     HOMEWORK_STATUS_RELEASED,
+    HOMEWORK_STATUS_SUBMITTED,
     HOMEWORK_STATUS_UNDER_REVIEW,
     LEGACY_STATUS_ACTIVE,
     QUESTION_TYPE_MCQ,
@@ -140,7 +136,6 @@ from apps.assessments.services import (
     admin_review_semester_exam,
     generate_exam_codes,
     grade_diploma_snapshot_answer,
-    release_attempt_grades,
     start_assessment,
     submit_assessment,
     submit_diploma_assessment,
@@ -160,9 +155,14 @@ from apps.attendance.services import (
     scan_attendance_token,
 )
 from apps.certificates.models import CertificateTemplate, GeneratedCertificate
+from apps.certificates.services import generate_certificate_pdf
 from apps.entrance_exams.constants import (
     ATTEMPT_STATUS_ASSIGNED as ENTRANCE_ATTEMPT_ASSIGNED,
+)
+from apps.entrance_exams.constants import (
     QUESTION_TYPE_MCQ as ENTRANCE_QUESTION_MCQ,
+)
+from apps.entrance_exams.constants import (
     QUESTION_TYPE_WRITTEN as ENTRANCE_QUESTION_WRITTEN,
 )
 from apps.entrance_exams.models import (
@@ -185,25 +185,16 @@ from apps.intake_forms.constants import (
     FIELD_TYPE_NUMBER,
     FIELD_TYPE_TEXT,
     FIELD_TYPE_TEXTAREA,
-    INTAKE_REQUEST_STATUS_SUBMITTED,
 )
 from apps.intake_forms.models import (
     IntakeForm,
-    IntakeFormAnswer,
     IntakeFormField,
-    IntakeFormRequest,
-    IntakeFormResponse,
 )
 from apps.intake_forms.services import (
     expire_intake_request,
     request_intake_form_for_application,
     submit_intake_form_response,
 )
-from apps.payments.constants import (
-    CURRENCY_EGP,
-    PAYMENT_STATUS_UNPAID,
-)
-from apps.payments.models import PaymentRecord
 from apps.payments.services import (
     grant_payment_waiver,
     mark_enrollment_paid,
@@ -213,16 +204,12 @@ from apps.payments.services import (
 from apps.progression.constants import (
     CERTIFICATE_STATUS_AVAILABLE,
     CERTIFICATE_STATUS_FAILED,
-    CERTIFICATE_STATUS_GENERATED,
     CERTIFICATE_STATUS_REVOKED,
-    DIPLOMA_COMPLETION_ACTIVE,
-    DIPLOMA_COMPLETION_COMPLETED,
     DIPLOMA_COMPLETION_FINAL_EXAM_PENDING,
     DIPLOMA_COMPLETION_GRADUATED,
     DIPLOMA_COMPLETION_LOCKED,
     DIPLOMA_COMPLETION_WITHDRAWN,
     EVALUATION_CONFIG_STATUS_ACTIVE,
-    FINAL_PROGRESSION_STATUS_RESOLVED,
     INTERVIEW_DECISION_FAIL,
     INTERVIEW_DECISION_PASS,
     PROMOTION_DECISION_LOCK,
@@ -240,10 +227,10 @@ from apps.progression.models import (
     CohortAcademicYear,
     DiplomaProgressionRule,
     FinalProgressionOutcome,
+    PromotionDecision,
     SemesterEvaluation,
     SemesterEvaluationConfig,
     SemesterProgressionRule,
-    SemesterRejoinPlan,
     StudentDiplomaCompletion,
     StudentSemesterProgress,
 )
@@ -261,7 +248,6 @@ from apps.students.constants import (
     GENDER_MALE,
 )
 from apps.students.models import StudentProfile
-
 
 SEED_SCOPE = "manual_qa_arabic_2026"
 DEFAULT_PASSWORD = "test-1234"
@@ -319,6 +305,7 @@ class Command(BaseCommand):
             self._create_students()
             self._create_academic_graph()
             self._create_applications()
+            self._create_intake_forms()
             self._create_intake_and_documents()
             self._create_enrollments()
             self._create_assessments()
@@ -329,6 +316,19 @@ class Command(BaseCommand):
             self._create_payments_and_certificates()
             self._create_assignments()
 
+        # Rendering and media storage are slow external effects, so create the
+        # available QA artifact only after its source records are committed.
+        available_certificate = generate_certificate_pdf(
+            self.completed_certificate_enrollment.student,
+            self.completed_certificate_enrollment,
+            actor=self.staff[GROUP_ADMIN],
+        )
+        if available_certificate.status != CERTIFICATE_STATUS_AVAILABLE:
+            raise CommandError(
+                "Could not generate the available QA certificate PDF: "
+                f"{(available_certificate.metadata_snapshot or {}).get('error', 'unknown error')}"
+            )
+
         self._print_manifest()
 
     def _purge_database(self):
@@ -336,7 +336,7 @@ class Command(BaseCommand):
         try:
             call_command("flush", interactive=False, verbosity=0)
             return
-        except CommandError as exc:
+        except CommandError:
             if connection.vendor != "postgresql":
                 raise
             self.stdout.write(self.style.WARNING(
@@ -585,7 +585,6 @@ class Command(BaseCommand):
             "course_lectures": course_lectures,
             "diploma_lectures": diploma_lectures,
         }
-        self._create_intake_forms()
         self._create_entrance_exams()
         self._create_progression_rules()
 
@@ -655,26 +654,28 @@ class Command(BaseCommand):
         return lectures
 
     def _create_intake_forms(self):
-        for cohort in (self.graph["cohort_a"], self.graph["cohort_b"]):
+        fields = [
+            ("العنوان الحالي", FIELD_TYPE_TEXT, True, [], 1),
+            ("نبذة عن خبرتك في الخدمة", FIELD_TYPE_TEXTAREA, True, [], 2),
+            ("سنوات الخبرة", FIELD_TYPE_NUMBER, False, [], 3),
+            ("تاريخ بدء الخدمة", FIELD_TYPE_DATE, False, [], 4),
+            ("نوع الخدمة", FIELD_TYPE_CHOICE, True, ["تعليم", "افتقاد", "إدارة"], 5),
+            ("الأيام المناسبة", FIELD_TYPE_MULTI_CHOICE, False, ["السبت", "الأحد", "الجمعة"], 6),
+            ("هل توافق على لائحة البرنامج؟", FIELD_TYPE_BOOLEAN, True, [], 7),
+        ]
+
+        def create_required_form(title, *, cohort=None, course_version=None):
             form = IntakeForm.objects.create(
-                title=f"استمارة البيانات الأولية - {cohort.name}",
+                title=title,
                 description="استمارة عربية مطلوبة قبل تفعيل الالتحاق.",
                 cohort=cohort,
+                course_version=course_version,
                 is_required=True,
                 is_active=True,
                 open_at=self.now - timedelta(days=30),
                 close_at=self.now + timedelta(days=90),
                 created_by=self.staff[GROUP_ADMIN],
             )
-            fields = [
-                ("العنوان الحالي", FIELD_TYPE_TEXT, True, [], 1),
-                ("نبذة عن خبرتك في الخدمة", FIELD_TYPE_TEXTAREA, True, [], 2),
-                ("سنوات الخبرة", FIELD_TYPE_NUMBER, False, [], 3),
-                ("تاريخ بدء الخدمة", FIELD_TYPE_DATE, False, [], 4),
-                ("نوع الخدمة", FIELD_TYPE_CHOICE, True, ["تعليم", "افتقاد", "إدارة"], 5),
-                ("الأيام المناسبة", FIELD_TYPE_MULTI_CHOICE, False, ["السبت", "الأحد", "الجمعة"], 6),
-                ("هل توافق على لائحة البرنامج؟", FIELD_TYPE_BOOLEAN, True, [], 7),
-            ]
             for label, field_type, required, options, order in fields:
                 IntakeFormField.objects.create(
                     form=form,
@@ -685,8 +686,20 @@ class Command(BaseCommand):
                     order=order,
                     is_active=True,
                 )
-            if cohort == self.graph["cohort_a"]:
-                self.graph["intake_form"] = form
+            return form
+
+        self.graph["intake_form"] = create_required_form(
+            f"استمارة البيانات الأولية - {self.graph['cohort_a'].name}",
+            cohort=self.graph["cohort_a"],
+        )
+        create_required_form(
+            f"استمارة البيانات الأولية - {self.graph['cohort_b'].name}",
+            cohort=self.graph["cohort_b"],
+        )
+        self.graph["course_intake_form"] = create_required_form(
+            "استمارة البيانات الأولية - دورة مهارات التواصل والإرشاد",
+            course_version=self.graph["v2"],
+        )
 
     def _create_entrance_exams(self):
         exams = {}
@@ -712,7 +725,7 @@ class Command(BaseCommand):
             )
             EntranceChoice.objects.create(question=q1, text="فهم المتحدث قبل الحكم", score=Decimal("10"), order=1)
             EntranceChoice.objects.create(question=q1, text="إنهاء الحديث بسرعة", score=Decimal("0"), order=2)
-            q2 = EntranceQuestion.objects.create(
+            EntranceQuestion.objects.create(
                 exam=exam,
                 text="اكتب في سطرين سبب رغبتك في الالتحاق.",
                 question_type=ENTRANCE_QUESTION_WRITTEN,
@@ -870,9 +883,18 @@ class Command(BaseCommand):
         self._new_application("core_course", "youssef", PROGRAM_TYPE_COURSE, course=course)
 
         # Admission lifecycle states.
-        self._new_application("intake_open", "intake-open", PROGRAM_TYPE_DIPLOMA, cohort=cohort_a)
-        self._new_application("intake_submitted", "intake-submitted", PROGRAM_TYPE_DIPLOMA, cohort=cohort_a)
-        self._new_application("intake_expired", "intake-expired", PROGRAM_TYPE_DIPLOMA, cohort=cohort_a)
+        for key, student_key in (
+            ("intake_open", "intake-open"),
+            ("intake_submitted", "intake-submitted"),
+            ("intake_expired", "intake-expired"),
+        ):
+            application = self._new_application(
+                key,
+                student_key,
+                PROGRAM_TYPE_COURSE,
+                course=course,
+            )
+            self._set_application_status(application, PROGRAM_APP_STATUS_ACCEPTED)
         self._new_application(
             "documents_open",
             "documents-open",
@@ -894,8 +916,8 @@ class Command(BaseCommand):
         self._new_application(
             "waiver_active",
             "waiver-active",
-            PROGRAM_TYPE_DIPLOMA,
-            cohort=cohort_d2,
+            PROGRAM_TYPE_COURSE,
+            course=course,
             status=PROGRAM_APP_STATUS_ACCEPTED,
         )
         self._new_application(
@@ -943,7 +965,7 @@ class Command(BaseCommand):
                 key,
                 student_key,
                 PROGRAM_TYPE_DIPLOMA,
-                cohort=cohort_a,
+                cohort=cohort_d2 if student_key == "d2-active" else cohort_a,
                 delivery=delivery,
             )
             self._set_application_status(app, PROGRAM_APP_STATUS_ACTIVATED, reason="حالة قبول مفعلة لاختبار المسار الأكاديمي.")
@@ -959,7 +981,7 @@ class Command(BaseCommand):
         return raw_token
 
     def _create_intake_and_documents(self):
-        form = self.graph["intake_form"]
+        form = self.graph["course_intake_form"]
         admin = self.staff[GROUP_ADMIN]
 
         open_request = request_intake_form_for_application(
@@ -1000,6 +1022,25 @@ class Command(BaseCommand):
             application=self.applications["intake_submitted"],
             answers=answers,
         )
+
+        # Keep waiver lifecycle examples on course applications so they can
+        # pass the required survey gate without fabricating uploaded diploma
+        # document binaries.
+        for key in ("waiver_active", "waiver_revoked"):
+            application = self.applications[key]
+            waiver_request = request_intake_form_for_application(
+                application,
+                admin,
+                expires_at=self.now + timedelta(days=14),
+                form=form,
+                send_email=False,
+            )
+            submit_intake_form_response(
+                waiver_request,
+                application.student.user,
+                application=application,
+                answers=answers,
+            )
 
         expired_request = request_intake_form_for_application(
             self.applications["intake_expired"],
@@ -1061,8 +1102,6 @@ class Command(BaseCommand):
         cohort_a = self.graph["cohort_a"]
         cohort_b = self.graph["cohort_b"]
         cohort_d2 = self.graph["cohort_d2"]
-        sem_a = self.graph["semesters"][self.graph["d1"].pk]
-
         self._diploma_enrollment("diploma_online", "diploma-online", cohort_a)
         self._diploma_enrollment("diploma_offline", "diploma-offline", cohort_a)
         self._diploma_enrollment("d2_active", "d2-active", cohort_d2)
@@ -1139,11 +1178,12 @@ class Command(BaseCommand):
                 assigned_by=admin,
             )
 
-    def _assessment(self, title, assessment_type, *, course_version=None, semester=None, cohort=None, open_at=None, close_at=None, duration_minutes=30, total_points=Decimal("10.00"), passing_score=Decimal("60.00"), release_mode=RELEASE_MODE_MANUAL, grade_visibility=GRADE_VISIBILITY_HIDDEN, max_upload_files=1):
+    def _assessment(self, title, assessment_type, *, course_version=None, semester=None, cohort=None, open_at=None, close_at=None, duration_minutes=30, total_points=Decimal("10.00"), passing_score=Decimal("60.00"), release_mode=RELEASE_MODE_MANUAL, grade_visibility=GRADE_VISIBILITY_HIDDEN, max_upload_files=1, is_required_for_semester_evaluation=True):
         assessment = Assessment.objects.create(
             title=title,
             description="بيانات تقييم عربية لاختبار الحالات الأساسية والنادرة.",
             assessment_type=assessment_type,
+            is_required_for_semester_evaluation=is_required_for_semester_evaluation,
             course_version=course_version,
             semester=semester,
             cohort=cohort,
@@ -1259,6 +1299,17 @@ class Command(BaseCommand):
             passing_score=Decimal("50.00"),
             max_upload_files=3,
         )
+        optional_homework = self._assessment(
+            "واجب اختياري للفصل الأول - الإرشاد الأسري",
+            ASSESSMENT_TYPE_HOMEWORK,
+            semester=d1_semesters[0],
+            cohort=self.graph["cohort_a"],
+            duration_minutes=None,
+            total_points=Decimal("60.00"),
+            passing_score=Decimal("50.00"),
+            max_upload_files=3,
+            is_required_for_semester_evaluation=False,
+        )
         exam_a = self._diploma_exam(
             "امتحان الفصل الأول - الإرشاد الأسري",
             self.graph["cohort_a"],
@@ -1288,6 +1339,7 @@ class Command(BaseCommand):
             "course_v2_quiz": v2_quiz,
             "future_quiz": future_quiz,
             "homework": homework,
+            "homework_optional": optional_homework,
             "exam_a": exam_a,
             "exam_b": exam_b,
             "exam_a_sem2": exam_a_sem2,
@@ -1328,6 +1380,11 @@ class Command(BaseCommand):
         assigned_app = self.applications["entrance_assigned"]
         progress_app = self.applications["entrance_progress"]
         submitted_app = self.applications["entrance_submitted"]
+        admin = self.staff[GROUP_ADMIN]
+        for application in (assigned_app, progress_app, submitted_app):
+            invite_to_entrance_exam(application, admin)
+            application.refresh_from_db()
+
         assigned_attempt = assign_attempt(exam, assigned_app, self.profiles["entrance-assigned"])
         if assigned_attempt.status != ENTRANCE_ATTEMPT_ASSIGNED:
             raise CommandError("Entrance assigned fixture did not remain assigned.")
@@ -1501,53 +1558,67 @@ class Command(BaseCommand):
         if online_attempt.status == ATTEMPT_STATUS_GRADED:
             admin_review_semester_exam(online_attempt.pk, "pass", actor=self.staff[GROUP_ADMIN], note="مراجعة إدارية مؤجلة للإطلاق.")
 
-        # Homework aggregate with a metadata-only attachment. It is deliberately
-        # not a real upload; storage tests must use the actual upload flow.
+        # The online student has a released 14/20 Required Homework result for
+        # semester-evaluation previews.
         homework_attempt = AssessmentAttempt.objects.create(
             assessment=self.assessments["homework"],
             student=self.students["diploma-online"],
             attempt_number=1,
-            status=ATTEMPT_STATUS_GRADED,
+            status=ATTEMPT_STATUS_RELEASED,
             started_at=self.now - timedelta(days=3),
             submitted_at=self.now - timedelta(days=2),
             graded_at=self.now - timedelta(days=1),
-            graded_by=self.staff[GROUP_MODERATOR],
+            graded_by=self.staff[GROUP_ADMIN],
+            possible_points_snapshot=self.assessments["homework"].total_points,
             score_points=Decimal("14.00"),
             score_percent=Decimal("70.00"),
             is_pass=True,
-            visible_to_student=False,
+            visible_to_student=True,
         )
-        homework_submission = HomeworkSubmission.objects.create(
+        HomeworkSubmission.objects.create(
             assessment=self.assessments["homework"],
             student=self.students["diploma-online"],
             attempt=homework_attempt,
+            status=HOMEWORK_STATUS_RELEASED,
+            submitted_at=self.now - timedelta(days=2),
+            score=Decimal("14.00"),
+            feedback="درجة منشورة لاختبار تقييم الفصل.",
+            reviewed_at=self.now - timedelta(days=1),
+            reviewed_by=self.staff[GROUP_ADMIN],
+        )
+
+        # Keep the moderator-queue example separate and internally consistent:
+        # a submitted attempt, an under-review aggregate, and placeholder-only
+        # attachment metadata (never a fabricated real file).
+        review_attempt = AssessmentAttempt.objects.create(
+            assessment=self.assessments["homework"],
+            student=self.students["diploma-offline"],
+            attempt_number=1,
+            status=ATTEMPT_STATUS_SUBMITTED,
+            started_at=self.now - timedelta(days=3),
+            submitted_at=self.now - timedelta(days=2),
+            possible_points_snapshot=self.assessments["homework"].total_points,
+            visible_to_student=False,
+        )
+        review_submission = HomeworkSubmission.objects.create(
+            assessment=self.assessments["homework"],
+            student=self.students["diploma-offline"],
+            attempt=review_attempt,
             status=HOMEWORK_STATUS_UNDER_REVIEW,
             submitted_at=self.now - timedelta(days=2),
         )
         HomeworkAttachment.objects.create(
-            submission=homework_submission,
+            submission=review_submission,
             assessment=self.assessments["homework"],
-            student=self.students["diploma-online"],
+            student=self.students["diploma-offline"],
             original_filename="ملف-واجب-تجريبي.pdf",
             storage_key="manual-qa/not-a-real-upload/homework.pdf",
             content_type="application/pdf",
             file_size=128000,
             checksum="b" * 64,
-            status=HOMEWORK_STATUS_NEEDS_REVISION,
+            status=HOMEWORK_STATUS_SUBMITTED,
             submitted_at=self.now - timedelta(days=2),
-            reviewed_at=self.now - timedelta(days=1),
-            reviewed_by=self.staff[GROUP_MODERATOR],
-            feedback="يرجى إعادة رفع الملف الحقيقي من مسار التخزين.",
-        )
-
-        HomeworkSubmission.objects.create(
-            assessment=self.assessments["homework"],
-            student=self.students["diploma-offline"],
-            status=HOMEWORK_STATUS_RELEASED,
-            score=Decimal("18.00"),
-            feedback="واجب منشور لاختبار مسار الإطلاق اليدوي.",
-            reviewed_at=self.now - timedelta(days=1),
-            reviewed_by=self.staff[GROUP_ADMIN],
+            feedback="ملف تجريبي لاختبار قائمة المراجعة فقط.",
         )
 
         # Offline Diploma Semester Exam: the student receives a code and the
@@ -1657,8 +1728,6 @@ class Command(BaseCommand):
         from_status.status = SEMESTER_PROGRESS_LOCKED
         from_status.save(update_fields=["status", "updated_at"])
         # An explicit decision row makes the locked state visible in history.
-        from apps.progression.models import PromotionDecision
-
         PromotionDecision.objects.create(
             student=lab.student,
             diploma_enrollment=lab,
@@ -1846,17 +1915,26 @@ class Command(BaseCommand):
 
     def _create_payments_and_certificates(self):
         admin = self.staff[GROUP_ADMIN]
-        course_v1 = self.enrollments["course_v1"]
-        mark_enrollment_paid(course_v1.student, "course", course_v1.pk, admin, amount=Decimal("500.00"))
-        mark_enrollment_unpaid(
-            course_v1.student,
+        # Exercise a paid-to-unpaid correction on a pending enrollment. The
+        # payment service correctly refuses to remove the payment dependency
+        # from already-active access without a governed rollback.
+        course_pending = self.enrollments["course_pending"]
+        mark_enrollment_paid(
+            course_pending.student,
             "course",
-            course_v1.pk,
+            course_pending.pk,
+            admin,
+            amount=Decimal("500.00"),
+        )
+        mark_enrollment_unpaid(
+            course_pending.student,
+            "course",
+            course_pending.pk,
             admin,
             reason="اختبار تغيير حالة الدفع إلى غير مدفوع.",
         )
 
-        active_waiver = grant_payment_waiver(
+        grant_payment_waiver(
             self.applications["waiver_active"],
             admin,
             reason="منحة اختبارية معتمدة من الإدارة.",
@@ -1879,15 +1957,7 @@ class Command(BaseCommand):
             created_by=admin,
         )
         completed_enrollment = self.enrollments["completed"]
-        GeneratedCertificate.objects.create(
-            student=completed_enrollment.student,
-            diploma_enrollment=completed_enrollment,
-            certificate_template=template,
-            certificate_number="QA-AR-AVAILABLE-001",
-            status=CERTIFICATE_STATUS_AVAILABLE,
-            generated_by=admin,
-            metadata_snapshot={"seed_scope": SEED_SCOPE, "binary": "manual-storage-required"},
-        )
+        self.completed_certificate_enrollment = completed_enrollment
         GeneratedCertificate.objects.create(
             student=self.profiles["withdrawn"],
             diploma_enrollment=self.enrollments["withdrawn"],
@@ -1932,7 +2002,7 @@ class Command(BaseCommand):
 
         ReviewerAssignment.objects.create(
             reviewer=reviewer,
-            cohort=self.graph["cohort_a"],
+            cohort=self.graph["cohort_b"],
             semester=self.graph["semesters"][self.graph["d1"].pk][0],
             scope=REVIEWER_SCOPE_SEMESTER,
             access_mode=REVIEWER_ACCESS_BOTH,
@@ -2008,6 +2078,8 @@ class Command(BaseCommand):
             ("PAY-02", "منحة دفع نشطة ومنحة مسحوبة"),
             ("PROG-01", "فصول locked وretake_required وin_progress"),
             ("PROG-02", "تخرج، انسحاب، final exam pending وشهادة revoked/failed"),
+            ("PROG-20", "واجب مطلوب وآخر اختياري مفقود لاختبار سياسة الإغفال الموروثة والتجاوز"),
+            ("PROG-22", "واجب مسجل بنسبة 70% وآخر اختياري من 60 نقطة مفقود لاختبار الإغفال وإعادة الوزن"),
             ("PROG-14", "Rejoin planned بعد رسوب نهائي في الفصل الثاني"),
             ("PROG-15", "Rejoin active في الدفعة التالية بعد توقف سنة"),
             ("PROG-16", "إلغاء Rejoin واستعادة السجل المصدر"),

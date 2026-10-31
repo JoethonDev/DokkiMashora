@@ -32,6 +32,9 @@
         if (courseFields.indexOf(name) !== -1) el.classList.toggle("hidden", scope !== "course");
         if (diplomaFields.indexOf(name) !== -1) el.classList.toggle("hidden", scope !== "diploma");
       });
+      form.querySelectorAll("[data-course-only]").forEach(function (el) {
+        el.classList.toggle("hidden", scope !== "course");
+      });
     }
 
     function toggleHomeworkFields() {
@@ -39,6 +42,36 @@
       form.querySelectorAll("[data-homework-only]").forEach(function (el) {
         el.classList.toggle("hidden", !isHomework);
       });
+    }
+
+    function toggleEvaluationRequirement() {
+      var diplomaScoringAssessment = scopeSelect && scopeSelect.value === "diploma"
+        && typeSelect && ["homework", "semester_exam"].indexOf(typeSelect.value) !== -1;
+      form.querySelectorAll("[data-diploma-assessment-only]").forEach(function (el) {
+        el.classList.toggle("hidden", !diplomaScoringAssessment);
+      });
+    }
+
+    function allowedTypeOptions(scope) {
+      if (!typeSelect) return [];
+      return Array.prototype.filter.call(typeSelect.options, function (option) {
+        return !!option.value && (!scope || option.dataset.scope === scope);
+      });
+    }
+
+    function toggleAssessmentTypes() {
+      if (!typeSelect) return;
+      var allowed = allowedTypeOptions(scopeSelect ? scopeSelect.value : "");
+      Array.prototype.forEach.call(typeSelect.options, function (option) {
+        if (!option.value) return;
+        var visible = allowed.indexOf(option) !== -1;
+        option.hidden = !visible;
+        option.disabled = !visible;
+      });
+      var selected = typeSelect.options[typeSelect.selectedIndex];
+      if (allowed.length && allowed.indexOf(selected) === -1) {
+        allowed[0].selected = true;
+      }
     }
 
     function updateOptions(preserveValues) {
@@ -68,7 +101,10 @@
 
     if (scopeSelect) {
       scopeSelect.addEventListener("change", function () {
+        toggleAssessmentTypes();
         toggleScope(scopeSelect.value);
+        toggleHomeworkFields();
+        toggleEvaluationRequirement();
         if (scopeSelect.value === "course" && diplomaSelect) {
           diplomaSelect.value = "";
           if (semesterSelect) semesterSelect.value = "";
@@ -90,10 +126,15 @@
       if (versionSelect) versionSelect.value = "";
       updateOptions(false);
     });
-    if (typeSelect) typeSelect.addEventListener("change", toggleHomeworkFields);
+    if (typeSelect) typeSelect.addEventListener("change", function () {
+      toggleHomeworkFields();
+      toggleEvaluationRequirement();
+    });
 
+    toggleAssessmentTypes();
     toggleScope(scopeSelect ? scopeSelect.value : "");
     toggleHomeworkFields();
+    toggleEvaluationRequirement();
     updateOptions(true);
   }
 
@@ -102,5 +143,5 @@
   }
 
   document.addEventListener("DOMContentLoaded", initAll);
-  document.addEventListener("htmx:afterSwap", initAll);
+  document.addEventListener("htmx:after:swap", initAll);
 }());

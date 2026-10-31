@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextvars
 import logging
 import re
 from datetime import timedelta
@@ -16,9 +17,20 @@ from django.db.models import F, Q
 from django.template.exceptions import TemplateDoesNotExist
 from django.template.loader import render_to_string
 from django.utils import timezone
+from django.utils.translation import get_language
 from django.utils.translation import gettext_lazy as _
 
 from apps.applications.models import ProgramApplicationEmailLog
+from apps.audit.constants import (
+    ACTION_SYSTEM_EMAIL_FAILED,
+    ACTION_SYSTEM_EMAIL_QUEUED,
+    ACTION_SYSTEM_EMAIL_SENT,
+    ACTION_SYSTEM_EMAIL_SKIPPED,
+    OUTCOME_FAILURE,
+    OUTCOME_SUCCESS,
+    SECTION_COMMUNICATIONS,
+)
+from apps.audit.services import record_audit_event
 from apps.communications import tasks as communication_tasks
 from apps.students.models import StudentProfile
 
@@ -40,6 +52,72 @@ logger = logging.getLogger("apps.communications")
 VARIABLE_PATTERN = re.compile(r"{{\s*[a-zA-Z_][a-zA-Z0-9_]*\s*}}")
 
 
+def _audit_email(
+    action: str,
+    record: EmailMessage,
+    *,
+    actor=None,
+    outcome: str = OUTCOME_SUCCESS,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    """Record one email lifecycle event without ever blocking delivery."""
+    payload = {
+        "template_slug": record.template_slug,
+        "recipient": record.to_email,
+        "subject": record.subject,
+        "attempts": record.attempts,
+    }
+    if metadata:
+        payload.update(metadata)
+    try:
+        record_audit_event(
+            actor,
+            action,
+            target_type="email_message",
+            target_id=record.pk,
+            section=SECTION_COMMUNICATIONS,
+            target_label=f"{record.subject} → {record.to_email}"[:255],
+            subject_type="email",
+            subject_id=record.pk,
+            subject_label=record.to_email,
+            metadata=payload,
+            outcome=outcome,
+            correlation_id=f"email:{record.pk}",
+        )
+    except Exception:  # noqa: BLE001 - delivery must not fail because audit is down
+        logger.exception("Could not record audit event %s for email %s", action, record.pk)
+
+
+#: Templates that could not be used during the current request because no
+#: active/enabled EmailTemplate row exists. The request-scoped collector lets
+#: admin responses report "email not sent" instead of silently succeeding.
+#: ``None`` means no collector is installed (management commands, Celery), so
+#: recording is a deliberate no-op outside of a web request.
+_UNAVAILABLE_TEMPLATES: contextvars.ContextVar[tuple[str, ...] | None] = contextvars.ContextVar(
+    "unavailable_email_templates", default=None
+)
+
+
+def reset_unavailable_templates() -> None:
+    """Start collecting unavailable templates for the current request."""
+    _UNAVAILABLE_TEMPLATES.set(())
+
+
+def consume_unavailable_templates() -> tuple[str, ...]:
+    """Return the templates recorded so far and clear the collector."""
+    slugs = _UNAVAILABLE_TEMPLATES.get() or ()
+    _UNAVAILABLE_TEMPLATES.set(())
+    return slugs
+
+
+def _record_unavailable_template(slug: str) -> None:
+    """Record that ``slug`` has no active/enabled template for this request."""
+    slugs = _UNAVAILABLE_TEMPLATES.get()
+    if slugs is None or slug in slugs:
+        return
+    _UNAVAILABLE_TEMPLATES.set((*slugs, slug))
+
+
 def _mask_email(value: str) -> str:
     """Partially mask an address for logs (RV-025): keep the first 2 chars and
     the domain so operators can still triage, never the full local part.
@@ -59,9 +137,13 @@ def _wrap_in_design(body: str, design: str, footer: str) -> str:
     """Wrap body in an email design template, returning full HTML."""
     if design not in dict(DESIGN_CHOICES):
         design = DESIGN_BRANDED
-    return render_to_string(f"communications/email_designs/{design}.html", {
-        "content": body, "footer": footer,
-    })
+    return render_to_string(
+        f"communications/email_designs/{design}.html",
+        {
+            "content": body,
+            "footer": footer,
+        },
+    )
 
 
 def has_unresolved_variables(text: str) -> bool:
@@ -98,7 +180,10 @@ def _render_templated_email(
         template = EmailTemplate.objects.get(slug=slug, is_active=True, is_enabled_for_action=True)
     except EmailTemplate.DoesNotExist:
         logger.warning("No active/enabled template found for slug=%s, skipping send", slug)
+        _record_unavailable_template(slug)
         return None
+    language = (get_language() or settings.LANGUAGE_CODE or "ar").split("-", 1)[0]
+    context = {"language_code": language, **context}
     subject, body = template.render(context)
     missing = [v for v in template.variable_names() if v not in context]
     if "language_code" in template.body and "language_code" not in context:
@@ -151,15 +236,26 @@ def send_templated_email(
     )
 
 
-def _send_over_smtp(*, to_email: str, subject: str, body: str, html_body: str | None, cc: list[str]) -> None:
+def _send_over_smtp(
+    *,
+    to_email: str,
+    subject: str,
+    body: str,
+    html_body: str | None,
+    cc: list[str],
+    connection=None,
+) -> None:
     """Perform the actual SMTP delivery; raises on failure.
 
     Runs outside any DB transaction by design. Reused by the synchronous
     ``send_email`` path and the background queue task so the SMTP mechanics stay
-    in one place.
+    in one place. When a caller supplies an already-open ``connection`` (bulk
+    chunks), it stays owned by that caller and is not closed here.
     """
-    connection = get_connection()
-    connection.open()
+    owns_connection = connection is None
+    if owns_connection:
+        connection = get_connection()
+        connection.open()
     try:
         payload = html_body or body
         message = DjangoEmailMessage(
@@ -174,7 +270,8 @@ def _send_over_smtp(*, to_email: str, subject: str, body: str, html_body: str | 
             message.content_subtype = "html"
         message.send(fail_silently=False)
     finally:
-        connection.close()
+        if owns_connection:
+            connection.close()
 
 
 def send_email(
@@ -187,6 +284,7 @@ def send_email(
     sent_by=None,
     cc: list[str] | None = None,
     bulk_send: BulkEmailSend | None = None,
+    connection=None,
 ) -> EmailMessage:
     """Send an email synchronously and record the result in EmailMessage."""
     cc = cc or []
@@ -207,19 +305,44 @@ def send_email(
             body=body,
             html_body=html_body,
             cc=cc,
+            connection=connection,
         )
         record.status = EMAIL_STATUS_SENT
         record.sent_at = timezone.now()
         record.save(update_fields=["status", "sent_at", "updated_at"])
+        _audit_email(ACTION_SYSTEM_EMAIL_SENT, record, actor=sent_by)
     except Exception as exc:  # noqa: BLE001
         logger.exception(
             "Failed to send email %s (message id %s) to %s",
-            template_slug, record.pk, _mask_email(to_email),
+            template_slug,
+            record.pk,
+            _mask_email(to_email),
         )
         record.status = EMAIL_STATUS_FAILED
         record.error = str(exc)[:1000]
         record.save(update_fields=["status", "error", "updated_at"])
+        _audit_email(
+            ACTION_SYSTEM_EMAIL_FAILED,
+            record,
+            actor=sent_by,
+            outcome=OUTCOME_FAILURE,
+            metadata={"error": record.error},
+        )
     return record
+
+
+def _dispatch_queued_email(delivery_id: int) -> None:
+    """Hand one queued delivery to Celery without letting broker downtime escape.
+
+    Runs from ``transaction.on_commit`` after the business transaction has
+    already committed, so a broker outage must never surface as a 500 on an
+    action that succeeded. The failure is logged and the row stays QUEUED, so a
+    later retry or manual re-run can still deliver it.
+    """
+    try:
+        communication_tasks.send_queued_email_task.delay(delivery_id)
+    except Exception:  # noqa: BLE001 - broker outage must not fail the request
+        logger.exception("Could not enqueue email delivery %s", delivery_id)
 
 
 def queue_templated_email(
@@ -251,6 +374,25 @@ def queue_templated_email(
     """
     rendered = _render_templated_email(slug, context)
     if rendered is None:
+        try:
+            record_audit_event(
+                sent_by,
+                ACTION_SYSTEM_EMAIL_SKIPPED,
+                target_type="email_template",
+                target_id=slug,
+                section=SECTION_COMMUNICATIONS,
+                target_label=slug,
+                subject_type="email",
+                subject_label=to_email,
+                metadata={
+                    "template_slug": slug,
+                    "recipient": to_email,
+                    "reason": "template_missing_or_disabled",
+                },
+                outcome=OUTCOME_FAILURE,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("Could not record skipped email audit for %s", slug)
         return None
     _template, subject, body, html_body = rendered
 
@@ -271,6 +413,8 @@ def queue_templated_email(
             defaults=defaults,
         )
         if not created and record.status == EMAIL_STATUS_FAILED:
+            # A previous attempt failed permanently: reset it so the delivery
+            # task below re-sends instead of returning a stale terminal row.
             EmailMessage.objects.filter(pk=record.pk).update(
                 status=EMAIL_STATUS_QUEUED,
                 error="",
@@ -281,11 +425,26 @@ def queue_templated_email(
             record.error = ""
             record.queued_at = timezone.now()
         elif not created:
+            # Already queued/processing/sent for this key: deduplicate.
             return record
     else:
         record = EmailMessage.objects.create(**defaults)
 
-        transaction.on_commit(lambda: communication_tasks.send_queued_email_task.delay(record.id))
+    _audit_email(
+        ACTION_SYSTEM_EMAIL_QUEUED,
+        record,
+        actor=sent_by,
+        metadata={"reference": reference or ""},
+    )
+
+    # Reserve the delivery task for every row that still needs sending, whether
+    # it was created above or reset from a terminal FAILED state. Scheduling is
+    # deferred to commit so the worker can see the row. Previously the task was
+    # only registered on the non-idempotent branch, so any idempotency-keyed
+    # email (which is nearly all of them) stayed QUEUED forever: there is no
+    # periodic sweeper that dispatches queued rows. ``robust=True`` keeps a
+    # broker failure from raising out of an already-committed transaction.
+    transaction.on_commit(lambda: _dispatch_queued_email(record.id), robust=True)
     return record
 
 
@@ -341,6 +500,8 @@ def deliver_queued_email(delivery_id: int) -> bool:
         updated_at=now,
     )
     _sync_application_log_from_delivery(row.pk, status=EMAIL_STATUS_SENT, error="")
+    row.refresh_from_db(fields=["attempts", "status", "to_email", "subject", "template_slug"])
+    _audit_email(ACTION_SYSTEM_EMAIL_SENT, row)
     return True
 
 
@@ -365,6 +526,20 @@ def record_email_delivery_failure(delivery_id: int, error: str, *, final: bool) 
             updated_at=timezone.now(),
         )
         _sync_application_log_from_delivery(delivery_id, status=EMAIL_STATUS_QUEUED, error=error[:1000])
+    logger.warning(
+        "email_delivery_failed email_id=%s final=%s error=%s",
+        delivery_id,
+        final,
+        error[:300],
+    )
+    record = EmailMessage.objects.filter(pk=delivery_id).first()
+    if record is not None:
+        _audit_email(
+            ACTION_SYSTEM_EMAIL_FAILED,
+            record,
+            outcome=OUTCOME_FAILURE,
+            metadata={"error": error[:1000], "final": final},
+        )
 
 
 def _sync_application_log_from_delivery(delivery_id: int, *, status: str, error: str = "") -> None:
@@ -633,9 +808,13 @@ def enqueue_bulk_email_send(bulk_send: BulkEmailSend) -> int:
     SMTP delivery (T5); each chunk task sends at most ``_BULK_EMAIL_CHUNK_SIZE``
     recipients and skips recipients that already have a terminal send record.
     """
-    recipients = bulk_send.resolved_recipients if bulk_send.resolved_recipients else resolve_recipients(
-        filter_criteria=bulk_send.recipient_filter if bulk_send.recipient_filter else None,
-        manual_emails=bulk_send.recipient_emails,
+    recipients = (
+        bulk_send.resolved_recipients
+        if bulk_send.resolved_recipients
+        else resolve_recipients(
+            filter_criteria=bulk_send.recipient_filter if bulk_send.recipient_filter else None,
+            manual_emails=bulk_send.recipient_emails,
+        )
     )
     total = len(recipients)
     if total == 0:
@@ -645,7 +824,7 @@ def enqueue_bulk_email_send(bulk_send: BulkEmailSend) -> int:
         return 0
     chunk_count = 0
     for offset in range(0, total, _BULK_EMAIL_CHUNK_SIZE):
-        chunk_emails = [entry["email"] for entry in recipients[offset:offset + _BULK_EMAIL_CHUNK_SIZE]]
+        chunk_emails = [entry["email"] for entry in recipients[offset : offset + _BULK_EMAIL_CHUNK_SIZE]]
         communication_tasks.send_bulk_email_chunk_task.delay(bulk_send.id, chunk_emails, total)
         chunk_count += 1
     return chunk_count
@@ -661,7 +840,9 @@ def process_bulk_email_chunk(bulk_send_id: int, recipient_emails: list[str], tot
     recipients in the chunk.
     """
     try:
-        bulk_send = BulkEmailSend.objects.get(id=bulk_send_id)
+        bulk_send = (
+            BulkEmailSend.objects.select_related("template").defer("resolved_recipients").get(id=bulk_send_id)
+        )
     except BulkEmailSend.DoesNotExist:
         logger.warning("Bulk send %s no longer exists; chunk skipped", bulk_send_id)
         return 0, 0
@@ -676,25 +857,36 @@ def process_bulk_email_chunk(bulk_send_id: int, recipient_emails: list[str], tot
     )
     design = bulk_send.template.design if bulk_send.template else DESIGN_BRANDED
     footer = get_global_footer()
+    html_body = _wrap_in_design(bulk_send.body, design, footer)
     success = 0
     failure = 0
-    for email in recipient_emails:
-        if email in already_processed:
-            continue
-        html_body = _wrap_in_design(bulk_send.body, design, footer)
-        record = send_email(
-            template_slug=bulk_send.template.slug if bulk_send.template else "",
-            to_email=email,
-            subject=bulk_send.subject,
-            body=bulk_send.body,
-            html_body=html_body,
-            sent_by=bulk_send.sent_by,
-            bulk_send=bulk_send,
-        )
-        if record.status == EMAIL_STATUS_SENT:
-            success += 1
-        else:
-            failure += 1
+    connection = get_connection()
+    try:
+        connection.open()
+    except Exception:  # noqa: BLE001 - fall back to a per-message connection
+        logger.exception("Could not open the bulk SMTP connection; using per-message connections")
+        connection = None
+    try:
+        for email in recipient_emails:
+            if email in already_processed:
+                continue
+            record = send_email(
+                template_slug=bulk_send.template.slug if bulk_send.template else "",
+                to_email=email,
+                subject=bulk_send.subject,
+                body=bulk_send.body,
+                html_body=html_body,
+                sent_by=bulk_send.sent_by,
+                bulk_send=bulk_send,
+                connection=connection,
+            )
+            if record.status == EMAIL_STATUS_SENT:
+                success += 1
+            else:
+                failure += 1
+    finally:
+        if connection is not None:
+            connection.close()
     _accumulate_bulk_send_progress(bulk_send_id, success, failure, total)
     return success, failure
 
@@ -711,9 +903,14 @@ def _accumulate_bulk_send_progress(bulk_send_id: int, success: int, failure: int
         failure_count=F("failure_count") + failure,
         updated_at=timezone.now(),
     )
-    row = BulkEmailSend.objects.filter(id=bulk_send_id).values(
-        "success_count", "failure_count",
-    ).first()
+    row = (
+        BulkEmailSend.objects.filter(id=bulk_send_id)
+        .values(
+            "success_count",
+            "failure_count",
+        )
+        .first()
+    )
     if row is None:
         return
     processed = row["success_count"] + row["failure_count"]

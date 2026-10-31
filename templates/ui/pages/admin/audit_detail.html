@@ -1,0 +1,106 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n %}
+{% block title %}
+  {% trans "Audit detail" %}
+{% endblock %}
+{% block content %}
+  <div class="page-stack animate-enter-view">{% trans "Compliance" as eyebrow %}
+    {% trans "Audit detail" as title %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=event.action_label %}
+    <div class="actions-row">
+      <a class="btn-secondary" href="{% url 'audit:list' %}">&larr; {% trans "Back to audit" %}</a>
+    </div>
+    <section class="card-surface flex flex-col gap-4">
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="status-pill-info">{{ event.section_label|default:_("Other") }}</span>
+        <span class="status-pill-neutral">{{ event.source_label }}</span>
+        {% if event.outcome == "failure" %}
+          <span class="status-pill-danger">{{ event.outcome_label }}</span>
+        {% elif event.outcome == "denied" %}
+          <span class="status-pill-warning">{{ event.outcome_label }}</span>
+        {% else %}
+          <span class="status-pill-success">{{ event.outcome_label }}</span>
+        {% endif %}
+        <span class="text-muted">{{ event.created_at|date:"Y-m-d H:i:s" }}</span>
+      </div>
+      <dl class="dl">
+        <div>
+          <dt class="dt">{% trans "Action" %}</dt>
+          <dd class="dd">{{ event.action_label }}</dd>
+        </div>
+        <div>
+          <dt class="dt">{% trans "Actor" %}</dt>
+          <dd class="dd">
+            {{ event.actor_display }}
+            {% if event.actor_role_display %}<small class="block text-muted">{{ event.actor_role_display }}</small>{% endif %}
+          </dd>
+        </div>
+        <div>
+          <dt class="dt">{% trans "Target" %}</dt>
+          <dd class="dd">
+            {{ event.target_display|default:"—" }}
+            {% if event.target_id %}<small class="block text-muted">{{ event.target_type_label|default:event.target_type }} #{{ event.target_id }}</small>{% endif %}
+          </dd>
+        </div>
+        <div>
+          <dt class="dt">{% trans "Affected person" %}</dt>
+          <dd class="dd">
+            {{ event.subject_display|default:"—" }}
+            {% if event.subject_id %}<small class="block text-muted">#{{ event.subject_id }}</small>{% endif %}
+          </dd>
+        </div>
+        <div>
+          <dt class="dt">{% trans "Time" %}</dt>
+          <dd class="dd">{{ event.created_at|date:"Y-m-d H:i:s e" }}</dd>
+        </div>
+      </dl>
+    </section>
+    <section class="card-surface flex flex-col gap-4">
+      <div class="section-head"><div>
+          <p class="eyebrow">{% trans "Details" %}</p>
+          <h3>{% trans "What changed" %}</h3>
+        </div>
+      </div>
+      {% if event.display_metadata %}
+        <dl class="page-stack">
+          {% for entry in event.display_metadata %}
+            <div class="grid gap-1 sm:grid-cols-[minmax(10rem,0.35fr)_minmax(0,1fr)] sm:gap-3">
+              <dt class="font-semibold">{{ entry.label }}</dt>
+              <dd class="m-0 whitespace-pre-wrap break-words">{{ entry.value }}</dd>
+            </div>
+          {% endfor %}
+        </dl>
+      {% else %}
+        <p class="text-muted">{% trans "No additional details were recorded." %}</p>
+      {% endif %}
+    </section>
+    <section class="card-surface flex flex-col gap-4">
+      <div class="section-head"><div>
+          <p class="eyebrow">{% trans "Tracing" %}</p>
+          <h3>{% trans "Technical trace" %}</h3>
+        </div>
+      </div>
+      <dl class="dl">
+        <div>
+          <dt class="dt">{% trans "Correlation ID" %}</dt>
+          <dd class="dd break-all">{{ event.correlation_id|default:"—" }}</dd>
+        </div>
+        <div>
+          <dt class="dt">{% trans "IP address" %}</dt>
+          <dd class="dd">{{ event.ip_address|default:"—" }}</dd>
+        </div>
+        <div>
+          <dt class="dt">{% trans "Request" %}</dt>
+          <dd class="dd">
+            {% if event.request_method or event.request_path %}
+              {{ event.request_method }} {{ event.request_path }}
+              {% if event.status_code %}<small class="block text-muted">HTTP {{ event.status_code }}</small>{% endif %}
+            {% else %}
+              —
+            {% endif %}
+          </dd>
+        </div>
+      </dl>
+    </section>
+  </div>
+{% endblock %}

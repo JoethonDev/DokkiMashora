@@ -34,15 +34,13 @@ from apps.assessments.constants import (
 from apps.assessments.models import (
     Assessment,
     AssessmentAttempt,
+    AssessmentAttemptQuestion,
+    AssessmentAttemptSnapshotAnswer,
     AssessmentLectureSection,
     DiplomaLectureChoice,
     DiplomaLectureQuestion,
 )
 from apps.students.models import StudentProfile
-from apps.assessments.models import (
-    AssessmentAttemptQuestion,
-    AssessmentAttemptSnapshotAnswer,
-)
 
 User = get_user_model()
 

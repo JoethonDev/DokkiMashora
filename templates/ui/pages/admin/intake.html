@@ -9,10 +9,24 @@
     {% trans "Create and manage intake forms, fields, and responses." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
     {% if form %}
-      <form class="card-surface max-w-form mx-auto w-full page-stack" method="post">{% csrf_token %}
+      <form class="card-surface max-w-form mx-auto w-full page-stack" method="post"
+            x-data="{
+              targetType: '{{ form.target_type.value|default:'course_version'|escapejs }}',
+              resetTarget() {
+                const group = this.targetType === 'course_version' ? this.$refs.cohort : this.$refs.courseVersion;
+                const select = group ? group.querySelector('select') : null;
+                if (select) select.value = '';
+              }
+            }">{% csrf_token %}
         <div class="form-grid">
           {% for field in form %}
             {% if field.name == "is_required" or field.name == "is_active" %}
+            {% elif field.name == "target_type" %}
+              <div @change="targetType = $event.target.value; resetTarget()">{% include "ui/components/_field.html" %}</div>
+            {% elif field.name == "course_version" %}
+              <div x-ref="courseVersion" x-show="targetType === 'course_version'" x-cloak>{% include "ui/components/_field.html" %}</div>
+            {% elif field.name == "cohort" %}
+              <div x-ref="cohort" x-show="targetType === 'cohort'" x-cloak>{% include "ui/components/_field.html" %}</div>
             {% elif field.name == "description" %}
               <div class="form-grid-full">{% include "ui/components/_field.html" %}</div>
             {% else %}
@@ -193,7 +207,7 @@
           {% endfor %}
         </dl>
       </section>
-    {% elif page_obj %}
+    {% elif page_obj is not None %}
       <section class="card-surface flex flex-col gap-4"><div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>

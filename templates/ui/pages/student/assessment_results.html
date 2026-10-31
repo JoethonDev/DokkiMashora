@@ -36,9 +36,11 @@
           </div>
         {% endif %}
       {% elif attempt_projection %}
-        {% include "ui/components/_state_banner.html" with state=attempt_projection.status label=attempt_projection.status_label %}
-        {% if result_projection.visible_to_student %}
-          <dl class="dl mt-4"><div>
+        <div class="max-w-2xl mx-auto w-full flex flex-col gap-4">
+          {% include "ui/components/_state_banner.html" with state=attempt_projection.status label=attempt_projection.status_label %}
+          {% if result_projection.visible_to_student %}
+            <dl class="dl">
+              <div>
                 <dt class="dt">{% trans "Assessment" %}</dt>
                 <dd class="dd">{{ attempt_projection.assessment_title }}</dd>
               </div>
@@ -47,46 +49,50 @@
                 <dd class="dd">{{ result_projection.score_percent|default:'—' }}%</dd>
               </div>
             </dl>
-          {% if result_projection.questions %}
-            <div class="mt-6">
-              <h3>{% trans "Your answers" %}</h3>
-              <div class="mt-2 space-y-4">
-                {% for question in result_projection.questions %}
-                  <div class="border border-line rounded-sm p-4">
-                    <p class="text-sm font-bold m-0">{{ question.order }}. {{ question.text }}</p>
-                    {% if question.selected_text %}<p class="text-sm text-muted mt-1 mb-0">{% trans "Your answer" %}: {{ question.selected_text }}</p>{% endif %}
-                    {% if question.written_text %}<p class="text-sm text-muted mt-1 mb-0">{{ question.written_text }}</p>{% endif %}
-                    {% if question.score is not None %}<p class="text-sm mt-1 mb-0">{% trans "Score" %}: {{ question.score }}</p>{% endif %}
-                    {% if question.feedback %}<p class="text-sm mt-1 mb-0">{% trans "Feedback" %}: {{ question.feedback }}</p>{% endif %}
-                  </div>
-                {% endfor %}
+          {% else %}
+            <div class="state-banner state-banner-info">
+              <div>
+                <strong>{% trans "Your submission was recorded" %}</strong>
+                <p class="m-0 mt-1 text-sm">{% trans "You can review your own answers below. Scores and feedback remain unavailable until the result is released." %}</p>
+                {% if result_projection.submitted_at %}<p class="m-0 mt-1 text-sm">{% trans "Submitted" %}: {{ result_projection.submitted_at|date:"d/m/Y H:i" }}</p>{% endif %}
+                {% if result_projection.graded_at %}<p class="m-0 mt-1 text-sm">{% trans "Graded" %}: {{ result_projection.graded_at|date:"d/m/Y H:i" }}</p>{% endif %}
               </div>
             </div>
           {% endif %}
-        {% else %}
-          <div class="mt-4 state-banner state-banner-info">
+          {% if result_projection.questions %}
             <div>
-              <strong>{% trans "Your submission was recorded" %}</strong>
-              <p class="m-0 mt-1 text-sm">{% trans "You can review your own answers below. Scores and feedback remain unavailable until the result is released." %}</p>
-              {% if result_projection.submitted_at %}<p class="m-0 mt-1 text-sm">{% trans "Submitted" %}: {{ result_projection.submitted_at|date:"d/m/Y H:i" }}</p>{% endif %}
-              {% if result_projection.graded_at %}<p class="m-0 mt-1 text-sm">{% trans "Graded" %}: {{ result_projection.graded_at|date:"d/m/Y H:i" }}</p>{% endif %}
-            </div>
-          </div>
-          {% if result_projection.questions %}
-            <div class="mt-6">
               <h3>{% trans "Your answers" %}</h3>
-              <div class="mt-2 space-y-4">
-                {% for question in result_projection.questions %}
-                  <div class="border border-line rounded-sm p-4">
-                    <p class="text-sm font-bold m-0">{{ question.order }}. {{ question.text }}</p>
-                    {% if question.selected_text %}<p class="text-sm text-muted mt-1 mb-0">{% trans "Your answer" %}: {{ question.selected_text }}</p>{% endif %}
-                    {% if question.written_text %}<p class="text-sm text-muted mt-1 mb-0">{{ question.written_text }}</p>{% endif %}
-                  </div>
-                {% endfor %}
-              </div>
+              {% if result_projection.is_diploma %}
+                <div class="mt-3 flex flex-col gap-4">
+                  {% for section in result_projection.sections %}
+                    <details class="group border border-line rounded-sm bg-surface" open>
+                      <summary class="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer list-none hover:bg-surface-soft rounded-sm group-open:border-b group-open:border-line [&::-webkit-details-marker]:hidden">
+                        <div class="flex items-center gap-2.5 min-w-0">
+                          <span class="text-xs text-muted shrink-0 transition-transform group-open:rotate-90" aria-hidden="true">&#9654;</span>
+                          <span class="text-xs font-bold text-muted uppercase shrink-0">{% trans "Lecture" %} {{ section.order }}</span>
+                          <span class="text-xs text-muted shrink-0" aria-hidden="true">&middot;</span>
+                          <strong class="truncate">{{ section.lecture }}</strong>
+                        </div>
+                        <span class="text-xs text-muted shrink-0">{% trans "Questions" %}: {{ section.questions|length }}</span>
+                      </summary>
+                      <div class="flex flex-col gap-4 p-3">
+                        {% for question in section.questions %}
+                          {% include "ui/components/_result_question.html" with question=question %}
+                        {% endfor %}
+                      </div>
+                    </details>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <div class="mt-3 flex flex-col gap-4">
+                  {% for question in result_projection.questions %}
+                    {% include "ui/components/_result_question.html" with question=question %}
+                  {% endfor %}
+                </div>
+              {% endif %}
             </div>
           {% endif %}
-        {% endif %}
+        </div>
       {% elif attempts %}
         <div class="table-wrap hidden lg:block"><table class="table">
             <thead>

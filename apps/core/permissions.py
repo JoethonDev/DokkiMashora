@@ -38,6 +38,8 @@ from apps.academics.models import (
     ModeratorStudentAssignment,
 )
 from apps.accounts.constants import (
+    ACTIVE_ROLE_PRECEDENCE,
+    ALL_ROLE_GROUPS,
     GROUP_ADMIN,
     GROUP_MODERATOR,
     GROUP_REVIEWER,
@@ -98,7 +100,11 @@ def _user_in_any_group(user, group_names: tuple[str, ...]) -> bool:
         except Exception:
             cached = set()
         user._group_names_cache = cached
-    return any(name in cached for name in group_names)
+    primary_role = next(
+        (name for name in ACTIVE_ROLE_PRECEDENCE if name in cached),
+        "",
+    )
+    return primary_role in group_names
 
 
 ROLE_EXAM_STAFF = (GROUP_SUPER_ADMIN, GROUP_ADMIN)
@@ -122,23 +128,28 @@ def is_moderator(user) -> bool:
 
 
 def is_reviewer(user) -> bool:
-    return bool(
-        user
-        and user.is_authenticated
-        and _user_in_any_group(user, ROLE_REVIEW_STAFF)
-    )
+    return bool(user and user.is_authenticated and _user_in_any_group(user, ROLE_REVIEW_STAFF))
 
 
 def is_secretary(user) -> bool:
-    return bool(
-        user
-        and user.is_authenticated
-        and _user_in_any_group(user, ROLE_ATTENDANCE_STAFF)
-    )
+    return bool(user and user.is_authenticated and _user_in_any_group(user, ROLE_ATTENDANCE_STAFF))
 
 
 def is_student(user) -> bool:
     return bool(user and user.is_authenticated and _user_in_any_group(user, (GROUP_STUDENT,)))
+
+
+def is_infrastructure_manager(user) -> bool:
+    """Admin/Super Admin or a role-less Django staff IT operator.
+
+    Product staff roles (Moderator/Reviewer/Secretary) must not manage SMTP,
+    Redis, or read email bodies containing one-time tokens.
+    """
+    if not user or not user.is_authenticated or not user.is_staff:
+        return False
+    if is_admin(user):
+        return True
+    return not user.groups.filter(name__in=ALL_ROLE_GROUPS).exists()
 
 
 def is_moderator_for_student(user, student, cohort=None) -> bool:
@@ -168,12 +179,14 @@ def is_moderator_for_student(user, student, cohort=None) -> bool:
         mod_qs = mod_qs.filter(cohort=cohort)
     # Cluster or wide-cohort coverage requires an active enrollment in the
     # cohort; completed/expired/pending/restricted students stay out of scope.
-    return mod_qs.filter(
-        cohort__enrollments__student=student_profile,
-        cohort__enrollments__status=ENROLLMENT_STATUS_ACTIVE,
-    ).filter(
-        Q(cluster__memberships__student=student_profile) | Q(cluster__isnull=True)
-    ).exists()
+    return (
+        mod_qs.filter(
+            cohort__enrollments__student=student_profile,
+            cohort__enrollments__status=ENROLLMENT_STATUS_ACTIVE,
+        )
+        .filter(Q(cluster__memberships__student=student_profile) | Q(cluster__isnull=True))
+        .exists()
+    )
 
 
 def can_moderator_grade_homework(user, submission) -> bool:
@@ -235,31 +248,50 @@ def assessment_staff_scope_filter(user, prefix: str = "") -> Q:
     moderator_filter = (
         Q(**{f"{filter_prefix}student__student_profile__moderator_assignments__moderator": user})
         & Q(**{f"{filter_prefix}student__student_profile__moderator_assignments__active": True})
-        & Q(**{f"{filter_prefix}assessment__cohort_id": F(f"{filter_prefix}student__student_profile__moderator_assignments__cohort_id")})
+        & Q(
+            **{
+                f"{filter_prefix}assessment__cohort_id": F(
+                    f"{filter_prefix}student__student_profile__moderator_assignments__cohort_id"
+                )
+            }
+        )
     )
-    mod_wide_cohorts = list(ModeratorAssignment.objects.filter(
-        moderator=user, active=True, cluster__isnull=True,
-    ).values_list("cohort_id", flat=True))
-    mod_cluster_students = list(ModeratorAssignment.objects.filter(
-        moderator=user, active=True, cluster__isnull=False,
-    ).values_list("cluster__memberships__student_id", flat=True))
-    mod_cluster_cohorts = list(ModeratorAssignment.objects.filter(
-        moderator=user, active=True, cluster__isnull=False,
-    ).values_list("cohort_id", flat=True))
+    mod_wide_cohorts = list(
+        ModeratorAssignment.objects.filter(
+            moderator=user,
+            active=True,
+            cluster__isnull=True,
+        ).values_list("cohort_id", flat=True)
+    )
+    mod_cluster_students = list(
+        ModeratorAssignment.objects.filter(
+            moderator=user,
+            active=True,
+            cluster__isnull=False,
+        ).values_list("cluster__memberships__student_id", flat=True)
+    )
+    mod_cluster_cohorts = list(
+        ModeratorAssignment.objects.filter(
+            moderator=user,
+            active=True,
+            cluster__isnull=False,
+        ).values_list("cohort_id", flat=True)
+    )
     # Cluster coverage applies only to students with an active enrollment in
     # the cluster's cohort (S2-15).
-    active_cluster_students = list(DiplomaEnrollment.objects.filter(
-        student_id__in=mod_cluster_students,
-        cohort_id__in=mod_cluster_cohorts,
-        status=ENROLLMENT_STATUS_ACTIVE,
-    ).values_list("student_id", flat=True))
+    active_cluster_students = list(
+        DiplomaEnrollment.objects.filter(
+            student_id__in=mod_cluster_students,
+            cohort_id__in=mod_cluster_cohorts,
+            status=ENROLLMENT_STATUS_ACTIVE,
+        ).values_list("student_id", flat=True)
+    )
     mod_filter = Q()
     if mod_wide_cohorts:
         mod_filter |= Q(**{f"{filter_prefix}assessment__cohort_id__in": mod_wide_cohorts})
     if active_cluster_students:
-        mod_filter |= (
-            Q(**{f"{filter_prefix}student__student_profile_id__in": active_cluster_students})
-            & Q(**{f"{filter_prefix}assessment__cohort_id__in": mod_cluster_cohorts})
+        mod_filter |= Q(**{f"{filter_prefix}student__student_profile_id__in": active_cluster_students}) & Q(
+            **{f"{filter_prefix}assessment__cohort_id__in": mod_cluster_cohorts}
         )
     return moderator_filter | mod_filter
 
@@ -281,7 +313,8 @@ def assessment_scope_filter(user) -> Q:
     if is_admin(user):
         return Q()
     mod_cohorts = ModeratorAssignment.objects.filter(
-        moderator=user, active=True,
+        moderator=user,
+        active=True,
     ).values("cohort_id")
     return Q(cohort_id__in=mod_cohorts)
 
@@ -297,7 +330,8 @@ def enrollment_scope_filter(user, enrollment_model: str = "course") -> Q:
     if is_admin(user):
         return Q()
     mod_cohorts = ModeratorAssignment.objects.filter(
-        moderator=user, active=True,
+        moderator=user,
+        active=True,
     ).values("cohort_id")
     if enrollment_model == "course":
         return Q(pk__isnull=True)
@@ -329,6 +363,19 @@ def student_required(view_func: Callable) -> Callable:
     @login_required
     def _wrapped(request, *args, **kwargs):
         if not (is_student(request.user) or request.user.is_superuser):
+            raise PermissionDenied
+        return view_func(request, *args, **kwargs)
+
+    return _wrapped
+
+
+def infrastructure_required(view_func: Callable) -> Callable:
+    """Allow Admin/Super Admin or a role-less IT staff operator."""
+
+    @wraps(view_func)
+    @login_required
+    def _wrapped(request, *args, **kwargs):
+        if not is_infrastructure_manager(request.user):
             raise PermissionDenied
         return view_func(request, *args, **kwargs)
 

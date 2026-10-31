@@ -232,6 +232,12 @@ class AttendanceSession(TimeStampedModel):
     )
     open_at = models.DateTimeField(_("open at"))
     close_at = models.DateTimeField(_("close at"))
+    closed_at = models.DateTimeField(
+        _("closed at"),
+        null=True,
+        blank=True,
+        help_text=_("The actual time an administrator manually closed this session."),
+    )
     opened_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

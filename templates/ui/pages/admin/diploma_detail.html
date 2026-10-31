@@ -7,7 +7,7 @@
   <div class="page-stack animate-enter-view">{% include "ui/components/_page_header.html" with title=diploma.title description=diploma.description eyebrow=_("Diploma") back_button=True %}
     <div class="flex gap-2.5 items-center flex-wrap mb-4">
       <a class="btn-primary" href="{% url 'academics:admin_diploma_edit' diploma.id %}">{% trans "Edit diploma" %}</a>
-      <a class="btn-ghost" href="{% url 'progression:admin_rejoin_eligibility' %}">{% trans "Rejoin eligibility" %}</a>
+      <a class="btn-ghost" href="{% url 'progression:admin_rejoin_eligibility' %}?diploma_id={{ diploma.id }}">{% trans "Rejoin eligibility" %}</a>
       <form method="post" action="{% url 'academics:admin_diploma_delete' diploma.id %}" data-confirm="{% trans 'Delete this diploma and its delivery content?' %}" class="m-0">{% csrf_token %}
         <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
       </form>
@@ -53,10 +53,14 @@
                     <tbody>
                       {% for item in group.semesters %}
                         <tr>
-                          <td class="table-td">{{ item.semester.title }}</td>
+                          <td class="table-td">
+                            <a class="link font-semibold" href="{% url 'progression:admin_cohort_semester_progression' diploma.id group.cohort.id item.semester.id %}">{{ item.semester.title }}</a>
+                            <small class="block text-muted">{% trans "Semester workspace" %}</small>
+                          </td>
                           <td class="table-td">{{ item.lecture_count }}</td>
                           <td class="table-td">
                             <div class="flex gap-2.5 items-center flex-wrap">
+                              <a class="btn-ghost" href="{% url 'progression:admin_cohort_semester_progression' diploma.id group.cohort.id item.semester.id %}">{% trans "Grading" %}</a>
                               <a class="btn-ghost" href="{% url 'academics:admin_semester_edit' diploma.id item.semester.id %}">{% trans "Edit" %}</a>
                               <a class="btn-ghost" href="{% url 'academics:admin_diploma_lecture_list' diploma.id group.cohort.id item.semester.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Lectures" %}</a>
                               <form method="post" action="{% url 'academics:admin_semester_delete' diploma.id item.semester.id %}" data-confirm="{% trans 'Delete this semester and its delivery lectures?' %}" class="m-0">{% csrf_token %}
@@ -73,12 +77,14 @@
                   {% for item in group.semesters %}
                     <div class="mobile-card">
                       <div class="flex-1 min-w-0">
-                        <strong class="block truncate">{{ item.semester.title }}</strong>
+                        <strong class="block truncate"><a class="link" href="{% url 'progression:admin_cohort_semester_progression' diploma.id group.cohort.id item.semester.id %}">{{ item.semester.title }}</a></strong>
+                        <small class="block text-muted">{% trans "Semester workspace" %}</small>
                         <small class="block text-muted">{{ item.lecture_count }} {% trans "lectures" %}</small>
                       </div>
-                      <div class="flex gap-2 shrink-0">
+                      <div class="flex flex-wrap gap-2 justify-end">
+                        <a class="btn-ghost" href="{% url 'progression:admin_cohort_semester_progression' diploma.id group.cohort.id item.semester.id %}">{% trans "Grading" %}</a>
                         <a class="btn-ghost" href="{% url 'academics:admin_semester_edit' diploma.id item.semester.id %}">{% trans "Edit" %}</a>
-                        <a class="btn-ghost shrink-0" href="{% url 'academics:admin_diploma_lecture_list' diploma.id group.cohort.id item.semester.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Lectures" %}</a>
+                        <a class="btn-ghost" href="{% url 'academics:admin_diploma_lecture_list' diploma.id group.cohort.id item.semester.id %}?next={{ request.get_full_path|urlencode }}">{% trans "Lectures" %}</a>
                         <form method="post" action="{% url 'academics:admin_semester_delete' diploma.id item.semester.id %}" data-confirm="{% trans 'Delete this semester and its delivery lectures?' %}" class="m-0">{% csrf_token %}
                           <button class="btn-danger" type="submit">{% trans "Delete" %}</button>
                         </form>
@@ -149,16 +155,19 @@
     </section>
     <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
           <p class="eyebrow">{% trans "Rules" %}</p>
-          <h3>{% trans "Progression Rules" %}</h3>
+          <h3>{% trans "Diploma progression defaults" %}</h3>
         </div>
         <div class="flex gap-2.5 items-center flex-wrap">
           <a class="btn-ghost" href="{% url 'progression:admin_diploma_rule_edit' diploma.id %}">{% trans "Edit rule" %}</a>
         </div>
       </div>
-      {% with rule=diploma.progression_rules.first %}
+      <p class="text-muted text-sm">{% trans "These defaults govern whether missing Diploma assessments block or are omitted. Cohort and semester evaluation settings control score weights and minimums." %}</p>
+      {% with rule=progression_rule %}
         {% if rule %}
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 p-4">
-            <div><span class="text-xs text-muted">{% trans "Semester pass %" %}</span><p class="font-semibold">{{ rule.semester_pass_percent }}%</p></div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 p-4">
+            <div><span class="text-xs text-muted">{% trans "Diploma default semester pass threshold (%)" %}</span><p class="font-semibold">{{ rule.semester_pass_percent }}%</p></div>
+            <div><span class="text-xs text-muted">{% trans "Require all required assessments by default" %}</span><p class="font-semibold">{% if rule.require_all_required_assessments %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</p></div>
+            <div><span class="text-xs text-muted">{% trans "Allow missing optional assessments by default" %}</span><p class="font-semibold">{% if rule.allow_missing_optional_assessments %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</p></div>
             <div><span class="text-xs text-muted">{% trans "Require all semesters" %}</span><p class="font-semibold">{% if rule.require_all_semesters_passed %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</p></div>
             <div><span class="text-xs text-muted">{% trans "Auto promote" %}</span><p class="font-semibold">{% if rule.auto_promote_enabled %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</p></div>
             <div><span class="text-xs text-muted">{% trans "Admin override" %}</span><p class="font-semibold">{% if rule.allow_admin_override %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</p></div>

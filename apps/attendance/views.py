@@ -5,19 +5,17 @@ from datetime import datetime
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db.models import Count, Q
-from django.http import JsonResponse
+from django.db.models import Count, F, Q
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_http_methods, require_POST
 
 from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE
 from apps.academics.models import Cohort, CourseVersion, Diploma, DiplomaEnrollment, Semester
-from apps.academics.services import get_student_diploma_access
-from apps.audit.constants import ACTION_ATTENDANCE_SESSION_DELETED
-from apps.audit.services import record_audit_event
+from apps.academics.services import get_visible_semesters_by_enrollment
 from apps.core.htmx import is_htmx
 from apps.core.pagination import paginate
 from apps.core.permissions import (
@@ -41,19 +39,31 @@ from .constants import (
     SESSION_STATUS_OPEN,
     SESSION_STATUS_SCHEDULED,
 )
+from .forms import AttendancePeriodWindowForm, AttendanceSessionWindowForm
 from .models import AttendancePeriod, AttendanceRecord, AttendanceSession
+from .selectors import (
+    annotate_attendance_history_records,
+    effective_overdue_period_q,
+    effective_overdue_session_q,
+    student_attendance_history_queryset,
+)
 from .services import (
     AttendanceScanError,
     _build_attendance_summary,
+    attendance_record_exclusion_reason,
     close_attendance_period,
     close_attendance_session,
+    counted_attendance_record_q,
     create_attendance_day,
     create_attendance_period,
+    delete_empty_attendance_session,
     get_attendance_evaluation_percent,
     get_attendance_summaries,
     open_attendance_session,
     open_session,
     scan_attendance_token,
+    update_attendance_period_window,
+    update_attendance_session_window,
 )
 
 ADMIN_ONLY = (GROUP_SUPER_ADMIN, GROUP_ADMIN)
@@ -68,23 +78,83 @@ ADMIN_ONLY = (GROUP_SUPER_ADMIN, GROUP_ADMIN)
 @role_required(*ROLE_ATTENDANCE_STAFF)
 def attendance_session_list(request):
     periods = AttendancePeriod.objects.select_related(
-        "cohort", "semester", "created_by"
+        "cohort__diploma", "semester__diploma", "created_by"
     ).annotate(
         day_count=Count("sessions", distinct=True),
-        record_count=Count("sessions__records", distinct=True),
+        raw_record_count=Count("sessions__records", distinct=True),
+        counted_record_count=Count(
+            "sessions__records",
+            filter=counted_attendance_record_q("sessions__records__"),
+            distinct=True,
+        ),
+    ).annotate(
+        excluded_record_count=F("raw_record_count") - F("counted_record_count"),
     )
     sessions = AttendanceSession.objects.filter(period__isnull=True).select_related(
-        "cohort", "course_version", "semester", "created_by"
-    ).annotate(record_count=Count("records"))
+        "cohort__diploma", "course_version__course", "semester__diploma", "created_by"
+    ).annotate(
+        raw_record_count=Count("records"),
+        counted_record_count=Count(
+            "records", filter=counted_attendance_record_q("records__"),
+        ),
+    ).annotate(
+        excluded_record_count=F("raw_record_count") - F("counted_record_count"),
+    )
 
-    cohort_id = safe_int(request.GET.get("cohort_id"))
+    def query_id(name):
+        raw_value = request.GET.get(name)
+        if not raw_value:
+            return None
+        value = safe_int(raw_value)
+        if value is None or value < 1:
+            raise Http404
+        return value
+
+    diploma_id = query_id("diploma_id")
+    cohort_id = query_id("cohort_id")
+    semester_id = query_id("semester_id")
+    selected_diploma = get_object_or_404(Diploma, id=diploma_id) if diploma_id else None
+    selected_cohort = (
+        get_object_or_404(Cohort.objects.select_related("diploma"), id=cohort_id)
+        if cohort_id else None
+    )
+    selected_semester = (
+        get_object_or_404(Semester.objects.select_related("diploma"), id=semester_id)
+        if semester_id else None
+    )
+
+    inferred_diploma_id = (
+        selected_cohort.diploma_id if selected_cohort
+        else selected_semester.diploma_id if selected_semester
+        else None
+    )
+    if selected_diploma is None and inferred_diploma_id:
+        selected_diploma = get_object_or_404(Diploma, id=inferred_diploma_id)
+    # These are independent list filters, not an object-access boundary. If a
+    # user changes a parent selector while a stale child value remains in the
+    # query string, discard the incompatible child instead of returning a 404.
+    if selected_diploma and selected_cohort and selected_cohort.diploma_id != selected_diploma.id:
+        selected_cohort = None
+    if selected_diploma and selected_semester and selected_semester.diploma_id != selected_diploma.id:
+        selected_semester = None
+    if selected_cohort and selected_semester and selected_cohort.diploma_id != selected_semester.diploma_id:
+        selected_semester = None
+
     date_from = safe_date_str(request.GET.get("date_from"))
     date_to = safe_date_str(request.GET.get("date_to"))
     exception = request.GET.get("exception", "")
 
-    if cohort_id:
-        periods = periods.filter(cohort_id=cohort_id)
-        sessions = sessions.filter(cohort_id=cohort_id)
+    if selected_diploma:
+        periods = periods.filter(cohort__diploma=selected_diploma)
+        sessions = sessions.filter(
+            Q(cohort__diploma=selected_diploma) | Q(semester__diploma=selected_diploma)
+        )
+    if selected_cohort:
+        periods = periods.filter(cohort=selected_cohort)
+        sessions = sessions.filter(cohort=selected_cohort)
+    if selected_semester:
+        periods = periods.filter(semester=selected_semester)
+        sessions = sessions.filter(semester=selected_semester)
     if date_from:
         periods = periods.filter(sessions__date__gte=date_from).distinct()
         sessions = sessions.filter(date__gte=date_from)
@@ -92,20 +162,47 @@ def attendance_session_list(request):
         periods = periods.filter(sessions__date__lte=date_to).distinct()
         sessions = sessions.filter(date__lte=date_to)
     if exception == "overdue":
-        periods = periods.filter(status="scheduled", ends_at__lt=timezone.now())
-        sessions = sessions.filter(status="scheduled", date__lt=timezone.localdate())
+        now = timezone.now()
+        periods = periods.filter(effective_overdue_period_q(now))
+        sessions = sessions.filter(effective_overdue_session_q(now))
 
     periods = periods.order_by("-starts_at", "-created_at")
     page_obj, pagination_qs = paginate(request, periods, per_page=25)
     sessions = sessions.order_by("-date", "-created_at")
 
+    diplomas = Diploma.objects.filter(is_active=True)
+    if selected_diploma and not selected_diploma.is_active:
+        diplomas |= Diploma.objects.filter(id=selected_diploma.id)
+    cohorts = Cohort.objects.filter(is_active=True)
+    semesters = Semester.objects.filter(is_active=True)
+    if selected_diploma:
+        cohorts = cohorts.filter(diploma=selected_diploma)
+        semesters = semesters.filter(diploma=selected_diploma)
+    if selected_cohort and not selected_cohort.is_active:
+        cohorts |= Cohort.objects.filter(id=selected_cohort.id)
+    if selected_semester and not selected_semester.is_active:
+        semesters |= Semester.objects.filter(id=selected_semester.id)
+
+    course_sessions = sessions.filter(course_version__isnull=False)
+    legacy_diploma_sessions = sessions.filter(cohort__isnull=False)
+
     ctx = {
         "periods": page_obj,
-        "sessions": sessions,
+        "period_count": page_obj.paginator.count,
+        "course_sessions": course_sessions,
+        "legacy_diploma_sessions": legacy_diploma_sessions,
         "page_obj": page_obj,
         "pagination_qs": pagination_qs,
-        "cohorts": Cohort.objects.filter(is_active=True),
-        "selected_cohort_id": cohort_id,
+        "diplomas": diplomas.order_by("title"),
+        "cohorts": cohorts.select_related("diploma").order_by(
+            "diploma__title", "name",
+        ),
+        "semesters": semesters.select_related("diploma").order_by(
+            "diploma__title", "order",
+        ),
+        "selected_diploma_id": selected_diploma.id if selected_diploma else None,
+        "selected_cohort_id": selected_cohort.id if selected_cohort else None,
+        "selected_semester_id": selected_semester.id if selected_semester else None,
         "date_from": date_from,
         "date_to": date_to,
         "exception": exception,
@@ -212,17 +309,17 @@ def attendance_session_create(request):
                     form_errors.append(str(exc))
 
     cohorts = (
-        Cohort.objects.filter(is_active=True)
+        Cohort.objects.filter(is_active=True, diploma__attendance_enabled=True)
         .select_related("diploma")
         .order_by("diploma__title", "name")
     )
     course_versions = (
-        CourseVersion.objects.filter(is_active=True)
+        CourseVersion.objects.filter(is_active=True, course__attendance_enabled=True)
         .select_related("course")
         .order_by("course__title")
     )
     semesters = (
-        Semester.objects.filter(is_active=True)
+        Semester.objects.filter(is_active=True, diploma__attendance_enabled=True)
         .select_related("diploma")
         .order_by("diploma_id", "order")
     )
@@ -230,7 +327,9 @@ def attendance_session_create(request):
         "cohorts": cohorts,
         "course_versions": course_versions,
         "semesters": semesters,
-        "diplomas": Diploma.objects.filter(is_active=True).order_by("title"),
+        "diplomas": Diploma.objects.filter(
+            is_active=True, attendance_enabled=True
+        ).order_by("title"),
         "form_data": form_data,
         "form_errors": form_errors,
         "back_url": reverse("attendance:attendance_session_list"),
@@ -253,12 +352,37 @@ def attendance_period_detail(request, period_id):
     period = get_object_or_404(
         AttendancePeriod.objects.select_related(
             "cohort", "semester", "created_by", "opened_by", "closed_by"
+        ).annotate(
+            raw_record_count=Count("sessions__records", distinct=True),
+            counted_record_count=Count(
+                "sessions__records",
+                filter=counted_attendance_record_q("sessions__records__"),
+                distinct=True,
+            ),
+        ).annotate(
+            excluded_record_count=F("raw_record_count") - F("counted_record_count"),
         ),
         id=period_id,
     )
-    days = period.sessions.select_related("created_by", "opened_by", "closed_by").annotate(
-        record_count=Count("records")
+    days = period.sessions.select_related(
+        "created_by", "opened_by", "closed_by", "period",
+    ).annotate(
+        raw_record_count=Count("records"),
+        counted_record_count=Count(
+            "records", filter=counted_attendance_record_q("records__"),
+        ),
+    ).annotate(
+        excluded_record_count=F("raw_record_count") - F("counted_record_count"),
     ).order_by("session_number", "date")
+    period_start_date = timezone.localtime(period.starts_at).date()
+    period_end_date = timezone.localtime(period.ends_at).date()
+    for day in days:
+        day.outside_parent_period_window = (
+            day.date < period_start_date
+            or day.date > period_end_date
+            or day.open_at < period.starts_at
+            or day.close_at > period.ends_at
+        )
     return render(request, "ui/pages/admin/attendance_period_detail.html", {
         "period": period,
         "days": days,
@@ -266,7 +390,49 @@ def attendance_period_detail(request, period_id):
         "back_url": reverse("attendance:attendance_session_list"),
         "breadcrumb_items": [
             {"label": _("Attendance periods"), "href": reverse("attendance:attendance_session_list")},
-            {"label": str(period)},
+            {"label": _("Period details")},
+        ],
+    })
+
+
+@login_required
+@role_required(*ADMIN_ONLY)
+@require_http_methods(["GET", "POST"])
+def attendance_period_edit(request, period_id):
+    period = get_object_or_404(
+        AttendancePeriod.objects.select_related("cohort__diploma", "semester__diploma"),
+        id=period_id,
+    )
+    initial = {"starts_at": period.starts_at, "ends_at": period.ends_at}
+    form = AttendancePeriodWindowForm(
+        request.POST if request.method == "POST" else None,
+        initial=initial if request.method == "GET" else None,
+    )
+    if request.method == "POST" and form.is_valid():
+        try:
+            update_attendance_period_window(
+                period,
+                starts_at=form.cleaned_data["starts_at"],
+                ends_at=form.cleaned_data["ends_at"],
+                actor=request.user,
+            )
+        except ValueError as exc:
+            form.add_error(None, str(exc))
+        else:
+            messages.success(request, _("Attendance period window updated."))
+            return redirect("attendance:attendance_period_detail", period.id)
+
+    return render(request, "ui/pages/admin/attendance_window_form.html", {
+        "form": form,
+        "page_title": _("Edit attendance period"),
+        "object_title": str(period),
+        "notice": _("Changing the period window never deletes attendance records."),
+        "submit_label": _("Save changes"),
+        "back_url": reverse("attendance:attendance_period_detail", args=[period.id]),
+        "breadcrumb_items": [
+            {"label": _("Attendance periods"), "href": reverse("attendance:attendance_session_list")},
+            {"label": _("Period details"), "href": reverse("attendance:attendance_period_detail", args=[period.id])},
+            {"label": _("Edit attendance period")},
         ],
     })
 
@@ -328,34 +494,44 @@ def attendance_session_delete(request, session_id):
         AttendanceSession.objects.select_related("cohort", "course_version", "semester", "period"),
         id=session_id,
     )
-    if AttendanceRecord.objects.filter(session=session).exists():
-        messages.error(
-            request,
-            _("This session has recorded attendance and cannot be deleted."),
-        )
+    try:
+        info, period_id = delete_empty_attendance_session(session, request.user)
+    except ValueError as exc:
+        messages.error(request, str(exc))
         return redirect(
             "attendance:attendance_period_detail", session.period_id
         ) if session.period_id else redirect("attendance:attendance_session_detail", session.id)
-    info = str(session)
-    record_audit_event(
-        actor=request.user,
-        action=ACTION_ATTENDANCE_SESSION_DELETED,
-        target_type="attendance_session",
-        target_id=str(session.pk),
-        metadata={
-            "title": session.title,
-            "date": str(session.date),
-            "cohort_id": session.cohort_id,
-            "course_version_id": session.course_version_id,
-            "semester_id": session.semester_id,
-            "status": session.status,
-        },
-    )
-    session.delete()
+
     messages.success(request, _("Attendance session deleted: %(session)s.") % {"session": info})
     return redirect(
-        "attendance:attendance_period_detail", session.period_id
-    ) if session.period_id else redirect("attendance:attendance_session_list")
+        "attendance:attendance_period_detail", period_id
+    ) if period_id else redirect("attendance:attendance_session_list")
+
+
+def _attendance_session_breadcrumbs(
+    session: AttendanceSession,
+    *,
+    include_session_link: bool = False,
+) -> list[dict[str, object]]:
+    breadcrumbs = [{
+        "label": _("Attendance periods") if session.period_id else _("Attendance sessions"),
+        "href": reverse("attendance:attendance_session_list"),
+    }]
+    if session.period_id:
+        breadcrumbs.append({
+            "label": _("Period details"),
+            "href": reverse("attendance:attendance_period_detail", args=[session.period_id]),
+        })
+        session_label = f"{_('Session')} {session.session_number}"
+    else:
+        session_label = _("Attendance session")
+    session_breadcrumb = {"label": session_label}
+    if include_session_link:
+        session_breadcrumb["href"] = reverse(
+            "attendance:attendance_session_detail", args=[session.id],
+        )
+    breadcrumbs.append(session_breadcrumb)
+    return breadcrumbs
 
 
 @login_required
@@ -365,22 +541,71 @@ def attendance_session_detail(request, session_id):
         AttendanceSession.objects.select_related("cohort", "course_version", "semester", "period", "created_by", "opened_by", "closed_by"),
         id=session_id,
     )
-    records = session.records.select_related("student", "scanned_by").order_by("scanned_at")
+    record_projection = _attendance_record_projection(session)
 
     ctx = {
         "session": session,
-        "records": records,
+        **record_projection,
         "period": session.period,
         "is_admin": is_admin(request.user),
         "back_url": reverse(
             "attendance:attendance_period_detail", args=[session.period_id]
         ) if session.period_id else reverse("attendance:attendance_session_list"),
-        "breadcrumb_items": [
-            {"label": _("Attendance periods"), "href": reverse("attendance:attendance_session_list")},
-            {"label": str(session)},
-        ],
+        "breadcrumb_items": _attendance_session_breadcrumbs(session),
     }
     return render(request, "ui/pages/admin/attendance_detail.html", ctx)
+
+
+@login_required
+@role_required(*ADMIN_ONLY)
+@require_http_methods(["GET", "POST"])
+def attendance_session_edit(request, session_id):
+    session = get_object_or_404(
+        AttendanceSession.objects.select_related(
+            "cohort__diploma", "course_version__course", "semester__diploma", "period",
+        ),
+        id=session_id,
+    )
+    initial = {
+        "session_date": session.date,
+        "open_at": session.open_at,
+        "close_at": session.close_at,
+        "title": session.title,
+    }
+    form = AttendanceSessionWindowForm(
+        request.POST if request.method == "POST" else None,
+        initial=initial if request.method == "GET" else None,
+    )
+    if request.method == "POST" and form.is_valid():
+        try:
+            update_attendance_session_window(
+                session,
+                session_date=form.cleaned_data["session_date"],
+                open_at=form.cleaned_data["open_at"],
+                close_at=form.cleaned_data["close_at"],
+                title=form.cleaned_data["title"],
+                actor=request.user,
+            )
+        except ValueError as exc:
+            form.add_error(None, str(exc))
+        else:
+            messages.success(request, _("Attendance session window updated."))
+            return redirect("attendance:attendance_session_detail", session.id)
+
+    breadcrumb_items = _attendance_session_breadcrumbs(
+        session,
+        include_session_link=True,
+    )
+    breadcrumb_items.append({"label": _("Edit attendance session")})
+    return render(request, "ui/pages/admin/attendance_window_form.html", {
+        "form": form,
+        "page_title": _("Edit attendance session"),
+        "object_title": str(session),
+        "notice": _("Changing a session window never deletes attendance records."),
+        "submit_label": _("Save changes"),
+        "back_url": reverse("attendance:attendance_session_detail", args=[session.id]),
+        "breadcrumb_items": breadcrumb_items,
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -435,22 +660,49 @@ def attendance_session_close(request, session_id):
 @login_required
 @role_required(*ROLE_ATTENDANCE_STAFF)
 def attendance_session_records(request, session_id):
-    session = get_object_or_404(AttendanceSession, id=session_id)
-    records = session.records.select_related("student", "scanned_by", "attendance_code").order_by("scanned_at")
+    session = get_object_or_404(
+        AttendanceSession.objects.select_related(
+            "cohort", "course_version__course", "semester", "period",
+            "created_by", "opened_by", "closed_by",
+        ),
+        id=session_id,
+    )
+    record_projection = _attendance_record_projection(session)
 
     ctx = {
         "session": session,
-        "records": records,
+        **record_projection,
         "period": session.period,
+        "is_admin": is_admin(request.user),
         "back_url": reverse(
             "attendance:attendance_period_detail", args=[session.period_id]
         ) if session.period_id else reverse("attendance:attendance_session_list"),
-        "breadcrumb_items": [
-            {"label": _("Attendance Sessions"), "href": reverse("attendance:attendance_session_list")},
-            {"label": _("Records: %(session)s") % {"session": session}},
-        ],
+        "breadcrumb_items": _attendance_session_breadcrumbs(
+            session,
+            include_session_link=True,
+        ) + [{"label": _("Attendance records")}],
     }
     return render(request, "ui/pages/admin/attendance_detail.html", ctx)
+
+
+def _attendance_record_projection(session: AttendanceSession) -> dict:
+    records = list(
+        session.records.select_related(
+            "student", "scanned_by", "session__period",
+        ).order_by("scanned_at")
+    )
+    counted_record_count = 0
+    for record in records:
+        record.exclusion_reason = attendance_record_exclusion_reason(record)
+        record.is_counted = record.exclusion_reason is None
+        counted_record_count += int(record.is_counted)
+    raw_record_count = len(records)
+    return {
+        "records": records,
+        "raw_record_count": raw_record_count,
+        "counted_record_count": counted_record_count,
+        "excluded_record_count": raw_record_count - counted_record_count,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -463,6 +715,9 @@ def attendance_session_records(request, session_id):
 def attendance_scan(request):
     open_sessions = AttendanceSession.objects.filter(
         status=SESSION_STATUS_OPEN,
+    ).filter(
+        Q(course_version__course__attendance_enabled=True)
+        | Q(cohort__diploma__attendance_enabled=True)
     ).select_related("cohort", "course_version", "semester", "period").order_by("-date", "-session_number")
 
     result = None
@@ -587,9 +842,11 @@ def my_attendance(request):
 
     summaries = []
 
-    enrollments = student_profile.diploma_enrollments.filter(
+    enrollments = list(student_profile.diploma_enrollments.filter(
         status=ENROLLMENT_STATUS_ACTIVE,
-    ).select_related("cohort__diploma")
+        cohort__diploma__attendance_enabled=True,
+    ).select_related("cohort__diploma"))
+    visible_semesters_by_enrollment = get_visible_semesters_by_enrollment(enrollments)
 
     # Reuse the canonical batch attendance summaries (one set-based pass per
     # semester) and the same required-sessions capping the evaluation uses, so
@@ -599,7 +856,7 @@ def my_attendance(request):
     semester_by_id: dict[int, Semester] = {}
     cohort_ids: set[int] = set()
     for enrollment in enrollments:
-        visible_semesters = get_student_diploma_access(enrollment)["visible_semesters"]
+        visible_semesters = visible_semesters_by_enrollment.get(enrollment.id, [])
         for semester in visible_semesters:
             pairs_by_semester.setdefault(semester.id, []).append(enrollment)
             semester_by_id[semester.id] = semester
@@ -632,37 +889,83 @@ def my_attendance(request):
                 ),
             })
 
-    course_enrollments = student_profile.course_enrollments.filter(
+    course_enrollments = list(student_profile.course_enrollments.filter(
         status=ENROLLMENT_STATUS_ACTIVE,
-    ).select_related("course_version__course")
-    for ce in course_enrollments:
-        session_qs = AttendanceSession.objects.filter(
-            course_version=ce.course_version,
+        course_version__course__attendance_enabled=True,
+    ).select_related("course_version__course"))
+    if course_enrollments:
+        course_version_ids = {ce.course_version_id for ce in course_enrollments}
+        course_sessions = AttendanceSession.objects.filter(
+            course_version_id__in=course_version_ids,
             period__isnull=True,
         ).filter(ended_or_closed)
-        total = session_qs.count()
-        if total == 0:
-            continue
-        record_counts = {}
-        for row in AttendanceRecord.objects.filter(
-            course_enrollment=ce,
-            session__in=session_qs,
-        ).values("status").annotate(count=Count("id")):
-            record_counts[row["status"]] = row["count"]
-        summary = _build_attendance_summary(
-            total,
-            record_counts.get(ATTENDANCE_STATUS_PRESENT, 0),
-            record_counts.get(ATTENDANCE_STATUS_LATE, 0),
-            record_counts.get(ATTENDANCE_STATUS_EXCUSED, 0),
+        session_totals = {
+            row["course_version_id"]: row["total"]
+            for row in course_sessions.values("course_version_id").annotate(total=Count("id"))
+        }
+        counted_in_evaluation = counted_attendance_record_q() & Q(
+            session__in=course_sessions,
         )
-        summaries.append({
-            "enrollment": ce,
-            "course_title": str(ce.course_version.course.title),
-            **summary,
-        })
+        record_counts = {
+            row["course_enrollment_id"]: row
+            for row in AttendanceRecord.objects.filter(
+                course_enrollment_id__in=[ce.id for ce in course_enrollments],
+                session__course_version_id=F("course_enrollment__course_version_id"),
+                session__period__isnull=True,
+            ).values("course_enrollment_id").annotate(
+                raw_record_count=Count("id"),
+                present_count=Count(
+                    "id", filter=counted_in_evaluation & Q(status=ATTENDANCE_STATUS_PRESENT),
+                ),
+                late_count=Count(
+                    "id", filter=counted_in_evaluation & Q(status=ATTENDANCE_STATUS_LATE),
+                ),
+                excused_count=Count(
+                    "id", filter=counted_in_evaluation & Q(status=ATTENDANCE_STATUS_EXCUSED),
+                ),
+            )
+        }
+        for ce in course_enrollments:
+            counts = record_counts.get(ce.id, {})
+            summary = _build_attendance_summary(
+                session_totals.get(ce.course_version_id, 0),
+                counts.get("present_count", 0),
+                counts.get("late_count", 0),
+                counts.get("excused_count", 0),
+                raw_record_count=counts.get("raw_record_count", 0),
+            )
+            if not summary["total_sessions"] and not summary["raw_record_count"]:
+                continue
+            summaries.append({
+                "enrollment": ce,
+                "course_title": str(ce.course_version.course.title),
+                **summary,
+            })
+
+    attendance_history_qs = student_attendance_history_queryset(student_profile)
+    attendance_page, attendance_pagination_qs = paginate(
+        request,
+        attendance_history_qs,
+        per_page=25,
+    )
+    annotate_attendance_history_records(attendance_page.object_list)
+    attendance_totals = attendance_history_qs.aggregate(
+        total=Count("id"),
+        countable=Count("id", filter=counted_attendance_record_q()),
+    )
+    raw_attendance_record_count = attendance_totals["total"] or 0
+    countable_attendance_record_count = attendance_totals["countable"] or 0
 
     ctx = {
         "summaries": summaries,
+        "attendance_records": attendance_page,
+        "attendance_pagination_qs": attendance_pagination_qs,
+        "attendance_record_total": raw_attendance_record_count,
+        "attendance_record_countable": countable_attendance_record_count,
+        "attendance_record_excluded": max(
+            raw_attendance_record_count - countable_attendance_record_count,
+            0,
+        ),
         "breadcrumb_items": [{"label": _("My Attendance")}],
     }
     return render(request, "ui/pages/student/attendance.html", ctx)

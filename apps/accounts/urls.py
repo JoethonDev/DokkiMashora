@@ -13,6 +13,7 @@ urlpatterns = [
     path("logout/", views.EmailLogoutView.as_view(), name="logout"),
     path("post-login/", views.post_login, name="post_login"),
     path("profile/", views.profile, name="profile"),
+    path("profile/activation-email/", views.send_my_activation_email, name="send_my_activation_email"),
     path("dashboard/", views.dashboard_router, name="dashboard"),
     path("dashboard/admin/", views.admin_dashboard, name="dashboard_admin"),
     path("dashboard/moderator/", views.moderator_dashboard, name="dashboard_moderator"),

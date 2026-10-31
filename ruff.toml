@@ -21,7 +21,6 @@ ignore = [
 
 [lint.per-file-ignores]
 "**/migrations/*.py" = ["E", "F", "I", "B", "UP", "N"]
-"**/tests/*.py" = ["B011"]
 
 [format]
 quote-style = "double"

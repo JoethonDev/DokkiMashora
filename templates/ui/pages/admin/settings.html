@@ -1,94 +1,392 @@
 {% extends "ui/layouts/admin.html" %}
 {% load i18n ui_tags %}
 {% block title %}
-  {% trans "Settings" %}
+  {% trans "General settings" %}
 {% endblock %}
 {% block content %}
   <div class="page-stack animate-enter-view">{% trans "System" as eyebrow %}
-    {% trans "Settings" as title %}
-    {% trans "Site configuration, email health, and announcements." as description %}
+    {% trans "General settings" as title %}
+    {% trans "Email delivery, background jobs, Redis, and system information." as description %}
     {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description %}
-    <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
-          <p class="eyebrow">{% trans "General" %}</p>
-          <h3>{% trans "Site configuration" %}</h3>
+    <nav class="tab-track w-max max-w-full overflow-auto" aria-label="{% trans 'Settings sections' %}">
+      {% for key,label in tabs %}
+        <a class="tab {% if tab == key %}tab-active{% endif %}" href="?tab={{ key }}">{{ label }}</a>
+      {% endfor %}
+    </nav>
+
+    {% if tab == "email" %}
+      <section class="card-surface flex flex-col gap-4">
+        <div class="section-head"><div>
+            <p class="eyebrow">{% trans "Health" %}</p>
+            <h3>{% trans "Email delivery" %}</h3>
+            <p class="text-muted">{% trans "Source:" %} {{ site_config.email_source_label }} · {{ site_config.default_from_email }}</p>
+          </div>
+          <a class="btn-secondary" href="{{ email_log_url }}">{% trans "Open email log" %}</a>
         </div>
-      </div>
-      <dl class="dl"><div>
-          <dt class="dt">{% trans "Site name (EN)" %}</dt>
-          <dd class="dd">
-            {{ site_config.SITE_NAME|default:'—' }}
-          </dd>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {% for window in email_health.windows %}
+            <div class="card-surface">
+              <p class="eyebrow">{{ window.label }}</p>
+              <p class="text-2xl font-black">{{ window.stats.total }}</p>
+              <p class="text-muted text-sm">
+                {% trans "Sent" %}: {{ window.stats.sent }} ·
+                {% trans "Failed" %}: {{ window.stats.failed }} ·
+                {% trans "Queued" %}: {{ window.stats.queued }}
+              </p>
+            </div>
+          {% endfor %}
         </div>
-        <div>
-          <dt class="dt">{% trans "Site name (AR)" %}</dt>
-          <dd class="dd">
-            {{ site_config.SITE_NAME_AR|default:'—' }}
-          </dd>
-        </div>
-        <div>
-          <dt class="dt">{% trans "Timezone" %}</dt>
-          <dd class="dd">
-            {{ site_config.TIME_ZONE|default:'—' }}
-          </dd>
-        </div>
-        <div>
-          <dt class="dt">{% trans "Language" %}</dt>
-          <dd class="dd">
-            {{ site_config.LANGUAGE_CODE|default:'—' }}
-          </dd>
-        </div>
-        <div>
-          <dt class="dt">{% trans "Storage backend" %}</dt>
-          <dd class="dd">
-            {{ site_config.STORAGE|default:_("Local") }}
-          </dd>
-        </div>
-      </dl>
-    </section>
-    <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
-          <p class="eyebrow">{% trans "Email" %}</p>
-          <h3>{% trans "Email health" %}</h3>
-        </div>
-      </div>
-      <dl class="dl"><div>
-          <dt class="dt">{% trans "Total sent" %}</dt>
-          <dd class="dd">
-            {{ email_stats.total|default:0 }}
-          </dd>
-        </div>
-        <div>
-          <dt class="dt">{% trans "Succeeded" %}</dt>
-          <dd class="dd">
-            {{ email_stats.sent|default:0 }}
-          </dd>
-        </div>
-        <div>
-          <dt class="dt">{% trans "Failed" %}</dt>
-          <dd class="dd">
-            {{ email_stats.failed|default:0 }}
-          </dd>
-        </div>
-        <div>
-          <dt class="dt">{% trans "Last status" %}</dt>
-          <dd class="dd">
-            {{ email_stats.last_status|default:'—' }}
-          </dd>
-        </div>
-        <div>
-          <dt class="dt">{% trans "Last attempt" %}</dt>
-          <dd class="dd">
-            {{ email_stats.last_time|default:'—' }}
-          </dd>
-        </div>
-      </dl>
-    </section>
-    {% if active_announcement %}
-      <section class="card-surface flex flex-col gap-4"><div class="section-head"><div>
-            <p class="eyebrow">{% trans "Notice" %}</p>
-            <h3>{% trans "Active announcement" %}</h3>
+        <dl class="dl">
+          <div><dt class="dt">{% trans "Stuck for more than 15 minutes" %}</dt><dd class="dd">{{ email_health.stuck }}</dd></div>
+          <div><dt class="dt">{% trans "Last delivery" %}</dt><dd class="dd">
+            {% if email_health.last %}
+              {{ email_health.last.get_status_display }} · {{ email_health.last.to_email }} · {{ email_health.last.created_at|date:"Y-m-d H:i:s" }}
+            {% else %}—{% endif %}
+          </dd></div>
+        </dl>
+        {% if email_health.recent_failures %}
+          <div>
+            <h4>{% trans "Recent failures" %}</h4>
+            <ul class="mt-2 space-y-2">
+              {% for failure in email_health.recent_failures %}
+                <li class="border-b border-line pb-2">
+                  <strong>{{ failure.to_email }}</strong>
+                  <small class="block text-muted">{{ failure.created_at|date:"Y-m-d H:i:s" }} · {{ failure.template_slug|default:"—" }}</small>
+                  {% if failure.error %}<small class="block text-red break-words">{{ failure.error|truncatechars:240 }}</small>{% endif %}
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+      </section>
+
+      <section class="card-surface flex flex-col gap-4">
+        <div class="section-head"><div>
+            <p class="eyebrow">{% trans "Configuration" %}</p>
+            <h3>{% trans "SMTP configurations" %}</h3>
           </div>
         </div>
-        <p>{{ active_announcement }}</p>
+        <div class="table-wrap"><table class="table">
+            <thead><tr>
+                <th class="table-th">{% trans "Name" %}</th>
+                <th class="table-th">{% trans "Server" %}</th>
+                <th class="table-th">{% trans "Sender" %}</th>
+                <th class="table-th">{% trans "Last test" %}</th>
+                <th class="table-th">{% trans "Actions" %}</th>
+              </tr></thead>
+            <tbody>
+              {% for config in email_configs %}
+                <tr>
+                  <td class="table-td">
+                    <span class="block font-semibold">{{ config.name }}</span>
+                    {% if config.is_active %}<span class="status-pill-success">{% trans "Active" %}</span>{% endif %}
+                  </td>
+                  <td class="table-td">{{ config.host }}:{{ config.port }}{% if config.use_tls %} · TLS{% endif %}{% if config.use_ssl %} · SSL{% endif %}</td>
+                  <td class="table-td">{{ config.sender }}</td>
+                  <td class="table-td">
+                    {% if not config.last_tested_at %}—
+                    {% elif config.last_test_ok %}<span class="status-pill-success">{% trans "OK" %}</span>
+                    {% else %}<span class="status-pill-danger">{% trans "Failed" %}</span>{% endif %}
+                    {% if config.last_tested_at %}<small class="block text-muted">{{ config.last_tested_at|date:"Y-m-d H:i" }}</small>{% endif %}
+                    {% if config.last_test_error %}<small class="block text-red break-words">{{ config.last_test_error|truncatechars:180 }}</small>{% endif %}
+                  </td>
+                  <td class="table-td">
+                    <div class="actions-row flex-wrap gap-1">
+                      <a class="btn-ghost" href="?tab=email&edit={{ config.id }}">{% trans "Edit" %}</a>
+                      {% if not config.is_active %}
+                        <form method="post">{% csrf_token %}<input type="hidden" name="action" value="email_activate"><input type="hidden" name="config_id" value="{{ config.id }}"><button class="btn-ghost" type="submit">{% trans "Activate" %}</button></form>
+                      {% endif %}
+                      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="email_test"><input type="hidden" name="config_id" value="{{ config.id }}"><button class="btn-ghost" type="submit">{% trans "Test" %}</button></form>
+                      <form method="post" data-confirm="{% trans 'Delete this email configuration?' %}" data-confirm-label="{% trans 'Delete' %}">{% csrf_token %}<input type="hidden" name="action" value="email_delete"><input type="hidden" name="config_id" value="{{ config.id }}"><button class="btn-ghost text-red" type="submit">{% trans "Delete" %}</button></form>
+                    </div>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr><td class="table-td" colspan="5">{% include "ui/components/_empty_state.html" with title=_("No database configuration. Environment settings are in use.") %}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table></div>
+        <form method="post" class="actions-row items-end flex-wrap">{% csrf_token %}
+          <input type="hidden" name="action" value="email_test">
+          <label class="min-w-64 flex-1"><span class="field-label">{% trans "Send a test email to" %}</span>
+            <input class="form-input" type="email" name="test_email" placeholder="you@example.com">
+          </label>
+          <button class="btn-secondary" type="submit">{% trans "Test active configuration" %}</button>
+        </form>
+      </section>
+
+      <section class="card-surface flex flex-col gap-4">
+        <div class="section-head"><div>
+            <p class="eyebrow">{% trans "Configuration" %}</p>
+            <h3>{% if email_form.instance.pk %}{% trans "Edit configuration" %}{% else %}{% trans "Add configuration" %}{% endif %}</h3>
+            <p class="text-muted">{% trans "The password is encrypted and never displayed. Leaving it blank keeps the current password." %}</p>
+          </div>
+        </div>
+        <form method="post">{% csrf_token %}
+          <input type="hidden" name="action" value="email_save">
+          {% if email_form.instance.pk %}<input type="hidden" name="config_id" value="{{ email_form.instance.pk }}">{% endif %}
+          {% if email_form.non_field_errors %}
+            <div class="py-4 px-5 border border-red rounded-md bg-red-soft text-red" role="alert">{% for error in email_form.non_field_errors %}<p>{{ error }}</p>{% endfor %}</div>
+          {% endif %}
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% include "ui/components/_field.html" with field=email_form.name %}
+            {% include "ui/components/_field.html" with field=email_form.host %}
+            {% include "ui/components/_field.html" with field=email_form.port %}
+            {% include "ui/components/_field.html" with field=email_form.username %}
+            {% include "ui/components/_field.html" with field=email_form.password %}
+            {% include "ui/components/_field.html" with field=email_form.from_email %}
+            {% include "ui/components/_field.html" with field=email_form.from_name %}
+            {% include "ui/components/_field.html" with field=email_form.timeout %}
+            {% include "ui/components/_field.html" with field=email_form.use_tls %}
+            {% include "ui/components/_field.html" with field=email_form.use_ssl %}
+            {% include "ui/components/_field.html" with field=email_form.is_active %}
+          </div>
+          <div class="actions-row mt-3">
+            <button class="btn-primary" type="submit">{% trans "Save configuration" %}</button>
+            {% if email_form.instance.pk %}<a class="btn-ghost" href="?tab=email">{% trans "Cancel" %}</a>{% endif %}
+          </div>
+        </form>
+      </section>
+    {% elif tab == "site" %}
+      <section class="card-surface flex flex-col gap-4">
+        <div class="section-head"><div>
+            <p class="eyebrow">{% trans "Site" %}</p>
+            <h3>{% trans "Site configuration" %}</h3>
+          </div>
+        </div>
+        <dl class="dl">
+          <div><dt class="dt">{% trans "Site name (EN)" %}</dt><dd class="dd">{{ site_config.site_name }}</dd></div>
+          <div><dt class="dt">{% trans "Site name (AR)" %}</dt><dd class="dd">{{ site_config.site_name_ar }}</dd></div>
+          <div><dt class="dt">{% trans "Timezone" %}</dt><dd class="dd">{{ site_config.timezone }}</dd></div>
+          <div><dt class="dt">{% trans "Default language" %}</dt><dd class="dd">{{ site_config.language_code }}</dd></div>
+          <div><dt class="dt">{% trans "Storage backend" %}</dt><dd class="dd">{{ site_config.storage }}</dd></div>
+          <div><dt class="dt">{% trans "Email source" %}</dt><dd class="dd">{{ site_config.email_source_label }}</dd></div>
+          <div><dt class="dt">{% trans "Default sender" %}</dt><dd class="dd">{{ site_config.default_from_email }}</dd></div>
+          <div><dt class="dt">{% trans "Email backend" %}</dt><dd class="dd">{{ site_config.email_backend }}</dd></div>
+        </dl>
+      </section>
+      <section class="card-surface flex flex-col gap-4">
+        <div class="section-head"><div>
+            <p class="eyebrow">{% trans "Versions" %}</p>
+            <h3>{% trans "System information" %}</h3>
+          </div>
+        </div>
+        <dl class="dl">
+          {% for item in versions %}
+            <div><dt class="dt">{{ item.label }}</dt><dd class="dd">{{ item.value }}</dd></div>
+          {% endfor %}
+        </dl>
+      </section>
+    {% elif tab == "jobs" %}
+      <section class="card-surface flex flex-col gap-4">
+        <div class="section-head"><div>
+            <p class="eyebrow">{% trans "Celery" %}</p>
+            <h3>{% trans "Background jobs" %}</h3>
+          </div>
+          {% if celery_status.ok %}<span class="status-pill-success">{% trans "Workers online" %}</span>{% else %}<span class="status-pill-danger">{% trans "Degraded" %}</span>{% endif %}
+        </div>
+        <dl class="dl">
+          <div><dt class="dt">{% trans "Celery version" %}</dt><dd class="dd">{{ celery_status.app_version }}</dd></div>
+          <div><dt class="dt">{% trans "Workers" %}</dt><dd class="dd">{{ celery_status.workers|length }}</dd></div>
+          {% if celery_status.error %}<div><dt class="dt">{% trans "Error" %}</dt><dd class="dd text-red">{{ celery_status.error }}</dd></div>{% endif %}
+        </dl>
+        <div class="table-wrap"><table class="table">
+            <thead><tr>
+                <th class="table-th">{% trans "Worker" %}</th>
+                <th class="table-th">{% trans "Status" %}</th>
+                <th class="table-th">{% trans "Uptime" %}</th>
+                <th class="table-th">{% trans "Concurrency" %}</th>
+                <th class="table-th">{% trans "Tasks processed" %}</th>
+              </tr></thead>
+            <tbody>
+              {% for worker in celery_status.workers %}
+                <tr>
+                  <td class="table-td">{{ worker.name }}</td>
+                  <td class="table-td"><span class="{% if worker.status == 'online' %}status-pill-success{% else %}status-pill-warning{% endif %}">{% if worker.status == 'online' %}{% trans "Online" %}{% else %}{% trans "Unknown" %}{% endif %}</span></td>
+                  <td class="table-td">{{ worker.uptime }}</td>
+                  <td class="table-td">{{ worker.concurrency }}</td>
+                  <td class="table-td">{{ worker.total }}</td>
+                </tr>
+              {% empty %}
+                <tr><td class="table-td" colspan="5">{% include "ui/components/_empty_state.html" with title=_("No Celery workers responded.") %}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table></div>
+        <div>
+          <h4>{% trans "Queue depths" %}</h4>
+          {% if queue_depths.ok %}
+            <ul class="mt-2 space-y-1">
+              {% for queue in celery_status.queues %}
+                <li class="flex items-center justify-between border-b border-line py-1"><span>{{ queue }}</span><strong>{{ queue_depths.depths|dict_key:queue }}</strong></li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="text-red">{{ queue_depths.error }}</p>
+          {% endif %}
+        </div>
+      </section>
+      <section class="card-surface flex flex-col gap-4">
+        <div class="section-head"><div>
+            <p class="eyebrow">{% trans "Jobs" %}</p>
+            <h3>{% trans "Recent job runs" %}</h3>
+          </div>
+        </div>
+        <div class="table-wrap"><table class="table">
+            <thead><tr>
+                <th class="table-th">{% trans "Started" %}</th>
+                <th class="table-th">{% trans "Task" %}</th>
+                <th class="table-th">{% trans "Status" %}</th>
+                <th class="table-th">{% trans "Duration" %}</th>
+                <th class="table-th">{% trans "Error" %}</th>
+              </tr></thead>
+            <tbody>
+              {% for job in recent_jobs %}
+                <tr>
+                  <td class="table-td whitespace-nowrap">{{ job.started_at|date:"Y-m-d H:i:s"|default:"—" }}</td>
+                  <td class="table-td break-all">
+                    {{ job.task_name }}
+                    <a class="block text-xs text-brand" href="{% url 'audit:list' %}?q={{ job.task_id|urlencode }}">{% trans "Trace in audit" %}</a>
+                  </td>
+                  <td class="table-td">
+                    <span class="{% if job.status == 'success' %}status-pill-success{% elif job.status == 'failed' %}status-pill-danger{% elif job.status == 'retried' %}status-pill-warning{% else %}status-pill-info{% endif %}">{{ job.get_status_display }}</span>
+                  </td>
+                  <td class="table-td">{% if job.duration_ms is not None %}{{ job.duration_ms }} ms{% else %}—{% endif %}</td>
+                  <td class="table-td">{% if job.error %}<span class="text-red break-words">{{ job.error|truncatechars:180 }}</span>{% else %}—{% endif %}</td>
+                </tr>
+              {% empty %}
+                <tr><td class="table-td" colspan="5">{% include "ui/components/_empty_state.html" with title=_("No job runs recorded yet.") %}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table></div>
+      </section>
+      <section class="card-surface flex flex-col gap-4">
+        <div class="section-head"><div>
+            <p class="eyebrow">{% trans "Beat" %}</p>
+            <h3>{% trans "Scheduled jobs" %}</h3>
+          </div>
+        </div>
+        <div class="table-wrap"><table class="table">
+            <thead><tr><th class="table-th">{% trans "Name" %}</th><th class="table-th">{% trans "Task" %}</th><th class="table-th">{% trans "Every" %}</th></tr></thead>
+            <tbody>
+              {% for job in beat_schedule %}
+                <tr><td class="table-td">{{ job.name }}</td><td class="table-td">{{ job.task }}</td><td class="table-td">{{ job.schedule }}</td></tr>
+              {% empty %}
+                <tr><td class="table-td" colspan="3">{% trans "No scheduled jobs." %}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table></div>
+      </section>
+    {% elif tab == "redis" %}
+      <section class="card-surface flex flex-col gap-4">
+        <div class="section-head"><div>
+            <p class="eyebrow">{% trans "Redis" %}</p>
+            <h3>{% trans "Server status" %}</h3>
+            <p class="text-muted">{% trans "The cache database is writable below. The Celery broker database is read-only." %}</p>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {% for instance in redis_instances %}
+            <div class="card-surface">
+              <div class="flex items-center justify-between gap-2">
+                <h4>{{ instance.label }}</h4>
+                {% if instance.ok %}<span class="status-pill-success">{% trans "Connected" %}</span>{% elif instance.configured %}<span class="status-pill-danger">{% trans "Unavailable" %}</span>{% else %}<span class="status-pill-neutral">{% trans "Not configured" %}</span>{% endif %}
+              </div>
+              {% if instance.configured %}
+                <dl class="dl mt-2">
+                  <div><dt class="dt">{% trans "Address" %}</dt><dd class="dd">{{ instance.url }}</dd></div>
+                  <div><dt class="dt">{% trans "Version" %}</dt><dd class="dd">{{ instance.version|default:"—" }}</dd></div>
+                  <div><dt class="dt">{% trans "Memory" %}</dt><dd class="dd">{{ instance.used_memory|default:"—" }} / {{ instance.maxmemory|default:"—" }}</dd></div>
+                  <div><dt class="dt">{% trans "Policy" %}</dt><dd class="dd">{{ instance.policy|default:"—" }}</dd></div>
+                  <div><dt class="dt">{% trans "Keys" %}</dt><dd class="dd">{{ instance.keys }}</dd></div>
+                </dl>
+                {% if instance.error %}<p class="text-red break-words">{{ instance.error }}</p>{% endif %}
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+      <section class="card-surface flex flex-col gap-4">
+        <div class="section-head"><div>
+            <p class="eyebrow">{% trans "Cache keys" %}</p>
+            <h3>{% trans "Key browser" %}</h3>
+          </div>
+        </div>
+        <form class="actions-row items-end flex-wrap" method="get">
+          <input type="hidden" name="tab" value="redis">
+          <label class="min-w-64 flex-1"><span class="field-label">{% trans "Key pattern" %}</span>
+            <input class="form-input" name="redis_q" value="{{ redis_pattern }}" placeholder="assessment-attempt:*">
+          </label>
+          <button class="btn-secondary" type="submit">{% trans "Search keys" %}</button>
+          <a class="btn-ghost" href="?tab=redis">{% trans "Reset" %}</a>
+        </form>
+        {% if redis_key_detail %}
+          <div class="border border-line rounded-sm p-3">
+            <div class="flex items-center justify-between gap-2">
+              <h4 class="break-all">{{ redis_key_name }}</h4>
+              <span class="status-pill-neutral">{{ redis_key_detail.type|default:"—" }}</span>
+            </div>
+            {% if redis_key_detail.ok %}
+              <pre class="whitespace-pre-wrap break-words max-h-72 overflow-auto mt-2">{{ redis_key_detail.value|default:"—" }}</pre>
+            {% else %}
+              <p class="text-red">{{ redis_key_detail.error }}</p>
+            {% endif %}
+          </div>
+        {% endif %}
+        <div class="table-wrap"><table class="table">
+            <thead><tr>
+                <th class="table-th">{% trans "Key" %}</th>
+                <th class="table-th">{% trans "Type" %}</th>
+                <th class="table-th">{% trans "TTL" %}</th>
+                <th class="table-th">{% trans "Size" %}</th>
+                <th class="table-th">{% trans "Actions" %}</th>
+              </tr></thead>
+            <tbody>
+              {% for item in redis_page.keys %}
+                <tr>
+                  <td class="table-td break-all">
+                    {{ item.key }}
+                    {% if item.protected %}<span class="status-pill-warning">{% trans "Protected" %}</span>{% endif %}
+                  </td>
+                  <td class="table-td">{{ item.type }}</td>
+                  <td class="table-td">{{ item.ttl }}</td>
+                  <td class="table-td">{{ item.length }}</td>
+                  <td class="table-td">
+                    <a class="btn-ghost" href="?tab=redis&redis_q={{ redis_pattern|urlencode }}&redis_key={{ item.key|urlencode }}">{% trans "View" %}</a>
+                    <details class="mt-1">
+                      <summary class="cursor-pointer text-red">{% trans "Delete" %}</summary>
+                      <form method="post" class="mt-2 flex flex-col gap-2">{% csrf_token %}
+                        <input type="hidden" name="action" value="redis_delete">
+                        <input type="hidden" name="redis_key" value="{{ item.key }}">
+                        <input class="form-input" name="reason" aria-label="{% trans 'Reason' %}" placeholder="{% trans 'Reason' %}">
+                        {% if item.protected %}<input class="form-input" name="confirm_key" aria-label="{% trans 'Type the exact key to confirm' %}" placeholder="{% trans 'Type the exact key to confirm' %}">{% endif %}
+                        <button class="btn-warning" type="submit">{% trans "Delete key" %}</button>
+                      </form>
+                    </details>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr><td class="table-td" colspan="5">{% include "ui/components/_empty_state.html" with title=_("No cache keys matched.") %}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table></div>
+        {% if redis_page.next_cursor %}
+          <a class="btn-secondary w-fit" href="?tab=redis&redis_q={{ redis_pattern|urlencode }}&cursor={{ redis_page.next_cursor }}">{% trans "Load more keys" %}</a>
+        {% endif %}
+      </section>
+      <section class="card-surface flex flex-col gap-4">
+        <div class="section-head"><div>
+            <p class="eyebrow">{% trans "Danger zone" %}</p>
+            <h3>{% trans "Add cache key" %}</h3>
+            <p class="text-muted">{% trans "Only add operational keys. The Celery broker database is never modified here." %}</p>
+          </div>
+        </div>
+        <form method="post" class="actions-row items-end flex-wrap">{% csrf_token %}
+          <input type="hidden" name="action" value="redis_add">
+          <label class="min-w-64 flex-1"><span class="field-label">{% trans "Key" %}</span><input class="form-input" name="redis_key" required></label>
+          <label class="min-w-64 flex-1"><span class="field-label">{% trans "Value" %}</span><input class="form-input" name="redis_value"></label>
+          <label class="min-w-32"><span class="field-label">{% trans "TTL (seconds)" %}</span><input class="form-input" type="number" min="0" name="redis_ttl" value="0"></label>
+          <button class="btn-primary" type="submit">{% trans "Add key" %}</button>
+        </form>
       </section>
     {% endif %}
   </div>

@@ -18,9 +18,11 @@ def _auto_create_diploma_progression_rule(sender, instance, created, **kwargs):
     if created:
         DiplomaProgressionRule.objects.get_or_create(
             diploma=instance,
+            is_active=True,
             defaults={
-                "is_active": True,
                 "semester_pass_percent": Decimal("50.00"),
+                "require_all_required_assessments": True,
+                "allow_missing_optional_assessments": False,
                 "final_exam_pass_percent": Decimal("50.00"),
                 "require_all_semesters_passed": True,
                 "require_final_exam": False,

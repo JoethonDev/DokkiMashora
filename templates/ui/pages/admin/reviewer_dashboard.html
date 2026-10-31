@@ -4,34 +4,166 @@
   {% trans "Reviewer dashboard" %}
 {% endblock %}
 {% block content %}
-  <div class="page-stack animate-enter-view">{% trans "Semester exam" as eyebrow %}
-    {% include "ui/components/_page_header.html" with title=_("Reviewer dashboard") eyebrow=eyebrow %}
-    {% if groups %}
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">{% for key,group in groups.items %}
-        <section class="card-surface flex flex-col gap-4">
-          <div class="section-head"><div><p class="eyebrow">{% trans "Assignment" %}</p><h2>{{ group.cohort }} · {{ group.semester }}</h2></div></div>
-           {% for item in group.assignments %}
-             <div class="flex items-center justify-between gap-2 border-t border-line py-3 first:border-t-0">
-               <div class="min-w-0">
-                  <strong class="block">{{ item.assignment.title }}</strong>
-                   <small class="block text-muted">{{ item.assignment.scope_label }} · {{ item.assignment.assessment|default:_('All Semester Exams') }} · {{ item.assignment.cluster|default:_('All assigned students') }} · {{ item.assignment.access_mode_label }}</small>
+  {% trans "Semester exam" as eyebrow %}
+  {% trans "Reviewer dashboard" as page_title %}
+  {% trans "Review your anonymous semester-exam grading assignments across cohorts." as page_description %}
+  {% trans "All Semester Exams" as all_exams_label %}
+  {% trans "All assigned students" as all_students_label %}
+  <div class="page-stack animate-enter-view">
+    {% include "ui/components/_page_header.html" with title=page_title eyebrow=eyebrow description=page_description %}
+    {% if page_diplomas %}
+      <section class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4" aria-label="{% trans 'Grading summary' %}">
+        <article class="stat-card">
+          <div class="stat-body">
+            <span>{% trans "Diplomas" %}</span>
+            <strong>{{ summary.diplomas }}</strong>
+          </div>
+        </article>
+        <article class="stat-card">
+          <div class="stat-body">
+            <span>{% trans "Cohorts" %}</span>
+            <strong>{{ summary.cohorts }}</strong>
+          </div>
+        </article>
+        <article class="stat-card">
+          <div class="stat-body">
+            <span>{% trans "Assignments" %}</span>
+            <strong>{{ summary.assignments }}</strong>
+          </div>
+        </article>
+        <article class="stat-card">
+          <div class="stat-body">
+            <span>{% trans "Online pending" %}</span>
+            <strong>{{ summary.online_pending }}</strong>
+          </div>
+        </article>
+        <article class="stat-card col-span-2 sm:col-span-1">
+          <div class="stat-body">
+            <span>{% trans "Offline pending" %}</span>
+            <strong>{{ summary.offline_pending }}</strong>
+          </div>
+        </article>
+      </section>
+
+      {% for diploma in page_diplomas %}
+        <details class="group page-stack" {% if forloop.first %}open{% endif %}>
+          <summary class="section-head cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <span class="text-xs text-muted shrink-0 transition-transform group-open:rotate-90" aria-hidden="true">&#9654;</span>
+              <div class="min-w-0">
+                <p class="eyebrow">{% trans "Diploma" %}</p>
+                <h2 class="m-0 break-words">{{ diploma.title }}</h2>
+              </div>
+            </div>
+            <div class="flex flex-wrap gap-2 items-center justify-end">
+              <span class="status-pill status-pill-neutral">{% trans "Cohorts" %}: {{ diploma.cohort_count }}</span>
+              <span class="status-pill status-pill-neutral">{% trans "Assignments" %}: {{ diploma.assignment_count }}</span>
+            </div>
+          </summary>
+
+          <div class="grid grid-cols-1 {% if diploma.cohorts|length > 1 %}lg:grid-cols-2{% endif %} gap-4">
+            {% for cohort in diploma.cohorts %}
+              <details id="cohort-{{ cohort.id }}" class="group card-surface flex flex-col gap-4" {% if forloop.first %}open{% endif %}>
+                <summary class="section-head items-start cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                  <div class="flex items-start gap-2.5 min-w-0">
+                    <span class="text-xs text-muted shrink-0 transition-transform group-open:rotate-90 mt-1" aria-hidden="true">&#9654;</span>
+                    <div class="min-w-0">
+                      <p class="eyebrow">{% trans "Cohort" %}</p>
+                      <h3 class="m-0 break-words">{{ cohort.name }}</h3>
+                    </div>
+                  </div>
+                  <div class="flex flex-wrap gap-2 items-center justify-end">
+                    <span class="status-pill status-pill-neutral">{% trans "Assignments" %}: {{ cohort.assignment_count }}</span>
+                    {% if cohort.claim_count %}
+                      <span class="status-pill status-pill-info">{% trans "Claim in progress" %}: {{ cohort.claim_count }}</span>
+                    {% endif %}
+                  </div>
+                </summary>
+
+                <div class="flex flex-col gap-4">
+                  <dl class="grid grid-cols-1 sm:grid-cols-2 gap-2 m-0">
+                    <div class="rounded-sm border border-line bg-surface-soft p-3">
+                      <dt class="dt">{% trans "Online pending" %}</dt>
+                      <dd class="dd mt-1"><strong>{{ cohort.online_pending }}</strong></dd>
+                    </div>
+                    <div class="rounded-sm border border-line bg-surface-soft p-3">
+                      <dt class="dt">{% trans "Offline pending" %}</dt>
+                      <dd class="dd mt-1"><strong>{{ cohort.offline_pending }}</strong></dd>
+                    </div>
+                  </dl>
+
+                  {% for semester in cohort.semesters %}
+                    <div class="rounded-sm border border-line bg-surface-soft/40 p-3">
+                      <div class="flex items-center justify-between gap-3 flex-wrap mb-2">
+                        <h4 class="m-0 text-sm font-black break-words">{{ semester.title }}</h4>
+                        <small class="text-muted">{% trans "Assignments" %}: {{ semester.assignments|length }}</small>
+                      </div>
+                      <div class="flex flex-col">
+                        {% for item in semester.assignments %}
+                          <div class="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between {% if not forloop.first %}border-t border-line{% endif %}">
+                            <div class="min-w-0">
+                              <strong class="block break-words">
+                                {% if item.assessment %}{{ item.assessment }}{% else %}{{ all_exams_label }}{% endif %}
+                              </strong>
+                              <small class="block text-muted">
+                                {{ item.assignment.scope_label }}
+                                &middot;
+                                {% if item.assignment.cluster %}{{ item.assignment.cluster }}{% else %}{{ all_students_label }}{% endif %}
+                                &middot;
+                                {{ item.assignment.access_mode_label }}
+                              </small>
+                              {% if item.claim %}
+                                <span class="status-pill status-pill-info mt-2">{% trans "Claim in progress" %}</span>
+                              {% endif %}
+                            </div>
+                            <div class="flex gap-2 flex-wrap items-center sm:justify-end">
+                              {% if item.can_offline %}
+                                <a class="btn-soft" href="{% url 'assessments:reviewer_section_grading' item.assignment.id %}">
+                                  {% trans "Offline grades" %} <span class="status">{{ item.ungraded }}</span>
+                                </a>
+                              {% endif %}
+                              {% if item.can_online %}
+                                {% if item.claim %}
+                                  <a class="btn-primary" href="{% url 'assessments:reviewer_online_grading' item.assignment.id %}">
+                                    {% trans "Continue online submission" %}
+                                  </a>
+                                {% elif item.online_ungraded %}
+                                  <form method="post" action="{% url 'assessments:reviewer_claim_submission' item.assignment.id %}" class="m-0">
+                                    {% csrf_token %}
+                                    <button class="btn-soft" type="submit">
+                                      {% trans "Request online submission" %} <span class="status">{{ item.online_ungraded }}</span>
+                                    </button>
+                                  </form>
+                                {% else %}
+                                  <span class="status-pill status-pill-neutral">{% trans "No online submissions pending" %}</span>
+                                {% endif %}
+                              {% endif %}
+                              {% if not item.can_offline and not item.can_online and not item.claim and not item.online_ungraded %}
+                                <span class="status-pill status-pill-neutral">{% trans "No pending work" %}</span>
+                              {% endif %}
+                            </div>
+                          </div>
+                        {% endfor %}
+                      </div>
+                    </div>
+                  {% endfor %}
                 </div>
-                <div class="flex gap-2 flex-wrap justify-end">
-                  {% if item.can_offline %}<a class="btn-soft" href="{% url 'assessments:reviewer_section_grading' item.assignment.id %}">{% trans "Offline grades" %} <span class="status">{{ item.ungraded }}</span></a>{% endif %}
-                  {% if item.can_online and item.claim %}
-                    <a class="btn-primary" href="{% url 'assessments:reviewer_online_grading' item.assignment.id %}">{% trans "Continue online submission" %}</a>
-                  {% elif item.can_online %}
-                    <form method="post" action="{% url 'assessments:reviewer_claim_submission' item.assignment.id %}">{% csrf_token %}<button class="btn-soft" type="submit">{% trans "Request online submission" %} <span class="status">{{ item.online_ungraded }}</span></button></form>
-                  {% endif %}
-                </div>
-             </div>
-          {% endfor %}
-        </section>
+              </details>
+            {% endfor %}
+          </div>
+        </details>
       {% endfor %}
-      </div>
+
+      {% if page_obj.has_other_pages %}
+        <div class="pt-1">
+          {% include "ui/components/_pagination.html" %}
+        </div>
+      {% endif %}
     {% else %}
+      {% trans "No active assignments." as no_active_title %}
+      {% trans "You have no assigned grading work right now." as no_active_message %}
       <section class="card-surface flex flex-col gap-4">
-        {% include "ui/components/_empty_state.html" with title=_("No active assignments.") message=_("You have no assigned grading work right now.") %}
+        {% include "ui/components/_empty_state.html" with title=no_active_title message=no_active_message %}
       </section>
     {% endif %}
   </div>

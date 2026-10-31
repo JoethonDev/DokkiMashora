@@ -27,6 +27,13 @@ docs/
 **/*.md
 !AGENTS.md
 !DOKKIMASHORA.md
+!DEMO_V1_CODEBASE_REVIEW_PLAN.md
+!docs/
+docs/*
+!docs/testing/
+docs/testing/*
+!docs/testing/MANUAL_QA_PLAYBOOK.md
+opencode.json
 # --- Django ----------------------------------------------------------------
 *.log
 *.pot
@@ -42,6 +49,8 @@ htmlcov/
 .coverage_report/
 .pytest_cache/
 .ruff_cache/
+# Host bind-mount data for the Docker stack (Postgres/Redis must survive resets).
+.docker-data/
 
 # --- Environments ----------------------------------------------------------
 .env
@@ -65,3 +74,9 @@ tests/
 stakeholder_lms_prototype/
 qa/
 **/*.docx
+
+# Keep focused application tests visible even though root-level test fixtures
+# are ignored by default.
+!apps/assessments/tests/
+!apps/assessments/tests/test_durable_submission.py
+results

@@ -13,37 +13,82 @@
           <label class="field"><span class="field-label">{% trans "Reviewers" %}</span><select class="form-select" name="reviewers" multiple size="5" required>{% for reviewer in reviewers %}<option value="{{ reviewer.id }}">{{ reviewer.get_full_name|default:reviewer.email }}</option>{% endfor %}</select><span class="field-help">{% trans "Ctrl/Cmd + click" %}</span></label>
           <label class="field"><span class="field-label">{% trans "Assignment scope" %}</span><select class="form-select" name="scope" x-model="scope" @change="if (scope === 'cohort') { $refs.semester.value = ''; $refs.assessment.value = ''; } else if (scope === 'semester') { $refs.assessment.value = ''; }" required><option value="">{% trans "Select" %}</option>{% for value,label in reviewer_scope_choices %}<option value="{{ value }}"{% if value == reviewer_scope %} selected{% endif %}>{{ label }}</option>{% endfor %}</select><span class="field-help">{% trans "One level only" %}</span></label>
           <label class="field"><span class="field-label">{% trans "Cohort" %}</span><select class="form-select" name="cohort" x-ref="cohort" @change="filterOptions(); $refs.semester.value = ''; $refs.assessment.value = '';" required><option value="">{% trans "Select" %}</option>{% for cohort in cohorts %}<option value="{{ cohort.id }}" data-diploma-id="{{ cohort.diploma_id }}"{% if cohort.id|stringformat:'s' == reviewer_cohort %} selected{% endif %}>{{ cohort }}</option>{% endfor %}</select></label>
-          <div x-show="scope === 'semester'" x-transition x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" x-cloak>
+          <div x-show="scope === 'semester'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" x-cloak>
             <label class="field"><span class="field-label">{% trans "Semester" %}</span><select class="form-select" name="semester" x-ref="semester" :disabled="scope !== 'semester'"><option value="">{% trans "Select" %}</option>{% for semester in semesters %}<option value="{{ semester.id }}" data-diploma-id="{{ semester.diploma_id }}"{% if semester.id|stringformat:'s' == reviewer_semester %} selected{% endif %}>{{ semester }}</option>{% endfor %}</select></label>
           </div>
-          <div x-show="scope === 'semester_exam'" x-transition x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" x-cloak>
+          <div x-show="scope === 'semester_exam'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" x-cloak>
             <label class="field"><span class="field-label">{% trans "Semester Exam" %}</span><select class="form-select" name="assessment" x-ref="assessment" :disabled="scope !== 'semester_exam'"><option value="">{% trans "Select" %}</option>{% for exam in semester_exams %}<option value="{{ exam.id }}" data-cohort-id="{{ exam.cohort_id }}"{% if exam.id|stringformat:'s' == reviewer_assessment %} selected{% endif %}>{{ exam }}</option>{% endfor %}</select><span class="field-help">{% trans "Online & offline" %}</span></label>
           </div>
           <label class="field"><span class="field-label">{% trans "Cluster (optional)" %}</span><select class="form-select" name="cluster"><option value="">{% trans "All assigned students" %}</option>{% for cluster in clusters %}<option value="{{ cluster.id }}"{% if cluster.id|stringformat:'s' == reviewer_cluster %} selected{% endif %}>{{ cluster }}</option>{% endfor %}</select></label>
         </div>
       {% else %}
         {% for field in form %}
-          <div class="scope-field{% if field.name == 'max_upload_files' or field.name == 'allow_late_submission' %} homework-only-field{% if form.assessment_type.value != 'homework' %} hidden{% endif %}{% endif %}" data-field-name="{{ field.name }}"{% if field.name == 'max_upload_files' or field.name == 'allow_late_submission' %} data-homework-only{% endif %}>{% include "ui/components/_field.html" %}</div>
+          <div class="scope-field{% if field.name == 'max_upload_files' or field.name == 'allow_late_submission' %} homework-only-field{% if form.assessment_type.value != 'homework' %} hidden{% endif %}{% endif %}{% if field.name == 'is_required_for_semester_evaluation' %} hidden{% endif %}{% if field.name == 'is_completion_exam' and form.scope_type.value != 'course' %} hidden{% endif %}" data-field-name="{{ field.name }}"{% if field.name == 'max_upload_files' or field.name == 'allow_late_submission' %} data-homework-only{% endif %}{% if field.name == 'is_required_for_semester_evaluation' %} data-diploma-assessment-only{% endif %}{% if field.name == 'is_completion_exam' %} data-course-only{% endif %}>{% include "ui/components/_field.html" %}</div>
         {% endfor %}
       {% endif %}
       {% if semester_pass_percent_override is not None %}
-        <div class="form-group">
-          <label class="field-label" for="semester_pass_percent_override">{% trans "Semester passing threshold override (%)" %}</label>
-          <input class="form-input" type="number" id="semester_pass_percent_override" name="semester_pass_percent_override" value="{{ semester_pass_percent_override }}" min="0" max="100" step="0.01" placeholder="{% trans 'Keep current override' %}">
-          <p class="field-help">{% trans "0–100 or empty" %}</p>
-        </div>
-        <div class="form-group">
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input class="form-checkbox" type="checkbox" name="semester_require_all_required" value="1" {% if semester_require_all_required %}checked{% endif %}>
-            <span>{% trans "Require all required assessments" %}</span>
-          </label>
-        </div>
-        <div class="form-group">
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input class="form-checkbox" type="checkbox" name="semester_allow_missing_optional" value="1" {% if semester_allow_missing_optional %}checked{% endif %}>
-            <span>{% trans "Allow missing optional assessments" %}</span>
-          </label>
-        </div>
+        <section class="rounded-md border border-line p-4 page-stack" aria-labelledby="semester-progression-policy-heading">
+          <div class="page-stack">
+            <h2 id="semester-progression-policy-heading" class="m-0">{% trans "Semester progression policy overrides" %}</h2>
+            <p class="m-0 text-sm text-muted">{% trans "These overrides control whether missing Diploma assessments block or are omitted; work in progress or awaiting grading/exam review always blocks. Score weights and minimums remain in evaluation settings." %}</p>
+          </div>
+          {% if semester_progression_policy %}
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div class="rounded-md border border-line bg-subtle p-3">
+                <span class="field-label">{% trans "Effective semester pass threshold" %}</span>
+                <p class="m-0 font-semibold">{{ semester_progression_policy.semester_pass_percent }}%</p>
+                <p class="m-0 mt-1 text-sm text-muted">
+                  {% if semester_progression_policy.semester_pass_percent_source == "semester_override" %}{% trans "Overridden for this semester" %}
+                  {% elif semester_progression_policy.semester_pass_percent_source == "diploma_default" %}{% trans "Inherited from the diploma" %}
+                  {% else %}{% trans "Using the system default" %}{% endif %}
+                </p>
+              </div>
+              <div class="rounded-md border border-line bg-subtle p-3">
+                <span class="field-label">{% trans "Effective required-assessment rule" %}</span>
+                <p class="m-0 font-semibold">{% if semester_progression_policy.require_all_required_assessments %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</p>
+                <p class="m-0 mt-1 text-sm text-muted">
+                  {% if semester_progression_policy.require_all_required_assessments_source == "semester_override" %}{% trans "Overridden for this semester" %}
+                  {% elif semester_progression_policy.require_all_required_assessments_source == "diploma_default" %}{% trans "Inherited from the diploma" %}
+                  {% else %}{% trans "Using the system default" %}{% endif %}
+                </p>
+              </div>
+              <div class="rounded-md border border-line bg-subtle p-3">
+                <span class="field-label">{% trans "Effective optional-assessment rule" %}</span>
+                <p class="m-0 font-semibold">{% if semester_progression_policy.allow_missing_optional_assessments %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</p>
+                <p class="m-0 mt-1 text-sm text-muted">
+                  {% if semester_progression_policy.allow_missing_optional_assessments_source == "semester_override" %}{% trans "Overridden for this semester" %}
+                  {% elif semester_progression_policy.allow_missing_optional_assessments_source == "diploma_default" %}{% trans "Inherited from the diploma" %}
+                  {% else %}{% trans "Using the system default" %}{% endif %}
+                </p>
+              </div>
+            </div>
+          {% endif %}
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <label class="field" for="semester_pass_percent_override">
+              <span class="field-label">{% trans "Semester passing threshold override (%)" %}</span>
+              <input class="form-input" type="number" id="semester_pass_percent_override" name="semester_pass_percent_override" value="{{ semester_pass_percent_override }}" min="0" max="100" step="0.01" placeholder="{% trans 'Inherit diploma default' %}">
+              <span class="field-help">{% trans "Leave empty to inherit the diploma default." %}</span>
+            </label>
+            <label class="field" for="semester_require_all_required">
+              <span class="field-label">{% trans "Require all required assessments" %}</span>
+              <select class="form-select" id="semester_require_all_required" name="semester_require_all_required">
+                <option value=""{% if semester_require_all_required == "" %} selected{% endif %}>{% trans "Inherit diploma default" %}</option>
+                <option value="1"{% if semester_require_all_required == "1" %} selected{% endif %}>{% trans "Yes" %}</option>
+                <option value="0"{% if semester_require_all_required == "0" %} selected{% endif %}>{% trans "No" %}</option>
+              </select>
+              <span class="field-help">{% trans "If enabled, a missing required assessment blocks finalization; otherwise it is omitted." %}</span>
+            </label>
+            <label class="field" for="semester_allow_missing_optional">
+              <span class="field-label">{% trans "Allow missing optional assessments" %}</span>
+              <select class="form-select" id="semester_allow_missing_optional" name="semester_allow_missing_optional">
+                <option value=""{% if semester_allow_missing_optional == "" %} selected{% endif %}>{% trans "Inherit diploma default" %}</option>
+                <option value="1"{% if semester_allow_missing_optional == "1" %} selected{% endif %}>{% trans "Yes" %}</option>
+                <option value="0"{% if semester_allow_missing_optional == "0" %} selected{% endif %}>{% trans "No" %}</option>
+              </select>
+              <span class="field-help">{% trans "If enabled, a missing optional assessment is omitted; otherwise it blocks finalization." %}</span>
+            </label>
+          </div>
+        </section>
       {% endif %}
       {% if question_choices %}
         <fieldset class="form-group border border-line rounded-sm p-4" id="assessment-choices-fieldset">

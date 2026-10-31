@@ -9,7 +9,6 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 
-from apps.accounts.constants import GROUP_ADMIN, GROUP_STUDENT
 from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE
 from apps.academics.models import (
     Cohort,
@@ -20,12 +19,12 @@ from apps.academics.models import (
     DiplomaEnrollment,
     Semester,
 )
+from apps.accounts.constants import GROUP_ADMIN, GROUP_STUDENT
 from apps.assessments.constants import ASSESSMENT_TYPE_QUIZ, QUESTION_TYPE_MCQ
 from apps.assessments.models import Assessment, AssessmentAttempt, AssessmentChoice, AssessmentQuestion
 from apps.progression.constants import (
     PROMOTION_DECISION_ACADEMIC_YEAR_PROMOTE,
     SEMESTER_PROGRESS_FAILED,
-    SEMESTER_PROGRESS_IN_PROGRESS,
     SEMESTER_PROGRESS_PASSED,
     SEMESTER_PROGRESS_PROMOTED,
 )
@@ -40,8 +39,8 @@ TERM_STATES = {
     "first": {},
     "failed": {1: SEMESTER_PROGRESS_FAILED},
     "passed": {1: SEMESTER_PROGRESS_PASSED},
-    "year-blocked": {1: SEMESTER_PROGRESS_PASSED, 2: SEMESTER_PROGRESS_PASSED},
-    "year-open": {1: SEMESTER_PROGRESS_PASSED, 2: SEMESTER_PROGRESS_PASSED},
+    "year-no-legacy-record": {1: SEMESTER_PROGRESS_PASSED, 2: SEMESTER_PROGRESS_PASSED},
+    "year-with-legacy-record": {1: SEMESTER_PROGRESS_PASSED, 2: SEMESTER_PROGRESS_PASSED},
 }
 
 
@@ -164,7 +163,7 @@ class Command(BaseCommand):
                     semester=semesters[order],
                     status=status,
                 )
-            if state == "year-open":
+            if state == "year-with-legacy-record":
                 PromotionDecision.objects.create(
                     student=profile,
                     diploma_enrollment=enrollment,
@@ -173,14 +172,7 @@ class Command(BaseCommand):
                     decision_type=PROMOTION_DECISION_ACADEMIC_YEAR_PROMOTE,
                     previous_status=SEMESTER_PROGRESS_PASSED,
                     new_status=SEMESTER_PROGRESS_PROMOTED,
-                    reason="QA academic-year promotion",
-                )
-                StudentSemesterProgress.objects.create(
-                    student=profile,
-                    diploma_enrollment=enrollment,
-                    cohort=cohort,
-                    semester=semesters[3],
-                    status=SEMESTER_PROGRESS_IN_PROGRESS,
+                    reason="Historical QA row only; it must not gate semester access.",
                 )
 
     def _load_assessment(self, admin, count):
