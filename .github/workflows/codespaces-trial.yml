@@ -5,6 +5,7 @@ on:
     paths:
       - ".devcontainer/**"
       - "compose.codespaces.yml"
+      - "deploy/cloudflare/**"
       - "compose.application.yml"
       - "compose.infrastructure.yml"
       - ".github/workflows/codespaces-trial.yml"
@@ -47,7 +48,15 @@ jobs:
           allowed = set(web_env["DJANGO_ALLOWED_HOSTS"].split(","))
           required = {"localhost", "127.0.0.1", "dokkimashora-demo-check-80.app.github.dev"}
           assert required <= allowed, f"Missing Django allowed hosts: {required - allowed}"
-          assert web_env["DJANGO_CSRF_TRUSTED_ORIGINS"] == "https://dokkimashora-demo-check-80.app.github.dev"
+          assert "demo.joethon.dev" in allowed
+          assert web_env["SITE_URL"] == "https://demo.joethon.dev"
+          assert set(web_env["DJANGO_CSRF_TRUSTED_ORIGINS"].split(",")) == {
+              "https://demo.joethon.dev",
+              "https://dokkimashora-demo-check-80.app.github.dev",
+          }
+          tunnel = services["cloudflared"]
+          assert "tunnel" in tunnel["profiles"]
+          assert "TUNNEL_TOKEN" in tunnel["environment"]
           PY
 
       - name: Validate devcontainer JSON
@@ -69,3 +78,6 @@ jobs:
 
       - name: Validate startup shell syntax
         run: bash -n .devcontainer/start-demo.sh
+
+      - name: Validate Cloudflare activation Worker syntax
+        run: node --input-type=module --check < deploy/cloudflare/demo-gateway.js
