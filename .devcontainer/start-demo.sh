@@ -36,6 +36,12 @@ export APP_IMAGE_TAG=codespaces
 # Only create the empty directory: collectstatic writes to the named volume.
 mkdir -p .docker-data/postgres .docker-data/redis media staticfiles .demo-backups
 
+# Only this trial uses the Cloudflare TLS-terminating gateway. Preserve the
+# original Nginx config and adjust the trusted upstream scheme in a generated
+# ignored file, rather than modifying the production Nginx configuration.
+sed 's/proxy_set_header X-Forwarded-Proto $scheme;/proxy_set_header X-Forwarded-Proto https;/g' \
+  deploy/nginx.conf > .docker-data/nginx.codespaces.conf
+
 for attempt in $(seq 1 45); do
   if docker info >/dev/null 2>&1; then
     break
@@ -66,7 +72,15 @@ docker run --rm --user root --entrypoint sh \
   -c 'chown app:app /demo-media'
 
 echo "Starting Docker Compose services..."
-"${compose[@]}" up -d --no-build
+# Cloudflare Tunnel is opt-in. Its secret lives only in the ignored env file;
+# Docker Compose never starts the tunnel with a missing/blank token.
+if grep -Eq '^CF_TUNNEL_TOKEN=[^[:space:]]+' .env.docker; then
+  echo "Cloudflare Tunnel token configured; starting the tunnel sidecar."
+  "${compose[@]}" --profile tunnel up -d --no-build
+else
+  echo "Tunnel disabled until CF_TUNNEL_TOKEN is added to .env.docker."
+  "${compose[@]}" up -d --no-build
+fi
 
 if ! curl --fail --silent --show-error --retry 20 --retry-delay 3 \
   --retry-connrefused http://127.0.0.1/healthz >/dev/null; then
@@ -76,4 +90,4 @@ if ! curl --fail --silent --show-error --retry 20 --retry-delay 3 \
 fi
 
 echo "Demo healthy. Forward port 80 and set its visibility to Public only when ready."
-echo "URL: https://${CODESPACE_NAME}-80.app.github.dev"
+echo "Use https://demo.joethon.dev after configuring the Cloudflare gateway and tunnel token."
