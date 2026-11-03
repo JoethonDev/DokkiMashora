@@ -64,8 +64,9 @@ default password. The `createsuperuser` command prompts for credentials.
 The auto-generated `.env.docker` has `DJANGO_SEED_DEMO=false`; introduce
 synthetic demo data only through an approved, existing seed command.
 
-The app uses the Codespaces HTTPS host for Django allowed hosts, CSRF origins
-and canonical site URL. This override disables Django's **HTTP-to-HTTPS
+The app accepts both the Codespaces forwarded HTTPS host and the Cloudflare
+\`demo.joethon.dev\` hostname for Django allowed hosts/CSRF. The Cloudflare
+hostname is the canonical site URL. This override disables Django's **HTTP-to-HTTPS
 redirect** because GitHub terminates HTTPS before reaching the internal
 HTTP Nginx, but it retains secure browser cookies.
 
@@ -119,11 +120,11 @@ task across arbitrary shutdowns.
 
 ## Scope and limits
 
-The public GitHub-forwarded URL is **not** a custom-domain hosting origin.
-No custom DNS, Cloudflare Worker, wake-on-request proxy, or automatic port
-visibility change is part of this first phase. A stable custom domain and
-wake-on-request flow would require an external gateway and must be checked
-against GitHub's terms before being used for unsupervised public hosting.
+The optional Cloudflare gateway described below is only for a controlled
+10-day development/demo session. It requires manual secret provisioning.
+GitHub explicitly restricts production-facing hosting and disproportionate
+burden on Codespaces. No unapproved public production service or
+400-concurrent-user load generation is allowed through this Codespace.
 
 A 2-core/8-GB Codespace is **not** the approved 2-vCPU/4-GB/30-GB benchmark
 environment. Do not run the 400-concurrent-user load test through a public
@@ -135,6 +136,118 @@ the engineering target remains **<=3s**.
 Configure GitHub Codespaces billing and spending limits before the demo.
 A 2-core Codespace consumes two core-hours per running hour. Never assume
 an unattended 10-day always-on website fits the free allowance.
+
+
+## Cloudflare on-demand activation (optional controlled demo)
+
+This trial has dedicated, already-created Cloudflare resources:
+
+- `https://demo.joethon.dev` — Cloudflare Worker named
+  `dokkimashora-demo-gateway`; always presents the activation screen when
+  the upstream tunnel is unavailable.
+- `dokkimashora-origin.joethon.dev` — proxied DNS for the Cloudflare Tunnel
+  `dokkimashora-codespaces-demo`. The tunnel forwards to `nginx:80`.
+- The original GitHub Codespaces forwarded port can remain **private**.
+  GitHub reverts public ports to private on restart, which is why the
+  independent Cloudflare Tunnel is used.
+
+### 1. Install the tunnel token inside the existing Codespace
+
+In Cloudflare Dashboard → **Networking → Tunnels** → select
+`dokkimashora-codespaces-demo` → **Add a replica**, copy the
+`eyJ...` **tunnel token** from the installation command. Do not paste it
+into a chat, GitHub issue/PR, or any tracked file.
+
+In the Codespace terminal:
+
+```bash
+cd /workspaces/DokkiMashora
+git pull --ff-only origin chore/codespaces-trial
+read -rs -p "Paste Cloudflare Tunnel token (hidden): " CF_TOKEN
+echo
+sed -i '/^CF_TUNNEL_TOKEN=/d' .env.docker
+printf 'CF_TUNNEL_TOKEN=%s\\n' "$CF_TOKEN" >> .env.docker
+unset CF_TOKEN
+chmod 600 .env.docker
+bash .devcontainer/start-demo.sh
+```
+
+The startup script launches the additional `cloudflared` container only if
+the token is present. Normal stop/resume does not change your database; the
+startup script reuses the image and restarts the stack, including the tunnel.
+
+After it starts, verify:
+
+```bash
+docker ps --format "table {{.Names}}\\t{{.Status}}"
+curl -i http://localhost/healthz
+```
+
+Check `https://demo.joethon.dev/__demo/status`; it should show
+`{"ready":true}` once the tunnel is connected and Django is healthy.
+If not, inspect `docker logs --tail=60 dokkimashora-trial-cloudflared-1`
+and verify the HTTPS site from a private browsing window.
+
+### 2. Configure a scoped GitHub token for remote activation
+
+In GitHub **Settings → Developer settings → Personal access tokens →
+Fine-grained tokens**, create an expiration-limited token:
+
+- Resource owner: `JoethonDev`.
+- Repository access: **Only selected repositories → DokkiMashora**.
+- Repository permission **Codespaces: Read** (to discover your Codespace).
+- Repository permission **Codespaces lifecycle admin: Read and write**
+  (to start the Codespace through GitHub's API).
+- No organization administration or other repository write permissions.
+
+In Cloudflare **Workers & Pages → dokkimashora-demo-gateway →
+Settings → Variables and Secrets**, add two **Secret** bindings:
+
+- `GITHUB_TOKEN` — the fine-grained GitHub token.
+- `ACTIVATION_KEY` — your own strong random activation passphrase
+  (20+ characters; e.g. generate `openssl rand -hex 24`). Keep this
+  passphrase in your password manager; it is entered on the activation page,
+  never in GitHub source code.
+
+If multiple Codespaces exist for the same repository, also add a **Text**
+binding named `CODESPACE_NAME` containing the target Codespace's exact name
+(found with `echo "$CODESPACE_NAME"` inside the Codespace).
+If you have exactly one Codespace for `JoethonDev/DokkiMashora`, the Worker
+can discover it without this binding.
+
+Never paste these tokens or the activation passphrase into ChatGPT.
+No credentials are embedded in the Worker source. The Worker is safe to
+deploy before the secrets exist: activation requests will respond with a
+configuration-unavailable message.
+
+### 3. Test stop/start activation
+
+1. Verify the running site at `https://demo.joethon.dev` first.
+2. In `https://github.com/codespaces`, use **... → Stop codespace**.
+   Stop the existing Codespace, **do not delete it**.
+3. Open `https://demo.joethon.dev` again. It should show the offline screen.
+4. Enter your activation passphrase and select **Activate demo**.
+5. The Worker calls the GitHub Codespaces Start API once, and the browser
+   polls `/__demo/status` until the tunnel/health endpoint is available,
+   then reloads into Django. GET requests **never** start the Codespace, to
+   prevent anonymous visitors from consuming your Codespaces budget.
+
+Scheduled Celery jobs cannot run while the Codespace is stopped. Allow time
+for service recovery after resuming; do not start an exam mid-recovery.
+
+### Important caveats
+
+- The origin tunnel hostname is technically reachable directly if its
+  hostname is known. Do not load real student records into this temporary
+  demo; protect the Django application with accounts and add Cloudflare
+  Access if you need a stronger perimeter.
+- Codespaces may stop due to idle-timeout or continuous-runtime limits.
+- Cloudflare does **not** keep Django, PostgreSQL, Redis or Celery running
+  while the Codespace is stopped.
+- Public demo links are not authorization to run production workloads in
+  Codespaces. See GitHub's Codespaces Terms for permitted development usage.
+- Activation has ongoing Codespaces compute consumption while running;
+  review GitHub billing and spending controls.
 
 ## Cleanup
 
