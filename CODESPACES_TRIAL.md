@@ -82,6 +82,10 @@ is validated by this demo.
 - Redis AOF: `.docker-data/redis`.
 - Media uploads: `media/`.
 - The existing `static_data` named volume is **regenerable** only.
+- The startup script creates an empty ignored `staticfiles/` directory in the
+  host workspace so Docker can mount the named volume below the read-only
+  `/app` source mount. Actual collected assets live in `static_data`, not in
+  the host directory; never mount host `staticfiles/` over that volume.
 - Keep the **same** Codespace for the full 10 days. A normal stop/start should
   preserve workspace data. Deleting a Codespace or removing its workspace
   destroys the local data. Rebuilding the development container can recreate
