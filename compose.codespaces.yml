@@ -1,6 +1,7 @@
 # Codespaces-only demo sizing. Always load this after both existing Compose files.
 # This is not the approved 2-vCPU/4-GB benchmark environment.
-x-demo-host: &demo-host ${CODESPACE_NAME:?Run this stack inside GitHub Codespaces}-80.app.github.dev
+# Docker checks /healthz against 127.0.0.1:8000; Nginx may use localhost.
+x-demo-host: &demo-host localhost,127.0.0.1,${CODESPACE_NAME:?Run this stack inside GitHub Codespaces}-80.app.github.dev
 x-demo-env: &demo-env
   DJANGO_ALLOWED_HOSTS: *demo-host
   DJANGO_CSRF_TRUSTED_ORIGINS: "https://${CODESPACE_NAME:?Run inside Codespaces}-80.app.github.dev"
