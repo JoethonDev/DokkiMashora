@@ -38,7 +38,7 @@ jobs:
             --env-file .env.docker \
             -f compose.application.yml \
             -f compose.infrastructure.yml \
-            -f compose.codespaces.yml config --format json > /tmp/dokkimashora-compose.json
+            -f compose.codespaces.yml --profile tunnel config --format json > /tmp/dokkimashora-compose.json
           python - <<'PY'
           import json
           from pathlib import Path
