@@ -65,7 +65,7 @@ The auto-generated `.env.docker` has `DJANGO_SEED_DEMO=false`; introduce
 synthetic demo data only through an approved, existing seed command.
 
 The app accepts both the Codespaces forwarded HTTPS host and the Cloudflare
-\`demo.joethon.dev\` hostname for Django allowed hosts/CSRF. The Cloudflare
+`demo.joethon.dev` hostname for Django allowed hosts/CSRF. The Cloudflare
 hostname is the canonical site URL. This override disables Django's **HTTP-to-HTTPS
 redirect** because GitHub terminates HTTPS before reaching the internal
 HTTP Nginx, but it retains secure browser cookies.
@@ -166,7 +166,7 @@ git pull --ff-only origin chore/codespaces-trial
 read -rs -p "Paste Cloudflare Tunnel token (hidden): " CF_TOKEN
 echo
 sed -i '/^CF_TUNNEL_TOKEN=/d' .env.docker
-printf 'CF_TUNNEL_TOKEN=%s\\n' "$CF_TOKEN" >> .env.docker
+printf 'CF_TUNNEL_TOKEN=%s\n' "$CF_TOKEN" >> .env.docker
 unset CF_TOKEN
 chmod 600 .env.docker
 bash .devcontainer/start-demo.sh
@@ -179,7 +179,7 @@ startup script reuses the image and restarts the stack, including the tunnel.
 After it starts, verify:
 
 ```bash
-docker ps --format "table {{.Names}}\\t{{.Status}}"
+docker ps --format "table {{.Names}}\t{{.Status}}"
 curl -i http://localhost/healthz
 ```
 
