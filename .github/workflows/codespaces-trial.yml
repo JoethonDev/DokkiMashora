@@ -31,6 +31,25 @@ jobs:
             -f compose.infrastructure.yml \
             -f compose.codespaces.yml config --quiet
 
+      - name: Ensure Django permits internal health-check and forwarded hosts
+        run: |
+          docker compose --project-name dokkimashora-trial \
+            --env-file .env.docker \
+            -f compose.application.yml \
+            -f compose.infrastructure.yml \
+            -f compose.codespaces.yml config --format json > /tmp/dokkimashora-compose.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          services = json.loads(Path("/tmp/dokkimashora-compose.json").read_text())["services"]
+          web_env = services["web"]["environment"]
+          allowed = set(web_env["DJANGO_ALLOWED_HOSTS"].split(","))
+          required = {"localhost", "127.0.0.1", "dokkimashora-demo-check-80.app.github.dev"}
+          assert required <= allowed, f"Missing Django allowed hosts: {required - allowed}"
+          assert web_env["DJANGO_CSRF_TRUSTED_ORIGINS"] == "https://dokkimashora-demo-check-80.app.github.dev"
+          PY
+
       - name: Validate devcontainer JSON
         run: python -m json.tool .devcontainer/devcontainer.json >/dev/null
 
