@@ -34,5 +34,19 @@ jobs:
       - name: Validate devcontainer JSON
         run: python -m json.tool .devcontainer/devcontainer.json >/dev/null
 
+      - name: Ensure a supported, pinned devcontainer image
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          config = json.loads(Path(".devcontainer/devcontainer.json").read_text())
+          assert config["image"] == "mcr.microsoft.com/devcontainers/base:ubuntu24.04", (
+              "Pin the devcontainer base image: rolling ubuntu selected unsupported packages"
+          )
+          dind = config["features"]["ghcr.io/devcontainers/features/docker-in-docker:2"]
+          assert dind.get("moby") is False, "Use Docker CE instead of OS-dependent Moby packages"
+          PY
+
       - name: Validate startup shell syntax
         run: bash -n .devcontainer/start-demo.sh
