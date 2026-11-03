@@ -30,7 +30,11 @@ fi
 
 export APP_ENV_FILE=.env.docker
 export APP_IMAGE_TAG=codespaces
-mkdir -p .docker-data/postgres .docker-data/redis media .demo-backups
+# The entire workspace is bind-mounted read-only at /app. The web container
+# mounts a writable named volume at /app/staticfiles; its mountpoint must
+# already exist in the host workspace or runc cannot create it under /app:ro.
+# Only create the empty directory: collectstatic writes to the named volume.
+mkdir -p .docker-data/postgres .docker-data/redis media staticfiles .demo-backups
 
 for attempt in $(seq 1 45); do
   if docker info >/dev/null 2>&1; then
