@@ -3,9 +3,9 @@
 # Docker checks /healthz against 127.0.0.1:8000; Nginx may use localhost.
 x-demo-host: &demo-host localhost,127.0.0.1,${CODESPACE_NAME:?Run this stack inside GitHub Codespaces}-80.app.github.dev
 x-demo-env: &demo-env
-  DJANGO_ALLOWED_HOSTS: *demo-host
-  DJANGO_CSRF_TRUSTED_ORIGINS: "https://${CODESPACE_NAME:?Run inside Codespaces}-80.app.github.dev"
-  SITE_URL: "https://${CODESPACE_NAME:?Run inside Codespaces}-80.app.github.dev"
+  DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,demo.joethon.dev,${CODESPACE_NAME:?Run this stack inside GitHub Codespaces}-80.app.github.dev"
+  DJANGO_CSRF_TRUSTED_ORIGINS: "https://demo.joethon.dev,https://${CODESPACE_NAME:?Run inside Codespaces}-80.app.github.dev"
+  SITE_URL: "https://demo.joethon.dev"
   # Codespaces terminates public HTTPS before requests reach our HTTP-only Nginx.
   # Leave secure cookies enabled, but avoid an incorrect HTTP->HTTPS redirect loop.
   DJANGO_SECURE_SSL_REDIRECT: "false"
@@ -66,6 +66,24 @@ services:
 
   nginx:
     cpuset: "0-1"
+    # During local HTTP proxying, tell Django the outside-facing request is HTTPS.
+    # Generated from the existing Nginx config by start-demo.sh (no production edit).
+    volumes:
+      - ./.docker-data/nginx.codespaces.conf:/etc/nginx/nginx.conf:ro
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles: ["tunnel"]
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: "${CF_TUNNEL_TOKEN:-}"
+    depends_on:
+      nginx:
+        condition: service_started
+    cpuset: "0-1"
+    mem_limit: 128m
+    networks: [app]
 
   backup:
     cpuset: "0-1"
