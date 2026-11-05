@@ -10,8 +10,9 @@ credentials, live SMTP configuration, or production R2 secrets.
 - A dedicated `compose.codespaces.yml` **override** over the unchanged
   `compose.application.yml` + `compose.infrastructure.yml`.
 - Two-CPU-compatible container pinning and lower demo memory limits.
-- A required private `.env` file. Startup fails if it is missing or invalid;
-  credentials are never generated automatically.
+- A required private `.env` file. Normal startup fails if it is missing.
+  A separate, explicit one-time initializer can create it for **new** demos;
+  it never overwrites existing credentials.
 - Automatic image build only if missing; otherwise restart existing Compose
   services after Codespace resume.
 - PostgreSQL 18, Redis AOF and media bind-mounted under the persistent
@@ -26,10 +27,14 @@ in GitHub's UI. The GitHub connector cannot do those operations.
 1. Open the repository branch `chore/codespaces-trial` on GitHub.
 2. **Code → Codespaces → New with options**; select this branch and a
    **2-core** Codespace (8 GB RAM), then create it.
-3. Create `.env` manually in the project root before starting. The post-start
-   hook fails if it is missing. Previously generated `.env.docker` values must
-   be migrated manually; the old file is never read. Run:
-   `bash .devcontainer/start-demo.sh` in the Codespace terminal.
+3. For a **brand-new, empty** demo, run
+   `bash .devcontainer/init-demo-env.sh` once in the Codespace terminal.
+   This generates a strong password and signing key in the private project
+   `.env` file. It never runs automatically, never replaces an existing
+   `.env`, and refuses to initialize new credentials if PostgreSQL data
+   already exists. If an older `.env.docker` file was used, migrate its
+   existing settings manually instead.
+   Then run `bash .devcontainer/start-demo.sh`.
 4. Verify `curl -f http://localhost/healthz` succeeds.
 5. In VS Code's **Ports** panel, select port `80`, set visibility to
    **Public**, and copy the forwarded HTTPS address:
@@ -46,8 +51,24 @@ Public forwarded ports do **not** wake a stopped Codespace.
 
 There is **one runtime source**: the private, gitignored project-root
 `.env` file. Docker Compose, Django, Celery, and the optional tunnel use it.
-`.env.example` is only a template (not loaded) and has local-development
-defaults; you must provide the actual values below. Do not commit them.
+`.env.example` is only a template (not loaded), and its local-development
+defaults are not suitable for the public demo. Do not commit your secrets.
+
+For **new demos only**, the easiest setup is:
+
+```bash
+bash .devcontainer/init-demo-env.sh
+bash .devcontainer/start-demo.sh
+```
+
+The first command creates and protects `.env` only when none exists and
+no database files exist. The second command **still fails** if `.env` is
+missing. Once the demo exists, you only need the second command.
+The initializer never starts automatically and never resets credentials.
+
+For an **existing demo**, preserve the exact existing PostgreSQL credentials
+and Django signing key. Edit `.env` rather than running the initializer.
+The full settings below are documented for manual setup or review:
 
 ```dotenv
 POSTGRES_DB=dokkimashora_demo
@@ -78,8 +99,35 @@ Replace the placeholders and match the `POSTGRES_PASSWORD` value inside
 `DATABASE_URL`. Obtain the Codespace name via `echo "$CODESPACE_NAME"`.
 For safe hex values, run `openssl rand -hex 32` (database password) and
 `openssl rand -hex 64` (Django signing key). Keep `.env` private with
-`chmod 600 .env`. The startup script never overwrites, copies, or creates
-it; missing/incomplete settings fail before containers start.
+`chmod 600 .env`. The startup script never overwrites, copies, or creates it; missing/incomplete
+settings fail before containers start. The separate explicit initializer
+exists only to make first-time setup easier.
+
+
+### Inspect which environment file Docker Compose uses
+
+The trial starts with `docker compose --env-file .env` for Compose variable
+interpolation, while web and Celery have `env_file: .env` to inject variables.
+The database and tunnel receive selected values via Compose interpolation.
+
+To see the declared service env files without printing secrets:
+
+```bash
+docker compose --env-file .env \
+  -f compose.application.yml -f compose.infrastructure.yml \
+  -f compose.codespaces.yml config --no-env-resolution | grep -A 3 'env_file:'
+```
+
+To see only variable **names** received by the running web container:
+
+```bash
+docker exec dokkimashora-trial-web-1 sh -c 'env | cut -d= -f1 | sort'
+```
+
+Use `--no-env-resolution` to avoid printing all secret values. Docker does
+not track which file originally provided each running variable, and shell
+variables or explicit Compose overrides can take precedence. Changes to
+`.env` take effect on **container recreation**, not `docker compose restart`.
 
 ## Administration commands
 
