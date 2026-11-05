@@ -96,7 +96,7 @@ fi
 
 # Verify the running container, not merely the Compose YAML, has the correct
 # public hosts and can complete the CSRF-protected login round trip.
-"${compose[@]}" exec -T web python - <<'PY'
+"${compose[@]}" exec -T -e CODESPACE_NAME="${CODESPACE_NAME}" web python - <<'PY'
 import os
 
 import django
