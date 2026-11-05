@@ -1,21 +1,10 @@
 # Codespaces-only demo sizing. Always load this after both existing Compose files.
 # This is not the approved 2-vCPU/4-GB benchmark environment.
-# Docker checks /healthz against 127.0.0.1:8000; Nginx may use localhost.
-x-demo-host: &demo-host localhost,127.0.0.1,${CODESPACE_NAME:?Run this stack inside GitHub Codespaces}-80.app.github.dev
-x-demo-env: &demo-env
-  DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,demo.joethon.dev,${CODESPACE_NAME:?Run this stack inside GitHub Codespaces}-80.app.github.dev"
-  DJANGO_CSRF_TRUSTED_ORIGINS: "https://demo.joethon.dev,https://${CODESPACE_NAME:?Run inside Codespaces}-80.app.github.dev"
-  SITE_URL: "https://demo.joethon.dev"
-  # Codespaces terminates public HTTPS before requests reach our HTTP-only Nginx.
-  # Leave secure cookies enabled, but avoid an incorrect HTTP->HTTPS redirect loop.
-  DJANGO_SECURE_SSL_REDIRECT: "false"
-  DJANGO_SECURE_COOKIES: "true"
-
+# Runtime configuration is supplied solely by the mandatory .env file.
 services:
   web:
     cpuset: "0-1"
     mem_limit: 1536m
-    environment: *demo-env
 
   postgres:
     cpuset: "0-1"
@@ -49,20 +38,16 @@ services:
   celery-submit:
     cpuset: "0-1"
     mem_limit: 512m
-    environment: *demo-env
 
   celery-autosave:
     cpuset: "0-1"
     mem_limit: 512m
-    environment: *demo-env
 
   celery:
     cpuset: "0-1"
-    environment: *demo-env
 
   beat:
     cpuset: "0-1"
-    environment: *demo-env
 
   nginx:
     cpuset: "0-1"

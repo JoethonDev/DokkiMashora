@@ -6,18 +6,7 @@ services:
     image: dokkimashora-app:${APP_IMAGE_TAG:-local}
     restart: unless-stopped
     env_file:
-      - ${APP_ENV_FILE:-.env}
-    environment:
-      PORT: 8000
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      CACHE_URL: redis://redis:6379/1
-      CELERY_BROKER_URL: redis://redis:6379/0
-      DJANGO_SETTINGS_MODULE: config.settings.prod
-      ASSESSMENT_AUTOSAVE_WRITE_BEHIND: "true"
-      ASSESSMENT_SUBMISSION_GRADING_DELAY: ${ASSESSMENT_SUBMISSION_GRADING_DELAY:-0}
-      ASSESSMENT_PERF_TRACE: ${ASSESSMENT_PERF_TRACE:-false}
-      GUNICORN_WORKERS: 3
-      GUNICORN_THREADS: 4
+      - .env
     volumes:
       - ${APP_SOURCE:-.}:/app:ro
       # Data-bearing mounts are host paths so a Docker reset cannot delete them.

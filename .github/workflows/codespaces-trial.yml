@@ -5,6 +5,7 @@ on:
     paths:
       - ".devcontainer/**"
       - "compose.codespaces.yml"
+      - "CODESPACES_TRIAL.md"
       - "deploy/cloudflare/**"
       - "compose.application.yml"
       - "compose.infrastructure.yml"
@@ -16,18 +17,47 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CODESPACE_NAME: dokkimashora-demo-check
-      APP_ENV_FILE: .env.docker
-      APP_IMAGE_TAG: codespaces
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prepare example env for configuration-only validation
-        run: cp .env.docker.example .env.docker
+      - name: Require a real .env at startup
+        run: |
+          if bash .devcontainer/start-demo.sh >/tmp/startup-no-env.log 2>&1; then
+            echo "Startup unexpectedly succeeded without .env" >&2
+            exit 1
+          fi
+          grep -q "Missing, empty or unreadable .env" /tmp/startup-no-env.log
+
+      - name: Prepare synthetic .env for Compose checks (CI only)
+        run: |
+          cat > .env <<'EOF'
+          POSTGRES_DB=dokkimashora_demo
+          POSTGRES_USER=dokkimashora
+          POSTGRES_PASSWORD=ci_only_docker_password
+          APP_IMAGE_TAG=codespaces
+          DJANGO_SETTINGS_MODULE=config.settings.prod
+          DJANGO_DEBUG=false
+          DJANGO_SECRET_KEY=ci-only-placeholder-with-adequate-length-for-protected-demo-test-123456
+          DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,demo.joethon.dev,dokkimashora-demo-check-80.app.github.dev
+          DJANGO_CSRF_TRUSTED_ORIGINS=https://demo.joethon.dev,https://dokkimashora-demo-check-80.app.github.dev
+          SITE_URL=https://demo.joethon.dev
+          DJANGO_SECURE_SSL_REDIRECT=false
+          DJANGO_SECURE_COOKIES=true
+          DATABASE_URL=postgresql://dokkimashora:ci_only_docker_password@postgres:5432/dokkimashora_demo
+          CACHE_URL=redis://redis:6379/1
+          CELERY_BROKER_URL=redis://redis:6379/0
+          PORT=8000
+          GUNICORN_WORKERS=3
+          GUNICORN_THREADS=4
+          DJANGO_SEED_DEMO=false
+          USE_R2_STORAGE=false
+          EOF
+          chmod 600 .env
 
       - name: Validate the merged Docker Compose configuration
         run: |
           docker compose --project-name dokkimashora-trial \
-            --env-file .env.docker \
+            --env-file .env \
             -f compose.application.yml \
             -f compose.infrastructure.yml \
             -f compose.codespaces.yml config --quiet
@@ -35,7 +65,7 @@ jobs:
       - name: Ensure Django permits internal health-check and forwarded hosts
         run: |
           docker compose --project-name dokkimashora-trial \
-            --env-file .env.docker \
+            --env-file .env \
             -f compose.application.yml \
             -f compose.infrastructure.yml \
             -f compose.codespaces.yml --profile tunnel config --format json > /tmp/dokkimashora-compose.json
@@ -57,6 +87,14 @@ jobs:
           tunnel = services["cloudflared"]
           assert "tunnel" in tunnel["profiles"]
           assert "TUNNEL_TOKEN" in tunnel["environment"]
+          for name in ("web", "celery-submit", "celery-autosave", "beat"):
+              runtime_env = services[name]["environment"]
+              for key in ("DATABASE_URL", "CACHE_URL", "CELERY_BROKER_URL",
+                          "DJANGO_SECRET_KEY", "SITE_URL", "DJANGO_CSRF_TRUSTED_ORIGINS"):
+                  assert runtime_env[key] == web_env[key], (name, key)
+          assert web_env["DJANGO_SECURE_COOKIES"] == "true"
+          assert web_env["DJANGO_SECURE_SSL_REDIRECT"] == "false"
+          assert services["web"]["image"] == "dokkimashora-app:codespaces"
           PY
 
       - name: Validate devcontainer JSON

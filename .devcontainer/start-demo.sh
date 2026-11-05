@@ -10,26 +10,11 @@ if [[ -z "${CODESPACE_NAME:-}" ]]; then
   exit 1
 fi
 
-if [[ ! -f .env.docker ]]; then
-  command -v openssl >/dev/null || { echo "openssl is required to generate trial credentials" >&2; exit 1; }
-  umask 077
-  {
-    printf '%s\n' 'POSTGRES_DB=dokkimashora_demo'
-    printf '%s\n' 'POSTGRES_USER=dokkimashora'
-    printf 'POSTGRES_PASSWORD=%s\n' "$(openssl rand -hex 32)"
-    printf 'DJANGO_SECRET_KEY=%s\n' "$(openssl rand -hex 64)"
-    printf '%s\n' 'DJANGO_DEBUG=false'
-    printf '%s\n' 'DJANGO_SEED_DEMO=false'
-    printf '%s\n' 'USE_R2_STORAGE=false'
-    printf '%s\n' 'EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend'
-    printf '%s\n' 'EMAIL_HOST='
-    printf '%s\n' 'DJANGO_SUPERUSER_USERNAME=demo-admin@dokkimashora.test'
-  } > .env.docker
-  echo "Created private .env.docker with unique database and Django secrets."
+# No auto-generation and no alternate dotenv file.
+if [[ ! -s .env || ! -r .env ]]; then
+  echo "ERROR: Missing, empty or unreadable .env. Create it manually before startup." >&2
+  exit 1
 fi
-
-export APP_ENV_FILE=.env.docker
-export APP_IMAGE_TAG=codespaces
 # The entire workspace is bind-mounted read-only at /app. The web container
 # mounts a writable named volume at /app/staticfiles; its mountpoint must
 # already exist in the host workspace or runc cannot create it under /app:ro.
@@ -54,13 +39,54 @@ for attempt in $(seq 1 45); do
 done
 
 compose=(
-  docker compose --project-name dokkimashora-trial --env-file .env.docker
+  docker compose --project-name dokkimashora-trial --env-file .env
   -f compose.application.yml -f compose.infrastructure.yml -f compose.codespaces.yml
 )
 
 "${compose[@]}" config --quiet
 
-if ! docker image inspect dokkimashora-app:codespaces >/dev/null 2>&1; then
+# Validate the settings from the merged environment before starting anything.
+"${compose[@]}" config --format json | python3 -c '
+import json, os, sys
+services = json.load(sys.stdin)["services"]
+env = services["web"]["environment"]
+required = ("POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD",
+            "DJANGO_SECRET_KEY", "DJANGO_SETTINGS_MODULE", "DJANGO_ALLOWED_HOSTS",
+            "DJANGO_CSRF_TRUSTED_ORIGINS", "SITE_URL", "DATABASE_URL", "CACHE_URL",
+            "CELERY_BROKER_URL", "DJANGO_SECURE_COOKIES", "DJANGO_SECURE_SSL_REDIRECT")
+missing = [k for k in required if not str(env.get(k, "")).strip()]
+if missing:
+    sys.exit("ERROR: Missing required settings in .env: " + ", ".join(missing))
+codespace = os.environ.get("CODESPACE_NAME", "")
+forwarded = codespace + "-80.app.github.dev"
+hosts = set(env["DJANGO_ALLOWED_HOSTS"].split(","))
+origins = set(env["DJANGO_CSRF_TRUSTED_ORIGINS"].split(","))
+if not {"localhost", "127.0.0.1", "demo.joethon.dev", forwarded} <= hosts:
+    sys.exit("ERROR: .env DJANGO_ALLOWED_HOSTS needs the demo and forwarded hosts")
+if not {"https://demo.joethon.dev", "https://" + forwarded} <= origins:
+    sys.exit("ERROR: .env DJANGO_CSRF_TRUSTED_ORIGINS needs both HTTPS origins")
+if env["DJANGO_SETTINGS_MODULE"] != "config.settings.prod" or env.get("DJANGO_DEBUG", "false").lower() not in ("false", "0"):
+    sys.exit("ERROR: Use production Django settings with DJANGO_DEBUG=false in demo .env")
+if env["SITE_URL"] != "https://demo.joethon.dev":
+    sys.exit("ERROR: .env SITE_URL must be https://demo.joethon.dev")
+if env["DJANGO_SECURE_COOKIES"].lower() != "true" or env["DJANGO_SECURE_SSL_REDIRECT"].lower() != "false":
+    sys.exit("ERROR: .env secure cookie or SSL redirect settings are incorrect")
+if len(env["DJANGO_SECRET_KEY"]) < 50 or env["DJANGO_SECRET_KEY"].startswith(("django-insecure-","replace-with-")):
+    sys.exit("ERROR: .env needs a unique DJANGO_SECRET_KEY (50+ characters)")
+if not env["DATABASE_URL"].startswith(("postgresql://", "postgres://")) or "@postgres:5432/" not in env["DATABASE_URL"]:
+    sys.exit("ERROR: .env DATABASE_URL must point to the Docker Postgres service")
+if env["CACHE_URL"] != "redis://redis:6379/1" or env["CELERY_BROKER_URL"] != "redis://redis:6379/0":
+    sys.exit("ERROR: .env must point Cache and Celery to the Docker Redis service")
+for service in ("web", "celery-submit", "celery-autosave", "beat"):
+    e = services[service]["environment"]
+    if any(e.get(k) != env.get(k) for k in required):
+        sys.exit("ERROR: " + service + " has settings that differ from .env")
+print("Codespaces .env configuration validated.")
+'
+web_image="$("${compose[@]}" config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["services"]["web"]["image"])')"
+
+
+if ! docker image inspect "$web_image" >/dev/null 2>&1; then
   echo "First run: building the shared Django/Celery image..."
   "${compose[@]}" build web
 fi
@@ -68,7 +94,7 @@ fi
 # Dockerfile runs the application as the nonroot 'app' user. Give that user
 # ownership of the bind-mounted demo media folder without changing the source.
 docker run --rm --user root --entrypoint sh \
-  -v "$PWD/media:/demo-media" dokkimashora-app:codespaces \
+  -v "$PWD/media:/demo-media" "$web_image" \
   -c 'chown app:app /demo-media'
 
 echo "Reloading the web and Nginx containers with the latest Codespaces settings..."
@@ -79,11 +105,11 @@ echo "Reloading the web and Nginx containers with the latest Codespaces settings
 echo "Starting Docker Compose services..."
 # Cloudflare Tunnel is opt-in. Its secret lives only in the ignored env file;
 # Docker Compose never starts the tunnel with a missing/blank token.
-if grep -Eq '^CF_TUNNEL_TOKEN=[^[:space:]]+' .env.docker; then
+if grep -Eq '^CF_TUNNEL_TOKEN=[^[:space:]]+' .env; then
   echo "Cloudflare Tunnel token configured; starting the tunnel sidecar."
   "${compose[@]}" --profile tunnel up -d --no-build
 else
-  echo "Tunnel disabled until CF_TUNNEL_TOKEN is added to .env.docker."
+  echo "Tunnel disabled until CF_TUNNEL_TOKEN is added to .env."
   "${compose[@]}" up -d --no-build
 fi
 
@@ -135,10 +161,10 @@ print("Codespaces demo: both public hosts, HTTPS cookies and CSRF checks passed.
 PY
 
 echo "Local demo healthy. Use the Codespaces forwarded HTTPS port 80 for direct access."
-if grep -Eq '^CF_TUNNEL_TOKEN=[^[:space:]]+' .env.docker; then
+if grep -Eq '^CF_TUNNEL_TOKEN=[^[:space:]]+' .env; then
   echo "Tunnel sidecar configured. Use https://demo.joethon.dev when it connects."
-  echo "If the public domain is offline, inspect: docker compose --project-name dokkimashora-trial --env-file .env.docker -f compose.application.yml -f compose.infrastructure.yml -f compose.codespaces.yml --profile tunnel logs --tail=40 cloudflared"
+  echo "If the public domain is offline, inspect: docker compose --project-name dokkimashora-trial --env-file .env -f compose.application.yml -f compose.infrastructure.yml -f compose.codespaces.yml --profile tunnel logs --tail=40 cloudflared"
 else
-  echo "Public demo is OFFLINE: add CF_TUNNEL_TOKEN to the private .env.docker and rerun this script."
+  echo "Public demo is OFFLINE: add CF_TUNNEL_TOKEN to the private .env and rerun this script."
   echo "Get the token from Cloudflare Zero Trust > Networks > Tunnels > dokkimashora-codespaces-demo."
 fi

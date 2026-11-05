@@ -73,12 +73,7 @@ services:
     image: dokkimashora-app:${APP_IMAGE_TAG:-local}
     restart: unless-stopped
     env_file:
-      - ${APP_ENV_FILE:-.env}
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      CACHE_URL: redis://redis:6379/1
-      CELERY_BROKER_URL: redis://redis:6379/0
-      DJANGO_SETTINGS_MODULE: config.settings.prod
+      - .env
     command: ["sh", "-c", "python manage.py wait_for_db && exec celery -A config worker --loglevel=INFO --concurrency=1 --max-tasks-per-child=200 -Q exam_submission"]
     volumes:
       - ${APP_SOURCE:-.}:/app:ro
@@ -104,12 +99,7 @@ services:
     image: dokkimashora-app:${APP_IMAGE_TAG:-local}
     restart: unless-stopped
     env_file:
-      - ${APP_ENV_FILE:-.env}
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      CACHE_URL: redis://redis:6379/1
-      CELERY_BROKER_URL: redis://redis:6379/0
-      DJANGO_SETTINGS_MODULE: config.settings.prod
+      - .env
     command: ["sh", "-c", "python manage.py wait_for_db && exec celery -A config worker --loglevel=INFO --concurrency=1 --max-tasks-per-child=200 -Q exam_autosave,celery"]
     volumes:
       - ${APP_SOURCE:-.}:/app:ro
@@ -137,12 +127,7 @@ services:
     restart: unless-stopped
     profiles: ["legacy-celery"]
     env_file:
-      - ${APP_ENV_FILE:-.env}
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      CACHE_URL: redis://redis:6379/1
-      CELERY_BROKER_URL: redis://redis:6379/0
-      DJANGO_SETTINGS_MODULE: config.settings.prod
+      - .env
     command: ["sh", "-c", "python manage.py wait_for_db && exec celery -A config worker --loglevel=INFO --concurrency=1 --max-tasks-per-child=200"]
     volumes:
       - ${APP_SOURCE:-.}:/app:ro
@@ -162,12 +147,7 @@ services:
     image: dokkimashora-app:${APP_IMAGE_TAG:-local}
     restart: unless-stopped
     env_file:
-      - ${APP_ENV_FILE:-.env}
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      CACHE_URL: redis://redis:6379/1
-      CELERY_BROKER_URL: redis://redis:6379/0
-      DJANGO_SETTINGS_MODULE: config.settings.prod
+      - .env
     command: ["sh", "-c", "python manage.py wait_for_db && exec celery -A config beat --loglevel=INFO -s /tmp/celerybeat-schedule"]
     volumes:
       - ${APP_SOURCE:-.}:/app:ro

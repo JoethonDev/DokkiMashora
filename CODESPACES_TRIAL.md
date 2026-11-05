@@ -10,8 +10,8 @@ credentials, live SMTP configuration, or production R2 secrets.
 - A dedicated `compose.codespaces.yml` **override** over the unchanged
   `compose.application.yml` + `compose.infrastructure.yml`.
 - Two-CPU-compatible container pinning and lower demo memory limits.
-- Automatic initial generation of **random local credentials** in the
-  gitignored `.env.docker` (never displayed or committed).
+- A required private `.env` file. Startup fails if it is missing or invalid;
+  credentials are never generated automatically.
 - Automatic image build only if missing; otherwise restart existing Compose
   services after Codespace resume.
 - PostgreSQL 18, Redis AOF and media bind-mounted under the persistent
@@ -26,9 +26,9 @@ in GitHub's UI. The GitHub connector cannot do those operations.
 1. Open the repository branch `chore/codespaces-trial` on GitHub.
 2. **Code → Codespaces → New with options**; select this branch and a
    **2-core** Codespace (8 GB RAM), then create it.
-3. The post-start hook creates the gitignored local demo environment and
-   starts the existing Compose stack automatically. Initial image building,
-   migrations and static collection may take time. If needed, run:
+3. Create `.env` manually in the project root before starting. The post-start
+   hook fails if it is missing. Previously generated `.env.docker` values must
+   be migrated manually; the old file is never read. Run:
    `bash .devcontainer/start-demo.sh` in the Codespace terminal.
 4. Verify `curl -f http://localhost/healthz` succeeds.
 5. In VS Code's **Ports** panel, select port `80`, set visibility to
@@ -42,14 +42,52 @@ integrations are verified inactive. GitHub Codespaces is not an always-on
 server. It automatically stops on idle and has a continuous runtime limit.
 Public forwarded ports do **not** wake a stopped Codespace.
 
+## Mandatory .env for the demo
+
+There is **one runtime source**: the private, gitignored project-root
+`.env` file. Docker Compose, Django, Celery, and the optional tunnel use it.
+`.env.example` is only a template (not loaded) and has local-development
+defaults; you must provide the actual values below. Do not commit them.
+
+```dotenv
+POSTGRES_DB=dokkimashora_demo
+POSTGRES_USER=dokkimashora
+POSTGRES_PASSWORD=<strong-random-hex-password>
+APP_IMAGE_TAG=codespaces
+DJANGO_SETTINGS_MODULE=config.settings.prod
+DJANGO_DEBUG=false
+DJANGO_SECRET_KEY=<strong-unique-key-at-least-50-characters>
+DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,demo.joethon.dev,<CODESPACE_NAME>-80.app.github.dev
+DJANGO_CSRF_TRUSTED_ORIGINS=https://demo.joethon.dev,https://<CODESPACE_NAME>-80.app.github.dev
+SITE_URL=https://demo.joethon.dev
+DJANGO_SECURE_SSL_REDIRECT=false
+DJANGO_SECURE_COOKIES=true
+DATABASE_URL=postgresql://dokkimashora:<same-hex-password>@postgres:5432/dokkimashora_demo
+CACHE_URL=redis://redis:6379/1
+CELERY_BROKER_URL=redis://redis:6379/0
+PORT=8000
+GUNICORN_WORKERS=3
+GUNICORN_THREADS=4
+DJANGO_SEED_DEMO=false
+USE_R2_STORAGE=false
+# Optional, for Cloudflare Tunnel access:
+# CF_TUNNEL_TOKEN=<secret-from-Cloudflare>
+```
+
+Replace the placeholders and match the `POSTGRES_PASSWORD` value inside
+`DATABASE_URL`. Obtain the Codespace name via `echo "$CODESPACE_NAME"`.
+For safe hex values, run `openssl rand -hex 32` (database password) and
+`openssl rand -hex 64` (Django signing key). Keep `.env` private with
+`chmod 600 .env`. The startup script never overwrites, copies, or creates
+it; missing/incomplete settings fail before containers start.
+
 ## Administration commands
 
 From the Codespace repository root, define a helper in the terminal:
 
 ```bash
-export APP_ENV_FILE=.env.docker APP_IMAGE_TAG=codespaces
 dc() {
-  docker compose --project-name dokkimashora-trial --env-file .env.docker \
+  docker compose --project-name dokkimashora-trial --env-file .env \
     -f compose.application.yml -f compose.infrastructure.yml \
     -f compose.codespaces.yml "$@"
 }
@@ -61,7 +99,7 @@ dc logs --tail=100 web celery-submit celery-autosave beat nginx
 
 The first startup intentionally does **not** create an administrator with a
 default password. The `createsuperuser` command prompts for credentials.
-The auto-generated `.env.docker` has `DJANGO_SEED_DEMO=false`; introduce
+Set `DJANGO_SEED_DEMO=false` in your `.env`; introduce
 synthetic demo data only through an approved, existing seed command.
 
 The app accepts both the Codespaces forwarded HTTPS host and the Cloudflare
@@ -165,10 +203,10 @@ cd /workspaces/DokkiMashora
 git pull --ff-only origin chore/codespaces-trial
 read -rs -p "Paste Cloudflare Tunnel token (hidden): " CF_TOKEN
 echo
-sed -i '/^CF_TUNNEL_TOKEN=/d' .env.docker
-printf 'CF_TUNNEL_TOKEN=%s\n' "$CF_TOKEN" >> .env.docker
+sed -i '/^CF_TUNNEL_TOKEN=/d' .env
+printf 'CF_TUNNEL_TOKEN=%s\n' "$CF_TOKEN" >> .env
 unset CF_TOKEN
-chmod 600 .env.docker
+chmod 600 .env
 bash .devcontainer/start-demo.sh
 ```
 
