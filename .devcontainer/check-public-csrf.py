@@ -14,6 +14,42 @@ import urllib.request
 from html.parser import HTMLParser
 
 
+class ResponseInfoParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.title = ""
+        self._in_title = False
+        self.has_login_form = False
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "title":
+            self._in_title = True
+        elif tag == "form":
+            attributes = dict(attrs)
+            if attributes.get("method", "").lower() == "post":
+                self.has_login_form = True
+
+    def handle_endtag(self, tag):
+        if tag == "title":
+            self._in_title = False
+
+    def handle_data(self, value):
+        if self._in_title:
+            self.title += value
+
+
+class RedirectTracker(urllib.request.HTTPRedirectHandler):
+    def __init__(self):
+        super().__init__()
+        self.hops = []
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        destination = urllib.parse.urlsplit(newurl)
+        # Only the path, never query params or credentials, is disclosed.
+        self.hops.append(f"{code} to {destination.hostname}{destination.path}")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
 class CsrfTokenParser(HTMLParser):
     def __init__(self):
         super().__init__()
@@ -36,7 +72,8 @@ def request_with_status(opener, req):
 
 def check(origin):
     jar = http.cookiejar.CookieJar()
-    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+    tracker = RedirectTracker()
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar), tracker)
     url = origin + "/accounts/login/"
     response = request_with_status(
         opener,
@@ -49,12 +86,21 @@ def check(origin):
 
     parser = CsrfTokenParser()
     parser.feed(body)
+    info = ResponseInfoParser()
+    info.feed(body)
     cookie_names = {cookie.name for cookie in jar}
     set_cookie_names = [v.split("=", 1)[0].strip() for v in headers.get_all("Set-Cookie", [])]
     has_csrf_cookie = "csrftoken" in cookie_names
     sets_csrf = "csrftoken" in set_cookie_names
-    print(f"{origin}: GET={status}, Set-Cookie(csrftoken)={sets_csrf}, "
-          f"browser-style cookie stored={has_csrf_cookie}, HTML token={bool(parser.token)}")
+    final_url = urllib.parse.urlsplit(response.geturl())
+    print(f"{origin}: GET={status}, final_host={final_url.hostname}, "
+          f"final_path={final_url.path}, content_type={headers.get('content-type', '').split(';')[0]}, "
+          f"server={headers.get('server', '')}, "
+          f"title={info.title.strip()[:100]!r}, login_form={info.has_login_form}, "
+          f"Set-Cookie(csrftoken)={sets_csrf}, "
+          f"cookie stored={has_csrf_cookie}, HTML token={bool(parser.token)}")
+    if tracker.hops:
+        print("  Redirects: " + "; ".join(tracker.hops))
 
     if status != 200 or not parser.token or not has_csrf_cookie:
         print("  FAIL BEFORE POST: inspect public GET response and browser cookie restrictions.")
