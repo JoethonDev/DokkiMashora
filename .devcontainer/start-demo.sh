@@ -153,8 +153,20 @@ fi
 "${compose[@]}" exec -T -e CODESPACE_NAME="${CODESPACE_NAME}" web python - <<'PY'
 import http.client
 import os
-import re
+from html.parser import HTMLParser
 from urllib.parse import urlencode
+
+class LoginTokenParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.token = None
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "input":
+            values = dict(attrs)
+            if values.get("name") == "csrfmiddlewaretoken":
+                self.token = values.get("value")
+
 
 hosts = ("demo.joethon.dev", f"{os.environ['CODESPACE_NAME']}-80.app.github.dev")
 for host in hosts:
@@ -168,12 +180,13 @@ for host in hosts:
     cookies = [v.split(";", 1)[0] for v in cookie_headers]
     csrf_cookie = next((v for v in cookies if v.startswith("csrftoken=")), None)
     assert csrf_cookie, f"{host}: missing csrftoken Set-Cookie response header"
-    match = re.search(r'name=["\\x27]csrfmiddlewaretoken["\\x27]\\s+value=["\\x27]([^"\\x27]+)', page)
-    assert match, f"{host}: login HTML missing csrfmiddlewaretoken field"
+    parser = LoginTokenParser()
+    parser.feed(page)
+    assert parser.token, f"{host}: login HTML missing csrfmiddlewaretoken field"
     post_data = urlencode({
         "username": "invalid-demo-user@example.invalid",
         "password": "intentionally-incorrect",
-        "csrfmiddlewaretoken": match.group(1),
+        "csrfmiddlewaretoken": parser.token,
     })
     connection.close()
     connection = http.client.HTTPConnection("nginx", 80, timeout=15)
