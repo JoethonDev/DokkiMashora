@@ -12,7 +12,9 @@ fi
 
 # No auto-generation and no alternate dotenv file.
 if [[ ! -s .env || ! -r .env ]]; then
-  echo "ERROR: Missing, empty or unreadable .env. Create it manually before startup." >&2
+  echo "ERROR: Missing, empty or unreadable .env." >&2
+  echo "Fresh demo? Run: bash .devcontainer/init-demo-env.sh" >&2
+  echo "Existing demo? Restore the original .env to preserve database credentials." >&2
   exit 1
 fi
 # The entire workspace is bind-mounted read-only at /app. The web container
