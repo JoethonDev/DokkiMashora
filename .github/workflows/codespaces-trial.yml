@@ -119,7 +119,7 @@ jobs:
           # Python is available on CI but not in the Codespaces base image.
           # The startup script must run its Python validation via Docker.
           grep -q 'python:3.11-slim python -c' .devcontainer/start-demo.sh
-          if grep -E '^.*\\| python3? -c ' .devcontainer/start-demo.sh; then
+          if grep -Eq '[|][[:space:]]*python3?[[:space:]]+-c' .devcontainer/start-demo.sh; then
             echo "Host Python invocation found in Codespaces startup" >&2
             exit 1
           fi
