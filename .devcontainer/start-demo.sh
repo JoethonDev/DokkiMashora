@@ -120,7 +120,10 @@ echo "Starting Docker Compose services..."
 # Docker Compose never starts the tunnel with a missing/blank token.
 if grep -Eq '^CF_TUNNEL_TOKEN=[^[:space:]]+' .env; then
   echo "Cloudflare Tunnel token configured; starting the tunnel sidecar."
-  "${compose[@]}" --profile tunnel up -d --no-build
+  # A stale tunnel container can remain attached to an old Docker network
+  # after Codespaces recovery; recreate the connector to restore nginx DNS.
+  "${compose[@]}" --profile tunnel up -d --no-build --force-recreate cloudflared
+  "${compose[@]}" up -d --no-build
 else
   echo "Tunnel disabled until CF_TUNNEL_TOKEN is added to .env."
   "${compose[@]}" up -d --no-build
@@ -143,6 +146,51 @@ if ! curl --fail --silent --show-error \
   "${compose[@]}" logs --tail=50 web nginx
   exit 1
 fi
+
+# Test the real Nginx proxy path and a CSRF-protected login POST. A
+# Django test Client test alone does not detect missing Set-Cookie headers,
+# dropped form fields or proxy HTTPS/Host mistakes.
+"${compose[@]}" exec -T -e CODESPACE_NAME="${CODESPACE_NAME}" web python - <<'PY'
+import http.client
+import os
+import re
+from urllib.parse import urlencode
+
+hosts = ("demo.joethon.dev", f"{os.environ['CODESPACE_NAME']}-80.app.github.dev")
+for host in hosts:
+    connection = http.client.HTTPConnection("nginx", 80, timeout=15)
+    common = {"Host": host, "X-Forwarded-Proto": "https"}
+    connection.request("GET", "/accounts/login/", headers=common)
+    response = connection.getresponse()
+    page = response.read().decode("utf-8", "replace")
+    assert response.status == 200, f"{host}: login page returned {response.status}"
+    cookie_headers = [v for k, v in response.getheaders() if k.lower() == "set-cookie"]
+    cookies = [v.split(";", 1)[0] for v in cookie_headers]
+    csrf_cookie = next((v for v in cookies if v.startswith("csrftoken=")), None)
+    assert csrf_cookie, f"{host}: missing csrftoken Set-Cookie response header"
+    match = re.search(r'name=["\\x27]csrfmiddlewaretoken["\\x27]\\s+value=["\\x27]([^"\\x27]+)', page)
+    assert match, f"{host}: login HTML missing csrfmiddlewaretoken field"
+    post_data = urlencode({
+        "username": "invalid-demo-user@example.invalid",
+        "password": "intentionally-incorrect",
+        "csrfmiddlewaretoken": match.group(1),
+    })
+    connection.close()
+    connection = http.client.HTTPConnection("nginx", 80, timeout=15)
+    connection.request("POST", "/accounts/login/", body=post_data, headers={
+        **common,
+        "Origin": "https://" + host,
+        "Referer": "https://" + host + "/accounts/login/",
+        "Cookie": "; ".join(cookies),
+        "Content-Type": "application/x-www-form-urlencoded",
+    })
+    result = connection.getresponse()
+    result.read()
+    assert result.status != 403, f"{host}: proxied login POST failed CSRF (403)"
+    assert result.status in (200, 302), f"{host}: unexpected login status {result.status}"
+    connection.close()
+print("Nginx login GET, CSRF cookie, form token and POST passed for both public hosts.")
+PY
 
 # Verify the running container, not merely the Compose YAML, has the correct
 # public hosts and can complete the CSRF-protected login round trip.
