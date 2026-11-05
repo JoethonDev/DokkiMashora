@@ -174,12 +174,23 @@ for origin in expected:
     assert page.status_code == 200, f"{host} login GET: HTTP {page.status_code}"
     csrf = client.cookies.get(settings.CSRF_COOKIE_NAME)
     assert csrf, f"{host} login form did not set a CSRF cookie"
+    # The login form includes {% csrf_token %}; Django requires both the
+    # CSRF cookie and the matching submitted form token on every POST.
     response = client.post("/accounts/login/", {
         "username": "invalid-demo-user@example.invalid",
         "password": "intentionally-incorrect",
+        "csrfmiddlewaretoken": csrf.value,
     }, HTTP_ORIGIN=origin)
     assert response.status_code != 403, (
-        f"{host} valid-origin login form failed CSRF: HTTP {response.status_code}"
+        f"{host} login with valid CSRF token failed: HTTP {response.status_code}"
+    )
+    # Confirm the middleware still rejects a missing token; do not weaken CSRF.
+    rejected = client.post("/accounts/login/", {
+        "username": "invalid-demo-user@example.invalid",
+        "password": "intentionally-incorrect",
+    }, HTTP_ORIGIN=origin)
+    assert rejected.status_code == 403, (
+        f"{host} unexpectedly accepted a login POST without a CSRF token"
     )
 print("Codespaces demo: both public hosts, HTTPS cookies and CSRF checks passed.")
 PY
