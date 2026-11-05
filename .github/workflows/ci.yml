@@ -79,23 +79,16 @@ jobs:
       - name: Django check
         run: python manage.py check
 
-      - name: Verify Django uses injected settings when private .env is unreadable
+      - name: Verify Django uses injected settings when .env is unreadable
         run: |
           set -euo pipefail
-          # This recreates a Codespaces host-owned mode-600 .env while the
-          # Django app executes as a different, nonroot Linux user.
-          printf 'DJANGO_SECRET_KEY=private-unreadable-fixture\\n' > .env
-          chmod 600 .env
-          trap 'rm -f .env' EXIT
-          sudo -u nobody env \
-            PATH="$PATH" \
-            DJANGO_SETTINGS_MODULE=config.settings.test \
-            DJANGO_SECRET_KEY=ci-secret \
-            DJANGO_DEBUG=false \
-            DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1 \
-            DJANGO_CSRF_TRUSTED_ORIGINS=http://localhost:8000 \
-            DATABASE_URL=sqlite:///db.sqlite3 \
-            python -c 'import django; django.setup(); from django.conf import settings; from config.wsgi import application as wsgi; from config.asgi import application as asgi; assert settings.SECRET_KEY == "ci-secret"'
+          # The same runner user can traverse the repository. Restrict only
+          # the dotenv file, mimicking a private host file in a nonroot app.
+          printf 'DJANGO_SECRET_KEY=private-unreadable-fixture\n' > .env
+          chmod 000 .env
+          trap 'chmod 600 .env && rm -f .env' EXIT
+          python -c 'import django; django.setup(); from django.conf import settings; from config.wsgi import application as wsgi; from config.asgi import application as asgi; assert settings.SECRET_KEY == "ci-secret"'
+          python manage.py check
 
       - name: Verify migrations are in sync
         run: |
