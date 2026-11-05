@@ -46,7 +46,7 @@ compose=(
 "${compose[@]}" config --quiet
 
 # Validate the settings from the merged environment before starting anything.
-"${compose[@]}" config --format json | python3 -c '
+"${compose[@]}" --profile tunnel config --format json | python3 -c '
 import json, os, sys
 services = json.load(sys.stdin)["services"]
 env = services["web"]["environment"]
