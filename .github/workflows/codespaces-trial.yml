@@ -4,7 +4,6 @@ on:
   pull_request:
     paths:
       - ".devcontainer/**"
-      - "compose.codespaces.yml"
       - "CODESPACES_TRIAL.md"
       - "deploy/cloudflare/**"
       - "compose.application.yml"
@@ -60,16 +59,14 @@ jobs:
           docker compose --project-name dokkimashora-trial \
             --env-file .env \
             -f compose.application.yml \
-            -f compose.infrastructure.yml \
-            -f compose.codespaces.yml config --quiet
+            -f compose.infrastructure.yml config --quiet
 
       - name: Ensure Django permits internal health-check and forwarded hosts
         run: |
           docker compose --project-name dokkimashora-trial \
             --env-file .env \
             -f compose.application.yml \
-            -f compose.infrastructure.yml \
-            -f compose.codespaces.yml --profile tunnel config --format json > /tmp/dokkimashora-compose.json
+            -f compose.infrastructure.yml --profile tunnel config --format json > /tmp/dokkimashora-compose.json
           python - <<'PY'
           import json
           from pathlib import Path
@@ -124,6 +121,15 @@ jobs:
             echo "Host Python invocation found in Codespaces startup" >&2
             exit 1
           fi
+
+      - name: Ensure only the original Compose files are used
+        run: |
+          ! grep -q 'compose.codespaces.yml' .devcontainer/start-demo.sh
+          grep -q 'X-Forwarded-Proto \$django_forwarded_proto;' deploy/nginx.conf
+          grep -q 'map \$http_x_forwarded_proto \$django_forwarded_proto' deploy/nginx.conf
+          test ! -e compose.codespaces.yml
+          grep -q 'APP_CPUSET:-0-1' compose.application.yml
+          grep -q 'APP_CPUSET:-0-1' compose.infrastructure.yml
 
       - name: Validate startup shell syntax
         run: bash -n .devcontainer/start-demo.sh

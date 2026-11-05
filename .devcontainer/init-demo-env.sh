@@ -49,6 +49,7 @@ SITE_URL=https://demo.joethon.dev
 CACHE_URL=redis://redis:6379/1
 CELERY_BROKER_URL=redis://redis:6379/0
 APP_IMAGE_TAG=codespaces
+APP_CPUSET=0-1
 PORT=8000
 GUNICORN_WORKERS=3
 GUNICORN_THREADS=4

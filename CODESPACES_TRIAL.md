@@ -7,9 +7,10 @@ credentials, live SMTP configuration, or production R2 secrets.
 ## What this branch adds
 
 - A Codespaces dev container with Docker-in-Docker and port 80 forwarding.
-- A dedicated `compose.codespaces.yml` **override** over the unchanged
-  `compose.application.yml` + `compose.infrastructure.yml`.
-- Two-CPU-compatible container pinning and lower demo memory limits.
+- Reuse the two existing `compose.application.yml` and
+  `compose.infrastructure.yml` files; no Codespaces override file.
+  CPU pinning defaults to 0-1 unless `APP_CPUSET` is set in `.env`.
+- Two-CPU-compatible container pinning using existing service memory limits.
 - A required private `.env` file. Normal startup fails if it is missing.
   A separate, explicit one-time initializer can create it for **new** demos;
   it never overwrites existing credentials.
@@ -75,6 +76,7 @@ POSTGRES_DB=dokkimashora_demo
 POSTGRES_USER=dokkimashora
 POSTGRES_PASSWORD=<strong-random-hex-password>
 APP_IMAGE_TAG=codespaces
+APP_CPUSET=0-1
 DJANGO_SETTINGS_MODULE=config.settings.prod
 DJANGO_DEBUG=false
 DJANGO_SECRET_KEY=<strong-unique-key-at-least-50-characters>
@@ -115,7 +117,7 @@ To see the declared service env files without printing secrets:
 ```bash
 docker compose --env-file .env \
   -f compose.application.yml -f compose.infrastructure.yml \
-  -f compose.codespaces.yml config --no-env-resolution | grep -A 3 'env_file:'
+ config --no-env-resolution | grep -A 3 'env_file:'
 ```
 
 To see only variable **names** received by the running web container:
@@ -136,8 +138,7 @@ From the Codespace repository root, define a helper in the terminal:
 ```bash
 dc() {
   docker compose --project-name dokkimashora-trial --env-file .env \
-    -f compose.application.yml -f compose.infrastructure.yml \
-    -f compose.codespaces.yml "$@"
+    -f compose.application.yml -f compose.infrastructure.yml "$@"
 }
 dc ps
 dc exec web python manage.py seed_roles

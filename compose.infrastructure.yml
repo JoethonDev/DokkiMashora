@@ -46,7 +46,7 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
-    cpuset: "0-3"
+    cpuset: "${APP_CPUSET:-0-1}"
     cpu_shares: 1024
     mem_limit: 2048m
     networks: [app]
@@ -63,7 +63,7 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
-    cpuset: "0-3"
+    cpuset: "${APP_CPUSET:-0-1}"
     cpu_shares: 512
     mem_limit: 512m
     networks: [app]
@@ -89,7 +89,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
-    cpuset: "0-3"
+    cpuset: "${APP_CPUSET:-0-1}"
     cpu_shares: 1024
     mem_limit: 768m
     networks: [app]
@@ -115,7 +115,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
-    cpuset: "0-3"
+    cpuset: "${APP_CPUSET:-0-1}"
     cpu_shares: 512
     mem_limit: 768m
     networks: [app]
@@ -137,7 +137,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    cpuset: "0-3"
+    cpuset: "${APP_CPUSET:-0-1}"
     cpu_shares: 512
     mem_limit: 768m
     networks: [app]
@@ -161,7 +161,7 @@ services:
         condition: service_healthy
       celery-autosave:
         condition: service_healthy
-    cpuset: "0-3"
+    cpuset: "${APP_CPUSET:-0-1}"
     cpu_shares: 64
     mem_limit: 256m
     networks: [app]
@@ -180,7 +180,7 @@ services:
         condition: service_healthy
     security_opt:
       - no-new-privileges:true
-    cpuset: "0-3"
+    cpuset: "${APP_CPUSET:-0-1}"
     cpu_shares: 128
     mem_limit: 128m
     ulimits:
@@ -189,6 +189,21 @@ services:
         hard: 65535
     networks: [app]
     logging: *default-logging
+
+  # Optional Cloudflare Tunnel for supervised demo access.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles: ["tunnel"]
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: "${CF_TUNNEL_TOKEN:-}"
+    depends_on:
+      nginx:
+        condition: service_started
+    cpuset: "${APP_CPUSET:-0-1}"
+    mem_limit: 128m
+    networks: [app]
 
   backup:
     image: postgres:18
@@ -209,7 +224,7 @@ services:
       pg_dump --format=custom --file="/backups/db-$$stamp.dump";
       tar -czf "/backups/media-$$stamp.tar.gz" -C /media .;
       find /backups -type f \( -name "db-*.dump" -o -name "media-*.tar.gz" \) -mtime +84 -delete'
-    cpuset: "0-3"
+    cpuset: "${APP_CPUSET:-0-1}"
     cpu_shares: 128
     mem_limit: 384m
     networks: [app]

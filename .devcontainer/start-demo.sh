@@ -23,12 +23,6 @@ fi
 # Only create the empty directory: collectstatic writes to the named volume.
 mkdir -p .docker-data/postgres .docker-data/redis media staticfiles .demo-backups
 
-# Only this trial uses the Cloudflare TLS-terminating gateway. Preserve the
-# original Nginx config and adjust the trusted upstream scheme in a generated
-# ignored file, rather than modifying the production Nginx configuration.
-sed 's/proxy_set_header X-Forwarded-Proto $scheme;/proxy_set_header X-Forwarded-Proto https;/g' \
-  deploy/nginx.conf > .docker-data/nginx.codespaces.conf
-
 for attempt in $(seq 1 45); do
   if docker info >/dev/null 2>&1; then
     break
@@ -42,7 +36,7 @@ done
 
 compose=(
   docker compose --project-name dokkimashora-trial --env-file .env
-  -f compose.application.yml -f compose.infrastructure.yml -f compose.codespaces.yml
+  -f compose.application.yml -f compose.infrastructure.yml
 )
 
 "${compose[@]}" config --quiet
@@ -116,7 +110,7 @@ docker run --rm --user root --entrypoint sh \
   -v "$PWD/media:/demo-media" "$web_image" \
   -c 'chown app:app /demo-media'
 
-echo "Reloading the web and Nginx containers with the latest Codespaces settings..."
+echo "Reloading the web and Nginx containers with the latest settings..."
 # 'up' alone keeps existing containers (and their old environment) unchanged.
 # Recreate only these stateless services; never reset Postgres/Redis volumes.
 "${compose[@]}" up -d --no-build --force-recreate web nginx
@@ -136,6 +130,17 @@ if ! curl --fail --silent --show-error --retry 20 --retry-delay 3 \
   --retry-connrefused http://127.0.0.1/healthz >/dev/null; then
   "${compose[@]}" ps
   "${compose[@]}" logs --tail=80 web nginx
+  exit 1
+fi
+
+# Verify the actual Nginx route sees the forwarded HTTPS login host.
+forwarded_host="${CODESPACE_NAME}-80.app.github.dev"
+if ! curl --fail --silent --show-error \
+  -H "Host: ${forwarded_host}" \
+  -H "X-Forwarded-Proto: https" \
+  -o /dev/null http://127.0.0.1/accounts/login/; then
+  echo "ERROR: Forwarded HTTPS login GET failed through Nginx." >&2
+  "${compose[@]}" logs --tail=50 web nginx
   exit 1
 fi
 
@@ -182,7 +187,7 @@ PY
 echo "Local demo healthy. Use the Codespaces forwarded HTTPS port 80 for direct access."
 if grep -Eq '^CF_TUNNEL_TOKEN=[^[:space:]]+' .env; then
   echo "Tunnel sidecar configured. Use https://demo.joethon.dev when it connects."
-  echo "If the public domain is offline, inspect: docker compose --project-name dokkimashora-trial --env-file .env -f compose.application.yml -f compose.infrastructure.yml -f compose.codespaces.yml --profile tunnel logs --tail=40 cloudflared"
+  echo "If the public domain is offline, inspect: docker compose --project-name dokkimashora-trial --env-file .env -f compose.application.yml -f compose.infrastructure.yml --profile tunnel logs --tail=40 cloudflared"
 else
   echo "Public demo is OFFLINE: add CF_TUNNEL_TOKEN to the private .env and rerun this script."
   echo "Get the token from Cloudflare Zero Trust > Networks > Tunnels > dokkimashora-codespaces-demo."
