@@ -53,7 +53,8 @@ env = services["web"]["environment"]
 required = ("POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD",
             "DJANGO_SECRET_KEY", "DJANGO_SETTINGS_MODULE", "DJANGO_ALLOWED_HOSTS",
             "DJANGO_CSRF_TRUSTED_ORIGINS", "SITE_URL", "DATABASE_URL", "CACHE_URL",
-            "CELERY_BROKER_URL", "DJANGO_SECURE_COOKIES", "DJANGO_SECURE_SSL_REDIRECT")
+            "CELERY_BROKER_URL", "DJANGO_SECURE_COOKIES", "DJANGO_SECURE_SSL_REDIRECT",
+            "APP_IMAGE_TAG", "PORT", "GUNICORN_WORKERS", "GUNICORN_THREADS")
 missing = [k for k in required if not str(env.get(k, "")).strip()]
 if missing:
     sys.exit("ERROR: Missing required settings in .env: " + ", ".join(missing))
@@ -77,6 +78,17 @@ if not env["DATABASE_URL"].startswith(("postgresql://", "postgres://")) or "@pos
     sys.exit("ERROR: .env DATABASE_URL must point to the Docker Postgres service")
 if env["CACHE_URL"] != "redis://redis:6379/1" or env["CELERY_BROKER_URL"] != "redis://redis:6379/0":
     sys.exit("ERROR: .env must point Cache and Celery to the Docker Redis service")
+if env["PORT"] != "8000":
+    sys.exit("ERROR: .env PORT must be 8000 for the existing Nginx upstream")
+if services["web"]["image"] != "dokkimashora-app:" + env["APP_IMAGE_TAG"]:
+    sys.exit("ERROR: Docker image tag differs from the value in .env")
+postgres = services["postgres"]["environment"]
+for key in ("POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD"):
+    if postgres[key] != env[key]:
+        sys.exit("ERROR: Postgres is overriding " + key + " instead of using .env")
+tunnel_env = services["cloudflared"]["environment"]
+if tunnel_env.get("TUNNEL_TOKEN", "") != env.get("CF_TUNNEL_TOKEN", ""):
+    sys.exit("ERROR: Tunnel token differs from the one configured in .env")
 for service in ("web", "celery-submit", "celery-autosave", "beat"):
     e = services[service]["environment"]
     if any(e.get(k) != env.get(k) for k in required):
