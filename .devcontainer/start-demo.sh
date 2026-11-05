@@ -116,21 +116,29 @@ assert settings.CSRF_COOKIE_SECURE and settings.SESSION_COOKIE_SECURE
 assert not settings.SECURE_SSL_REDIRECT
 assert settings.DEBUG is False
 
-client = Client(enforce_csrf_checks=True, HTTP_HOST="demo.joethon.dev",
-                HTTP_X_FORWARDED_PROTO="https")
-page = client.get("/accounts/login/")
-assert page.status_code == 200, f"Login GET: HTTP {page.status_code}"
-csrf = client.cookies.get(settings.CSRF_COOKIE_NAME)
-assert csrf, "Login form did not set a CSRF cookie"
-response = client.post("/accounts/login/", {
-    "username": "invalid-demo-user@example.invalid",
-    "password": "intentionally-incorrect",
-}, HTTP_ORIGIN="https://demo.joethon.dev")
-assert response.status_code != 403, (
-    f"Valid-origin login form failed CSRF: HTTP {response.status_code}"
-)
-print("Codespaces demo: host, HTTPS cookies and CSRF login checks passed.")
+for origin in expected:
+    host = origin.removeprefix("https://")
+    client = Client(enforce_csrf_checks=True, HTTP_HOST=host,
+                    HTTP_X_FORWARDED_PROTO="https")
+    page = client.get("/accounts/login/")
+    assert page.status_code == 200, f"{host} login GET: HTTP {page.status_code}"
+    csrf = client.cookies.get(settings.CSRF_COOKIE_NAME)
+    assert csrf, f"{host} login form did not set a CSRF cookie"
+    response = client.post("/accounts/login/", {
+        "username": "invalid-demo-user@example.invalid",
+        "password": "intentionally-incorrect",
+    }, HTTP_ORIGIN=origin)
+    assert response.status_code != 403, (
+        f"{host} valid-origin login form failed CSRF: HTTP {response.status_code}"
+    )
+print("Codespaces demo: both public hosts, HTTPS cookies and CSRF checks passed.")
 PY
 
-echo "Demo healthy. Forward port 80 and set its visibility to Public only when ready."
-echo "Use https://demo.joethon.dev after configuring the Cloudflare gateway and tunnel token."
+echo "Local demo healthy. Use the Codespaces forwarded HTTPS port 80 for direct access."
+if grep -Eq '^CF_TUNNEL_TOKEN=[^[:space:]]+' .env.docker; then
+  echo "Tunnel sidecar configured. Use https://demo.joethon.dev when it connects."
+  echo "If the public domain is offline, inspect: docker compose --project-name dokkimashora-trial --env-file .env.docker -f compose.application.yml -f compose.infrastructure.yml -f compose.codespaces.yml --profile tunnel logs --tail=40 cloudflared"
+else
+  echo "Public demo is OFFLINE: add CF_TUNNEL_TOKEN to the private .env.docker and rerun this script."
+  echo "Get the token from Cloudflare Zero Trust > Networks > Tunnels > dokkimashora-codespaces-demo."
+fi
