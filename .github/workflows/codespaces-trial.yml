@@ -131,6 +131,13 @@ jobs:
           grep -q 'APP_CPUSET:-0-1' compose.application.yml
           grep -q 'APP_CPUSET:-0-1' compose.infrastructure.yml
 
+      - name: Guard against stale tunnel network and incomplete CSRF proxy checks
+        run: |
+          grep -q -- '--force-recreate cloudflared' .devcontainer/start-demo.sh
+          grep -q 'csrfmiddlewaretoken' .devcontainer/start-demo.sh
+          grep -q 'HTTPConnection("nginx", 80' .devcontainer/start-demo.sh
+          grep -q 'Set-Cookie response header' .devcontainer/start-demo.sh
+
       - name: Validate startup shell syntax
         run: bash -n .devcontainer/start-demo.sh
 
