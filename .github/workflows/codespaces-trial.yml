@@ -28,31 +28,32 @@ jobs:
           fi
           grep -q "Missing, empty or unreadable .env" /tmp/startup-no-env.log
 
-      - name: Prepare synthetic .env for Compose checks (CI only)
+      - name: Initialize a private .env once and protect existing credentials
         run: |
-          cat > .env <<'EOF'
-          POSTGRES_DB=dokkimashora_demo
-          POSTGRES_USER=dokkimashora
-          POSTGRES_PASSWORD=ci_only_docker_password
-          APP_IMAGE_TAG=codespaces
-          DJANGO_SETTINGS_MODULE=config.settings.prod
-          DJANGO_DEBUG=false
-          DJANGO_SECRET_KEY=ci-only-placeholder-with-adequate-length-for-protected-demo-test-123456
-          DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,demo.joethon.dev,dokkimashora-demo-check-80.app.github.dev
-          DJANGO_CSRF_TRUSTED_ORIGINS=https://demo.joethon.dev,https://dokkimashora-demo-check-80.app.github.dev
-          SITE_URL=https://demo.joethon.dev
-          DJANGO_SECURE_SSL_REDIRECT=false
-          DJANGO_SECURE_COOKIES=true
-          DATABASE_URL=postgresql://dokkimashora:ci_only_docker_password@postgres:5432/dokkimashora_demo
-          CACHE_URL=redis://redis:6379/1
-          CELERY_BROKER_URL=redis://redis:6379/0
-          PORT=8000
-          GUNICORN_WORKERS=3
-          GUNICORN_THREADS=4
-          DJANGO_SEED_DEMO=false
-          USE_R2_STORAGE=false
-          EOF
-          chmod 600 .env
+          bash -n .devcontainer/init-demo-env.sh
+          bash .devcontainer/init-demo-env.sh
+          test -s .env
+          test "$(stat -c %a .env)" = 600
+          grep -Fxq 'DJANGO_CSRF_TRUSTED_ORIGINS=https://demo.joethon.dev,https://dokkimashora-demo-check-80.app.github.dev' .env
+          if bash .devcontainer/init-demo-env.sh >/tmp/reinit.log 2>&1; then
+            echo "Initializer overwrote an existing .env" >&2
+            exit 1
+          fi
+          grep -q "already exists" /tmp/reinit.log
+
+      - name: Ensure existing PostgreSQL data never gets new credentials
+        run: |
+          mv .env .env.backup
+          mkdir -p .docker-data/postgres
+          touch .docker-data/postgres/PG_VERSION
+          if bash .devcontainer/init-demo-env.sh >/tmp/existing-db.log 2>&1; then
+            echo "Initializer incorrectly reset existing DB credentials" >&2
+            exit 1
+          fi
+          grep -q "Existing PostgreSQL data" /tmp/existing-db.log
+          test ! -e .env
+          rm .docker-data/postgres/PG_VERSION
+          mv .env.backup .env
 
       - name: Validate the merged Docker Compose configuration
         run: |
