@@ -45,8 +45,13 @@ compose=(
 
 "${compose[@]}" config --quiet
 
-# Validate the settings from the merged environment before starting anything.
-"${compose[@]}" --profile tunnel config --format json | python3 -c '
+# Run the configuration validator in the Python Docker image, not on the
+# Codespaces host (the base devcontainer does not provide python3).
+# No secrets are logged; Compose JSON is only piped to this local container.
+web_image="$("${compose[@]}" --profile tunnel config --format json |
+  docker run --rm -i --network none --read-only \
+    -e CODESPACE_NAME="$CODESPACE_NAME" \
+    python:3.11-slim python -c '
 import json, os, sys
 services = json.load(sys.stdin)["services"]
 env = services["web"]["environment"]
@@ -93,9 +98,9 @@ for service in ("web", "celery-submit", "celery-autosave", "beat"):
     e = services[service]["environment"]
     if any(e.get(k) != env.get(k) for k in required):
         sys.exit("ERROR: " + service + " has settings that differ from .env")
-print("Codespaces .env configuration validated.")
-'
-web_image="$("${compose[@]}" config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["services"]["web"]["image"])')"
+print(services["web"]["image"])
+')"
+echo "Codespaces .env configuration validated."
 
 
 if ! docker image inspect "$web_image" >/dev/null 2>&1; then
