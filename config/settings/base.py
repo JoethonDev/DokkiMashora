@@ -6,6 +6,7 @@ Environment variables are loaded from a .env file via django-environ.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import environ
@@ -45,9 +46,11 @@ env = environ.Env(
     YOUTUBE_API_KEY=(str, ""),
 )
 
-# Read .env file if it exists.
+# Read .env for local development when accessible. In Docker, Compose injects
+# variables from this same .env before launching the nonroot process; the
+# chmod-600 host file does not need to be readable inside the container.
 env_file = BASE_DIR / ".env"
-if env_file.exists():
+if env_file.is_file() and os.access(env_file, os.R_OK):
     environ.Env.read_env(str(env_file))
 
 # --- Paths -------------------------------------------------------------------

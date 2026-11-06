@@ -33,3 +33,6 @@ landing_rich.html
 tailwind.config.js.bak
 test_phase0_ui_regression.py
 test_rendered_html_lint.py
+
+.docker-data/
+.demo-backups/
