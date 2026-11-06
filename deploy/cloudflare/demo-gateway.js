@@ -67,7 +67,6 @@ async function originReady() {
     const response = await fetch('https://' + ORIGIN_HOST + '/healthz', {
       headers: { 'cache-control': 'no-cache' },
       redirect: 'manual',
-      cf: { cacheTtl: 0 }
     });
     return response.status === 200;
   } catch {
@@ -129,8 +128,10 @@ async function proxy(request) {
   headers.delete('x-forwarded-host');
   const upstream = new Request(target, { method: request.method, headers, body: ['GET', 'HEAD'].includes(request.method) ? undefined : request.body, redirect: 'manual' });
   let response;
+  // Let the Django origin's Cache-Control: private, no-store govern HTML.
+  // Forced cacheTtl (even zero) can strip its CSRF Set-Cookie header.
   try {
-    response = await fetch(upstream, { cf: { cacheTtl: 0 } });
+    response = await fetch(upstream);
   } catch {
     return offlinePage();
   }
