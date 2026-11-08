@@ -1,6 +1,6 @@
 {% load i18n %}
 <section class="card-surface"><div class="section-head"><div>
-      <p class="eyebrow">{% translate user_role context "role" %}</p>
+      <p class="eyebrow">{{ user.role_display }}</p>
       <h2>
         {% trans "Welcome back" %}
         ,

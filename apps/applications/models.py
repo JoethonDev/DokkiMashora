@@ -7,11 +7,17 @@ from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from apps.academics.constants import ENROLLMENT_STATUS_CHOICES
+from apps.accounts.constants import MATCH_METHOD_CHOICES, MATCH_METHOD_NONE
 from apps.core.models import TimeStampedModel
 from apps.students.models import StudentProfile
 
 from .constants import (
     ACTIVE_PROGRAM_APP_STATUSES,
+    APPLICATION_IMPORT_ROW_PARSED,
+    APPLICATION_IMPORT_ROW_STATUS_CHOICES,
+    APPLICATION_IMPORT_STATUS_CHOICES,
+    APPLICATION_IMPORT_STATUS_PENDING,
     DECISION_ACTION_CHOICES,
     DELIVERY_MODE_CHOICES,
     DELIVERY_MODE_ONLINE,
@@ -27,6 +33,7 @@ from .constants import (
     PROGRAM_TYPE_CHOICES,
     PROGRAM_TYPE_DIPLOMA,
 )
+from .import_errors import render_import_errors
 
 
 class ProgramApplication(TimeStampedModel):
@@ -374,6 +381,190 @@ class ApplicationDocumentUpload(TimeStampedModel):
 
     def __str__(self):
         return f"DocUpload for request {self.request_id}"
+
+
+class ApplicationImport(TimeStampedModel):
+    """A bulk historical application import batch from CSV."""
+
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="application_imports",
+        verbose_name=_("uploaded by"),
+    )
+    original_filename = models.CharField(_("original filename"), max_length=255)
+    file_hash = models.CharField(_("file hash"), max_length=64, blank=True)
+    status = models.CharField(
+        _("status"),
+        max_length=16,
+        choices=APPLICATION_IMPORT_STATUS_CHOICES,
+        default=APPLICATION_IMPORT_STATUS_PENDING,
+        db_index=True,
+    )
+    total_rows = models.IntegerField(_("total rows"), default=0)
+    matched_rows = models.IntegerField(_("matched rows"), default=0)
+    failed_rows = models.IntegerField(_("failed rows"), default=0)
+    created_rows = models.IntegerField(_("created rows"), default=0)
+    created_diploma_enrollments = models.IntegerField(
+        _("created diploma enrollments"), default=0
+    )
+    created_course_enrollments = models.IntegerField(
+        _("created course enrollments"), default=0
+    )
+    started_at = models.DateTimeField(_("started at"), null=True, blank=True)
+    completed_at = models.DateTimeField(_("completed at"), null=True, blank=True)
+    error_rows = models.JSONField(_("error rows"), default=list, blank=True)
+    error_summary = models.TextField(_("error summary"), blank=True)
+
+    class Meta:
+        verbose_name = _("application import")
+        verbose_name_plural = _("application imports")
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return f"{self.original_filename} ({self.get_status_display()})"
+
+
+class ApplicationImportRow(TimeStampedModel):
+    """A single row from a historical application import CSV."""
+
+    upload = models.ForeignKey(
+        ApplicationImport,
+        on_delete=models.CASCADE,
+        related_name="rows",
+        verbose_name=_("upload"),
+    )
+    row_number = models.PositiveIntegerField(_("row number"))
+    raw_data = models.JSONField(_("raw data"), default=dict, blank=True)
+    matched_student = models.ForeignKey(
+        StudentProfile,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="application_import_rows",
+        verbose_name=_("matched student"),
+    )
+    match_method = models.CharField(
+        _("match method"),
+        max_length=16,
+        choices=MATCH_METHOD_CHOICES,
+        default=MATCH_METHOD_NONE,
+        blank=True,
+    )
+    resolved_cohort = models.ForeignKey(
+        "academics.Cohort",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="application_import_rows",
+        verbose_name=_("resolved cohort"),
+    )
+    resolved_course_version = models.ForeignKey(
+        "academics.CourseVersion",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="application_import_rows",
+        verbose_name=_("resolved course version"),
+    )
+    resolved_entry_semester = models.ForeignKey(
+        "academics.Semester",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="application_import_rows",
+        verbose_name=_("resolved entry semester"),
+    )
+    resolved_entry_semester_ref = models.PositiveIntegerField(
+        _("resolved entry semester reference"),
+        null=True,
+        blank=True,
+    )
+    status = models.CharField(
+        _("status"),
+        max_length=16,
+        choices=APPLICATION_IMPORT_ROW_STATUS_CHOICES,
+        default=APPLICATION_IMPORT_ROW_PARSED,
+        db_index=True,
+    )
+    errors = models.JSONField(_("errors"), default=list, blank=True)
+    error_message = models.TextField(_("error message"), blank=True)
+    created_application = models.ForeignKey(
+        ProgramApplication,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="import_rows",
+        verbose_name=_("created application"),
+    )
+    created_diploma_enrollment = models.ForeignKey(
+        "academics.DiplomaEnrollment",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="application_import_rows",
+        verbose_name=_("created diploma enrollment"),
+    )
+    created_course_enrollment = models.ForeignKey(
+        "academics.CourseEnrollment",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="application_import_rows",
+        verbose_name=_("created course enrollment"),
+    )
+
+    class Meta:
+        verbose_name = _("application import row")
+        verbose_name_plural = _("application import rows")
+        ordering = ("upload", "row_number")
+        unique_together = (("upload", "row_number"),)
+
+    def __str__(self) -> str:
+        return f"Row {self.row_number} — {self.get_status_display()}"
+
+    @property
+    def student_label(self) -> str:
+        if self.matched_student_id:
+            return self.matched_student.full_name
+        return (
+            self.raw_data.get("email")
+            or self.raw_data.get("national_id")
+            or self.raw_data.get("phone")
+            or ""
+        )
+
+    @property
+    def program_label(self) -> str:
+        if self.resolved_cohort_id:
+            cohort = self.resolved_cohort
+            if cohort is not None:
+                return f"{cohort.diploma.title} · {cohort.name}"
+        if self.resolved_course_version_id:
+            version = self.resolved_course_version
+            if version is not None:
+                return f"{version.course.title} · {version.label}"
+        return self.raw_data.get("diploma_title") or self.raw_data.get("course_title") or ""
+
+    @property
+    def display_error_message(self) -> str:
+        if self.errors:
+            return render_import_errors(self.errors)
+        return self.error_message
+
+    @property
+    def outcome_label(self) -> str:
+        status = (self.raw_data.get("application_status") or "").strip().lower()
+        if status == PROGRAM_APP_STATUS_ACTIVATED:
+            enrollment_status = (self.raw_data.get("enrollment_status") or "").strip().lower()
+            if enrollment_status:
+                label = dict(ENROLLMENT_STATUS_CHOICES).get(enrollment_status, enrollment_status)
+                return f"{_('Activated')} · {label}"
+            return str(_("Activated"))
+        if status == PROGRAM_APP_STATUS_REJECTED:
+            return str(_("Rejected"))
+        return status
 
 
 # Legacy email action constants (re-exported from constants.py)

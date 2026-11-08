@@ -52,6 +52,28 @@ class AttendanceScanError(ValueError):
         self.code = code
 
 
+def _attendance_code_key(
+    enrollment: DiplomaEnrollment | CourseEnrollment,
+) -> tuple[str, int]:
+    return ("diploma", enrollment.pk) if isinstance(enrollment, DiplomaEnrollment) else ("course", enrollment.pk)
+
+
+def _build_attendance_code(
+    enrollment: DiplomaEnrollment | CourseEnrollment,
+    actor=None,
+) -> AttendanceCode:
+    token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    return AttendanceCode(
+        student_id=enrollment.student_id,
+        diploma_enrollment=enrollment if isinstance(enrollment, DiplomaEnrollment) else None,
+        course_enrollment=enrollment if isinstance(enrollment, CourseEnrollment) else None,
+        token_hash=token_hash,
+        display_code=token_hash[:12],
+        created_by=actor,
+    )
+
+
 @transaction.atomic
 def get_or_create_attendance_code_for_enrollment(
     enrollment: DiplomaEnrollment | CourseEnrollment,
@@ -75,19 +97,80 @@ def get_or_create_attendance_code_for_enrollment(
     if existing:
         return existing
 
-    token = secrets.token_urlsafe(32)
-    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    code = _build_attendance_code(locked, actor=actor)
+    code.save()
+    return code
 
-    code = AttendanceCode.objects.create(
-        student=locked.student,
-        diploma_enrollment=locked if isinstance(locked, DiplomaEnrollment) else None,
-        course_enrollment=locked if isinstance(locked, CourseEnrollment) else None,
-        token_hash=token_hash,
-        display_code=token_hash[:8],
-        created_by=actor,
+
+@transaction.atomic
+def get_or_create_attendance_codes_for_enrollments(
+    enrollments: list[DiplomaEnrollment | CourseEnrollment],
+    actor=None,
+) -> dict[tuple[str, int], AttendanceCode]:
+    """Create active attendance codes for many enrollments in bounded queries."""
+    requested: dict[tuple[str, int], DiplomaEnrollment | CourseEnrollment] = {}
+    for enrollment in enrollments:
+        if not enrollment.pk:
+            raise ValueError(_("Attendance codes require saved enrollments."))
+        requested[_attendance_code_key(enrollment)] = enrollment
+    if not requested:
+        return {}
+
+    diploma_ids = sorted(
+        enrollment_id
+        for kind, enrollment_id in requested
+        if kind == "diploma"
+    )
+    course_ids = sorted(
+        enrollment_id
+        for kind, enrollment_id in requested
+        if kind == "course"
+    )
+    locked_diploma = {
+        enrollment.pk: enrollment
+        for enrollment in DiplomaEnrollment.objects.select_for_update()
+        .filter(pk__in=diploma_ids)
+        .order_by("pk")
+    }
+    locked_course = {
+        enrollment.pk: enrollment
+        for enrollment in CourseEnrollment.objects.select_for_update()
+        .filter(pk__in=course_ids)
+        .order_by("pk")
+    }
+    if set(locked_diploma) != set(diploma_ids) or set(locked_course) != set(course_ids):
+        raise ValueError(_("One or more enrollments no longer exist."))
+
+    locked_by_key: dict[tuple[str, int], DiplomaEnrollment | CourseEnrollment] = {
+        ("diploma", enrollment_id): enrollment
+        for enrollment_id, enrollment in locked_diploma.items()
+    }
+    locked_by_key.update(
+        {("course", enrollment_id): enrollment for enrollment_id, enrollment in locked_course.items()}
     )
 
-    return code
+    existing: dict[tuple[str, int], AttendanceCode] = {}
+    for code in AttendanceCode.objects.filter(
+        Q(diploma_enrollment_id__in=diploma_ids)
+        | Q(course_enrollment_id__in=course_ids),
+        active=True,
+    ):
+        if code.diploma_enrollment_id:
+            existing[("diploma", code.diploma_enrollment_id)] = code
+        elif code.course_enrollment_id:
+            existing[("course", code.course_enrollment_id)] = code
+
+    missing_keys = [key for key in requested if key not in existing]
+    if missing_keys:
+        codes = [
+            _build_attendance_code(locked_by_key[key], actor=actor)
+            for key in missing_keys
+        ]
+        AttendanceCode.objects.bulk_create(codes, batch_size=500)
+        for key, code in zip(missing_keys, codes, strict=True):
+            existing[key] = code
+
+    return existing
 
 
 def build_attendance_qr_payload(attendance_code: AttendanceCode) -> str:

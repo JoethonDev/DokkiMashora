@@ -238,7 +238,14 @@ def workspace_navigation(user):
             _("Admissions"),
             _("Applications"),
             "applications:program_list",
-            ["applications:program_detail"],
+            [
+                "applications:program_detail",
+                "applications:admin_application_import",
+                "applications:admin_application_import_template",
+                "applications:admin_application_import_targets",
+                "applications:admin_application_import_detail",
+                "applications:admin_application_import_confirm",
+            ],
             "application",
         )
         _add(

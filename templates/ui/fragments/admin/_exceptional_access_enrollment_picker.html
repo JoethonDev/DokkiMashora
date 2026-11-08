@@ -15,7 +15,7 @@
   <div class="actions-row">
     <button type="submit" class="btn-secondary">{% trans "Search" %}</button>
     <span class="text-sm text-muted" role="status">
-      {% blocktranslate with count=page_obj.paginator.count %}{{ count }} eligible students{% endblocktranslate %}
+      {% blocktranslate count counter=page_obj.paginator.count %}{{ counter }} eligible student{% plural %}{{ counter }} eligible students{% endblocktranslate %}
     </span>
   </div>
 </form>

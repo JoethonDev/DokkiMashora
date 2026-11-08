@@ -7,7 +7,7 @@
     <span class="w-9 h-9 rounded-full bg-brand-soft text-brand font-black grid place-items-center shrink-0">{{ user.get_full_name|slice:":2"|upper }}</span>
     <span class="flex-1 text-start min-w-0">
       <strong class="block text-sm">{{ user.get_full_name|default:user.email }}</strong>
-      <small class="block text-brand-200/60 text-xs">{% translate role_label context "role" %}</small>
+      <small class="block text-brand-200/60 text-xs">{{ role_label }}</small>
     </span>
   </button>
   <div class="absolute start-0 end-0 bottom-14 bg-surface border border-line rounded-sm p-1.5 shadow-modal opacity-0 translate-y-2 scale-95 pointer-events-none transition-all duration-150"

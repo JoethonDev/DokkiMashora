@@ -21,7 +21,9 @@ from apps.students.models import StudentProfile
 from .constants import (
     ACTIVE_ROLE_GROUPS,
     GROUP_STUDENT,
+    ROLE_DISPLAY_LABELS,
     STAFF_ROLE_GROUPS,
+    role_display_label,
 )
 from .models import User
 from .services import lock_identity_writes
@@ -223,7 +225,7 @@ class UserEditForm(StyledFormMixin, forms.ModelForm):
     )
     role = forms.ChoiceField(
         label=_("Role"),
-        choices=[(role, _(role)) for role in ACTIVE_ROLE_GROUPS],
+        choices=[(role, ROLE_DISPLAY_LABELS.get(role, role)) for role in ACTIVE_ROLE_GROUPS],
         required=False,
         widget=forms.Select(),
     )
@@ -261,17 +263,19 @@ class UserEditForm(StyledFormMixin, forms.ModelForm):
             else set()
         )
         if staff_only:
-            self.fields["role"].choices = [(role, _(role)) for role in role_choices if role != GROUP_STUDENT]
+            self.fields["role"].choices = [
+                (role, role_display_label(role)) for role in role_choices if role != GROUP_STUDENT
+            ]
             for fname in self.STUDENT_ONLY_FIELDS:
                 if fname in self.fields:
                     del self.fields[fname]
             self._allowed_roles = tuple(role for role in role_choices if role != GROUP_STUDENT)
         else:
             if existing_staff_roles:
-                self.fields["role"].choices = [(role, _(role)) for role in role_choices]
+                self.fields["role"].choices = [(role, role_display_label(role)) for role in role_choices]
                 self._allowed_roles = role_choices
             else:
-                self.fields["role"].choices = [(GROUP_STUDENT, _(GROUP_STUDENT))]
+                self.fields["role"].choices = [(GROUP_STUDENT, role_display_label(GROUP_STUDENT))]
                 self._allowed_roles = (GROUP_STUDENT,)
         profile = getattr(self.instance, "student_profile", None)
         if not self.instance.pk:

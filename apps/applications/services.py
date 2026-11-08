@@ -15,6 +15,7 @@ from django.db.models import BooleanField, Case, Exists, IntegerField, OuterRef,
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext as _
+from django.utils.translation import gettext_noop
 
 from apps.academics.constants import ENROLLMENT_STATUS_ACTIVE, ENROLLMENT_STATUS_PENDING
 from apps.academics.models import Cohort, Course, CourseEnrollment, CourseVersion, DiplomaEnrollment
@@ -1666,17 +1667,17 @@ ACTION_ACTIVATE = "activate"
 ACTION_REVERT = "revert"
 
 APPLICATION_ACTION_LABELS = {
-    ACTION_ACCEPT: "Accept application",
-    ACTION_REJECT: "Reject application",
-    ACTION_MARK_PAID: "Record payment",
-    ACTION_REQUEST_PAYMENT: "Request payment",
-    ACTION_REQUEST_INTAKE: "Request survey",
-    ACTION_REQUEST_DOCUMENTS: "Request documents",
-    ACTION_REQUEST_INTERVIEW: "Request interview",
-    ACTION_INVITE_TO_ENTRANCE: "Assign entrance assessment",
-    ACTION_GRANT_WAIVER: "Grant payment waiver",
-    ACTION_ACTIVATE: "Activate application",
-    ACTION_REVERT: "Revert decision",
+    ACTION_ACCEPT: gettext_noop("Accept application"),
+    ACTION_REJECT: gettext_noop("Reject application"),
+    ACTION_MARK_PAID: gettext_noop("Record payment"),
+    ACTION_REQUEST_PAYMENT: gettext_noop("Request payment"),
+    ACTION_REQUEST_INTAKE: gettext_noop("Request survey"),
+    ACTION_REQUEST_DOCUMENTS: gettext_noop("Request documents"),
+    ACTION_REQUEST_INTERVIEW: gettext_noop("Request interview"),
+    ACTION_INVITE_TO_ENTRANCE: gettext_noop("Assign entrance assessment"),
+    ACTION_GRANT_WAIVER: gettext_noop("Grant payment waiver"),
+    ACTION_ACTIVATE: gettext_noop("Activate application"),
+    ACTION_REVERT: gettext_noop("Revert decision"),
 }
 
 APPLICATION_ACTION_CATEGORIES = {
@@ -2129,7 +2130,9 @@ def get_application_action_projection(application) -> dict:
                 "key": action,
                 # Translate per request locale; evaluating gettext in this
                 # module-level map would freeze labels at import-time language.
-                "label": _(APPLICATION_ACTION_LABELS.get(action, "Available action")),
+                "label": _(
+                    APPLICATION_ACTION_LABELS.get(action, gettext_noop("Available action"))
+                ),
                 "category": APPLICATION_ACTION_CATEGORIES.get(action, "workflow"),
                 "method": "POST",
                 "queue_relevant": action in APPLICATION_QUEUE_ACTIONS,

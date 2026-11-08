@@ -13,7 +13,7 @@ import re
 from pathlib import Path
 
 from django.utils import translation
-from django.utils.translation import gettext
+from django.utils.translation import gettext, gettext_noop
 from PIL import Image
 
 from .models import (
@@ -36,9 +36,9 @@ LOGO_TYPES = {
 }
 
 DESIGN_TEXT_DEFAULTS = (
-    ("title_text", "Certificate of Completion"),
-    ("intro_text", "The center certifies that"),
-    ("closing_text", "has successfully completed the requirements of"),
+    ("title_text", gettext_noop("Certificate of Completion")),
+    ("intro_text", gettext_noop("The center certifies that")),
+    ("closing_text", gettext_noop("has successfully completed the requirements of")),
 )
 DESIGN_TEXT_KEYS = tuple(key for key, _msgid in DESIGN_TEXT_DEFAULTS)
 DESIGN_EXTRA_TEXT_KEYS = ("signature_name", "signature_title", "footer_note")
@@ -53,7 +53,7 @@ DESIGN_TEXT_MAX_LENGTHS = {
 
 
 def normalize_language(language: str | None) -> str:
-    return "en" if language == "en" else "ar"
+    return "en" if str(language or "").lower().startswith("en") else "ar"
 
 
 def design_text_defaults(language: str | None) -> dict[str, str]:

@@ -14,6 +14,7 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.academics.models import Course, Diploma
 from apps.applications.constants import (
+    APPLICATION_IMPORT_MAX_FILE_SIZE_BYTES,
     DELIVERY_MODE_CHOICES,
     DELIVERY_MODE_ONLINE,
     PROGRAM_TYPE_CHOICES,
@@ -358,3 +359,25 @@ class StudentDocumentUploadForm(StyledFormMixin, forms.Form):
 
 def _get_ext(name: str) -> str:
     return os.path.splitext(name)[1].lower()
+
+
+class ApplicationImportForm(StyledFormMixin, forms.Form):
+    """Upload a CSV of historical applications for existing students."""
+
+    csv_file = forms.FileField(
+        label=_("CSV file"),
+        help_text=_("Historical applications CSV. Download the template below."),
+        widget=forms.FileInput(attrs={"accept": ".csv"}),
+    )
+
+    def clean_csv_file(self):
+        file = self.cleaned_data.get("csv_file")
+        if not file:
+            raise ValidationError(_("No file provided"))
+        if not file.name.lower().endswith(".csv"):
+            raise ValidationError(_("Only CSV files are accepted"))
+        if file.size > APPLICATION_IMPORT_MAX_FILE_SIZE_BYTES:
+            raise ValidationError(_("File size exceeds the maximum of 10 MB"))
+        if file.size == 0:
+            raise ValidationError(_("Uploaded file is empty"))
+        return file

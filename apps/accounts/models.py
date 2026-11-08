@@ -12,12 +12,14 @@ from apps.core.models import TimeStampedModel
 
 from .constants import (
     ACTIVE_ROLE_PRECEDENCE,
+    GROUP_SUPER_ADMIN,
     MATCH_METHOD_CHOICES,
     MATCH_METHOD_NONE,
     ROW_STATUS_CHOICES,
     ROW_STATUS_PARSED,
     UPLOAD_STATUS_CHOICES,
     UPLOAD_STATUS_PENDING,
+    role_display_label,
 )
 from .managers import UserManager
 
@@ -109,6 +111,14 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
             if candidate in groups:
                 return candidate
         return ""
+
+    @property
+    def role_display(self) -> str:
+        """Return the translated role label without changing the stored role."""
+        role = self.primary_role
+        if not role and self.is_superuser:
+            role = GROUP_SUPER_ADMIN
+        return role_display_label(role)
 
     @property
     def is_staff_member(self) -> bool:

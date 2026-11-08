@@ -56,7 +56,7 @@
           {% trans "Profile" %}
         </a>
       </nav>
-      {% include "ui/components/_profile_menu.html" with role_label="Student" %}
+      {% include "ui/components/_profile_menu.html" with role_label=user.role_display %}
     </aside>
     <section class="min-w-0 lg:col-start-2" :inert="sidebarOpen && !isDesktop ? 'true' : null">
       {% include "ui/components/_workspace_topbar.html" with show_global_search=True profile_url="students:details" profile_icon="&#9813;" section_label=_("Student portal") sidebar_id="student-sidebar" %}

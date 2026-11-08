@@ -34,7 +34,7 @@
         <div>
           <dt class="dt">{% trans "Role" %}</dt>
           <dd class="dd">
-            {% translate user_obj.primary_role context "role" %}
+            {{ user_obj.role_display }}
           </dd>
         </div>
       </dl>

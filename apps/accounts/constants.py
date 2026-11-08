@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.utils.translation import gettext_lazy as _
+from django.utils.translation import pgettext_lazy
 
 # Role group names.
 GROUP_SUPER_ADMIN = "Super Admin"
@@ -22,6 +23,28 @@ ALL_ROLE_GROUPS = (
     GROUP_REVIEWER,
     GROUP_SECRETARY,
 )
+
+# Role names are stored as stable English group identifiers. These lazy
+# translations provide the user-facing label without ever translating the
+# stored value used for authorization.
+ROLE_DISPLAY_LABELS = {
+    GROUP_SUPER_ADMIN: pgettext_lazy("role", "Super Admin"),
+    GROUP_ADMIN: pgettext_lazy("role", "Admin"),
+    GROUP_MODERATOR: pgettext_lazy("role", "Moderator"),
+    GROUP_TEACHER: pgettext_lazy("role", "Teacher"),
+    GROUP_STUDENT: pgettext_lazy("role", "Student"),
+    GROUP_REVIEWER: pgettext_lazy("role", "Reviewer"),
+    GROUP_SECRETARY: pgettext_lazy("role", "Secretary"),
+}
+STAFF_ROLE_FALLBACK = pgettext_lazy("role", "Staff")
+
+
+def role_display_label(role: str) -> str:
+    """Return the translated label for a stored role name, unchanged if unknown."""
+    if not role:
+        return str(STAFF_ROLE_FALLBACK)
+    return str(ROLE_DISPLAY_LABELS.get(role, role))
+
 
 # Teacher remains a historical group, but is not an active product role.
 ACTIVE_ROLE_GROUPS = (

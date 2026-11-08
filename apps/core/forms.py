@@ -51,6 +51,90 @@ class StyledFormMixin:
             widget.attrs["class"] = " ".join(sorted(existing | {canonical}))
 
 
+LANDING_SETTINGS_FIELD_LABELS = {
+    "hero_image": _("Hero image"),
+    "parenting_image": _("Parenting image"),
+    "diploma_image": _("Diploma image"),
+    "show_live_stats": _("Show live stats"),
+    "stat_value_1": _("Stat value 1"),
+    "stat_value_2": _("Stat value 2"),
+    "stat_value_3": _("Stat value 3"),
+    "stat_value_4": _("Stat value 4"),
+    "contact_email": _("Contact email"),
+    "contact_phone": _("Contact phone"),
+    "facebook_url": _("Facebook URL"),
+    "instagram_url": _("Instagram URL"),
+    "youtube_url": _("YouTube URL"),
+}
+
+CONTENT_FIELD_LABELS = {
+    "hero_eyebrow": _("Hero eyebrow"),
+    "hero_title": _("Hero title"),
+    "hero_body": _("Hero body"),
+    "hero_primary": _("Hero primary button"),
+    "hero_secondary": _("Hero secondary button"),
+    "intro_eyebrow": _("Introduction eyebrow"),
+    "intro_title": _("Introduction title"),
+    "intro_body": _("Introduction body"),
+    "benefits_eyebrow": _("Benefits eyebrow"),
+    "benefits_title": _("Benefits title"),
+    "benefits_body": _("Benefits body"),
+    "benefit_1_title": _("Benefit 1 title"),
+    "benefit_1_body": _("Benefit 1 body"),
+    "benefit_2_title": _("Benefit 2 title"),
+    "benefit_2_body": _("Benefit 2 body"),
+    "benefit_3_title": _("Benefit 3 title"),
+    "benefit_3_body": _("Benefit 3 body"),
+    "benefit_4_title": _("Benefit 4 title"),
+    "benefit_4_body": _("Benefit 4 body"),
+    "parenting_eyebrow": _("Parenting eyebrow"),
+    "parenting_title": _("Parenting title"),
+    "parenting_body": _("Parenting body"),
+    "diploma_eyebrow": _("Diploma eyebrow"),
+    "diploma_title": _("Diploma title"),
+    "diploma_body": _("Diploma body"),
+    "programs_eyebrow": _("Programs eyebrow"),
+    "programs_title": _("Programs title"),
+    "programs_body": _("Programs body"),
+    "diplomas_eyebrow": _("Diplomas eyebrow"),
+    "diplomas_title": _("Diplomas title"),
+    "diplomas_body": _("Diplomas body"),
+    "courses_eyebrow": _("Courses eyebrow"),
+    "courses_title": _("Courses title"),
+    "courses_body": _("Courses body"),
+    "status_open": _("Status open"),
+    "status_closed": _("Status closed"),
+    "success_groups": _("Success groups"),
+    "diploma_courses_label": _("Diploma courses label"),
+    "current_edition": _("Current edition"),
+    "entrance_note": _("Entrance note"),
+    "apply_now": _("Apply now field"),
+    "quote": _("Quote field"),
+    "quote_name": _("Quote name"),
+    "quote_role": _("Quote role"),
+    "cta_eyebrow": _("Call to action eyebrow"),
+    "cta_title": _("Call to action title"),
+    "cta_body": _("Call to action body"),
+    "cta_label": _("Call to action label"),
+    "footer_tagline": _("Footer tagline"),
+    "footer_address": _("Footer address"),
+    "footer_about_title": _("Footer about title"),
+    "footer_links_title": _("Footer links title"),
+    "footer_contact_title": _("Footer contact title"),
+    "footer_follow_title": _("Footer follow title"),
+    "footer_programs_link": _("Footer programs link"),
+    "footer_apply_link": _("Footer apply link"),
+    "footer_login_link": _("Footer login link"),
+    "footer_hours": _("Footer hours"),
+    "footer_email_placeholder": _("Footer email placeholder"),
+    "footer_phone_placeholder": _("Footer phone placeholder"),
+    "footer_note": _("Footer note"),
+    "stat_1": _("Stat 1"),
+    "stat_2": _("Stat 2"),
+    "stat_3": _("Stat 3"),
+    "stat_4": _("Stat 4"),
+}
+
 CONTENT_SECTIONS = {
     _("Hero"): (
         "hero_eyebrow",
@@ -153,6 +237,9 @@ class LandingPageSettingsForm(StyledFormMixin, forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        for name, label in LANDING_SETTINGS_FIELD_LABELS.items():
+            if name in self.fields:
+                self.fields[name].label = label
         for language, defaults in LANDING_CONTENT_DEFAULTS.items():
             for key, default in defaults.items():
                 value = (
@@ -160,7 +247,10 @@ class LandingPageSettingsForm(StyledFormMixin, forms.ModelForm):
                 )
                 field = forms.CharField(
                     label=_("%(key)s (%(language)s)")
-                    % {"key": key.replace("_", " ").title(), "language": language.upper()},
+                    % {
+                        "key": CONTENT_FIELD_LABELS.get(key, key.replace("_", " ").title()),
+                        "language": language.upper(),
+                    },
                     initial=value,
                     widget=forms.Textarea(attrs={"rows": 3})
                     if key.endswith(("body", "quote", "tagline"))

@@ -231,7 +231,9 @@
         var files = Array.prototype.map.call(input.files || [], function (file) {
           return file.name;
         });
-        name.textContent = files.length ? files.join("، ") : (name.dataset.emptyLabel || "");
+        var language = (document.documentElement.lang || "").toLowerCase();
+        var separator = language.indexOf("ar") === 0 ? "، " : ", ";
+        name.textContent = files.length ? files.join(separator) : (name.dataset.emptyLabel || "");
       }
 
       input.addEventListener("change", updateName);
