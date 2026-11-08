@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import csv
+import logging
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
@@ -14,7 +17,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods
 
-from apps.academics.models import Cohort
+from apps.academics.models import Cohort, CourseVersion
 from apps.audit.constants import (
     ACTION_APPLICATION_STATUS_CHANGE,
     SECTION_ADMISSIONS,
@@ -38,6 +41,9 @@ from apps.storage.services import StorageError, storage_service
 from apps.students.services import get_open_apply_targets
 
 from .constants import (
+    APPLICATION_IMPORT_HEADERS,
+    APPLICATION_IMPORT_STATUS_PREVIEWED,
+    APPLICATION_IMPORT_TEMPLATE_SAMPLES,
     DECISION_ACTION_ACCEPT,
     DECISION_ACTION_ACCOUNT_ACTIVATED,
     DECISION_ACTION_ACTIVATE,
@@ -78,8 +84,23 @@ from .documents import (
     request_documents_program_application,
     submit_application_documents,
 )
-from .forms import AdminDocumentRequestForm, RegistrationForm, StudentDocumentUploadForm
-from .models import ApplicationDocumentRequest, ApplicationDocumentUpload, ProgramApplication
+from .forms import (
+    AdminDocumentRequestForm,
+    ApplicationImportForm,
+    RegistrationForm,
+    StudentDocumentUploadForm,
+)
+from .imports import (
+    confirm_application_import,
+    create_application_import,
+    preview_application_import,
+)
+from .models import (
+    ApplicationDocumentRequest,
+    ApplicationDocumentUpload,
+    ApplicationImport,
+    ProgramApplication,
+)
 from .services import (
     ACTION_ACCEPT,
     ACTION_ACTIVATE,
@@ -112,6 +133,8 @@ from .services import (
     revert_program_application_decision,
     submit_registration,
 )
+
+logger = logging.getLogger(__name__)
 
 PUBLIC_REGISTRATION_SESSION_KEY = "registration_email"
 
@@ -645,7 +668,10 @@ def program_application_detail(request: HttpRequest, application_id: int) -> Htt
             except ValueError as exc:
                 messages.error(request, str(exc))
             else:
-                messages.success(request, _("Entrance exam assigned." if not send_email else "Entrance exam assigned. Invitation email queued."))
+                if send_email:
+                    messages.success(request, _("Entrance exam assigned. Invitation email queued."))
+                else:
+                    messages.success(request, _("Entrance exam assigned."))
             return redirect("applications:program_detail", application_id=application.id)
 
         if action == "grant_waiver" and is_admin(request.user) and ACTION_GRANT_WAIVER in allowed_actions:
@@ -1033,3 +1059,206 @@ def _get_profile_or_404(user):
     if not hasattr(user, "student_profile"):
         raise Http404(_("No student profile."))
     return user.student_profile
+
+
+# ---------------------------------------------------------------------------
+# Historical application bulk import
+# ---------------------------------------------------------------------------
+
+
+def _safe_csv_cell(value) -> str:
+    """Neutralize spreadsheet formula prefixes in exported label cells."""
+    text = str(value or "")
+    if text[:1] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + text
+    return text
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_http_methods(["GET"])
+def admin_application_import_template(request: HttpRequest) -> HttpResponse:
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = 'attachment; filename="historical_applications_template.csv"'
+    writer = csv.writer(response)
+    writer.writerow(APPLICATION_IMPORT_HEADERS)
+    writer.writerows(APPLICATION_IMPORT_TEMPLATE_SAMPLES)
+    return response
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_http_methods(["GET"])
+def admin_application_import_targets(request: HttpRequest) -> HttpResponse:
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = 'attachment; filename="historical_application_targets.csv"'
+    writer = csv.writer(response)
+    writer.writerow(
+        (
+            "program_type",
+            "diploma_title",
+            "cohort_name",
+            "cohort_id",
+            "course_title",
+            "course_id",
+            "course_version",
+            "course_version_id",
+            "active",
+            "start_date",
+            "end_date",
+        )
+    )
+    for cohort in Cohort.objects.select_related("diploma").order_by(
+        "diploma__title", "start_date", "id"
+    ):
+        writer.writerow(
+            (
+                "diploma",
+                _safe_csv_cell(cohort.diploma.title),
+                _safe_csv_cell(cohort.name),
+                cohort.id,
+                "",
+                "",
+                "",
+                "",
+                "yes" if cohort.is_active else "no",
+                cohort.start_date.isoformat() if cohort.start_date else "",
+                cohort.end_date.isoformat() if cohort.end_date else "",
+            )
+        )
+    for version in CourseVersion.objects.select_related("course").order_by(
+        "course__title", "-created_at", "-id"
+    ):
+        writer.writerow(
+            (
+                "course",
+                "",
+                "",
+                "",
+                _safe_csv_cell(version.course.title),
+                version.course_id,
+                _safe_csv_cell(version.label),
+                version.id,
+                "yes" if version.is_active else "no",
+                "",
+                "",
+            )
+        )
+    return response
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_http_methods(["GET", "POST"])
+def admin_application_import(request: HttpRequest) -> HttpResponse:
+    form = ApplicationImportForm()
+    if request.method == "POST":
+        form = ApplicationImportForm(request.POST, request.FILES)
+        if form.is_valid():
+            try:
+                content = request.FILES["csv_file"].read()
+                batch = create_application_import(
+                    original_filename=request.FILES["csv_file"].name,
+                    content=content,
+                    uploaded_by=request.user,
+                )
+                batch = preview_application_import(batch.id)
+            except ValueError as exc:
+                messages.error(request, str(exc))
+            except Exception:  # noqa: BLE001
+                logger.exception(
+                    "Application import upload failed for user_id=%s",
+                    request.user.pk,
+                )
+                messages.error(
+                    request,
+                    _("Failed to process the file. Please review it and try again."),
+                )
+            else:
+                if batch.status == APPLICATION_IMPORT_STATUS_PREVIEWED:
+                    messages.success(request, _("File parsed. Review the rows below."))
+                else:
+                    messages.warning(request, _("Some rows have errors. Review them below."))
+                return redirect(
+                    "applications:admin_application_import_detail",
+                    import_id=batch.id,
+                )
+    recent_imports = ApplicationImport.objects.select_related("uploaded_by").order_by(
+        "-created_at"
+    )[:5]
+    return render(
+        request,
+        "ui/pages/admin/application_import.html",
+        {"form": form, "recent_imports": recent_imports},
+    )
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_http_methods(["GET"])
+def admin_application_import_detail(request: HttpRequest, import_id: int) -> HttpResponse:
+    batch = get_object_or_404(
+        ApplicationImport.objects.select_related("uploaded_by"),
+        id=import_id,
+    )
+    rows = batch.rows.select_related(
+        "matched_student__user",
+        "resolved_cohort__diploma",
+        "resolved_course_version__course",
+        "resolved_entry_semester",
+    ).order_by("row_number")
+    search_value = request.GET.get("q", "").strip()
+    if search_value:
+        rows = rows.filter(
+            Q(matched_student__full_name__icontains=search_value)
+            | Q(matched_student__user__email__icontains=search_value)
+            | Q(matched_student__national_id__icontains=search_value)
+            | Q(raw_data__email__icontains=search_value)
+            | Q(raw_data__national_id__icontains=search_value)
+            | Q(raw_data__phone__icontains=search_value)
+            | Q(error_message__icontains=search_value)
+        )
+    page_obj, pagination_qs = paginate(request, rows, per_page=50)
+    return render(
+        request,
+        "ui/pages/admin/application_import.html",
+        {
+            "import_batch": batch,
+            "page_obj": page_obj,
+            "pagination_qs": pagination_qs,
+            "search_value": search_value,
+        },
+    )
+
+
+@login_required
+@role_required(*ROLE_SENIOR_STAFF)
+@require_http_methods(["POST"])
+def admin_application_import_confirm(request: HttpRequest, import_id: int) -> HttpResponse:
+    batch = get_object_or_404(ApplicationImport, id=import_id)
+    try:
+        batch = confirm_application_import(batch.id, confirmed_by=request.user)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "Application import confirmation failed for import_id=%s user_id=%s",
+            batch.id,
+            request.user.pk,
+        )
+        messages.error(
+            request,
+            _("Failed to confirm the import. Please review the file and try again."),
+        )
+    else:
+        messages.success(
+            request,
+            _("Historical imports created: %(applications)d applications, "
+              "%(diploma)d diploma enrollments, %(course)d course enrollments.")
+            % {
+                "applications": batch.created_rows,
+                "diploma": batch.created_diploma_enrollments,
+                "course": batch.created_course_enrollments,
+            },
+        )
+    return redirect("applications:admin_application_import_detail", import_id=batch.id)

@@ -1,0 +1,154 @@
+{% extends "ui/layouts/admin.html" %}
+{% load i18n %}
+{% block title %}
+  {% trans "Import historical applications" %}
+{% endblock %}
+{% block content %}
+  <div class="page-stack animate-enter-view">
+    {% trans "Admissions" as eyebrow %}
+    {% trans "Import historical applications" as title %}
+    {% trans "Load already-activated or rejected applications for existing students. Import the students first." as description %}
+    {% url 'applications:program_list' as applications_url %}
+    {% include "ui/components/_page_header.html" with eyebrow=eyebrow title=title description=description back_url=applications_url %}
+    {% if import_batch %}
+      <section class="card-surface flex flex-col gap-4">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">{% trans "Historical import" %}</p>
+            <h2>{{ import_batch.original_filename }}</h2>
+            <p class="text-muted">
+              {{ import_batch.get_status_display }}
+              · {{ import_batch.uploaded_by|default:"—" }}
+              · {{ import_batch.created_at|date:"DATE_FORMAT" }}
+            </p>
+          </div>
+          <div class="text-sm text-muted flex flex-col gap-1">
+            <span>{% trans "Total rows" %}: {{ import_batch.total_rows }}</span>
+            <span>{% trans "Matched rows" %}: {{ import_batch.matched_rows }}</span>
+            <span>{% trans "Failed rows" %}: {{ import_batch.failed_rows }}</span>
+          </div>
+        </div>
+        {% if import_batch.error_rows %}
+          <div class="rounded-sm border border-amber/30 bg-amber-soft px-4 py-3 text-sm text-amber"
+               role="alert">
+            <p class="m-0">{% trans "Rows with errors:" %} {{ import_batch.error_rows|join:", " }}</p>
+          </div>
+        {% elif import_batch.error_summary %}
+          <div class="rounded-sm border border-amber/30 bg-amber-soft px-4 py-3 text-sm text-amber"
+               role="alert">
+            <pre class="whitespace-pre-wrap break-words m-0">{{ import_batch.error_summary }}</pre>
+          </div>
+        {% endif %}
+        {% if import_batch.status == "failed" %}
+          <p class="text-red" role="alert">
+            {% trans "Every row must be valid before the import can be confirmed. Fix the CSV and upload it again." %}
+          </p>
+        {% endif %}
+        {% if import_batch.status == "confirmed" %}
+          <p class="text-muted">
+            {% blocktranslate with applications=import_batch.created_rows diploma=import_batch.created_diploma_enrollments course=import_batch.created_course_enrollments %}Created: {{ applications }} applications · {{ diploma }} diploma enrollments · {{ course }} course enrollments.{% endblocktranslate %}
+          </p>
+        {% endif %}
+        <form class="actions-row items-end" method="get">
+          <div class="search-field">
+            <label for="application-import-search" class="sr-only">{% trans "Search preview" %}</label>
+            <input id="application-import-search"
+                   name="q"
+                   value="{{ search_value }}"
+                   type="search"
+                   class="form-input"
+                   placeholder="{% trans 'Student name, email, national ID, or error…' %}">
+          </div>
+          <button class="btn-secondary" type="submit">{% trans "Search" %}</button>
+          <a class="btn-ghost"
+             href="{% url 'applications:admin_application_import_detail' import_batch.id %}">{% trans "Reset" %}</a>
+        </form>
+        {% include "ui/fragments/admin/_application_import_table.html" with page_obj=page_obj pagination_qs=pagination_qs results_id="application-import-results" empty_title=_("No rows found.") empty_message=_("Try a different search.") %}
+        {% if import_batch.status == "previewed" %}
+          <p class="text-sm text-muted">
+            {% trans "Confirming applies every matched row in the full file, not only the filtered rows shown above." %}
+          </p>
+          <form method="post"
+                action="{% url 'applications:admin_application_import_confirm' import_batch.id %}"
+                class="actions-row">
+            {% csrf_token %}
+            <button class="btn-primary" type="submit">{% trans "Confirm import" %}</button>
+          </form>
+        {% endif %}
+      </section>
+    {% endif %}
+    {% if form %}
+      <section class="card-surface max-w-form mx-auto w-full page-stack">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">{% trans "Upload" %}</p>
+            <h2>{% trans "Historical applications CSV" %}</h2>
+          </div>
+        </div>
+        <p class="text-muted">
+          {% trans "Students must already exist. Only activated and rejected historical applications are accepted. The import creates no emails, payments, documents, or certificates." %}
+        </p>
+        <p class="text-muted">
+          {% trans "For diploma rows, entry_semester defaults to the diploma's first semester and the resolved semester is shown in the preview. For courses with more than one version, set course_version explicitly." %}
+        </p>
+        <p class="text-muted">
+          {% trans "The downloaded template contains one sample diploma row and one sample course row. Delete both samples before uploading." %}
+        </p>
+        <form method="post" enctype="multipart/form-data" class="page-stack">
+          {% csrf_token %}
+          {% for field in form %}
+            {% include "ui/components/_field.html" %}
+          {% endfor %}
+          <button class="btn-primary" type="submit">{% trans "Upload and preview" %}</button>
+        </form>
+        <div class="actions-row">
+          <a class="btn-secondary"
+             href="{% url 'applications:admin_application_import_template' %}">{% trans "Download CSV template" %}</a>
+          <a class="btn-ghost"
+             href="{% url 'applications:admin_application_import_targets' %}">{% trans "Download target list" %}</a>
+          <a class="btn-ghost"
+             href="{% url 'accounts:admin_student_import' %}">{% trans "Import students first" %}</a>
+        </div>
+      </section>
+    {% endif %}
+    {% if recent_imports %}
+      <section class="card-surface flex flex-col gap-3">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">{% trans "History" %}</p>
+            <h2>{% trans "Recent imports" %}</h2>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th class="table-th">{% trans "File" %}</th>
+                <th class="table-th">{% trans "Status" %}</th>
+                <th class="table-th">{% trans "Rows" %}</th>
+                <th class="table-th">{% trans "Created" %}</th>
+                <th class="table-th">{% trans "Uploaded" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in recent_imports %}
+                <tr>
+                  <td class="table-td">
+                    <a class="text-brand no-underline hover:underline"
+                       href="{% url 'applications:admin_application_import_detail' item.id %}">{{ item.original_filename }}</a>
+                  </td>
+                  <td class="table-td">
+                    {% include "ui/components/_status.html" with code=item.status label=item.get_status_display %}
+                  </td>
+                  <td class="table-td">{{ item.total_rows }}</td>
+                  <td class="table-td">{{ item.created_rows }}</td>
+                  <td class="table-td">{{ item.created_at|date:"DATE_FORMAT" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    {% endif %}
+  </div>
+{% endblock %}

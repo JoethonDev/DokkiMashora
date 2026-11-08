@@ -156,7 +156,7 @@ def load_certificate_logo_data_uri(template: CertificateTemplate) -> str:
 
 def preview_field_values(template: CertificateTemplate) -> dict[str, str]:
     """Sample field values with the template's program names filled in."""
-    values = sample_field_values()
+    values = sample_field_values(language=template.language)
     if template.diploma_id:
         title = template.diploma.title
         values[FIELD_KEY_DIPLOMA] = title
@@ -289,13 +289,14 @@ def render_certificate_html(
         completion.diploma_enrollment,
         completion,
         certificate_number,
+        language=template.language,
     )
     # A visual design always wins over the legacy raw HTML body. Templates with
     # neither use the same visual defaults, so no HTML/CSS knowledge is needed.
     if template.body_html and not template.design:
         completion_date = _certificate_completion_date(completion)
         context = {
-            "student_name": user.full_name_ar or user.full_name or user.email,
+            "student_name": certificate_student_name(user, template.language),
             "diploma_title": completion.diploma_enrollment.cohort.diploma.title,
             "course_title": "",
             "course_version": "",
@@ -325,11 +326,12 @@ def render_course_certificate_html(
         student,
         enrollment,
         certificate_number,
+        language=template.language,
     )
     if template.body_html and not template.design:
         completion_date = enrollment.completed_at or enrollment.updated_at
         context = {
-            "student_name": user.full_name_ar or user.full_name or user.email,
+            "student_name": certificate_student_name(user, template.language),
             "diploma_title": "",
             "course_title": course.title,
             "course_version": enrollment.course_version.label,
@@ -348,18 +350,39 @@ def render_course_certificate_html(
     return render_certificate_design_html(template, field_values, for_pdf=True)
 
 
-def sample_field_values(*, today=None) -> dict[str, str]:
+def certificate_student_name(user, language: str | None = None) -> str:
+    """Pick the profile name that matches the certificate template language."""
+    if normalize_language(language) == "ar":
+        return user.full_name_ar or user.full_name or user.email
+    return user.full_name or user.full_name_ar or user.email
+
+
+def sample_field_values(*, today=None, language: str | None = None) -> dict[str, str]:
     """Sample values for preview rendering (never persisted, never issued)."""
     today = today or date.today()
+    language = normalize_language(language or translation.get_language())
+    if language == "en":
+        labels = {
+            FIELD_KEY_STUDENT_NAME: "Student Name",
+            FIELD_KEY_DIPLOMA: "Diploma Name",
+            FIELD_KEY_COURSE: "Course Name",
+            FIELD_KEY_COURSE_VERSION: "First Edition",
+            FIELD_KEY_SEMESTER: "First Semester",
+            FIELD_KEY_COHORT: "Cohort 2026",
+        }
+    else:
+        labels = {
+            FIELD_KEY_STUDENT_NAME: "اسم الطالب",
+            FIELD_KEY_DIPLOMA: "اسم الدبلومة",
+            FIELD_KEY_COURSE: "اسم الدورة",
+            FIELD_KEY_COURSE_VERSION: "الإصدار الأول",
+            FIELD_KEY_SEMESTER: "الفصل الأول",
+            FIELD_KEY_COHORT: "الدفعة 2026",
+        }
     return {
-        FIELD_KEY_STUDENT_NAME: "اسم الطالب",
+        **labels,
         FIELD_KEY_DATE: today.strftime("%Y-%m-%d"),
         FIELD_KEY_CERTIFICATE_NUMBER: "DM-2026-0001",
-        FIELD_KEY_DIPLOMA: "اسم الدبلومة",
-        FIELD_KEY_COURSE: "اسم الدورة",
-        FIELD_KEY_COURSE_VERSION: "الإصدار الأول",
-        FIELD_KEY_SEMESTER: "الفصل الأول",
-        FIELD_KEY_COHORT: "الدفعة 2026",
         FIELD_KEY_GRADUATION_DATE: today.strftime("%Y-%m-%d"),
     }
 
@@ -422,6 +445,7 @@ def resolve_certificate_field_values(
     certificate_number: str,
     *,
     today=None,
+    language: str | None = None,
 ) -> dict[str, str]:
     """Resolve every registered dynamic field for a generated certificate.
 
@@ -439,7 +463,7 @@ def resolve_certificate_field_values(
         .first()
     )
     return {
-        FIELD_KEY_STUDENT_NAME: user.full_name_ar or user.full_name or user.email,
+        FIELD_KEY_STUDENT_NAME: certificate_student_name(user, language),
         FIELD_KEY_DATE: (today or date.today()).strftime("%Y-%m-%d"),
         FIELD_KEY_CERTIFICATE_NUMBER: certificate_number,
         FIELD_KEY_DIPLOMA: diploma.title,
@@ -457,13 +481,14 @@ def resolve_course_certificate_field_values(
     certificate_number: str,
     *,
     today=None,
+    language: str | None = None,
 ) -> dict[str, str]:
     """Resolve every registered dynamic field for a course certificate."""
     user = student.user
     course = enrollment.course_version.course
     completion_date = enrollment.completed_at or enrollment.updated_at
     return {
-        FIELD_KEY_STUDENT_NAME: user.full_name_ar or user.full_name or user.email,
+        FIELD_KEY_STUDENT_NAME: certificate_student_name(user, language),
         FIELD_KEY_DATE: (today or date.today()).strftime("%Y-%m-%d"),
         FIELD_KEY_CERTIFICATE_NUMBER: certificate_number,
         FIELD_KEY_DIPLOMA: "",
@@ -622,6 +647,7 @@ def _render_diploma_certificate(
         enrollment,
         completion,
         cert.certificate_number,
+        language=template.language,
     )
     return _render_and_store_certificate(
         cert,
@@ -647,6 +673,7 @@ def _render_course_certificate(
         student,
         enrollment,
         cert.certificate_number,
+        language=template.language,
     )
     return _render_and_store_certificate(
         cert,

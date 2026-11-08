@@ -186,7 +186,7 @@ class LandingAnnouncement(TimeStampedModel):
         return self.title_ar or self.title_en or str(_("Landing announcement"))
 
     def localized(self, language_code: str) -> dict[str, str]:
-        language = "ar" if str(language_code or "").startswith("ar") else "en"
+        language = "ar" if str(language_code or "").lower().startswith("ar") else "en"
         other = "en" if language == "ar" else "ar"
         return {
             "title": getattr(self, f"title_{language}") or getattr(self, f"title_{other}"),
@@ -255,7 +255,7 @@ class LandingPageSettings(TimeStampedModel):
         return cls.objects.first() or cls.objects.create()
 
     def localized_content(self, language_code):
-        language = "ar" if language_code == "ar" else "en"
+        language = "ar" if str(language_code or "").lower().startswith("ar") else "en"
         return {**LANDING_CONTENT_DEFAULTS[language], **self.content.get(language, {})}
 
     def reset_to_defaults(self):

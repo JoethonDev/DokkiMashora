@@ -9,8 +9,6 @@ from typing import Any
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.models import Q
-from django.db.models.functions import Lower
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -29,16 +27,18 @@ from apps.audit.services import record_audit_event
 from apps.core.dates import parse_date
 from apps.core.permissions import validate_score
 from apps.core.phone import normalize_phone
-from apps.students.identity import normalize_identity_number
+from apps.students.matching import (  # noqa: F401 - re-exported for existing callers
+    build_student_matcher,
+    match_student,
+    normalize_national_id,
+    normalize_national_id_for_matching,
+)
 from apps.students.models import StudentProfile
 
 from .constants import (
     CURRENCY_EGP,
     MATCH_METHOD_AMBIGUOUS,
-    MATCH_METHOD_EMAIL,
-    MATCH_METHOD_NATIONAL_ID,
     MATCH_METHOD_NONE,
-    MATCH_METHOD_PHONE,
     MAX_CSV_ROWS,
     PAYMENT_STATUS_PAID,
     PAYMENT_STATUS_UNPAID,
@@ -61,25 +61,6 @@ from .models import PaymentRecord, PaymentUpload, PaymentUploadRow, PaymentWaive
 logger = logging.getLogger(__name__)
 
 
-# ponytail: delegate to country-aware normalize_identity_number, default EG for CSV imports
-def normalize_national_id(value: str) -> str:
-    """Normalize identity value for CSV matching (EG default)."""
-    return normalize_identity_number("EG", value)
-
-
-def normalize_national_id_for_matching(value: str) -> list[str]:
-    """Return normalized variants to try when matching.
-
-    Uses country-aware normalize_identity_number (default EG).
-    For passport IDs, an uppercased variant is also returned.
-    """
-    stripped = normalize_national_id(value)
-    variants = [stripped]
-    if any(c.isalpha() for c in stripped):
-        variants.append(normalize_identity_number("EG", stripped.upper()))
-    return variants
-
-
 def validate_csv_content(content: bytes) -> list[dict[str, str]]:
     text = content.decode("utf-8-sig")
     reader = csv.DictReader(io.StringIO(text))
@@ -98,145 +79,6 @@ def validate_csv_content(content: bytes) -> list[dict[str, str]]:
         cleaned = {k.strip().lower(): (v or "").strip() for k, v in row.items()}
         rows.append(cleaned)
     return rows
-
-
-def match_student(row: dict[str, str]) -> tuple[StudentProfile | None, str, str]:
-    identity_variants = [
-        item for item in normalize_national_id_for_matching(row.get("national_id", "")) if item
-    ]
-    email = row.get("email", "").strip().lower()
-    phone = normalize_phone(row.get("phone", ""))
-    candidates: dict[int, StudentProfile] = {}
-    sources: dict[int, str] = {}
-
-    if identity_variants:
-        qs = StudentProfile.objects.filter(national_id=identity_variants[0])
-        if qs.count() == 1:
-            s = qs.first()
-            candidates[s.id] = s
-            sources[s.id] = "national_id"
-        elif qs.count() > 1:
-            return None, MATCH_METHOD_AMBIGUOUS, f"Multiple students match national ID {identity_variants[0]}"
-        elif len(identity_variants) > 1:
-            qs = StudentProfile.objects.filter(national_id=identity_variants[1])
-            if qs.count() == 1:
-                s = qs.first()
-                candidates[s.id] = s
-                sources[s.id] = "national_id"
-            elif qs.count() > 1:
-                return None, MATCH_METHOD_AMBIGUOUS, f"Multiple students match national ID {identity_variants[0]}"
-
-    if email:
-        qs = StudentProfile.objects.filter(user__email__iexact=email)
-        if qs.count() == 1:
-            s = qs.first()
-            candidates[s.id] = s
-            sources[s.id] = sources.get(s.id, "") + "+email"
-        elif qs.count() > 1:
-            return None, MATCH_METHOD_AMBIGUOUS, f"Multiple students match email {email}"
-
-    if phone:
-        qs = StudentProfile.objects.filter(phone=phone)
-        if qs.count() == 1:
-            s = qs.first()
-            candidates[s.id] = s
-            sources[s.id] = sources.get(s.id, "") + "+phone"
-        elif qs.count() > 1:
-            return None, MATCH_METHOD_AMBIGUOUS, f"Multiple students match phone {phone}"
-
-    if not candidates:
-        return None, MATCH_METHOD_NONE, "No student found matching any identifier"
-
-    if len(candidates) > 1:
-        return None, MATCH_METHOD_AMBIGUOUS, (
-            f"Conflicting identifiers match {len(candidates)} different students"
-        )
-
-    match = next(iter(candidates.values()))
-    method_str = sources.get(match.id, "")
-    if "national_id" in method_str:
-        method = MATCH_METHOD_NATIONAL_ID
-    elif "email" in method_str:
-        method = MATCH_METHOD_EMAIL
-    elif "phone" in method_str:
-        method = MATCH_METHOD_PHONE
-    else:
-        method = MATCH_METHOD_NONE
-    return match, method, ""
-
-
-def _build_student_matcher(rows):
-    """Build one set-based identifier index for a bounded CSV batch."""
-    identities = set()
-    emails = set()
-    phones = set()
-    for row in rows:
-        identities.update(
-            item for item in normalize_national_id_for_matching(row.get("national_id", "")) if item
-        )
-        email = row.get("email", "").strip().lower()
-        phone = normalize_phone(row.get("phone", ""))
-        if email:
-            emails.add(email)
-        if phone:
-            phones.add(phone)
-
-    candidates = (
-        StudentProfile.objects.select_related("user")
-        .annotate(normalized_email_db=Lower("user__email"))
-        .filter(
-            Q(national_id__in=identities)
-            | Q(normalized_email_db__in=emails)
-            | Q(phone__in=phones)
-        )
-    )
-    by_identity = {}
-    by_email = {}
-    by_phone = {}
-    for student in candidates:
-        if student.national_id:
-            by_identity.setdefault(student.national_id, []).append(student)
-        email = (student.user.email or "").strip().lower()
-        if email:
-            by_email.setdefault(email, []).append(student)
-        if student.phone:
-            by_phone.setdefault(normalize_phone(student.phone), []).append(student)
-
-    def resolve(row):
-        matches = {}
-        methods = {}
-        identity_values = [
-            item for item in normalize_national_id_for_matching(row.get("national_id", "")) if item
-        ]
-        email = row.get("email", "").strip().lower()
-        phone = normalize_phone(row.get("phone", ""))
-        for value in identity_values:
-            students = by_identity.get(value, [])
-            if len(students) > 1:
-                return None, MATCH_METHOD_AMBIGUOUS, f"Multiple students match national ID {value}"
-            if students:
-                matches[students[0].pk] = students[0]
-                methods[students[0].pk] = MATCH_METHOD_NATIONAL_ID
-        for value, index, method, label in (
-            (email, by_email, MATCH_METHOD_EMAIL, "email"),
-            (phone, by_phone, MATCH_METHOD_PHONE, "phone"),
-        ):
-            if not value:
-                continue
-            students = index.get(value, [])
-            if len(students) > 1:
-                return None, MATCH_METHOD_AMBIGUOUS, f"Multiple students match {label} {value}"
-            if students:
-                matches[students[0].pk] = students[0]
-                methods.setdefault(students[0].pk, method)
-        if not matches:
-            return None, MATCH_METHOD_NONE, "No student found matching any identifier"
-        if len(matches) > 1:
-            return None, MATCH_METHOD_AMBIGUOUS, "Conflicting identifiers match different students"
-        student = next(iter(matches.values()))
-        return student, methods[student.pk], ""
-
-    return resolve
 
 
 def _lookup_application(data: dict, student: StudentProfile) -> tuple:
@@ -327,7 +169,7 @@ def preview_upload(upload_id: int) -> PaymentUpload:
     matched = unmatched = failed = 0
 
     parsed_rows = list(upload.rows.filter(status=ROW_STATUS_PARSED))
-    resolve_student = _build_student_matcher([row.raw_data for row in parsed_rows])
+    resolve_student = build_student_matcher([row.raw_data for row in parsed_rows])
     for row in parsed_rows:
         data = row.raw_data
         student, method, error = resolve_student(data)
@@ -361,8 +203,9 @@ def preview_upload(upload_id: int) -> PaymentUpload:
             matched += 1
         else:
             row.status = ROW_STATUS_FAILED if method != MATCH_METHOD_AMBIGUOUS else ROW_STATUS_AMBIGUOUS
-            row.error_message = error
-            errors.append(f"Row {row.row_number}: {error}")
+            error_text = str(error) if error else ""
+            row.error_message = error_text
+            errors.append(f"Row {row.row_number}: {error_text}")
             if method == MATCH_METHOD_NONE:
                 unmatched += 1
             else:
@@ -439,14 +282,16 @@ def confirm_upload(upload_id: int, confirmed_by) -> PaymentUpload:
         raise ValueError(_("No rows matched; nothing to import"))
 
     rows = list(upload.rows.select_for_update().filter(status=ROW_STATUS_MATCHED).select_related("matched_student"))
-    resolve_student = _build_student_matcher([row.raw_data for row in rows])
+    resolve_student = build_student_matcher([row.raw_data for row in rows])
     errors: list[str] = []
     plans: list[tuple[PaymentUploadRow, StudentProfile, Any, DiplomaEnrollment | None, CourseEnrollment | None, PaymentRecord | None]] = []
     for row in rows:
         try:
             student, method, error = resolve_student(row.raw_data)
             if student is None or student.id != row.matched_student_id:
-                raise ValueError(error or _("No student found matching the row identifiers."))
+                raise ValueError(
+                    str(error) if error is not None else _("No student found matching the row identifiers.")
+                )
             app, app_error = _lookup_application(row.raw_data, student)
             if app_error:
                 raise ValueError(app_error)

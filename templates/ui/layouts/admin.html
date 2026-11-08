@@ -42,7 +42,7 @@
           {% endfor %}
         {% endfor %}
       </nav>
-      {% include "ui/components/_profile_menu.html" with role_label=user.primary_role|default:"Staff" %}
+      {% include "ui/components/_profile_menu.html" with role_label=user.role_display %}
     </aside>
     {% endif %}
     <section class="min-w-0 {% if not HIDE_STAFF_SIDEBAR %}lg:col-start-2{% endif %}" :inert="sidebarOpen && !isDesktop ? 'true' : null">

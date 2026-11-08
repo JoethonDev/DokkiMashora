@@ -36,6 +36,8 @@ _SUCCESS = frozenset(
         "released",
         "sent",
         "matched",
+        "created",
+        "confirmed",
         "published",
         "graded",
         "present",
@@ -68,6 +70,7 @@ _WARNING = frozenset(
         "late",
         "restricted",
         "unmatched",
+        "ambiguous",
         "absent",
         "awaiting_release",
     }

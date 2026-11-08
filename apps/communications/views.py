@@ -46,7 +46,9 @@ from .constants import (
     DESIGN_BRANDED,
     DESIGN_CHOICES,
     EMAIL_STATUS_CHOICES,
+    RECIPIENT_SOURCE_LABELS,
     SAMPLE_CONTEXT_BY_SLUG,
+    SAMPLE_CONTEXT_BY_SLUG_EN,
     TEMPLATE_SLUGS,
 )
 from .email_message import EmailMessage as DeliveryLog
@@ -172,7 +174,8 @@ def bulk_email_preview(request):
     )
     source_counts: dict[str, int] = {}
     for r in recipients:
-        source_counts[r["source"]] = source_counts.get(r["source"], 0) + 1
+        source = str(RECIPIENT_SOURCE_LABELS.get(r["source"], r["source"]))
+        source_counts[source] = source_counts.get(source, 0) + 1
 
     if request.method == "POST":
         if not recipients:
@@ -415,7 +418,9 @@ def admin_template_preview(request, slug):
     design = request.GET.get("design", template.design)
     if design not in dict(DESIGN_CHOICES):
         design = template.design
-    context = SAMPLE_CONTEXT_BY_SLUG.get(slug, {})
+    language = (request.LANGUAGE_CODE or "ar").split("-", 1)[0]
+    samples = SAMPLE_CONTEXT_BY_SLUG_EN if language == "en" else SAMPLE_CONTEXT_BY_SLUG
+    context = {**samples.get(slug, {}), "language_code": language}
     try:
         rendered_subject, rendered_body = template.render(context)
     except Exception:

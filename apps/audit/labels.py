@@ -17,6 +17,8 @@ from typing import Any
 from django.utils.translation import gettext
 from django.utils.translation import gettext_lazy as _
 
+from apps.accounts.constants import GROUP_SUPER_ADMIN, role_display_label
+
 from .constants import (
     ACTION_SECTION_PREFIXES,
     AUDIT_ACTION_CHOICES,
@@ -314,10 +316,12 @@ def actor_display(event: Any) -> str:
 def actor_role_display(event: Any) -> str:
     snapshot = getattr(event, "actor_role", "") or ""
     if snapshot:
-        return snapshot
+        return role_display_label(snapshot)
     actor = getattr(event, "actor", None)
     role = getattr(actor, "primary_role", "") if actor is not None else ""
-    return str(role or "")
+    if not role and getattr(actor, "is_superuser", False):
+        role = GROUP_SUPER_ADMIN
+    return role_display_label(role) if role else ""
 
 
 def target_display(event: Any) -> str:

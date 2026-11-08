@@ -135,6 +135,7 @@ from .constants import (
     GROUP_SUPER_ADMIN,
     GROUP_TEACHER,
     STAFF_ROLE_GROUPS,
+    role_display_label,
 )
 from .forms import ActivationConfirmForm, EmailAuthenticationForm, ProfileForm, UserEditForm, UserUploadForm
 from .models import User, UserUpload
@@ -272,8 +273,6 @@ def dashboard_router(request: HttpRequest) -> HttpResponse:
 @role_required(GROUP_SUPER_ADMIN, GROUP_ADMIN)
 def admin_dashboard(request: HttpRequest) -> HttpResponse:
     context = _admin_dashboard_data()
-    context["user_role"] = request.user.primary_role or _("Super Admin")
-    context["show_role_label"] = True
     context["dashboard_kind"] = "admin"
     return render(request, "ui/pages/admin/dashboard.html", context)
 
@@ -326,18 +325,13 @@ def secretary_dashboard(request: HttpRequest) -> HttpResponse:
             "upcoming_sessions": sessions,
             "session_count": AttendanceSession.objects.filter(date=today).count(),
             "attendance_exception_count": attendance_exception_count,
-            "user_role": request.user.primary_role,
-            "show_role_label": True,
         },
     )
 
 
 # --- Helpers ----------------------------------------------------------------
 def _dashboard_context(user: User) -> dict:
-    ctx = {
-        "user_role": user.primary_role or _("Super Admin"),
-        "show_role_label": True,
-    }
+    ctx = {}
     if user.primary_role == GROUP_MODERATOR:
         ctx["assignment_count"] = ModeratorAssignment.objects.filter(moderator=user, active=True).count()
     elif user.is_staff or user.is_superuser:
@@ -819,7 +813,8 @@ def admin_staff_list(request):
     page_obj, pagination_qs = paginate(request, users, per_page=15)
 
     role_choices = [
-        {"value": name, "label": _(name), "selected": role_filter == name} for name in staff_role_names
+        {"value": name, "label": role_display_label(name), "selected": role_filter == name}
+        for name in staff_role_names
     ]
     status_choices = [
         {"value": value, "label": _(label), "selected": status_filter == value}

@@ -40,6 +40,7 @@ AUDIT_SECTION_KEYS = tuple(key for key, _label in AUDIT_SECTION_CHOICES)
 # section explicitly. Exact action constants are resolved first.
 ACTION_SECTION_PREFIXES = {
     "application.": SECTION_ADMISSIONS,
+    "application_import.": SECTION_ADMISSIONS,
     "admission.": SECTION_ADMISSIONS,
     "entrance_exam.": SECTION_ADMISSIONS,
     "intake_": SECTION_ADMISSIONS,
@@ -79,6 +80,8 @@ ACTION_APPLICATION_ENTRANCE_SUBMITTED = "application.entrance_submitted"
 ACTION_APPLICATION_INTERVIEW_REQUESTED = "application.interview_requested"
 ACTION_APPLICATION_PAID = "application.paid"
 ACTION_APPLICATION_DECISION_REVERTED = "application.decision_reverted"
+ACTION_APPLICATION_IMPORT_PREVIEWED = "application_import.previewed"
+ACTION_APPLICATION_IMPORT_CONFIRMED = "application_import.confirmed"
 ACTION_STUDENT_ACCESS_CHANGE = "student.access_change"
 ACTION_ENROLLMENT_CHANGE = "enrollment.change"
 ACTION_ENROLLMENT_DELETED = "enrollment.deleted"
@@ -211,6 +214,8 @@ AUDIT_ACTION_CHOICES = (
     (ACTION_APPLICATION_INTERVIEW_REQUESTED, _("Interview requested")),
     (ACTION_APPLICATION_PAID, _("Application payment recorded")),
     (ACTION_APPLICATION_DECISION_REVERTED, _("Application decision reverted")),
+    (ACTION_APPLICATION_IMPORT_PREVIEWED, _("Historical application import previewed")),
+    (ACTION_APPLICATION_IMPORT_CONFIRMED, _("Historical application import confirmed")),
     (ACTION_ENTRANCE_EXAM_COMPLETED, _("Entrance exam completed")),
     (ACTION_ENTRANCE_EXAM_CREATED, _("Entrance exam created")),
     (ACTION_ENTRANCE_EXAM_UPDATED, _("Entrance exam updated")),
@@ -427,6 +432,8 @@ TARGET_TYPE_LABELS = {
     "email_config": _("Email configuration"),
     "UserUpload": _("User import"),
     "user_upload": _("User import"),
+    "ApplicationImport": _("Historical application import"),
+    "application_import": _("Historical application import"),
     "diploma": _("Diploma"),
     "Diploma": _("Diploma"),
     "cohort": _("Cohort"),

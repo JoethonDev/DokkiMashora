@@ -1,0 +1,104 @@
+{% extends "ui/components/_results_shell.html" %}
+{% load i18n ui_tags %}
+{% block results_heading %}
+  <p class="eyebrow">{% trans "Preview" %}</p>
+  <h3>{% trans "Rows" %}</h3>
+{% endblock %}
+{% block table_head %}
+  <th class="table-th">{% trans "Row" %}</th>
+  <th class="table-th">{% trans "Student" %}</th>
+  <th class="table-th">{% trans "Program" %}</th>
+  <th class="table-th">{% trans "Outcome" %}</th>
+  <th class="table-th">{% trans "Dates" %}</th>
+  <th class="table-th">{% trans "Status" %}</th>
+  <th class="table-th">{% trans "Error" %}</th>
+{% endblock %}
+{% block table_body %}
+  {% for row in page_obj %}
+    <tr>
+      <td class="table-td text-muted">{{ row.row_number }}</td>
+      <td class="table-td">
+        {% if row.matched_student %}
+          <div class="flex flex-col gap-1">
+            <strong>{{ row.matched_student.full_name }}</strong>
+            <small><span dir="ltr" class="inline-block">{{ row.matched_student.user.email }}</span></small>
+          </div>
+        {% else %}
+          <span class="text-muted">{{ row.student_label|default:"—" }}</span>
+        {% endif %}
+      </td>
+      <td class="table-td break-words">
+        <div class="flex flex-col gap-1">
+          <span>{{ row.program_label|default:"—" }}</span>
+          {% if row.resolved_entry_semester %}
+            <small class="text-muted">{% trans "Entry semester" %}: {{ row.resolved_entry_semester.title }}</small>
+          {% endif %}
+        </div>
+      </td>
+      <td class="table-td">
+        <div class="flex flex-col gap-1">
+          <span>{{ row.outcome_label|default:"—" }}</span>
+          {% if row.raw_data.rejection_reason %}
+            <small class="text-muted break-words">{{ row.raw_data.rejection_reason }}</small>
+          {% endif %}
+        </div>
+      </td>
+      <td class="table-td">
+        <div class="flex flex-col gap-1 text-xs text-muted">
+          <span>{% trans "Applied" %}: <span dir="ltr">{{ row.raw_data.application_date|default:"—" }}</span></span>
+          {% if row.raw_data.activated_at %}
+            <span>{% trans "Activated" %}: <span dir="ltr">{{ row.raw_data.activated_at }}</span></span>
+          {% endif %}
+          {% if row.raw_data.expires_at %}
+            <span>{% trans "Expires" %}: <span dir="ltr">{{ row.raw_data.expires_at }}</span></span>
+          {% endif %}
+          {% if row.raw_data.completed_at %}
+            <span>{% trans "Completed" %}: <span dir="ltr">{{ row.raw_data.completed_at }}</span></span>
+          {% endif %}
+        </div>
+      </td>
+      <td class="table-td">
+        {% include "ui/components/_status.html" with code=row.status label=row.get_status_display %}
+      </td>
+      <td class="table-td break-words">
+        {% if row.display_error_message %}<span class="text-red">{{ row.display_error_message }}</span>{% else %}—{% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+{% endblock %}
+{% block mobile_cards %}
+  {% for row in page_obj %}
+    <div class="mobile-card">
+      <div class="flex-1 min-w-0">
+        <strong class="block">
+          {% trans "Row" %} {{ row.row_number }}
+          {% if row.matched_student %}· {{ row.matched_student.full_name }}{% endif %}
+        </strong>
+        <small class="block text-muted break-words">{{ row.program_label|default:"—" }}</small>
+        {% if row.resolved_entry_semester %}
+          <small class="block text-muted">{% trans "Entry semester" %}: {{ row.resolved_entry_semester.title }}</small>
+        {% endif %}
+        <small class="block text-muted">{{ row.outcome_label|default:"—" }}</small>
+        {% if row.raw_data.rejection_reason %}
+          <small class="block text-muted break-words">{{ row.raw_data.rejection_reason }}</small>
+        {% endif %}
+        <small class="block text-muted">
+          {% trans "Applied" %}: <span dir="ltr">{{ row.raw_data.application_date|default:"—" }}</span>
+          {% if row.raw_data.activated_at %}
+            · {% trans "Activated" %}: <span dir="ltr">{{ row.raw_data.activated_at }}</span>
+          {% endif %}
+          {% if row.raw_data.expires_at %}
+            · {% trans "Expires" %}: <span dir="ltr">{{ row.raw_data.expires_at }}</span>
+          {% endif %}
+          {% if row.raw_data.completed_at %}
+            · {% trans "Completed" %}: <span dir="ltr">{{ row.raw_data.completed_at }}</span>
+          {% endif %}
+        </small>
+        {% include "ui/components/_status.html" with code=row.status label=row.get_status_display %}
+        {% if row.display_error_message %}
+          <small class="block text-red break-words">{{ row.display_error_message }}</small>
+        {% endif %}
+      </div>
+    </div>
+  {% endfor %}
+{% endblock %}

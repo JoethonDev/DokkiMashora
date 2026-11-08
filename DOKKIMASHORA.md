@@ -135,6 +135,27 @@ Diploma applications never let the applicant choose a cohort. The applicant sele
 
 This rule is shared by every apply entry point: applying from the student profile and applying during public sign-up.
 
+## 3.6 Historical bulk import
+
+**Status:** IMPLEMENTED 2026-11-06; service/flow validated with rollback tests and Admin page rendering.
+
+Historical student/application migration is an administrative exception to the live admissions workflow, not a second live lifecycle. Implementation lives in `apps/applications/imports.py`, `apps/applications/models.py` (`ApplicationImport` / `ApplicationImportRow`), and the Admin **Admissions → Applications → Import historical applications** screen.
+
+- **Two-step flow.** The existing student CSV import creates/updates root identities first. The historical application import only matches existing `StudentProfile` records and never creates or updates identity data.
+- **One row per historical application.** A student may appear on multiple rows for different exact targets. Repeated identity rows must agree.
+- **Allowed outcomes.** Only `activated` and `rejected` historical applications may be imported. In-progress/live applications must use the normal admissions workflow.
+- **Activated outcome.** Creates the `ProgramApplication` and its matching `DiplomaEnrollment` or `CourseEnrollment`. This is the only path allowed to create an activated application/enrollment without the live payment, document, intake-form, and entrance-exam gates. It is a named, permissioned, audited historical service; it is never a generic bypass or a change to `activate_application_if_ready`.
+- **Rejected outcome.** Creates the application and rejection history only; no enrollment.
+- **Original dates.** `application_date`, `decision_date`, `activated_at`, `expires_at`, and `completed_at` are preserved. The application's `created_at`/`reviewed_at` and enrollment dates are backdated; the import itself is timestamped now. The original reviewer is not fabricated: `reviewed_by` stays empty and the decision records the importing Admin plus `source=historical_import`.
+- **Derived enrollment state.** Unless explicitly supplied, a diploma enrollment is `expired` when its cohort/expiry date has passed, otherwise `active`; a course enrollment is `completed` when a completion date is supplied, `expired` when its access window has passed, otherwise `active`. `restricted` is explicit only. `pending` is not a valid historical outcome. Diploma `entry_semester` defaults to the diploma's first semester; the resolved semester is stored and shown in the preview. For a course with more than one version, `course_version` or `course_version_id` is required.
+- **Attendance side effect.** Only an active imported enrollment gets an attendance code; expired/completed/restricted enrollments do not. Codes for the batch are created in one set-based pass.
+- **No live side effects.** Historical import never sends email, creates payment records or waivers, requests/uploads documents, creates intake responses, creates entrance attempts, or issues certificates.
+- **Targets.** Diploma, cohort, and course records must already exist. Names resolve only when unique; ambiguous names require explicit IDs.
+- **Existing target conflict.** If the student already has an application for the same exact target, the row is blocked for manual review. Live and previously imported applications are never overwritten. Live submission and historical confirmation both lock the matched `StudentProfile` row before checking existing targets, so the check is serialized.
+- **Atomic and audited.** The file is previewed, then confirmed in one transaction. Any row error blocks the whole file. Batch preview/confirm is audited and every imported application receives an append-only decision record carrying the batch provenance. Row errors are stored language-neutrally and rendered in the viewer's active language. Admin/Super Admin only.
+- **Upload safeguards.** UTF-8 CSV, 10 MB maximum, 1,000 rows maximum, preview before confirm.
+- **Scope boundary.** Historical payments, grades, progression decisions, attendance history, entrance attempts, documents, and certificates are not part of this import. They require separate designs.
+
 ---
 
 # 4. Admissions Lifecycle
@@ -1429,8 +1450,8 @@ Engineers still inspect current code before editing.
 | Domain | Expected implementation areas | Status / contract notes |
 |---|---|---|
 | accounts | `apps/accounts/models.py`, `forms.py`, `views.py`, `services.py`, `admin.py`, `admin_config.py`, `admin_site.py`, `urls.py`, `constants.py` | IMPLEMENTED; identity writes share one guard; account active state is Django `is_active` only; Arabic display name defaults to the full name; product and Django Admin role boundaries align; Teacher product behavior is DEFERRED |
-| students | `apps/students/models.py`, `forms.py`, `views.py`, `services.py`, `identity.py`, `admin.py`, `selectors.py`, `urls.py`, student templates/fragments | IMPLEMENTED / evolving UX; cross-table identity ownership is validated across profile and account paths |
-| applications | `apps/applications/models.py`, `forms.py`, `services.py`, `views.py`, `urls.py` | IMPLEMENTED |
+| students | `apps/students/models.py`, `forms.py`, `views.py`, `services.py`, `identity.py`, `matching.py`, `admin.py`, `selectors.py`, `urls.py`, student templates/fragments | IMPLEMENTED / evolving UX; cross-table identity ownership is validated across profile and account paths; `matching.py` is the shared set-based CSV identity matcher |
+| applications | `apps/applications/models.py`, `forms.py`, `services.py`, `imports.py`, `import_errors.py`, `views.py`, `urls.py` | IMPLEMENTED; historical application bulk import accepts activated/rejected records only, previews before an atomic confirm, creates matching enrollments, audits provenance, stores language-neutral row errors, and produces no live email/payment/document/intake/exam side effects |
 | intake_forms | `apps/intake_forms/models.py`, `forms.py`, `services.py`, `views.py`, `urls.py` | IMPLEMENTED |
 | academics | `apps/academics/models.py`, `forms.py`, `services.py`, `views.py`, `urls.py` | IMPLEMENTED; Course Video OR Audio completion, generation-guarded YouTube metadata remediation, read-time enrollment expiry, and course completion readiness (all published lectures + every active quiz's latest attempt + designated end-course exam) are enforced; the end-course exam is blocked until required lecture progress is met; historical Teacher structures are not used by student learning UX |
 | entrance_exams | `apps/entrance_exams/models.py`, `forms.py`, `services.py`, `views.py`, `urls.py`, exam templates | IMPLEMENTED; single-recipient email VERIFY; correct answers hidden VERIFY |
@@ -1484,6 +1505,7 @@ Again, their existence does not prove the exact two-level evaluation or immediat
 |---|---|
 | Root identity | IMPLEMENTED |
 | Additional applications | IMPLEMENTED |
+| Historical application bulk import | IMPLEMENTED |
 | Standalone Course topology | IMPLEMENTED |
 | Diploma direct lecture topology | IMPLEMENTED |
 | Entrance/Assessment separation | IMPLEMENTED |

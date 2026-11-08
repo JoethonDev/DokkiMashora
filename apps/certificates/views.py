@@ -549,7 +549,7 @@ def admin_template_preview_generate(request, template_id):
         source_bytes,
         template.source_format,
         mapping,
-        sample_field_values(),
+        sample_field_values(language=template.language),
     )
     pdf_bytes = output_bytes if template.source_format == "pdf" else _image_bytes_to_pdf(output_bytes)
     record_audit_event(

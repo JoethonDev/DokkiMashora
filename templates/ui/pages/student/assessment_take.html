@@ -80,7 +80,7 @@
               </div>
               <p class="field-help">{% trans "Upload PDF or DOCX files. Each file is checked for type and size before storage. Files stay in your draft until you submit." %}</p>
               {% if remaining_uploads is not None %}
-                <p class="field-help">{% blocktrans with count=remaining_uploads %}{{ count }} upload(s) remaining.{% endblocktrans %}</p>
+                <p class="field-help">{% blocktranslate count counter=remaining_uploads %}{{ counter }} upload remaining.{% plural %}{{ counter }} uploads remaining.{% endblocktranslate %}</p>
               {% endif %}
               <button class="btn-soft mt-1" type="submit">{% trans "Add files" %}</button>
             </form>

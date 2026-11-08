@@ -152,3 +152,120 @@ EMAIL_ACTION_CHOICES = (
     (EMAIL_ACTION_NOTE, _("Note")),
     (EMAIL_ACTION_EXAM_RESULT, _("Entrance exam result")),
 )
+
+# --- Historical bulk application import -------------------------------------
+
+APPLICATION_IMPORT_STATUS_PENDING = "pending"
+APPLICATION_IMPORT_STATUS_PREVIEWED = "previewed"
+APPLICATION_IMPORT_STATUS_CONFIRMED = "confirmed"
+APPLICATION_IMPORT_STATUS_FAILED = "failed"
+
+APPLICATION_IMPORT_STATUS_CHOICES = (
+    (APPLICATION_IMPORT_STATUS_PENDING, _("Pending")),
+    (APPLICATION_IMPORT_STATUS_PREVIEWED, _("Previewed")),
+    (APPLICATION_IMPORT_STATUS_CONFIRMED, _("Confirmed")),
+    (APPLICATION_IMPORT_STATUS_FAILED, _("Failed")),
+)
+
+APPLICATION_IMPORT_ROW_PARSED = "parsed"
+APPLICATION_IMPORT_ROW_MATCHED = "matched"
+APPLICATION_IMPORT_ROW_FAILED = "failed"
+APPLICATION_IMPORT_ROW_AMBIGUOUS = "ambiguous"
+APPLICATION_IMPORT_ROW_CREATED = "created"
+
+APPLICATION_IMPORT_ROW_STATUS_CHOICES = (
+    (APPLICATION_IMPORT_ROW_PARSED, _("Parsed")),
+    (APPLICATION_IMPORT_ROW_MATCHED, _("Matched")),
+    (APPLICATION_IMPORT_ROW_FAILED, _("Failed")),
+    (APPLICATION_IMPORT_ROW_AMBIGUOUS, _("Ambiguous")),
+    (APPLICATION_IMPORT_ROW_CREATED, _("Created")),
+)
+
+APPLICATION_IMPORT_MAX_ROWS = 1_000
+APPLICATION_IMPORT_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
+
+APPLICATION_IMPORT_IDENTITY_HEADERS = ("email", "national_id", "phone")
+APPLICATION_IMPORT_REQUIRED_HEADERS = (
+    "program_type",
+    "application_status",
+    "application_date",
+)
+APPLICATION_IMPORT_HEADERS = (
+    "email",
+    "national_id",
+    "phone",
+    "program_type",
+    "diploma_title",
+    "cohort_name",
+    "cohort_id",
+    "course_title",
+    "course_id",
+    "course_version",
+    "course_version_id",
+    "application_status",
+    "application_date",
+    "decision_date",
+    "activated_at",
+    "enrollment_status",
+    "expires_at",
+    "completed_at",
+    "entry_semester",
+    "delivery_mode",
+    "rejection_reason",
+    "admin_notes",
+)
+
+# Illustrative rows. The samples are intentionally not importable: their
+# identities do not match real students and the preview rejects them.
+APPLICATION_IMPORT_TEMPLATE_SAMPLE = (
+    "student@example.com",
+    "29001010100001",
+    "+201234567890",
+    "diploma",
+    "Theological Studies Diploma",
+    "2024 Cohort",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "activated",
+    "2024-09-01",
+    "2024-09-15",
+    "2024-09-15",
+    "active",
+    "2027-06-30",
+    "",
+    "First Semester",
+    "online",
+    "",
+    "Sample diploma row; delete it before uploading.",
+)
+APPLICATION_IMPORT_TEMPLATE_COURSE_SAMPLE = (
+    "student2@example.com",
+    "29001010100002",
+    "+201234567891",
+    "course",
+    "",
+    "",
+    "",
+    "Sample Course",
+    "",
+    "Version 1",
+    "",
+    "activated",
+    "2024-09-01",
+    "2024-09-15",
+    "2024-09-15",
+    "active",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "Sample course row; delete it before uploading.",
+)
+APPLICATION_IMPORT_TEMPLATE_SAMPLES = (
+    APPLICATION_IMPORT_TEMPLATE_SAMPLE,
+    APPLICATION_IMPORT_TEMPLATE_COURSE_SAMPLE,
+)

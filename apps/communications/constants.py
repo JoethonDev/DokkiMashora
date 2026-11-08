@@ -39,6 +39,12 @@ TEMPLATE_SLUGS = (
     TEMPLATE_APPLICATION_SURVEY_REQUEST,
 )
 
+RECIPIENT_SOURCE_LABELS = {
+    "filter": _("Filter"),
+    "search": _("Search"),
+    "manual": _("Manual"),
+}
+
 EMAIL_STATUS_QUEUED = "queued"
 EMAIL_STATUS_PROCESSING = "processing"
 EMAIL_STATUS_SENT = "sent"
@@ -346,6 +352,117 @@ SAMPLE_CONTEXT_BY_SLUG: dict[str, dict[str, str]] = {
         "full_name": "ماري جرجس",
         "program_title": "دبلومة الدراسات اللاهوتية",
         "form_title": "استبيان القبول",
+        "form_url": "https://example.com/intake/forms/fill/abc123",
+        "expires_at": "2026-07-20T23:59:00+03:00",
+        "staff_phone": "01234567890",
+    },
+}
+
+SAMPLE_CONTEXT_BY_SLUG_EN: dict[str, dict[str, str]] = {
+    TEMPLATE_REGISTRATION_RECEIVED: {
+        "full_name": "Mary George",
+        "email": "mary@example.com",
+        "national_id": "12345678901234",
+        "phone": "01234567890",
+        "password": "1234567890",
+    },
+    TEMPLATE_ENTRANCE_EXAM_INVITATION: {
+        "full_name": "Mary George",
+        "email": "mary@example.com",
+        "phone_number": "01234567890",
+        "exam_title": "Diploma entrance exam",
+        "cohort_name": "2026 cohort",
+        "exam_url": "https://example.com/exam/123",
+        "exam_open_at": "June 1, 2026",
+        "exam_close_at": "June 15, 2026",
+    },
+    TEMPLATE_ENTRANCE_EXAM_PASS: {
+        "full_name": "Mary George",
+        "exam_title": "Diploma entrance exam",
+        "cohort_name": "2026 cohort",
+        "language_code": "en",
+        "subject": "Your entrance exam was submitted",
+    },
+    TEMPLATE_ENTRANCE_EXAM_FAIL: {
+        "full_name": "Mary George",
+        "exam_title": "Diploma entrance exam",
+        "cohort_name": "2026 cohort",
+        "language_code": "en",
+        "subject": "Your entrance exam was submitted",
+    },
+    TEMPLATE_EXAM_INVITATION: {
+        "full_name": "Mary George",
+        "email": "mary@example.com",
+        "exam_title": "Entrance exam",
+        "exam_url": "https://example.com/exam/123",
+    },
+    TEMPLATE_ACCEPTANCE: {
+        "full_name": "Mary George",
+        "cohort_name": "2026 cohort",
+        "diploma_title": "Theological Studies Diploma",
+    },
+    TEMPLATE_REJECTION: {
+        "full_name": "Mary George",
+        "cohort_name": "2026 cohort",
+        "rejection_reason": "Admission requirements were not met",
+    },
+    TEMPLATE_ACTIVATION: {
+        "full_name": "Mary George",
+        "activation_url": "https://example.com/activate/abc123",
+        "cohort_name": "2026 cohort",
+        "email": "mary@example.com",
+        "password": "1234567890",
+        "diploma_title": "Theological Studies Diploma",
+    },
+    TEMPLATE_PAYMENT_NOTIFICATION: {
+        "full_name": "Mary George",
+        "amount": "500.00",
+        "currency": "EGP",
+        "due_at": "2026-06-30",
+        "reference": "INV-001",
+        "status": "Paid",
+    },
+    TEMPLATE_COURSE_PAYMENT_INSTRUCTIONS: {
+        "full_name": "Mary George",
+        "course_title": "Introduction to Theology",
+        "staff_phone": "01234567890",
+    },
+    TEMPLATE_DIPLOMA_ENTRANCE_EXAM_SCHEDULE: {
+        "full_name": "Mary George",
+        "diploma_title": "Theological Studies Diploma",
+        "cohort_name": "2026 cohort",
+        "exam_title": "Diploma entrance exam",
+        "exam_open_at": "June 1, 2026",
+        "exam_close_at": "June 15, 2026",
+    },
+    TEMPLATE_DIPLOMA_INTERVIEW_REQUEST: {
+        "full_name": "Mary George",
+        "diploma_title": "Theological Studies Diploma",
+        "cohort_name": "2026 cohort",
+        "interview_at": "2026-07-15T10:00:00+03:00",
+        "phone_number": "01234567890",
+        "expires_at": "2026-07-20T23:59:00+03:00",
+    },
+    TEMPLATE_APPLICATION_PAYMENT_PENDING: {
+        "full_name": "Mary George",
+        "program_type": "Diploma",
+        "course_title": "",
+        "diploma_title": "Theological Studies Diploma",
+        "cohort_name": "2026 cohort",
+        "staff_phone": "01234567890",
+    },
+    TEMPLATE_DIPLOMA_DOCUMENT_UPLOAD_REQUEST: {
+        "full_name": "Mary George",
+        "diploma_title": "Theological Studies Diploma",
+        "cohort_name": "2026 cohort",
+        "upload_url": "https://example.com/documents/upload/abc123",
+        "expires_at": "2026-07-20T23:59:00+03:00",
+        "staff_phone": "01234567890",
+    },
+    TEMPLATE_APPLICATION_SURVEY_REQUEST: {
+        "full_name": "Mary George",
+        "program_title": "Theological Studies Diploma",
+        "form_title": "Admission survey",
         "form_url": "https://example.com/intake/forms/fill/abc123",
         "expires_at": "2026-07-20T23:59:00+03:00",
         "staff_phone": "01234567890",
