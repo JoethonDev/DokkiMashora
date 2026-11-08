@@ -13,7 +13,8 @@ from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
-from django.utils.html import escape
+from django.utils import translation
+from django.utils.html import escape, strip_tags
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods, require_POST
 
@@ -48,10 +49,11 @@ from .constants import (
     EMAIL_STATUS_CHOICES,
     RECIPIENT_SOURCE_LABELS,
     SAMPLE_CONTEXT_BY_SLUG,
-    SAMPLE_CONTEXT_BY_SLUG_EN,
     TEMPLATE_SLUGS,
+    TRANSACTIONAL_EMAIL_LANGUAGE,
 )
 from .email_message import EmailMessage as DeliveryLog
+from .formatting import humanize_email_datetime_context, linkify_email_body
 from .models import BulkEmailSend, EmailFooter, EmailTemplate
 from .services import (
     _wrap_in_design,
@@ -407,30 +409,32 @@ def admin_template_edit(request, slug):
 @login_required
 @role_required(*ROLE_SENIOR_STAFF)
 def admin_template_preview(request, slug):
-    """Preview an EmailTemplate rendered with sample context.
+    """Preview an EmailTemplate rendered with Arabic sample context.
 
-    The body is rendered through the model's engine-aware ``render()`` and
-    then escaped at this preview boundary: editable staff HTML must not
-    execute inside the admin page, even though the live email design keeps
-    the engine-rendered body.
+    The preview mirrors the real send path: Arabic-only rendering, human dates,
+    and URL buttons with the visible link. Raw tags are stripped before
+    linkification, so editable staff HTML still cannot execute inside the admin
+    page.
     """
     template = get_object_or_404(EmailTemplate, slug=slug)
     design = request.GET.get("design", template.design)
     if design not in dict(DESIGN_CHOICES):
         design = template.design
-    language = (request.LANGUAGE_CODE or "ar").split("-", 1)[0]
-    samples = SAMPLE_CONTEXT_BY_SLUG_EN if language == "en" else SAMPLE_CONTEXT_BY_SLUG
-    context = {**samples.get(slug, {}), "language_code": language}
-    try:
-        rendered_subject, rendered_body = template.render(context)
-    except Exception:
-        rendered_subject, rendered_body = template.subject, template.body
-    footer_text = get_global_footer()
-    rendered_html = render_to_string(
-        f"communications/email_designs/{design}.html",
-        {"content": escape(rendered_body), "footer": footer_text},
-        request=request,
-    )
+    with translation.override(TRANSACTIONAL_EMAIL_LANGUAGE):
+        context = humanize_email_datetime_context(
+            {**SAMPLE_CONTEXT_BY_SLUG.get(slug, {}), "language_code": TRANSACTIONAL_EMAIL_LANGUAGE}
+        )
+        try:
+            rendered_subject, rendered_body = template.render(context)
+        except Exception:
+            rendered_subject = template.subject
+            rendered_body = escape(template.body)
+        footer_text = get_global_footer()
+        rendered_html = render_to_string(
+            f"communications/email_designs/{design}.html",
+            {"content": linkify_email_body(strip_tags(rendered_body)), "footer": footer_text},
+            request=request,
+        )
     return render(
         request,
         "ui/pages/admin/communication_template_form.html",

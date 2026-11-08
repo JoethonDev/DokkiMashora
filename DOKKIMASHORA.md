@@ -135,6 +135,8 @@ Diploma applications never let the applicant choose a cohort. The applicant sele
 
 This rule is shared by every apply entry point: applying from the student profile and applying during public sign-up.
 
+An **open cohort** — the unit every apply entry point tests — is an active cohort whose `end_date` has not passed and whose entrance exam window (`EntranceExam.open_at`–`close_at`) contains the current time. `EntranceExam.is_active` is the exam-access switch only; it never makes a diploma applicable or non-applicable.
+
 ## 3.6 Historical bulk import
 
 **Status:** IMPLEMENTED 2026-11-06; service/flow validated with rollback tests and Admin page rendering.
@@ -1418,6 +1420,8 @@ One canonical form system across Admin, Student, and Public. Default interactive
 ## 20.8 RTL/LTR
 
 Arabic RTL is the design source; English LTR must work. Use logical direction utilities. Mixed-direction values — email, phone, code, date, seating number — remain correctly LTR. Directional icons mirror in RTL.
+
+Transactional email is the exception: content is Arabic-only (there is no English branch), the message is laid out LTR, dates render as `DD-MM-YYYY (HH:MM AM/PM) (Arabic day name)` in the business timezone, and every URL appears as a button plus the visible link.
 
 ## 20.9 HTMX / Alpine / JS
 

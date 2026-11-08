@@ -143,6 +143,7 @@ ACTION_CLUSTER_CREATED = "cluster.created"
 ACTION_CLUSTER_MEMBERSHIP_ADDED = "cluster.membership_added"
 ACTION_CLUSTER_MEMBERSHIP_REMOVED = "cluster.membership_removed"
 ACTION_INTAKE_FORM_CREATED = "intake_form.created"
+ACTION_INTAKE_FORM_UPDATED = "intake_form.updated"
 ACTION_INTAKE_FORM_TOGGLED = "intake_form.toggled"
 ACTION_INTAKE_FORM_FIELD_CREATED = "intake_form.field_created"
 ACTION_INTAKE_FORM_FIELD_DELETED = "intake_form.field_deleted"
@@ -226,6 +227,7 @@ AUDIT_ACTION_CHOICES = (
     (ACTION_ENTRANCE_EXAM_GRADED, _("Entrance exam graded")),
     (ACTION_ADMISSIONS_EMAIL_SENT, _("Admissions email sent")),
     (ACTION_INTAKE_FORM_CREATED, _("Intake form created")),
+    (ACTION_INTAKE_FORM_UPDATED, _("Intake form updated")),
     (ACTION_INTAKE_FORM_TOGGLED, _("Intake form status changed")),
     (ACTION_INTAKE_FORM_FIELD_CREATED, _("Intake form field created")),
     (ACTION_INTAKE_FORM_FIELD_DELETED, _("Intake form field deleted")),

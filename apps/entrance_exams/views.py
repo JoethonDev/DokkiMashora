@@ -54,6 +54,7 @@ from apps.communications.constants import (
     TEMPLATE_ENTRANCE_EXAM_INVITATION,
     TEMPLATE_ENTRANCE_EXAM_PASS,
     TEMPLATE_REJECTION,
+    TRANSACTIONAL_EMAIL_LANGUAGE,
 )
 from apps.communications.services import (
     queue_program_application_email,
@@ -79,6 +80,7 @@ from .forms import EntranceChoiceFormSet, EntranceExamForm, EntranceQuestionForm
 from .models import EntranceAttempt, EntranceChoice, EntranceExam, EntranceQuestion, EntranceSnapshot
 from .services import (
     AnswerData,
+    absolute_exam_access_url,
     attempt_deadline,
     attempt_decision,
     entrance_attempt_audit_fields,
@@ -86,7 +88,6 @@ from .services import (
     finalize_expired_attempt,
     get_pending_grading,
     grade_answer,
-    normalize_result_email_language,
     queue_entrance_invitation_email,
     resolve_assigned_attempt,
     resolve_exam_access_token,
@@ -334,7 +335,7 @@ def submit_exam(request, token):
         else:
             answers.append(AnswerData(question_id=qid, written_text=value))
     try:
-        submit_attempt(attempt, answers, language_code=request.LANGUAGE_CODE)
+        submit_attempt(attempt, answers)
         messages.success(request, _("Entrance exam submitted."))
     except ValueError as exc:
         messages.error(request, str(exc))
@@ -388,7 +389,7 @@ def finalize_expired_exam(request, token):
     """
     _profile, _exam, attempt = _resolve_active_public_attempt(request, token)
     try:
-        finalized = finalize_expired_attempt(attempt, language_code=request.LANGUAGE_CODE)
+        finalized = finalize_expired_attempt(attempt)
     except ValueError as exc:
         return JsonResponse({"ok": False, "error": str(exc)}, status=400)
     return JsonResponse(
@@ -669,7 +670,7 @@ def admin_finalize_pending(request, exam_id):
         raise PermissionDenied
     exam = get_object_or_404(EntranceExam, id=exam_id)
     next_url = safe_next_url(request)
-    count = finalize_all_pending_for_exam(exam, language_code=request.LANGUAGE_CODE)
+    count = finalize_all_pending_for_exam(exam)
     record_audit_event(
         actor=request.user,
         action=ACTION_ENTRANCE_EXAM_UPDATED,
@@ -762,7 +763,6 @@ def admin_grade_attempt(request, attempt_id):
                             score,
                             feedback,
                             request.user,
-                            language_code=request.LANGUAGE_CODE,
                             attempt=attempt,
                         )
                         graded += 1
@@ -1282,7 +1282,7 @@ def _send_results(request, exam, student_ids):
         ).exists():
             queued_count += 1
             continue
-        context = result_email_context(attempt, request.LANGUAGE_CODE)
+        context = result_email_context(attempt)
         try:
             record, _log = queue_program_application_email(
                 program_application=prog_app,
@@ -1352,18 +1352,15 @@ def _resend_emails(request, exam, cohort, log_ids):
             "cohort_name": cohort.name or "",
         }
         if log.template_slug in (TEMPLATE_ENTRANCE_EXAM_PASS, TEMPLATE_ENTRANCE_EXAM_FAIL):
-            language_code = normalize_result_email_language(request.LANGUAGE_CODE)
             context.update(
-                language_code=language_code,
-                subject=result_email_subject(language_code),
+                language_code=TRANSACTIONAL_EMAIL_LANGUAGE,
+                subject=result_email_subject(),
             )
         if log.template_slug == TEMPLATE_ENTRANCE_EXAM_INVITATION:
             context.update(
-                exam_url=reverse("entrance_exams:exam_access_token", args=[exam.access_token])
-                if exam.access_token
-                else "",
-                exam_open_at="",
-                exam_close_at="",
+                exam_url=absolute_exam_access_url(exam),
+                exam_open_at=exam.open_at,
+                exam_close_at=exam.close_at,
             )
         resend_seq = PAEL.objects.filter(
             program_application=log.program_application,

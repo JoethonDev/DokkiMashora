@@ -214,21 +214,34 @@ def find_duplicate(data: RegistrationData) -> str | None:
     return None
 
 
+def _open_entrance_exam_window_q(now, prefix: str = "") -> Q:
+    """Single definition of the entrance-exam apply window.
+
+    Both the boolean and the set-based apply gates use this helper so the
+    open/close boundary can never drift between them. ``is_active`` is not part
+    of the window: it only enables taking the exam.
+    """
+    return Q(**{f"{prefix}open_at__lte": now, f"{prefix}close_at__gte": now})
+
+
 def is_apply_target_open(cohort=None, course=None) -> bool:
     """Shared open-target predicate for registration and apply flows (A5/S2-08).
 
     A diploma cohort is open when it is active, its application window has
-    not ended, and it has an active entrance exam. A course is open when it
-    is active and has an active version. The registration form, the apply
-    selectors, and the submission services must all use this single rule.
+    not ended, and its entrance exam is inside its open/close window right now.
+    ``EntranceExam.is_active`` is deliberately not consulted: it only enables
+    access to the exam itself after the applicant reaches that stage. A course
+    is open when it is active and has an active version. The registration form,
+    the apply selectors, and the submission services must all use this single
+    rule.
     """
-    today = timezone.now().date()
+    now = timezone.now()
     if cohort is not None:
         if not cohort.is_active:
             return False
-        if cohort.end_date is None or cohort.end_date < today:
+        if cohort.end_date is None or cohort.end_date < timezone.localdate():
             return False
-        return cohort.entrance_exams.filter(is_active=True).exists()
+        return cohort.entrance_exams.filter(_open_entrance_exam_window_q(now)).exists()
     if course is not None:
         return bool(course.is_active and course.versions.filter(is_active=True).exists())
     return False
@@ -238,15 +251,17 @@ def open_cohorts_queryset(*, diploma=None, diploma_ids=None):
     """Set-based twin of :func:`is_apply_target_open` for Cohort querysets.
 
     Must stay in lockstep with ``is_apply_target_open``: a cohort is open when
-    it is active, its application window has not ended, and it has an active
-    entrance exam. Callers add their own ordering.
+    it is active, its application window has not ended, and its entrance exam
+    is inside its open/close window right now. ``EntranceExam.is_active`` only
+    enables exam access and never gates applications. Callers add their own
+    ordering.
     """
+    now = timezone.now()
     qs = Cohort.objects.filter(
         is_active=True,
         end_date__isnull=False,
-        end_date__gte=timezone.now().date(),
-        entrance_exams__is_active=True,
-    )
+        end_date__gte=timezone.localdate(),
+    ).filter(_open_entrance_exam_window_q(now, "entrance_exams__"))
     if diploma is not None:
         qs = qs.filter(diploma=diploma)
     if diploma_ids is not None:
@@ -632,8 +647,8 @@ def _send_diploma_entrance_schedule_email(prog_app, actor=None) -> None:
         "diploma_title": cohort.diploma.title if cohort and cohort.diploma else "",
         "cohort_name": cohort.name if cohort else "",
         "exam_title": exam.title if exam else "",
-        "exam_open_at": "",
-        "exam_close_at": "",
+        "exam_open_at": exam.open_at if exam else "",
+        "exam_close_at": exam.close_at if exam else "",
     }
     # ponytail: no exam URL in context per Phase 2 rule
     queue_program_application_email(

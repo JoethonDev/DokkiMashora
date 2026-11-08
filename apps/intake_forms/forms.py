@@ -47,8 +47,27 @@ class IntakeFormBuildForm(StyledFormMixin, forms.Form):
         widget=forms.DateTimeInput(attrs={"type": "datetime-local"}),
     )
 
+    def __init__(self, *args, lock_target: bool = False, **kwargs):
+        """Reuse the builder for editing existing form details.
+
+        The target (course version or cohort) is immutable after creation:
+        existing requests and responses are scoped through it, so the edit
+        flow removes those fields and skips target selection validation.
+        """
+        super().__init__(*args, **kwargs)
+        self.lock_target = lock_target
+        if lock_target:
+            for name in ("target_type", "course_version", "cohort"):
+                self.fields.pop(name, None)
+
     def clean(self):
         cleaned = super().clean()
+        open_at = cleaned.get("open_at")
+        close_at = cleaned.get("close_at")
+        if open_at and close_at and open_at >= close_at:
+            self.add_error("close_at", _("Open time must be before close time."))
+        if self.lock_target:
+            return cleaned
         target_type = cleaned.get("target_type")
         course_version = cleaned.get("course_version")
         cohort = cleaned.get("cohort")

@@ -231,7 +231,7 @@ class RegistrationForm(StyledFormMixin, forms.Form):
                             Diploma.objects.filter(pk=diploma).first()
                         )
                         if cohort is None:
-                            self.add_error("diploma", _("No active cohort with an entrance exam found for this diploma."))
+                            self.add_error("diploma", _("This program is no longer accepting applications."))
                         else:
                             self._auto_cohort_id = cohort.pk
                 if program_type == "course":

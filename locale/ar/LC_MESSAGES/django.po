@@ -7000,6 +7000,10 @@ msgid "Intake form created"
 msgstr "تم إنشاء نموذج البيانات"
 
 #: .\apps\audit\constants.py:229
+msgid "Intake form updated"
+msgstr "تم تحديث نموذج البيانات"
+
+#: .\apps\audit\constants.py:229
 msgid "Intake form status changed"
 msgstr "تم تغيير حالة نموذج البيانات"
 
@@ -11111,6 +11115,9 @@ msgstr "معرّفات حقول غير معروفة: {}"
 #: .\apps\intake_forms\views.py:102
 msgid "Intake form created."
 msgstr "تم إنشاء نموذج البيانات."
+
+msgid "Intake form updated."
+msgstr "تم تحديث نموذج البيانات."
 
 #: .\apps\intake_forms\views.py:109
 msgid "Create intake form"

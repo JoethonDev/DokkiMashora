@@ -10,6 +10,7 @@ urlpatterns = [
     # Admin: form builder
     path("admin/forms/", views.admin_intake_form_list, name="admin_intake_form_list"),
     path("admin/forms/create/", views.admin_intake_form_create, name="admin_intake_form_create"),
+    path("admin/forms/<int:form_id>/edit/", views.admin_intake_form_edit, name="admin_intake_form_edit"),
     path("admin/forms/<int:form_id>/", views.admin_intake_form_detail, name="admin_intake_form_detail"),
     path("admin/forms/<int:form_id>/responses/<int:response_id>/", views.admin_intake_response_detail, name="admin_intake_response_detail"),
     path("admin/forms/<int:form_id>/fields/<int:field_id>/delete/", views.admin_intake_form_field_delete, name="admin_intake_form_field_delete"),

@@ -87,6 +87,7 @@ from apps.applications.models import (
 from apps.applications.services import (
     accept_program_application,
     invite_to_entrance_exam,
+    is_apply_target_open,
     mark_application_paid,
     request_interview_program_application,
     submit_program_application,
@@ -805,12 +806,13 @@ class Command(BaseCommand):
         if (
             program_type == PROGRAM_TYPE_DIPLOMA
             and cohort is not None
-            and not cohort.entrance_exams.filter(is_active=True).exists()
+            and not is_apply_target_open(cohort=cohort)
         ):
-            # The public submission workflow intentionally requires an active
-            # entrance exam for a diploma.  This approved QA diploma has no
-            # entrance exam, so create its submitted dashboard fixture at the
-            # model boundary without inventing an exam that should not exist.
+            # The public submission workflow intentionally requires the
+            # cohort's entrance exam window to contain now. This approved QA
+            # diploma has no such exam, so create its submitted dashboard
+            # fixture at the model boundary without inventing an exam that
+            # should not exist.
             application = ProgramApplication.objects.create(
                 student=profile,
                 program_type=program_type,

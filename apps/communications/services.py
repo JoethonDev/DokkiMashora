@@ -16,8 +16,8 @@ from django.db import transaction
 from django.db.models import F, Q
 from django.template.exceptions import TemplateDoesNotExist
 from django.template.loader import render_to_string
-from django.utils import timezone
-from django.utils.translation import get_language
+from django.utils import timezone, translation
+from django.utils.html import strip_tags
 from django.utils.translation import gettext_lazy as _
 
 from apps.applications.models import ProgramApplicationEmailLog
@@ -43,8 +43,10 @@ from .constants import (
     EMAIL_STATUS_PROCESSING,
     EMAIL_STATUS_QUEUED,
     EMAIL_STATUS_SENT,
+    TRANSACTIONAL_EMAIL_LANGUAGE,
 )
 from .email_message import EmailMessage
+from .formatting import humanize_email_datetime_context, linkify_email_body
 from .models import BulkEmailSend, EmailFooter, EmailTemplate
 
 logger = logging.getLogger("apps.communications")
@@ -169,6 +171,13 @@ def _render_templated_email(
 ) -> tuple[EmailTemplate, str, str, str] | None:
     """Render an email template into (template, subject, body, html_body).
 
+    Transactional email is Arabic-only: rendering always runs under the Arabic
+    locale, regardless of the staff member's interface language, so no English
+    branch can be selected. Dates are presented in the business timezone as
+    ``DD-MM-YYYY (HH:MM AM/PM) (Arabic day)`` and raw URLs become a button plus
+    the visible clickable URL. Raw tags in a staff-edited template are stripped
+    before linkification, so the design never receives executable markup.
+
     Reused by the synchronous ``send_templated_email`` and the canonical
     ``queue_templated_email`` path so queueing and direct sending share the
     exact same rendering pipeline (static design wrap + global footer). Returns
@@ -182,26 +191,28 @@ def _render_templated_email(
         logger.warning("No active/enabled template found for slug=%s, skipping send", slug)
         _record_unavailable_template(slug)
         return None
-    language = (get_language() or settings.LANGUAGE_CODE or "ar").split("-", 1)[0]
-    context = {"language_code": language, **context}
-    subject, body = template.render(context)
-    missing = [v for v in template.variable_names() if v not in context]
-    if "language_code" in template.body and "language_code" not in context:
-        missing.append("language_code")
-    if "{{ subject }}" in template.subject and "subject" not in context:
-        missing.append("subject")
-    if missing:
-        raise ValueError(
-            _("Template '%(slug)s' is missing context variables: %(missing)s")
-            % {"slug": slug, "missing": ", ".join(sorted(missing))}
-        )
-    static_template = f"communications/email_designs/{slug}.html"
-    try:
-        body = render_to_string(static_template, {**context, "content": body})
-    except TemplateDoesNotExist:
-        pass
-    footer = get_global_footer()
-    html_body = _wrap_in_design(body, template.design, footer)
+    context = humanize_email_datetime_context(context)
+    with translation.override(TRANSACTIONAL_EMAIL_LANGUAGE):
+        context = {**context, "language_code": TRANSACTIONAL_EMAIL_LANGUAGE}
+        subject, body = template.render(context)
+        missing = [v for v in template.variable_names() if v not in context]
+        if "language_code" in template.body and "language_code" not in context:
+            missing.append("language_code")
+        if "{{ subject }}" in template.subject and "subject" not in context:
+            missing.append("subject")
+        if missing:
+            raise ValueError(
+                _("Template '%(slug)s' is missing context variables: %(missing)s")
+                % {"slug": slug, "missing": ", ".join(sorted(missing))}
+            )
+        body = linkify_email_body(strip_tags(body))
+        static_template = f"communications/email_designs/{slug}.html"
+        try:
+            body = render_to_string(static_template, {**context, "content": body})
+        except TemplateDoesNotExist:
+            pass
+        footer = get_global_footer()
+        html_body = _wrap_in_design(body, template.design, footer)
     return template, subject, body, html_body
 
 

@@ -4,4 +4,5 @@
 {% if activation_url %}
 <p style="margin:0 0 12px">{% trans "Please activate your account to get started" %}:</p>
 <p style="margin:0;text-align:center"><a href="{{ activation_url }}" style="display:inline-block;background:#2b675f;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:700">{% trans "Activate My Account" %}</a></p>
+<p style="margin:10px 0 0;text-align:center;font-size:12px;line-height:1.6;word-break:break-all" dir="ltr"><a href="{{ activation_url }}" style="color:#2b675f;text-decoration:underline">{{ activation_url }}</a></p>
 {% endif %}

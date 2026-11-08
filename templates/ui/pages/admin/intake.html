@@ -18,6 +18,14 @@
                 if (select) select.value = '';
               }
             }">{% csrf_token %}
+        {% if editing %}
+          <div class="section-head"><div>
+              <p class="eyebrow">{% trans "Form" %}</p>
+              <h3>{% trans "Edit" %} — {{ intake_form.title }}</h3>
+              <small class="text-muted">{% if intake_form.course_version %}{{ intake_form.course_version }}{% else %}{{ intake_form.cohort }}{% endif %}</small>
+            </div>
+          </div>
+        {% endif %}
         <div class="form-grid">
           {% for field in form %}
             {% if field.name == "is_required" or field.name == "is_active" %}
@@ -52,7 +60,9 @@
           </div>
         </div>
         <p>{{ intake_form.description }}</p>
-        <div class="flex gap-2.5 items-center flex-wrap"><form method="post"><input type="hidden" name="action" value="toggle_active">{% csrf_token %}
+        <div class="flex gap-2.5 items-center flex-wrap">
+          <a class="btn-secondary" href="{% url 'intake_forms:admin_intake_form_edit' intake_form.id %}">{% trans "Edit" %}</a>
+          <form method="post"><input type="hidden" name="action" value="toggle_active">{% csrf_token %}
             <button class="btn-warning" type="submit">{% if intake_form.is_active %}
                 {% trans "Deactivate" %}
               {% else %}

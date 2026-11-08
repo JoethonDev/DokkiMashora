@@ -3,6 +3,7 @@ from __future__ import annotations
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -17,6 +18,7 @@ from apps.audit.constants import (
     ACTION_INTAKE_FORM_FIELD_CREATED,
     ACTION_INTAKE_FORM_FIELD_DELETED,
     ACTION_INTAKE_FORM_TOGGLED,
+    ACTION_INTAKE_FORM_UPDATED,
     SECTION_ADMISSIONS,
 )
 from apps.audit.services import record_audit_event
@@ -107,6 +109,84 @@ def admin_intake_form_create(request: HttpRequest) -> HttpResponse:
     else:
         form = IntakeFormBuildForm()
     return render(request, "ui/pages/admin/intake.html", {"form": form, "title": _("Create intake form")})
+
+
+@require_http_methods(["GET", "POST"])
+@role_required(*ROLE_SENIOR_STAFF)
+def admin_intake_form_edit(request: HttpRequest, form_id: int) -> HttpResponse:
+    """Edit form details; the target stays immutable after creation."""
+    intake_form = get_object_or_404(
+        IntakeForm.objects.select_related("course_version__course", "cohort__diploma"),
+        pk=form_id,
+    )
+
+    def _local_input(value):
+        return timezone.localtime(value).strftime("%Y-%m-%dT%H:%M") if value else ""
+
+    if request.method == "POST":
+        form = IntakeFormBuildForm(request.POST, lock_target=True)
+        if form.is_valid():
+            with transaction.atomic():
+                before = {
+                    "title": intake_form.title,
+                    "description": intake_form.description,
+                    "open_at": intake_form.open_at.isoformat() if intake_form.open_at else None,
+                    "close_at": intake_form.close_at.isoformat() if intake_form.close_at else None,
+                    "is_required": intake_form.is_required,
+                    "is_active": intake_form.is_active,
+                }
+                intake_form.title = form.cleaned_data["title"]
+                intake_form.description = form.cleaned_data.get("description", "")
+                intake_form.open_at = form.cleaned_data.get("open_at")
+                intake_form.close_at = form.cleaned_data.get("close_at")
+                intake_form.is_required = form.cleaned_data.get("is_required", False)
+                intake_form.is_active = form.cleaned_data.get("is_active", False)
+                intake_form.save()
+                after = {
+                    "title": intake_form.title,
+                    "description": intake_form.description,
+                    "open_at": intake_form.open_at.isoformat() if intake_form.open_at else None,
+                    "close_at": intake_form.close_at.isoformat() if intake_form.close_at else None,
+                    "is_required": intake_form.is_required,
+                    "is_active": intake_form.is_active,
+                }
+                changed_fields = sorted(key for key in after if before[key] != after[key])
+                if changed_fields:
+                    record_audit_event(
+                        actor=request.user,
+                        action=ACTION_INTAKE_FORM_UPDATED,
+                        target_type="intake_form",
+                        target_id=str(intake_form.pk),
+                        section=SECTION_ADMISSIONS,
+                        target_label=intake_form.title,
+                        metadata={
+                            "changed_fields": changed_fields,
+                            "before": {key: before[key] for key in changed_fields},
+                            "after": {key: after[key] for key in changed_fields},
+                        },
+                    )
+            messages.success(request, _("Intake form updated."))
+            return redirect("intake_forms:admin_intake_form_detail", form_id=intake_form.pk)
+        for _field, errs in form.errors.items():
+            for err in errs:
+                messages.error(request, err)
+    else:
+        form = IntakeFormBuildForm(
+            lock_target=True,
+            initial={
+                "title": intake_form.title,
+                "description": intake_form.description,
+                "open_at": _local_input(intake_form.open_at),
+                "close_at": _local_input(intake_form.close_at),
+                "is_required": intake_form.is_required,
+                "is_active": intake_form.is_active,
+            },
+        )
+    return render(
+        request,
+        "ui/pages/admin/intake.html",
+        {"form": form, "intake_form": intake_form, "editing": True},
+    )
 
 
 @require_http_methods(["GET", "POST"])

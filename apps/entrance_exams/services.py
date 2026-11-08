@@ -7,10 +7,11 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+from django.conf import settings
 from django.db import transaction
 from django.db.models import Q
 from django.urls import reverse
-from django.utils import timezone
+from django.utils import timezone, translation
 from django.utils.translation import gettext_lazy as _
 
 from apps.applications.constants import (
@@ -31,6 +32,7 @@ from apps.communications.constants import (
     TEMPLATE_ENTRANCE_EXAM_FAIL,
     TEMPLATE_ENTRANCE_EXAM_INVITATION,
     TEMPLATE_ENTRANCE_EXAM_PASS,
+    TRANSACTIONAL_EMAIL_LANGUAGE,
 )
 from apps.communications.services import queue_program_application_email
 from apps.core.permissions import validate_score
@@ -74,10 +76,7 @@ TERMINAL_ATTEMPT_STATUSES = frozenset({
     ATTEMPT_STATUS_COMPLETED,
     ATTEMPT_STATUS_GRADED,
 })
-ENTRANCE_RESULT_EMAIL_SUBJECTS = {
-    "ar": "تم تقديم امتحان القبول",
-    "en": "Your entrance exam was submitted",
-}
+ENTRANCE_RESULT_EMAIL_SUBJECT = "تم تقديم امتحان القبول"
 
 
 def entrance_attempt_audit_fields(attempt: EntranceAttempt) -> dict[str, str]:
@@ -115,6 +114,20 @@ def resolve_exam_access_token(token, *, active_only: bool = True) -> EntranceExa
     if active_only:
         queryset = queryset.filter(is_active=True)
     return queryset.get(access_token=token)
+
+
+def absolute_exam_access_url(exam: EntranceExam) -> str:
+    """Return the absolute Arabic exam URL used in emails.
+
+    Emails are Arabic-only and must carry an absolute link; a relative
+    ``reverse()`` result is not clickable and may hold the staff member's
+    interface-language prefix.
+    """
+    if not exam.access_token:
+        return ""
+    with translation.override(TRANSACTIONAL_EMAIL_LANGUAGE):
+        path = reverse("entrance_exams:exam_access_token", args=[exam.access_token])
+    return f"{settings.SITE_URL.rstrip('/')}{path}"
 
 
 def resolve_assigned_attempt(exam: EntranceExam, student: StudentProfile) -> EntranceAttempt:
@@ -155,24 +168,17 @@ def resolve_submitted_attempt(exam: EntranceExam, student: StudentProfile) -> En
     ).get()
 
 
-def normalize_result_email_language(language_code: str | None) -> str:
-    """Use the active request language when supported; Arabic is the fallback."""
-    language = (language_code or "").lower().split("-", 1)[0]
-    return language if language in ENTRANCE_RESULT_EMAIL_SUBJECTS else "ar"
+def result_email_subject() -> str:
+    return ENTRANCE_RESULT_EMAIL_SUBJECT
 
 
-def result_email_subject(language_code: str | None) -> str:
-    return ENTRANCE_RESULT_EMAIL_SUBJECTS[normalize_result_email_language(language_code)]
-
-
-def result_email_context(attempt: EntranceAttempt, language_code: str | None) -> dict[str, str]:
-    language = normalize_result_email_language(language_code)
+def result_email_context(attempt: EntranceAttempt) -> dict[str, str]:
     return {
         "full_name": attempt.student.full_name or "",
         "exam_title": attempt.exam.title,
         "cohort_name": attempt.exam.cohort.name or "",
-        "language_code": language,
-        "subject": result_email_subject(language),
+        "language_code": TRANSACTIONAL_EMAIL_LANGUAGE,
+        "subject": result_email_subject(),
     }
 
 
@@ -284,8 +290,6 @@ def attempt_deadline(attempt: EntranceAttempt):
 def submit_attempt(
     attempt: EntranceAttempt,
     answers: list[AnswerData],
-    *,
-    language_code: str | None = None,
 ) -> EntranceAttempt:
     with transaction.atomic():
         locked = (
@@ -368,7 +372,7 @@ def submit_attempt(
         locked.status = ATTEMPT_STATUS_COMPLETED
         locked.submitted_at = now
         locked.save(update_fields=["status", "submitted_at", "updated_at"])
-        _recompute_attempt_grade(locked, language_code=language_code)
+        _recompute_attempt_grade(locked)
     return locked
 
 
@@ -383,7 +387,6 @@ def grade_answer(
     feedback: str,
     grader: User,
     *,
-    language_code: str | None = None,
     attempt: EntranceAttempt | None = None,
 ) -> EntranceAnswer:
     validate_score(score)
@@ -394,15 +397,13 @@ def grade_answer(
     answer.save(update_fields=["score", "feedback", "graded_at", "graded_by"])
     # Callers that already loaded the attempt pass it so the resulting
     # recompute and audit snapshot do not reload the same row per answer.
-    _recompute_attempt_grade(attempt or answer.attempt, actor=grader, language_code=language_code)
+    _recompute_attempt_grade(attempt or answer.attempt, actor=grader)
     return answer
 
 
 def _recompute_attempt_grade(
     attempt: EntranceAttempt,
     actor: User | None = None,
-    *,
-    language_code: str | None = None,
 ) -> None:
     total = Decimal("0.00")
     all_graded = True
@@ -423,9 +424,7 @@ def _recompute_attempt_grade(
         attempt.status = ATTEMPT_STATUS_GRADED
         attempt.graded_at = timezone.now()
         attempt.save(update_fields=["score", "status", "graded_at", "result"])
-        _update_program_application_from_result(
-            attempt, attempt.result, actor=actor, language_code=language_code,
-        )
+        _update_program_application_from_result(attempt, attempt.result, actor=actor)
     else:
         attempt.save(update_fields=["score"])
 
@@ -434,8 +433,6 @@ def _update_program_application_from_result(
     attempt: EntranceAttempt,
     result: str,
     actor: User | None = None,
-    *,
-    language_code: str | None = None,
 ) -> None:
     prog_app = attempt.program_application
 
@@ -464,9 +461,7 @@ def _update_program_application_from_result(
     # The result email is an external effect: schedule it after commit so an
     # SMTP failure never rolls back the already-durable submission (BUG-004).
     transaction.on_commit(
-        lambda: _send_result_email(
-            attempt, result, actor, language_code=normalize_result_email_language(language_code),
-        ),
+        lambda: _send_result_email(attempt, result, actor),
     )
 
 
@@ -474,8 +469,6 @@ def _send_result_email(
     attempt: EntranceAttempt,
     result: str,
     actor: User | None = None,
-    *,
-    language_code: str | None = None,
 ) -> None:
     """Send the entrance result email after the submission commit.
 
@@ -488,7 +481,7 @@ def _send_result_email(
         prog_app = attempt.program_application
         slug = TEMPLATE_ENTRANCE_EXAM_PASS if result == RESULT_PASS else TEMPLATE_ENTRANCE_EXAM_FAIL
         email_to = attempt.student.user.email
-        context = result_email_context(attempt, language_code)
+        context = result_email_context(attempt)
         queue_program_application_email(
             program_application=prog_app,
             action=EMAIL_ACTION_EXAM_RESULT,
@@ -541,10 +534,16 @@ def queue_entrance_invitation_email(
     application back to ``survey_requested`` instead of sending this email.
     """
     with transaction.atomic():
-        exam = EntranceExam.objects.select_for_update().select_related("cohort").get(pk=exam.pk)
-        locked_application = ProgramApplication.objects.select_for_update().select_related(
-            "student__user", "cohort",
-        ).get(pk=program_application.pk)
+        exam = (
+            EntranceExam.objects.select_for_update(of=("self",))
+            .select_related("cohort")
+            .get(pk=exam.pk)
+        )
+        locked_application = (
+            ProgramApplication.objects.select_for_update(of=("self",))
+            .select_related("student__user", "cohort")
+            .get(pk=program_application.pk)
+        )
         if locked_application.program_type != PROGRAM_TYPE_DIPLOMA:
             raise ValueError(_("Only diploma applications can receive an entrance exam invitation."))
         if locked_application.status != PROGRAM_APP_STATUS_INVITED:
@@ -567,9 +566,9 @@ def queue_entrance_invitation_email(
         "phone_number": program_application.student.phone or "",
         "exam_title": exam.title,
         "cohort_name": exam.cohort.name or "",
-        "exam_url": reverse("entrance_exams:exam_access_token", args=[exam.access_token]) if exam.access_token else "",
-        "exam_open_at": "",
-        "exam_close_at": "",
+        "exam_url": absolute_exam_access_url(exam),
+        "exam_open_at": exam.open_at,
+        "exam_close_at": exam.close_at,
     }
     if is_resend:
         resend_seq = ProgramApplicationEmailLog.objects.filter(
@@ -667,8 +666,6 @@ def save_snapshot(attempt: EntranceAttempt, question_id: int, choice_id: int | N
 
 def finalize_attempt_from_snapshots(
     attempt: EntranceAttempt,
-    *,
-    language_code: str | None = None,
 ) -> EntranceAttempt:
     """Rebuild answers from the latest snapshots and submit the attempt.
 
@@ -698,13 +695,11 @@ def finalize_attempt_from_snapshots(
         _validate_attempt_application_state(locked)
         if locked.program_application.status != PROGRAM_APP_STATUS_INVITED:
             raise ValueError(_("This exam cannot be finalized in the current application state."))
-        return _finalize_locked_attempt(locked, language_code=language_code)
+        return _finalize_locked_attempt(locked)
 
 
 def _finalize_locked_attempt(
     locked: EntranceAttempt,
-    *,
-    language_code: str | None = None,
 ) -> EntranceAttempt:
     """Finalize an already locked in-progress attempt exactly once."""
     snapshots = list(
@@ -756,14 +751,12 @@ def _finalize_locked_attempt(
     locked.status = ATTEMPT_STATUS_COMPLETED
     locked.submitted_at = timezone.now()
     locked.save(update_fields=["status", "submitted_at", "updated_at"])
-    _recompute_attempt_grade(locked, language_code=language_code)
+    _recompute_attempt_grade(locked)
     return locked
 
 
 def finalize_expired_attempt(
     attempt: EntranceAttempt,
-    *,
-    language_code: str | None = None,
 ) -> EntranceAttempt:
     """Idempotently finalize an attempt once its deadline has passed.
 
@@ -797,13 +790,11 @@ def finalize_expired_attempt(
         deadline = attempt_deadline(locked)
         if deadline is None or timezone.now() <= deadline:
             raise ValueError(_("Exam duration has not expired yet."))
-        return _finalize_locked_attempt(locked, language_code=language_code)
+        return _finalize_locked_attempt(locked)
 
 
 def finalize_all_pending_for_exam(
     exam: EntranceExam,
-    *,
-    language_code: str | None = None,
 ) -> int:
     """Finalize all in-progress attempts for an exam using their snapshots.
 
@@ -814,6 +805,6 @@ def finalize_all_pending_for_exam(
     )
     count = 0
     for attempt in attempts:
-        finalize_attempt_from_snapshots(attempt, language_code=language_code)
+        finalize_attempt_from_snapshots(attempt)
         count += 1
     return count
