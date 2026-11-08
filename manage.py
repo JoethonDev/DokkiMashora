@@ -8,7 +8,11 @@ from pathlib import Path
 try:
     from dotenv import load_dotenv
 
-    load_dotenv(Path(__file__).resolve().parent / ".env")
+    # Docker Compose injects the same .env values into the process. The
+    # bind-mounted file may be chmod 600 and unreadable to the nonroot app.
+    dotenv_path = Path(__file__).resolve().parent / ".env"
+    if dotenv_path.is_file() and os.access(dotenv_path, os.R_OK):
+        load_dotenv(dotenv_path)
 except ImportError:
     pass
 
