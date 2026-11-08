@@ -28,6 +28,7 @@ docs/
 !AGENTS.md
 !DOKKIMASHORA.md
 !DEMO_V1_CODEBASE_REVIEW_PLAN.md
+!CODESPACES_TRIAL.md
 !docs/
 docs/*
 !docs/testing/
@@ -80,3 +81,5 @@ qa/
 !apps/assessments/tests/
 !apps/assessments/tests/test_durable_submission.py
 results
+# Codespaces trial database exports must not be committed.
+.demo-backups/
