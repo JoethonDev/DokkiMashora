@@ -283,7 +283,7 @@ class Command(BaseCommand):
                 "is_active": True,
                 "max_attempts": 1,
                 "allow_late_submission": True,
-                "penalty_percent": 10,
+                "penalty_points": 10,
             },
         )
         self._report("Homework assessment", _)

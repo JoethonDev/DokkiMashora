@@ -4378,8 +4378,8 @@ msgid "Passing score (%)"
 msgstr "درجة النجاح (%)"
 
 #: .\apps\assessments\forms.py:206
-msgid "Wrong-answer penalty (%)"
-msgstr "خصم الإجابة الخاطئة (%)"
+msgid "Wrong-answer penalty (points)"
+msgstr "خصم الإجابة الخاطئة (نقاط)"
 
 #: .\apps\assessments\forms.py:207
 #: .\templates\ui\fragments\admin\_assessment_table.html:23
@@ -4399,6 +4399,10 @@ msgstr "اختبار نهاية الدورة"
 #: .\templates\ui\pages\admin\progression_component_form.html:31
 msgid "0–100"
 msgstr "0–100"
+
+#: .\apps\assessments\forms.py:211
+msgid "Points deducted for each wrong MCQ answer. 0–100."
+msgstr "النقاط المخصومة مقابل كل إجابة خاطئة في أسئلة الاختيار من متعدد. 0–100."
 
 #: .\apps\assessments\forms.py:213
 msgid ""
@@ -4562,14 +4566,14 @@ msgid "allow late submission"
 msgstr "السماح بالتسليم المتأخر"
 
 #: .\apps\assessments\models.py:151
-msgid "penalty percent"
-msgstr "نسبة الخصم"
+msgid "penalty points"
+msgstr "نقاط الخصم"
 
 #: .\apps\assessments\models.py:156
-msgid "Percentage deducted for wrong MCQ answers. 0 means no penalty."
+msgid "Points deducted from the total for each wrong MCQ answer. 0 means no penalty."
 msgstr ""
-"النسبة المخصومة مقابل الإجابات الخاطئة في أسئلة الاختيار من متعدد. 0 يعني "
-"عدم وجود خصم."
+"النقاط المخصومة من الإجمالي مقابل كل إجابة خاطئة في أسئلة الاختيار من متعدد. "
+"0 يعني عدم وجود خصم."
 
 #: .\apps\assessments\models.py:165 .\apps\assessments\models.py:674
 msgid "legacy status"
@@ -20834,4 +20838,109 @@ msgid "The diploma entry semester changed after preview. Upload the file again."
 msgstr "????? ??? ?????? ???????? ??? ????????. ???? ????? ??? ????."
 
 msgid "For diploma rows, entry_semester defaults to the diploma's first semester and the resolved semester is shown in the preview. For courses with more than one version, set course_version explicitly."
-msgstr "?? ???? ????????? ????? entry_semester ????????? ??? ????? ????? ???????? ????? ????? ??????? ?? ????????. ???????? ???? ??? ???? ?? ?????? ???? course_version ??????."
+msgstr "في صفوف الدبلومة، يُفترض أن يكون entry_semester هو الفصل الأول للدبلومة والفصل الذي تم تحديده يظهر في المعاينة. للدورات التي لها أكثر من إصدار، حدد course_version صراحة."
+
+msgid "Given score"
+msgstr "الدرجة المعطاة"
+
+msgid "Graded at"
+msgstr "تاريخ التصحيح"
+
+msgid "Reason for change"
+msgstr "سبب التغيير"
+
+msgid "Required when changing an already-graded score."
+msgstr "مطلوب عند تغيير درجة تم تصحيحها بالفعل."
+
+msgid "Grade regraded"
+msgstr "أُعيد احتساب الدرجة"
+
+msgid "Assessment attempt deleted"
+msgstr "تم حذف محاولة التقييم"
+
+msgid "Select at most %(count)d submissions at a time."
+msgstr "حدد %(count)d محاولات كحد أقصى في المرة الواحدة."
+
+msgid "Submission not found."
+msgstr "المحاولة غير موجودة."
+
+msgid "This submission is linked to protected history and cannot be deleted."
+msgstr "هذه المحاولة مرتبطة بسجل محمي ولا يمكن حذفها."
+
+msgid "This submission could not be processed."
+msgstr "تعذر معالجة هذه المحاولة."
+
+msgid "Only graded or under-review attempts can be regraded."
+msgstr "يمكن إعادة احتساب المحاولات المصححة أو قيد المراجعة فقط."
+
+msgid "Homework submissions are graded manually and cannot be regraded."
+msgstr "يتم تصحيح واجبات المنزل يدويًا ولا يمكن إعادة احتسابها."
+
+msgid "This submission has no online answers to regrade."
+msgstr "لا تحتوي هذه المحاولة على إجابات إلكترونية لإعادة احتسابها."
+
+msgid "Active submissions cannot be deleted."
+msgstr "لا يمكن حذف المحاولات النشطة."
+
+msgid "This submission is linked to reviewer grading history and cannot be deleted."
+msgstr "هذه المحاولة مرتبطة بسجل تصحيح المراجع ولا يمكن حذفها."
+
+msgid "This submission is linked to progression history and cannot be deleted."
+msgstr "هذه المحاولة مرتبطة بسجل التقدم الأكاديمي ولا يمكن حذفها."
+
+msgid "This submission is linked to offline grading history and cannot be deleted."
+msgstr "هذه المحاولة مرتبطة بسجل التصحيح دون اتصال ولا يمكن حذفها."
+
+msgid "This submission is still processing and cannot be deleted."
+msgstr "لا تزال هذه المحاولة قيد المعالجة ولا يمكن حذفها."
+
+msgid "No submissions selected."
+msgstr "لم يتم تحديد أي محاولات."
+
+msgid "Invalid bulk action."
+msgstr "إجراء جماعي غير صالح."
+
+msgid "A reason is required to delete submissions."
+msgstr "سبب الحذف مطلوب لحذف المحاولات."
+
+msgid "Only Administrators can regrade submissions."
+msgstr "المديرون فقط يمكنهم إعادة احتساب المحاولات."
+
+msgid "Only Administrators can delete submissions."
+msgstr "المديرون فقط يمكنهم حذف المحاولات."
+
+msgid "%(count)d submission regraded."
+msgstr "تمت إعادة احتساب %(count)d محاولة."
+
+msgid "%(count)d submissions regraded."
+msgstr "تمت إعادة احتساب %(count)d محاولات."
+
+msgid "%(count)d submission deleted."
+msgstr "تم حذف %(count)d محاولة."
+
+msgid "%(count)d submissions deleted."
+msgstr "تم حذف %(count)d محاولات."
+
+msgid "Submission #%(id)s: %(error)s"
+msgstr "المحاولة #%(id)s: %(error)s"
+
+msgid "Some submissions could not be processed. Review the audit log for details."
+msgstr "تعذر معالجة بعض المحاولات. راجع سجل التدقيق للتفاصيل."
+
+msgid "Regrading recalculates MCQ scores only; written scores, feedback, and release visibility are preserved. Deletion cannot be undone."
+msgstr "إعادة الاحتساب تعيد حساب درجات الاختيار من متعدد فقط؛ يتم الاحتفاظ بدرجات الأسئلة الكتابية والملاحظات وحالة النشر. لا يمكن التراجع عن الحذف."
+
+msgid "Required for deletion; optional for regrade."
+msgstr "مطلوب للحذف؛ اختياري لإعادة الاحتساب."
+
+msgid "Regrade selected"
+msgstr "إعادة احتساب المحدد"
+
+msgid "Delete selected"
+msgstr "حذف المحدد"
+
+msgid "Delete the selected submissions? This cannot be undone."
+msgstr "حذف المحاولات المحددة؟ لا يمكن التراجع عن ذلك."
+
+msgid "Select submission"
+msgstr "تحديد المحاولة"

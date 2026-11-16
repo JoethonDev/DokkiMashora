@@ -103,6 +103,8 @@ from apps.assessments.services import (
     assessment_audit_target,
     attempt_grades_visible,
     autosave_attempt,
+    bulk_delete_attempts,
+    bulk_regrade_attempts,
     can_reviewer_grade_code,
     cancel_assessment_access_override,
     change_exam_code_delivery_mode,
@@ -1192,6 +1194,8 @@ def admin_detail(request, assessment_id):
             "section_total": section_total,
             "is_diploma": is_diploma,
             "is_course_quiz": is_course_quiz,
+            "is_admin_user": is_admin(request.user),
+            "bulk_next_url": request.get_full_path(),
         },
     )
 
@@ -1657,7 +1661,7 @@ def admin_grade_list(request):
     scope_filters = page_context.pop("assessment_scope_filters")
     queue = get_grading_queue(request.user, **scope_filters)
     homework_queue = get_homework_pending_grading(request.user, **scope_filters)
-    recently_graded = get_recently_graded_attempts(request.user, **scope_filters)
+    recently_graded = get_recently_graded_attempts(request.user, limit=50, **scope_filters)
     queue_page, queue_pagination_qs = paginate(request, queue)
     hw_page, homework_pagination_qs = paginate(request, homework_queue)
     return render(
@@ -1671,6 +1675,7 @@ def admin_grade_list(request):
             "homework_pagination_qs": homework_pagination_qs,
             "recently_graded": recently_graded,
             "detail_return_url": request.get_full_path(),
+            "is_admin_user": is_admin(request.user),
         },
     )
 
@@ -1822,7 +1827,7 @@ def admin_grade_detail(request, attempt_id):
             a.attempt_question_id: a
             for a in AssessmentAttemptSnapshotAnswer.objects.filter(
                 attempt_question__attempt=attempt,
-            ).select_related("selected_choice")
+            ).select_related("selected_choice", "graded_by")
         }
         if request.method == "POST":
             attempt_score_before = attempt.score_points
@@ -1877,6 +1882,10 @@ def admin_grade_detail(request, attempt_id):
                             "status", "visible_to_student", "graded_by",
                         ],
                     )
+            if not graded_any:
+                return _redirect_to_grading_detail(
+                    request, "assessments:admin_grade_detail", attempt_id=attempt_id,
+                )
             record_audit_event(
                 actor=request.user,
                 action=ACTION_GRADE_CHANGED,
@@ -1916,7 +1925,10 @@ def admin_grade_detail(request, attempt_id):
         .prefetch_related("choices")
         .all()
     )
-    answers = {a.question_id: a for a in attempt.answers.select_related("question", "selected_choice").all()}
+    answers = {
+        a.question_id: a
+        for a in attempt.answers.select_related("question", "selected_choice", "graded_by").all()
+    }
     if request.method == "POST":
         attempt_score_before = attempt.score_points
         release_state_before = {
@@ -1968,6 +1980,10 @@ def admin_grade_detail(request, attempt_id):
                         "status", "visible_to_student", "graded_by",
                     ],
                 )
+        if not graded_any:
+            return _redirect_to_grading_detail(
+                request, "assessments:admin_grade_detail", attempt_id=attempt_id,
+            )
         record_audit_event(
             actor=request.user,
             action=ACTION_GRADE_CHANGED,
@@ -2000,6 +2016,74 @@ def admin_grade_detail(request, attempt_id):
         "ui/pages/admin/grading_detail.html",
         {**ctx_base, "question_answer_pairs": question_answer_pairs},
     )
+
+
+@login_required
+@role_required(*ROLE_EXAM_STAFF)
+@require_POST
+def admin_bulk_attempts(request):
+    """Regrade or delete a bounded selection of assessment submissions."""
+    if not is_admin(request.user):
+        raise PermissionDenied
+    action = request.POST.get("action", "")
+    reason = request.POST.get("reason", "").strip()[:500]
+    attempt_ids = []
+    for raw in request.POST.getlist("attempt_ids"):
+        value = safe_int(raw)
+        if value and value > 0 and value not in attempt_ids:
+            attempt_ids.append(value)
+    next_url = safe_next_url(
+        request,
+        default=reverse("assessments:admin_grade_list"),
+    )
+    if not attempt_ids:
+        messages.error(request, _("No submissions selected."))
+        return redirect(next_url)
+    if action not in {"regrade", "delete"}:
+        messages.error(request, _("Invalid bulk action."))
+        return redirect(next_url)
+    if action == "delete" and not reason:
+        messages.error(request, _("A reason is required to delete submissions."))
+        return redirect(next_url)
+    try:
+        if action == "regrade":
+            result = bulk_regrade_attempts(attempt_ids, actor=request.user, reason=reason)
+        else:
+            result = bulk_delete_attempts(attempt_ids, actor=request.user, reason=reason)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect(next_url)
+    succeeded = len(result["succeeded"])
+    if succeeded:
+        if action == "regrade":
+            messages.success(
+                request,
+                ngettext_lazy(
+                    "%(count)d submission regraded.",
+                    "%(count)d submissions regraded.",
+                    succeeded,
+                ) % {"count": succeeded},
+            )
+        else:
+            messages.success(
+                request,
+                ngettext_lazy(
+                    "%(count)d submission deleted.",
+                    "%(count)d submissions deleted.",
+                    succeeded,
+                ) % {"count": succeeded},
+            )
+    for attempt_id, error in result["errors"][:10]:
+        messages.error(
+            request,
+            _("Submission #%(id)s: %(error)s") % {"id": attempt_id, "error": str(error)},
+        )
+    if len(result["errors"]) > 10:
+        messages.error(
+            request,
+            _("Some submissions could not be processed. Review the audit log for details."),
+        )
+    return redirect(next_url)
 
 
 @login_required

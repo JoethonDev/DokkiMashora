@@ -311,7 +311,7 @@ class Command(BaseCommand):
                 "grade_visibility": GRADE_VISIBILITY_HIDDEN,
                 "release_mode": RELEASE_MODE_MANUAL,
                 "allow_late_submission": False,
-                "penalty_percent": Decimal("0.00"),
+                "penalty_points": Decimal("0.00"),
                 "created_by": creator,
             },
         )

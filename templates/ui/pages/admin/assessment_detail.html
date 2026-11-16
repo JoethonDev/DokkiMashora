@@ -305,6 +305,7 @@
         <div class="table-wrap hidden lg:block"><table class="table">
             <thead>
               <tr>
+                {% if is_admin_user %}<th class="table-th w-10"><span class="sr-only">{% trans "Select" %}</span></th>{% endif %}
                 <th class="table-th">{% trans "Student" %}</th>
                 <th class="table-th">{% trans "Score" %}</th>
                 <th class="table-th">{% trans "Status" %}</th>
@@ -316,6 +317,7 @@
             <tbody>
               {% for attempt in attempts %}
                 <tr>
+                  {% if is_admin_user %}<td class="table-td"><input type="checkbox" class="form-checkbox" name="attempt_ids" value="{{ attempt.id }}" form="bulk-attempt-form" aria-label="{% trans 'Select submission' %}"></td>{% endif %}
                   <td class="table-td">{{ attempt.student }}</td>
                   <td class="table-td">
                     {{ attempt.score_points|default:'-' }}
@@ -358,6 +360,7 @@
         <div class="card-stack lg:hidden">
           {% for attempt in attempts %}
             <div class="mobile-card">
+              {% if is_admin_user %}<input type="checkbox" class="form-checkbox shrink-0" name="attempt_ids" value="{{ attempt.id }}" form="bulk-attempt-form" aria-label="{% trans 'Select submission' %}">{% endif %}
               <div class="flex-1 min-w-0">
                 <strong class="block truncate">{{ attempt.student }}</strong>
                 {% include "ui/components/_status.html" with code=attempt.status label=attempt.get_status_display %}
@@ -383,6 +386,13 @@
             </div>
           {% endfor %}
         </div>
+        {% if is_admin_user %}
+          <form id="bulk-attempt-form" method="post" action="{% url 'assessments:admin_bulk_attempts' %}">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ bulk_next_url }}">
+            {% include "ui/fragments/admin/_bulk_attempt_actions.html" %}
+          </form>
+        {% endif %}
       {% else %}
         {% include "ui/components/_empty_state.html" with title=_("No attempts") message=_("No student attempts for this assessment.") %}
       {% endif %}

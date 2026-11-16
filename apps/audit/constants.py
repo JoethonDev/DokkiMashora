@@ -111,6 +111,8 @@ ACTION_GRADE_CHANGED = "grade.changed"
 ACTION_GRADE_OVERRIDE = "grade.override"
 ACTION_GRADE_RELEASED = "grade.released"
 ACTION_GRADE_HIDDEN = "grade.hidden"
+ACTION_GRADE_REGRADED = "grade.regraded"
+ACTION_EXAM_ATTEMPT_DELETED = "exam.attempt_deleted"
 ACTION_PROMOTION = "promotion.promoted"
 ACTION_DEMOTION = "promotion.demoted"
 ACTION_COMPLETED = "progression.completed"
@@ -250,6 +252,8 @@ AUDIT_ACTION_CHOICES = (
     (ACTION_GRADE_OVERRIDE, _("Grade override")),
     (ACTION_GRADE_RELEASED, _("Grade released")),
     (ACTION_GRADE_HIDDEN, _("Grade hidden")),
+    (ACTION_GRADE_REGRADED, _("Grade regraded")),
+    (ACTION_EXAM_ATTEMPT_DELETED, _("Assessment attempt deleted")),
     (ACTION_EXAM_ACCESS_OVERRIDE_CREATED, _("Exam access override created")),
     (ACTION_EXAM_ACCESS_OVERRIDE_CANCELLED, _("Exam access override cancelled")),
     (ACTION_EXAM_ACCESS_OVERRIDE_USED, _("Exam access override used")),

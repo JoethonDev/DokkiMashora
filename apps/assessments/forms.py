@@ -184,7 +184,7 @@ class AssessmentForm(StyledFormMixin, forms.ModelForm):
             "show_written_feedback",
             "release_mode",
             "allow_late_submission",
-            "penalty_percent",
+            "penalty_points",
         ]
         widgets = {
             "title": forms.TextInput(attrs={}),
@@ -199,16 +199,16 @@ class AssessmentForm(StyledFormMixin, forms.ModelForm):
             "passing_score": forms.NumberInput(attrs={}),
             "max_upload_files": forms.NumberInput(attrs={}),
             "release_mode": forms.Select(attrs={}),
-            "penalty_percent": forms.NumberInput(attrs={}),
+            "penalty_points": forms.NumberInput(attrs={}),
         }
         labels = {
             "passing_score": _("Passing score (%)"),
-            "penalty_percent": _("Wrong-answer penalty (%)"),
+            "penalty_points": _("Wrong-answer penalty (points)"),
             "is_completion_exam": _("End-course exam"),
         }
         help_texts = {
             "passing_score": _("0–100"),
-            "penalty_percent": _("0–100"),
+            "penalty_points": _("Points deducted for each wrong MCQ answer. 0–100."),
             "is_completion_exam": _(
                 "Passing this exam is required to complete the course. Only one quiz per course version can be the end-course exam."
             ),

@@ -12,8 +12,9 @@ from typing import TYPE_CHECKING
 
 from django.conf import settings
 from django.core.cache import cache
+from django.core.exceptions import PermissionDenied
 from django.db import IntegrityError, transaction
-from django.db.models import Count, Exists, F, Max, OuterRef, Q, Subquery, Sum
+from django.db.models import Count, Exists, F, Max, OuterRef, ProtectedError, Q, Subquery, Sum
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -40,8 +41,10 @@ from apps.audit.constants import (
     ACTION_EXAM_ACCESS_OVERRIDE_CREATED,
     ACTION_EXAM_ACCESS_OVERRIDE_USED,
     ACTION_EXAM_DELETED,
+    ACTION_EXAM_ATTEMPT_DELETED,
     ACTION_GRADE_CHANGED,
     ACTION_GRADE_HIDDEN,
+    ACTION_GRADE_REGRADED,
     ACTION_GRADE_RELEASED,
     ACTION_REVIEWER_ASSIGNMENT_REVOKED,
     ACTION_STUDENT_ACCESS_CHANGE,
@@ -128,6 +131,12 @@ if TYPE_CHECKING:
     pass
 
 HOMEWORK_ALLOWED_EXTENSIONS = [".pdf", ".docx"]
+BULK_ATTEMPT_LIMIT = 100
+
+
+def _floor_attempt_score(total: Decimal) -> Decimal:
+    """Negative marking may make the raw sum negative; attempt scores floor at zero."""
+    return max(total, Decimal("0.00"))
 
 
 def _person_name(person) -> str:
@@ -1125,6 +1134,9 @@ def submit_assessment(attempt: AssessmentAttempt, answers: list[AssessmentAnswer
         status = ATTEMPT_STATUS_UNDER_REVIEW if has_ungraded else ATTEMPT_STATUS_GRADED
         attempt.status = status
         attempt.submitted_at = now
+        # Negative marking may make the raw sum negative; the attempt total
+        # is a score and cannot fall below zero.
+        total_score = _floor_attempt_score(total_score)
         attempt.score_points = total_score
         attempt.score_percent = compute_percent(total_score, total_possible)
         if not has_ungraded:
@@ -1247,7 +1259,7 @@ def submit_diploma_assessment(attempt: AssessmentAttempt, answer_data: dict) -> 
                         ) from None
                     answer.selected_choice = choice
                     answer.score = mcq_score(
-                        sq.points, bool(choice.is_correct_snapshot), assessment.penalty_percent
+                        sq.points, bool(choice.is_correct_snapshot), assessment.penalty_points
                     )
                     total_earned += answer.score
                 else:
@@ -1268,8 +1280,8 @@ def submit_diploma_assessment(attempt: AssessmentAttempt, answer_data: dict) -> 
         for answer in answers_to_save:
             answer.save()
 
-        attempt_ref.score_points = total_earned
-        attempt_ref.score_percent = compute_percent(total_earned, total_possible)
+        attempt_ref.score_points = _floor_attempt_score(total_earned)
+        attempt_ref.score_percent = compute_percent(attempt_ref.score_points, total_possible)
         if has_written_questions:
             attempt_ref.status = ATTEMPT_STATUS_UNDER_REVIEW
             attempt_ref.graded_at = None
@@ -1729,7 +1741,7 @@ def _score_mcq_answer(
 ) -> Decimal:
     if choice is None:
         return Decimal("0.00")
-    return mcq_score(question.points, bool(choice.is_correct), assessment.penalty_percent)
+    return mcq_score(question.points, bool(choice.is_correct), assessment.penalty_points)
 
 
 # ---------------------------------------------------------------------------
@@ -1987,6 +1999,8 @@ def _update_diploma_attempt_grade(attempt: AssessmentAttempt, *, graded_by=None)
                 total += answer.score
             else:
                 all_graded = False
+        # Negative marking may make the raw sum negative; floor the attempt.
+        total = _floor_attempt_score(total)
         locked.score_points = total
         snapshot_total = sum((question.points for question in snapshot_questions), Decimal("0.00"))
         total_possible = locked.possible_points_snapshot
@@ -2033,7 +2047,7 @@ def grade_homework(submission_id: int, score: Decimal, feedback: str, grader) ->
     """Grade the aggregate homework submission (one score/feedback for all files)."""
     with transaction.atomic():
         submission = (
-            HomeworkSubmission.objects.select_for_update()
+            HomeworkSubmission.objects.select_for_update(of=("self",))
             .select_related("assessment", "attempt")
             .get(id=submission_id)
         )
@@ -2097,6 +2111,8 @@ def _update_attempt_grade(attempt: AssessmentAttempt, *, graded_by=None) -> None
                 total += answer.score
             else:
                 all_graded = False
+        # Negative marking may make the raw sum negative; floor the attempt.
+        total = _floor_attempt_score(total)
         locked.score_points = total
         assessment = locked.assessment
         total_possible = sum(q.points for q in assessment.questions.all())
@@ -2196,8 +2212,11 @@ def release_attempt_grades(
     an Admin/Super Admin actor; automatic release (``source="automatic"``) is
     invoked only after the final grade transaction commits.
     """
+    # ``graded_by`` and the reverse student profile are nullable, so the
+    # select_related joins are outer joins. PostgreSQL rejects ``FOR UPDATE``
+    # across a nullable outer join; lock only the attempt row.
     attempt = (
-        AssessmentAttempt.objects.select_for_update()
+        AssessmentAttempt.objects.select_for_update(of=("self",))
         .select_related("assessment", "student", "student__student_profile", "graded_by")
         .get(pk=attempt_id)
     )
@@ -2251,8 +2270,9 @@ def release_attempt_grades(
 @transaction.atomic
 def hide_attempt_grades(attempt_id: int, *, actor=None, reason: str = "") -> AssessmentAttempt:
     """Idempotently hide (un-release) a released attempt."""
+    # Nullable outer joins cannot be locked by PostgreSQL (same as release).
     attempt = (
-        AssessmentAttempt.objects.select_for_update()
+        AssessmentAttempt.objects.select_for_update(of=("self",))
         .select_related("assessment", "student", "student__student_profile", "graded_by")
         .get(pk=attempt_id)
     )
@@ -2295,6 +2315,300 @@ def hide_attempt_grades(attempt_id: int, *, actor=None, reason: str = "") -> Ass
         ),
     )
     return attempt
+
+
+REGRADEABLE_ATTEMPT_STATUSES = (
+    ATTEMPT_STATUS_UNDER_REVIEW,
+    ATTEMPT_STATUS_GRADED,
+    ATTEMPT_STATUS_RELEASED,
+)
+DELETABLE_ATTEMPT_STATUSES = (
+    ATTEMPT_STATUS_SUBMITTED,
+    ATTEMPT_STATUS_UNDER_REVIEW,
+    ATTEMPT_STATUS_GRADED,
+    ATTEMPT_STATUS_RELEASED,
+    ATTEMPT_STATUS_EXPIRED,
+    ATTEMPT_STATUS_CANCELLED,
+)
+
+
+@transaction.atomic
+def regrade_attempt(attempt_id: int, *, actor=None, reason: str = "") -> AssessmentAttempt:
+    """Recalculate MCQ scores from the stored submission and refresh the aggregate.
+
+    Written scores and feedback are preserved. A released attempt remains
+    released and visible; otherwise the aggregate moves to graded or
+    under_review based on written-answer completeness.
+    """
+    attempt = (
+        AssessmentAttempt.objects.select_for_update()
+        .select_related("assessment", "student")
+        .get(pk=attempt_id)
+    )
+    assessment = attempt.assessment
+    if assessment.legacy_status != LEGACY_STATUS_ACTIVE:
+        raise ValueError(_("This assessment is preserved legacy data and is read-only."))
+    if actor is not None and not is_admin(actor):
+        raise PermissionDenied(_("Only Administrators can regrade submissions."))
+    if attempt.status not in REGRADEABLE_ATTEMPT_STATUSES:
+        raise ValueError(_("Only graded or under-review attempts can be regraded."))
+    if assessment.assessment_type == ASSESSMENT_TYPE_HOMEWORK:
+        raise ValueError(_("Homework submissions are graded manually and cannot be regraded."))
+
+    before = {
+        "status": attempt.status,
+        "score_points": "" if attempt.score_points is None else str(attempt.score_points),
+        "score_percent": "" if attempt.score_percent is None else str(attempt.score_percent),
+        "visible_to_student": attempt.visible_to_student,
+    }
+    was_visible = attempt.visible_to_student
+    now = timezone.now()
+    changed_count = 0
+
+    snapshot_questions = list(attempt.snapshot_questions.order_by("order"))
+    if snapshot_questions:
+        answers_qs = (
+            AssessmentAttemptSnapshotAnswer.objects.select_for_update(of=("self",))
+            .filter(attempt_question__attempt=attempt)
+            .select_related("selected_choice")
+        )
+        answers = {answer.attempt_question_id: answer for answer in answers_qs}
+        changed = []
+        for question in snapshot_questions:
+            answer = answers.get(question.pk)
+            if answer is None:
+                answer = AssessmentAttemptSnapshotAnswer.objects.create(
+                    attempt_question=question,
+                    score=None,
+                )
+                answers[question.pk] = answer
+            if question.question_type != QUESTION_TYPE_MCQ:
+                continue
+            new_score = (
+                mcq_score(
+                    question.points,
+                    bool(answer.selected_choice.is_correct_snapshot),
+                    assessment.penalty_points,
+                )
+                if answer.selected_choice_id
+                else Decimal("0.00")
+            )
+            if answer.score != new_score:
+                answer.score = new_score
+                answer.updated_at = now
+                changed.append(answer)
+        if changed:
+            AssessmentAttemptSnapshotAnswer.objects.bulk_update(changed, ["score", "updated_at"])
+        changed_count = len(changed)
+        _update_diploma_attempt_grade(attempt, graded_by=actor)
+    else:
+        questions = list(assessment.questions.order_by("order"))
+        if not questions:
+            raise ValueError(_("This submission has no online answers to regrade."))
+        answers_qs = (
+            AssessmentAnswer.objects.select_for_update(of=("self",))
+            .filter(attempt=attempt)
+            .select_related("selected_choice", "question")
+        )
+        answers = {answer.question_id: answer for answer in answers_qs}
+        changed = []
+        for question in questions:
+            answer = answers.get(question.pk)
+            if answer is None or question.question_type != QUESTION_TYPE_MCQ:
+                continue
+            new_score = _score_mcq_answer(answer.selected_choice, question, assessment)
+            if answer.score != new_score:
+                answer.score = new_score
+                answer.updated_at = now
+                changed.append(answer)
+        if changed:
+            AssessmentAnswer.objects.bulk_update(changed, ["score", "updated_at"])
+        changed_count = len(changed)
+        _update_attempt_grade(attempt, graded_by=actor)
+
+    attempt.refresh_from_db()
+    if was_visible and attempt.status == ATTEMPT_STATUS_GRADED:
+        attempt.status = ATTEMPT_STATUS_RELEASED
+        attempt.visible_to_student = True
+        attempt.save(update_fields=["status", "visible_to_student", "updated_at"])
+    after = {
+        "status": attempt.status,
+        "score_points": "" if attempt.score_points is None else str(attempt.score_points),
+        "score_percent": "" if attempt.score_percent is None else str(attempt.score_percent),
+        "visible_to_student": attempt.visible_to_student,
+    }
+    record_audit_event(
+        actor=actor,
+        action=ACTION_GRADE_REGRADED,
+        **assessment_audit_target(assessment),
+        **student_audit_subject(attempt.student),
+        metadata=grading_audit_metadata(
+            assessment=assessment,
+            attempt=attempt,
+            student=attempt.student,
+            grader=actor,
+            score_before=before["score_points"],
+            score_after=after["score_points"],
+            max_score=attempt.possible_points_snapshot,
+            release_state_before=before,
+            release_state_after=after,
+            reason=reason or "",
+            changed_answers=changed_count,
+            before=before,
+            after=after,
+        ),
+    )
+    return attempt
+
+
+def _delete_attempt_storage(keys: tuple[str, ...]) -> None:
+    """Best-effort post-commit cleanup for homework files owned by a deleted attempt."""
+    for key in keys:
+        try:
+            if not storage_service.delete_file(key):
+                record_deferred_storage_deletion(key=key, error="Assessment attempt deleted")
+        except Exception as exc:
+            record_deferred_storage_deletion(key=key, error=str(exc))
+
+
+@transaction.atomic
+def delete_attempt(attempt_id: int, *, actor=None, reason: str = "") -> None:
+    """Permanently delete one submitted attempt and its owned rows.
+
+    Active attempts, reviewer-claimed attempts, and attempts referenced by
+    progression history are protected. Audit metadata is written before the
+    destructive delete so the event survives the removed rows.
+    """
+    attempt = (
+        AssessmentAttempt.objects.select_for_update()
+        .select_related("assessment", "student")
+        .get(pk=attempt_id)
+    )
+    assessment = attempt.assessment
+    if assessment.legacy_status != LEGACY_STATUS_ACTIVE:
+        raise ValueError(_("This assessment is preserved legacy data and is read-only."))
+    if actor is not None and not is_admin(actor):
+        raise PermissionDenied(_("Only Administrators can delete submissions."))
+    reason = reason or ""
+    if not reason.strip():
+        raise ValueError(_("A reason is required to delete submissions."))
+    if attempt.status not in DELETABLE_ATTEMPT_STATUSES:
+        raise ValueError(_("Active submissions cannot be deleted."))
+    if attempt.reviewer_exam_claims.exists():
+        raise ValueError(
+            _("This submission is linked to reviewer grading history and cannot be deleted.")
+        )
+    if (
+        attempt.studentgradeitem_set.exists()
+        or attempt.final_exam_eligibility.exists()
+        or attempt.diploma_completion.exists()
+    ):
+        raise ValueError(_("This submission is linked to progression history and cannot be deleted."))
+    if OfflineSectionGrade.objects.filter(
+        exam_code__assessment=assessment,
+        exam_code__diploma_enrollment__student__user=attempt.student,
+    ).exists():
+        raise ValueError(_("This submission is linked to offline grading history and cannot be deleted."))
+
+    durable_submission = (
+        AssessmentSubmission.objects.select_for_update().filter(attempt=attempt).first()
+    )
+    if durable_submission is not None and durable_submission.processing_status in (
+        SUBMISSION_STATUS_PENDING,
+        SUBMISSION_STATUS_PROCESSING,
+    ):
+        raise ValueError(_("This submission is still processing and cannot be deleted."))
+
+    storage_keys = tuple(
+        HomeworkAttachment.objects.filter(
+            Q(attempt=attempt) | Q(submission__attempt=attempt),
+        )
+        .exclude(storage_key="")
+        .values_list("storage_key", flat=True)
+    )
+    metadata = grading_audit_metadata(
+        assessment=assessment,
+        attempt=attempt,
+        student=attempt.student,
+        grader=actor,
+        score_before=attempt.score_points,
+        score_after="",
+        max_score=attempt.possible_points_snapshot,
+        release_state_before={
+            "status": attempt.status,
+            "visible_to_student": attempt.visible_to_student,
+        },
+        release_state_after={},
+        reason=reason,
+        attempt_number=attempt.attempt_number,
+        submitted_at=attempt.submitted_at.isoformat() if attempt.submitted_at else "",
+        graded_at=attempt.graded_at.isoformat() if attempt.graded_at else "",
+        durable_submission_id=(
+            durable_submission.submission_id if durable_submission is not None else ""
+        ),
+        attachment_count=len(storage_keys),
+    )
+    target_label = f"{attempt.student} - {assessment.title} #{attempt.attempt_number}"
+    attempt_pk = attempt.pk
+    student = attempt.student
+    if durable_submission is not None:
+        durable_submission.delete()
+    attempt.delete()
+    if storage_keys:
+        transaction.on_commit(lambda: _delete_attempt_storage(storage_keys))
+    record_audit_event(
+        actor=actor,
+        action=ACTION_EXAM_ATTEMPT_DELETED,
+        section=SECTION_ASSESSMENTS,
+        target_type="assessment_attempt",
+        target_id=attempt_pk,
+        target_label=target_label,
+        **student_audit_subject(student),
+        metadata=metadata,
+    )
+
+
+def _bulk_attempt_action(attempt_ids, operation) -> dict:
+    ids = list(dict.fromkeys(attempt_ids))
+    if len(ids) > BULK_ATTEMPT_LIMIT:
+        raise ValueError(
+            _("Select at most %(count)d submissions at a time.")
+            % {"count": BULK_ATTEMPT_LIMIT}
+        )
+    succeeded = []
+    errors = []
+    for attempt_id in ids:
+        try:
+            with transaction.atomic():
+                operation(attempt_id)
+            succeeded.append(attempt_id)
+        except AssessmentAttempt.DoesNotExist:
+            errors.append((attempt_id, _("Submission not found.")))
+        except ProtectedError:
+            errors.append(
+                (attempt_id, _("This submission is linked to protected history and cannot be deleted."))
+            )
+        except IntegrityError:
+            errors.append((attempt_id, _("This submission could not be processed.")))
+        except ValueError as exc:
+            errors.append((attempt_id, str(exc)))
+    return {"succeeded": succeeded, "errors": errors}
+
+
+def bulk_regrade_attempts(attempt_ids, *, actor=None, reason: str = "") -> dict:
+    """Regrade a bounded selection, reporting per-attempt failures."""
+    return _bulk_attempt_action(
+        attempt_ids,
+        lambda attempt_id: regrade_attempt(attempt_id, actor=actor, reason=reason),
+    )
+
+
+def bulk_delete_attempts(attempt_ids, *, actor=None, reason: str = "") -> dict:
+    """Delete a bounded selection, reporting per-attempt failures."""
+    return _bulk_attempt_action(
+        attempt_ids,
+        lambda attempt_id: delete_attempt(attempt_id, actor=actor, reason=reason),
+    )
 
 
 def _maybe_auto_release_attempt(attempt_id: int) -> None:
@@ -2515,7 +2829,7 @@ def admin_review_semester_exam(
     assessment release mode is automatic. Idempotent for the same decision.
     """
     attempt = (
-        AssessmentAttempt.objects.select_for_update()
+        AssessmentAttempt.objects.select_for_update(of=("self",))
         .select_related("assessment", "student", "student__student_profile", "graded_by")
         .get(pk=attempt_id)
     )

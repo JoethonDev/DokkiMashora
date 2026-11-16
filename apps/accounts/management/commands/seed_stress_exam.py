@@ -120,7 +120,7 @@ class Command(BaseCommand):
                     "max_attempts": 1,
                     "grade_visibility": GRADE_VISIBILITY_HIDDEN,
                     "release_mode": RELEASE_MODE_MANUAL,
-                    "penalty_percent": Decimal("0"),
+                    "penalty_points": Decimal("0"),
                     "created_by": admin,
                 },
             )[0]

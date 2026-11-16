@@ -493,6 +493,29 @@ Percentages are **quantized to two decimals before any pass/fail comparison** â€
 
 *Decision source: locked by user 2026-08-28 (Demo v1 review decision D-002).*
 
+### 8.4 MCQ negative marking (LOCKED)
+
+`Assessment.penalty_points` is a **flat per-question deduction**, not a percentage of the question's points.
+
+- Correct MCQ: `+question.points`.
+- Selected wrong MCQ: `-penalty_points`, regardless of the question's points.
+- Unanswered MCQ: `0` (no penalty).
+- Attempt total: sum every question score, then floor the result at `0.00` before computing the percentage and pass/fail result.
+- Written questions remain manually graded and do not receive an automatic penalty.
+
+*Decision source: locked by user 2026-11-16.*
+
+### 8.5 Submission regrade and deletion (LOCKED)
+
+Admin/Super Admin may regrade or delete one or more assessment submissions from the grading list or an assessment's attempts table. Both actions are POST + CSRF, limited to 100 selected attempts per request, and audited per attempt.
+
+- **Regrade** recalculates only MCQ scores from the frozen submission/snapshot using the current `penalty_points`. Written scores, feedback, and answer notes are preserved. The aggregate, percentage, and pass/fail are recomputed. If the per-student grade was visible, the attempt remains released and visible.
+- **Delete** permanently removes the attempt and its owned rows, including the durable submission, snapshot answers/questions, homework aggregate, and owned homework attachments (storage cleanup runs after commit). A reason is required.
+- Deletion is blocked for active (`assigned`, `in_progress`) attempts, attempts claimed by a Reviewer, attempts still processing, attempts referenced by offline section grading, and attempts referenced by progression history (`StudentGradeItem`, final-exam eligibility, or diploma completion).
+- Deletion preserves the append-only audit event even though the attempt row is removed.
+
+*Decision source: locked by user 2026-11-16.*
+
 ---
 
 # 9. Attempt Policy

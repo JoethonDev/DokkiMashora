@@ -147,13 +147,13 @@ class Assessment(TimeStampedModel):
         help_text=_("Automatic releases grades as soon as the final grade commits; Manual requires an Admin/Super Admin release action."),
     )
     allow_late_submission = models.BooleanField(_("allow late submission"), default=False)
-    penalty_percent = models.DecimalField(
-        _("penalty percent"),
+    penalty_points = models.DecimalField(
+        _("penalty points"),
         max_digits=5,
         decimal_places=2,
         default=Decimal("0.00"),
         validators=[MinValueValidator(0), MaxValueValidator(100)],
-        help_text=_("Percentage deducted for wrong MCQ answers. 0 means no penalty."),
+        help_text=_("Points deducted from the total for each wrong MCQ answer. 0 means no penalty."),
     )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

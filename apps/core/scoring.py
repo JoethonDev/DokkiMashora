@@ -61,27 +61,24 @@ def calculate_score(
 def mcq_score(
     points: Decimal,
     is_correct: bool,
-    penalty_percent: Decimal | None,
+    penalty_points: Decimal | None,
 ) -> Decimal:
     """Canonical MCQ penalty (DUP-003).
 
-    Correct -> full points. Incorrect with penalty -> points - (points*penalty/100)
-    clamped to 0. No penalty or zero penalty -> 0 for incorrect.
+    Correct -> full question points. Wrong -> the configured flat penalty as a
+    negative per-question score (e.g. 0.25 -> -0.25), independent of the
+    question's points. No penalty or zero penalty -> 0 for incorrect.
+    Unanswered questions are handled by callers and score 0, not a penalty.
     """
     pts = Decimal(points) if points is not None else Decimal("0")
     if is_correct:
         return pts
-    if penalty_percent is None:
+    if penalty_points is None:
         return Decimal("0.00")
     try:
-        pen = Decimal(penalty_percent)
+        pen = Decimal(penalty_points)
     except Exception:
         return Decimal("0.00")
     if pen > 0:
-        # Quantize penalty result to 2 decimals to match stored scores
-        score = pts - (pts * pen / _HUNDRED)
-        if score < 0:
-            score = Decimal("0.00")
-        # Keep two decimals for consistency with other scoring paths
-        return score.quantize(_SCORE_QUANT) if score != 0 else Decimal("0.00")
+        return (-pen).quantize(_SCORE_QUANT)
     return Decimal("0.00")

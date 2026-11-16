@@ -54,6 +54,11 @@ urlpatterns = [
     ),
     path("manage/grading/", views.admin_grade_list, name="admin_grade_list"),
     path(
+        "manage/grading/bulk/",
+        views.admin_bulk_attempts,
+        name="admin_bulk_attempts",
+    ),
+    path(
         "manage/grading/<int:attempt_id>/",
         views.admin_grade_detail,
         name="admin_grade_detail",
