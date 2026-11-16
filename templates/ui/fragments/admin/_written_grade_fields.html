@@ -1,9 +1,24 @@
 {% load i18n %}
 {% if answer and answer.score is not None %}
-  <div class="mt-4 rounded-sm border border-line bg-surface-soft px-3 py-2 text-sm flex flex-wrap gap-x-3 gap-y-1 items-center">
-    <span><strong>{% trans "Given score" %}:</strong> {{ answer.score }} / {{ question.points }}</span>
-    {% if answer.graded_by %}<span class="text-muted">{% trans "Graded by" %}: {{ answer.graded_by }}</span>{% endif %}
-    {% if answer.graded_at %}<span class="text-muted">{% trans "Graded at" %}: {{ answer.graded_at|date:"SHORT_DATETIME_FORMAT" }}</span>{% endif %}
+  <div class="mt-4 rounded-sm border border-line bg-surface-soft p-4">
+    <dl class="dl">
+      <div>
+        <dt class="dt">{% trans "Given score" %}</dt>
+        <dd class="dd">{{ answer.score }} / {{ question.points }}</dd>
+      </div>
+      {% if answer.graded_by %}
+        <div>
+          <dt class="dt">{% trans "Graded by" %}</dt>
+          <dd class="dd">{{ answer.graded_by }}</dd>
+        </div>
+      {% endif %}
+      {% if answer.graded_at %}
+        <div>
+          <dt class="dt">{% trans "Graded at" %}</dt>
+          <dd class="dd">{{ answer.graded_at|date:"SHORT_DATETIME_FORMAT" }}</dd>
+        </div>
+      {% endif %}
+    </dl>
   </div>
 {% endif %}
 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
